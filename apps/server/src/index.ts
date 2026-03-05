@@ -1,4 +1,5 @@
 import { serve } from '@hono/node-server'
+import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import { Server as SocketIOServer } from 'socket.io'
 import { createApp } from './app'
 import { createAppContainer } from './container'
@@ -9,6 +10,13 @@ import { setupWebSocket } from './ws'
 const PORT = Number(process.env.PORT ?? 3002)
 
 async function main() {
+  // Run database migrations
+  const migrationsPath =
+    process.env.NODE_ENV === 'production' ? './apps/server/migrations' : './src/db/migrations'
+  logger.info('Running database migrations...')
+  await migrate(db, { migrationsFolder: migrationsPath })
+  logger.info('Database migrations completed')
+
   // Create DI container
   const container = createAppContainer(db)
 

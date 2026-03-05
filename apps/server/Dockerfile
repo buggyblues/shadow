@@ -30,6 +30,7 @@ COPY apps/server/package.json apps/server/
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 COPY --from=builder /app/apps/server/dist apps/server/dist
+COPY --from=builder /app/apps/server/src/db/migrations apps/server/migrations
 
 EXPOSE 3002
 ENV NODE_ENV=production
