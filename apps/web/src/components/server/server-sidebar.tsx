@@ -9,7 +9,7 @@ import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
 
 interface ServerEntry {
-  server: { id: string; name: string; iconUrl: string | null }
+  server: { id: string; name: string; slug: string | null; iconUrl: string | null }
   member: { role: string }
 }
 
@@ -57,10 +57,10 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
 
   const { setMobileView } = useUIStore()
 
-  const handleSelect = (serverId: string) => {
+  const handleSelect = (serverId: string, slug?: string | null) => {
     setActiveServer(serverId)
     setMobileView('channels')
-    navigate({ to: '/app/servers/$serverId', params: { serverId } })
+    navigate({ to: '/app/servers/$serverId', params: { serverId: slug ?? serverId } })
     onNavigate?.()
   }
 
@@ -81,7 +81,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
       {servers.map((s, i) => (
         <div key={s.server.id} className="relative group/server">
           <button
-            onClick={() => handleSelect(s.server.id)}
+            onClick={() => handleSelect(s.server.id, s.server.slug)}
             className={`w-12 h-12 rounded-2xl hover:rounded-xl transition-all flex items-center justify-center font-bold text-sm overflow-hidden ${
               activeServerId === s.server.id
                 ? 'bg-primary rounded-xl text-white ring-2 ring-primary/50'

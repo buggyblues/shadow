@@ -149,7 +149,9 @@ interface Server {
   id: string
   name: string
   slug: string | null
+  description: string | null
   iconUrl: string | null
+  bannerUrl: string | null
   isPublic: boolean
   createdAt: string
 }
@@ -184,6 +186,13 @@ function DashboardContent() {
   const [serverChannels, setServerChannels] = useState<Channel[]>([])
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null)
   const [channelMessages, setChannelMessages] = useState<Message[]>([])
+  const [editingServer, setEditingServer] = useState<Server | null>(null)
+  const [editServerForm, setEditServerForm] = useState<{
+    name: string
+    slug: string
+    description: string
+    isPublic: boolean
+  }>({ name: '', slug: '', description: '', isPublic: false })
 
   const loadStats = async () => {
     try {
@@ -305,6 +314,35 @@ function DashboardContent() {
     await apiFetch(`/messages/${id}`, { method: 'DELETE' })
     if (selectedServer && selectedChannel) {
       loadChannelMessages(selectedServer.id, selectedChannel.id)
+    }
+  }
+
+  const openEditServer = (s: Server) => {
+    setEditingServer(s)
+    setEditServerForm({
+      name: s.name,
+      slug: s.slug ?? '',
+      description: s.description ?? '',
+      isPublic: s.isPublic,
+    })
+  }
+
+  const saveEditServer = async () => {
+    if (!editingServer) return
+    try {
+      await apiFetch(`/servers/${editingServer.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: editServerForm.name,
+          slug: editServerForm.slug || null,
+          description: editServerForm.description || null,
+          isPublic: editServerForm.isPublic,
+        }),
+      })
+      setEditingServer(null)
+      loadServers()
+    } catch {
+      /* */
     }
   }
 
@@ -746,15 +784,26 @@ function DashboardContent() {
                             {s.createdAt ? new Date(s.createdAt).toLocaleString() : '-'}
                           </td>
                           <td className="px-4 py-3">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                deleteServer(s.id)
-                              }}
-                              className="text-red-400 hover:text-red-300 text-xs transition"
-                            >
-                              删除
-                            </button>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  openEditServer(s)
+                                }}
+                                className="text-indigo-400 hover:text-indigo-300 text-xs transition"
+                              >
+                                编辑
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  deleteServer(s.id)
+                                }}
+                                className="text-red-400 hover:text-red-300 text-xs transition"
+                              >
+                                删除
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -767,6 +816,83 @@ function DashboardContent() {
                       )}
                     </tbody>
                   </table>
+                </div>
+              )}
+
+              {/* Edit server dialog */}
+              {editingServer && (
+                <div
+                  className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+                  onClick={() => setEditingServer(null)}
+                >
+                  <div
+                    className="bg-zinc-900 rounded-xl p-6 w-[440px] border border-zinc-800 space-y-4"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <h3 className="text-lg font-bold text-white">编辑服务器</h3>
+                    <div>
+                      <label className="block text-xs text-zinc-400 mb-1">名称</label>
+                      <input
+                        type="text"
+                        value={editServerForm.name}
+                        onChange={(e) => setEditServerForm((f) => ({ ...f, name: e.target.value }))}
+                        className="w-full bg-zinc-800 text-white rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-zinc-400 mb-1">Slug</label>
+                      <input
+                        type="text"
+                        value={editServerForm.slug}
+                        onChange={(e) => setEditServerForm((f) => ({ ...f, slug: e.target.value }))}
+                        placeholder="例如: my-server"
+                        className="w-full bg-zinc-800 text-white rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-zinc-400 mb-1">描述</label>
+                      <textarea
+                        value={editServerForm.description}
+                        onChange={(e) =>
+                          setEditServerForm((f) => ({ ...f, description: e.target.value }))
+                        }
+                        rows={3}
+                        placeholder="服务器描述..."
+                        className="w-full bg-zinc-800 text-white rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-zinc-300">公开服务器</span>
+                      <button
+                        type="button"
+                        onClick={() => setEditServerForm((f) => ({ ...f, isPublic: !f.isPublic }))}
+                        className={`relative w-11 h-6 rounded-full transition-colors ${
+                          editServerForm.isPublic ? 'bg-indigo-600' : 'bg-zinc-700'
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
+                            editServerForm.isPublic ? 'translate-x-5' : ''
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    <div className="flex justify-end gap-3 pt-2">
+                      <button
+                        onClick={() => setEditingServer(null)}
+                        className="px-4 py-2 text-zinc-400 hover:text-white transition"
+                      >
+                        取消
+                      </button>
+                      <button
+                        onClick={saveEditServer}
+                        disabled={!editServerForm.name.trim()}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition disabled:opacity-50"
+                      >
+                        保存
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

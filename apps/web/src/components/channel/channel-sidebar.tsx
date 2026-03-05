@@ -82,6 +82,13 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
     queryFn: () => fetchApi<Server>(`/api/servers/${serverId}`),
   })
 
+  // Auto-redirect to slug URL if server has a slug and URL uses UUID
+  useEffect(() => {
+    if (server?.slug && serverId !== server.slug) {
+      navigate({ to: '/app/servers/$serverId', params: { serverId: server.slug }, replace: true })
+    }
+  }, [server?.slug, serverId, navigate])
+
   const { data: channels = [] } = useQuery({
     queryKey: ['channels', serverId],
     queryFn: () => fetchApi<Channel[]>(`/api/servers/${serverId}/channels`),

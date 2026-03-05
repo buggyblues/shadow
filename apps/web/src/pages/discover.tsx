@@ -9,6 +9,7 @@ import { getCatAvatar } from '../lib/pixel-cats'
 interface DiscoverServer {
   id: string
   name: string
+  slug: string | null
   description: string | null
   iconUrl: string | null
   bannerUrl?: string | null
@@ -19,7 +20,7 @@ interface DiscoverServer {
 }
 
 interface ServerEntry {
-  server: { id: string; name: string; iconUrl: string | null }
+  server: { id: string; name: string; slug: string | null; iconUrl: string | null }
   member: { role: string }
 }
 
@@ -177,7 +178,7 @@ export function DiscoverPage() {
                           onClick={() =>
                             navigate({
                               to: '/app/servers/$serverId',
-                              params: { serverId: server.id },
+                              params: { serverId: server.slug ?? server.id },
                             })
                           }
                           className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition"

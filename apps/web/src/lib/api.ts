@@ -3,6 +3,18 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? ''
 let isRefreshing = false
 let refreshPromise: Promise<string | null> | null = null
 
+function clearAuthState() {
+  localStorage.removeItem('accessToken')
+  localStorage.removeItem('refreshToken')
+  // Redirect to login page if not already there
+  if (
+    !window.location.pathname.startsWith('/login') &&
+    !window.location.pathname.startsWith('/register')
+  ) {
+    window.location.href = '/login'
+  }
+}
+
 async function refreshAccessToken(): Promise<string | null> {
   const refreshToken = localStorage.getItem('refreshToken')
   if (!refreshToken) return null
@@ -53,12 +65,15 @@ export async function fetchApi<T>(path: string, options?: RequestInit): Promise<
         ...options,
         headers,
       })
+    } else {
+      // Refresh failed — clear auth state and redirect to login
+      clearAuthState()
     }
   }
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))
-    let errorMessage = 'Request failed'
+    let errorMessage = `Request failed (${response.status})`
     if (typeof body === 'object' && body !== null) {
       const b = body as Record<string, unknown>
       if (typeof b.error === 'string') {

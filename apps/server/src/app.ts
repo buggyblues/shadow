@@ -11,15 +11,30 @@ import { createMessageHandler } from './handlers/message.handler'
 import { createNotificationHandler } from './handlers/notification.handler'
 import { createSearchHandler } from './handlers/search.handler'
 import { createServerHandler } from './handlers/server.handler'
-import { errorMiddleware } from './middleware/error.middleware'
+import { logger } from './lib/logger'
 import { loggerMiddleware } from './middleware/logger.middleware'
 
 export function createApp(container: AppContainer) {
   const app = new Hono()
 
+  // Global error handler (Hono's onError ensures proper JSON responses)
+  app.onError((error, c) => {
+    const message = error instanceof Error ? error.message : 'Internal Server Error'
+    const status = (error as { status?: number }).status ?? 500
+
+    logger.error({ err: error, path: c.req.path, method: c.req.method }, message)
+
+    return c.json(
+      {
+        error: status >= 500 ? 'Internal Server Error' : message,
+        ...(process.env.NODE_ENV !== 'production' && status >= 500 ? { detail: message } : {}),
+      },
+      status as 400,
+    )
+  })
+
   // Global middleware
   app.use('*', cors())
-  app.use('*', errorMiddleware)
   app.use('*', loggerMiddleware)
   app.use('*', bodyLimit({ maxSize: 50 * 1024 * 1024 })) // 50MB
 

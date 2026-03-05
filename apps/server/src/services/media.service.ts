@@ -25,6 +25,20 @@ export class MediaService {
         await this.minioClient.makeBucket(bucketName)
       }
 
+      // Set public read policy so uploaded files are directly accessible
+      const publicPolicy = JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: { AWS: ['*'] },
+            Action: ['s3:GetObject'],
+            Resource: [`arn:aws:s3:::${bucketName}/*`],
+          },
+        ],
+      })
+      await this.minioClient.setBucketPolicy(bucketName, publicPolicy)
+
       this.deps.logger.info('MinIO storage initialized')
     } catch (error) {
       this.deps.logger.warn({ err: error }, 'MinIO not available, file upload disabled')

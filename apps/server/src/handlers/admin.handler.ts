@@ -5,6 +5,7 @@ import { z } from 'zod'
 import type { AppContainer } from '../container'
 import { channels, messages } from '../db/schema'
 import { authMiddleware } from '../middleware/auth.middleware'
+import { updateServerSchema } from '../validators/server.schema'
 
 function generateCode(length = 8): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -189,6 +190,17 @@ export function createAdminHandler(container: AppContainer) {
     const cursor = c.req.query('cursor')
     const msgs = await messageDao.findByChannelId(channelId, limit, cursor)
     return c.json(msgs)
+  })
+
+  // Update server settings (admin)
+  adminHandler.patch('/servers/:id', zValidator('json', updateServerSchema), async (c) => {
+    const serverDao = container.resolve('serverDao')
+    const id = c.req.param('id')
+    const input = c.req.valid('json')
+    const server = await serverDao.findById(id)
+    if (!server) return c.json({ error: 'Server not found' }, 404)
+    const updated = await serverDao.update(id, input)
+    return c.json(updated)
   })
 
   adminHandler.delete('/servers/:id', async (c) => {
