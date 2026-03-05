@@ -9,7 +9,7 @@ COPY packages/ui/package.json packages/ui/
 COPY packages/agenthub/package.json packages/agenthub/
 COPY apps/admin/package.json apps/admin/
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 COPY packages/ packages/
 COPY apps/admin/ apps/admin/
