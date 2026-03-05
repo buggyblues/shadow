@@ -33,6 +33,70 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2)
 
+  apps/admin:
+    dependencies:
+      '@shadow/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@shadow/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      '@tanstack/react-query':
+        specifier: ^5.80.7
+        version: 5.90.21(react@19.2.4)
+      '@tanstack/react-router':
+        specifier: ^1.121.2
+        version: 1.166.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      date-fns:
+        specifier: ^4.1.0
+        version: 4.1.0
+      i18next:
+        specifier: ^25.8.14
+        version: 25.8.14(typescript@5.9.3)
+      i18next-browser-languagedetector:
+        specifier: ^8.2.1
+        version: 8.2.1
+      lucide-react:
+        specifier: ^0.513.0
+        version: 0.513.0(react@19.2.4)
+      react:
+        specifier: ^19.1.0
+        version: 19.2.4
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.4(react@19.2.4)
+      react-i18next:
+        specifier: ^16.5.4
+        version: 16.5.4(i18next@25.8.14(typescript@5.9.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      tailwind-merge:
+        specifier: ^3.3.0
+        version: 3.5.0
+      zustand:
+        specifier: ^5.0.5
+        version: 5.0.11(@types/react@19.2.14)(react@19.2.4)(use-sync-external-store@1.6.0(react@19.2.4))
+    devDependencies:
+      '@rsbuild/core':
+        specifier: ^1.3.21
+        version: 1.7.3
+      '@rsbuild/plugin-react':
+        specifier: ^1.3.3
+        version: 1.4.5(@rsbuild/core@1.7.3)
+      '@tailwindcss/postcss':
+        specifier: ^4.2.1
+        version: 4.2.1
+      '@types/react':
+        specifier: ^19.1.6
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.1.6
+        version: 19.2.3(@types/react@19.2.14)
+      tailwindcss:
+        specifier: ^4.1.10
+        version: 4.2.1
+
   apps/server:
     dependencies:
       '@hono/node-server':

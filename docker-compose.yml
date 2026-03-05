@@ -1,4 +1,5 @@
 services:
+  # ── Infrastructure ────────────────────────────────
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -46,6 +47,55 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+  # ── Application ───────────────────────────────────
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    restart: unless-stopped
+    ports:
+      - '3002:3002'
+    environment:
+      DATABASE_URL: postgresql://shadow:shadow@postgres:5432/shadow
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-shadow-dev-secret}
+      JWT_EXPIRES_IN: 7d
+      PORT: 3002
+      HOST: 0.0.0.0
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_USE_SSL: false
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: shadow
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    depends_on:
+      - server
+
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    depends_on:
+      - server
 
 volumes:
   pg_data:
