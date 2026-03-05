@@ -286,12 +286,12 @@ describe('Server Validators', () => {
       expect(result.success).toBe(true)
     })
 
-    it('should reject invalid iconUrl', () => {
+    it('should accept relative iconUrl (e.g. MinIO paths)', () => {
       const result = createServerSchema.safeParse({
         name: 'Server',
-        iconUrl: 'not-a-url',
+        iconUrl: '/shadow/uploads/icon.png',
       })
-      expect(result.success).toBe(false)
+      expect(result.success).toBe(true)
     })
   })
 

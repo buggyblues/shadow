@@ -79,22 +79,27 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
 
       {/* Server list */}
       {servers.map((s, i) => (
-        <button
-          key={s.server.id}
-          onClick={() => handleSelect(s.server.id)}
-          className={`w-12 h-12 rounded-2xl hover:rounded-xl transition-all flex items-center justify-center font-bold text-sm overflow-hidden ${
-            activeServerId === s.server.id
-              ? 'bg-primary rounded-xl text-white ring-2 ring-primary/50'
-              : 'bg-bg-primary text-text-primary hover:bg-primary/20'
-          }`}
-          title={s.server.name}
-        >
-          {s.server.iconUrl ? (
-            <img src={s.server.iconUrl} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <img src={getCatAvatar(i)} alt={s.server.name} className="w-10 h-10" />
-          )}
-        </button>
+        <div key={s.server.id} className="relative group/server">
+          <button
+            onClick={() => handleSelect(s.server.id)}
+            className={`w-12 h-12 rounded-2xl hover:rounded-xl transition-all flex items-center justify-center font-bold text-sm overflow-hidden ${
+              activeServerId === s.server.id
+                ? 'bg-primary rounded-xl text-white ring-2 ring-primary/50'
+                : 'bg-bg-primary text-text-primary hover:bg-primary/20'
+            }`}
+          >
+            {s.server.iconUrl ? (
+              <img src={s.server.iconUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <img src={getCatAvatar(i)} alt={s.server.name} className="w-10 h-10" />
+            )}
+          </button>
+          {/* Tooltip */}
+          <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-zinc-900 text-white text-sm font-medium rounded-md shadow-lg whitespace-nowrap pointer-events-none opacity-0 group-hover/server:opacity-100 transition-opacity z-50">
+            {s.server.name}
+            <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-zinc-900" />
+          </div>
+        </div>
       ))}
 
       {/* Add server */}

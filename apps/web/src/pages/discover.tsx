@@ -15,6 +15,7 @@ interface DiscoverServer {
   isPublic: boolean
   inviteCode: string
   memberCount: number
+  memberAvatars?: { id: string; avatarUrl: string | null }[]
 }
 
 interface ServerEntry {
@@ -144,10 +145,32 @@ export function DiscoverPage() {
                       {server.description ?? t('discover.noDescription')}
                     </p>
                     <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1.5 text-xs text-text-muted">
-                        <Users size={14} />
-                        {server.memberCount} {t('discover.members')}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <div className="flex -space-x-2">
+                          {(server.memberAvatars ?? []).slice(0, 5).map((m) => (
+                            <div
+                              key={m.id}
+                              className="w-6 h-6 rounded-full border-2 border-bg-secondary overflow-hidden bg-bg-tertiary"
+                            >
+                              {m.avatarUrl ? (
+                                <img
+                                  src={m.avatarUrl}
+                                  alt=""
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-[8px] text-text-muted">
+                                  👤
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <span className="flex items-center gap-1 text-xs text-text-muted">
+                          <Users size={14} />
+                          {server.memberCount} {t('discover.members')}
+                        </span>
+                      </div>
                       {isJoined ? (
                         <button
                           type="button"

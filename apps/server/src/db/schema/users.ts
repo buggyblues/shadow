@@ -11,6 +11,7 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash').notNull(),
   status: userStatusEnum('status').default('offline').notNull(),
   isBot: boolean('is_bot').default(false).notNull(),
+  isAdmin: boolean('is_admin').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })

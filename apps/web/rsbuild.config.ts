@@ -28,6 +28,10 @@ export default defineConfig({
         target: 'http://localhost:3002',
         ws: true,
       },
+      '/shadow': {
+        target: 'http://localhost:9000',
+        changeOrigin: true,
+      },
     },
   },
   output: {

@@ -144,9 +144,35 @@ export class ServerDao {
       .limit(limit)
       .offset(offset)
 
+    // Fetch top 5 member avatars per server
+    const serverIds = results.map((r) => r.server.id)
+    const memberAvatars: Record<string, { id: string; avatarUrl: string | null }[]> = {}
+    if (serverIds.length > 0) {
+      const avatarRows = await this.db
+        .select({
+          serverId: members.serverId,
+          userId: users.id,
+          avatarUrl: users.avatarUrl,
+        })
+        .from(members)
+        .leftJoin(users, eq(members.userId, users.id))
+        .where(sql`${members.serverId} IN ${serverIds}`)
+
+      for (const row of avatarRows) {
+        if (!row.userId) continue
+        if (!memberAvatars[row.serverId]) {
+          memberAvatars[row.serverId] = []
+        }
+        if (memberAvatars[row.serverId]!.length < 5) {
+          memberAvatars[row.serverId]!.push({ id: row.userId, avatarUrl: row.avatarUrl })
+        }
+      }
+    }
+
     return results.map((r) => ({
       ...r.server,
       memberCount: Number(r.memberCount),
+      memberAvatars: memberAvatars[r.server.id] ?? [],
     }))
   }
 }

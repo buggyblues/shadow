@@ -66,6 +66,7 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
   const [editSlug, setEditSlug] = useState('')
   const [editIsPublic, setEditIsPublic] = useState(false)
   const [bannerUploading, setBannerUploading] = useState(false)
+  const [iconUploading, setIconUploading] = useState(false)
   const [copiedInvite, setCopiedInvite] = useState(false)
   const [contextMenu, setContextMenu] = useState<{
     x: number
@@ -153,6 +154,31 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
       /* upload failed */
     } finally {
       setBannerUploading(false)
+    }
+  }
+
+  const handleIconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIconUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const result = await fetchApi<{ url: string }>('/api/media/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      await fetchApi(`/api/servers/${serverId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ iconUrl: result.url }),
+      })
+      queryClient.invalidateQueries({ queryKey: ['server', serverId] })
+      queryClient.invalidateQueries({ queryKey: ['servers'] })
+      queryClient.invalidateQueries({ queryKey: ['discover-servers'] })
+    } catch {
+      /* upload failed */
+    } finally {
+      setIconUploading(false)
     }
   }
 
@@ -437,6 +463,37 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
               >
                 <X size={18} />
               </button>
+            </div>
+
+            {/* Server icon upload */}
+            <div className="mb-4">
+              <label className="block text-xs font-bold uppercase text-text-secondary mb-2">
+                {t('channel.serverIcon')}
+              </label>
+              <div className="flex items-center gap-4">
+                <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-bg-tertiary group/icon flex-shrink-0">
+                  {server?.iconUrl ? (
+                    <img src={server.iconUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-text-muted">
+                      {server?.name?.[0]?.toUpperCase() ?? '?'}
+                    </div>
+                  )}
+                  <label className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover/icon:opacity-100 transition cursor-pointer">
+                    <span className="text-white text-xs font-medium">
+                      {iconUploading ? '...' : t('channel.uploadIcon')}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleIconUpload}
+                      className="hidden"
+                      disabled={iconUploading}
+                    />
+                  </label>
+                </div>
+                <p className="text-xs text-text-muted">{t('channel.iconDesc')}</p>
+              </div>
             </div>
 
             {/* Banner upload */}

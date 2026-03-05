@@ -69,6 +69,9 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
       MINIO_BUCKET: shadow
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@shadow.app}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123456}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
     depends_on:
       postgres:
         condition: service_healthy

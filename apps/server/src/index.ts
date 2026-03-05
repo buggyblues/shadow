@@ -1,9 +1,12 @@
 import { serve } from '@hono/node-server'
+import { hash } from 'bcryptjs'
+import { eq } from 'drizzle-orm'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import { Server as SocketIOServer } from 'socket.io'
 import { createApp } from './app'
 import { createAppContainer } from './container'
 import { db } from './db'
+import { users } from './db/schema'
 import { logger } from './lib/logger'
 import { setupWebSocket } from './ws'
 
@@ -32,6 +35,43 @@ async function main() {
 
   // Create DI container
   const container = createAppContainer(db)
+
+  // Seed admin account from env vars
+  const adminEmail = process.env.ADMIN_EMAIL
+  const adminPassword = process.env.ADMIN_PASSWORD
+  if (adminEmail && adminPassword) {
+    try {
+      const existing = await db.select().from(users).where(eq(users.email, adminEmail)).limit(1)
+      if (existing.length === 0) {
+        const passwordHash = await hash(adminPassword, 12)
+        const adminUsername = process.env.ADMIN_USERNAME ?? 'admin'
+        // Check if username is taken, append suffix if so
+        const usernameCheck = await db
+          .select()
+          .from(users)
+          .where(eq(users.username, adminUsername))
+          .limit(1)
+        const finalUsername =
+          usernameCheck.length > 0 ? `${adminUsername}_${Date.now()}` : adminUsername
+        await db.insert(users).values({
+          email: adminEmail,
+          username: finalUsername,
+          passwordHash,
+          displayName: 'Admin',
+          isAdmin: true,
+        })
+        logger.info(`Admin account created: ${adminEmail} (username: ${finalUsername})`)
+      } else if (!existing[0]!.isAdmin) {
+        await db
+          .update(users)
+          .set({ isAdmin: true, updatedAt: new Date() })
+          .where(eq(users.email, adminEmail))
+        logger.info(`Existing user promoted to admin: ${adminEmail}`)
+      }
+    } catch (err) {
+      logger.warn({ err }, 'Failed to seed admin account')
+    }
+  }
 
   // Initialize services that need async setup
   const mediaService = container.resolve('mediaService')

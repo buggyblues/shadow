@@ -12,6 +12,11 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
       ...(opts?.headers ?? {}),
     },
   })
+  if (res.status === 403) {
+    localStorage.removeItem('admin_token')
+    window.location.reload()
+    throw new Error('Admin access denied')
+  }
   if (!res.ok) throw new Error(await res.text())
   return res.json() as Promise<T>
 }
@@ -33,10 +38,21 @@ function LoginPanel({ onLogin }: { onLogin: (token: string) => void }) {
       })
       if (!res.ok) throw new Error('Login failed')
       const data = (await res.json()) as { accessToken: string }
+      // Verify admin access
+      const checkRes = await fetch(`${API_BASE}/stats`, {
+        headers: { Authorization: `Bearer ${data.accessToken}` },
+      })
+      if (checkRes.status === 403) {
+        throw new Error('此账号没有管理员权限')
+      }
+      if (!checkRes.ok) {
+        throw new Error('Admin verification failed')
+      }
       localStorage.setItem('admin_token', data.accessToken)
       onLogin(data.accessToken)
-    } catch {
-      setErr('登录失败，请检查邮箱和密码')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '登录失败'
+      setErr(msg === 'Login failed' ? '登录失败，请检查邮箱和密码' : msg)
     }
   }
 
@@ -101,6 +117,8 @@ interface Stats {
   totalUsers: number
   onlineUsers: number
   totalServers: number
+  totalMessages: number
+  totalChannels: number
   totalInviteCodes: number
   usedInviteCodes: number
 }
@@ -136,6 +154,22 @@ interface Server {
   createdAt: string
 }
 
+interface Channel {
+  id: string
+  name: string
+  type: string
+  serverId: string
+}
+
+interface Message {
+  id: string
+  content: string
+  channelId: string
+  authorId: string
+  createdAt: string
+  author?: { username: string; displayName: string | null } | null
+}
+
 /* ── Dashboard Content ──────────────────────────────── */
 function DashboardContent() {
   const [tab, setTab] = useState<Tab>('stats')
@@ -146,6 +180,10 @@ function DashboardContent() {
   const [genCount, setGenCount] = useState(1)
   const [genNote, setGenNote] = useState('')
   const [loading, setLoading] = useState(false)
+  const [selectedServer, setSelectedServer] = useState<Server | null>(null)
+  const [serverChannels, setServerChannels] = useState<Channel[]>([])
+  const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null)
+  const [channelMessages, setChannelMessages] = useState<Message[]>([])
 
   const loadStats = async () => {
     try {
@@ -174,6 +212,24 @@ function DashboardContent() {
   const loadServers = async () => {
     try {
       setServers(await apiFetch<Server[]>('/servers'))
+    } catch {
+      /* */
+    }
+  }
+
+  const loadServerChannels = async (serverId: string) => {
+    try {
+      setServerChannels(await apiFetch<Channel[]>(`/servers/${serverId}/channels`))
+    } catch {
+      /* */
+    }
+  }
+
+  const loadChannelMessages = async (serverId: string, channelId: string) => {
+    try {
+      setChannelMessages(
+        await apiFetch<Message[]>(`/servers/${serverId}/channels/${channelId}/messages`),
+      )
     } catch {
       /* */
     }
@@ -225,6 +281,31 @@ function DashboardContent() {
     await apiFetch(`/servers/${id}`, { method: 'DELETE' })
     loadServers()
     loadStats()
+    if (selectedServer?.id === id) {
+      setSelectedServer(null)
+      setServerChannels([])
+      setSelectedChannel(null)
+      setChannelMessages([])
+    }
+  }
+
+  const deleteChannel = async (id: string) => {
+    if (!confirm('确定要删除该频道吗？')) return
+    await apiFetch(`/channels/${id}`, { method: 'DELETE' })
+    if (selectedServer) loadServerChannels(selectedServer.id)
+    loadStats()
+    if (selectedChannel?.id === id) {
+      setSelectedChannel(null)
+      setChannelMessages([])
+    }
+  }
+
+  const deleteMessage = async (id: string) => {
+    if (!confirm('确定要删除该消息吗？')) return
+    await apiFetch(`/messages/${id}`, { method: 'DELETE' })
+    if (selectedServer && selectedChannel) {
+      loadChannelMessages(selectedServer.id, selectedChannel.id)
+    }
   }
 
   const tabs: { key: Tab; label: string }[] = [
@@ -283,6 +364,8 @@ function DashboardContent() {
                 <StatCard label="总用户数" value={stats.totalUsers} color="text-blue-400" />
                 <StatCard label="在线用户" value={stats.onlineUsers} color="text-green-400" />
                 <StatCard label="总服务器" value={stats.totalServers} color="text-purple-400" />
+                <StatCard label="总频道数" value={stats.totalChannels} color="text-pink-400" />
+                <StatCard label="总消息数" value={stats.totalMessages} color="text-orange-400" />
                 <StatCard
                   label="邀请码总数"
                   value={stats.totalInviteCodes}
@@ -488,58 +571,204 @@ function DashboardContent() {
           {/* Servers Tab */}
           {tab === 'servers' && (
             <div>
-              <h2 className="text-lg font-bold mb-4">服务器管理</h2>
-              <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-zinc-800 text-zinc-400 text-left">
-                      <th className="px-4 py-3">服务器</th>
-                      <th className="px-4 py-3">Slug</th>
-                      <th className="px-4 py-3">公开</th>
-                      <th className="px-4 py-3">创建时间</th>
-                      <th className="px-4 py-3">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {servers.map((s) => (
-                      <tr key={s.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            {s.iconUrl ? (
-                              <img src={s.iconUrl} alt="" className="w-7 h-7 rounded-lg" />
-                            ) : (
-                              <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-xs font-bold">
-                                {s.name[0]?.toUpperCase()}
-                              </div>
-                            )}
-                            <span className="font-medium">{s.name}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-zinc-400 font-mono">{s.slug ?? '-'}</td>
-                        <td className="px-4 py-3">{s.isPublic ? '✅' : '❌'}</td>
-                        <td className="px-4 py-3 text-zinc-500">
-                          {s.createdAt ? new Date(s.createdAt).toLocaleString() : '-'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <button
-                            onClick={() => deleteServer(s.id)}
-                            className="text-red-400 hover:text-red-300 text-xs transition"
-                          >
-                            删除
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {servers.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
-                          暂无服务器
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+              {/* Breadcrumb */}
+              <div className="flex items-center gap-2 mb-4">
+                <button
+                  onClick={() => {
+                    setSelectedServer(null)
+                    setServerChannels([])
+                    setSelectedChannel(null)
+                    setChannelMessages([])
+                  }}
+                  className={`text-lg font-bold ${selectedServer ? 'text-indigo-400 hover:underline cursor-pointer' : 'text-white'}`}
+                >
+                  服务器管理
+                </button>
+                {selectedServer && (
+                  <>
+                    <span className="text-zinc-500">/</span>
+                    <button
+                      onClick={() => {
+                        setSelectedChannel(null)
+                        setChannelMessages([])
+                      }}
+                      className={`text-lg font-bold ${selectedChannel ? 'text-indigo-400 hover:underline cursor-pointer' : 'text-white'}`}
+                    >
+                      {selectedServer.name}
+                    </button>
+                  </>
+                )}
+                {selectedChannel && (
+                  <>
+                    <span className="text-zinc-500">/</span>
+                    <span className="text-lg font-bold text-white">#{selectedChannel.name}</span>
+                  </>
+                )}
               </div>
+
+              {/* Messages list */}
+              {selectedServer && selectedChannel && (
+                <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-zinc-800 text-zinc-400 text-left">
+                        <th className="px-4 py-3">发送者</th>
+                        <th className="px-4 py-3">内容</th>
+                        <th className="px-4 py-3">时间</th>
+                        <th className="px-4 py-3">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {channelMessages.map((msg) => (
+                        <tr
+                          key={msg.id}
+                          className="border-b border-zinc-800/50 hover:bg-zinc-800/30"
+                        >
+                          <td className="px-4 py-3 text-zinc-300">
+                            {msg.author?.displayName ?? msg.author?.username ?? msg.authorId}
+                          </td>
+                          <td className="px-4 py-3 text-zinc-300 max-w-sm truncate">
+                            {msg.content}
+                          </td>
+                          <td className="px-4 py-3 text-zinc-500">
+                            {msg.createdAt ? new Date(msg.createdAt).toLocaleString() : '-'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => deleteMessage(msg.id)}
+                              className="text-red-400 hover:text-red-300 text-xs transition"
+                            >
+                              删除
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {channelMessages.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="px-4 py-8 text-center text-zinc-500">
+                            暂无消息
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Channels list for a server */}
+              {selectedServer && !selectedChannel && (
+                <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-zinc-800 text-zinc-400 text-left">
+                        <th className="px-4 py-3">频道</th>
+                        <th className="px-4 py-3">类型</th>
+                        <th className="px-4 py-3">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {serverChannels.map((ch) => (
+                        <tr
+                          key={ch.id}
+                          className="border-b border-zinc-800/50 hover:bg-zinc-800/30 cursor-pointer"
+                          onClick={() => {
+                            setSelectedChannel(ch)
+                            loadChannelMessages(selectedServer.id, ch.id)
+                          }}
+                        >
+                          <td className="px-4 py-3">
+                            <span className="text-zinc-300 font-medium">#{ch.name}</span>
+                          </td>
+                          <td className="px-4 py-3 text-zinc-400">{ch.type}</td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                deleteChannel(ch.id)
+                              }}
+                              className="text-red-400 hover:text-red-300 text-xs transition"
+                            >
+                              删除
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {serverChannels.length === 0 && (
+                        <tr>
+                          <td colSpan={3} className="px-4 py-8 text-center text-zinc-500">
+                            暂无频道
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Server list */}
+              {!selectedServer && (
+                <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-zinc-800 text-zinc-400 text-left">
+                        <th className="px-4 py-3">服务器</th>
+                        <th className="px-4 py-3">Slug</th>
+                        <th className="px-4 py-3">公开</th>
+                        <th className="px-4 py-3">创建时间</th>
+                        <th className="px-4 py-3">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {servers.map((s) => (
+                        <tr
+                          key={s.id}
+                          className="border-b border-zinc-800/50 hover:bg-zinc-800/30 cursor-pointer"
+                          onClick={() => {
+                            setSelectedServer(s)
+                            loadServerChannels(s.id)
+                          }}
+                        >
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              {s.iconUrl ? (
+                                <img src={s.iconUrl} alt="" className="w-7 h-7 rounded-lg" />
+                              ) : (
+                                <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-xs font-bold">
+                                  {s.name[0]?.toUpperCase()}
+                                </div>
+                              )}
+                              <span className="font-medium">{s.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-zinc-400 font-mono">{s.slug ?? '-'}</td>
+                          <td className="px-4 py-3">{s.isPublic ? '✅' : '❌'}</td>
+                          <td className="px-4 py-3 text-zinc-500">
+                            {s.createdAt ? new Date(s.createdAt).toLocaleString() : '-'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                deleteServer(s.id)
+                              }}
+                              className="text-red-400 hover:text-red-300 text-xs transition"
+                            >
+                              删除
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {servers.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
+                            暂无服务器
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </main>

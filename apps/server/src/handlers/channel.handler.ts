@@ -4,10 +4,21 @@ import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
 import { createChannelSchema, updateChannelSchema } from '../validators/channel.schema'
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export function createChannelHandler(container: AppContainer) {
   const channelHandler = new Hono()
 
   channelHandler.use('*', authMiddleware)
+
+  // Helper: resolve serverId param (UUID or slug) to UUID
+  async function resolveServerId(param: string): Promise<string> {
+    if (UUID_RE.test(param)) return param
+    const serverDao = container.resolve('serverDao')
+    const server = await serverDao.findBySlug(param)
+    if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
+    return server.id
+  }
 
   // POST /api/servers/:serverId/channels
   channelHandler.post(
@@ -15,7 +26,7 @@ export function createChannelHandler(container: AppContainer) {
     zValidator('json', createChannelSchema),
     async (c) => {
       const channelService = container.resolve('channelService')
-      const serverId = c.req.param('serverId')
+      const serverId = await resolveServerId(c.req.param('serverId'))
       const input = c.req.valid('json')
       const channel = await channelService.create(serverId, input)
       return c.json(channel, 201)
@@ -25,7 +36,7 @@ export function createChannelHandler(container: AppContainer) {
   // GET /api/servers/:serverId/channels
   channelHandler.get('/servers/:serverId/channels', async (c) => {
     const channelService = container.resolve('channelService')
-    const serverId = c.req.param('serverId')
+    const serverId = await resolveServerId(c.req.param('serverId'))
     const channels = await channelService.getByServerId(serverId)
     return c.json(channels)
   })

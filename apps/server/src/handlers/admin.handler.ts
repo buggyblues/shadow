@@ -1,7 +1,9 @@
 import { zValidator } from '@hono/zod-validator'
+import { sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
+import { channels, messages } from '../db/schema'
 import { authMiddleware } from '../middleware/auth.middleware'
 
 function generateCode(length = 8): string {
@@ -18,18 +20,33 @@ export function createAdminHandler(container: AppContainer) {
 
   adminHandler.use('*', authMiddleware)
 
+  // Admin-only middleware: check isAdmin on the authenticated user
+  adminHandler.use('*', async (c, next) => {
+    const user = c.get('user') as { userId: string }
+    const userDao = container.resolve('userDao')
+    const dbUser = await userDao.findById(user.userId)
+    if (!dbUser || !dbUser.isAdmin) {
+      return c.json({ error: 'Forbidden: admin access required' }, 403)
+    }
+    await next()
+  })
+
   // ── Stats ─────────────────────────────────────────
   adminHandler.get('/stats', async (c) => {
     const userDao = container.resolve('userDao')
     const serverDao = container.resolve('serverDao')
     const inviteCodeDao = container.resolve('inviteCodeDao')
+    const db = container.resolve('db')
 
-    const [allUsers, allServers, totalCodes, usedCodes] = await Promise.all([
-      userDao.findAll(9999, 0),
-      serverDao.findAll(9999, 0),
-      inviteCodeDao.count(),
-      inviteCodeDao.countUsed(),
-    ])
+    const [allUsers, allServers, totalCodes, usedCodes, msgCountResult, chCountResult] =
+      await Promise.all([
+        userDao.findAll(9999, 0),
+        serverDao.findAll(9999, 0),
+        inviteCodeDao.count(),
+        inviteCodeDao.countUsed(),
+        db.select({ count: sql<number>`count(*)` }).from(messages),
+        db.select({ count: sql<number>`count(*)` }).from(channels),
+      ])
 
     const onlineUsers = allUsers.filter((u: { status?: string }) => u.status === 'online').length
 
@@ -37,6 +54,8 @@ export function createAdminHandler(container: AppContainer) {
       totalUsers: allUsers.length,
       onlineUsers,
       totalServers: allServers.length,
+      totalMessages: Number(msgCountResult[0]?.count ?? 0),
+      totalChannels: Number(chCountResult[0]?.count ?? 0),
       totalInviteCodes: totalCodes,
       usedInviteCodes: usedCodes,
     })
@@ -143,6 +162,33 @@ export function createAdminHandler(container: AppContainer) {
     const offset = Number(c.req.query('offset') ?? '0')
     const servers = await serverDao.findAll(limit, offset)
     return c.json(servers)
+  })
+
+  // Server detail — get a single server by ID
+  adminHandler.get('/servers/:id', async (c) => {
+    const serverDao = container.resolve('serverDao')
+    const id = c.req.param('id')
+    const server = await serverDao.findById(id)
+    if (!server) return c.json({ error: 'Server not found' }, 404)
+    return c.json(server)
+  })
+
+  // Channels for a specific server
+  adminHandler.get('/servers/:id/channels', async (c) => {
+    const channelDao = container.resolve('channelDao')
+    const serverId = c.req.param('id')
+    const chs = await channelDao.findByServerId(serverId)
+    return c.json(chs)
+  })
+
+  // Messages for a specific channel (admin)
+  adminHandler.get('/servers/:serverId/channels/:channelId/messages', async (c) => {
+    const messageDao = container.resolve('messageDao')
+    const channelId = c.req.param('channelId')
+    const limit = Number(c.req.query('limit') ?? '50')
+    const cursor = c.req.query('cursor')
+    const msgs = await messageDao.findByChannelId(channelId, limit, cursor)
+    return c.json(msgs)
   })
 
   adminHandler.delete('/servers/:id', async (c) => {

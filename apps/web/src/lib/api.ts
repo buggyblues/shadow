@@ -57,8 +57,25 @@ export async function fetchApi<T>(path: string, options?: RequestInit): Promise<
   }
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Request failed' }))
-    throw Object.assign(new Error((error as { error: string }).error ?? 'Request failed'), {
+    const body = await response.json().catch(() => ({}))
+    let errorMessage = 'Request failed'
+    if (typeof body === 'object' && body !== null) {
+      const b = body as Record<string, unknown>
+      if (typeof b.error === 'string') {
+        errorMessage = b.error
+      } else if (
+        b.error &&
+        typeof b.error === 'object' &&
+        Array.isArray((b.error as { issues?: unknown }).issues)
+      ) {
+        // Zod validation error
+        const issues = (b.error as { issues: { message: string }[] }).issues
+        errorMessage = issues.map((i) => i.message).join('; ')
+      } else if (typeof b.message === 'string') {
+        errorMessage = b.message
+      }
+    }
+    throw Object.assign(new Error(errorMessage), {
       status: response.status,
     })
   }
