@@ -29,9 +29,7 @@ COPY apps/server/package.json apps/server/
 
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
-COPY --from=builder /app/packages/ packages/
 COPY --from=builder /app/apps/server/dist apps/server/dist
-COPY --from=builder /app/apps/server/drizzle apps/server/drizzle
 
 EXPOSE 3002
 ENV NODE_ENV=production
