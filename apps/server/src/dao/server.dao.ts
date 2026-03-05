@@ -1,5 +1,5 @@
 import { generateInviteCode } from '@shadow/shared'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import { members, servers, users } from '../db/schema'
 
@@ -32,7 +32,13 @@ export class ServerDao {
       .where(eq(members.userId, userId))
   }
 
-  async create(data: { name: string; ownerId: string; iconUrl?: string }) {
+  async create(data: {
+    name: string
+    ownerId: string
+    iconUrl?: string
+    description?: string
+    isPublic?: boolean
+  }) {
     const inviteCode = generateInviteCode()
     const result = await this.db
       .insert(servers)
@@ -40,13 +46,23 @@ export class ServerDao {
         name: data.name,
         ownerId: data.ownerId,
         iconUrl: data.iconUrl,
+        description: data.description,
+        isPublic: data.isPublic ?? false,
         inviteCode,
       })
       .returning()
     return result[0]
   }
 
-  async update(id: string, data: Partial<{ name: string; iconUrl: string | null }>) {
+  async update(
+    id: string,
+    data: Partial<{
+      name: string
+      iconUrl: string | null
+      description: string | null
+      isPublic: boolean
+    }>,
+  ) {
     const result = await this.db
       .update(servers)
       .set({ ...data, updatedAt: new Date() })
@@ -101,5 +117,25 @@ export class ServerDao {
 
   async findAll(limit = 50, offset = 0) {
     return this.db.select().from(servers).limit(limit).offset(offset)
+  }
+
+  async findPublic(limit = 50, offset = 0) {
+    const results = await this.db
+      .select({
+        server: servers,
+        memberCount:
+          sql<number>`(SELECT count(*) FROM ${members} WHERE ${members.serverId} = ${servers.id})`.as(
+            'member_count',
+          ),
+      })
+      .from(servers)
+      .where(eq(servers.isPublic, true))
+      .limit(limit)
+      .offset(offset)
+
+    return results.map((r) => ({
+      ...r.server,
+      memberCount: Number(r.memberCount),
+    }))
   }
 }

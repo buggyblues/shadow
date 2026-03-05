@@ -11,7 +11,32 @@ import {
 export function createServerHandler(container: AppContainer) {
   const serverHandler = new Hono()
 
-  // All server routes require authentication
+  // Public endpoint: GET /api/servers/discover - browse public servers
+  serverHandler.get('/discover', async (c) => {
+    const serverService = container.resolve('serverService')
+    const limit = Number(c.req.query('limit') ?? '50')
+    const offset = Number(c.req.query('offset') ?? '0')
+    const servers = await serverService.discoverPublic(limit, offset)
+    return c.json(servers)
+  })
+
+  // Public endpoint: GET /api/servers/invite/:code - get server info by invite code
+  serverHandler.get('/invite/:code', async (c) => {
+    const serverService = container.resolve('serverService')
+    const code = c.req.param('code')
+    try {
+      const server = await serverService.getByInviteCode(code)
+      return c.json({
+        id: server.id,
+        name: server.name,
+        iconUrl: server.iconUrl,
+      })
+    } catch {
+      return c.json({ error: 'Invalid invite code' }, 404)
+    }
+  })
+
+  // All other server routes require authentication
   serverHandler.use('*', authMiddleware)
 
   // POST /api/servers

@@ -93,9 +93,11 @@ CREATE TABLE "reactions" (
 CREATE TABLE "servers" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" varchar(100) NOT NULL,
+	"description" text,
 	"icon_url" text,
 	"owner_id" uuid NOT NULL,
 	"invite_code" varchar(8) NOT NULL,
+	"is_public" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "servers_invite_code_unique" UNIQUE("invite_code")

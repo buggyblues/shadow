@@ -11,6 +11,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@emoji-mart/data": "^1.2.1",
+    "@emoji-mart/react": "^1.1.1",
     "@shadow/shared": "workspace:*",
     "@shadow/ui": "workspace:*",
     "@tanstack/react-query": "^5.80.7",

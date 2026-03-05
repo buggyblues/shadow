@@ -13,9 +13,11 @@ import { useTranslation } from 'react-i18next'
 import { AppLayout } from './components/layout/app-layout'
 import { RootLayout } from './components/layout/root-layout'
 import { AgentMarketPage } from './pages/agents'
+import { DiscoverPage } from './pages/discover'
 import { DocsPage } from './pages/docs'
 import { FeaturesPage } from './pages/features'
 import { HomePage } from './pages/home'
+import { InvitePage } from './pages/invite'
 import { LoginPage } from './pages/login'
 import { PricingPage } from './pages/pricing'
 import { RegisterPage } from './pages/register'
@@ -91,6 +93,12 @@ const docsRoute = createRoute({
   component: DocsPage,
 })
 
+const inviteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/invite/$code',
+  component: InvitePage,
+})
+
 // Authenticated layout route
 const appRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -132,6 +140,12 @@ const settingsRoute = createRoute({
   component: SettingsPage,
 })
 
+const discoverRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/discover',
+  component: DiscoverPage,
+})
+
 // Router
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -141,7 +155,8 @@ const routeTree = rootRoute.addChildren([
   agentsRoute,
   pricingRoute,
   docsRoute,
-  appRoute.addChildren([appIndexRoute, serverRoute, settingsRoute]),
+  inviteRoute,
+  appRoute.addChildren([appIndexRoute, serverRoute, settingsRoute, discoverRoute]),
 ])
 
 const router = createRouter({ routeTree })

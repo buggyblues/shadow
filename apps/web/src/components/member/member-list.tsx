@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
 import { useChatStore } from '../../stores/chat.store'
 import { UserAvatar } from '../common/avatar'
@@ -33,12 +34,27 @@ const statusColors: Record<string, string> = {
 export function MemberList() {
   const { t } = useTranslation()
   const { activeServerId } = useChatStore()
+  const queryClient = useQueryClient()
 
   const { data: members = [] } = useQuery({
     queryKey: ['members', activeServerId],
     queryFn: () => fetchApi<Member[]>(`/api/servers/${activeServerId}/members`),
     enabled: !!activeServerId,
   })
+
+  // Listen for real-time presence changes
+  useSocketEvent(
+    'presence:change',
+    (data: { userId: string; status: 'online' | 'idle' | 'dnd' | 'offline' }) => {
+      queryClient.setQueryData<Member[]>(['members', activeServerId], (old = []) =>
+        old.map((m) =>
+          m.userId === data.userId && m.user
+            ? { ...m, user: { ...m.user, status: data.status } }
+            : m,
+        ),
+      )
+    },
+  )
 
   const onlineMembers = members.filter((m) => m.user?.status !== 'offline')
   const offlineMembers = members.filter((m) => m.user?.status === 'offline')
@@ -61,6 +77,7 @@ export function MemberList() {
                 : null
           return (
             <button
+              type="button"
               key={member.id}
               className="flex items-center gap-3 px-2 py-1.5 w-full rounded-md hover:bg-white/[0.04] transition group"
             >

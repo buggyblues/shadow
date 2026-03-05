@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { UserAvatar } from '../common/avatar'
+import { EmojiPicker } from '../common/emoji-picker'
 
 interface Author {
   id: string
@@ -61,6 +62,7 @@ export function MessageBubble({ message, currentUserId, onReply, onReact }: Mess
   const { t, i18n } = useTranslation()
   const [showActions, setShowActions] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [showFullPicker, setShowFullPicker] = useState(false)
 
   const dateFnsLocaleMap: Record<string, Locale> = {
     'zh-CN': zhCN,
@@ -82,6 +84,7 @@ export function MessageBubble({ message, currentUserId, onReply, onReact }: Mess
       onMouseLeave={() => {
         setShowActions(false)
         setShowEmojiPicker(false)
+        setShowFullPicker(false)
       }}
     >
       {/* Avatar */}
@@ -155,6 +158,7 @@ export function MessageBubble({ message, currentUserId, onReply, onReact }: Mess
           <div className="flex flex-wrap gap-1 mt-1.5">
             {message.reactions.map((r) => (
               <button
+                type="button"
                 key={r.emoji}
                 onClick={() => onReact?.(message.id, r.emoji)}
                 className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition ${
@@ -175,6 +179,7 @@ export function MessageBubble({ message, currentUserId, onReply, onReact }: Mess
       {showActions && (
         <div className="absolute -top-3 right-4 flex items-center bg-bg-tertiary border border-white/10 rounded-lg shadow-lg">
           <button
+            type="button"
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             className="p-1.5 text-text-muted hover:text-text-primary transition"
             title={t('chat.addEmoji')}
@@ -182,6 +187,7 @@ export function MessageBubble({ message, currentUserId, onReply, onReact }: Mess
             <Smile size={16} />
           </button>
           <button
+            type="button"
             onClick={() => onReply?.(message.id)}
             className="p-1.5 text-text-muted hover:text-text-primary transition"
             title={t('chat.reply')}
@@ -189,6 +195,7 @@ export function MessageBubble({ message, currentUserId, onReply, onReact }: Mess
             <Reply size={16} />
           </button>
           <button
+            type="button"
             className="p-1.5 text-text-muted hover:text-text-primary transition"
             title={t('chat.more')}
           >
@@ -202,6 +209,7 @@ export function MessageBubble({ message, currentUserId, onReply, onReact }: Mess
         <div className="absolute -top-10 right-4 flex items-center gap-1 bg-bg-tertiary border border-white/10 rounded-lg shadow-lg p-1">
           {quickEmojis.map((emoji) => (
             <button
+              type="button"
               key={emoji}
               onClick={() => {
                 onReact?.(message.id, emoji)
@@ -212,6 +220,31 @@ export function MessageBubble({ message, currentUserId, onReply, onReact }: Mess
               {emoji}
             </button>
           ))}
+          <div className="w-px h-6 bg-white/10 mx-0.5" />
+          <button
+            type="button"
+            onClick={() => {
+              setShowEmojiPicker(false)
+              setShowFullPicker(true)
+            }}
+            className="w-8 h-8 rounded hover:bg-white/10 flex items-center justify-center text-sm text-text-muted transition"
+            title={t('chat.addEmoji')}
+          >
+            +
+          </button>
+        </div>
+      )}
+
+      {/* Full emoji picker */}
+      {showFullPicker && (
+        <div className="absolute -top-[440px] right-4 z-50">
+          <EmojiPicker
+            onSelect={(emoji) => {
+              onReact?.(message.id, emoji)
+            }}
+            onClose={() => setShowFullPicker(false)}
+            position="bottom"
+          />
         </div>
       )}
     </div>

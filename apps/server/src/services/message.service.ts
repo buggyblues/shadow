@@ -14,6 +14,10 @@ export class MessageService {
     return this.deps.messageDao.findByChannelId(channelId, limit, cursor)
   }
 
+  async getById(id: string) {
+    return this.deps.messageDao.findById(id)
+  }
+
   async send(channelId: string, authorId: string, input: SendMessageInput) {
     const message = await this.deps.messageDao.create({
       content: input.content,

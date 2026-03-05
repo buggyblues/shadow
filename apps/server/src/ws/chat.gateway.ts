@@ -45,6 +45,28 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
           if (data.threadId) {
             io.to(`thread:${data.threadId}`).emit('message:new', message)
           }
+
+          // Create notification for reply
+          if (data.replyToId) {
+            try {
+              const notificationService = container.resolve('notificationService')
+              const originalMessage = await messageService.getById(data.replyToId)
+              if (originalMessage && originalMessage.authorId !== userId) {
+                const notification = await notificationService.create({
+                  userId: originalMessage.authorId,
+                  type: 'reply',
+                  title: `${message.author?.displayName ?? message.author?.username ?? 'Someone'} replied to your message`,
+                  body: data.content.substring(0, 200),
+                  referenceId: message.id,
+                  referenceType: 'message',
+                })
+                // Push notification to the user via WS
+                io.emit('notification:new', notification)
+              }
+            } catch {
+              /* notification creation failed, non-critical */
+            }
+          }
         } catch (error) {
           const msg = error instanceof Error ? error.message : 'Failed to send message'
           socket.emit('error', { message: msg })

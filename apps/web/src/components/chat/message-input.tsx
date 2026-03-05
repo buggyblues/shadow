@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import { sendTyping, sendWsMessage } from '../../lib/socket'
+import { EmojiPicker } from '../common/emoji-picker'
 
 interface MessageInputProps {
   channelId: string
@@ -26,6 +27,7 @@ export function MessageInput({
   const [content, setContent] = useState('')
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
   const [uploading, setUploading] = useState(false)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -232,9 +234,25 @@ export function MessageInput({
           <ImageIcon size={18} />
         </button>
 
-        <button className="text-text-muted hover:text-text-primary transition pb-1">
-          <Smile size={20} />
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            className="text-text-muted hover:text-text-primary transition pb-1"
+            title={t('chat.addEmoji')}
+          >
+            <Smile size={20} />
+          </button>
+          {showEmojiPicker && (
+            <EmojiPicker
+              onSelect={(emoji) => {
+                setContent((prev) => prev + emoji)
+                textareaRef.current?.focus()
+              }}
+              onClose={() => setShowEmojiPicker(false)}
+              position="top"
+            />
+          )}
+        </div>
 
         <button
           onClick={handleSend}

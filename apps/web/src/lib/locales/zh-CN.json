@@ -100,7 +100,12 @@
     "home": "首页",
     "createServer": "创建服务器",
     "settings": "设置",
-    "serverName": "服务器名称"
+    "serverName": "服务器名称",
+    "joinServer": "加入服务器",
+    "joinServerDesc": "输入邀请码加入已有的服务器",
+    "inviteCodePlaceholder": "输入邀请码",
+    "joinButton": "加入",
+    "discover": "探索服务器"
   },
   "channel": {
     "serverSettings": "服务器设置",
@@ -115,7 +120,8 @@
     "typeAnnouncement": "公告",
     "editServerName": "服务器名称",
     "inviteCode": "邀请码",
-    "copyInviteCode": "复制邀请码"
+    "inviteLink": "邀请链接",
+    "copyInviteCode": "复制邀请链接"
   },
   "chat": {
     "selectChannel": "选择一个频道开始聊天",
@@ -130,7 +136,8 @@
     "inputPlaceholder": "在 #{{channelName}} 中发送消息",
     "uploadFile": "上传文件",
     "uploadImage": "上传图片",
-    "channelFallback": "频道"
+    "channelFallback": "频道",
+    "newMessages": "新消息"
   },
   "member": {
     "online": "在线",
@@ -307,5 +314,28 @@
     "envReqPnpm": "pnpm >= 9",
     "envReqDocker": "Docker & Docker Compose",
     "envReqDb": "PostgreSQL 15+ / Redis 7+（或使用 Docker）"
+  },
+  "invite": {
+    "title": "邀请",
+    "loginRequired": "请先登录后再接受邀请",
+    "invalidCode": "无效的邀请码",
+    "joinFailed": "加入失败，请重试",
+    "youAreInvited": "你被邀请加入一个服务器",
+    "acceptInvite": "接受邀请"
+  },
+  "discover": {
+    "title": "探索服务器",
+    "subtitle": "发现并加入感兴趣的社区",
+    "searchPlaceholder": "搜索服务器...",
+    "noServers": "暂无公开的服务器",
+    "noDescription": "暂无描述",
+    "members": "成员",
+    "joinButton": "加入"
+  },
+  "notification": {
+    "title": "通知",
+    "markAllRead": "全部已读",
+    "markRead": "标记已读",
+    "empty": "暂无通知"
   }
 }

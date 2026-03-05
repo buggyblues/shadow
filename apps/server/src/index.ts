@@ -14,8 +14,21 @@ async function main() {
   const migrationsPath =
     process.env.NODE_ENV === 'production' ? './apps/server/migrations' : './src/db/migrations'
   logger.info('Running database migrations...')
-  await migrate(db, { migrationsFolder: migrationsPath })
-  logger.info('Database migrations completed')
+  try {
+    await migrate(db, { migrationsFolder: migrationsPath })
+    logger.info('Database migrations completed')
+  } catch (err) {
+    // Handle "already exists" errors gracefully (e.g. Docker volume has stale data
+    // from a previous run where objects were created but migration journal lost)
+    const message = err instanceof Error ? err.message : String(err)
+    if (message.includes('already exists')) {
+      logger.warn(
+        'Database objects already exist, skipping migrations. If schema is out of sync, run: docker-compose down -v && docker-compose up --build',
+      )
+    } else {
+      throw err
+    }
+  }
 
   // Create DI container
   const container = createAppContainer(db)

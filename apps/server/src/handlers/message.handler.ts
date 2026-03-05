@@ -109,6 +109,23 @@ export function createMessageHandler(container: AppContainer) {
     const input = c.req.valid('json')
     const user = c.get('user')
     const reaction = await messageService.addReaction(id, user.userId, input)
+
+    // Broadcast reaction via WS
+    try {
+      const io = container.resolve('io')
+      const message = await messageService.getById(id)
+      if (message) {
+        const reactions = await messageService.getReactions(id)
+        io.to(`channel:${message.channelId}`).emit('reaction:updated', {
+          messageId: id,
+          channelId: message.channelId,
+          reactions,
+        })
+      }
+    } catch {
+      /* io not yet registered */
+    }
+
     return c.json(reaction, 201)
   })
 
@@ -119,6 +136,23 @@ export function createMessageHandler(container: AppContainer) {
     const emoji = c.req.param('emoji')
     const user = c.get('user')
     await messageService.removeReaction(id, user.userId, emoji)
+
+    // Broadcast reaction removal via WS
+    try {
+      const io = container.resolve('io')
+      const message = await messageService.getById(id)
+      if (message) {
+        const reactions = await messageService.getReactions(id)
+        io.to(`channel:${message.channelId}`).emit('reaction:updated', {
+          messageId: id,
+          channelId: message.channelId,
+          reactions,
+        })
+      }
+    } catch {
+      /* io not yet registered */
+    }
+
     return c.json({ success: true })
   })
 

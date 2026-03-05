@@ -100,7 +100,12 @@
     "home": "ホーム",
     "createServer": "サーバー作成",
     "settings": "設定",
-    "serverName": "サーバー名"
+    "serverName": "サーバー名",
+    "joinServer": "サーバーに参加",
+    "joinServerDesc": "招待コードを入力してサーバーに参加",
+    "inviteCodePlaceholder": "招待コードを入力",
+    "joinButton": "参加",
+    "discover": "サーバーを探す"
   },
   "channel": {
     "serverSettings": "サーバー設定",
@@ -115,7 +120,8 @@
     "typeAnnouncement": "お知らせ",
     "editServerName": "サーバー名",
     "inviteCode": "招待コード",
-    "copyInviteCode": "招待コードをコピー"
+    "inviteLink": "招待リンク",
+    "copyInviteCode": "招待リンクをコピー"
   },
   "chat": {
     "selectChannel": "チャンネルを選んでチャットを始めましょう",
@@ -130,7 +136,8 @@
     "inputPlaceholder": "#{{channelName}} にメッセージを送信",
     "uploadFile": "ファイルをアップロード",
     "uploadImage": "画像をアップロード",
-    "channelFallback": "チャンネル"
+    "channelFallback": "チャンネル",
+    "newMessages": "新着メッセージ"
   },
   "member": {
     "online": "オンライン",
@@ -307,5 +314,28 @@
     "envReqPnpm": "pnpm >= 9",
     "envReqDocker": "Docker & Docker Compose",
     "envReqDb": "PostgreSQL 15+ / Redis 7+（または Docker を使用）"
+  },
+  "invite": {
+    "title": "招待",
+    "loginRequired": "招待を受けるにはまずログインしてください",
+    "invalidCode": "無効な招待コード",
+    "joinFailed": "参加に失敗しました。再試行してください",
+    "youAreInvited": "サーバーへの招待が届いています",
+    "acceptInvite": "招待を受ける"
+  },
+  "discover": {
+    "title": "サーバーを探す",
+    "subtitle": "興味のあるコミュニティを見つけて参加",
+    "searchPlaceholder": "サーバーを検索...",
+    "noServers": "公開サーバーはありません",
+    "noDescription": "説明なし",
+    "members": "メンバー",
+    "joinButton": "参加"
+  },
+  "notification": {
+    "title": "通知",
+    "markAllRead": "すべて既読",
+    "markRead": "既読にする",
+    "empty": "通知はありません"
   }
 }

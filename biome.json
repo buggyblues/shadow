@@ -28,7 +28,8 @@
         "noSvgWithoutTitle": "warn",
         "noLabelWithoutControl": "warn",
         "noStaticElementInteractions": "warn",
-        "useKeyWithClickEvents": "warn"
+        "useKeyWithClickEvents": "warn",
+        "useSemanticElements": "warn"
       },
       "suspicious": {
         "noExplicitAny": "warn",

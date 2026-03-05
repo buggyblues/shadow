@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { fetchApi } from '../../lib/api'
 import { connectSocket, disconnectSocket } from '../../lib/socket'
 import { useAuthStore } from '../../stores/auth.store'
+import { NotificationBell } from '../notification/notification-bell'
 import { ServerSidebar } from '../server/server-sidebar'
 
 export function AppLayout() {
@@ -31,7 +32,7 @@ export function AppLayout() {
 
   // Redirect to login on auth failure
   useEffect(() => {
-    if (meError && (meError as any).status === 401) {
+    if (meError && (meError as Error & { status?: number }).status === 401) {
       logout()
       navigate({ to: '/login' })
     }
@@ -46,7 +47,15 @@ export function AppLayout() {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-bg-tertiary">
       <ServerSidebar />
-      <Outlet />
+      <div className="flex flex-col flex-1 min-w-0">
+        {/* Top bar with notification bell */}
+        <div className="h-0 relative z-30">
+          <div className="absolute top-2 right-4">
+            <NotificationBell />
+          </div>
+        </div>
+        <Outlet />
+      </div>
     </div>
   )
 }

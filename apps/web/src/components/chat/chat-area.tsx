@@ -50,9 +50,10 @@ export function ChatArea() {
   const { activeChannelId } = useChatStore()
   const user = useAuthStore((s) => s.user)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const [replyToId, setReplyToId] = useState<string | null>(null)
   const [typingUsers, setTypingUsers] = useState<string[]>([])
-
+  const [lastReadCount, setLastReadCount] = useState(0)
   // Fetch channel info
   const { data: channel } = useQuery({
     queryKey: ['channel', activeChannelId],
@@ -96,6 +97,18 @@ export function ChatArea() {
     }
   })
 
+  // Listen for reaction updates via WS
+  useSocketEvent(
+    'reaction:updated',
+    (data: { messageId: string; channelId: string; reactions: ReactionGroup[] }) => {
+      if (data.channelId === activeChannelId) {
+        queryClient.setQueryData<Message[]>(['messages', activeChannelId], (old = []) =>
+          old.map((m) => (m.id === data.messageId ? { ...m, reactions: data.reactions } : m)),
+        )
+      }
+    },
+  )
+
   // Listen for typing indicators
   useSocketEvent(
     'message:typing',
@@ -120,15 +133,35 @@ export function ChatArea() {
         method: 'POST',
         body: JSON.stringify({ emoji }),
       }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['messages', activeChannelId] })
-    },
   })
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll to bottom on new messages (only if near bottom)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [])
+    const container = messagesContainerRef.current
+    if (!container) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      return
+    }
+
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150
+
+    if (isNearBottom || messages.length <= 50) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages.length])
+
+  // Reset read count when channel changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional trigger on channel change
+  useEffect(() => {
+    setLastReadCount(0)
+  }, [activeChannelId])
+
+  // Track read count for new message line
+  useEffect(() => {
+    if (messages.length > 0 && lastReadCount === 0) {
+      setLastReadCount(messages.length)
+    }
+  }, [messages.length, lastReadCount])
 
   const handleReact = useCallback(
     (messageId: string, emoji: string) => {
@@ -163,7 +196,7 @@ export function ChatArea() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto py-4">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto py-4">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-text-muted">
             <Hash size={48} className="mb-2 opacity-30" />
@@ -175,14 +208,24 @@ export function ChatArea() {
             <p className="text-sm">{t('chat.welcomeStart')}</p>
           </div>
         ) : (
-          messages.map((msg) => (
-            <MessageBubble
-              key={msg.id}
-              message={msg}
-              currentUserId={user?.id ?? ''}
-              onReply={(id) => setReplyToId(id)}
-              onReact={handleReact}
-            />
+          messages.map((msg, index) => (
+            <div key={msg.id}>
+              {lastReadCount > 0 && index === lastReadCount && (
+                <div className="flex items-center gap-2 px-4 my-2">
+                  <div className="flex-1 h-px bg-danger/60" />
+                  <span className="text-xs text-danger font-semibold px-2">
+                    {t('chat.newMessages')}
+                  </span>
+                  <div className="flex-1 h-px bg-danger/60" />
+                </div>
+              )}
+              <MessageBubble
+                message={msg}
+                currentUserId={user?.id ?? ''}
+                onReply={(id) => setReplyToId(id)}
+                onReact={handleReact}
+              />
+            </div>
           ))
         )}
         <div ref={messagesEndRef} />

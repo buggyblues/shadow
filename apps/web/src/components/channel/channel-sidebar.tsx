@@ -97,7 +97,8 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
 
   const copyInviteCode = async () => {
     if (server?.inviteCode) {
-      await navigator.clipboard.writeText(server.inviteCode)
+      const inviteLink = `${window.location.origin}/invite/${server.inviteCode}`
+      await navigator.clipboard.writeText(inviteLink)
       setCopiedInvite(true)
       setTimeout(() => setCopiedInvite(false), 2000)
     }
@@ -304,11 +305,11 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
             {server?.inviteCode && (
               <div className="mb-5">
                 <label className="block text-xs font-bold uppercase text-text-secondary mb-2">
-                  {t('channel.inviteCode')}
+                  {t('channel.inviteLink')}
                 </label>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 bg-bg-tertiary text-text-primary rounded-lg px-4 py-3 font-mono text-sm">
-                    {server.inviteCode}
+                  <code className="flex-1 bg-bg-tertiary text-text-primary rounded-lg px-4 py-3 font-mono text-xs truncate">
+                    {`${window.location.origin}/invite/${server.inviteCode}`}
                   </code>
                   <button
                     onClick={copyInviteCode}

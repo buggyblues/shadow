@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { Plus, Settings } from 'lucide-react'
+import { Compass, LogIn, Plus, Settings } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
@@ -18,7 +18,9 @@ export function ServerSidebar() {
   const queryClient = useQueryClient()
   const { activeServerId, setActiveServer } = useChatStore()
   const [showCreate, setShowCreate] = useState(false)
+  const [showJoin, setShowJoin] = useState(false)
   const [newName, setNewName] = useState('')
+  const [joinCode, setJoinCode] = useState('')
 
   const { data: servers = [] } = useQuery({
     queryKey: ['servers'],
@@ -35,6 +37,20 @@ export function ServerSidebar() {
       queryClient.invalidateQueries({ queryKey: ['servers'] })
       setShowCreate(false)
       setNewName('')
+    },
+  })
+
+  const joinServer = useMutation({
+    mutationFn: (inviteCode: string) =>
+      fetchApi<{ id: string }>('/api/servers/_/join', {
+        method: 'POST',
+        body: JSON.stringify({ inviteCode }),
+      }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['servers'] })
+      setShowJoin(false)
+      setJoinCode('')
+      handleSelect(data.id)
     },
   })
 
@@ -85,6 +101,24 @@ export function ServerSidebar() {
         <Plus size={24} />
       </button>
 
+      {/* Join server */}
+      <button
+        onClick={() => setShowJoin(!showJoin)}
+        className="w-12 h-12 rounded-2xl bg-bg-primary hover:bg-blue-600 hover:rounded-xl transition-all flex items-center justify-center text-blue-500 hover:text-white"
+        title={t('server.joinServer')}
+      >
+        <LogIn size={20} />
+      </button>
+
+      {/* Discover servers */}
+      <button
+        onClick={() => navigate({ to: '/app/discover' })}
+        className="w-12 h-12 rounded-2xl bg-bg-primary hover:bg-emerald-600 hover:rounded-xl transition-all flex items-center justify-center text-emerald-500 hover:text-white"
+        title={t('server.discover')}
+      >
+        <Compass size={20} />
+      </button>
+
       {/* Settings */}
       <div className="mt-auto">
         <button
@@ -127,6 +161,45 @@ export function ServerSidebar() {
                 className="px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg transition disabled:opacity-50 font-bold"
               >
                 {t('common.create')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Join server dialog */}
+      {showJoin && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          onClick={() => setShowJoin(false)}
+        >
+          <div
+            className="bg-bg-secondary rounded-xl p-6 w-96 border border-white/5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-xl font-bold text-text-primary mb-2">{t('server.joinServer')}</h2>
+            <p className="text-text-muted text-sm mb-4">{t('server.joinServerDesc')}</p>
+            <input
+              type="text"
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value)}
+              placeholder={t('server.inviteCodePlaceholder')}
+              maxLength={8}
+              className="w-full bg-bg-tertiary text-text-primary rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-primary mb-4 font-mono text-center text-lg tracking-widest"
+            />
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowJoin(false)}
+                className="px-4 py-2 text-text-secondary hover:text-text-primary transition rounded-lg"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={() => joinCode.trim() && joinServer.mutate(joinCode.trim())}
+                disabled={joinCode.trim().length !== 8 || joinServer.isPending}
+                className="px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg transition disabled:opacity-50 font-bold"
+              >
+                {t('server.joinButton')}
               </button>
             </div>
           </div>

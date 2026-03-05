@@ -10,6 +10,8 @@ export class ServerService {
       name: input.name,
       ownerId: userId,
       iconUrl: input.iconUrl,
+      description: input.description,
+      isPublic: input.isPublic,
     })
 
     // Add owner as member with 'owner' role
@@ -30,6 +32,14 @@ export class ServerService {
     const server = await this.deps.serverDao.findById(id)
     if (!server) {
       throw Object.assign(new Error('Server not found'), { status: 404 })
+    }
+    return server
+  }
+
+  async getByInviteCode(code: string) {
+    const server = await this.deps.serverDao.findByInviteCode(code)
+    if (!server) {
+      throw Object.assign(new Error('Invalid invite code'), { status: 404 })
     }
     return server
   }
@@ -88,5 +98,9 @@ export class ServerService {
 
   async getMembers(serverId: string) {
     return this.deps.serverDao.getMembers(serverId)
+  }
+
+  async discoverPublic(limit = 50, offset = 0) {
+    return this.deps.serverDao.findPublic(limit, offset)
   }
 }

@@ -100,7 +100,12 @@
     "home": "Home",
     "createServer": "Create Server",
     "settings": "Settings",
-    "serverName": "Server Name"
+    "serverName": "Server Name",
+    "joinServer": "Join Server",
+    "joinServerDesc": "Enter an invite code to join an existing server",
+    "inviteCodePlaceholder": "Enter invite code",
+    "joinButton": "Join",
+    "discover": "Discover Servers"
   },
   "channel": {
     "serverSettings": "Server Settings",
@@ -115,7 +120,8 @@
     "typeAnnouncement": "Announcement",
     "editServerName": "Server Name",
     "inviteCode": "Invite Code",
-    "copyInviteCode": "Copy Invite Code"
+    "inviteLink": "Invite Link",
+    "copyInviteCode": "Copy Invite Link"
   },
   "chat": {
     "selectChannel": "Select a channel to start chatting",
@@ -130,7 +136,8 @@
     "inputPlaceholder": "Message #{{channelName}}",
     "uploadFile": "Upload File",
     "uploadImage": "Upload Image",
-    "channelFallback": "channel"
+    "channelFallback": "channel",
+    "newMessages": "New Messages"
   },
   "member": {
     "online": "Online",
@@ -307,5 +314,28 @@
     "envReqPnpm": "pnpm >= 9",
     "envReqDocker": "Docker & Docker Compose",
     "envReqDb": "PostgreSQL 15+ / Redis 7+ (or use Docker)"
+  },
+  "invite": {
+    "title": "Invitation",
+    "loginRequired": "Please log in first to accept the invitation",
+    "invalidCode": "Invalid invite code",
+    "joinFailed": "Failed to join, please try again",
+    "youAreInvited": "You have been invited to join a server",
+    "acceptInvite": "Accept Invitation"
+  },
+  "discover": {
+    "title": "Discover Servers",
+    "subtitle": "Find and join communities you're interested in",
+    "searchPlaceholder": "Search servers...",
+    "noServers": "No public servers available",
+    "noDescription": "No description",
+    "members": "members",
+    "joinButton": "Join"
+  },
+  "notification": {
+    "title": "Notifications",
+    "markAllRead": "Mark All Read",
+    "markRead": "Mark as Read",
+    "empty": "No notifications"
   }
 }
