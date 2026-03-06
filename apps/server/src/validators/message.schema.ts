@@ -28,6 +28,11 @@ export const createThreadSchema = z.object({
   parentMessageId: z.string().uuid(),
 })
 
+export const updateThreadSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  isArchived: z.boolean().optional(),
+})
+
 export const reactionSchema = z.object({
   emoji: z.string().min(1).max(32),
 })
@@ -35,4 +40,5 @@ export const reactionSchema = z.object({
 export type SendMessageInput = z.infer<typeof sendMessageSchema>
 export type UpdateMessageInput = z.infer<typeof updateMessageSchema>
 export type CreateThreadInput = z.infer<typeof createThreadSchema>
+export type UpdateThreadInput = z.infer<typeof updateThreadSchema>
 export type ReactionInput = z.infer<typeof reactionSchema>

@@ -145,6 +145,39 @@ export class MessageDao {
     return this.db.select().from(reactions).where(eq(reactions.messageId, messageId))
   }
 
+  // Pins
+  async pinMessage(id: string) {
+    const result = await this.db
+      .update(messages)
+      .set({ isPinned: true, updatedAt: new Date() })
+      .where(eq(messages.id, id))
+      .returning()
+    return result[0] ?? null
+  }
+
+  async unpinMessage(id: string) {
+    const result = await this.db
+      .update(messages)
+      .set({ isPinned: false, updatedAt: new Date() })
+      .where(eq(messages.id, id))
+      .returning()
+    return result[0] ?? null
+  }
+
+  async findPinnedByChannelId(channelId: string) {
+    const rows = await this.db
+      .select({
+        message: messages,
+        author: this.authorColumns,
+      })
+      .from(messages)
+      .leftJoin(users, eq(messages.authorId, users.id))
+      .where(and(eq(messages.channelId, channelId), eq(messages.isPinned, true)))
+      .orderBy(desc(messages.createdAt))
+
+    return rows.map((r) => ({ ...r.message, author: r.author }))
+  }
+
   // Threads
   async createThread(data: {
     name: string
@@ -159,5 +192,26 @@ export class MessageDao {
   async findThreadById(id: string) {
     const result = await this.db.select().from(threads).where(eq(threads.id, id)).limit(1)
     return result[0] ?? null
+  }
+
+  async findThreadsByChannelId(channelId: string) {
+    return this.db
+      .select()
+      .from(threads)
+      .where(and(eq(threads.channelId, channelId), eq(threads.isArchived, false)))
+      .orderBy(desc(threads.createdAt))
+  }
+
+  async updateThread(id: string, data: Partial<{ name: string; isArchived: boolean }>) {
+    const result = await this.db
+      .update(threads)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(threads.id, id))
+      .returning()
+    return result[0] ?? null
+  }
+
+  async deleteThread(id: string) {
+    await this.db.delete(threads).where(eq(threads.id, id))
   }
 }

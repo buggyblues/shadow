@@ -130,6 +130,29 @@ export class ServerDao {
     return this.db.select().from(servers).limit(limit).offset(offset)
   }
 
+  async updateMember(
+    serverId: string,
+    userId: string,
+    data: Partial<{ role: 'owner' | 'admin' | 'member'; nickname: string | null }>,
+  ) {
+    const result = await this.db
+      .update(members)
+      .set(data)
+      .where(and(eq(members.serverId, serverId), eq(members.userId, userId)))
+      .returning()
+    return result[0] ?? null
+  }
+
+  async regenerateInviteCode(id: string) {
+    const inviteCode = generateInviteCode()
+    const result = await this.db
+      .update(servers)
+      .set({ inviteCode, updatedAt: new Date() })
+      .where(eq(servers.id, id))
+      .returning()
+    return result[0] ?? null
+  }
+
   async findPublic(limit = 50, offset = 0) {
     const results = await this.db
       .select()

@@ -60,4 +60,13 @@ export class ChannelDao {
   async delete(id: string) {
     await this.db.delete(channels).where(eq(channels.id, id))
   }
+
+  async updatePositions(positions: { id: string; position: number }[]) {
+    for (const pos of positions) {
+      await this.db
+        .update(channels)
+        .set({ position: pos.position, updatedAt: new Date() })
+        .where(eq(channels.id, pos.id))
+    }
+  }
 }

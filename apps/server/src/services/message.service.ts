@@ -5,6 +5,7 @@ import type {
   ReactionInput,
   SendMessageInput,
   UpdateMessageInput,
+  UpdateThreadInput,
 } from '../validators/message.schema'
 
 export class MessageService {
@@ -100,8 +101,101 @@ export class MessageService {
     })
   }
 
+  async getThreadsByChannelId(channelId: string) {
+    return this.deps.messageDao.findThreadsByChannelId(channelId)
+  }
+
+  async getThread(threadId: string) {
+    const thread = await this.deps.messageDao.findThreadById(threadId)
+    if (!thread) {
+      throw Object.assign(new Error('Thread not found'), { status: 404 })
+    }
+    return thread
+  }
+
+  async updateThread(threadId: string, userId: string, input: UpdateThreadInput) {
+    const thread = await this.deps.messageDao.findThreadById(threadId)
+    if (!thread) {
+      throw Object.assign(new Error('Thread not found'), { status: 404 })
+    }
+    if (thread.creatorId !== userId) {
+      throw Object.assign(new Error('Can only update your own threads'), { status: 403 })
+    }
+    return this.deps.messageDao.updateThread(threadId, input)
+  }
+
+  async deleteThread(threadId: string, userId: string) {
+    const thread = await this.deps.messageDao.findThreadById(threadId)
+    if (!thread) {
+      throw Object.assign(new Error('Thread not found'), { status: 404 })
+    }
+    if (thread.creatorId !== userId) {
+      throw Object.assign(new Error('Can only delete your own threads'), { status: 403 })
+    }
+    await this.deps.messageDao.deleteThread(threadId)
+  }
+
+  async sendToThread(threadId: string, userId: string, input: { content: string }) {
+    const thread = await this.deps.messageDao.findThreadById(threadId)
+    if (!thread) {
+      throw Object.assign(new Error('Thread not found'), { status: 404 })
+    }
+    if (thread.isArchived) {
+      throw Object.assign(new Error('Thread is archived'), { status: 400 })
+    }
+
+    const message = await this.deps.messageDao.create({
+      content: input.content,
+      channelId: thread.channelId,
+      authorId: userId,
+      threadId,
+    })
+
+    const user = await this.deps.userDao.findById(userId)
+    return {
+      ...message,
+      author: user
+        ? {
+            id: user.id,
+            username: user.username,
+            displayName: user.displayName,
+            avatarUrl: user.avatarUrl,
+            status: user.status,
+            isBot: user.isBot,
+          }
+        : null,
+    }
+  }
+
   async getThreadMessages(threadId: string, limit?: number, cursor?: string) {
     return this.deps.messageDao.findByThreadId(threadId, limit, cursor)
+  }
+
+  // Pins
+  async pinMessage(channelId: string, messageId: string) {
+    const message = await this.deps.messageDao.findById(messageId)
+    if (!message) {
+      throw Object.assign(new Error('Message not found'), { status: 404 })
+    }
+    if (message.channelId !== channelId) {
+      throw Object.assign(new Error('Message does not belong to this channel'), { status: 400 })
+    }
+    return this.deps.messageDao.pinMessage(messageId)
+  }
+
+  async unpinMessage(channelId: string, messageId: string) {
+    const message = await this.deps.messageDao.findById(messageId)
+    if (!message) {
+      throw Object.assign(new Error('Message not found'), { status: 404 })
+    }
+    if (message.channelId !== channelId) {
+      throw Object.assign(new Error('Message does not belong to this channel'), { status: 400 })
+    }
+    return this.deps.messageDao.unpinMessage(messageId)
+  }
+
+  async getPinnedMessages(channelId: string) {
+    return this.deps.messageDao.findPinnedByChannelId(channelId)
   }
 
   // Reactions

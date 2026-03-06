@@ -5,6 +5,7 @@ import { authMiddleware } from '../middleware/auth.middleware'
 import {
   createServerSchema,
   joinServerSchema,
+  updateMemberSchema,
   updateServerSchema,
 } from '../validators/server.schema'
 
@@ -119,6 +120,36 @@ export function createServerHandler(container: AppContainer) {
     const id = c.req.param('id')
     const members = await serverService.getMembers(id)
     return c.json(members)
+  })
+
+  // PATCH /api/servers/:id/members/:userId
+  serverHandler.patch('/:id/members/:userId', zValidator('json', updateMemberSchema), async (c) => {
+    const serverService = container.resolve('serverService')
+    const id = c.req.param('id')
+    const targetUserId = c.req.param('userId')
+    const input = c.req.valid('json')
+    const user = c.get('user')
+    const member = await serverService.updateMember(id, targetUserId, user.userId, input)
+    return c.json(member)
+  })
+
+  // DELETE /api/servers/:id/members/:userId
+  serverHandler.delete('/:id/members/:userId', async (c) => {
+    const serverService = container.resolve('serverService')
+    const id = c.req.param('id')
+    const targetUserId = c.req.param('userId')
+    const user = c.get('user')
+    await serverService.kickMember(id, targetUserId, user.userId)
+    return c.json({ success: true })
+  })
+
+  // POST /api/servers/:id/invite/regenerate
+  serverHandler.post('/:id/invite/regenerate', async (c) => {
+    const serverService = container.resolve('serverService')
+    const id = c.req.param('id')
+    const user = c.get('user')
+    const server = await serverService.regenerateInvite(id, user.userId)
+    return c.json({ inviteCode: server.inviteCode })
   })
 
   return serverHandler

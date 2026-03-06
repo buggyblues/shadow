@@ -40,4 +40,12 @@ export class ChannelService {
     }
     await this.deps.channelDao.delete(id)
   }
+
+  async updatePositions(serverId: string, positions: { id: string; position: number }[]) {
+    if (positions.length === 0) {
+      throw Object.assign(new Error('Positions array cannot be empty'), { status: 400 })
+    }
+    await this.deps.channelDao.updatePositions(positions)
+    return this.deps.channelDao.findByServerId(serverId)
+  }
 }

@@ -2,7 +2,11 @@ import { zValidator } from '@hono/zod-validator'
 import { Hono } from 'hono'
 import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
-import { createChannelSchema, updateChannelSchema } from '../validators/channel.schema'
+import {
+  channelPositionsSchema,
+  createChannelSchema,
+  updateChannelSchema,
+} from '../validators/channel.schema'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -65,6 +69,19 @@ export function createChannelHandler(container: AppContainer) {
     await channelService.delete(id)
     return c.json({ success: true })
   })
+
+  // PATCH /api/servers/:serverId/channels/positions
+  channelHandler.patch(
+    '/servers/:serverId/channels/positions',
+    zValidator('json', channelPositionsSchema),
+    async (c) => {
+      const channelService = container.resolve('channelService')
+      const serverId = await resolveServerId(c.req.param('serverId'))
+      const { positions } = c.req.valid('json')
+      const channels = await channelService.updatePositions(serverId, positions)
+      return c.json(channels)
+    },
+  )
 
   return channelHandler
 }

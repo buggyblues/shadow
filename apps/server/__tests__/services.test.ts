@@ -176,7 +176,9 @@ describe('ServerService', () => {
         name: 'My Server',
         ownerId: 'user1',
         iconUrl: undefined,
+        bannerUrl: undefined,
         description: 'Cool',
+        slug: undefined,
         isPublic: true,
       })
     })

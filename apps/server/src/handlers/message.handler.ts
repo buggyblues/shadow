@@ -7,6 +7,7 @@ import {
   reactionSchema,
   sendMessageSchema,
   updateMessageSchema,
+  updateThreadSchema,
 } from '../validators/message.schema'
 
 export function createMessageHandler(container: AppContainer) {
@@ -92,6 +93,41 @@ export function createMessageHandler(container: AppContainer) {
     },
   )
 
+  // GET /api/channels/:channelId/threads
+  messageHandler.get('/channels/:channelId/threads', async (c) => {
+    const messageService = container.resolve('messageService')
+    const channelId = c.req.param('channelId')
+    const threads = await messageService.getThreadsByChannelId(channelId)
+    return c.json(threads)
+  })
+
+  // GET /api/threads/:id
+  messageHandler.get('/threads/:id', async (c) => {
+    const messageService = container.resolve('messageService')
+    const id = c.req.param('id')
+    const thread = await messageService.getThread(id)
+    return c.json(thread)
+  })
+
+  // PATCH /api/threads/:id
+  messageHandler.patch('/threads/:id', zValidator('json', updateThreadSchema), async (c) => {
+    const messageService = container.resolve('messageService')
+    const id = c.req.param('id')
+    const input = c.req.valid('json')
+    const user = c.get('user')
+    const thread = await messageService.updateThread(id, user.userId, input)
+    return c.json(thread)
+  })
+
+  // DELETE /api/threads/:id
+  messageHandler.delete('/threads/:id', async (c) => {
+    const messageService = container.resolve('messageService')
+    const id = c.req.param('id')
+    const user = c.get('user')
+    await messageService.deleteThread(id, user.userId)
+    return c.json({ success: true })
+  })
+
   // GET /api/threads/:id/messages
   messageHandler.get('/threads/:id/messages', async (c) => {
     const messageService = container.resolve('messageService')
@@ -99,6 +135,44 @@ export function createMessageHandler(container: AppContainer) {
     const limit = Number(c.req.query('limit') ?? '50')
     const cursor = c.req.query('cursor')
     const messages = await messageService.getThreadMessages(id, limit, cursor)
+    return c.json(messages)
+  })
+
+  // POST /api/threads/:id/messages
+  messageHandler.post('/threads/:id/messages', zValidator('json', sendMessageSchema), async (c) => {
+    const messageService = container.resolve('messageService')
+    const id = c.req.param('id')
+    const input = c.req.valid('json')
+    const user = c.get('user')
+    const message = await messageService.sendToThread(id, user.userId, {
+      content: input.content,
+    })
+    return c.json(message, 201)
+  })
+
+  // PUT /api/channels/:channelId/pins/:messageId
+  messageHandler.put('/channels/:channelId/pins/:messageId', async (c) => {
+    const messageService = container.resolve('messageService')
+    const channelId = c.req.param('channelId')
+    const messageId = c.req.param('messageId')
+    const message = await messageService.pinMessage(channelId, messageId)
+    return c.json(message)
+  })
+
+  // DELETE /api/channels/:channelId/pins/:messageId
+  messageHandler.delete('/channels/:channelId/pins/:messageId', async (c) => {
+    const messageService = container.resolve('messageService')
+    const channelId = c.req.param('channelId')
+    const messageId = c.req.param('messageId')
+    const message = await messageService.unpinMessage(channelId, messageId)
+    return c.json(message)
+  })
+
+  // GET /api/channels/:channelId/pins
+  messageHandler.get('/channels/:channelId/pins', async (c) => {
+    const messageService = container.resolve('messageService')
+    const channelId = c.req.param('channelId')
+    const messages = await messageService.getPinnedMessages(channelId)
     return c.json(messages)
   })
 

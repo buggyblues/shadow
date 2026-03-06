@@ -25,6 +25,12 @@ export const joinServerSchema = z.object({
   inviteCode: z.string().length(8, 'Invite code must be 8 characters'),
 })
 
+export const updateMemberSchema = z.object({
+  role: z.enum(['owner', 'admin', 'member']).optional(),
+  nickname: z.string().max(64).nullable().optional(),
+})
+
 export type CreateServerInput = z.infer<typeof createServerSchema>
 export type UpdateServerInput = z.infer<typeof updateServerSchema>
 export type JoinServerInput = z.infer<typeof joinServerSchema>
+export type UpdateMemberInput = z.infer<typeof updateMemberSchema>
