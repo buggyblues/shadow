@@ -1,4 +1,4 @@
-import { LIMITS } from '@shadow/shared'
+import { LIMITS } from '@shadowob/shared'
 import { z } from 'zod'
 
 export const sendMessageSchema = z.object({

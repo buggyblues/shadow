@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
+  Bot,
   Check,
   ChevronDown,
   ChevronRight,
@@ -13,6 +14,7 @@ import {
   Save,
   Settings,
   Trash2,
+  UserPlus,
   Volume2,
   X,
 } from 'lucide-react'
@@ -73,6 +75,8 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
     y: number
     channel: Channel
   } | null>(null)
+  const [showAddAgent, setShowAddAgent] = useState(false)
+  const [showInvitePanel, setShowInvitePanel] = useState(false)
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null)
   const [editChannelName, setEditChannelName] = useState('')
   const contextMenuRef = useRef<HTMLDivElement>(null)
@@ -283,10 +287,10 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
       <div className="mb-4">
         <button
           onClick={() => toggleGroup(label)}
-          className="flex items-center gap-1 px-2 py-1 text-xs font-semibold uppercase text-text-muted hover:text-text-secondary w-full"
+          className="flex items-center gap-1 px-4 py-1.5 text-[12px] font-bold tracking-wide uppercase text-[#949ba4] hover:text-[#dbdee1] w-full transition"
         >
-          {isCollapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
-          {label}
+          {isCollapsed ? <ChevronRight size={12} className="shrink-0" /> : <ChevronDown size={12} className="shrink-0" />}
+          <span className="truncate">{label}</span>
         </button>
         {!isCollapsed &&
           items.map((ch) => {
@@ -294,8 +298,8 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
             const isActive = activeChannelId === ch.id
             const isEditing = editingChannel?.id === ch.id
             return isEditing ? (
-              <div key={ch.id} className="flex items-center gap-1 px-2 mx-2 py-1">
-                <Icon size={18} className="shrink-0 opacity-60" />
+              <div key={ch.id} className="flex items-center gap-1.5 px-2 mx-2 py-1 bg-white/[0.04] rounded">
+                <Icon size={18} className="shrink-0 opacity-80" />
                 <input
                   type="text"
                   value={editChannelName}
@@ -335,13 +339,13 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
                 key={ch.id}
                 onClick={() => handleSelectChannel(ch.id)}
                 onContextMenu={(e) => handleContextMenu(e, ch)}
-                className={`flex items-center gap-2 px-2 py-1.5 mx-2 rounded-md text-sm w-[calc(100%-16px)] text-left transition ${
+                className={`group flex items-center gap-1.5 px-2 py-[6px] mx-2 mb-[2px] rounded-md text-[15px] font-medium w-[calc(100%-16px)] text-left transition ${
                   isActive
-                    ? 'bg-bg-primary/50 text-text-primary'
-                    : 'text-text-muted hover:bg-bg-primary/30 hover:text-text-secondary'
+                    ? 'bg-white/[0.08] text-white'
+                    : 'text-[#949ba4] hover:bg-white/[0.04] hover:text-[#dbdee1]'
                 }`}
               >
-                <Icon size={18} className="shrink-0 opacity-60" />
+                <Icon size={18} className={`shrink-0 ${isActive ? 'opacity-80 text-white' : 'opacity-60 group-hover:text-[#dbdee1]'}`} />
                 <span className="truncate">{ch.name}</span>
               </button>
             )
@@ -353,8 +357,8 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
   return (
     <div className="w-full md:w-60 bg-bg-secondary flex flex-col shrink-0 h-full">
       {/* Server name header */}
-      <div className="h-12 px-4 flex items-center justify-between border-b border-white/5 shadow-sm">
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="h-12 px-4 flex items-center justify-between border-b-2 border-bg-tertiary bg-bg-secondary shadow-sm z-10 transition hover:bg-white/[0.02] cursor-pointer">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           {/* Mobile menu button to open server sidebar */}
           <button
             onClick={openMobileServerSidebar}
@@ -654,6 +658,29 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
           <button
             type="button"
             onClick={() => {
+              setShowInvitePanel(true)
+              setContextMenu(null)
+            }}
+            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
+          >
+            <UserPlus size={14} />
+            {t('channel.inviteMember')}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowAddAgent(true)
+              setContextMenu(null)
+            }}
+            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
+          >
+            <Bot size={14} />
+            {t('channel.addAgent')}
+          </button>
+          <div className="h-px bg-white/5 my-1" />
+          <button
+            type="button"
+            onClick={() => {
               setEditingChannel(contextMenu.channel)
               setEditChannelName(contextMenu.channel.name)
               setContextMenu(null)
@@ -691,6 +718,192 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
           </button>
         </div>
       )}
+
+      {/* Invite Panel */}
+      {showInvitePanel && server?.inviteCode && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          onClick={() => setShowInvitePanel(false)}
+        >
+          <div
+            className="bg-bg-secondary rounded-xl p-6 w-96 border border-white/5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-text-primary">{t('channel.inviteMember')}</h2>
+              <button
+                onClick={() => setShowInvitePanel(false)}
+                className="text-text-muted hover:text-text-primary transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <label className="block text-xs font-bold uppercase text-text-secondary mb-2">
+              {t('channel.inviteLink')}
+            </label>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 bg-bg-tertiary text-text-primary rounded-lg px-4 py-3 font-mono text-xs truncate">
+                {`${window.location.origin}/invite/${server.inviteCode}`}
+              </code>
+              <button
+                onClick={copyInviteCode}
+                className="px-3 py-3 bg-bg-tertiary rounded-lg text-text-muted hover:text-text-primary transition"
+                title={t('common.copy')}
+              >
+                {copiedInvite ? (
+                  <Check size={16} className="text-green-400" />
+                ) : (
+                  <Copy size={16} />
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Agent dialog */}
+      {showAddAgent && (
+        <AddAgentDialog
+          serverId={serverId}
+          onClose={() => setShowAddAgent(false)}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['members', serverId] })
+            setShowAddAgent(false)
+          }}
+          t={t}
+        />
+      )}
+    </div>
+  )
+}
+
+/* ── Add Agent Dialog ──────────────────────────────────── */
+
+interface AgentOption {
+  id: string
+  userId: string
+  status: string
+  botUser?: {
+    id: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+  } | null
+}
+
+function AddAgentDialog({
+  serverId,
+  onClose,
+  onSuccess,
+  t,
+}: {
+  serverId: string
+  onClose: () => void
+  onSuccess: () => void
+  t: (key: string) => string
+}) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [adding, setAdding] = useState(false)
+
+  const { data: agents = [] } = useQuery({
+    queryKey: ['agents'],
+    queryFn: () => fetchApi<AgentOption[]>('/api/agents'),
+  })
+
+  const toggleAgent = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleAdd = async () => {
+    if (selectedIds.size === 0) return
+    setAdding(true)
+    try {
+      await fetchApi(`/api/servers/${serverId}/agents`, {
+        method: 'POST',
+        body: JSON.stringify({ agentIds: Array.from(selectedIds) }),
+      })
+      onSuccess()
+    } catch {
+      /* error handled silently */
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+      onClick={onClose}
+    >
+      <div
+        className="bg-bg-secondary rounded-xl p-6 w-96 max-h-[60vh] flex flex-col border border-white/5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-bold text-text-primary mb-4">{t('channel.addAgent')}</h2>
+
+        {agents.length === 0 ? (
+          <p className="text-text-muted text-sm py-4">{t('channel.noAgentsAvailable')}</p>
+        ) : (
+          <div className="flex-1 overflow-y-auto space-y-1 mb-4">
+            {agents.map((agent) => {
+              const name = agent.botUser?.displayName ?? agent.botUser?.username ?? 'Agent'
+              const isSelected = selectedIds.has(agent.id)
+              return (
+                <button
+                  key={agent.id}
+                  type="button"
+                  onClick={() => toggleAgent(agent.id)}
+                  className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm transition ${
+                    isSelected
+                      ? 'bg-primary/20 text-text-primary'
+                      : 'text-text-secondary hover:bg-bg-primary/30'
+                  }`}
+                >
+                  <div
+                    className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                      isSelected ? 'border-primary bg-primary' : 'border-white/20'
+                    }`}
+                  >
+                    {isSelected && <Check size={10} className="text-white" />}
+                  </div>
+                  <span className="truncate">{name}</span>
+                  <span
+                    className={`ml-auto w-2 h-2 rounded-full ${
+                      agent.status === 'running'
+                        ? 'bg-green-400'
+                        : agent.status === 'error'
+                          ? 'bg-red-400'
+                          : 'bg-zinc-500'
+                    }`}
+                  />
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-3 pt-2 border-t border-white/5">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-text-secondary hover:text-text-primary transition rounded-lg"
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            onClick={handleAdd}
+            disabled={selectedIds.size === 0 || adding}
+            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg font-bold transition disabled:opacity-50"
+          >
+            <Bot size={14} />
+            {adding ? t('common.loading') : t('channel.addAgentConfirm')}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

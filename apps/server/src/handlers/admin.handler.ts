@@ -236,5 +236,28 @@ export function createAdminHandler(container: AppContainer) {
     return c.json({ success: true })
   })
 
+  // ── Agents ────────────────────────────────────────
+  adminHandler.get('/agents', async (c) => {
+    const agentService = container.resolve('agentService')
+    const allAgents = await agentService.getAll()
+    // Enrich with bot user and owner info
+    const enriched = await Promise.all(
+      allAgents.map(async (agent: { id: string; ownerId: string }) => {
+        const full = await agentService.getById(agent.id)
+        const userDao = container.resolve('userDao')
+        const owner = await userDao.findById(agent.ownerId)
+        return { ...full, owner: owner ? { id: owner.id, username: owner.username, displayName: owner.displayName } : null }
+      }),
+    )
+    return c.json(enriched.filter(Boolean))
+  })
+
+  adminHandler.delete('/agents/:id', async (c) => {
+    const agentService = container.resolve('agentService')
+    const id = c.req.param('id')
+    await agentService.delete(id)
+    return c.json({ success: true })
+  })
+
   return adminHandler
 }

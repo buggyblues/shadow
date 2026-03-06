@@ -29,6 +29,20 @@
       "when": 1772704800000,
       "tag": "0003_add_user_is_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1772781200000,
+      "tag": "0004_add_agent_last_heartbeat",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1772867600000,
+      "tag": "0005_add_agent_policies",
+      "breakpoints": true
     }
   ]
 }

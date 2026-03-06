@@ -14,7 +14,7 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY packages/ packages/
 COPY apps/web/ apps/web/
 
-RUN pnpm --filter @shadow/web build
+RUN pnpm --filter @shadowob/web build
 
 # ── Serve stage ─────────────────────────────────────
 FROM nginx:alpine AS runner

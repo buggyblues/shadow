@@ -1,0 +1,12 @@
+{
+  "id": "openclaw",
+  "name": "Shadow",
+  "description": "Shadow server channel plugin — enables AI agents to chat in Shadow channels with threads, reactions, and media support",
+  "version": "0.1.0",
+  "channels": ["shadow"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

@@ -1,4 +1,4 @@
-import type { AgentCapability, AgentKernelType } from '@shadow/shared'
+import type { AgentCapability, AgentKernelType } from '@shadowob/shared'
 
 /** Agent 配置 - CLI 工具模式 */
 export interface AgentConfig {

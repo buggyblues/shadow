@@ -4,6 +4,6 @@ export default defineConfig({
   entry: ['src/index.ts'],
   format: ['esm'],
   target: 'es2022',
-  noExternal: [/^@shadow\//],
+  noExternal: [/^@shadowob\//],
   clean: true,
 })

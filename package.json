@@ -16,9 +16,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "db:generate": "pnpm --filter @shadow/server db:generate",
-    "db:migrate": "pnpm --filter @shadow/server db:migrate",
-    "db:studio": "pnpm --filter @shadow/server db:studio",
+    "db:generate": "pnpm --filter @shadowob/server db:generate",
+    "db:migrate": "pnpm --filter @shadowob/server db:migrate",
+    "db:studio": "pnpm --filter @shadowob/server db:studio",
     "prepare": "husky"
   },
   "lint-staged": {

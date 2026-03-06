@@ -35,10 +35,10 @@ importers:
 
   apps/admin:
     dependencies:
-      '@shadow/shared':
+      '@shadowob/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@shadow/ui':
+      '@shadowob/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@tanstack/react-query':
@@ -105,10 +105,10 @@ importers:
       '@hono/zod-validator':
         specifier: ^0.5.0
         version: 0.5.0(hono@4.12.5)(zod@3.25.76)
-      '@shadow/agenthub':
+      '@shadowob/agenthub':
         specifier: workspace:*
         version: link:../../packages/agenthub
-      '@shadow/shared':
+      '@shadowob/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       awilix:
@@ -187,10 +187,10 @@ importers:
       '@emoji-mart/react':
         specifier: ^1.1.1
         version: 1.1.1(emoji-mart@5.6.0)(react@19.2.4)
-      '@shadow/shared':
+      '@shadowob/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@shadow/ui':
+      '@shadowob/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@tanstack/react-query':
@@ -269,7 +269,7 @@ importers:
 
   packages/agenthub:
     dependencies:
-      '@shadow/shared':
+      '@shadowob/shared':
         specifier: workspace:*
         version: link:../shared
       dockerode:
@@ -285,6 +285,15 @@ importers:
       '@types/dockerode':
         specifier: ^3.3.38
         version: 3.3.47
+
+  packages/openclaw:
+    dependencies:
+      socket.io-client:
+        specifier: ^4.8.1
+        version: 4.8.3
+      zod:
+        specifier: ^3.25.67
+        version: 3.25.76
 
   packages/shared:
     dependencies:

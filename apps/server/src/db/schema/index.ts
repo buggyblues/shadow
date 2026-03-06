@@ -1,3 +1,4 @@
+export { agentPolicies } from './agent-policies'
 export { agentStatusEnum, agents } from './agents'
 export { attachments } from './attachments'
 export { channels, channelTypeEnum } from './channels'

@@ -70,48 +70,48 @@ export function SettingsPage() {
   return (
     <div className="flex-1 flex bg-bg-primary overflow-hidden">
       {/* Sidebar */}
-      <div className="w-56 bg-bg-secondary flex flex-col shrink-0 border-r border-white/5">
-        <div className="p-4 border-b border-white/5">
+      <div className="w-60 bg-bg-secondary flex flex-col shrink-0">
+        <div className="p-4 border-b-2 border-bg-tertiary">
           <button
             onClick={() => navigate({ to: '/app' })}
-            className="flex items-center gap-2 text-text-muted hover:text-text-primary transition text-sm"
+            className="flex items-center gap-2 text-[#949ba4] hover:text-[#dbdee1] transition text-[15px] font-medium"
           >
             <ArrowLeft size={16} />
             {t('settings.back')}
           </button>
         </div>
-        <div className="px-3 py-2 text-[10px] font-bold uppercase text-text-muted tracking-wider">
+        <div className="px-5 py-3 text-[12px] font-bold uppercase text-[#949ba4] tracking-wide mt-2">
           {t('settings.sidebarTitle')}
         </div>
-        <nav className="px-2 space-y-0.5">
+        <nav className="px-3 space-y-0.5">
           <button
             onClick={() => setActiveTab('profile')}
-            className={`flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm transition ${
+            className={`group flex items-center gap-3 w-full px-3 py-2 rounded-md text-[15px] font-medium transition ${
               activeTab === 'profile'
-                ? 'bg-bg-primary/50 text-text-primary'
-                : 'text-text-muted hover:text-text-secondary hover:bg-bg-primary/30'
+                ? 'bg-white/[0.08] text-white'
+                : 'text-[#949ba4] hover:bg-white/[0.04] hover:text-[#dbdee1]'
             }`}
           >
-            <User size={16} />
+            <User size={18} className={`shrink-0 ${activeTab === 'profile' ? 'opacity-80 text-white' : 'opacity-60 group-hover:text-[#dbdee1]'}`} />
             {t('settings.tabProfile')}
           </button>
           <button
             onClick={() => setActiveTab('account')}
-            className={`flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm transition ${
+            className={`group flex items-center gap-3 w-full px-3 py-2 rounded-md text-[15px] font-medium transition ${
               activeTab === 'account'
-                ? 'bg-bg-primary/50 text-text-primary'
-                : 'text-text-muted hover:text-text-secondary hover:bg-bg-primary/30'
+                ? 'bg-white/[0.08] text-white'
+                : 'text-[#949ba4] hover:bg-white/[0.04] hover:text-[#dbdee1]'
             }`}
           >
-            <Shield size={16} />
+            <Shield size={18} className={`shrink-0 ${activeTab === 'account' ? 'opacity-80 text-white' : 'opacity-60 group-hover:text-[#dbdee1]'}`} />
             {t('settings.tabAccount')}
           </button>
         </nav>
 
-        <div className="mt-auto p-3 border-t border-white/5">
+        <div className="mt-auto p-4 border-t-2 border-bg-tertiary">
           <button
             onClick={() => setShowLogoutConfirm(true)}
-            className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm text-danger hover:bg-danger/10 transition"
+            className="flex items-center gap-3 w-full px-3 py-2 rounded-md text-[15px] font-medium text-danger hover:bg-danger/10 transition"
           >
             <LogOut size={16} />
             {t('settings.logout')}

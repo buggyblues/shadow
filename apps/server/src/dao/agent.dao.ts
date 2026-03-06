@@ -45,6 +45,30 @@ export class AgentDao {
     return result[0] ?? null
   }
 
+  async updateHeartbeat(id: string) {
+    const now = new Date()
+    const result = await this.db
+      .update(agents)
+      .set({ lastHeartbeat: now, status: 'running', updatedAt: now })
+      .where(eq(agents.id, id))
+      .returning()
+    return result[0] ?? null
+  }
+
+  async updateConfig(id: string, config: Record<string, unknown>) {
+    const result = await this.db
+      .update(agents)
+      .set({ config, updatedAt: new Date() })
+      .where(eq(agents.id, id))
+      .returning()
+    return result[0] ?? null
+  }
+
+  async findByUserId(userId: string) {
+    const result = await this.db.select().from(agents).where(eq(agents.userId, userId)).limit(1)
+    return result[0] ?? null
+  }
+
   async delete(id: string) {
     await this.db.delete(agents).where(eq(agents.id, id))
   }
@@ -54,7 +78,7 @@ export class AgentDao {
     const result = await this.db
       .insert(users)
       .values({
-        email: `${data.username}@shadow.bot`,
+        email: `${data.username}@shadowob.bot`,
         username: data.username,
         displayName: data.displayName,
         passwordHash: 'bot-no-password',

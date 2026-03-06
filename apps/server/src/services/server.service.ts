@@ -189,4 +189,17 @@ export class ServerService {
   async discoverPublic(limit = 50, offset = 0) {
     return this.deps.serverDao.findPublic(limit, offset)
   }
+
+  /** Add a bot user as a member of a server (skip if already a member) */
+  async addBotMember(serverId: string, botUserId: string) {
+    const server = await this.deps.serverDao.findById(serverId)
+    if (!server) {
+      throw Object.assign(new Error('Server not found'), { status: 404 })
+    }
+    const existing = await this.deps.serverDao.getMember(serverId, botUserId)
+    if (existing) {
+      return existing // already a member
+    }
+    return this.deps.serverDao.addMember(serverId, botUserId, 'member')
+  }
 }

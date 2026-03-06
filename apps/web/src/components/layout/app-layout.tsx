@@ -5,7 +5,6 @@ import { fetchApi } from '../../lib/api'
 import { connectSocket, disconnectSocket } from '../../lib/socket'
 import { useAuthStore } from '../../stores/auth.store'
 import { useUIStore } from '../../stores/ui.store'
-import { NotificationBell } from '../notification/notification-bell'
 import { ServerSidebar } from '../server/server-sidebar'
 
 export function AppLayout() {
@@ -63,13 +62,7 @@ export function AppLayout() {
         </div>
       )}
 
-      <div className="flex flex-col flex-1 min-w-0">
-        {/* Top bar with notification bell */}
-        <div className="h-0 relative z-30">
-          <div className="absolute top-2 right-4">
-            <NotificationBell />
-          </div>
-        </div>
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <Outlet />
       </div>
     </div>

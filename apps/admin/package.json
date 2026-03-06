@@ -1,5 +1,5 @@
 {
-  "name": "@shadow/admin",
+  "name": "@shadowob/admin",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,8 +9,8 @@
     "preview": "rsbuild preview"
   },
   "dependencies": {
-    "@shadow/shared": "workspace:*",
-    "@shadow/ui": "workspace:*",
+    "@shadowob/shared": "workspace:*",
+    "@shadowob/ui": "workspace:*",
     "@tanstack/react-query": "^5.80.7",
     "@tanstack/react-router": "^1.121.2",
     "clsx": "^2.1.1",

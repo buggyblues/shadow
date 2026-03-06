@@ -1,5 +1,5 @@
 {
-  "name": "@shadow/agenthub",
+  "name": "@shadowob/agenthub",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@shadow/shared": "workspace:*",
+    "@shadowob/shared": "workspace:*",
     "socket.io-client": "^4.8.0",
     "dockerode": "^4.0.6",
     "zod": "^3.25.67"

@@ -14,10 +14,13 @@ import {
 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useQueryClient } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { fetchApi } from '../../lib/api'
+import { useChatStore } from '../../stores/chat.store'
 import { UserAvatar } from '../common/avatar'
+import { UserProfileCard } from '../common/user-profile-card'
 import { EmojiPicker } from '../common/emoji-picker'
 
 interface Author {
@@ -160,10 +163,30 @@ export function MessageBubble({
     addSuffix: true,
   })
 
+  /**
+   * Process React children to highlight @mention patterns.
+   * Splits text nodes on @username and wraps matches in styled spans with hover cards.
+   */
+  const renderMentions = (children: React.ReactNode): React.ReactNode => {
+    if (!children) return children
+    const childArray = Array.isArray(children) ? children : [children]
+    return childArray.map((child, idx) => {
+      if (typeof child !== 'string') return child
+      const parts = child.split(/(@\w+)/g)
+      if (parts.length === 1) return child
+      return parts.map((part, pi) => {
+        if (/^@\w+$/.test(part)) {
+          return <MentionSpan key={`${idx}-${pi}`} mention={part} />
+        }
+        return part
+      })
+    })
+  }
+
   return (
     <div
       id={`msg-${message.id}`}
-      className={`group relative flex gap-3 px-4 py-1.5 hover:bg-white/[0.02] transition ${highlight ? 'bg-primary/10 animate-pulse' : ''}`}
+      className={`group relative flex gap-4 px-4 py-1.5 message-row ${highlight ? 'bg-primary/10 animate-pulse' : 'mt-[2px]'}`}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => {
         if (!showMoreMenu) {
@@ -173,14 +196,15 @@ export function MessageBubble({
         }
       }}
     >
-      {/* Avatar */}
-      <UserAvatar
-        userId={author?.id}
-        avatarUrl={author?.avatarUrl}
-        displayName={author?.displayName ?? author?.username}
-        size="md"
-        className="mt-0.5"
-      />
+      {/* Avatar container */}
+      <div className={`flex-shrink-0 ${replyToMessage ? 'mt-6' : 'mt-0.5'}`}>
+        <UserAvatar
+          userId={author?.id}
+          avatarUrl={author?.avatarUrl}
+          displayName={author?.displayName ?? author?.username}
+          size="md"
+        />
+      </div>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
@@ -203,18 +227,19 @@ export function MessageBubble({
             <span className="truncate max-w-[300px] opacity-70">{replyToMessage.content}</span>
           </button>
         )}
-        <div className="flex items-baseline gap-2">
+        <div className="flex items-baseline gap-2 leading-none mb-1">
           <span
-            className={`font-semibold text-sm ${author?.isBot ? 'text-primary' : 'text-text-primary'}`}
+            className={`font-medium text-[15px] hover:underline cursor-pointer ${author?.isBot ? 'text-primary' : 'text-text-primary'}`}
           >
             {author?.displayName ?? author?.username ?? t('common.unknownUser')}
           </span>
           {author?.isBot && (
-            <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-medium">
+            <span className="text-[10px] bg-[#5865F2] text-white px-1.5 py-0.5 rounded-[3px] font-semibold flex items-center gap-1">
+              <Check size={8} className="text-white" />
               {t('common.bot')}
             </span>
           )}
-          <span className="text-xs text-text-muted">{time}</span>
+          <span className="text-xs text-text-muted ml-0.5">{time}</span>
           {message.isEdited && (
             <span
               className="text-[10px] text-text-muted cursor-help"
@@ -268,7 +293,7 @@ export function MessageBubble({
           </div>
         ) : (
           /* Markdown content */
-          <div className="text-sm text-text-secondary leading-relaxed break-words msg-markdown">
+          <div className="text-[15px] text-[#dbdee1] leading-[1.375] break-words msg-markdown pt-[2px]">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
@@ -277,6 +302,9 @@ export function MessageBubble({
                     <img src={src} alt={alt ?? ''} loading="lazy" />
                   </a>
                 ),
+                p: ({ children }) => <p>{renderMentions(children)}</p>,
+                li: ({ children }) => <li>{renderMentions(children)}</li>,
+                td: ({ children }) => <td>{renderMentions(children)}</td>,
               }}
             >
               {message.content}
@@ -459,5 +487,107 @@ export function MessageBubble({
         </div>
       )}
     </div>
+  )
+}
+
+/* ── MentionSpan — @username with hover card ──────────────── */
+
+interface MemberUser {
+  id: string
+  username: string
+  displayName: string
+  avatarUrl: string | null
+  status: string
+  isBot: boolean
+}
+
+interface MemberEntry {
+  id: string
+  userId: string
+  role: string
+  user?: MemberUser
+}
+
+function MentionSpan({ mention }: { mention: string }) {
+  const [showCard, setShowCard] = useState(false)
+  const [pinned, setPinned] = useState(false)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const spanRef = useRef<HTMLSpanElement>(null)
+  const { activeServerId } = useChatStore()
+  const queryClient = useQueryClient()
+
+  const username = mention.slice(1) // strip @
+
+  // Look up user from cached members query
+  const members = queryClient.getQueryData<MemberEntry[]>(['members', activeServerId]) ?? []
+  const member = members.find(
+    (m) => m.user?.username === username || m.user?.displayName === username,
+  )
+  const user = member?.user
+
+  const handleMouseEnter = () => {
+    if (pinned) return
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    timeoutRef.current = setTimeout(() => setShowCard(true), 300)
+  }
+
+  const handleMouseLeave = () => {
+    if (pinned) return
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    timeoutRef.current = setTimeout(() => setShowCard(false), 200)
+  }
+
+  const handleClick = () => {
+    if (user) {
+      setPinned(true)
+      setShowCard(true)
+    }
+  }
+
+  const handleClose = () => {
+    setPinned(false)
+    setShowCard(false)
+  }
+
+  return (
+    <>
+      <span
+        ref={spanRef}
+        className="relative inline-block bg-primary/20 text-primary rounded px-1 cursor-pointer hover:bg-primary/30 transition"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onClick={handleClick}
+      >
+        {mention}
+        {showCard && !pinned && user && (
+          <div
+            className="absolute bottom-full left-0 mb-2 z-50"
+            onMouseEnter={() => {
+              if (timeoutRef.current) clearTimeout(timeoutRef.current)
+            }}
+            onMouseLeave={handleMouseLeave}
+          >
+            <UserProfileCard
+              user={user}
+              role={(member?.role as 'owner' | 'admin' | 'member') ?? null}
+            />
+          </div>
+        )}
+      </span>
+      {/* Pinned profile card as a centered overlay */}
+      {pinned && showCard && user && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          onClick={handleClose}
+        >
+          <div onClick={(e) => e.stopPropagation()}>
+            <UserProfileCard
+              user={user}
+              role={(member?.role as 'owner' | 'admin' | 'member') ?? null}
+            />
+          </div>
+        </div>
+      )}
+    </>
   )
 }

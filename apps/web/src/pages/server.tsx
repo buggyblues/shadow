@@ -21,24 +21,32 @@ export function ServerPage() {
   if (!serverId) return null
 
   return (
-    <div className="flex flex-1 min-w-0 overflow-hidden">
-      {/* Channel sidebar: always on md+, conditionally on mobile */}
+    <div className="flex flex-1 min-w-0 overflow-hidden h-full bg-bg-tertiary">
+      {/* Channel sidebar: standard Discord width (240px/w-60). 
+          On mobile it takes full width but transitions smoothly. */}
       <div
         className={`${
-          mobileView === 'channels' ? 'flex' : 'hidden'
-        } md:flex flex-col w-full md:w-auto`}
+          mobileView === 'channels'
+            ? 'flex absolute inset-0 z-20 md:relative'
+            : 'hidden'
+        } md:flex flex-col w-full md:w-60 flex-shrink-0 transition-transform duration-300 ease-in-out`}
       >
         <ChannelSidebar serverId={serverId} />
       </div>
 
-      {/* Chat area: always on md+, conditionally on mobile */}
+      {/* Chat area: flexible width, with min-w-0 to prevent flex blowout */}
       <div
-        className={`${mobileView === 'chat' ? 'flex' : 'hidden'} md:flex flex-1 min-w-0 flex-col`}
+        className={`${
+          mobileView === 'chat'
+            ? 'flex absolute inset-0 z-10 md:relative md:z-auto'
+            : 'hidden'
+        } md:flex flex-1 min-w-0 flex-col transition-all duration-300 ease-in-out`}
       >
         <ChatArea />
       </div>
 
-      {/* Member list: hidden on mobile, shown on lg+ */}
+      {/* Member list: hidden by default, shown on lg+ within its component,
+          or as an overlay on smaller screens if managed by a state */}
       <MemberList />
     </div>
   )

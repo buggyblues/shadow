@@ -35,6 +35,15 @@ export function createMessageHandler(container: AppContainer) {
       const input = c.req.valid('json')
       const user = c.get('user')
       const message = await messageService.send(channelId, user.userId, input)
+
+      // Emit WS event so all connected clients (including bots) see the message
+      try {
+        const io = container.resolve('io')
+        io.to(`channel:${channelId}`).emit('message:new', message)
+      } catch {
+        /* io not yet registered */
+      }
+
       return c.json(message, 201)
     },
   )

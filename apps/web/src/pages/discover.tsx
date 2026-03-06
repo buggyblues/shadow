@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { Globe, LogIn, Search, Shield, UserPlus, Users } from 'lucide-react'
+import { Globe, Search, Shield } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../lib/api'
@@ -72,26 +72,26 @@ export function DiscoverPage() {
   return (
     <div className="flex-1 flex flex-col bg-bg-primary overflow-y-auto">
       {/* Header */}
-      <div className="border-b border-white/5 px-6 py-8">
+      <div className="border-b-2 border-bg-tertiary px-6 py-8 bg-bg-primary">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center gap-3 mb-4">
             <Globe size={28} className="text-primary" />
             <h1 className="text-2xl font-bold text-text-primary">{t('discover.title')}</h1>
           </div>
-          <p className="text-text-muted mb-6">{t('discover.subtitle')}</p>
+          <p className="text-[#dbdee1] mb-6 text-[15px]">{t('discover.subtitle')}</p>
 
           {/* Search */}
           <div className="relative max-w-md">
             <Search
               size={18}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-[#949ba4]"
             />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('discover.searchPlaceholder')}
-              className="w-full bg-bg-tertiary text-text-primary rounded-lg pl-10 pr-4 py-2.5 outline-none focus:ring-2 focus:ring-primary text-sm"
+              className="w-full bg-[#1e1f22] text-text-primary rounded-lg pl-10 pr-4 py-2.5 outline-none focus:ring-1 focus:ring-primary text-[15px] shadow-sm"
             />
           </div>
         </div>
@@ -110,48 +110,60 @@ export function DiscoverPage() {
               return (
                 <div
                   key={server.id}
-                  className="bg-bg-secondary rounded-xl border border-white/5 overflow-hidden hover:border-white/10 transition group flex flex-col"
+                  onClick={() => {
+                    if (isJoined) {
+                      navigate({
+                        to: '/app/servers/$serverId',
+                        params: { serverId: server.slug ?? server.id },
+                      })
+                    }
+                  }}
+                  className="bg-[#2b2d31] rounded-[16px] overflow-hidden hover:bg-[#383a40] hover:-translate-y-0.5 hover:shadow-xl transition-all duration-200 group flex flex-col cursor-pointer border border-[#1e1f22] relative"
                 >
                   {/* Server banner */}
-                  <div className="h-28 bg-gradient-to-br from-primary/30 to-primary/5 flex items-center justify-center relative">
-                    {server.bannerUrl ? (
+                  <div className="h-[120px] bg-gradient-to-br from-[#5865F2]/20 to-[#5865F2]/5 relative">
+                    {server.bannerUrl && (
                       <img
                         src={server.bannerUrl}
                         alt=""
                         className="w-full h-full object-cover absolute inset-0"
                       />
-                    ) : null}
-                    <div className="relative z-10">
-                      {server.iconUrl ? (
-                        <img
-                          src={server.iconUrl}
-                          alt=""
-                          className="w-16 h-16 rounded-2xl object-cover"
-                        />
-                      ) : (
-                        <img src={getCatAvatar(i)} alt={server.name} className="w-14 h-14" />
-                      )}
-                    </div>
+                    )}
                     {server.isPublic && (
-                      <span className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 bg-primary/80 text-white text-xs rounded-full z-10">
-                        <Shield size={10} />
+                      <span className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 bg-black/50 backdrop-blur-md text-white text-[11px] font-bold rounded-full z-10 uppercase tracking-widest">
+                        <Shield size={12} />
                         {t('discover.public')}
                       </span>
                     )}
                   </div>
 
-                  <div className="p-4 flex flex-col flex-1">
-                    <h3 className="font-bold text-text-primary mb-1 truncate">{server.name}</h3>
-                    <p className="text-text-muted text-sm mb-3 line-clamp-2 min-h-[2.5rem] flex-1">
+                  {/* Avatar overlapping banner */}
+                  <div className="absolute top-[92px] left-4 p-1.5 bg-[#2b2d31] group-hover:bg-[#383a40] rounded-[18px] transition-colors duration-200 z-20">
+                    <div className="w-[48px] h-[48px] rounded-[12px] overflow-hidden bg-[#1e1f22] flex items-center justify-center">
+                      {server.iconUrl ? (
+                        <img
+                          src={server.iconUrl}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <img src={getCatAvatar(i)} alt={server.name} className="w-9 h-9" />
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-10 p-4 flex flex-col flex-1">
+                    <h3 className="font-bold text-[#f2f3f5] text-[16px] mb-1 truncate">{server.name}</h3>
+                    <p className="text-[#dbdee1] text-[14px] mb-4 line-clamp-2 min-h-[2.5rem] flex-1">
                       {server.description ?? t('discover.noDescription')}
                     </p>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mt-auto">
                       <div className="flex items-center gap-2">
                         <div className="flex -space-x-2">
                           {(server.memberAvatars ?? []).slice(0, 5).map((m) => (
                             <div
                               key={m.id}
-                              className="w-6 h-6 rounded-full border-2 border-bg-secondary overflow-hidden bg-bg-tertiary"
+                              className="w-6 h-6 rounded-full border-2 border-[#2b2d31] group-hover:border-[#383a40] overflow-hidden bg-[#1e1f22] transition-colors duration-200"
                             >
                               {m.avatarUrl ? (
                                 <img
@@ -160,36 +172,37 @@ export function DiscoverPage() {
                                   className="w-full h-full object-cover"
                                 />
                               ) : (
-                                <div className="w-full h-full flex items-center justify-center text-[8px] text-text-muted">
+                                <div className="w-full h-full flex items-center justify-center text-[10px] text-[#dbdee1]">
                                   👤
                                 </div>
                               )}
                             </div>
                           ))}
                         </div>
-                        <span className="flex items-center gap-1 text-xs text-text-muted">
-                          <Users size={14} />
+                        <span className="flex items-center gap-1.5 text-[12px] font-medium text-[#949ba4]">
+                          <div className="w-2 h-2 rounded-full bg-[#23a559]"></div>
                           {server.memberCount} {t('discover.members')}
                         </span>
                       </div>
                       {isJoined ? (
                         <button
                           type="button"
-                          onClick={() =>
+                          onClick={(e) => {
+                            e.stopPropagation()
                             navigate({
                               to: '/app/servers/$serverId',
                               params: { serverId: server.slug ?? server.id },
                             })
-                          }
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition"
+                          }}
+                          className="flex items-center gap-1.5 px-4 py-1.5 bg-[#23a559] hover:bg-[#1d8749] text-white rounded-[3px] text-[14px] font-medium transition"
                         >
-                          <LogIn size={14} />
                           {t('discover.enterButton')}
                         </button>
                       ) : (
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation()
                             if (server.inviteCode) {
                               joinMutation.mutate({
                                 inviteCode: server.inviteCode,
@@ -198,9 +211,8 @@ export function DiscoverPage() {
                             }
                           }}
                           disabled={joinMutation.isPending}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary-hover text-white rounded-lg text-sm font-medium transition disabled:opacity-50"
+                          className="flex items-center gap-1.5 px-4 py-1.5 bg-[#5865F2] hover:bg-[#4752C4] text-white rounded-[3px] text-[14px] font-medium transition disabled:opacity-50"
                         >
-                          <UserPlus size={14} />
                           {t('discover.joinButton')}
                         </button>
                       )}

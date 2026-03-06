@@ -14,7 +14,7 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY packages/ packages/
 COPY apps/server/ apps/server/
 
-RUN pnpm --filter @shadow/server build
+RUN pnpm --filter @shadowob/server build
 
 # ── Run stage ───────────────────────────────────────
 FROM node:22-alpine AS runner

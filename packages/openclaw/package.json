@@ -1,0 +1,23 @@
+{
+  "name": "@shadowob/openclaw",
+  "version": "0.1.0",
+  "description": "OpenClaw Shadow channel plugin — enables AI agents to interact in Shadow server channels",
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/buggyblues/shadow",
+    "directory": "packages/openclaw"
+  },
+  "homepage": "https://github.com/buggyblues/shadow/tree/main/packages/openclaw#readme",
+  "keywords": ["openclaw", "openclaw-plugin", "shadow", "chat", "channel", "ai-agent"],
+  "openclaw": {
+    "extensions": ["./index.ts"]
+  },
+  "dependencies": {
+    "socket.io-client": "^4.8.1",
+    "zod": "^3.25.67"
+  }
+}

@@ -1,11 +1,15 @@
 import type { Logger } from 'pino'
 import type { AgentDao } from '../dao/agent.dao'
+import type { UserDao } from '../dao/user.dao'
+import { signAgentToken } from '../lib/jwt'
 
 export class AgentService {
-  constructor(private deps: { agentDao: AgentDao; logger: Logger }) {}
+  constructor(private deps: { agentDao: AgentDao; userDao: UserDao; logger: Logger }) {}
 
   async create(data: {
     name: string
+    description?: string
+    avatarUrl?: string
     kernelType: string
     config: Record<string, unknown>
     ownerId: string
@@ -17,15 +21,38 @@ export class AgentService {
       displayName: data.name,
     })
 
-    // Create the agent record
+    if (!botUser) {
+      throw Object.assign(new Error('Failed to create bot user'), { status: 500 })
+    }
+
+    // Update avatar if provided
+    if (data.avatarUrl) {
+      await this.deps.userDao.update(botUser.id, { avatarUrl: data.avatarUrl })
+    }
+
+    // Create the agent record (default to running)
     const agent = await this.deps.agentDao.create({
       userId: botUser.id,
       kernelType: data.kernelType,
-      config: data.config,
+      config: {
+        ...data.config,
+        ...(data.description ? { description: data.description } : {}),
+      },
       ownerId: data.ownerId,
     })
 
-    return { ...agent, botUser }
+    // Set initial status to running
+    await this.deps.agentDao.updateStatus(agent!.id, 'running')
+
+    return { ...agent, status: 'running' as const, botUser: { ...botUser, avatarUrl: data.avatarUrl ?? botUser.avatarUrl } }
+  }
+
+  async getById(id: string) {
+    const agent = await this.deps.agentDao.findById(id)
+    if (!agent) return null
+    const botUser = await this.deps.userDao.findById(agent.userId)
+    const owner = await this.deps.userDao.findById(agent.ownerId)
+    return { ...agent, botUser, owner }
   }
 
   async getAll() {
@@ -34,6 +61,36 @@ export class AgentService {
 
   async getByOwnerId(ownerId: string) {
     return this.deps.agentDao.findByOwnerId(ownerId)
+  }
+
+  /** Generate a long-lived JWT token for the agent's bot user */
+  async generateToken(agentId: string, ownerId: string) {
+    const agent = await this.deps.agentDao.findById(agentId)
+    if (!agent) {
+      throw Object.assign(new Error('Agent not found'), { status: 404 })
+    }
+    if (agent.ownerId !== ownerId) {
+      throw Object.assign(new Error('Not the owner of this agent'), { status: 403 })
+    }
+
+    const botUser = await this.deps.userDao.findById(agent.userId)
+    if (!botUser) {
+      throw Object.assign(new Error('Bot user not found'), { status: 404 })
+    }
+
+    const token = signAgentToken({
+      userId: botUser.id,
+      email: botUser.email,
+      username: botUser.username,
+    })
+
+    // Persist the token in agent config so it can be viewed again later
+    await this.deps.agentDao.updateConfig(agentId, {
+      ...((agent.config as Record<string, unknown>) ?? {}),
+      lastToken: token,
+    })
+
+    return { token, agent, botUser }
   }
 
   async start(id: string) {
@@ -67,6 +124,20 @@ export class AgentService {
     return this.start(id)
   }
 
+  /** Record a heartbeat from the agent — marks it as running */
+  async heartbeat(agentId: string, botUserId: string) {
+    // Verify the agent exists and the bot user matches
+    const agent = await this.deps.agentDao.findById(agentId)
+    if (!agent) {
+      throw Object.assign(new Error('Agent not found'), { status: 404 })
+    }
+    if (agent.userId !== botUserId) {
+      throw Object.assign(new Error('User does not match agent'), { status: 403 })
+    }
+
+    return this.deps.agentDao.updateHeartbeat(agentId)
+  }
+
   async delete(id: string) {
     const agent = await this.deps.agentDao.findById(id)
     if (!agent) {
@@ -77,6 +148,10 @@ export class AgentService {
       await this.stop(id)
     }
 
+    // Delete the agent record first (cascade deletes agent_policies)
     await this.deps.agentDao.delete(id)
+
+    // Delete the bot user — cascade removes members entries from all servers
+    await this.deps.userDao.delete(agent.userId)
   }
 }

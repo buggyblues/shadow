@@ -1,11 +1,12 @@
 import { compare, hash } from 'bcryptjs'
+import type { AgentDao } from '../dao/agent.dao'
 import type { InviteCodeDao } from '../dao/invite-code.dao'
 import type { UserDao } from '../dao/user.dao'
 import { signAccessToken, signRefreshToken, verifyToken } from '../lib/jwt'
 import type { LoginInput, RegisterInput } from '../validators/auth.schema'
 
 export class AuthService {
-  constructor(private deps: { userDao: UserDao; inviteCodeDao: InviteCodeDao }) {}
+  constructor(private deps: { userDao: UserDao; inviteCodeDao: InviteCodeDao; agentDao: AgentDao }) {}
 
   async register(input: RegisterInput) {
     const { userDao, inviteCodeDao } = this.deps
@@ -114,12 +115,22 @@ export class AuthService {
   }
 
   async getMe(userId: string) {
-    const { userDao } = this.deps
+    const { userDao, agentDao } = this.deps
 
     const user = await userDao.findById(userId)
     if (!user) {
       throw Object.assign(new Error('User not found'), { status: 404 })
     }
+
+    // For bot users, look up and include the agentId
+    let agentId: string | undefined
+    if (user.isBot) {
+      const agent = await agentDao.findByUserId(userId)
+      if (agent) {
+        agentId = agent.id
+      }
+    }
+
     return {
       id: user.id,
       email: user.email,
@@ -128,6 +139,7 @@ export class AuthService {
       avatarUrl: user.avatarUrl,
       status: user.status,
       isBot: user.isBot,
+      ...(agentId ? { agentId } : {}),
     }
   }
 

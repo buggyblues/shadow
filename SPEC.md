@@ -72,7 +72,7 @@ Shadow (虾豆) is a **Discord-like team collaboration platform** with built-in 
 
 1. **Layered Architecture**: Handler → Service → DAO → Database (strict dependency direction)
 2. **Dependency Injection**: Awilix container manages all singletons; never import services directly
-3. **Type Safety End-to-End**: Shared types between frontend/backend via `@shadow/shared`
+3. **Type Safety End-to-End**: Shared types between frontend/backend via `@shadowob/shared`
 4. **Monorepo with Workspace Packages**: `apps/*` for deployables, `packages/*` for shared code
 
 ---
@@ -108,14 +108,14 @@ shadow/
 │       │   └── lib/         # JWT, logger utilities
 │       └── drizzle.config.ts
 ├── packages/
-│   ├── shared/              # @shadow/shared — Types, constants, utilities
+│   ├── shared/              # @shadowob/shared — Types, constants, utilities
 │   │   └── src/
 │   │       ├── types/       # Shared TypeScript interfaces
 │   │       ├── constants/   # Socket events, limits
 │   │       └── utils/       # Shared utility functions
-│   ├── ui/                  # @shadow/ui — Shared UI components (Radix-based)
+│   ├── ui/                  # @shadowob/ui — Shared UI components (Radix-based)
 │   │   └── src/components/  # Avatar, Button, Input (CVA + Radix)
-│   └── agenthub/            # @shadow/agenthub — Agent runtime & adapters
+│   └── agenthub/            # @shadowob/agenthub — Agent runtime & adapters
 │       └── src/
 │           ├── types.ts     # IAgentKernel, MCP types
 │           ├── registry.ts  # Agent registration & discovery
@@ -133,11 +133,11 @@ shadow/
 ### Package Dependency Graph
 
 ```
-@shadow/web ──→ @shadow/shared, @shadow/ui
-@shadow/server ──→ @shadow/shared, @shadow/agenthub
-@shadow/agenthub ──→ @shadow/shared
-@shadow/ui ──→ (no internal deps)
-@shadow/shared ──→ (no internal deps)
+@shadowob/web ──→ @shadowob/shared, @shadowob/ui
+@shadowob/server ──→ @shadowob/shared, @shadowob/agenthub
+@shadowob/agenthub ──→ @shadowob/shared
+@shadowob/ui ──→ (no internal deps)
+@shadowob/shared ──→ (no internal deps)
 ```
 
 ---
@@ -273,7 +273,7 @@ The Rsbuild dev server proxies these paths to the backend (port 3002):
 ### Import Order
 
 1. External packages (`react`, `hono`, `drizzle-orm`)
-2. Workspace packages (`@shadow/shared`, `@shadow/ui`)
+2. Workspace packages (`@shadowob/shared`, `@shadowob/ui`)
 3. Internal aliases (`@/components/...`, `../../lib/...`)
 4. Styles
 
@@ -617,7 +617,7 @@ export function createExampleHandlers(container: AwilixContainer) {
 
 ### Overview
 
-AgentHub (`@shadow/agenthub`) provides the runtime for AI agents to participate in Shadow conversations via the MCP (Model Context Protocol) standard.
+AgentHub (`@shadowob/agenthub`) provides the runtime for AI agents to participate in Shadow conversations via the MCP (Model Context Protocol) standard.
 
 ### Architecture
 
@@ -657,7 +657,7 @@ AgentHub (`@shadow/agenthub`) provides the runtime for AI agents to participate 
 ### Creating a New Agent Adapter
 
 ```typescript
-import { BaseAdapter } from '@shadow/agenthub'
+import { BaseAdapter } from '@shadowob/agenthub'
 
 export class MyAdapter extends BaseAdapter {
   name = 'my-agent'
@@ -758,9 +758,9 @@ function MyComponent() {
 
 | Package | Path | Focus |
 |---------|------|-------|
-| `@shadow/server` | `apps/server/__tests__/` | DI container, E2E, validators |
-| `@shadow/shared` | `packages/shared/__tests__/` | Constants, utility functions |
-| `@shadow/agenthub` | `packages/agenthub/__tests__/` | Agent registry |
+| `@shadowob/server` | `apps/server/__tests__/` | DI container, E2E, validators |
+| `@shadowob/shared` | `packages/shared/__tests__/` | Constants, utility functions |
+| `@shadowob/agenthub` | `packages/agenthub/__tests__/` | Agent registry |
 
 ### Running Tests
 
@@ -769,7 +769,7 @@ function MyComponent() {
 pnpm test
 
 # Run specific package tests
-pnpm --filter @shadow/server test
+pnpm --filter @shadowob/server test
 
 # Watch mode
 pnpm test:watch
@@ -1036,7 +1036,7 @@ describe('BookmarkService', () => {
 
 ### Feature Implementation Checklist
 
-- [ ] Types in `@shadow/shared`
+- [ ] Types in `@shadowob/shared`
 - [ ] Database schema in `apps/server/src/db/schema/`
 - [ ] DAO in `apps/server/src/dao/`
 - [ ] Service in `apps/server/src/services/`

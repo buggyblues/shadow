@@ -1,4 +1,4 @@
-import { generateInviteCode } from '@shadow/shared'
+import { generateInviteCode } from '@shadowob/shared'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import { members, servers, users } from '../db/schema'

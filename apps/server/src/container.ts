@@ -1,6 +1,7 @@
 import { type AwilixContainer, asClass, asValue, createContainer, InjectionMode } from 'awilix'
 import type { Server as SocketIOServer } from 'socket.io'
 import { AgentDao } from './dao/agent.dao'
+import { AgentPolicyDao } from './dao/agent-policy.dao'
 import { ChannelDao } from './dao/channel.dao'
 import { InviteCodeDao } from './dao/invite-code.dao'
 import { MessageDao } from './dao/message.dao'
@@ -12,6 +13,7 @@ import type { Database } from './db'
 // Lib
 import { logger } from './lib/logger'
 import { AgentService } from './services/agent.service'
+import { AgentPolicyService } from './services/agent-policy.service'
 // Service classes
 import { AuthService } from './services/auth.service'
 import { ChannelService } from './services/channel.service'
@@ -36,6 +38,7 @@ export interface Cradle {
   messageDao: MessageDao
   notificationDao: NotificationDao
   agentDao: AgentDao
+  agentPolicyDao: AgentPolicyDao
   inviteCodeDao: InviteCodeDao
 
   // Services
@@ -49,6 +52,7 @@ export interface Cradle {
   dmService: DmService
   mediaService: MediaService
   agentService: AgentService
+  agentPolicyService: AgentPolicyService
 }
 
 export type AppContainer = AwilixContainer<Cradle>
@@ -71,6 +75,7 @@ export function createAppContainer(db: Database): AppContainer {
     messageDao: asClass(MessageDao).singleton(),
     notificationDao: asClass(NotificationDao).singleton(),
     agentDao: asClass(AgentDao).singleton(),
+    agentPolicyDao: asClass(AgentPolicyDao).singleton(),
     inviteCodeDao: asClass(InviteCodeDao).singleton(),
 
     // Services
@@ -84,6 +89,7 @@ export function createAppContainer(db: Database): AppContainer {
     dmService: asClass(DmService).singleton(),
     mediaService: asClass(MediaService).singleton(),
     agentService: asClass(AgentService).singleton(),
+    agentPolicyService: asClass(AgentPolicyService).singleton(),
   })
 
   return container

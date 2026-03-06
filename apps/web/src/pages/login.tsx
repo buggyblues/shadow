@@ -44,45 +44,45 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg-tertiary p-4">
-      <div className="w-full max-w-md bg-bg-secondary rounded-2xl p-8 shadow-xl border border-white/5">
+    <div className="min-h-screen flex items-center justify-center bg-[#1e1f22] p-4  bg-center">
+      <div className="w-full max-w-[480px] bg-[#313338] rounded-md p-8 shadow-[0_2px_10px_0_rgba(0,0,0,0.2)]">
         <div className="text-center mb-8">
           <img src="/Logo.svg" alt="Shadow" className="w-12 h-12 mx-auto mb-3" />
-          <h1 className="text-3xl font-bold text-text-primary mb-2">{t('auth.loginTitle')}</h1>
-          <p className="text-text-muted">{t('auth.loginSubtitle')}</p>
+          <h1 className="text-2xl font-semibold text-white mb-2 tracking-wide">{t('auth.loginTitle')}</h1>
+          <p className="text-[#b5bac1] text-[15px]">{t('auth.loginSubtitle')}</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
+            <div className="bg-red-500/10 border border-red-500/20 rounded-[3px] p-3 text-[#fa777c] text-sm">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-bold uppercase text-text-secondary mb-2">
-              {t('auth.emailLabel')}
+            <label className="block text-[12px] font-bold uppercase text-[#b5bac1] mb-2 tracking-wide">
+              {t('auth.emailLabel')} <span className="text-[#f23f43]">*</span>
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full bg-bg-tertiary text-text-primary rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-primary transition"
+              className="w-full bg-[#1e1f22] text-[#dbdee1] rounded-[3px] px-3 py-2.5 outline-none focus:ring-0 transition"
               placeholder="you@example.com"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase text-text-secondary mb-2">
-              {t('auth.passwordLabel')}
+            <label className="block text-[12px] font-bold uppercase text-[#b5bac1] mb-2 tracking-wide">
+              {t('auth.passwordLabel')} <span className="text-[#f23f43]">*</span>
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full bg-bg-tertiary text-text-primary rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-primary transition"
+              className="w-full bg-[#1e1f22] text-[#dbdee1] rounded-[3px] px-3 py-2.5 outline-none focus:ring-0 transition"
               placeholder="••••••••"
             />
           </div>
@@ -90,15 +90,15 @@ export function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-3 rounded-lg transition disabled:opacity-50"
+            className="w-full bg-[#5865F2] hover:bg-[#4752c4] text-white font-medium py-2.5 rounded-[3px] transition mt-2 disabled:opacity-50 text-[15px]"
           >
             {loading ? t('auth.loginLoading') : t('auth.loginSubmit')}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-text-muted text-sm">
-          {t('auth.noAccount')}{' '}
-          <Link to="/register" className="text-primary hover:underline">
+        <p className="mt-4 text-[14px]">
+          <span className="text-[#949ba4]">{t('auth.noAccount')}</span>{' '}
+          <Link to="/register" className="text-[#00a8fc] hover:underline">
             {t('auth.registerLink')}
           </Link>
         </p>

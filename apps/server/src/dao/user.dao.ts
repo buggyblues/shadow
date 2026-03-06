@@ -69,4 +69,8 @@ export class UserDao {
   async findAll(limit = 50, offset = 0) {
     return this.db.select().from(users).limit(limit).offset(offset)
   }
+
+  async delete(id: string) {
+    await this.db.delete(users).where(eq(users.id, id))
+  }
 }

@@ -93,6 +93,27 @@ export function createServerHandler(container: AppContainer) {
     const user = c.get('user')
     try {
       const server = await serverService.join(inviteCode, user.userId)
+
+      // Emit member:joined to all channel rooms in the server
+      try {
+        const io = container.resolve('io')
+        const channelDao = container.resolve('channelDao')
+        const userDao = container.resolve('userDao')
+        const fullUser = await userDao.findById(user.userId)
+        const channels = await channelDao.findByServerId(server.id)
+        const payload = {
+          serverId: server.id,
+          userId: user.userId,
+          username: fullUser?.username ?? 'unknown',
+          displayName: fullUser?.displayName ?? fullUser?.username ?? 'unknown',
+          avatarUrl: fullUser?.avatarUrl ?? null,
+          isBot: fullUser?.isBot ?? false,
+        }
+        for (const ch of channels) {
+          io.to(`channel:${ch.id}`).emit('member:joined', payload)
+        }
+      } catch { /* non-critical */ }
+
       return c.json(server)
     } catch (error) {
       const status = (error as { status?: number }).status
@@ -110,7 +131,43 @@ export function createServerHandler(container: AppContainer) {
     const serverService = container.resolve('serverService')
     const id = c.req.param('id')
     const user = c.get('user')
+
+    // Get user info before leaving for the event payload
+    let leavePayload: {
+      serverId: string
+      userId: string
+      username: string
+      displayName: string
+      avatarUrl: string | null
+      isBot: boolean
+    } | null = null
+    try {
+      const userDao = container.resolve('userDao')
+      const fullUser = await userDao.findById(user.userId)
+      leavePayload = {
+        serverId: id,
+        userId: user.userId,
+        username: fullUser?.username ?? 'unknown',
+        displayName: fullUser?.displayName ?? fullUser?.username ?? 'unknown',
+        avatarUrl: fullUser?.avatarUrl ?? null,
+        isBot: fullUser?.isBot ?? false,
+      }
+    } catch { /* non-critical */ }
+
     await serverService.leave(id, user.userId)
+
+    // Emit member:left to all channel rooms
+    if (leavePayload) {
+      try {
+        const io = container.resolve('io')
+        const channelDao = container.resolve('channelDao')
+        const channels = await channelDao.findByServerId(id)
+        for (const ch of channels) {
+          io.to(`channel:${ch.id}`).emit('member:left', leavePayload)
+        }
+      } catch { /* non-critical */ }
+    }
+
     return c.json({ success: true })
   })
 
@@ -123,15 +180,19 @@ export function createServerHandler(container: AppContainer) {
   })
 
   // PATCH /api/servers/:id/members/:userId
-  serverHandler.patch('/:id/members/:userId', zValidator('json', updateMemberSchema), async (c) => {
-    const serverService = container.resolve('serverService')
-    const id = c.req.param('id')
-    const targetUserId = c.req.param('userId')
-    const input = c.req.valid('json')
-    const user = c.get('user')
-    const member = await serverService.updateMember(id, targetUserId, user.userId, input)
-    return c.json(member)
-  })
+  serverHandler.patch(
+    '/:id/members/:userId',
+    zValidator('json', updateMemberSchema),
+    async (c) => {
+      const serverService = container.resolve('serverService')
+      const id = c.req.param('id')
+      const targetUserId = c.req.param('userId')
+      const input = c.req.valid('json')
+      const user = c.get('user')
+      const member = await serverService.updateMember(id, targetUserId, user.userId, input)
+      return c.json(member)
+    },
+  )
 
   // DELETE /api/servers/:id/members/:userId
   serverHandler.delete('/:id/members/:userId', async (c) => {
@@ -139,7 +200,43 @@ export function createServerHandler(container: AppContainer) {
     const id = c.req.param('id')
     const targetUserId = c.req.param('userId')
     const user = c.get('user')
+
+    // Get target user info before kicking for the event payload
+    let kickPayload: {
+      serverId: string
+      userId: string
+      username: string
+      displayName: string
+      avatarUrl: string | null
+      isBot: boolean
+    } | null = null
+    try {
+      const userDao = container.resolve('userDao')
+      const fullUser = await userDao.findById(targetUserId)
+      kickPayload = {
+        serverId: id,
+        userId: targetUserId,
+        username: fullUser?.username ?? 'unknown',
+        displayName: fullUser?.displayName ?? fullUser?.username ?? 'unknown',
+        avatarUrl: fullUser?.avatarUrl ?? null,
+        isBot: fullUser?.isBot ?? false,
+      }
+    } catch { /* non-critical */ }
+
     await serverService.kickMember(id, targetUserId, user.userId)
+
+    // Emit member:left to all channel rooms
+    if (kickPayload) {
+      try {
+        const io = container.resolve('io')
+        const channelDao = container.resolve('channelDao')
+        const channels = await channelDao.findByServerId(id)
+        for (const ch of channels) {
+          io.to(`channel:${ch.id}`).emit('member:left', kickPayload)
+        }
+      } catch { /* non-critical */ }
+    }
+
     return c.json({ success: true })
   })
 
@@ -150,6 +247,66 @@ export function createServerHandler(container: AppContainer) {
     const user = c.get('user')
     const server = await serverService.regenerateInvite(id, user.userId)
     return c.json({ inviteCode: server.inviteCode })
+  })
+
+  // POST /api/servers/:id/agents — add agent(s) to server as members
+  serverHandler.post('/:id/agents', async (c) => {
+    const serverService = container.resolve('serverService')
+    const agentService = container.resolve('agentService')
+    const agentPolicyService = container.resolve('agentPolicyService')
+    const id = c.req.param('id')
+    const user = c.get('user')
+    const body = await c.req.json<{ agentIds: string[] }>()
+
+    if (!Array.isArray(body.agentIds) || body.agentIds.length === 0) {
+      return c.json({ error: 'agentIds is required' }, 400)
+    }
+
+    const results: Array<{ agentId: string; success: boolean; error?: string }> = []
+    for (const agentId of body.agentIds) {
+      try {
+        const agent = await agentService.getById(agentId)
+        if (!agent) {
+          results.push({ agentId, success: false, error: 'Agent not found' })
+          continue
+        }
+        // Verify the user owns the agent
+        if (agent.ownerId !== user.userId) {
+          results.push({ agentId, success: false, error: 'Not the owner' })
+          continue
+        }
+        // Add bot user as server member
+        await serverService.addBotMember(id, agent.userId)
+        // Auto-create default server-wide policy
+        await agentPolicyService.ensureServerDefault(agentId, id)
+        results.push({ agentId, success: true })
+
+        // Emit member:joined for the bot
+        try {
+          const io = container.resolve('io')
+          const channelDao = container.resolve('channelDao')
+          const userDao = container.resolve('userDao')
+          const botUser = await userDao.findById(agent.userId)
+          const channels = await channelDao.findByServerId(id)
+          const payload = {
+            serverId: id,
+            userId: agent.userId,
+            username: botUser?.username ?? 'unknown',
+            displayName: botUser?.displayName ?? botUser?.username ?? 'unknown',
+            avatarUrl: botUser?.avatarUrl ?? null,
+            isBot: true,
+          }
+          for (const ch of channels) {
+            io.to(`channel:${ch.id}`).emit('member:joined', payload)
+          }
+        } catch { /* non-critical */ }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error'
+        results.push({ agentId, success: false, error: msg })
+      }
+    }
+
+    return c.json({ results })
   })
 
   return serverHandler

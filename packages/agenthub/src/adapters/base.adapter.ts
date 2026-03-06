@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'node:child_process'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import type { AgentCapability } from '@shadow/shared'
+import type { AgentCapability } from '@shadowob/shared'
 import type {
   AgentConfig,
   AgentResponse,

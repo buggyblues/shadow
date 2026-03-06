@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { Compass, Plus, Settings, UserPlus } from 'lucide-react'
-import { useState } from 'react'
+import { Bot, Check, Compass, Copy, LogOut, Plus, Settings, UserPlus, Info } from 'lucide-react'
+import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import { getCatAvatar } from '../../lib/pixel-cats'
@@ -22,6 +22,12 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   const [showJoin, setShowJoin] = useState(false)
   const [newName, setNewName] = useState('')
   const [joinCode, setJoinCode] = useState('')
+  const [copiedId, setCopiedId] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{
+    x: number
+    y: number
+    server: ServerEntry
+  } | null>(null)
 
   const { data: servers = [] } = useQuery({
     queryKey: ['servers'],
@@ -57,6 +63,26 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
 
   const { setMobileView } = useUIStore()
 
+  const leaveServer = useMutation({
+    mutationFn: (serverId: string) =>
+      fetchApi(`/api/servers/${serverId}/leave`, { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['servers'] })
+      setContextMenu(null)
+      navigate({ to: '/app' })
+    },
+  })
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, server: ServerEntry) => {
+      e.preventDefault()
+      setContextMenu({ x: e.clientX, y: e.clientY, server })
+    },
+    [],
+  )
+
+  const closeContextMenu = useCallback(() => setContextMenu(null), [])
+
   const handleSelect = (serverId: string, slug?: string | null) => {
     setActiveServer(serverId)
     setMobileView('channels')
@@ -69,23 +95,24 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
       {/* Home button */}
       <button
         onClick={() => navigate({ to: '/app' })}
-        className="w-12 h-12 rounded-2xl bg-bg-primary hover:bg-primary hover:rounded-xl transition-all flex items-center justify-center overflow-hidden"
+        className="w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-bg-primary hover:bg-[#5865F2] transition-all duration-200 flex items-center justify-center overflow-hidden"
         title={t('server.home')}
       >
-        <img src="/Logo.svg" alt="Shadow" className="w-8 h-8" />
+        <img src="/Logo.svg" alt="Shadow" className="w-7 h-7" />
       </button>
 
-      <div className="w-8 h-0.5 bg-bg-primary rounded-full my-1" />
+      <div className="w-8 h-0.5 bg-[#404249] rounded-full my-1" />
 
       {/* Server list */}
       {servers.map((s, i) => (
         <div key={s.server.id} className="relative group/server">
           <button
             onClick={() => handleSelect(s.server.id, s.server.slug)}
-            className={`w-12 h-12 rounded-2xl hover:rounded-xl transition-all flex items-center justify-center font-bold text-sm overflow-hidden ${
+            onContextMenu={(e) => handleContextMenu(e, s)}
+            className={`w-12 h-12 transition-all duration-200 flex items-center justify-center font-bold text-[15px] overflow-hidden ${
               activeServerId === s.server.id
-                ? 'bg-primary rounded-xl text-white ring-2 ring-primary/50'
-                : 'bg-bg-primary text-text-primary hover:bg-primary/20'
+                ? 'bg-[#5865F2] rounded-[16px] text-white shadow-sm'
+                : 'bg-bg-primary text-text-primary rounded-[24px] hover:rounded-[16px] hover:bg-[#5865F2] hover:text-white'
             }`}
           >
             {s.server.iconUrl ? (
@@ -105,7 +132,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
       {/* Add server */}
       <button
         onClick={() => setShowCreate(!showCreate)}
-        className="w-12 h-12 rounded-2xl bg-bg-primary hover:bg-green-600 hover:rounded-xl transition-all flex items-center justify-center text-green-500 hover:text-white"
+        className="w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-bg-primary hover:bg-[#23a559] transition-all duration-200 flex items-center justify-center text-[#23a559] hover:text-white"
         title={t('server.createServer')}
       >
         <Plus size={24} />
@@ -114,7 +141,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
       {/* Join server */}
       <button
         onClick={() => setShowJoin(!showJoin)}
-        className="w-12 h-12 rounded-2xl bg-bg-primary hover:bg-blue-600 hover:rounded-xl transition-all flex items-center justify-center text-blue-500 hover:text-white"
+        className="w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-bg-primary hover:bg-[#5865F2] transition-all duration-200 flex items-center justify-center text-[#5865F2] hover:text-white"
         title={t('server.joinServer')}
       >
         <UserPlus size={20} />
@@ -123,20 +150,29 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
       {/* Discover servers */}
       <button
         onClick={() => navigate({ to: '/app/discover' })}
-        className="w-12 h-12 rounded-2xl bg-bg-primary hover:bg-emerald-600 hover:rounded-xl transition-all flex items-center justify-center text-emerald-500 hover:text-white"
+        className="w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-bg-primary hover:bg-[#23a559] transition-all duration-200 flex items-center justify-center text-[#23a559] hover:text-white"
         title={t('server.discover')}
       >
-        <Compass size={20} />
+        <Compass size={24} className="opacity-90" />
       </button>
 
       {/* Settings */}
-      <div className="mt-auto">
+      <div className="mt-auto flex flex-col items-center gap-2">
+        {/* Agent management */}
+        <button
+          onClick={() => navigate({ to: '/app/agents' })}
+          className="w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-bg-primary hover:bg-[#5865F2] transition-all duration-200 flex items-center justify-center text-[#5865F2] hover:text-white"
+          title={t('agentMgmt.title')}
+        >
+          <Bot size={22} className="opacity-90" />
+        </button>
+
         <button
           onClick={() => navigate({ to: '/app/settings' })}
-          className="w-12 h-12 rounded-2xl bg-bg-primary hover:bg-bg-secondary hover:rounded-xl transition-all flex items-center justify-center text-text-muted hover:text-text-primary"
+          className="w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-bg-primary hover:bg-[#80848e] transition-all duration-200 flex items-center justify-center text-text-muted hover:text-white"
           title={t('server.settings')}
         >
-          <Settings size={20} />
+          <Settings size={22} className="opacity-90" />
         </button>
       </div>
 
@@ -214,6 +250,74 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
             </div>
           </div>
         </div>
+      )}
+
+      {/* Server context menu */}
+      {contextMenu && (
+        <>
+          <div className="fixed inset-0 z-[60]" onClick={closeContextMenu} onContextMenu={(e) => { e.preventDefault(); closeContextMenu() }} />
+          <div
+            className="fixed z-[61] bg-bg-tertiary border border-white/10 rounded-lg shadow-xl py-1 min-w-[180px]"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            {/* Server info */}
+            <button
+              type="button"
+              onClick={() => {
+                handleSelect(contextMenu.server.server.id, contextMenu.server.server.slug)
+                setContextMenu(null)
+              }}
+              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
+            >
+              <Info size={14} />
+              {t('server.serverInfo')}
+            </button>
+
+            {/* Invite members */}
+            <button
+              type="button"
+              onClick={() => {
+                handleSelect(contextMenu.server.server.id, contextMenu.server.server.slug)
+                setContextMenu(null)
+              }}
+              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
+            >
+              <UserPlus size={14} />
+              {t('server.inviteMembers')}
+            </button>
+
+            {/* Copy server ID */}
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(contextMenu.server.server.id)
+                setCopiedId(true)
+                setTimeout(() => setCopiedId(false), 2000)
+                setContextMenu(null)
+              }}
+              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
+            >
+              {copiedId ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+              {copiedId ? t('common.copied') : t('server.copyServerId')}
+            </button>
+
+            {/* Leave server */}
+            <div className="h-px bg-white/5 my-1" />
+            <button
+              type="button"
+              onClick={() => {
+                const name = contextMenu.server.server.name
+                if (confirm(t('server.leaveConfirm', { name }))) {
+                  leaveServer.mutate(contextMenu.server.server.id)
+                }
+              }}
+              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition"
+            >
+              <LogOut size={14} />
+              {t('server.leaveServer')}
+            </button>
+          </div>
+        </>
       )}
     </div>
   )

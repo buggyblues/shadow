@@ -8,15 +8,19 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
     logger.info({ socketId: socket.id, userId }, 'Client connected')
 
     // channel:join
-    socket.on('channel:join', async ({ channelId }: { channelId: string }) => {
+    socket.on('channel:join', async ({ channelId }: { channelId: string }, ack?: (res: { ok: boolean }) => void) => {
       await socket.join(`channel:${channelId}`)
-      logger.debug({ userId, channelId }, 'Joined channel room')
+      logger.info({ userId, channelId, socketId: socket.id }, 'Joined channel room')
+      // Send ack if client provided a callback
+      if (typeof ack === 'function') {
+        ack({ ok: true })
+      }
     })
 
     // channel:leave
     socket.on('channel:leave', async ({ channelId }: { channelId: string }) => {
       await socket.leave(`channel:${channelId}`)
-      logger.debug({ userId, channelId }, 'Left channel room')
+      logger.info({ userId, channelId, socketId: socket.id }, 'Left channel room')
     })
 
     // message:send
@@ -87,6 +91,39 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
             } catch {
               /* notification creation failed, non-critical */
             }
+          }
+
+          // Create notifications for @mentions
+          try {
+            const mentionRegex = /@(\w+)/g
+            const mentionedUsernames = new Set<string>()
+            let match: RegExpExecArray | null
+            while ((match = mentionRegex.exec(data.content)) !== null) {
+              if (match[1]) mentionedUsernames.add(match[1])
+            }
+
+            if (mentionedUsernames.size > 0) {
+              const userDao = container.resolve('userDao')
+              const notificationService = container.resolve('notificationService')
+              const senderName = message.author?.displayName ?? message.author?.username ?? 'Someone'
+
+              for (const username of mentionedUsernames) {
+                const mentionedUser = await userDao.findByUsername(username)
+                if (mentionedUser && mentionedUser.id !== userId) {
+                  const notification = await notificationService.create({
+                    userId: mentionedUser.id,
+                    type: 'mention',
+                    title: `${senderName} mentioned you`,
+                    body: data.content.substring(0, 200),
+                    referenceId: message.id,
+                    referenceType: 'message',
+                  })
+                  io.emit('notification:new', notification)
+                }
+              }
+            }
+          } catch {
+            /* mention notification failed, non-critical */
           }
         } catch (error) {
           const msg = error instanceof Error ? error.message : 'Failed to send message'

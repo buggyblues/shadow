@@ -73,23 +73,23 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg-tertiary p-4">
-      <div className="w-full max-w-md bg-bg-secondary rounded-2xl p-8 shadow-xl border border-white/5">
-        <div className="text-center mb-8">
+    <div className="min-h-screen flex items-center justify-center bg-[#1e1f22] p-4  bg-center">
+      <div className="w-full max-w-[480px] bg-[#313338] rounded-[5px] p-8 shadow-[0_2px_10px_0_rgba(0,0,0,0.2)]">
+        <div className="text-center mb-6">
           <img src="/Logo.svg" alt="Shadow" className="w-12 h-12 mx-auto mb-3" />
-          <h1 className="text-3xl font-bold text-text-primary mb-2">{t('auth.registerTitle')}</h1>
-          <p className="text-text-muted">{t('auth.registerSubtitle')}</p>
+          <h1 className="text-2xl font-semibold text-white mb-2 tracking-wide">{t('auth.registerTitle')}</h1>
+          <p className="text-[#b5bac1] text-[15px]">{t('auth.registerSubtitle')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
+            <div className="bg-red-500/10 border border-red-500/20 rounded-[3px] p-3 text-[#fa777c] text-sm">
               {error}
             </div>
           )}
 
           {/* Avatar selection */}
-          <div className="flex justify-center">
+          <div className="flex justify-center mb-2">
             <button
               type="button"
               onClick={() => setShowAvatarPicker(!showAvatarPicker)}
@@ -98,16 +98,16 @@ export function RegisterPage() {
               <img
                 src={selectedAvatar}
                 alt="Avatar"
-                className="w-20 h-20 rounded-full bg-bg-tertiary border-2 border-white/10 group-hover:border-primary/50 transition"
+                className="w-[72px] h-[72px] rounded-full bg-[#1e1f22] border-2 border-transparent group-hover:border-primary/50 transition cursor-pointer"
               />
-              <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs text-white font-bold">
+              <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-[11px] text-white font-bold tracking-wide pointer-events-none">
                 {t('auth.changeAvatar')}
               </div>
             </button>
           </div>
 
           {showAvatarPicker && (
-            <div className="grid grid-cols-4 gap-2 bg-bg-tertiary rounded-xl p-3">
+            <div className="grid grid-cols-4 gap-2 bg-[#1e1f22] rounded-[5px] p-3 mt-1 shadow-inner max-h-[160px] overflow-y-auto">
               {allCats.map((cat) => (
                 <button
                   key={cat.index}
@@ -116,64 +116,64 @@ export function RegisterPage() {
                     setSelectedAvatar(cat.dataUri)
                     setShowAvatarPicker(false)
                   }}
-                  className={`flex flex-col items-center gap-1 p-2 rounded-lg transition ${
+                  className={`flex flex-col items-center gap-1 p-1.5 rounded-[5px] transition ${
                     selectedAvatar === cat.dataUri
-                      ? 'bg-primary/20 ring-2 ring-primary'
+                      ? 'bg-[#5865F2]/20 ring-1 ring-[#5865F2]'
                       : 'hover:bg-white/5'
                   }`}
                 >
-                  <img src={cat.dataUri} alt={cat.name} className="w-10 h-10 rounded-full" />
-                  <span className="text-[10px] text-text-muted">{cat.name}</span>
+                  <img src={cat.dataUri} alt={cat.name} className="w-9 h-9 rounded-full" />
+                  <span className="text-[10px] text-[#b5bac1]">{cat.name}</span>
                 </button>
               ))}
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-bold uppercase text-text-secondary mb-2">
-              {t('auth.emailLabel')}
+            <label className="block text-[12px] font-bold uppercase text-[#b5bac1] mb-2 tracking-wide">
+              {t('auth.emailLabel')} <span className="text-[#f23f43]">*</span>
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full bg-bg-tertiary text-text-primary rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-primary transition"
+              className="w-full bg-[#1e1f22] text-[#dbdee1] rounded-[3px] px-3 py-2.5 outline-none focus:ring-0 transition"
               placeholder="you@example.com"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase text-text-secondary mb-2">
-              {t('auth.usernameLabel')}
+            <label className="block text-[12px] font-bold uppercase text-[#b5bac1] mb-2 tracking-wide">
+              {t('auth.usernameLabel')} <span className="text-[#f23f43]">*</span>
             </label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
-              className="w-full bg-bg-tertiary text-text-primary rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-primary transition"
+              className="w-full bg-[#1e1f22] text-[#dbdee1] rounded-[3px] px-3 py-2.5 outline-none focus:ring-0 transition"
               placeholder="shadow_user"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase text-text-secondary mb-2">
+            <label className="block text-[12px] font-bold uppercase text-[#b5bac1] mb-2 tracking-wide">
               {t('auth.displayNameLabel')}{' '}
-              <span className="text-text-muted font-normal">{t('auth.optional')}</span>
+              <span className="text-[#949ba4] font-normal italic">{t('auth.optional')}</span>
             </label>
             <input
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="w-full bg-bg-tertiary text-text-primary rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-primary transition"
+              className="w-full bg-[#1e1f22] text-[#dbdee1] rounded-[3px] px-3 py-2.5 outline-none focus:ring-0 transition"
               placeholder={t('auth.displayNamePlaceholder')}
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase text-text-secondary mb-2">
-              {t('auth.passwordLabel')}
+            <label className="block text-[12px] font-bold uppercase text-[#b5bac1] mb-2 tracking-wide">
+              {t('auth.passwordLabel')} <span className="text-[#f23f43]">*</span>
             </label>
             <input
               type="password"
@@ -181,38 +181,38 @@ export function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={8}
-              className="w-full bg-bg-tertiary text-text-primary rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-primary transition"
+              className="w-full bg-[#1e1f22] text-[#dbdee1] rounded-[3px] px-3 py-2.5 outline-none focus:ring-0 transition"
               placeholder={t('auth.passwordPlaceholder')}
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase text-text-secondary mb-2">
-              {t('auth.inviteCodeLabel')}
+            <label className="block text-[12px] font-bold uppercase text-[#b5bac1] mb-2 tracking-wide">
+              {t('auth.inviteCodeLabel')} <span className="text-[#f23f43]">*</span>
             </label>
             <input
               type="text"
               value={inviteCode}
               onChange={(e) => setInviteCode(e.target.value)}
               required
-              className="w-full bg-bg-tertiary text-text-primary rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-primary transition font-mono tracking-wider"
+              className="w-full bg-[#1e1f22] text-[#dbdee1] rounded-[3px] px-3 py-2.5 outline-none focus:ring-0 transition font-mono tracking-wider"
               placeholder={t('auth.inviteCodePlaceholder')}
             />
-            <p className="text-xs text-text-muted mt-1">{t('auth.inviteCodeHint')}</p>
+            <p className="text-[11px] text-[#949ba4] mt-1.5">{t('auth.inviteCodeHint')}</p>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-3 rounded-lg transition disabled:opacity-50"
+            className="w-full bg-[#5865F2] hover:bg-[#4752c4] text-white font-medium py-2.5 rounded-[3px] transition mt-2 disabled:opacity-50 text-[15px]"
           >
             {loading ? t('auth.registerLoading') : t('auth.registerSubmit')}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-text-muted text-sm">
-          {t('auth.hasAccount')}{' '}
-          <Link to="/login" className="text-primary hover:underline">
+        <p className="mt-4 text-[14px]">
+          <span className="text-[#949ba4]">{t('auth.hasAccount')}</span>{' '}
+          <Link to="/login" className="text-[#00a8fc] hover:underline">
             {t('auth.loginLink')}
           </Link>
         </p>

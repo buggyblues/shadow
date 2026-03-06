@@ -1,5 +1,5 @@
 {
-  "name": "@shadow/web",
+  "name": "@shadowob/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,8 +13,8 @@
   "dependencies": {
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
-    "@shadow/shared": "workspace:*",
-    "@shadow/ui": "workspace:*",
+    "@shadowob/shared": "workspace:*",
+    "@shadowob/ui": "workspace:*",
     "@tanstack/react-query": "^5.80.7",
     "@tanstack/react-router": "^1.121.2",
     "clsx": "^2.1.1",

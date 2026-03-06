@@ -13,6 +13,7 @@ import ReactDOM from 'react-dom/client'
 import { useTranslation } from 'react-i18next'
 import { AppLayout } from './components/layout/app-layout'
 import { RootLayout } from './components/layout/root-layout'
+import { AgentManagementPage } from './pages/agent-management'
 import { AgentMarketPage } from './pages/agents'
 import { DiscoverPage } from './pages/discover'
 import { DocsPage } from './pages/docs'
@@ -121,16 +122,16 @@ const appIndexRoute = createRoute({
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const navigate = useNavigate()
     return (
-      <div className="flex-1 flex items-center justify-center text-text-muted">
+      <div className="flex-1 flex items-center justify-center text-text-muted bg-bg-primary h-full">
         <div className="text-center max-w-md">
           <img src="/Logo.svg" alt="Shadow" className="w-20 h-20 mx-auto mb-6 opacity-60" />
           <h2 className="text-2xl font-bold text-text-primary mb-2">{t('common.welcomeTitle')}</h2>
-          <p className="text-text-muted mb-8">{t('common.welcomeDesc')}</p>
+          <p className="text-[#dbdee1] mb-8 text-[15px]">{t('common.welcomeDesc')}</p>
           <div className="flex flex-col gap-3">
             <button
               type="button"
               onClick={() => navigate({ to: '/app/discover' })}
-              className="px-6 py-3 bg-primary hover:bg-primary-hover text-white rounded-xl font-bold transition flex items-center justify-center gap-2"
+              className="px-6 py-3 bg-[#5865F2] hover:bg-[#4752c4] text-white rounded-xl font-bold transition flex items-center justify-center gap-2 shadow-sm"
             >
               {t('common.welcomeDiscover')}
             </button>
@@ -153,6 +154,12 @@ const settingsRoute = createRoute({
   component: SettingsPage,
 })
 
+const agentMgmtRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/agents',
+  component: AgentManagementPage,
+})
+
 const discoverRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/discover',
@@ -169,7 +176,7 @@ const routeTree = rootRoute.addChildren([
   pricingRoute,
   docsRoute,
   inviteRoute,
-  appRoute.addChildren([appIndexRoute, serverRoute, settingsRoute, discoverRoute]),
+  appRoute.addChildren([appIndexRoute, serverRoute, settingsRoute, agentMgmtRoute, discoverRoute]),
 ])
 
 const router = createRouter({ routeTree })
