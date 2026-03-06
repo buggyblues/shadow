@@ -118,8 +118,48 @@ async function processShadowMessage(params: {
     body: rawBody,
   })
 
-  // Extract media URLs from attachments
+  // Extract media URLs from attachments AND from inline markdown images/files
   const attachmentUrls = (message.attachments ?? []).map((a) => a.url).filter(Boolean)
+
+  // Parse markdown for image/file URLs: ![alt](url) and [name](url)
+  const markdownMediaRegex = /!?\[[^\]]*\]\(([^)]+)\)/g
+  const markdownUrls: string[] = []
+  let mdMatch: RegExpExecArray | null
+  while ((mdMatch = markdownMediaRegex.exec(rawBody)) !== null) {
+    const url = mdMatch[1]!
+    // Only include media paths (uploads), not arbitrary links
+    if (url.startsWith('/') && url.includes('/uploads/')) {
+      markdownUrls.push(url)
+    } else if (url.startsWith('http')) {
+      markdownUrls.push(url)
+    }
+  }
+
+  // Merge and deduplicate, convert relative URLs to absolute
+  const baseUrl = account.serverUrl.replace(/\/$/, '')
+  const allMediaUrls = [...new Set([...attachmentUrls, ...markdownUrls])].map((url) =>
+    url.startsWith('/') ? `${baseUrl}${url}` : url,
+  )
+
+  // Build media context fields following OpenClaw convention
+  const mediaCtx: Record<string, unknown> = {}
+  if (allMediaUrls.length > 0) {
+    mediaCtx.MediaUrl = allMediaUrls[0]
+    mediaCtx.MediaUrls = allMediaUrls
+    // Try to infer content types from file extensions
+    const inferType = (u: string) => {
+      const ext = u.split('.').pop()?.toLowerCase() ?? ''
+      const map: Record<string, string> = {
+        jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+        gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+        mp4: 'video/mp4', webm: 'video/webm', mp3: 'audio/mpeg',
+        wav: 'audio/wav', ogg: 'audio/ogg', pdf: 'application/pdf',
+      }
+      return map[ext] ?? 'application/octet-stream'
+    }
+    mediaCtx.MediaType = inferType(allMediaUrls[0]!)
+    mediaCtx.MediaTypes = allMediaUrls.map(inferType)
+  }
 
   // 3. Build and finalize MsgContext
   const ctxPayload = core.channel.reply.finalizeInboundContext({
@@ -143,7 +183,7 @@ async function processShadowMessage(params: {
     OriginatingTo: `shadow:channel:${channelId}`,
     ...(message.threadId ? { ThreadId: message.threadId } : {}),
     ...(message.replyToId ? { ReplyToId: message.replyToId } : {}),
-    ...(attachmentUrls.length > 0 ? { MediaUrls: attachmentUrls } : {}),
+    ...mediaCtx,
   })
 
   // 4. Record session

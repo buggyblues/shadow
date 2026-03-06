@@ -362,13 +362,13 @@ export function MessageInput({
       )}
 
       <div
-        className={`flex items-end gap-2 bg-[#383a40] ${
+        className={`flex items-center gap-1 bg-[#383a40] ${
           replyToId || pendingFiles.length > 0 ? 'rounded-b-lg' : 'rounded-lg'
-        } px-4 py-2.5 shadow-sm`}
+        } px-3 py-1.5 shadow-sm`}
       >
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="text-text-secondary hover:text-text-primary transition p-1 rounded-full hover:bg-white/5 shrink-0"
+          className="text-text-secondary hover:text-text-primary transition p-1.5 rounded-full hover:bg-white/5 shrink-0 self-end mb-[3px]"
           title={t('chat.uploadFile')}
         >
           <Plus size={20} />
@@ -383,21 +383,21 @@ export function MessageInput({
             channelName: channelName ?? t('chat.channelFallback'),
           })}
           rows={1}
-          className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted outline-none resize-none text-[15px] leading-relaxed max-h-[50vh] min-h-[24px] py-1.5"
+          className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted outline-none resize-none text-[15px] leading-[22px] max-h-[50vh] min-h-[22px] py-[7px]"
         />
 
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="text-text-secondary hover:text-text-primary transition p-1 rounded-full hover:bg-white/5 shrink-0"
+          className="text-text-secondary hover:text-text-primary transition p-1.5 rounded-full hover:bg-white/5 shrink-0 self-end mb-[3px]"
           title={t('chat.uploadImage')}
         >
           <ImageIcon size={20} />
         </button>
 
-        <div className="relative shrink-0 flex items-center justify-center">
+        <div className="relative shrink-0 self-end mb-[3px]">
           <button
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            className="text-text-secondary hover:text-text-primary transition p-1 rounded-full hover:bg-white/5"
+            className="text-text-secondary hover:text-text-primary transition p-1.5 rounded-full hover:bg-white/5"
             title={t('chat.addEmoji')}
           >
             <Smile size={20} />
@@ -417,7 +417,7 @@ export function MessageInput({
         <button
           onClick={handleSend}
           disabled={(!content.trim() && pendingFiles.length === 0) || uploading}
-          className="text-text-muted hover:text-primary transition pb-1 disabled:opacity-30"
+          className="text-text-muted hover:text-primary transition p-1.5 rounded-full hover:bg-white/5 shrink-0 self-end mb-[3px] disabled:opacity-30 disabled:hover:bg-transparent"
         >
           <Send size={20} />
         </button>

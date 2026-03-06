@@ -185,6 +185,30 @@ export class ShadowClient {
     mediaUrl: string,
     messageId?: string,
   ): Promise<{ url: string; key: string; size: number }> {
+    // Handle local file paths (file:// or absolute paths)
+    const normalizedUrl = mediaUrl.replace(/^file:\/\//, '')
+    if (normalizedUrl.startsWith('/') && !normalizedUrl.startsWith('//')) {
+      // Local filesystem path — read via Node.js fs
+      // Dynamic imports with @ts-expect-error since @types/node is not in this package
+      // @ts-expect-error node:fs/promises is available at runtime
+      const { readFile } = await import('node:fs/promises')
+      // @ts-expect-error node:path is available at runtime
+      const { basename } = await import('node:path')
+      const buffer: ArrayBuffer = (await readFile(normalizedUrl)).buffer
+      const filename: string = basename(normalizedUrl)
+      // Infer content type from extension
+      const ext = filename.split('.').pop()?.toLowerCase() ?? ''
+      const mimeMap: Record<string, string> = {
+        jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+        gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+        mp4: 'video/mp4', webm: 'video/webm', mp3: 'audio/mpeg',
+        wav: 'audio/wav', ogg: 'audio/ogg', pdf: 'application/pdf',
+      }
+      const contentType = mimeMap[ext] ?? 'application/octet-stream'
+      return this.uploadMedia(buffer, filename, contentType, messageId)
+    }
+
+    // HTTP/HTTPS URL — fetch and upload
     const res = await fetch(mediaUrl)
     if (!res.ok) {
       throw new Error(`Failed to download media from ${mediaUrl}: ${res.status}`)

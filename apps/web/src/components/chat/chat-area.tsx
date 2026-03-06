@@ -372,30 +372,27 @@ export function ChatArea() {
         virtualizer.scrollToIndex(addedCount, { align: 'start' })
       }
       isLoadingOlderRef.current = false
+    } else if (prevCount > 0 && currentCount > prevCount && !isLoadingOlderRef.current) {
+      // New messages appended at the end — auto-scroll if near bottom
+      const scrollEl = parentRef.current
+      if (scrollEl) {
+        const isNearBottom =
+          scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 150
+        if (isNearBottom) {
+          // Use requestAnimationFrame to let virtualizer measure first
+          requestAnimationFrame(() => {
+            virtualizer.scrollToIndex(currentCount - 1, { align: 'end', behavior: 'smooth' })
+          })
+        }
+        // Track read count
+        if (lastReadCount > 0 && lastReadCount < currentCount && isNearBottom) {
+          setLastReadCount(currentCount)
+        }
+      }
     }
 
     prevMessageCountRef.current = currentCount
-  }, [messages.length, virtualizer])
-
-  // Auto-scroll to bottom on new messages from WS (if near bottom)
-  useEffect(() => {
-    const scrollEl = parentRef.current
-    if (!scrollEl || messages.length === 0) return
-
-    const prevCount = prevMessageCountRef.current
-    // Only auto-scroll for new messages appended at the end (not for history loading)
-    if (prevCount > 0 && messages.length > prevCount && !isLoadingOlderRef.current) {
-      const isNearBottom =
-        scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 150
-      if (isNearBottom) {
-        virtualizer.scrollToIndex(messages.length - 1, { align: 'end', behavior: 'smooth' })
-      }
-      // Track read count
-      if (lastReadCount > 0 && lastReadCount < messages.length && isNearBottom) {
-        setLastReadCount(messages.length)
-      }
-    }
-  })
+  }, [messages.length, virtualizer, lastReadCount])
 
   // Load older messages when scrolling near top
   useEffect(() => {
