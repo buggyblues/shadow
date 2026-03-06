@@ -55,6 +55,36 @@ export class AgentService {
     return { ...agent, botUser, owner }
   }
 
+  async update(
+    id: string,
+    ownerId: string,
+    data: { name?: string; description?: string; avatarUrl?: string | null }
+  ) {
+    const agent = await this.deps.agentDao.findById(id)
+    if (!agent) {
+      throw Object.assign(new Error('Agent not found'), { status: 404 })
+    }
+    if (agent.ownerId !== ownerId) {
+      throw Object.assign(new Error('Not the owner of this agent'), { status: 403 })
+    }
+
+    const updates: any = {}
+    if (data.name !== undefined) updates.displayName = data.name
+    if (data.avatarUrl !== undefined) updates.avatarUrl = data.avatarUrl
+
+    if (Object.keys(updates).length > 0) {
+      await this.deps.userDao.update(agent.userId, updates)
+    }
+
+    if (data.description !== undefined) {
+      const config = (agent.config as Record<string, unknown>) ?? {}
+      config.description = data.description
+      await this.deps.agentDao.updateConfig(id, config)
+    }
+
+    return this.getById(id)
+  }
+
   async getAll() {
     return this.deps.agentDao.findAll()
   }

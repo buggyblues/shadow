@@ -3,9 +3,9 @@ import { ArrowLeft, LogOut, Save, Shield, User } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { UserAvatar } from '../components/common/avatar'
+import { AvatarEditor } from '../components/common/avatar-editor'
 import { LanguageSwitcher } from '../components/common/language-switcher'
 import { fetchApi } from '../lib/api'
-import { getAllCatAvatars } from '../lib/pixel-cats'
 import { disconnectSocket } from '../lib/socket'
 import { useAuthStore } from '../stores/auth.store'
 
@@ -20,8 +20,6 @@ export function SettingsPage() {
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [activeTab, setActiveTab] = useState<'profile' | 'account'>('profile')
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
-
-  const allCats = getAllCatAvatars()
 
   useEffect(() => {
     if (user) {
@@ -163,25 +161,10 @@ export function SettingsPage() {
 
               {/* Avatar picker */}
               <div className="mb-8">
-                <label className="block text-xs font-bold uppercase text-text-secondary mb-3">
+                <label className="block text-[12px] font-bold uppercase text-[#b5bac1] mb-3 tracking-wide">
                   {t('settings.avatarLabel')}
                 </label>
-                <div className="grid grid-cols-4 gap-3">
-                  {allCats.map((cat) => (
-                    <button
-                      key={cat.index}
-                      onClick={() => setSelectedAvatar(cat.dataUri)}
-                      className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition ${
-                        selectedAvatar === cat.dataUri
-                          ? 'border-primary bg-primary/10'
-                          : 'border-transparent bg-bg-tertiary hover:border-white/10'
-                      }`}
-                    >
-                      <img src={cat.dataUri} alt={cat.name} className="w-14 h-14 rounded-full" />
-                      <span className="text-xs text-text-muted">{cat.name}</span>
-                    </button>
-                  ))}
-                </div>
+                <AvatarEditor value={selectedAvatar ?? undefined} onChange={setSelectedAvatar} />
               </div>
 
               {/* Language */}

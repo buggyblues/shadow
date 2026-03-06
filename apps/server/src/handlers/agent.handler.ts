@@ -51,6 +51,20 @@ export function createAgentHandler(container: AppContainer) {
     return c.json(agent)
   })
 
+  // PATCH /api/agents/:id — update existing agent
+  agentHandler.patch('/:id', async (c) => {
+    const agentService = container.resolve('agentService')
+    const user = c.get('user')
+    const id = c.req.param('id')
+    const body = await c.req.json()
+
+    const agent = await agentService.update(id, user.userId, body)
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404)
+    }
+    return c.json(agent)
+  })
+
   // POST /api/agents/:id/token — generate agent token
   agentHandler.post('/:id/token', async (c) => {
     const agentService = container.resolve('agentService')
