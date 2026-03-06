@@ -364,7 +364,7 @@ export type ReplyPayload = {
 export interface ShadowAccountConfig {
   /** Agent JWT token for authenticating with Shadow API */
   token: string
-  /** Shadow server base URL (default: http://localhost:3002) */
+  /** Shadow server base URL (default: https://shadowob.com) */
   serverUrl: string
   /** Agent ID for heartbeat reporting (auto-resolved from /api/auth/me) */
   agentId?: string
@@ -421,6 +421,15 @@ export interface ShadowMessage {
     avatarUrl?: string | null
     isBot?: boolean
   }
+  attachments?: {
+    id: string
+    filename: string
+    url: string
+    contentType: string
+    size: number
+    width?: number | null
+    height?: number | null
+  }[]
 }
 
 export interface ShadowChannel {

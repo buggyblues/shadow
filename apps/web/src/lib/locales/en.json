@@ -174,7 +174,9 @@
     "deleteMessage": "Delete Message",
     "deleteConfirm": "Are you sure you want to delete this message?",
     "copyMessage": "Copy Message",
-    "shareLink": "Share Message Link"
+    "shareLink": "Share Message Link",
+    "loading": "Loading...",
+    "loadingOlder": "Loading older messages..."
   },
   "member": {
     "online": "Online",

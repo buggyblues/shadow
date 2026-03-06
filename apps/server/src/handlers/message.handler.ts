@@ -21,8 +21,8 @@ export function createMessageHandler(container: AppContainer) {
     const channelId = c.req.param('channelId')
     const limit = Number(c.req.query('limit') ?? '50')
     const cursor = c.req.query('cursor')
-    const messages = await messageService.getByChannelId(channelId, limit, cursor)
-    return c.json(messages)
+    const result = await messageService.getByChannelId(channelId, limit, cursor)
+    return c.json(result)
   })
 
   // POST /api/channels/:channelId/messages

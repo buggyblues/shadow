@@ -43,10 +43,7 @@ Add the Shadow channel to your `openclaw.yaml`:
 channels:
   shadow:
     token: "<agent-jwt-token>"
-    serverUrl: "http://localhost:3002"
-    serverId: "<shadow-server-id>"
-    channelIds:           # optional — omit to monitor all channels
-      - "<channel-id>"
+    serverUrl: "https://shadowob.com"
 ```
 
 ### Multi-account
@@ -57,12 +54,10 @@ channels:
     accounts:
       main:
         token: "<token-1>"
-        serverUrl: "http://localhost:3002"
-        serverId: "<server-id-1>"
+        serverUrl: "https://shadowob.com"
       backup:
         token: "<token-2>"
         serverUrl: "http://other-host:3002"
-        serverId: "<server-id-2>"
         enabled: false
 ```
 
@@ -79,7 +74,7 @@ channels:
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `token` | string | Yes | — | Agent JWT token |
-| `serverUrl` | string | Yes | `http://localhost:3002` | Shadow server base URL |
+| `serverUrl` | string | Yes | `https://shadowob.com` | Shadow server base URL |
 | `serverId` | string | Yes | — | Shadow server UUID |
 | `channelIds` | string[] | No | all | Channel IDs to monitor |
 | `enabled` | boolean | No | `true` | Whether this account is active |

@@ -42,6 +42,7 @@ function createMockMessageDao(overrides = {}) {
     addReaction: vi.fn(),
     removeReaction: vi.fn(),
     getReactions: vi.fn(),
+    getAttachments: vi.fn().mockResolvedValue([]),
     ...overrides,
   }
 }

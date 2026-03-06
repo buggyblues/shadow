@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, lt } from 'drizzle-orm'
+import { and, asc, desc, eq, ilike, inArray, lt } from 'drizzle-orm'
 import type { Database } from '../db'
 import { attachments, messages, reactions, threads, users } from '../db/schema'
 
@@ -29,6 +29,8 @@ export class MessageDao {
       conditions.push(lt(messages.createdAt, new Date(cursor)))
     }
 
+    // Fetch one extra record to determine if there are more older messages
+    const fetchLimit = limit + 1
     const rows = await this.db
       .select({
         message: messages,
@@ -37,10 +39,36 @@ export class MessageDao {
       .from(messages)
       .leftJoin(users, eq(messages.authorId, users.id))
       .where(and(...conditions))
-      .orderBy(asc(messages.createdAt))
-      .limit(limit)
+      .orderBy(desc(messages.createdAt))
+      .limit(fetchLimit)
 
-    return rows.map((r) => ({ ...r.message, author: r.author }))
+    const hasMore = rows.length > limit
+    const trimmed = rows.slice(0, limit).reverse() // oldest-to-newest for display
+    const msgList = trimmed.map((r) => ({ ...r.message, author: r.author }))
+
+    // Batch-fetch attachments for all messages
+    if (msgList.length > 0) {
+      const msgIds = msgList.map((m) => m.id)
+      const atts = await this.db
+        .select()
+        .from(attachments)
+        .where(inArray(attachments.messageId, msgIds))
+      const attMap = new Map<string, typeof atts>()
+      for (const att of atts) {
+        const list = attMap.get(att.messageId) ?? []
+        list.push(att)
+        attMap.set(att.messageId, list)
+      }
+      return {
+        messages: msgList.map((m) => ({ ...m, attachments: attMap.get(m.id) ?? [] })),
+        hasMore,
+      }
+    }
+
+    return {
+      messages: msgList.map((m) => ({ ...m, attachments: [] as typeof attachments.$inferSelect[] })),
+      hasMore,
+    }
   }
 
   async findByThreadId(threadId: string, limit = 50, cursor?: string) {
@@ -60,7 +88,25 @@ export class MessageDao {
       .orderBy(asc(messages.createdAt))
       .limit(limit)
 
-    return rows.map((r) => ({ ...r.message, author: r.author }))
+    const msgList = rows.map((r) => ({ ...r.message, author: r.author }))
+
+    // Batch-fetch attachments
+    if (msgList.length > 0) {
+      const msgIds = msgList.map((m) => m.id)
+      const atts = await this.db
+        .select()
+        .from(attachments)
+        .where(inArray(attachments.messageId, msgIds))
+      const attMap = new Map<string, typeof atts>()
+      for (const att of atts) {
+        const list = attMap.get(att.messageId) ?? []
+        list.push(att)
+        attMap.set(att.messageId, list)
+      }
+      return msgList.map((m) => ({ ...m, attachments: attMap.get(m.id) ?? [] }))
+    }
+
+    return msgList.map((m) => ({ ...m, attachments: [] as typeof attachments.$inferSelect[] }))
   }
 
   async create(data: {
@@ -175,7 +221,25 @@ export class MessageDao {
       .where(and(eq(messages.channelId, channelId), eq(messages.isPinned, true)))
       .orderBy(desc(messages.createdAt))
 
-    return rows.map((r) => ({ ...r.message, author: r.author }))
+    const msgList = rows.map((r) => ({ ...r.message, author: r.author }))
+
+    // Batch-fetch attachments
+    if (msgList.length > 0) {
+      const msgIds = msgList.map((m) => m.id)
+      const atts = await this.db
+        .select()
+        .from(attachments)
+        .where(inArray(attachments.messageId, msgIds))
+      const attMap = new Map<string, typeof atts>()
+      for (const att of atts) {
+        const list = attMap.get(att.messageId) ?? []
+        list.push(att)
+        attMap.set(att.messageId, list)
+      }
+      return msgList.map((m) => ({ ...m, attachments: attMap.get(m.id) ?? [] }))
+    }
+
+    return msgList.map((m) => ({ ...m, attachments: [] as typeof attachments.$inferSelect[] }))
   }
 
   // Threads

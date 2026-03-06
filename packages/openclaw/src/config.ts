@@ -8,7 +8,7 @@
  *       accounts:
  *         <accountId>:
  *           token: "..."
- *           serverUrl: "http://localhost:3002"
+ *           serverUrl: "https://shadowob.com"
  *           enabled: true
  */
 
@@ -49,7 +49,7 @@ export function getAccountConfig(
     if (merged.token) {
       return {
         token: merged.token,
-        serverUrl: merged.serverUrl ?? 'http://localhost:3002',
+        serverUrl: merged.serverUrl ?? 'https://shadowob.com',
         enabled: merged.enabled,
       }
     }

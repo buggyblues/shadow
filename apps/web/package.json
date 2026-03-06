@@ -17,6 +17,7 @@
     "@shadowob/ui": "workspace:*",
     "@tanstack/react-query": "^5.80.7",
     "@tanstack/react-router": "^1.121.2",
+    "@tanstack/react-virtual": "^3.13.21",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "hono": "^4.7.10",

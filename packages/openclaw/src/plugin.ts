@@ -82,7 +82,7 @@ export const shadowPlugin: ChannelPlugin<ShadowAccountConfig> = {
       },
       serverUrl: {
         label: 'Server URL',
-        placeholder: 'http://localhost:3002',
+        placeholder: 'https://shadowob.com',
       },
       enabled: {
         label: 'Enabled',
@@ -99,7 +99,7 @@ export const shadowPlugin: ChannelPlugin<ShadowAccountConfig> = {
       if (!account) {
         return {
           token: '',
-          serverUrl: 'http://localhost:3002',
+          serverUrl: 'https://shadowob.com',
           enabled: false,
         }
       }

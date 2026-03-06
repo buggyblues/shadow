@@ -118,6 +118,9 @@ async function processShadowMessage(params: {
     body: rawBody,
   })
 
+  // Extract media URLs from attachments
+  const attachmentUrls = (message.attachments ?? []).map((a) => a.url).filter(Boolean)
+
   // 3. Build and finalize MsgContext
   const ctxPayload = core.channel.reply.finalizeInboundContext({
     Body: body,
@@ -140,6 +143,7 @@ async function processShadowMessage(params: {
     OriginatingTo: `shadow:channel:${channelId}`,
     ...(message.threadId ? { ThreadId: message.threadId } : {}),
     ...(message.replyToId ? { ReplyToId: message.replyToId } : {}),
+    ...(attachmentUrls.length > 0 ? { MediaUrls: attachmentUrls } : {}),
   })
 
   // 4. Record session
@@ -211,24 +215,39 @@ async function deliverShadowReply(params: {
   const { payload, channelId, threadId, replyToId, client, runtime } = params
 
   try {
-    if (!payload.text) {
-      runtime.error?.('[reply] No text in reply payload')
+    if (!payload.text && !(payload.mediaUrl || payload.mediaUrls?.length)) {
+      runtime.error?.('[reply] No text or media in reply payload')
       return
     }
 
-    // If there is media, append URLs
-    let text = payload.text
-    const mediaUrls = [payload.mediaUrl, ...(payload.mediaUrls ?? [])].filter(Boolean)
-    if (mediaUrls.length > 0) {
-      text += '\n\n' + mediaUrls.join('\n')
-    }
+    const text = payload.text ?? ''
 
     runtime.log?.(`[reply] Sending reply to channel ${channelId}: "${text.slice(0, 80)}"`)
 
-    if (threadId) {
-      await client.sendToThread(threadId, text)
-    } else {
-      await client.sendMessage(channelId, text, { replyToId })
+    // Send the text message first
+    let sentMessage: ShadowMessage | null = null
+    if (text) {
+      if (threadId) {
+        sentMessage = await client.sendToThread(threadId, text)
+      } else {
+        sentMessage = await client.sendMessage(channelId, text, { replyToId })
+      }
+      runtime.log?.(`[reply] Text reply delivered (${sentMessage.id})`)
+    }
+
+    // Upload media files and attach to the message
+    const mediaUrls = [payload.mediaUrl, ...(payload.mediaUrls ?? [])].filter(Boolean) as string[]
+    if (mediaUrls.length > 0) {
+      const messageId = sentMessage?.id
+      for (const mediaUrl of mediaUrls) {
+        try {
+          runtime.log?.(`[reply] Uploading media: ${mediaUrl}`)
+          await client.uploadMediaFromUrl(mediaUrl, messageId)
+          runtime.log?.(`[reply] Media uploaded successfully`)
+        } catch (err) {
+          runtime.error?.(`[reply] Failed to upload media ${mediaUrl}: ${String(err)}`)
+        }
+      }
     }
 
     runtime.log?.(`[reply] Reply delivered successfully`)
@@ -358,6 +377,41 @@ export async function monitorShadowProvider(
 
   socket.io.on('reconnect_attempt', (attempt) => {
     runtime.log?.(`[ws] Reconnect attempt #${attempt}`)
+  })
+
+  // Listen for server:joined — bot added to a new server, refresh channels
+  socket.on('server:joined', async (data: { serverId: string; agentId: string }) => {
+    if (!agentId) return
+    runtime.log?.(`[ws] Received server:joined for server ${data.serverId} — refreshing channels`)
+
+    try {
+      const updatedConfig = await client.getAgentConfig(agentId)
+      runtime.log?.(`[config] Refreshed config: ${updatedConfig.servers.length} server(s)`)
+
+      // Rebuild channel policies and join new channels
+      for (const server of updatedConfig.servers) {
+        for (const ch of server.channels) {
+          if (!channelPolicies.has(ch.id)) {
+            channelPolicies.set(ch.id, ch.policy)
+            if (ch.policy.listen) {
+              allChannelIds.push(ch.id)
+              runtime.log?.(`[config] New channel: #${ch.name} (${ch.id}) — joining`)
+              socket.emit('channel:join', { channelId: ch.id }, (ack: { ok: boolean } | undefined) => {
+                if (ack?.ok) {
+                  runtime.log?.(`[ws] ✓ Joined new channel room ${ch.id}`)
+                }
+              })
+            }
+          } else {
+            // Update policy if changed
+            channelPolicies.set(ch.id, ch.policy)
+          }
+        }
+      }
+      remoteConfig = updatedConfig
+    } catch (err) {
+      runtime.error?.(`[config] Failed to refresh config after server:joined: ${String(err)}`)
+    }
   })
 
   // Listen for new messages

@@ -42,6 +42,7 @@ export class MessageService {
             isBot: user.isBot,
           }
         : null,
+      attachments: [] as Awaited<ReturnType<typeof this.deps.messageDao.getAttachments>>,
     }
   }
 
@@ -56,8 +57,9 @@ export class MessageService {
 
     const updated = await this.deps.messageDao.update(id, input.content)
 
-    // Attach author info for broadcasting
+    // Attach author info and attachments for broadcasting
     const user = await this.deps.userDao.findById(userId)
+    const messageAttachments = await this.deps.messageDao.getAttachments(id)
     return {
       ...updated,
       author: user
@@ -70,6 +72,7 @@ export class MessageService {
             isBot: user.isBot,
           }
         : null,
+      attachments: messageAttachments,
     }
   }
 

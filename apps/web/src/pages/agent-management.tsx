@@ -624,7 +624,7 @@ function AgentDetail({
 {`channels:
   shadow:
     token: "${displayToken.slice(0, 20)}..."
-    serverUrl: "http://localhost:3002"`}
+    serverUrl: "https://shadowob.com"`}
                   </pre>
                 </div>
               </div>

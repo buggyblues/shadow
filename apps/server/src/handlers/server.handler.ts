@@ -299,6 +299,11 @@ export function createServerHandler(container: AppContainer) {
           for (const ch of channels) {
             io.to(`channel:${ch.id}`).emit('member:joined', payload)
           }
+          // Notify the bot directly so its monitor can join new channels
+          io.to(`user:${agent.userId}`).emit('server:joined', {
+            serverId: id,
+            agentId,
+          })
         } catch { /* non-critical */ }
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error'

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
 import { joinChannel, leaveChannel } from '../../lib/socket'
 import { useAuthStore } from '../../stores/auth.store'
@@ -261,6 +262,14 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
       joinChannel(first.id)
     }
   }, [channels, activeChannelId, setActiveChannel])
+
+  // Rejoin active channel room on socket reconnect
+  useSocketEvent('connect', () => {
+    const currentChannel = useChatStore.getState().activeChannelId
+    if (currentChannel) {
+      joinChannel(currentChannel)
+    }
+  })
 
   // Cleanup: leave channel on unmount
   useEffect(() => {

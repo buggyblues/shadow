@@ -174,7 +174,9 @@
     "deleteMessage": "刪除訊息",
     "deleteConfirm": "確定要刪除此訊息嗎？",
     "copyMessage": "複製訊息",
-    "shareLink": "分享訊息連結"
+    "shareLink": "分享訊息連結",
+    "loading": "載入中...",
+    "loadingOlder": "載入更早的訊息..."
   },
   "member": {
     "online": "線上",

@@ -174,7 +174,9 @@
     "deleteMessage": "删除消息",
     "deleteConfirm": "确定要删除这条消息吗？",
     "copyMessage": "复制消息",
-    "shareLink": "分享消息链接"
+    "shareLink": "分享消息链接",
+    "loading": "加载中...",
+    "loadingOlder": "加载更早的消息..."
   },
   "member": {
     "online": "在线",

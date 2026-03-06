@@ -52,7 +52,7 @@ describe('Shadow Config', () => {
         channels: {
           shadow: {
             token: 'my-token',
-            serverUrl: 'http://localhost:3002',
+            serverUrl: 'http://localhost:3000',
           },
         },
       }
@@ -72,14 +72,14 @@ describe('Shadow Config', () => {
         channels: {
           shadow: {
             token: 'my-token',
-            serverUrl: 'http://localhost:3002',
+            serverUrl: 'http://localhost:3000',
           },
         },
       }
       const account = getAccountConfig(cfg, 'default')
       expect(account).not.toBeNull()
       expect(account!.token).toBe('my-token')
-      expect(account!.serverUrl).toBe('http://localhost:3002')
+      expect(account!.serverUrl).toBe('http://localhost:3000')
     })
 
     it('should resolve named account from multi-account config', () => {
@@ -114,7 +114,7 @@ describe('Shadow Config', () => {
       expect(account).toBeNull()
     })
 
-    it('should default serverUrl to localhost:3002', () => {
+    it('should default serverUrl to localhost:3000', () => {
       const cfg = {
         channels: {
           shadow: {
@@ -123,7 +123,7 @@ describe('Shadow Config', () => {
         },
       }
       const account = getAccountConfig(cfg, 'default')
-      expect(account!.serverUrl).toBe('http://localhost:3002')
+      expect(account!.serverUrl).toBe('https://shadowob.com')
     })
   })
 })
@@ -161,7 +161,7 @@ describe('Shadow Plugin', () => {
   it('should resolve empty config to defaults', () => {
     const account = shadowPlugin.config.resolveAccount({}, null)
     expect(account.token).toBe('')
-    expect(account.serverUrl).toBe('http://localhost:3002')
+    expect(account.serverUrl).toBe('https://shadowob.com')
     expect(account.enabled).toBe(false)
   })
 
@@ -241,8 +241,8 @@ describe('Plugin Entry Point', () => {
   it('should export a valid OpenClawPluginDefinition', async () => {
     const mod = await import('../index.js')
     const plugin = mod.default
-    expect(plugin.id).toBe('openclaw')
-    expect(plugin.name).toBe('Shadow')
+    expect(plugin.id).toBe('shadow')
+    expect(plugin.name).toBe('ShadowOwnBuddy')
     expect(typeof plugin.register).toBe('function')
   })
 
@@ -269,15 +269,15 @@ describe('ShadowClient', () => {
   })
 
   it('should construct with baseUrl and token', () => {
-    const client = new ShadowClient('http://localhost:3002', 'my-token')
+    const client = new ShadowClient('http://localhost:3000', 'my-token')
     expect(client).toBeDefined()
   })
 
   it('should normalize baseUrl by stripping trailing /api', () => {
-    const client1 = new ShadowClient('http://localhost:3002/api', 'tok')
-    const client2 = new ShadowClient('http://localhost:3002/api/', 'tok')
-    const client3 = new ShadowClient('http://localhost:3002', 'tok')
-    // All three should have the same effective baseUrl (http://localhost:3002)
+    const client1 = new ShadowClient('http://localhost:3000/api', 'tok')
+    const client2 = new ShadowClient('http://localhost:3000/api/', 'tok')
+    const client3 = new ShadowClient('http://localhost:3000', 'tok')
+    // All three should have the same effective baseUrl (http://localhost:3000)
     // We verify indirectly by checking the client is created without error
     expect(client1).toBeDefined()
     expect(client2).toBeDefined()
@@ -285,7 +285,7 @@ describe('ShadowClient', () => {
   })
 
   it('should have all API methods', () => {
-    const client = new ShadowClient('http://localhost:3002', 'tok')
+    const client = new ShadowClient('http://localhost:3000', 'tok')
     expect(typeof client.sendMessage).toBe('function')
     expect(typeof client.getMessages).toBe('function')
     expect(typeof client.editMessage).toBe('function')
@@ -324,7 +324,7 @@ describe('Shadow Outbound', () => {
         channels: {
           shadow: {
             token: 'tok',
-            serverUrl: 'http://localhost:3002',
+            serverUrl: 'http://localhost:3000',
           },
         },
       },
@@ -344,7 +344,7 @@ describe('Shadow Config Schema', () => {
 
     const result = ShadowConfigSchema.safeParse({
       token: 'test-token',
-      serverUrl: 'http://localhost:3002',
+      serverUrl: 'http://localhost:3000',
     })
 
     expect(result.success).toBe(true)
@@ -357,11 +357,11 @@ describe('Shadow Config Schema', () => {
       accounts: {
         bot1: {
           token: 'token-1',
-          serverUrl: 'http://localhost:3002',
+          serverUrl: 'http://localhost:3000',
         },
         bot2: {
           token: 'token-2',
-          serverUrl: 'http://localhost:3002',
+          serverUrl: 'http://localhost:3000',
           enabled: true,
         },
       },
@@ -375,7 +375,7 @@ describe('Shadow Config Schema', () => {
 
     const result = ShadowConfigSchema.safeParse({
       token: '',
-      serverUrl: 'http://localhost:3002',
+      serverUrl: 'http://localhost:3000',
     })
 
     expect(result.success).toBe(false)

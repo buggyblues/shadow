@@ -73,32 +73,47 @@ export const shadowOutbound: ChannelOutboundAdapter = {
         return { ok: false, error: 'Shadow account not configured' }
       }
 
-      // For now, embed media URLs in the message text
-      const mediaText = [ctx.mediaUrl, ...(ctx.mediaUrls ?? [])]
-        .filter(Boolean)
-        .join('\n')
-      const text = [ctx.text, mediaText].filter(Boolean).join('\n\n')
-
-      if (!text) {
-        return { ok: false, error: 'No content to send' }
-      }
-
       const client = new ShadowClient(account.serverUrl, account.token)
       const { channelId, threadId: parsedThreadId } = parseTarget(ctx.to)
       const threadId = ctx.threadId ?? parsedThreadId
 
+      // Send text message first (if any)
       let message
-      if (threadId) {
-        message = await client.sendToThread(threadId, text)
-      } else if (channelId) {
-        message = await client.sendMessage(channelId, text, {
-          replyToId: ctx.replyToMessageId,
-        })
-      } else {
-        return { ok: false, error: 'Could not resolve target channel or thread' }
+      const text = ctx.text ?? ''
+      if (text) {
+        if (threadId) {
+          message = await client.sendToThread(threadId, text)
+        } else if (channelId) {
+          message = await client.sendMessage(channelId, text, {
+            replyToId: ctx.replyToMessageId,
+          })
+        } else {
+          return { ok: false, error: 'Could not resolve target channel or thread' }
+        }
       }
 
-      return { ok: true, messageId: message.id }
+      // Upload media files and attach to the message
+      const mediaUrls = [ctx.mediaUrl, ...(ctx.mediaUrls ?? [])].filter(Boolean) as string[]
+      for (const mediaUrl of mediaUrls) {
+        try {
+          await client.uploadMediaFromUrl(mediaUrl, message?.id)
+        } catch {
+          // Fallback: if upload fails, send the URL as text
+          const fallbackText = mediaUrl
+          if (threadId) {
+            await client.sendToThread(threadId, fallbackText)
+          } else if (channelId) {
+            await client.sendMessage(channelId, fallbackText)
+          }
+        }
+      }
+
+      // If no text was sent but we had media, we still need to send something
+      if (!text && mediaUrls.length === 0) {
+        return { ok: false, error: 'No content to send' }
+      }
+
+      return { ok: true, messageId: message?.id }
     } catch (err) {
       return {
         ok: false,

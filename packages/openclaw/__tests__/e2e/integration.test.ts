@@ -160,11 +160,12 @@ describe('ShadowClient Integration', () => {
     const uniqueContent = `E2E msg ${Date.now()}`
     await client.sendMessage(seed.channel.id, uniqueContent)
 
-    const messages = await client.getMessages(seed.channel.id)
+    const result = await client.getMessages(seed.channel.id)
 
-    expect(Array.isArray(messages)).toBe(true)
-    expect(messages.length).toBeGreaterThanOrEqual(1)
-    expect(messages.some((m) => m.content === uniqueContent)).toBe(true)
+    expect(Array.isArray(result.messages)).toBe(true)
+    expect(result.messages.length).toBeGreaterThanOrEqual(1)
+    expect(result.messages.some((m) => m.content === uniqueContent)).toBe(true)
+    expect(typeof result.hasMore).toBe('boolean')
   })
 
   it('editMessage() updates message content', async () => {
@@ -182,8 +183,8 @@ describe('ShadowClient Integration', () => {
     await expect(client.deleteMessage(msg.id)).resolves.toBeUndefined()
 
     // Message should be gone from listing
-    const msgs = await client.getMessages(seed.channel.id)
-    expect(msgs.some((m) => m.id === msg.id)).toBe(false)
+    const listing = await client.getMessages(seed.channel.id)
+    expect(listing.messages.some((m) => m.id === msg.id)).toBe(false)
   })
 
   it('addReaction() adds a reaction to a message', async () => {
@@ -560,8 +561,8 @@ describe('Outbound Adapter Integration', () => {
 
     // Verify the message actually appeared
     const client = new ShadowClient(SHADOW_URL, seed.agentToken)
-    const msgs = await client.getMessages(seed.channel.id)
-    expect(msgs.some((m) => m.content === 'Outbound adapter E2E test')).toBe(true)
+    const listing = await client.getMessages(seed.channel.id)
+    expect(listing.messages.some((m) => m.content === 'Outbound adapter E2E test')).toBe(true)
   })
 
   it('sendMedia() delivers a message with media URL', async () => {

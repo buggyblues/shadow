@@ -87,6 +87,11 @@ export function MemberList() {
     },
   )
 
+  // On socket reconnect, refetch members to sync bot/user statuses
+  useSocketEvent('connect', () => {
+    queryClient.invalidateQueries({ queryKey: ['members', activeServerId] })
+  })
+
   // Kick / remove member mutation
   const kickMember = useMutation({
     mutationFn: ({ serverId, userId }: { serverId: string; userId: string }) =>

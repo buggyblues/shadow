@@ -174,7 +174,9 @@
     "deleteMessage": "메시지 삭제",
     "deleteConfirm": "이 메시지를 삭제하시겠습니까?",
     "copyMessage": "메시지 복사",
-    "shareLink": "메시지 링크 공유"
+    "shareLink": "메시지 링크 공유",
+    "loading": "로딩 중...",
+    "loadingOlder": "이전 메시지 로딩 중..."
   },
   "member": {
     "online": "온라인",

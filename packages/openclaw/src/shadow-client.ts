@@ -56,10 +56,10 @@ export class ShadowClient {
     channelId: string,
     limit = 50,
     cursor?: string,
-  ): Promise<ShadowMessage[]> {
+  ): Promise<{ messages: ShadowMessage[]; hasMore: boolean }> {
     const params = new URLSearchParams({ limit: String(limit) })
     if (cursor) params.set('cursor', cursor)
-    return this.request<ShadowMessage[]>(
+    return this.request<{ messages: ShadowMessage[]; hasMore: boolean }>(
       `/api/channels/${channelId}/messages?${params}`,
     )
   }
@@ -141,6 +141,59 @@ export class ShadowClient {
     agentId?: string
   }> {
     return this.request('/api/auth/me')
+  }
+
+  // ── Media ─────────────────────────────────────────────────────────────
+
+  /**
+   * Upload a file to the Shadow media service.
+   * Optionally link it to a message as an attachment.
+   */
+  async uploadMedia(
+    file: Blob | ArrayBuffer,
+    filename: string,
+    contentType: string,
+    messageId?: string,
+  ): Promise<{ url: string; key: string; size: number }> {
+    const formData = new FormData()
+    const blob = file instanceof Blob ? file : new Blob([file], { type: contentType })
+    formData.append('file', blob, filename)
+    if (messageId) {
+      formData.append('messageId', messageId)
+    }
+
+    const url = `${this.baseUrl}/api/media/upload`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+      },
+      body: formData,
+    })
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      throw new Error(`Shadow API POST /api/media/upload failed (${res.status}): ${body}`)
+    }
+    return res.json() as Promise<{ url: string; key: string; size: number }>
+  }
+
+  /**
+   * Download a file from a URL and upload it to the Shadow media service.
+   * Returns the uploaded media info.
+   */
+  async uploadMediaFromUrl(
+    mediaUrl: string,
+    messageId?: string,
+  ): Promise<{ url: string; key: string; size: number }> {
+    const res = await fetch(mediaUrl)
+    if (!res.ok) {
+      throw new Error(`Failed to download media from ${mediaUrl}: ${res.status}`)
+    }
+    const blob = await res.blob()
+    const urlPath = new URL(mediaUrl).pathname
+    const filename = urlPath.split('/').pop() ?? 'file'
+    const contentType = blob.type || 'application/octet-stream'
+    return this.uploadMedia(blob, filename, contentType, messageId)
   }
 
   // ── Heartbeat ─────────────────────────────────────────────────────────

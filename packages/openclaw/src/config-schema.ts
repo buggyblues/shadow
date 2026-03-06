@@ -6,7 +6,7 @@ import { z } from 'zod'
 
 const ShadowAccountSchema = z.object({
   token: z.string().min(1),
-  serverUrl: z.string().url().default('http://localhost:3002'),
+  serverUrl: z.string().url().default('https://shadowob.com'),
   enabled: z.boolean().optional(),
 })
 

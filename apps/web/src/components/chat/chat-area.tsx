@@ -1,6 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { type InfiniteData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowLeft, Hash, LogIn, LogOut, Users } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
@@ -39,6 +40,12 @@ interface Message {
   updatedAt?: string
   author?: Author
   reactions?: ReactionGroup[]
+  attachments?: { id: string; filename: string; url: string; contentType: string; size: number }[]
+}
+
+interface MessagesPage {
+  messages: Message[]
+  hasMore: boolean
 }
 
 interface Channel {
@@ -72,8 +79,7 @@ export function ChatArea() {
   const { activeChannelId, activeServerId } = useChatStore()
   const user = useAuthStore((s) => s.user)
   const { setMobileView } = useUIStore()
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const parentRef = useRef<HTMLDivElement>(null)
   const [replyToId, setReplyToId] = useState<string | null>(null)
   const [typingUsers, setTypingUsers] = useState<string[]>([])
   const [lastReadCount, setLastReadCount] = useState(0)
@@ -82,6 +88,9 @@ export function ChatArea() {
   const [activityUsers, setActivityUsers] = useState<
     { userId: string; username: string; activity: string }[]
   >([])
+  const initialScrollDoneRef = useRef(false)
+  const isLoadingOlderRef = useRef(false)
+  const prevMessageCountRef = useRef(0)
 
   // Handle ?msg= query param for message anchor links
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional trigger on channel change
@@ -109,21 +118,55 @@ export function ChatArea() {
     enabled: !!activeChannelId,
   })
 
-  // Fetch messages
-  const { data: messages = [] } = useQuery({
+  // Fetch messages with infinite query (cursor-based pagination)
+  const PAGE_SIZE = 50
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: isLoadingMessages,
+  } = useInfiniteQuery({
     queryKey: ['messages', activeChannelId],
-    queryFn: () => fetchApi<Message[]>(`/api/channels/${activeChannelId}/messages?limit=50`),
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE) })
+      if (pageParam) params.set('cursor', pageParam as string)
+      return fetchApi<MessagesPage>(`/api/channels/${activeChannelId}/messages?${params}`)
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.hasMore || lastPage.messages.length === 0) return undefined
+      // Cursor = createdAt of the oldest message in this page (first item, since sorted oldest-to-newest)
+      return lastPage.messages[0]?.createdAt
+    },
     enabled: !!activeChannelId,
     refetchOnWindowFocus: false,
   })
 
+  // Flatten all pages into a single array (oldest-to-newest)
+  const messages = useMemo(() => {
+    if (!data) return []
+    // Pages are stored [latest, older, oldest...], reverse then flatten
+    return [...data.pages].reverse().flatMap((p) => p.messages)
+  }, [data])
+
   // Listen for new messages via WebSocket
   useSocketEvent('message:new', (msg: Message) => {
     if (msg.channelId === activeChannelId) {
-      queryClient.setQueryData<Message[]>(['messages', activeChannelId], (old = []) => [
-        ...old,
-        msg,
-      ])
+      queryClient.setQueryData<InfiniteData<MessagesPage>>(
+        ['messages', activeChannelId],
+        (old) => {
+          if (!old || old.pages.length === 0) return old
+          // Append to the first page (latest messages)
+          const pages = [...old.pages]
+          const firstPage = pages[0]!
+          pages[0] = {
+            ...firstPage,
+            messages: [...firstPage.messages, msg],
+          }
+          return { ...old, pages }
+        },
+      )
       // Play receive sound for messages from others
       if (msg.authorId !== user?.id) {
         playReceiveSound()
@@ -134,8 +177,18 @@ export function ChatArea() {
   // Listen for message updates
   useSocketEvent('message:updated', (msg: Message) => {
     if (msg.channelId === activeChannelId) {
-      queryClient.setQueryData<Message[]>(['messages', activeChannelId], (old = []) =>
-        old.map((m) => (m.id === msg.id ? msg : m)),
+      queryClient.setQueryData<InfiniteData<MessagesPage>>(
+        ['messages', activeChannelId],
+        (old) => {
+          if (!old) return old
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.map((m) => (m.id === msg.id ? msg : m)),
+            })),
+          }
+        },
       )
     }
   })
@@ -143,8 +196,18 @@ export function ChatArea() {
   // Listen for message deletes
   useSocketEvent('message:deleted', (data: { id: string; channelId: string }) => {
     if (data.channelId === activeChannelId) {
-      queryClient.setQueryData<Message[]>(['messages', activeChannelId], (old = []) =>
-        old.filter((m) => m.id !== data.id),
+      queryClient.setQueryData<InfiniteData<MessagesPage>>(
+        ['messages', activeChannelId],
+        (old) => {
+          if (!old) return old
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.filter((m) => m.id !== data.id),
+            })),
+          }
+        },
       )
     }
   })
@@ -154,8 +217,20 @@ export function ChatArea() {
     'reaction:updated',
     (data: { messageId: string; channelId: string; reactions: ReactionGroup[] }) => {
       if (data.channelId === activeChannelId) {
-        queryClient.setQueryData<Message[]>(['messages', activeChannelId], (old = []) =>
-          old.map((m) => (m.id === data.messageId ? { ...m, reactions: data.reactions } : m)),
+        queryClient.setQueryData<InfiniteData<MessagesPage>>(
+          ['messages', activeChannelId],
+          (old) => {
+            if (!old) return old
+            return {
+              ...old,
+              pages: old.pages.map((page) => ({
+                ...page,
+                messages: page.messages.map((m) =>
+                  m.id === data.messageId ? { ...m, reactions: data.reactions } : m,
+                ),
+              })),
+            }
+          },
         )
       }
     },
@@ -260,41 +335,90 @@ export function ChatArea() {
       }),
   })
 
-  // Auto-scroll to bottom on new messages (only if near bottom)
+  // Virtual list setup
+  const virtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 72,
+    overscan: 10,
+  })
+
+  // Initial scroll to bottom after first load
+  useLayoutEffect(() => {
+    if (messages.length > 0 && !initialScrollDoneRef.current) {
+      initialScrollDoneRef.current = true
+      virtualizer.scrollToIndex(messages.length - 1, { align: 'end' })
+    }
+  }, [messages.length, virtualizer])
+
+  // Reset initial scroll flag on channel change
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset on channel switch
   useEffect(() => {
-    const container = messagesContainerRef.current
-    if (!container) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-      return
+    initialScrollDoneRef.current = false
+    prevMessageCountRef.current = 0
+  }, [activeChannelId])
+
+  // Maintain scroll position after loading older messages (prepend)
+  useLayoutEffect(() => {
+    const prevCount = prevMessageCountRef.current
+    const currentCount = messages.length
+
+    if (prevCount > 0 && currentCount > prevCount && isLoadingOlderRef.current) {
+      // Items were prepended — scroll to maintain position
+      const addedCount = currentCount - prevCount
+      const scrollEl = parentRef.current
+      if (scrollEl) {
+        // Jump to where the old first item now is
+        virtualizer.scrollToIndex(addedCount, { align: 'start' })
+      }
+      isLoadingOlderRef.current = false
     }
 
-    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150
+    prevMessageCountRef.current = currentCount
+  }, [messages.length, virtualizer])
 
-    if (isNearBottom || messages.length <= 50) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-      // User is at bottom, mark all messages as read
-      if (lastReadCount > 0 && lastReadCount < messages.length) {
+  // Auto-scroll to bottom on new messages from WS (if near bottom)
+  useEffect(() => {
+    const scrollEl = parentRef.current
+    if (!scrollEl || messages.length === 0) return
+
+    const prevCount = prevMessageCountRef.current
+    // Only auto-scroll for new messages appended at the end (not for history loading)
+    if (prevCount > 0 && messages.length > prevCount && !isLoadingOlderRef.current) {
+      const isNearBottom =
+        scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 150
+      if (isNearBottom) {
+        virtualizer.scrollToIndex(messages.length - 1, { align: 'end', behavior: 'smooth' })
+      }
+      // Track read count
+      if (lastReadCount > 0 && lastReadCount < messages.length && isNearBottom) {
         setLastReadCount(messages.length)
       }
     }
-  }, [messages.length, lastReadCount])
+  })
 
-  // Clear new-message line when user scrolls to bottom
+  // Load older messages when scrolling near top
   useEffect(() => {
-    const container = messagesContainerRef.current
-    if (!container) return
+    const scrollEl = parentRef.current
+    if (!scrollEl) return
 
     const handleScroll = () => {
+      // Load more when near the top
+      if (scrollEl.scrollTop < 200 && hasNextPage && !isFetchingNextPage) {
+        isLoadingOlderRef.current = true
+        void fetchNextPage()
+      }
+      // Update read count when near bottom
       const isNearBottom =
-        container.scrollHeight - container.scrollTop - container.clientHeight < 80
+        scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 80
       if (isNearBottom && lastReadCount > 0 && lastReadCount < messages.length) {
         setLastReadCount(messages.length)
       }
     }
 
-    container.addEventListener('scroll', handleScroll, { passive: true })
-    return () => container.removeEventListener('scroll', handleScroll)
-  }, [lastReadCount, messages.length])
+    scrollEl.addEventListener('scroll', handleScroll, { passive: true })
+    return () => scrollEl.removeEventListener('scroll', handleScroll)
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, lastReadCount, messages.length])
 
   // Reset read count when channel changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional trigger on channel change
@@ -318,8 +442,18 @@ export function ChatArea() {
 
   const handleMessageUpdate = useCallback(
     (msg: Message) => {
-      queryClient.setQueryData<Message[]>(['messages', activeChannelId], (old = []) =>
-        old.map((m) => (m.id === msg.id ? { ...m, ...msg } : m)),
+      queryClient.setQueryData<InfiniteData<MessagesPage>>(
+        ['messages', activeChannelId],
+        (old) => {
+          if (!old) return old
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.map((m) => (m.id === msg.id ? { ...m, ...msg } : m)),
+            })),
+          }
+        },
       )
     },
     [queryClient, activeChannelId],
@@ -327,8 +461,18 @@ export function ChatArea() {
 
   const handleMessageDelete = useCallback(
     (msgId: string) => {
-      queryClient.setQueryData<Message[]>(['messages', activeChannelId], (old = []) =>
-        old.filter((m) => m.id !== msgId),
+      queryClient.setQueryData<InfiniteData<MessagesPage>>(
+        ['messages', activeChannelId],
+        (old) => {
+          if (!old) return old
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.filter((m) => m.id !== msgId),
+            })),
+          }
+        },
       )
     },
     [queryClient, activeChannelId],
@@ -344,6 +488,8 @@ export function ChatArea() {
       </div>
     )
   }
+
+  const virtualItems = virtualizer.getVirtualItems()
 
   return (
     <div className="flex-1 flex flex-col bg-bg-primary min-w-0 h-full relative">
@@ -377,9 +523,13 @@ export function ChatArea() {
         </div>
       </div>
 
-      {/* Messages */}
-      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden py-4">
-        {messages.length === 0 ? (
+      {/* Messages — virtual list */}
+      <div ref={parentRef} className="flex-1 overflow-y-auto overflow-x-hidden">
+        {isLoadingMessages ? (
+          <div className="flex items-center justify-center h-full text-text-muted">
+            <span className="animate-pulse">{t('chat.loading', 'Loading...')}</span>
+          </div>
+        ) : messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-text-muted">
             <Hash size={48} className="mb-2 opacity-30" />
             <p className="text-lg font-bold text-text-primary mb-1">
@@ -390,31 +540,66 @@ export function ChatArea() {
             <p className="text-sm">{t('chat.welcomeStart')}</p>
           </div>
         ) : (
-          messages.map((msg, index) => (
-            <div key={msg.id}>
-              {lastReadCount > 0 && index === lastReadCount && (
-                <div className="flex items-center gap-2 px-4 my-2">
-                  <div className="flex-1 h-px bg-danger/60" />
-                  <span className="text-xs text-danger font-semibold px-2">
-                    {t('chat.newMessages')}
-                  </span>
-                  <div className="flex-1 h-px bg-danger/60" />
+          <div
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {/* Loading older messages indicator */}
+            {isFetchingNextPage && (
+              <div className="absolute top-0 left-0 right-0 flex justify-center py-2 z-10">
+                <span className="text-xs text-text-muted animate-pulse">
+                  {t('chat.loadingOlder', 'Loading older messages...')}
+                </span>
+              </div>
+            )}
+
+            {virtualItems.map((virtualItem) => {
+              const msg = messages[virtualItem.index]!
+              const index = virtualItem.index
+
+              return (
+                <div
+                  key={msg.id}
+                  data-index={virtualItem.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualItem.start}px)`,
+                  }}
+                >
+                  {lastReadCount > 0 && index === lastReadCount && (
+                    <div className="flex items-center gap-2 px-4 my-2">
+                      <div className="flex-1 h-px bg-danger/60" />
+                      <span className="text-xs text-danger font-semibold px-2">
+                        {t('chat.newMessages')}
+                      </span>
+                      <div className="flex-1 h-px bg-danger/60" />
+                    </div>
+                  )}
+                  <MessageBubble
+                    message={msg}
+                    currentUserId={user?.id ?? ''}
+                    onReply={(id) => setReplyToId(id)}
+                    onReact={handleReact}
+                    onMessageUpdate={handleMessageUpdate}
+                    onMessageDelete={handleMessageDelete}
+                    highlight={highlightMsgId === msg.id}
+                    replyToMessage={
+                      msg.replyToId
+                        ? (messages.find((m) => m.id === msg.replyToId) ?? null)
+                        : null
+                    }
+                  />
                 </div>
-              )}
-              <MessageBubble
-                message={msg}
-                currentUserId={user?.id ?? ''}
-                onReply={(id) => setReplyToId(id)}
-                onReact={handleReact}
-                onMessageUpdate={handleMessageUpdate}
-                onMessageDelete={handleMessageDelete}
-                highlight={highlightMsgId === msg.id}
-                replyToMessage={
-                  msg.replyToId ? (messages.find((m) => m.id === msg.replyToId) ?? null) : null
-                }
-              />
-            </div>
-          ))
+              )
+            })}
+          </div>
         )}
         {/* System events (member join/leave) */}
         {systemEvents.map((evt) => (
@@ -434,7 +619,6 @@ export function ChatArea() {
             </div>
           </div>
         ))}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Typing indicator */}
