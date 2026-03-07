@@ -179,16 +179,67 @@ export class ShadowClient {
     mediaUrl: string,
     messageId?: string,
   ): Promise<{ url: string; key: string; size: number }> {
-    // Handle local file paths (file:// or absolute paths)
-    const normalizedUrl = mediaUrl.replace(/^file:\/\//, '')
+    // Dynamic imports with @ts-expect-error since @types/node is not in this package
+    // @ts-expect-error node:fs/promises is available at runtime
+    const { readFile } = await import('node:fs/promises')
+    // @ts-expect-error node:path is available at runtime
+    const { basename } = await import('node:path')
+    // @ts-expect-error node:os is available at runtime
+    const { homedir } = await import('node:os')
+
+    // Strip MEDIA: prefix used by agent tools to tag media paths
+    // (e.g. "MEDIA: /tmp/output.png" → "/tmp/output.png")
+    let normalizedUrl = mediaUrl.replace(/^\s*MEDIA\s*:\s*/i, '')
+
+    // Handle file:// URLs
+    if (normalizedUrl.startsWith('file://')) {
+      normalizedUrl = normalizedUrl.replace(/^file:\/\//, '')
+    }
+
+    // Expand tilde paths (e.g. ~/Downloads/photo.jpg → /Users/xxx/Downloads/photo.jpg)
+    if (normalizedUrl.startsWith('~')) {
+      normalizedUrl = normalizedUrl.replace(/^~/, homedir())
+    }
+
+    // Resolve relative paths against common agent workspace directories
+    if (
+      !normalizedUrl.startsWith('/') &&
+      !normalizedUrl.startsWith('http://') &&
+      !normalizedUrl.startsWith('https://') &&
+      !normalizedUrl.startsWith('//')
+    ) {
+      // @ts-expect-error node:fs is available at runtime
+      const { existsSync } = await import('node:fs')
+      // @ts-expect-error node:path is available at runtime
+      const { resolve } = await import('node:path')
+
+      // Try common roots: OpenClaw workspace, CWD
+      const cwd = (globalThis as Record<string, unknown>).process
+        ? ((globalThis as Record<string, unknown>).process as { cwd: () => string }).cwd()
+        : '/'
+      const roots = [resolve(homedir(), '.openclaw', 'workspace'), cwd]
+      let resolved = false
+      for (const root of roots) {
+        const candidate = resolve(root, normalizedUrl)
+        if (existsSync(candidate)) {
+          normalizedUrl = candidate
+          resolved = true
+          break
+        }
+      }
+      if (!resolved) {
+        // Last resort: treat as relative to CWD
+        normalizedUrl = resolve(cwd, normalizedUrl)
+      }
+    }
+
     if (normalizedUrl.startsWith('/') && !normalizedUrl.startsWith('//')) {
       // Local filesystem path — read via Node.js fs
-      // Dynamic imports with @ts-expect-error since @types/node is not in this package
-      // @ts-expect-error node:fs/promises is available at runtime
-      const { readFile } = await import('node:fs/promises')
-      // @ts-expect-error node:path is available at runtime
-      const { basename } = await import('node:path')
-      const buffer: ArrayBuffer = (await readFile(normalizedUrl)).buffer
+      const fileBuffer = await readFile(normalizedUrl)
+      // IMPORTANT: Use Uint8Array copy to avoid Node.js Buffer.buffer shared-ArrayBuffer bug.
+      // Node.js Buffer.buffer returns the underlying ArrayBuffer from the buffer pool,
+      // which may be larger than the actual file data, causing corruption.
+      const bytes = new Uint8Array(fileBuffer)
       const filename: string = basename(normalizedUrl)
       // Infer content type from extension
       const ext = filename.split('.').pop()?.toLowerCase() ?? ''
@@ -205,18 +256,29 @@ export class ShadowClient {
         wav: 'audio/wav',
         ogg: 'audio/ogg',
         pdf: 'application/pdf',
+        txt: 'text/plain',
+        csv: 'text/csv',
+        json: 'application/json',
+        html: 'text/html',
+        xml: 'application/xml',
+        zip: 'application/zip',
       }
       const contentType = mimeMap[ext] ?? 'application/octet-stream'
-      return this.uploadMedia(buffer, filename, contentType, messageId)
+      return this.uploadMedia(
+        new Blob([bytes], { type: contentType }),
+        filename,
+        contentType,
+        messageId,
+      )
     }
 
     // HTTP/HTTPS URL — fetch and upload
-    const res = await fetch(mediaUrl)
+    const res = await fetch(normalizedUrl)
     if (!res.ok) {
-      throw new Error(`Failed to download media from ${mediaUrl}: ${res.status}`)
+      throw new Error(`Failed to download media from ${normalizedUrl}: ${res.status}`)
     }
     const blob = await res.blob()
-    const urlPath = new URL(mediaUrl).pathname
+    const urlPath = new URL(normalizedUrl).pathname
     const filename = urlPath.split('/').pop() ?? 'file'
     const contentType = blob.type || 'application/octet-stream'
     return this.uploadMedia(blob, filename, contentType, messageId)

@@ -27,9 +27,13 @@ export class MessageService {
       threadId: input.threadId,
       replyToId: input.replyToId,
     })
+    if (!message) {
+      throw Object.assign(new Error('Failed to create message'), { status: 500 })
+    }
 
-    // Attach author info for broadcasting
+    // Attach author info and attachments for broadcasting
     const user = await this.deps.userDao.findById(authorId)
+    const messageAttachments = await this.deps.messageDao.getAttachments(message.id)
     return {
       ...message,
       author: user
@@ -42,7 +46,7 @@ export class MessageService {
             isBot: user.isBot,
           }
         : null,
-      attachments: [] as Awaited<ReturnType<typeof this.deps.messageDao.getAttachments>>,
+      attachments: messageAttachments,
     }
   }
 

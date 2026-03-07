@@ -6,7 +6,9 @@ import { signAccessToken, signRefreshToken, verifyToken } from '../lib/jwt'
 import type { LoginInput, RegisterInput } from '../validators/auth.schema'
 
 export class AuthService {
-  constructor(private deps: { userDao: UserDao; inviteCodeDao: InviteCodeDao; agentDao: AgentDao }) {}
+  constructor(
+    private deps: { userDao: UserDao; inviteCodeDao: InviteCodeDao; agentDao: AgentDao },
+  ) {}
 
   async register(input: RegisterInput) {
     const { userDao, inviteCodeDao } = this.deps

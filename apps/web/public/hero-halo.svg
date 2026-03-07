@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" width="320" height="320" fill="none">
+  <defs>
+    <radialGradient id="haloMain" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.04"/>
+      <stop offset="35%" stop-color="#9df7ff" stop-opacity="0.28"/>
+      <stop offset="58%" stop-color="#f8e71c" stop-opacity="0.18"/>
+      <stop offset="76%" stop-color="#ff8db6" stop-opacity="0.22"/>
+      <stop offset="90%" stop-color="#ffffff" stop-opacity="0.02"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="haloSecondary" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="72%" stop-color="#fdfdfd" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-45%" y="-45%" width="190%" height="190%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+  </defs>
+  <circle cx="160" cy="160" r="118" stroke="url(#haloMain)" stroke-width="20" filter="url(#soft)"/>
+  <circle cx="160" cy="160" r="130" stroke="url(#haloSecondary)" stroke-width="8" opacity="0.7"/>
+  <circle cx="160" cy="160" r="96" fill="url(#haloMain)" opacity="0.1"/>
+</svg>

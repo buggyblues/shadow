@@ -14,7 +14,7 @@ import type {
 } from './types.js'
 
 /** Parse a Shadow target string like "shadowob:channel:<channelId>" */
-function parseTarget(to: string): { channelId?: string; threadId?: string } {
+export function parseTarget(to: string): { channelId?: string; threadId?: string } {
   // "shadowob:channel:<id>" or "shadowob:thread:<id>"
   const parts = to.split(':')
   if (parts[0] === 'shadowob' && parts[1] === 'channel' && parts[2]) {
@@ -78,14 +78,19 @@ export const shadowOutbound: ChannelOutboundAdapter = {
       const { channelId, threadId: parsedThreadId } = parseTarget(ctx.to)
       const threadId = ctx.threadId ?? parsedThreadId
 
-      // Send text message first (if any)
+      // Collect media URLs first so we know whether media is present
+      const mediaUrls = [ctx.mediaUrl, ...(ctx.mediaUrls ?? [])].filter(Boolean) as string[]
+
+      // Send text message first, or a placeholder if media-only
+      // Always create a message when we have media so attachments can be linked
       let message: ShadowMessage | undefined
       const text = ctx.text ?? ''
-      if (text) {
+      if (text || mediaUrls.length > 0) {
+        const contentToSend = text || '\u200B' // zero-width space placeholder for media-only
         if (threadId) {
-          message = await client.sendToThread(threadId, text)
+          message = await client.sendToThread(threadId, contentToSend)
         } else if (channelId) {
-          message = await client.sendMessage(channelId, text, {
+          message = await client.sendMessage(channelId, contentToSend, {
             replyToId: ctx.replyToMessageId,
           })
         } else {
@@ -94,7 +99,6 @@ export const shadowOutbound: ChannelOutboundAdapter = {
       }
 
       // Upload media files and attach to the message
-      const mediaUrls = [ctx.mediaUrl, ...(ctx.mediaUrls ?? [])].filter(Boolean) as string[]
       for (const mediaUrl of mediaUrls) {
         try {
           await client.uploadMediaFromUrl(mediaUrl, message?.id)

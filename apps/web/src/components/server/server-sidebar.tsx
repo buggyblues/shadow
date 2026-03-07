@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { Bot, Check, Compass, Copy, LogOut, Plus, Settings, UserPlus, Info } from 'lucide-react'
+import { Check, Compass, Copy, Info, LogOut, Plus, Settings, UserPlus } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
@@ -73,13 +73,10 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
     },
   })
 
-  const handleContextMenu = useCallback(
-    (e: React.MouseEvent, server: ServerEntry) => {
-      e.preventDefault()
-      setContextMenu({ x: e.clientX, y: e.clientY, server })
-    },
-    [],
-  )
+  const handleContextMenu = useCallback((e: React.MouseEvent, server: ServerEntry) => {
+    e.preventDefault()
+    setContextMenu({ x: e.clientX, y: e.clientY, server })
+  }, [])
 
   const closeContextMenu = useCallback(() => setContextMenu(null), [])
 
@@ -158,13 +155,13 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
 
       {/* Settings */}
       <div className="mt-auto flex flex-col items-center gap-2">
-        {/* Agent management */}
+        {/* Buddy management */}
         <button
           onClick={() => navigate({ to: '/app/agents' })}
           className="w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-bg-primary hover:bg-[#5865F2] transition-all duration-200 flex items-center justify-center text-[#5865F2] hover:text-white"
           title={t('agentMgmt.title')}
         >
-          <Bot size={22} className="opacity-90" />
+          <img src="/Logo.svg" alt="Buddy" className="w-6 h-6 opacity-90" />
         </button>
 
         <button
@@ -255,7 +252,14 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
       {/* Server context menu */}
       {contextMenu && (
         <>
-          <div className="fixed inset-0 z-[60]" onClick={closeContextMenu} onContextMenu={(e) => { e.preventDefault(); closeContextMenu() }} />
+          <div
+            className="fixed inset-0 z-[60]"
+            onClick={closeContextMenu}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              closeContextMenu()
+            }}
+          />
           <div
             className="fixed z-[61] bg-bg-tertiary border border-white/10 rounded-lg shadow-xl py-1 min-w-[180px]"
             style={{ left: contextMenu.x, top: contextMenu.y }}

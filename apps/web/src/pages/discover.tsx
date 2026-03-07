@@ -3,6 +3,8 @@ import { useNavigate } from '@tanstack/react-router'
 import { Globe, Search, Shield } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useAppStatus } from '../hooks/use-app-status'
+import { useUnreadCount } from '../hooks/use-unread-count'
 import { fetchApi } from '../lib/api'
 import { getCatAvatar } from '../lib/pixel-cats'
 
@@ -26,6 +28,13 @@ interface ServerEntry {
 
 export function DiscoverPage() {
   const { t } = useTranslation()
+  const unreadCount = useUnreadCount()
+  useAppStatus({
+    title: t('discover.title'),
+    unreadCount,
+    hasNotification: unreadCount > 0,
+    variant: 'workspace',
+  })
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
@@ -82,10 +91,7 @@ export function DiscoverPage() {
 
           {/* Search */}
           <div className="relative max-w-md">
-            <Search
-              size={18}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-[#949ba4]"
-            />
+            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#949ba4]" />
             <input
               type="text"
               value={search}
@@ -141,11 +147,7 @@ export function DiscoverPage() {
                   <div className="absolute top-[92px] left-4 p-1.5 bg-[#2b2d31] group-hover:bg-[#383a40] rounded-[18px] transition-colors duration-200 z-20">
                     <div className="w-[48px] h-[48px] rounded-[12px] overflow-hidden bg-[#1e1f22] flex items-center justify-center">
                       {server.iconUrl ? (
-                        <img
-                          src={server.iconUrl}
-                          alt=""
-                          className="w-full h-full object-cover"
-                        />
+                        <img src={server.iconUrl} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <img src={getCatAvatar(i)} alt={server.name} className="w-9 h-9" />
                       )}
@@ -153,7 +155,9 @@ export function DiscoverPage() {
                   </div>
 
                   <div className="pt-10 p-4 flex flex-col flex-1">
-                    <h3 className="font-bold text-[#f2f3f5] text-[16px] mb-1 truncate">{server.name}</h3>
+                    <h3 className="font-bold text-[#f2f3f5] text-[16px] mb-1 truncate">
+                      {server.name}
+                    </h3>
                     <p className="text-[#dbdee1] text-[14px] mb-4 line-clamp-2 min-h-[2.5rem] flex-1">
                       {server.description ?? t('discover.noDescription')}
                     </p>

@@ -44,7 +44,11 @@ export class AgentService {
     // Set initial status to running
     await this.deps.agentDao.updateStatus(agent!.id, 'running')
 
-    return { ...agent, status: 'running' as const, botUser: { ...botUser, avatarUrl: data.avatarUrl ?? botUser.avatarUrl } }
+    return {
+      ...agent,
+      status: 'running' as const,
+      botUser: { ...botUser, avatarUrl: data.avatarUrl ?? botUser.avatarUrl },
+    }
   }
 
   async getById(id: string) {
@@ -58,7 +62,7 @@ export class AgentService {
   async update(
     id: string,
     ownerId: string,
-    data: { name?: string; description?: string; avatarUrl?: string | null }
+    data: { name?: string; description?: string; avatarUrl?: string | null },
   ) {
     const agent = await this.deps.agentDao.findById(id)
     if (!agent) {

@@ -2,20 +2,21 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
   ArrowLeft,
-  Bot,
   CheckCircle,
   ClipboardCopy,
+  Edit2,
   Key,
   Plus,
   Trash2,
   XCircle,
-  Edit2,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { UserAvatar } from '../components/common/avatar'
-import { fetchApi } from '../lib/api'
 import { AvatarEditor } from '../components/common/avatar-editor'
+import { useAppStatus } from '../hooks/use-app-status'
+import { useUnreadCount } from '../hooks/use-unread-count'
+import { fetchApi } from '../lib/api'
 
 /* ── Types ───────────────────────────────────────────── */
 
@@ -55,6 +56,13 @@ interface TokenResponse {
 
 export function AgentManagementPage() {
   const { t } = useTranslation()
+  const unreadCount = useUnreadCount()
+  useAppStatus({
+    title: t('agentMgmt.title'),
+    unreadCount,
+    hasNotification: unreadCount > 0,
+    variant: 'workspace',
+  })
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
@@ -65,13 +73,12 @@ export function AgentManagementPage() {
   const [tokenCopied, setTokenCopied] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [message, setMessage] = useState<{ text: string; success: boolean } | null>(null)
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; agent: Agent } | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; agent: Agent } | null>(
+    null,
+  )
 
   // Fetch agents
-  const {
-    data: agents = [],
-    isLoading,
-  } = useQuery({
+  const { data: agents = [], isLoading } = useQuery({
     queryKey: ['agents'],
     queryFn: () => fetchApi<Agent[]>('/api/agents'),
     refetchInterval: 30000, // Refresh every 30s for heartbeat status
@@ -208,10 +215,15 @@ export function AgentManagementPage() {
               <span className="truncate flex-1 text-left">
                 {agent.botUser?.displayName ?? agent.botUser?.username ?? 'Agent'}
               </span>
-              <span className={`w-2 h-2 rounded-full ${
-                agent.status === 'running' ? 'bg-[#23a559]' :
-                agent.status === 'error' ? 'bg-[#da373c]' : 'bg-[#80848e]'
-              }`} />
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  agent.status === 'running'
+                    ? 'bg-[#23a559]'
+                    : agent.status === 'error'
+                      ? 'bg-[#da373c]'
+                      : 'bg-[#80848e]'
+                }`}
+              />
             </button>
           ))}
 
@@ -527,9 +539,7 @@ function AgentDetail({
           <label className="block text-[10px] font-bold uppercase text-text-muted mb-1">
             {t('agentMgmt.createdAt')}
           </label>
-          <p className="text-sm text-text-primary">
-            {new Date(agent.createdAt).toLocaleString()}
-          </p>
+          <p className="text-sm text-text-primary">{new Date(agent.createdAt).toLocaleString()}</p>
         </div>
         <div>
           <label className="block text-[10px] font-bold uppercase text-text-muted mb-1">
@@ -558,11 +568,7 @@ function AgentDetail({
                 />
                 <span
                   className={`text-sm ${
-                    isOnline
-                      ? 'text-green-400'
-                      : isWarning
-                        ? 'text-yellow-400'
-                        : 'text-red-400'
+                    isOnline ? 'text-green-400' : isWarning ? 'text-yellow-400' : 'text-red-400'
                   }`}
                 >
                   {isOnline
@@ -586,7 +592,8 @@ function AgentDetail({
         <p className="text-sm text-text-muted mb-4">{t('agentMgmt.tokenDesc')}</p>
 
         {(() => {
-          const displayToken = generatedToken ?? (agent.config?.lastToken as string | undefined) ?? null
+          const displayToken =
+            generatedToken ?? (agent.config?.lastToken as string | undefined) ?? null
           if (displayToken) {
             return (
               <div className="space-y-3">
@@ -611,7 +618,9 @@ function AgentDetail({
                     className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition bg-bg-tertiary text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary disabled:opacity-50"
                   >
                     <Key size={14} />
-                    {tokenMutation.isPending ? t('agentMgmt.generating') : t('agentMgmt.regenerateToken')}
+                    {tokenMutation.isPending
+                      ? t('agentMgmt.generating')
+                      : t('agentMgmt.regenerateToken')}
                   </button>
                 </div>
 
@@ -621,7 +630,7 @@ function AgentDetail({
                     {t('agentMgmt.yamlExample')}
                   </label>
                   <pre className="bg-bg-tertiary rounded-lg p-4 text-xs text-text-secondary border border-white/5 overflow-x-auto">
-{`channels:
+                    {`channels:
   shadow:
     token: "${displayToken.slice(0, 20)}..."
     serverUrl: "https://shadowob.com"`}
@@ -669,7 +678,7 @@ function EmptyState({
 
   return (
     <div className="flex flex-col items-center justify-center h-64 text-center">
-      <Bot size={48} className="text-text-muted mb-4 opacity-40" />
+      <img src="/Logo.svg" alt="Buddy" className="w-12 h-12 mb-4 opacity-50" />
       <h2 className="text-xl font-bold text-text-primary mb-2">
         {agents.length === 0 ? t('agentMgmt.noAgents') : t('agentMgmt.title')}
       </h2>
@@ -791,7 +800,7 @@ function CreateAgentDialog({
             disabled={!name.trim() || createMutation.isPending}
             className="flex items-center gap-2 px-6 py-2 bg-primary hover:bg-primary-hover text-white font-bold rounded-lg transition disabled:opacity-50"
           >
-            <Bot size={16} />
+            <img src="/Logo.svg" alt="Buddy" className="w-4 h-4" />
             {createMutation.isPending ? t('agentMgmt.creating') : t('common.create')}
           </button>
         </div>
@@ -815,9 +824,11 @@ function EditAgentDialog({
   onError: () => void
   t: (key: string) => string
 }) {
-  const [name, setName] = useState(agent.botUser?.displayName ?? agent.botUser?.username ?? 'Agent')
+  const [name, setName] = useState(agent.botUser?.displayName ?? agent.botUser?.username ?? 'Buddy')
   const [description, setDescription] = useState((agent.config?.description as string) ?? '')
-  const [selectedAvatar, setSelectedAvatar] = useState<string | null>(agent.botUser?.avatarUrl ?? null)
+  const [selectedAvatar, setSelectedAvatar] = useState<string | null>(
+    agent.botUser?.avatarUrl ?? null,
+  )
 
   const updateMutation = useMutation({
     mutationFn: (data: { name: string; description?: string; avatarUrl?: string | null }) =>

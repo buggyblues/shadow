@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
-import { Bot, Code, FileText, Palette, Search, Wrench } from 'lucide-react'
+import { Code, FileText, Palette, Search, Wrench } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useAppStatus } from '../hooks/use-app-status'
 import { PublicFooter, PublicNav } from './home'
 
 const agentItems = [
@@ -42,7 +43,7 @@ const agentItems = [
   {
     nameKey: 'agents.customAgent',
     descKey: 'agents.customAgentDesc',
-    icon: Bot,
+    icon: null,
     color: 'from-gray-500 to-gray-600',
     tagKeys: ['agents.tagCustom', 'agents.tagMcp', 'agents.tagApi'],
   },
@@ -50,6 +51,8 @@ const agentItems = [
 
 export function AgentMarketPage() {
   const { t } = useTranslation()
+  useAppStatus({ title: t('nav.agents'), variant: 'market' })
+
   return (
     <div
       className="min-h-screen bg-[#f2f7fc] text-gray-800"
@@ -79,7 +82,11 @@ export function AgentMarketPage() {
               <div
                 className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br ${a.color} mb-5`}
               >
-                <a.icon className="w-7 h-7 text-white" />
+                {a.icon ? (
+                  <a.icon className="w-7 h-7 text-white" />
+                ) : (
+                  <img src="/Logo.svg" alt="Buddy" className="w-7 h-7" />
+                )}
               </div>
               <h3
                 style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}

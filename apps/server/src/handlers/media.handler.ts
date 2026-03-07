@@ -11,6 +11,7 @@ export function createMediaHandler(container: AppContainer) {
   mediaHandler.post('/upload', async (c) => {
     const mediaService = container.resolve('mediaService')
     const messageDao = container.resolve('messageDao')
+    const userDao = container.resolve('userDao')
     const body = await c.req.parseBody()
     const file = body.file
 
@@ -31,6 +32,32 @@ export function createMediaHandler(container: AppContainer) {
         contentType: file.type,
         size: result.size,
       })
+
+      // Broadcast message update so realtime clients can render newly attached media
+      try {
+        const io = container.resolve('io')
+        const message = await messageDao.findById(messageId)
+        if (message) {
+          const author = await userDao.findById(message.authorId)
+          const attachments = await messageDao.getAttachments(messageId)
+          io.to(`channel:${message.channelId}`).emit('message:updated', {
+            ...message,
+            author: author
+              ? {
+                  id: author.id,
+                  username: author.username,
+                  displayName: author.displayName,
+                  avatarUrl: author.avatarUrl,
+                  status: author.status,
+                  isBot: author.isBot,
+                }
+              : null,
+            attachments,
+          })
+        }
+      } catch (err) {
+        console.error('[media] Failed to broadcast message:updated after attachment creation:', err)
+      }
     }
 
     return c.json(result, 201)

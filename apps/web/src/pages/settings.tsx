@@ -5,12 +5,21 @@ import { useTranslation } from 'react-i18next'
 import { UserAvatar } from '../components/common/avatar'
 import { AvatarEditor } from '../components/common/avatar-editor'
 import { LanguageSwitcher } from '../components/common/language-switcher'
+import { useAppStatus } from '../hooks/use-app-status'
+import { useUnreadCount } from '../hooks/use-unread-count'
 import { fetchApi } from '../lib/api'
 import { disconnectSocket } from '../lib/socket'
 import { useAuthStore } from '../stores/auth.store'
 
 export function SettingsPage() {
   const { t } = useTranslation()
+  const unreadCount = useUnreadCount()
+  useAppStatus({
+    title: t('settings.sidebarTitle'),
+    unreadCount,
+    hasNotification: unreadCount > 0,
+    variant: 'workspace',
+  })
   const navigate = useNavigate()
   const { user, setUser, logout } = useAuthStore()
   const [displayName, setDisplayName] = useState(user?.displayName ?? '')
@@ -90,7 +99,10 @@ export function SettingsPage() {
                 : 'text-[#949ba4] hover:bg-white/[0.04] hover:text-[#dbdee1]'
             }`}
           >
-            <User size={18} className={`shrink-0 ${activeTab === 'profile' ? 'opacity-80 text-white' : 'opacity-60 group-hover:text-[#dbdee1]'}`} />
+            <User
+              size={18}
+              className={`shrink-0 ${activeTab === 'profile' ? 'opacity-80 text-white' : 'opacity-60 group-hover:text-[#dbdee1]'}`}
+            />
             {t('settings.tabProfile')}
           </button>
           <button
@@ -101,7 +113,10 @@ export function SettingsPage() {
                 : 'text-[#949ba4] hover:bg-white/[0.04] hover:text-[#dbdee1]'
             }`}
           >
-            <Shield size={18} className={`shrink-0 ${activeTab === 'account' ? 'opacity-80 text-white' : 'opacity-60 group-hover:text-[#dbdee1]'}`} />
+            <Shield
+              size={18}
+              className={`shrink-0 ${activeTab === 'account' ? 'opacity-80 text-white' : 'opacity-60 group-hover:text-[#dbdee1]'}`}
+            />
             {t('settings.tabAccount')}
           </button>
         </nav>

@@ -1,4 +1,10 @@
-import { type InfiniteData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  type InfiniteData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowLeft, Hash, LogIn, LogOut, Users } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -10,6 +16,7 @@ import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
 import { NotificationBell } from '../notification/notification-bell'
+import { FilePreviewPanel } from './file-preview-panel'
 import { MessageBubble } from './message-bubble'
 import { MessageInput } from './message-input'
 
@@ -91,6 +98,14 @@ export function ChatArea() {
   const initialScrollDoneRef = useRef(false)
   const isLoadingOlderRef = useRef(false)
   const prevMessageCountRef = useRef(0)
+  const shouldStickToBottomRef = useRef(true)
+  const [previewFile, setPreviewFile] = useState<{
+    id: string
+    filename: string
+    url: string
+    contentType: string
+    size: number
+  } | null>(null)
 
   // Handle ?msg= query param for message anchor links
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional trigger on channel change
@@ -150,23 +165,53 @@ export function ChatArea() {
     return [...data.pages].reverse().flatMap((p) => p.messages)
   }, [data])
 
+  // Merge system events into message timeline as virtual items
+  type TimelineItem = { kind: 'message'; data: Message } | { kind: 'system'; data: SystemEvent }
+
+  const timeline = useMemo<TimelineItem[]>(() => {
+    const items: TimelineItem[] = messages.map((m) => ({ kind: 'message' as const, data: m }))
+    // Insert system events at the correct position based on timestamp
+    for (const evt of systemEvents) {
+      // Find insertion index: first message with createdAt > evt.timestamp
+      let insertIdx = items.length
+      for (let i = items.length - 1; i >= 0; i--) {
+        const item = items[i]!
+        const itemTime =
+          item.kind === 'message' ? new Date(item.data.createdAt).getTime() : item.data.timestamp
+        if (itemTime <= evt.timestamp) {
+          insertIdx = i + 1
+          break
+        }
+        if (i === 0) insertIdx = 0
+      }
+      items.splice(insertIdx, 0, { kind: 'system', data: evt })
+    }
+    return items
+  }, [messages, systemEvents])
+
   // Listen for new messages via WebSocket
   useSocketEvent('message:new', (msg: Message) => {
     if (msg.channelId === activeChannelId) {
-      queryClient.setQueryData<InfiniteData<MessagesPage>>(
-        ['messages', activeChannelId],
-        (old) => {
-          if (!old || old.pages.length === 0) return old
-          // Append to the first page (latest messages)
-          const pages = [...old.pages]
-          const firstPage = pages[0]!
-          pages[0] = {
-            ...firstPage,
-            messages: [...firstPage.messages, msg],
-          }
-          return { ...old, pages }
-        },
-      )
+      const scrollEl = parentRef.current
+      const wasNearBottom = scrollEl
+        ? scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 150
+        : true
+
+      queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', activeChannelId], (old) => {
+        if (!old || old.pages.length === 0) return old
+        // Append to the first page (latest messages)
+        const pages = [...old.pages]
+        const firstPage = pages[0]!
+        pages[0] = {
+          ...firstPage,
+          messages: [...firstPage.messages, msg],
+        }
+        return { ...old, pages }
+      })
+      if (wasNearBottom || shouldStickToBottomRef.current) {
+        shouldStickToBottomRef.current = true
+        scrollToBottom('smooth')
+      }
       // Play receive sound for messages from others
       if (msg.authorId !== user?.id) {
         playReceiveSound()
@@ -177,38 +222,32 @@ export function ChatArea() {
   // Listen for message updates
   useSocketEvent('message:updated', (msg: Message) => {
     if (msg.channelId === activeChannelId) {
-      queryClient.setQueryData<InfiniteData<MessagesPage>>(
-        ['messages', activeChannelId],
-        (old) => {
-          if (!old) return old
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              messages: page.messages.map((m) => (m.id === msg.id ? msg : m)),
-            })),
-          }
-        },
-      )
+      queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', activeChannelId], (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            messages: page.messages.map((m) => (m.id === msg.id ? msg : m)),
+          })),
+        }
+      })
     }
   })
 
   // Listen for message deletes
   useSocketEvent('message:deleted', (data: { id: string; channelId: string }) => {
     if (data.channelId === activeChannelId) {
-      queryClient.setQueryData<InfiniteData<MessagesPage>>(
-        ['messages', activeChannelId],
-        (old) => {
-          if (!old) return old
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              messages: page.messages.filter((m) => m.id !== data.id),
-            })),
-          }
-        },
-      )
+      queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', activeChannelId], (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            messages: page.messages.filter((m) => m.id !== data.id),
+          })),
+        }
+      })
     }
   })
 
@@ -303,8 +342,7 @@ export function ChatArea() {
           { userId: string; user?: { displayName?: string; username?: string } }[]
         >(['members', activeServerId])
         const member = members?.find((m) => m.userId === data.userId)
-        const displayName =
-          member?.user?.displayName || member?.user?.username || data.userId
+        const displayName = member?.user?.displayName || member?.user?.username || data.userId
 
         const existing = prev.find((u) => u.userId === data.userId)
         if (existing) {
@@ -337,31 +375,44 @@ export function ChatArea() {
 
   // Virtual list setup
   const virtualizer = useVirtualizer({
-    count: messages.length,
+    count: timeline.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 72,
     overscan: 10,
   })
 
+  const scrollToBottom = useCallback(
+    (behavior: 'auto' | 'smooth' = 'smooth') => {
+      if (timeline.length === 0) return
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          virtualizer.scrollToIndex(timeline.length - 1, { align: 'end', behavior })
+        })
+      })
+    },
+    [timeline.length, virtualizer],
+  )
+
   // Initial scroll to bottom after first load
   useLayoutEffect(() => {
-    if (messages.length > 0 && !initialScrollDoneRef.current) {
+    if (timeline.length > 0 && !initialScrollDoneRef.current) {
       initialScrollDoneRef.current = true
-      virtualizer.scrollToIndex(messages.length - 1, { align: 'end' })
+      virtualizer.scrollToIndex(timeline.length - 1, { align: 'end' })
     }
-  }, [messages.length, virtualizer])
+  }, [timeline.length, virtualizer])
 
   // Reset initial scroll flag on channel change
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset on channel switch
   useEffect(() => {
     initialScrollDoneRef.current = false
     prevMessageCountRef.current = 0
+    shouldStickToBottomRef.current = true
   }, [activeChannelId])
 
   // Maintain scroll position after loading older messages (prepend)
   useLayoutEffect(() => {
     const prevCount = prevMessageCountRef.current
-    const currentCount = messages.length
+    const currentCount = timeline.length
 
     if (prevCount > 0 && currentCount > prevCount && isLoadingOlderRef.current) {
       // Items were prepended — scroll to maintain position
@@ -374,25 +425,17 @@ export function ChatArea() {
       isLoadingOlderRef.current = false
     } else if (prevCount > 0 && currentCount > prevCount && !isLoadingOlderRef.current) {
       // New messages appended at the end — auto-scroll if near bottom
-      const scrollEl = parentRef.current
-      if (scrollEl) {
-        const isNearBottom =
-          scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 150
-        if (isNearBottom) {
-          // Use requestAnimationFrame to let virtualizer measure first
-          requestAnimationFrame(() => {
-            virtualizer.scrollToIndex(currentCount - 1, { align: 'end', behavior: 'smooth' })
-          })
-        }
-        // Track read count
-        if (lastReadCount > 0 && lastReadCount < currentCount && isNearBottom) {
-          setLastReadCount(currentCount)
-        }
+      if (shouldStickToBottomRef.current) {
+        scrollToBottom('smooth')
+      }
+      // Track read count
+      if (lastReadCount > 0 && lastReadCount < currentCount && shouldStickToBottomRef.current) {
+        setLastReadCount(currentCount)
       }
     }
 
     prevMessageCountRef.current = currentCount
-  }, [messages.length, virtualizer, lastReadCount])
+  }, [timeline.length, virtualizer, lastReadCount, scrollToBottom])
 
   // Load older messages when scrolling near top
   useEffect(() => {
@@ -406,16 +449,16 @@ export function ChatArea() {
         void fetchNextPage()
       }
       // Update read count when near bottom
-      const isNearBottom =
-        scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 80
-      if (isNearBottom && lastReadCount > 0 && lastReadCount < messages.length) {
-        setLastReadCount(messages.length)
+      const isNearBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 80
+      shouldStickToBottomRef.current = isNearBottom
+      if (isNearBottom && lastReadCount > 0 && lastReadCount < timeline.length) {
+        setLastReadCount(timeline.length)
       }
     }
 
     scrollEl.addEventListener('scroll', handleScroll, { passive: true })
     return () => scrollEl.removeEventListener('scroll', handleScroll)
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage, lastReadCount, messages.length])
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, lastReadCount, timeline.length])
 
   // Reset read count when channel changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional trigger on channel change
@@ -425,10 +468,10 @@ export function ChatArea() {
 
   // Track read count for new message line (only set once on initial load)
   useEffect(() => {
-    if (messages.length > 0 && lastReadCount === 0) {
-      setLastReadCount(messages.length)
+    if (timeline.length > 0 && lastReadCount === 0) {
+      setLastReadCount(timeline.length)
     }
-  }, [messages.length, lastReadCount])
+  }, [timeline.length, lastReadCount])
 
   const handleReact = useCallback(
     (messageId: string, emoji: string) => {
@@ -439,38 +482,32 @@ export function ChatArea() {
 
   const handleMessageUpdate = useCallback(
     (msg: Message) => {
-      queryClient.setQueryData<InfiniteData<MessagesPage>>(
-        ['messages', activeChannelId],
-        (old) => {
-          if (!old) return old
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              messages: page.messages.map((m) => (m.id === msg.id ? { ...m, ...msg } : m)),
-            })),
-          }
-        },
-      )
+      queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', activeChannelId], (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            messages: page.messages.map((m) => (m.id === msg.id ? { ...m, ...msg } : m)),
+          })),
+        }
+      })
     },
     [queryClient, activeChannelId],
   )
 
   const handleMessageDelete = useCallback(
     (msgId: string) => {
-      queryClient.setQueryData<InfiniteData<MessagesPage>>(
-        ['messages', activeChannelId],
-        (old) => {
-          if (!old) return old
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              messages: page.messages.filter((m) => m.id !== msgId),
-            })),
-          }
-        },
-      )
+      queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', activeChannelId], (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            messages: page.messages.filter((m) => m.id !== msgId),
+          })),
+        }
+      })
     },
     [queryClient, activeChannelId],
   )
@@ -489,188 +526,203 @@ export function ChatArea() {
   const virtualItems = virtualizer.getVirtualItems()
 
   return (
-    <div className="flex-1 flex flex-col bg-bg-primary min-w-0 h-full relative">
-      {/* Channel header */}
-      <div className="h-12 px-4 flex items-center gap-2 border-b-2 border-bg-tertiary shrink-0 z-10 bg-bg-primary">
-        {/* Mobile back button */}
-        <button
-          onClick={() => setMobileView('channels')}
-          className="md:hidden text-text-secondary hover:text-text-primary transition shrink-0 -ml-1 mr-1 p-1 hover:bg-white/5 rounded-md"
-        >
-          <ArrowLeft size={20} />
-        </button>
-        <Hash size={24} className="text-text-muted shrink-0" />
-        <h3 className="font-bold text-text-primary text-[15px] truncate">{channel?.name ?? '...'}</h3>
-        {channel?.topic && (
-          <>
-            <div className="w-[1px] h-6 bg-white/10 mx-2 hidden sm:block shrink-0" />
-            <p className="text-sm text-text-secondary truncate hidden sm:block font-medium">{channel.topic}</p>
-          </>
-        )}
-        {/* Right side: members toggle + notification bell */}
-        <div className="flex items-center gap-3 ml-auto shrink-0">
-          <NotificationBell />
+    <div className="flex-1 flex min-w-0 h-full">
+      <div className="flex-1 flex flex-col bg-bg-primary min-w-0 h-full relative">
+        {/* Channel header */}
+        <div className="h-12 px-4 flex items-center gap-2 border-b-2 border-bg-tertiary shrink-0 z-10 bg-bg-primary">
+          {/* Mobile back button */}
           <button
-            onClick={() => useUIStore.getState().toggleMobileMemberList()}
-            className="lg:hidden text-text-secondary hover:text-text-primary transition p-1.5 rounded-md hover:bg-white/5"
-            title={t('member.toggleList')}
+            onClick={() => setMobileView('channels')}
+            className="md:hidden text-text-secondary hover:text-text-primary transition shrink-0 -ml-1 mr-1 p-1 hover:bg-white/5 rounded-md"
           >
-            <Users size={20} />
+            <ArrowLeft size={20} />
           </button>
+          <Hash size={24} className="text-text-muted shrink-0" />
+          <h3 className="font-bold text-text-primary text-[15px] truncate">
+            {channel?.name ?? '...'}
+          </h3>
+          {channel?.topic && (
+            <>
+              <div className="w-[1px] h-6 bg-white/10 mx-2 hidden sm:block shrink-0" />
+              <p className="text-sm text-text-secondary truncate hidden sm:block font-medium">
+                {channel.topic}
+              </p>
+            </>
+          )}
+          {/* Right side: members toggle + notification bell */}
+          <div className="flex items-center gap-3 ml-auto shrink-0">
+            <NotificationBell />
+            <button
+              onClick={() => useUIStore.getState().toggleMobileMemberList()}
+              className="lg:hidden text-text-secondary hover:text-text-primary transition p-1.5 rounded-md hover:bg-white/5"
+              title={t('member.toggleList')}
+            >
+              <Users size={20} />
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* Messages — virtual list */}
-      <div ref={parentRef} className="flex-1 overflow-y-auto overflow-x-hidden">
-        {isLoadingMessages ? (
-          <div className="flex items-center justify-center h-full text-text-muted">
-            <span className="animate-pulse">{t('chat.loading', 'Loading...')}</span>
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-text-muted">
-            <Hash size={48} className="mb-2 opacity-30" />
-            <p className="text-lg font-bold text-text-primary mb-1">
-              {t('chat.welcomeChannel', {
-                channelName: channel?.name ?? t('chat.channelFallback'),
-              })}
-            </p>
-            <p className="text-sm">{t('chat.welcomeStart')}</p>
-          </div>
-        ) : (
-          <div
-            style={{
-              height: `${virtualizer.getTotalSize()}px`,
-              width: '100%',
-              position: 'relative',
-            }}
-          >
-            {/* Loading older messages indicator */}
-            {isFetchingNextPage && (
-              <div className="absolute top-0 left-0 right-0 flex justify-center py-2 z-10">
-                <span className="text-xs text-text-muted animate-pulse">
-                  {t('chat.loadingOlder', 'Loading older messages...')}
-                </span>
-              </div>
-            )}
-
-            {virtualItems.map((virtualItem) => {
-              const msg = messages[virtualItem.index]!
-              const index = virtualItem.index
-
-              return (
-                <div
-                  key={msg.id}
-                  data-index={virtualItem.index}
-                  ref={virtualizer.measureElement}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    transform: `translateY(${virtualItem.start}px)`,
-                  }}
-                >
-                  {lastReadCount > 0 && index === lastReadCount && (
-                    <div className="flex items-center gap-2 px-4 my-2">
-                      <div className="flex-1 h-px bg-danger/60" />
-                      <span className="text-xs text-danger font-semibold px-2">
-                        {t('chat.newMessages')}
-                      </span>
-                      <div className="flex-1 h-px bg-danger/60" />
-                    </div>
-                  )}
-                  <MessageBubble
-                    message={msg}
-                    currentUserId={user?.id ?? ''}
-                    onReply={(id) => setReplyToId(id)}
-                    onReact={handleReact}
-                    onMessageUpdate={handleMessageUpdate}
-                    onMessageDelete={handleMessageDelete}
-                    highlight={highlightMsgId === msg.id}
-                    replyToMessage={
-                      msg.replyToId
-                        ? (messages.find((m) => m.id === msg.replyToId) ?? null)
-                        : null
-                    }
-                  />
+        {/* Messages — virtual list */}
+        <div ref={parentRef} className="flex-1 overflow-y-auto overflow-x-hidden">
+          {isLoadingMessages ? (
+            <div className="flex items-center justify-center h-full text-text-muted">
+              <span className="animate-pulse">{t('chat.loading', 'Loading...')}</span>
+            </div>
+          ) : messages.length === 0 && systemEvents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-text-muted">
+              <Hash size={48} className="mb-2 opacity-30" />
+              <p className="text-lg font-bold text-text-primary mb-1">
+                {t('chat.welcomeChannel', {
+                  channelName: channel?.name ?? t('chat.channelFallback'),
+                })}
+              </p>
+              <p className="text-sm">{t('chat.welcomeStart')}</p>
+            </div>
+          ) : (
+            <div
+              style={{
+                height: `${virtualizer.getTotalSize()}px`,
+                width: '100%',
+                position: 'relative',
+              }}
+            >
+              {/* Loading older messages indicator */}
+              {isFetchingNextPage && (
+                <div className="absolute top-0 left-0 right-0 flex justify-center py-2 z-10">
+                  <span className="text-xs text-text-muted animate-pulse">
+                    {t('chat.loadingOlder', 'Loading older messages...')}
+                  </span>
                 </div>
-              )
-            })}
+              )}
+
+              {virtualItems.map((virtualItem) => {
+                const item = timeline[virtualItem.index]!
+                const index = virtualItem.index
+
+                return (
+                  <div
+                    key={item.kind === 'message' ? item.data.id : item.data.id}
+                    data-index={virtualItem.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualItem.start}px)`,
+                    }}
+                  >
+                    {lastReadCount > 0 && index === lastReadCount && (
+                      <div className="flex items-center gap-2 px-4 my-2">
+                        <div className="flex-1 h-px bg-danger/60" />
+                        <span className="text-xs text-danger font-semibold px-2">
+                          {t('chat.newMessages')}
+                        </span>
+                        <div className="flex-1 h-px bg-danger/60" />
+                      </div>
+                    )}
+                    {item.kind === 'system' ? (
+                      <div className="flex items-center justify-center gap-2 px-4 py-1.5">
+                        <div className="flex items-center gap-1.5 text-xs text-text-muted">
+                          {item.data.type === 'joined' ? (
+                            <LogIn size={14} className="text-green-400" />
+                          ) : (
+                            <LogOut size={14} className="text-red-400" />
+                          )}
+                          <span>
+                            {item.data.isBot ? 'Buddy · ' : ''}
+                            <span className="font-medium text-text-secondary">
+                              {item.data.displayName}
+                            </span>{' '}
+                            {item.data.type === 'joined'
+                              ? t('member.joinedServer')
+                              : t('member.leftServer')}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <MessageBubble
+                        message={item.data}
+                        currentUserId={user?.id ?? ''}
+                        onReply={(id) => setReplyToId(id)}
+                        onReact={handleReact}
+                        onMessageUpdate={handleMessageUpdate}
+                        onMessageDelete={handleMessageDelete}
+                        onPreviewFile={(att) => setPreviewFile(att)}
+                        highlight={highlightMsgId === item.data.id}
+                        replyToMessage={
+                          item.data.replyToId
+                            ? (messages.find((m) => m.id === item.data.replyToId) ?? null)
+                            : null
+                        }
+                      />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Typing indicator */}
+        {typingUsers.length > 0 && (
+          <div className="px-4 py-1 text-xs text-text-muted">
+            <span className="inline-flex gap-0.5 mr-1">
+              <span
+                className="w-1.5 h-1.5 bg-text-muted rounded-full animate-bounce"
+                style={{ animationDelay: '0ms' }}
+              />
+              <span
+                className="w-1.5 h-1.5 bg-text-muted rounded-full animate-bounce"
+                style={{ animationDelay: '150ms' }}
+              />
+              <span
+                className="w-1.5 h-1.5 bg-text-muted rounded-full animate-bounce"
+                style={{ animationDelay: '300ms' }}
+              />
+            </span>
+            {t('chat.typingIndicator', { users: typingUsers.join('、') })}
           </div>
         )}
-        {/* System events (member join/leave) */}
-        {systemEvents.map((evt) => (
-          <div key={evt.id} className="flex items-center justify-center gap-2 px-4 py-1.5">
-            <div className="flex items-center gap-1.5 text-xs text-text-muted">
-              {evt.type === 'joined' ? (
-                <LogIn size={14} className="text-green-400" />
-              ) : (
-                <LogOut size={14} className="text-red-400" />
-              )}
-              <span>
-                {evt.isBot ? '🤖 ' : ''}
-                <span className="font-medium text-text-secondary">{evt.displayName}</span>
-                {' '}
-                {evt.type === 'joined' ? t('member.joinedServer') : t('member.leftServer')}
-              </span>
-            </div>
+
+        {/* Agent activity indicator */}
+        {activityUsers.length > 0 && (
+          <div className="px-4 py-1 text-xs text-text-muted flex items-center gap-1">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
+            </span>
+            {activityUsers
+              .map((u) => {
+                const activityLabel =
+                  u.activity === 'thinking'
+                    ? t('member.activityThinking')
+                    : u.activity === 'working'
+                      ? t('member.activityWorking')
+                      : u.activity === 'ready'
+                        ? t('member.activityReady')
+                        : u.activity === 'preparing'
+                          ? t('member.activityPreparing')
+                          : u.activity
+                return `Buddy ${u.username} ${activityLabel}`
+              })
+              .join('、')}
           </div>
-        ))}
+        )}
+
+        {/* Message input */}
+        <MessageInput
+          channelId={activeChannelId}
+          channelName={channel?.name}
+          replyToId={replyToId}
+          onClearReply={() => setReplyToId(null)}
+        />
       </div>
 
-      {/* Typing indicator */}
-      {typingUsers.length > 0 && (
-        <div className="px-4 py-1 text-xs text-text-muted">
-          <span className="inline-flex gap-0.5 mr-1">
-            <span
-              className="w-1.5 h-1.5 bg-text-muted rounded-full animate-bounce"
-              style={{ animationDelay: '0ms' }}
-            />
-            <span
-              className="w-1.5 h-1.5 bg-text-muted rounded-full animate-bounce"
-              style={{ animationDelay: '150ms' }}
-            />
-            <span
-              className="w-1.5 h-1.5 bg-text-muted rounded-full animate-bounce"
-              style={{ animationDelay: '300ms' }}
-            />
-          </span>
-          {t('chat.typingIndicator', { users: typingUsers.join('、') })}
-        </div>
+      {/* File preview panel */}
+      {previewFile && (
+        <FilePreviewPanel attachment={previewFile} onClose={() => setPreviewFile(null)} />
       )}
-
-      {/* Agent activity indicator */}
-      {activityUsers.length > 0 && (
-        <div className="px-4 py-1 text-xs text-text-muted flex items-center gap-1">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
-          </span>
-          {activityUsers
-            .map((u) => {
-              const activityLabel =
-                u.activity === 'thinking'
-                  ? t('member.activityThinking')
-                  : u.activity === 'working'
-                    ? t('member.activityWorking')
-                    : u.activity === 'ready'
-                      ? t('member.activityReady')
-                      : u.activity === 'preparing'
-                        ? t('member.activityPreparing')
-                        : u.activity
-              return `🤖 ${u.username} ${activityLabel}`
-            })
-            .join('、')}
-        </div>
-      )}
-
-      {/* Message input */}
-      <MessageInput
-        channelId={activeChannelId}
-        channelName={channel?.name}
-        replyToId={replyToId}
-        onClearReply={() => setReplyToId(null)}
-      />
     </div>
   )
 }

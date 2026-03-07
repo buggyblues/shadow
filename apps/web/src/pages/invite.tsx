@@ -3,6 +3,7 @@ import { useNavigate, useParams } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useAppStatus } from '../hooks/use-app-status'
 import { fetchApi } from '../lib/api'
 import { useAuthStore } from '../stores/auth.store'
 
@@ -15,6 +16,7 @@ interface ServerInfo {
 
 export function InvitePage() {
   const { t } = useTranslation()
+  useAppStatus({ title: t('invite.acceptInvite'), variant: 'auth' })
   const navigate = useNavigate()
   const { code } = useParams({ strict: false })
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)

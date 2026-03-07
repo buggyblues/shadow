@@ -351,7 +351,7 @@ function DashboardContent() {
   }
 
   const deleteAgent = async (id: string) => {
-    if (!confirm('确定要删除该 Agent 吗？')) return
+    if (!confirm('确定要删除该 Buddy 吗？')) return
     await apiFetch(`/agents/${id}`, { method: 'DELETE' })
     loadAgents()
   }
@@ -390,7 +390,7 @@ function DashboardContent() {
     { key: 'invites', label: '🎟️ 邀请码' },
     { key: 'users', label: '👤 用户管理' },
     { key: 'servers', label: '🖥️ 服务器管理' },
-    { key: 'agents', label: '🤖 Agent 管理' },
+    { key: 'agents', label: '🐱 Buddy 管理' },
   ]
 
   return (
@@ -614,7 +614,7 @@ function DashboardContent() {
                         <td className="px-4 py-3">
                           {u.isBot ? (
                             <span className="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full">
-                              BOT
+                              Buddy
                             </span>
                           ) : (
                             '用户'
@@ -941,12 +941,12 @@ function DashboardContent() {
           {/* Agents Tab */}
           {tab === 'agents' && (
             <div>
-              <h2 className="text-lg font-bold mb-4">Agent 管理</h2>
+              <h2 className="text-lg font-bold mb-4">Buddy 管理</h2>
               <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-zinc-800 text-zinc-400 text-left">
-                      <th className="px-4 py-3">Agent</th>
+                      <th className="px-4 py-3">Buddy</th>
                       <th className="px-4 py-3">所有者</th>
                       <th className="px-4 py-3">引擎</th>
                       <th className="px-4 py-3">状态</th>
@@ -956,21 +956,34 @@ function DashboardContent() {
                   </thead>
                   <tbody>
                     {adminAgents.map((agent) => (
-                      <tr key={agent.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
+                      <tr
+                        key={agent.id}
+                        className="border-b border-zinc-800/50 hover:bg-zinc-800/30"
+                      >
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             {agent.botUser?.avatarUrl ? (
-                              <img src={agent.botUser.avatarUrl} alt="" className="w-7 h-7 rounded-full" />
+                              <img
+                                src={agent.botUser.avatarUrl}
+                                alt=""
+                                className="w-7 h-7 rounded-full"
+                              />
                             ) : (
                               <div className="w-7 h-7 rounded-full bg-purple-600 flex items-center justify-center text-xs font-bold">
                                 {(agent.botUser?.displayName ?? 'A')[0]?.toUpperCase()}
                               </div>
                             )}
                             <div>
-                              <p className="font-medium">{agent.botUser?.displayName ?? agent.botUser?.username ?? 'Agent'}</p>
-                              <p className="text-xs text-zinc-500">@{agent.botUser?.username ?? '—'}</p>
+                              <p className="font-medium">
+                                {agent.botUser?.displayName ?? agent.botUser?.username ?? 'Buddy'}
+                              </p>
+                              <p className="text-xs text-zinc-500">
+                                @{agent.botUser?.username ?? '—'}
+                              </p>
                             </div>
-                            <span className="text-[10px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded-full font-bold">BOT</span>
+                            <span className="text-[10px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded-full font-bold">
+                              Buddy
+                            </span>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-zinc-400">
@@ -980,16 +993,24 @@ function DashboardContent() {
                             <span className="text-zinc-600">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-zinc-400 font-mono text-xs">{agent.kernelType}</td>
+                        <td className="px-4 py-3 text-zinc-400 font-mono text-xs">
+                          {agent.kernelType}
+                        </td>
                         <td className="px-4 py-3">
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            agent.status === 'running'
-                              ? 'bg-green-500/20 text-green-400'
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full ${
+                              agent.status === 'running'
+                                ? 'bg-green-500/20 text-green-400'
+                                : agent.status === 'error'
+                                  ? 'bg-red-500/20 text-red-400'
+                                  : 'bg-zinc-700 text-zinc-300'
+                            }`}
+                          >
+                            {agent.status === 'running'
+                              ? '运行中'
                               : agent.status === 'error'
-                                ? 'bg-red-500/20 text-red-400'
-                                : 'bg-zinc-700 text-zinc-300'
-                          }`}>
-                            {agent.status === 'running' ? '运行中' : agent.status === 'error' ? '异常' : '已停止'}
+                                ? '异常'
+                                : '已停止'}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-zinc-500">

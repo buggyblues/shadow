@@ -339,19 +339,25 @@ async function deliverShadowReply(params: {
 
     runtime.log?.(`[reply] Sending reply to channel ${channelId}: "${text.slice(0, 80)}"`)
 
-    // Send the text message first
+    // Collect media URLs first so we know whether media is present
+    const mediaUrls = [payload.mediaUrl, ...(payload.mediaUrls ?? [])].filter(Boolean) as string[]
+
+    // Send the text message first (or a placeholder if media-only)
     let sentMessage: ShadowMessage | null = null
-    if (text) {
+    // Always create a message when we have media so attachments can be linked
+    if (text || mediaUrls.length > 0) {
+      const contentToSend = text || '\u200B' // zero-width space placeholder for media-only
       if (threadId) {
-        sentMessage = await client.sendToThread(threadId, text)
+        sentMessage = await client.sendToThread(threadId, contentToSend)
       } else {
-        sentMessage = await client.sendMessage(channelId, text, { replyToId })
+        sentMessage = await client.sendMessage(channelId, contentToSend, { replyToId })
       }
-      runtime.log?.(`[reply] Text reply delivered (${sentMessage.id})`)
+      runtime.log?.(
+        `[reply] Message created (${sentMessage.id})${text ? '' : ' [media-only placeholder]'}`,
+      )
     }
 
     // Upload media files and attach to the message
-    const mediaUrls = [payload.mediaUrl, ...(payload.mediaUrls ?? [])].filter(Boolean) as string[]
     if (mediaUrls.length > 0) {
       const messageId = sentMessage?.id
       for (const mediaUrl of mediaUrls) {

@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useAppStatus } from '../hooks/use-app-status'
 import { PublicFooter, PublicNav } from './home'
 
 const planDefs = [
@@ -67,6 +68,8 @@ const faqKeys = [
 
 export function PricingPage() {
   const { t } = useTranslation()
+  useAppStatus({ title: t('nav.pricing'), variant: 'pricing' })
+
   return (
     <div
       className="min-h-screen bg-[#f2f7fc] text-gray-800"

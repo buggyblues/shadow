@@ -6,7 +6,7 @@
  */
 
 import { DEFAULT_ACCOUNT_ID, getAccountConfig, listAccountIds } from './config.js'
-import { shadowOutbound } from './outbound.js'
+import { parseTarget, shadowOutbound } from './outbound.js'
 import { ShadowClient } from './shadow-client.js'
 import type {
   ChannelAccountSnapshot,
@@ -16,6 +16,24 @@ import type {
   OpenClawConfig,
   ShadowAccountConfig,
 } from './types.js'
+
+/**
+ * Supported message actions for the Shadow channel.
+ * Returned by actions.listActions so that OpenClaw's message tool
+ * exposes these actions to the AI agent.
+ */
+const SHADOW_ACTIONS = [
+  'send',
+  'sendAttachment',
+  'react',
+  'edit',
+  'delete',
+  'reply',
+  'thread-create',
+  'thread-reply',
+  'pin',
+  'unpin',
+] as const
 
 export const shadowPlugin: ChannelPlugin<ShadowAccountConfig> = {
   /** Plugin identifier */
@@ -128,6 +146,260 @@ export const shadowPlugin: ChannelPlugin<ShadowAccountConfig> = {
   /** Outbound message adapter */
   outbound: shadowOutbound,
 
+  /**
+   * Message actions — advertises supported actions to the AI agent's message tool.
+   * Without this, the agent's system prompt shows capabilities=none and it refuses
+   * to send files/attachments via the Shadow channel.
+   */
+  actions: {
+    listActions: () => [...SHADOW_ACTIONS],
+
+    supportsAction: ({ action }: { action: string }): boolean =>
+      (SHADOW_ACTIONS as readonly string[]).includes(action),
+
+    handleAction: async (ctx: {
+      cfg: OpenClawConfig
+      action: string
+      params: Record<string, unknown>
+      accountId?: string
+      [key: string]: unknown
+    }) => {
+      const account = getAccountConfig(ctx.cfg, ctx.accountId ?? DEFAULT_ACCOUNT_ID)
+      if (!account) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({ ok: false, error: 'Shadow account not configured' }),
+            },
+          ],
+        }
+      }
+
+      const action = ctx.action
+      const params = ctx.params
+
+      // sendAttachment — OpenClaw core hydrates params.buffer (base64) via hydrateAttachmentParamsForAction
+      // before calling handleAction. We use the pre-loaded buffer for direct upload.
+      if (action === 'sendAttachment') {
+        try {
+          const client = new ShadowClient(account.serverUrl, account.token)
+          const to = (params.to as string) ?? ''
+          const text = (params.message as string) ?? (params.caption as string) ?? ''
+          const filename = (params.filename as string) || 'file'
+          const contentType =
+            (params.contentType as string) ||
+            (params.mimeType as string) ||
+            'application/octet-stream'
+          const base64Buffer = params.buffer as string | undefined
+          const mediaUrl =
+            (params.media as string) ?? (params.path as string) ?? (params.filePath as string) ?? ''
+
+          const { channelId, threadId: parsedThreadId } = parseTarget(to)
+          const threadId = (params.threadId as string) ?? parsedThreadId
+
+          // Step 1: Create a message to attach the file to
+          const content = text || '\u200B' // zero-width space for file-only messages
+          let message: Awaited<ReturnType<typeof client.sendMessage>> | undefined
+          if (threadId) {
+            message = await client.sendToThread(threadId, content)
+          } else if (channelId) {
+            message = await client.sendMessage(channelId, content, {
+              replyToId: params.replyTo as string | undefined,
+            })
+          } else {
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: JSON.stringify({
+                    ok: false,
+                    error: 'Could not resolve target channel or thread',
+                  }),
+                },
+              ],
+            }
+          }
+
+          // Step 2: Upload the file and attach to the message
+          if (base64Buffer) {
+            // Use the hydrated base64 buffer provided by OpenClaw core
+            const bytes = Uint8Array.from(atob(base64Buffer), (c) => c.charCodeAt(0))
+            const blob = new Blob([bytes], { type: contentType })
+            await client.uploadMedia(blob, filename, contentType, message.id)
+          } else if (mediaUrl) {
+            // Fallback: try to upload from URL/path
+            await client.uploadMediaFromUrl(mediaUrl, message.id)
+          } else {
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: JSON.stringify({
+                    ok: false,
+                    error: 'No buffer or media URL provided for attachment',
+                  }),
+                },
+              ],
+            }
+          }
+
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify({
+                  ok: true,
+                  action: 'sendAttachment',
+                  messageId: message.id,
+                  filename,
+                }),
+              },
+            ],
+          }
+        } catch (err) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify({
+                  ok: false,
+                  error: err instanceof Error ? err.message : String(err),
+                }),
+              },
+            ],
+          }
+        }
+      }
+
+      // react — add a reaction to a message
+      if (action === 'react') {
+        const client = new ShadowClient(account.serverUrl, account.token)
+        const messageId = (params.messageId as string) ?? (params.message_id as string) ?? ''
+        const emoji = (params.emoji as string) ?? (params.reaction as string) ?? ''
+        if (!messageId || !emoji) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify({ ok: false, error: 'messageId and emoji are required' }),
+              },
+            ],
+          }
+        }
+        try {
+          await client.addReaction(messageId, emoji)
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify({ ok: true, action: 'react', messageId, emoji }),
+              },
+            ],
+          }
+        } catch (err) {
+          return {
+            content: [
+              { type: 'text' as const, text: JSON.stringify({ ok: false, error: String(err) }) },
+            ],
+          }
+        }
+      }
+
+      // edit — edit a message
+      if (action === 'edit') {
+        const client = new ShadowClient(account.serverUrl, account.token)
+        const messageId = (params.messageId as string) ?? (params.message_id as string) ?? ''
+        const content = (params.message as string) ?? (params.content as string) ?? ''
+        if (!messageId || !content) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify({ ok: false, error: 'messageId and content are required' }),
+              },
+            ],
+          }
+        }
+        try {
+          await client.editMessage(messageId, content)
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify({ ok: true, action: 'edit', messageId }),
+              },
+            ],
+          }
+        } catch (err) {
+          return {
+            content: [
+              { type: 'text' as const, text: JSON.stringify({ ok: false, error: String(err) }) },
+            ],
+          }
+        }
+      }
+
+      // delete — delete a message
+      if (action === 'delete') {
+        const client = new ShadowClient(account.serverUrl, account.token)
+        const messageId = (params.messageId as string) ?? (params.message_id as string) ?? ''
+        if (!messageId) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify({ ok: false, error: 'messageId is required' }),
+              },
+            ],
+          }
+        }
+        try {
+          await client.deleteMessage(messageId)
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify({ ok: true, action: 'delete', messageId }),
+              },
+            ],
+          }
+        } catch (err) {
+          return {
+            content: [
+              { type: 'text' as const, text: JSON.stringify({ ok: false, error: String(err) }) },
+            ],
+          }
+        }
+      }
+
+      // pin / unpin — requires channelId context which is not always available
+      if (action === 'pin' || action === 'unpin') {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({
+                ok: false,
+                error: `${action} is not yet supported for Shadow channels`,
+              }),
+            },
+          ],
+        }
+      }
+
+      // Default: unsupported action
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify({ ok: false, error: `Action ${action} not yet implemented` }),
+          },
+        ],
+      }
+    },
+  },
+
   /** Mention handling — strips @username patterns from incoming messages */
   mentions: {
     stripPatterns: () => ['@[\\w-]+'],
@@ -151,8 +423,8 @@ export const shadowPlugin: ChannelPlugin<ShadowAccountConfig> = {
   /** Target normalization */
   messaging: {
     normalizeTarget: (raw: string): string | undefined => {
-      // Accept "shadowob:channel:<id>" or bare UUID
-      if (raw.startsWith('shadowob:')) return raw
+      // Accept "shadowob:channel:<id>", "shadowob:thread:<id>", or bare UUID
+      if (/^shadowob:(channel|thread):.+$/i.test(raw)) return raw
       // UUID pattern
       if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw)) {
         return `shadowob:channel:${raw}`
@@ -161,8 +433,9 @@ export const shadowPlugin: ChannelPlugin<ShadowAccountConfig> = {
     },
     targetResolver: {
       looksLikeId: (raw: string): boolean =>
+        /^shadowob:(channel|thread):.+$/i.test(raw) ||
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw),
-      hint: 'Provide a Shadow channel UUID',
+      hint: 'Provide a Shadow channel UUID or shadowob:channel:<uuid>',
     },
   },
 

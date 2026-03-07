@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useAppStatus } from '../hooks/use-app-status'
 import { PublicFooter, PublicNav } from './home'
 
 type DocSection = 'guide' | 'channels' | 'agents' | 'faq'
@@ -178,6 +179,7 @@ function FaqContent() {
 export function DocsPage() {
   const [activeSection, setActiveSection] = useState<DocSection>('guide')
   const { t } = useTranslation()
+  useAppStatus({ title: t('nav.docs'), variant: 'docs' })
 
   const contentMap: Record<DocSection, React.ReactNode> = {
     guide: <GuideContent />,

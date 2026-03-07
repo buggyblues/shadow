@@ -1,5 +1,13 @@
 export type CatPattern = 'none' | 'tabby' | 'tuxedo' | 'siamese' | 'calico' | 'bicolor'
-export type CatExpression = 'smile' | 'open' | 'flat' | 'sad' | 'surprised' | 'kawaii' | 'winking' | 'smirk'
+export type CatExpression =
+  | 'smile'
+  | 'open'
+  | 'flat'
+  | 'sad'
+  | 'surprised'
+  | 'kawaii'
+  | 'winking'
+  | 'smirk'
 export type CatDecoration = 'none' | 'glasses' | 'blush' | 'scar' | 'flower' | 'fish' | 'headband'
 export type BgPattern = 'none' | 'dots' | 'stripes' | 'grid' | 'stars'
 
@@ -15,10 +23,47 @@ export interface CatConfig {
 }
 
 const COLORS = {
-  bg: ['transparent', '#1e1f22', '#313338', '#5865F2', '#23a559', '#da373c', '#f472b6', '#3b82f6', '#fbbf24', '#a855f7', '#1abc9c', '#f39c12', '#e74c3c'],
-  body: ['#2d2d30', '#e8842c', '#e8e8e8', '#7a7a80', '#d4a574', '#6b8094', '#f472b6', '#c8d6e5', '#3e2723', '#bdc3c7', '#ffb8b8'],
-  eyes: ['#f8e71c', '#00f3ff', '#4ade80', '#60a5fa', '#a855f7', '#fbbf24', '#f87171', '#ffc0cb', '#1dd1a1', '#e056fd'],
-  pattern: ['#1a1a1c', '#ffffff', '#5a4a46', '#3d3d40', '#9a9aa0', '#d1ccc0', '#2d3436']
+  bg: [
+    'transparent',
+    '#1e1f22',
+    '#313338',
+    '#5865F2',
+    '#23a559',
+    '#da373c',
+    '#f472b6',
+    '#3b82f6',
+    '#fbbf24',
+    '#a855f7',
+    '#1abc9c',
+    '#f39c12',
+    '#e74c3c',
+  ],
+  body: [
+    '#2d2d30',
+    '#e8842c',
+    '#e8e8e8',
+    '#7a7a80',
+    '#d4a574',
+    '#6b8094',
+    '#f472b6',
+    '#c8d6e5',
+    '#3e2723',
+    '#bdc3c7',
+    '#ffb8b8',
+  ],
+  eyes: [
+    '#f8e71c',
+    '#00f3ff',
+    '#4ade80',
+    '#60a5fa',
+    '#a855f7',
+    '#fbbf24',
+    '#f87171',
+    '#ffc0cb',
+    '#1dd1a1',
+    '#e056fd',
+  ],
+  pattern: ['#1a1a1c', '#ffffff', '#5a4a46', '#3d3d40', '#9a9aa0', '#d1ccc0', '#2d3436'],
 }
 
 export function getRandomElement<T>(arr: readonly T[]): T {
@@ -34,27 +79,51 @@ export function generateRandomCatConfig(): CatConfig {
     bg: getRandomElement(COLORS.bg),
     bgPattern: getRandomElement(['none', 'dots', 'stripes', 'grid', 'stars'] as BgPattern[]),
     body: getRandomElement(COLORS.body),
-    pattern: getRandomElement(['none', 'tabby', 'tuxedo', 'siamese', 'calico', 'bicolor'] as CatPattern[]),
+    pattern: getRandomElement([
+      'none',
+      'tabby',
+      'tuxedo',
+      'siamese',
+      'calico',
+      'bicolor',
+    ] as CatPattern[]),
     patternColor: getRandomElement(COLORS.pattern),
     eyeColor: getRandomElement(COLORS.eyes),
-    expression: getRandomElement(['smile', 'open', 'flat', 'sad', 'surprised', 'kawaii', 'winking', 'smirk'] as CatExpression[]),
-    decoration: getRandomElement(['none', 'glasses', 'blush', 'scar', 'flower', 'fish', 'headband'] as CatDecoration[])
+    expression: getRandomElement([
+      'smile',
+      'open',
+      'flat',
+      'sad',
+      'surprised',
+      'kawaii',
+      'winking',
+      'smirk',
+    ] as CatExpression[]),
+    decoration: getRandomElement([
+      'none',
+      'glasses',
+      'blush',
+      'scar',
+      'flower',
+      'fish',
+      'headband',
+    ] as CatDecoration[]),
   }
 }
 
 export function renderCatSvg(config: CatConfig): string {
   const { bg, bgPattern, body, pattern, patternColor, eyeColor, expression, decoration } = config
   const stroke = '#1a1a1c'
-  
+
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">`
-  
+
   // Background
   if (bg && bg !== 'transparent') {
     svg += `<rect width="100" height="100" fill="${bg}" rx="20" />`
-    
+
     // Background Pattern
     const pColor = `rgba(255,255,255,0.15)`
-    const cleanBg = bg.replace('#','')
+    const cleanBg = bg.replace('#', '')
     if (bgPattern === 'dots') {
       svg += `<pattern id="p-${cleanBg}-dots" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="2" fill="${pColor}"/></pattern><rect width="100" height="100" fill="url(#p-${cleanBg}-dots)" rx="20" />`
     } else if (bgPattern === 'stripes') {
@@ -91,7 +160,7 @@ export function renderCatSvg(config: CatConfig): string {
     svg += `<ellipse cx="50" cy="65" rx="16" ry="12" fill="${patternColor}" opacity="0.95"/>`
   } else if (pattern === 'siamese') {
     // Dark fading mask
-    svg += `<ellipse cx="50" cy="62" rx="20" ry="16" fill="${patternColor}" opacity="0.6" filter="blur(2px)"/>` 
+    svg += `<ellipse cx="50" cy="62" rx="20" ry="16" fill="${patternColor}" opacity="0.6" filter="blur(2px)"/>`
   } else if (pattern === 'calico') {
     svg += `<path d="M25,40 Q35,30 45,45 Q35,55 25,40" fill="${patternColor}" opacity="0.8"/>`
     svg += `<path d="M75,45 Q65,60 55,50 Q65,35 75,45" fill="#e8842c" opacity="0.8"/>`
@@ -104,7 +173,7 @@ export function renderCatSvg(config: CatConfig): string {
     svg += `<ellipse cx="28" cy="62" rx="5" ry="3" fill="#ff7675" opacity="0.7" filter="blur(1px)"/>`
     svg += `<ellipse cx="72" cy="62" rx="5" ry="3" fill="#ff7675" opacity="0.7" filter="blur(1px)"/>`
   }
-  
+
   // Scar Decoration
   if (decoration === 'scar') {
     svg += `<path d="M28,42 L40,52 M30,48 L35,43 M34,51 L39,46 M32,53 L37,48" stroke="#d63031" stroke-width="1.5" stroke-linecap="round"/>`
@@ -113,16 +182,17 @@ export function renderCatSvg(config: CatConfig): string {
   // Eyes Base & Pupils depending on Expression
   const drawEye = (cx: number, cy: number, lookDir: number = 0) => {
     if (expression === 'kawaii') {
-      return `<path d="M${cx-8},${cy} Q${cx},${cy-8} ${cx+8},${cy} Q${cx},${cy-3} ${cx-8},${cy}" fill="${eyeColor}" stroke="${stroke}" stroke-width="1.5"/><circle cx="${cx+lookDir}" cy="${cy-2}" r="3" fill="white"/><circle cx="${cx-3+lookDir}" cy="${cy}" r="1" fill="white"/>`
-    } else if (expression === 'winking' && cx > 50) { // Wink right eye
-      return `<path d="M${cx-7},${cy+2} Q${cx},${cy-4} ${cx+7},${cy+2}" fill="none" stroke="${stroke}" stroke-width="2.5" stroke-linecap="round"/>`
+      return `<path d="M${cx - 8},${cy} Q${cx},${cy - 8} ${cx + 8},${cy} Q${cx},${cy - 3} ${cx - 8},${cy}" fill="${eyeColor}" stroke="${stroke}" stroke-width="1.5"/><circle cx="${cx + lookDir}" cy="${cy - 2}" r="3" fill="white"/><circle cx="${cx - 3 + lookDir}" cy="${cy}" r="1" fill="white"/>`
+    } else if (expression === 'winking' && cx > 50) {
+      // Wink right eye
+      return `<path d="M${cx - 7},${cy + 2} Q${cx},${cy - 4} ${cx + 7},${cy + 2}" fill="none" stroke="${stroke}" stroke-width="2.5" stroke-linecap="round"/>`
     } else if (expression === 'surprised') {
       return `<circle cx="${cx}" cy="${cy}" r="8" fill="white" stroke="${stroke}" stroke-width="1.5"/><circle cx="${cx}" cy="${cy}" r="3" fill="${eyeColor}"/>`
     } else {
       // Default cute large eyes
       return `<circle cx="${cx}" cy="${cy}" r="7.5" fill="${eyeColor}" stroke="${stroke}" stroke-width="1.5"/>
-              <circle cx="${cx-2+lookDir}" cy="${cy-2}" r="2.5" fill="white"/>
-              <circle cx="${cx+2+lookDir}" cy="${cy+1}" r="1" fill="white"/>`
+              <circle cx="${cx - 2 + lookDir}" cy="${cy - 2}" r="2.5" fill="white"/>
+              <circle cx="${cx + 2 + lookDir}" cy="${cy + 1}" r="1" fill="white"/>`
     }
   }
 

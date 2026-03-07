@@ -13,6 +13,8 @@ import ReactDOM from 'react-dom/client'
 import { useTranslation } from 'react-i18next'
 import { AppLayout } from './components/layout/app-layout'
 import { RootLayout } from './components/layout/root-layout'
+import { useAppStatus } from './hooks/use-app-status'
+import { useUnreadCount } from './hooks/use-unread-count'
 import { AgentManagementPage } from './pages/agent-management'
 import { AgentMarketPage } from './pages/agents'
 import { DiscoverPage } from './pages/discover'
@@ -119,6 +121,15 @@ const appIndexRoute = createRoute({
   component: () => {
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const { t } = useTranslation()
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const unreadCount = useUnreadCount()
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useAppStatus({
+      title: t('common.welcomeTitle'),
+      unreadCount,
+      hasNotification: unreadCount > 0,
+      variant: 'workspace',
+    })
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const navigate = useNavigate()
     return (

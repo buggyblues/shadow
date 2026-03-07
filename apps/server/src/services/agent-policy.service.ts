@@ -38,9 +38,7 @@ export class AgentPolicyService {
       throw Object.assign(new Error('Agent not found'), { status: 404 })
     }
 
-    return this.deps.agentPolicyDao.batchUpsert(
-      policies.map((p) => ({ agentId, ...p })),
-    )
+    return this.deps.agentPolicyDao.batchUpsert(policies.map((p) => ({ agentId, ...p })))
   }
 
   /** Delete a specific policy */

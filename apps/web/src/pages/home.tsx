@@ -2,15 +2,18 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { LanguageSwitcher } from '../components/common/language-switcher'
 
+import { useAppStatus } from '../hooks/use-app-status'
+import { BRAND_EN } from '../lib/brand'
+
 /* Shared nav component for public pages */
 export function PublicNav() {
   const { t } = useTranslation()
   return (
-    <nav className="glass-nav fixed w-full top-0 z-50 py-4 px-8 md:px-16 flex justify-between items-center transition-all">
+    <nav className="glass-nav fixed w-full top-0 z-50 py-4 px-8 md:px-16 flex justify-between items-center transition-all bg-white/70 backdrop-blur-xl border-b border-white/20 shadow-sm">
       <Link to="/" className="flex items-center gap-3 cursor-pointer hover:scale-105 transition">
         <img src="/Logo.svg" alt="Shadow Logo" className="w-10 h-10" />
         <span className="zcool text-2xl font-bold tracking-wider text-gray-800">
-          虾豆<span className="text-lg text-cyan-600 ml-1 font-sans font-black">Shadow</span>
+          虾豆<span className="text-lg text-cyan-600 ml-1 font-sans font-black">{BRAND_EN}</span>
         </span>
       </Link>
       <div className="hidden md:flex gap-8 text-base font-bold">
@@ -47,7 +50,10 @@ export function PublicNav() {
         >
           {t('nav.login')}
         </Link>
-        <Link to="/register" className="btn-primary zcool text-lg px-6 py-2">
+        <Link
+          to="/register"
+          className="btn-primary zcool text-lg px-6 py-2 hover:scale-105 transition-transform duration-300 shadow-lg hover:shadow-cyan-500/30"
+        >
           {t('nav.launch')}
         </Link>
       </div>
@@ -66,7 +72,7 @@ export function PublicFooter() {
           style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
           className="text-lg text-gray-500 font-bold"
         >
-          {t('common.brandFull')}
+          {t('common.brandLegal', { defaultValue: t('common.brandFull') })}
         </span>
       </div>
       <p className="text-sm text-gray-400 font-bold">{t('common.poweredBy')}</p>
@@ -107,7 +113,7 @@ function ChatIcon({ className = '' }: { className?: string }) {
   )
 }
 
-function BotIcon({ className = '' }: { className?: string }) {
+function BuddyIcon({ className = '' }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -118,11 +124,12 @@ function BotIcon({ className = '' }: { className?: string }) {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <rect x="3" y="11" width="18" height="10" rx="2" />
-      <circle cx="12" cy="5" r="2" />
-      <path d="M12 7v4" />
-      <line x1="8" y1="16" x2="8" y2="16" />
-      <line x1="16" y1="16" x2="16" y2="16" />
+      <path d="M6 10c-1.1-2.8-1-5.2.8-6.1 1.8-.9 3.8.7 5.2 3.1" />
+      <path d="M18 10c1.1-2.8 1-5.2-.8-6.1-1.8-.9-3.8.7-5.2 3.1" />
+      <ellipse cx="12" cy="14" rx="8" ry="6.5" />
+      <circle cx="9.2" cy="13.5" r="0.8" fill="currentColor" />
+      <circle cx="14.8" cy="13.5" r="0.8" fill="currentColor" />
+      <path d="M11.4 16.3c.5.5 1.3.5 1.8 0" />
     </svg>
   )
 }
@@ -191,6 +198,8 @@ function BookIcon({ className = '' }: { className?: string }) {
 
 export function HomePage() {
   const { t } = useTranslation()
+  useAppStatus({ title: t('home.heroTitle2'), variant: 'default' })
+
   return (
     <div
       className="relative min-h-screen flex flex-col"
@@ -251,32 +260,40 @@ export function HomePage() {
           <div className="flex flex-wrap gap-4 mt-4">
             <Link
               to="/register"
-              className="btn-primary zcool text-xl px-7 py-3.5 flex items-center gap-2"
+              className="btn-primary zcool text-xl px-7 py-3.5 flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-cyan-500/30 group"
             >
-              {t('home.createWorkspace')} <PawIcon className="w-5 h-5" />
+              {t('home.createWorkspace')}{' '}
+              <PawIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" />
             </Link>
             <Link
               to="/docs"
-              className="btn-secondary zcool text-xl px-7 py-3.5 flex items-center gap-2"
+              className="btn-secondary zcool text-xl px-7 py-3.5 flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-md hover:shadow-gray-400/20 group"
             >
-              {t('home.viewDocs')} <BookIcon className="w-5 h-5" />
+              {t('home.viewDocs')}{' '}
+              <BookIcon className="w-5 h-5 group-hover:-rotate-12 transition-transform" />
             </Link>
           </div>
         </div>
 
-        <div className="md:w-1/2 relative flex justify-center float z-10">
+        <div className="md:w-1/2 relative flex justify-center float z-10 group overflow-visible">
+          <img
+            src="/hero-halo.svg"
+            alt=""
+            aria-hidden="true"
+            className="absolute -z-10 w-[520px] h-[520px] md:w-[620px] md:h-[620px] object-contain opacity-90 pointer-events-none"
+          />
           <img
             src="/Logo.svg"
             alt="Shadow Hero Cat"
-            className="w-[320px] h-[320px] md:w-[380px] md:h-[380px] drop-shadow-2xl"
+            className="w-[320px] h-[320px] md:w-[380px] md:h-[380px] drop-shadow-2xl transition-transform duration-700 group-hover:scale-105"
           />
-          <div className="absolute top-6 -left-4 md:-left-8 bg-white border-3 border-gray-800 rounded-2xl px-4 py-3 shadow-xl -rotate-6 float-delay-1 zcool text-lg flex items-center gap-2">
+          <div className="absolute top-6 -left-4 md:-left-8 bg-white border-3 border-gray-800 rounded-2xl px-4 py-3 shadow-xl -rotate-6 float-delay-1 zcool text-lg flex items-center gap-2 transition-transform hover:scale-110 cursor-default">
             <ChatIcon className="w-5 h-5 text-cyan-500" /> {t('home.floatChat')}
           </div>
-          <div className="absolute top-36 -right-4 md:-right-8 bg-white border-3 border-gray-800 rounded-2xl px-4 py-3 shadow-xl rotate-12 float-delay-2 zcool text-lg flex items-center gap-2">
-            <BotIcon className="w-5 h-5 text-yellow-500" /> {t('home.floatAgent')}
+          <div className="absolute top-36 -right-4 md:-right-8 bg-white border-3 border-gray-800 rounded-2xl px-4 py-3 shadow-xl rotate-12 float-delay-2 zcool text-lg flex items-center gap-2 transition-transform hover:scale-110 cursor-default flex-row-reverse">
+            <BuddyIcon className="w-5 h-5 text-yellow-500" /> {t('home.floatAgent')}
           </div>
-          <div className="absolute bottom-8 left-4 md:left-8 bg-white border-3 border-gray-800 rounded-2xl px-4 py-3 shadow-xl rotate-3 float-delay-3 zcool text-lg flex items-center gap-2">
+          <div className="absolute bottom-8 left-4 md:left-8 bg-white border-3 border-gray-800 rounded-2xl px-4 py-3 shadow-xl rotate-3 float-delay-3 zcool text-lg flex items-center gap-2 transition-transform hover:scale-110 cursor-default">
             <BoltIcon className="w-5 h-5 text-cyan-500" /> {t('home.floatSync')}
           </div>
         </div>
@@ -294,8 +311,8 @@ export function HomePage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Feature 1: Multi-Agent */}
-          <div className="glass-card p-8 flex flex-col items-center text-center group">
-            <div className="w-40 h-40 mb-6 float relative">
+          <div className="glass-card p-8 flex flex-col items-center text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
+            <div className="w-40 h-40 mb-6 float relative group-hover:scale-110 transition-transform duration-500">
               <AgentCatSvg />
             </div>
             <h3 className="zcool text-2xl font-bold mb-3 text-gray-800">
@@ -307,8 +324,8 @@ export function HomePage() {
           </div>
 
           {/* Feature 2: Workspace */}
-          <div className="glass-card p-8 flex flex-col items-center text-center group">
-            <div className="w-40 h-40 mb-6 float-delay-1 relative">
+          <div className="glass-card p-8 flex flex-col items-center text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
+            <div className="w-40 h-40 mb-6 float-delay-1 relative group-hover:scale-110 transition-transform duration-500">
               <WorkCatSvg />
             </div>
             <h3 className="zcool text-2xl font-bold mb-3 text-gray-800">
@@ -320,8 +337,8 @@ export function HomePage() {
           </div>
 
           {/* Feature 3: Unified Channels */}
-          <div className="glass-card p-8 flex flex-col items-center text-center group">
-            <div className="w-40 h-40 mb-6 float-delay-2 relative">
+          <div className="glass-card p-8 flex flex-col items-center text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
+            <div className="w-40 h-40 mb-6 float-delay-2 relative group-hover:scale-110 transition-transform duration-500">
               <ChannelCatSvg />
             </div>
             <h3 className="zcool text-2xl font-bold mb-3 text-gray-800">
@@ -336,16 +353,17 @@ export function HomePage() {
 
       {/* CTA Banner */}
       <section id="cta" className="max-w-5xl mx-auto w-full px-8 md:px-16 py-12 mb-20">
-        <div className="glass-card bg-gradient-to-r from-cyan-50 to-yellow-50 p-10 md:p-12 text-center rounded-[36px] relative overflow-hidden">
+        <div className="glass-card bg-gradient-to-r from-cyan-50 to-yellow-50 p-10 md:p-12 text-center rounded-[36px] relative overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-cyan-500/20">
           <h2 className="zcool text-3xl md:text-4xl mb-5">{t('home.ctaTitle')}</h2>
           <p className="text-lg md:text-xl font-bold text-gray-600 mb-8">{t('home.ctaSubtitle')}</p>
           <Link
             to="/register"
-            className="btn-primary zcool text-2xl px-10 py-4 inline-flex items-center gap-2 hover:scale-110 transition-transform"
+            className="btn-primary zcool text-2xl px-10 py-4 inline-flex items-center gap-2 hover:-translate-y-1 hover:scale-105 transition-all duration-300 shadow-xl hover:shadow-cyan-400/40 group"
           >
-            {t('home.ctaButton')} <RocketIcon className="w-6 h-6" />
+            {t('home.ctaButton')}{' '}
+            <RocketIcon className="w-6 h-6 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
           </Link>
-          <div className="absolute -bottom-10 -right-10 opacity-20 w-48 h-48 pointer-events-none">
+          <div className="absolute -bottom-10 -right-10 opacity-20 w-48 h-48 pointer-events-none transition-transform duration-700 hover:scale-110">
             <img src="/Logo.svg" alt="Faded Logo background" />
           </div>
         </div>
@@ -355,7 +373,9 @@ export function HomePage() {
       <footer className="glass-nav mt-auto py-8 text-center border-t-2 border-white/50 relative z-10 w-full">
         <div className="flex justify-center items-center gap-2 mb-3">
           <img src="/Logo.svg" className="w-7 h-7 opacity-80" alt="Shadow cat" />
-          <span className="zcool text-xl font-bold text-gray-500">{t('common.brandFull')}</span>
+          <span className="zcool text-xl font-bold text-gray-500">
+            {t('common.brandLegal', { defaultValue: t('common.brandFull') })}
+          </span>
         </div>
         <p className="text-sm font-bold text-gray-400">{t('common.poweredBy')}</p>
       </footer>

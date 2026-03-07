@@ -73,10 +73,7 @@ export type ChannelConfigAdapter<ResolvedAccount> = {
   defaultAccountId?: (cfg: OpenClawConfig) => string
   isEnabled?: (account: ResolvedAccount, cfg: OpenClawConfig) => boolean
   isConfigured?: (account: ResolvedAccount, cfg: OpenClawConfig) => boolean | Promise<boolean>
-  describeAccount?: (
-    account: ResolvedAccount,
-    cfg: OpenClawConfig,
-  ) => ChannelAccountSnapshot
+  describeAccount?: (account: ResolvedAccount, cfg: OpenClawConfig) => ChannelAccountSnapshot
 }
 
 export type OutboundDeliveryResult = {
@@ -160,10 +157,7 @@ export type ChannelMessagingAdapter = {
 
 export type ChannelStatusAdapter<ResolvedAccount = unknown, Probe = unknown, Audit = unknown> = {
   defaultRuntime?: ChannelAccountSnapshot
-  probeAccount?: (params: {
-    account: ResolvedAccount
-    timeoutMs: number
-  }) => Promise<Probe>
+  probeAccount?: (params: { account: ResolvedAccount; timeoutMs: number }) => Promise<Probe>
   buildAccountSnapshot?: (params: {
     account: ResolvedAccount
     cfg: OpenClawConfig
@@ -175,10 +169,7 @@ export type ChannelStatusAdapter<ResolvedAccount = unknown, Probe = unknown, Aud
     cfg: OpenClawConfig
     accountId: string
   }) => Array<{ level: string; message: string }>
-  auditAccount?: (params: {
-    account: ResolvedAccount
-    cfg: OpenClawConfig
-  }) => Promise<Audit>
+  auditAccount?: (params: { account: ResolvedAccount; cfg: OpenClawConfig }) => Promise<Audit>
 }
 
 export type ChannelConfigUiHint = {
@@ -255,10 +246,7 @@ export type PluginRuntimeChannel = {
     [key: string]: unknown
   }
   session: {
-    resolveStorePath: (
-      store: unknown,
-      params: { agentId: string },
-    ) => string
+    resolveStorePath: (store: unknown, params: { agentId: string }) => string
     recordInboundSession: (params: {
       storePath: string
       sessionKey: string

@@ -20,10 +20,11 @@ const SimplifiedSchema = z.intersection(ShadowConfigBaseSchema, ShadowAccountSch
 const MultiAccountSchema = z.intersection(
   ShadowConfigBaseSchema,
   z.object({
-    accounts: z.record(z.string(), ShadowAccountSchema).refine(
-      (val) => Object.keys(val).length > 0,
-      { message: 'accounts must contain at least one entry' },
-    ),
+    accounts: z
+      .record(z.string(), ShadowAccountSchema)
+      .refine((val) => Object.keys(val).length > 0, {
+        message: 'accounts must contain at least one entry',
+      }),
   }),
 )
 

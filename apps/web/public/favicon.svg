@@ -1,11 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="200" height="200">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
   <defs>
-    <radialGradient id="catBody" cx="50%" cy="35%" r="70%">
+    <!-- Cat 3D Volume Gradients -->
+    <radialGradient id="catBody" cx="50%" cy="40%" r="70%">
       <stop offset="0%" stop-color="#5a5a5e" />
       <stop offset="50%" stop-color="#3d3d40" />
       <stop offset="100%" stop-color="#18181a" />
     </radialGradient>
 
+    <!-- Eyes 3D Gradients -->
     <radialGradient id="eyeYellow" cx="35%" cy="35%" r="65%">
       <stop offset="0%" stop-color="#ffffcc" />
       <stop offset="35%" stop-color="#f8e71c" />
@@ -19,19 +21,34 @@
     </radialGradient>
   </defs>
 
-  <g id="cat" transform="translate(0, -2)">
+  <!-- Clear Glass Backdrop -->
+  <circle cx="50" cy="50" r="48" fill="#1f2022" />
+
+  <g id="cat" transform="translate(0, -5) scale(1.1) translate(-5, 0)">
+    <!-- Left Ear -->
     <path d="M 22,47 Q 15,24 28,24 Q 34,24 40,40" fill="url(#catBody)" stroke="#1a1a1c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+    <!-- Right Ear -->
     <path d="M 78,47 Q 85,24 72,24 Q 66,24 60,40" fill="url(#catBody)" stroke="#1a1a1c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+    <!-- Cat Main Body -->
     <ellipse cx="50" cy="62" rx="38" ry="26" fill="url(#catBody)" stroke="#1a1a1c" stroke-width="2.5" />
+    <!-- Subtle highlight -->
     <ellipse cx="50" cy="61" rx="35" ry="23" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1.5" />
+
+    <!-- Left Eye (Yellow) -->
     <circle cx="32" cy="57" r="6.5" fill="url(#eyeYellow)" stroke="#1a1a1c" stroke-width="1.5" />
     <circle cx="30" cy="54.5" r="2.2" fill="#ffffff" />
     <circle cx="34" cy="60" r="1.2" fill="#ffffff" opacity="0.6" />
+    
+    <!-- Right Eye (Cyan) -->
     <circle cx="68" cy="57" r="6.5" fill="url(#eyeCyan)" stroke="#1a1a1c" stroke-width="1.5" />
     <circle cx="66" cy="54.5" r="2.2" fill="#ffffff" />
     <circle cx="70" cy="60" r="1.2" fill="#ffffff" opacity="0.6" />
+    
+    <!-- Nose -->
     <ellipse cx="50" cy="64" rx="4" ry="2.5" fill="#3a2a26" />
     <ellipse cx="49.5" cy="63.2" rx="1.5" ry="0.8" fill="#8c7772" />
+    
+    <!-- Mouth -->
     <path d="M 40,69 Q 45,74.5 50,69" fill="none" stroke="#1a1a1c" stroke-width="2.5" stroke-linecap="round" />
     <path d="M 50,69 Q 55,74.5 60,69" fill="none" stroke="#1a1a1c" stroke-width="2.5" stroke-linecap="round" />
   </g>

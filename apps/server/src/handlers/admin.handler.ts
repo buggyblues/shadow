@@ -246,7 +246,12 @@ export function createAdminHandler(container: AppContainer) {
         const full = await agentService.getById(agent.id)
         const userDao = container.resolve('userDao')
         const owner = await userDao.findById(agent.ownerId)
-        return { ...full, owner: owner ? { id: owner.id, username: owner.username, displayName: owner.displayName } : null }
+        return {
+          ...full,
+          owner: owner
+            ? { id: owner.id, username: owner.username, displayName: owner.displayName }
+            : null,
+        }
       }),
     )
     return c.json(enriched.filter(Boolean))

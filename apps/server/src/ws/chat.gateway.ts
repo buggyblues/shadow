@@ -8,14 +8,17 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
     logger.info({ socketId: socket.id, userId }, 'Client connected')
 
     // channel:join
-    socket.on('channel:join', async ({ channelId }: { channelId: string }, ack?: (res: { ok: boolean }) => void) => {
-      await socket.join(`channel:${channelId}`)
-      logger.info({ userId, channelId, socketId: socket.id }, 'Joined channel room')
-      // Send ack if client provided a callback
-      if (typeof ack === 'function') {
-        ack({ ok: true })
-      }
-    })
+    socket.on(
+      'channel:join',
+      async ({ channelId }: { channelId: string }, ack?: (res: { ok: boolean }) => void) => {
+        await socket.join(`channel:${channelId}`)
+        logger.info({ userId, channelId, socketId: socket.id }, 'Joined channel room')
+        // Send ack if client provided a callback
+        if (typeof ack === 'function') {
+          ack({ ok: true })
+        }
+      },
+    )
 
     // channel:leave
     socket.on('channel:leave', async ({ channelId }: { channelId: string }) => {
@@ -97,15 +100,17 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
           try {
             const mentionRegex = /@(\w+)/g
             const mentionedUsernames = new Set<string>()
-            let match: RegExpExecArray | null
-            while ((match = mentionRegex.exec(data.content)) !== null) {
+            let match: RegExpExecArray | null = mentionRegex.exec(data.content)
+            while (match !== null) {
               if (match[1]) mentionedUsernames.add(match[1])
+              match = mentionRegex.exec(data.content)
             }
 
             if (mentionedUsernames.size > 0) {
               const userDao = container.resolve('userDao')
               const notificationService = container.resolve('notificationService')
-              const senderName = message.author?.displayName ?? message.author?.username ?? 'Someone'
+              const senderName =
+                message.author?.displayName ?? message.author?.username ?? 'Someone'
 
               for (const username of mentionedUsernames) {
                 const mentionedUser = await userDao.findByUsername(username)

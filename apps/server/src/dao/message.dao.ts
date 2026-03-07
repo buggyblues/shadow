@@ -66,7 +66,10 @@ export class MessageDao {
     }
 
     return {
-      messages: msgList.map((m) => ({ ...m, attachments: [] as typeof attachments.$inferSelect[] })),
+      messages: msgList.map((m) => ({
+        ...m,
+        attachments: [] as (typeof attachments.$inferSelect)[],
+      })),
       hasMore,
     }
   }
@@ -106,7 +109,7 @@ export class MessageDao {
       return msgList.map((m) => ({ ...m, attachments: attMap.get(m.id) ?? [] }))
     }
 
-    return msgList.map((m) => ({ ...m, attachments: [] as typeof attachments.$inferSelect[] }))
+    return msgList.map((m) => ({ ...m, attachments: [] as (typeof attachments.$inferSelect)[] }))
   }
 
   async create(data: {
@@ -239,7 +242,7 @@ export class MessageDao {
       return msgList.map((m) => ({ ...m, attachments: attMap.get(m.id) ?? [] }))
     }
 
-    return msgList.map((m) => ({ ...m, attachments: [] as typeof attachments.$inferSelect[] }))
+    return msgList.map((m) => ({ ...m, attachments: [] as (typeof attachments.$inferSelect)[] }))
   }
 
   // Threads

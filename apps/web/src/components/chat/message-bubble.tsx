@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { format, formatDistanceToNow, type Locale } from 'date-fns'
 import { enUS, ja, ko, zhCN, zhTW } from 'date-fns/locale'
 import {
@@ -5,7 +6,6 @@ import {
   Copy,
   ExternalLink,
   MoreHorizontal,
-  Paperclip,
   Pencil,
   Reply,
   Smile,
@@ -13,15 +13,17 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { useQueryClient } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { fetchApi } from '../../lib/api'
+import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { UserAvatar } from '../common/avatar'
-import { UserProfileCard } from '../common/user-profile-card'
 import { EmojiPicker } from '../common/emoji-picker'
+import { UserProfileCard } from '../common/user-profile-card'
+import { FileCard } from './file-card'
 
 interface Author {
   id: string
@@ -68,6 +70,7 @@ interface MessageBubbleProps {
   onReact?: (messageId: string, emoji: string) => void
   onMessageUpdate?: (msg: Message) => void
   onMessageDelete?: (msgId: string) => void
+  onPreviewFile?: (attachment: Attachment) => void
   highlight?: boolean
   replyToMessage?: Message | null
 }
@@ -85,6 +88,7 @@ export function MessageBubble({
   onReact,
   onMessageUpdate,
   onMessageDelete,
+  onPreviewFile,
   highlight,
   replyToMessage,
 }: MessageBubbleProps) {
@@ -97,8 +101,18 @@ export function MessageBubble({
   const [editContent, setEditContent] = useState('')
   const [copied, setCopied] = useState(false)
   const editInputRef = useRef<HTMLTextAreaElement>(null)
+  const avatarRef = useRef<HTMLDivElement>(null)
+  const [avatarHover, setAvatarHover] = useState(false)
+  const [avatarPinned, setAvatarPinned] = useState(false)
+  const [avatarCardPos, setAvatarCardPos] = useState<{ left: number; top: number } | null>(null)
+  const [avatarContextMenu, setAvatarContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const avatarHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isOwn = message.authorId === currentUserId
+  const currentUser = useAuthStore((s) => s.user)
+  const queryClient = useQueryClient()
+  const { activeServerId } = useChatStore()
+  const author = message.author
 
   const handleEdit = useCallback(() => {
     setEditContent(message.content)
@@ -150,6 +164,63 @@ export function MessageBubble({
     setTimeout(() => setCopied(false), 2000)
   }, [message.id])
 
+  // Avatar hover handlers
+  const handleAvatarMouseEnter = useCallback(() => {
+    if (avatarPinned) return
+    if (avatarHoverTimerRef.current) clearTimeout(avatarHoverTimerRef.current)
+    avatarHoverTimerRef.current = setTimeout(() => {
+      if (avatarRef.current) {
+        const rect = avatarRef.current.getBoundingClientRect()
+        setAvatarCardPos({
+          left: rect.right + 12,
+          top: Math.max(8, Math.min(rect.top, window.innerHeight - 280)),
+        })
+        setAvatarHover(true)
+      }
+    }, 350)
+  }, [avatarPinned])
+
+  const handleAvatarMouseLeave = useCallback(() => {
+    if (avatarPinned) return
+    if (avatarHoverTimerRef.current) clearTimeout(avatarHoverTimerRef.current)
+    avatarHoverTimerRef.current = setTimeout(() => setAvatarHover(false), 200)
+  }, [avatarPinned])
+
+  const handleAvatarClick = useCallback(() => {
+    if (author) {
+      setAvatarPinned(true)
+      setAvatarHover(true)
+      if (avatarRef.current) {
+        const rect = avatarRef.current.getBoundingClientRect()
+        setAvatarCardPos({
+          left: rect.right + 12,
+          top: Math.max(8, Math.min(rect.top, window.innerHeight - 280)),
+        })
+      }
+    }
+  }, [author])
+
+  const handleAvatarContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setAvatarContextMenu({ x: e.clientX, y: e.clientY })
+  }, [])
+
+  const closeAvatarCard = useCallback(() => {
+    setAvatarPinned(false)
+    setAvatarHover(false)
+  }, [])
+
+  // Look up member info from cache for role/buddy metadata
+  const membersList = queryClient.getQueryData<MemberEntry[]>(['members', activeServerId]) ?? []
+  const authorMember = membersList.find((m: MemberEntry) => m.userId === author?.id)
+  const buddyAgentsList =
+    queryClient.getQueryData<BuddyAgentEntry[]>(['members-buddy-agents', activeServerId]) ?? []
+  const buddyAgent = author?.isBot
+    ? buddyAgentsList.find((a: BuddyAgentEntry) => a.botUser?.id === author.id)
+    : undefined
+  const currentMember = membersList.find((m: MemberEntry) => m.userId === currentUser?.id)
+  const canKick = currentMember?.role === 'owner' || currentMember?.role === 'admin'
+
   const dateFnsLocaleMap: Record<string, Locale> = {
     'zh-CN': zhCN,
     'zh-TW': zhTW,
@@ -157,7 +228,6 @@ export function MessageBubble({
     ja,
     ko,
   }
-  const author = message.author
   const time = formatDistanceToNow(new Date(message.createdAt), {
     locale: dateFnsLocaleMap[i18n.language] ?? zhCN,
     addSuffix: true,
@@ -197,7 +267,14 @@ export function MessageBubble({
       }}
     >
       {/* Avatar container */}
-      <div className={`flex-shrink-0 ${replyToMessage ? 'mt-6' : 'mt-0.5'}`}>
+      <div
+        ref={avatarRef}
+        className={`flex-shrink-0 ${replyToMessage ? 'mt-6' : 'mt-0.5'} cursor-pointer`}
+        onMouseEnter={handleAvatarMouseEnter}
+        onMouseLeave={handleAvatarMouseLeave}
+        onClick={handleAvatarClick}
+        onContextMenu={handleAvatarContextMenu}
+      >
         <UserAvatar
           userId={author?.id}
           avatarUrl={author?.avatarUrl}
@@ -292,29 +369,32 @@ export function MessageBubble({
             </div>
           </div>
         ) : (
-          /* Markdown content */
-          <div className="text-[15px] text-[#dbdee1] leading-[1.375] break-words msg-markdown pt-[2px]">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                img: ({ src, alt }) => (
-                  <a href={src} target="_blank" rel="noopener noreferrer">
-                    <img src={src} alt={alt ?? ''} loading="lazy" />
-                  </a>
-                ),
-                p: ({ children }) => <p>{renderMentions(children)}</p>,
-                li: ({ children }) => <li>{renderMentions(children)}</li>,
-                td: ({ children }) => <td>{renderMentions(children)}</td>,
-              }}
-            >
-              {message.content}
-            </ReactMarkdown>
-          </div>
+          /* Markdown content — hide zero-width space placeholder for file-only messages */
+          message.content &&
+          message.content !== '\u200B' && (
+            <div className="text-[15px] text-[#dbdee1] leading-[1.375] break-words msg-markdown pt-[2px]">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  img: ({ src, alt }) => (
+                    <a href={src} target="_blank" rel="noopener noreferrer">
+                      <img src={src} alt={alt ?? ''} loading="lazy" />
+                    </a>
+                  ),
+                  p: ({ children }) => <p>{renderMentions(children)}</p>,
+                  li: ({ children }) => <li>{renderMentions(children)}</li>,
+                  td: ({ children }) => <td>{renderMentions(children)}</td>,
+                }}
+              >
+                {message.content}
+              </ReactMarkdown>
+            </div>
+          )
         )}
 
         {/* Attachments */}
         {message.attachments && message.attachments.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="flex flex-col gap-2 mt-2">
             {message.attachments.map((att) =>
               isImageType(att.contentType) ? (
                 <a
@@ -327,19 +407,14 @@ export function MessageBubble({
                   <img src={att.url} alt={att.filename} className="max-h-60 object-contain" />
                 </a>
               ) : (
-                <a
+                <FileCard
                   key={att.id}
-                  href={att.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-bg-tertiary border border-white/10 text-sm text-text-secondary hover:text-text-primary transition"
-                >
-                  <Paperclip size={14} className="shrink-0" />
-                  <span className="truncate max-w-[200px]">{att.filename}</span>
-                  <span className="text-xs text-text-muted shrink-0">
-                    {(att.size / 1024).toFixed(0)} KB
-                  </span>
-                </a>
+                  filename={att.filename}
+                  url={att.url}
+                  contentType={att.contentType}
+                  size={att.size}
+                  onClick={() => onPreviewFile?.(att)}
+                />
               ),
             )}
           </div>
@@ -486,6 +561,117 @@ export function MessageBubble({
           />
         </div>
       )}
+
+      {/* Avatar hover card (portal) */}
+      {avatarHover &&
+        !avatarPinned &&
+        author &&
+        avatarCardPos &&
+        createPortal(
+          <div
+            className="fixed z-[80]"
+            style={{ left: avatarCardPos.left, top: avatarCardPos.top }}
+            onMouseEnter={() => {
+              if (avatarHoverTimerRef.current) clearTimeout(avatarHoverTimerRef.current)
+            }}
+            onMouseLeave={handleAvatarMouseLeave}
+          >
+            <UserProfileCard
+              user={author}
+              role={(authorMember?.role as 'owner' | 'admin' | 'member') ?? null}
+              ownerName={buddyAgent?.owner?.displayName ?? buddyAgent?.owner?.username}
+              description={
+                typeof buddyAgent?.config?.description === 'string'
+                  ? buddyAgent.config.description
+                  : undefined
+              }
+            />
+          </div>,
+          document.body,
+        )}
+
+      {/* Avatar pinned card (modal overlay) */}
+      {avatarPinned &&
+        avatarHover &&
+        author &&
+        createPortal(
+          <div
+            className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+            onClick={closeAvatarCard}
+          >
+            <div onClick={(e) => e.stopPropagation()}>
+              <UserProfileCard
+                user={author}
+                role={(authorMember?.role as 'owner' | 'admin' | 'member') ?? null}
+                ownerName={buddyAgent?.owner?.displayName ?? buddyAgent?.owner?.username}
+                description={
+                  typeof buddyAgent?.config?.description === 'string'
+                    ? buddyAgent.config.description
+                    : undefined
+                }
+              />
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      {/* Avatar right-click context menu */}
+      {avatarContextMenu &&
+        createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-[60]"
+              onClick={() => setAvatarContextMenu(null)}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                setAvatarContextMenu(null)
+              }}
+            />
+            <div
+              className="fixed z-[61] bg-bg-tertiary border border-white/10 rounded-lg shadow-xl py-1 min-w-[160px]"
+              style={{ left: avatarContextMenu.x, top: avatarContextMenu.y }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setAvatarContextMenu(null)
+                  handleAvatarClick()
+                }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
+              >
+                {t('member.viewProfile')}
+              </button>
+              {canKick && author?.id !== currentUser?.id && authorMember?.role !== 'owner' && (
+                <>
+                  <div className="h-px bg-white/5 my-1" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const name = author?.displayName ?? author?.username
+                      const confirmKey = author?.isBot
+                        ? 'member.removeBotConfirm'
+                        : 'member.kickConfirm'
+                      if (confirm(t(confirmKey, { name }))) {
+                        fetchApi(`/api/servers/${activeServerId}/members/${author?.id}`, {
+                          method: 'DELETE',
+                        }).then(() => {
+                          queryClient.invalidateQueries({
+                            queryKey: ['members', activeServerId],
+                          })
+                        })
+                      }
+                      setAvatarContextMenu(null)
+                    }}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition"
+                  >
+                    {author?.isBot ? t('member.removeBot') : t('member.kickMember')}
+                  </button>
+                </>
+              )}
+            </div>
+          </>,
+          document.body,
+        )}
     </div>
   )
 }
@@ -508,12 +694,33 @@ interface MemberEntry {
   user?: MemberUser
 }
 
+interface BuddyAgentEntry {
+  id: string
+  ownerId: string
+  config?: Record<string, unknown>
+  owner?: {
+    id: string
+    username: string
+    displayName: string | null
+  } | null
+  botUser?: {
+    id: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+  } | null
+}
+
 function MentionSpan({ mention }: { mention: string }) {
+  const { t } = useTranslation()
   const [showCard, setShowCard] = useState(false)
   const [pinned, setPinned] = useState(false)
+  const [cardPos, setCardPos] = useState<{ left: number; top: number } | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const spanRef = useRef<HTMLSpanElement>(null)
   const { activeServerId } = useChatStore()
+  const currentUser = useAuthStore((s) => s.user)
   const queryClient = useQueryClient()
 
   const username = mention.slice(1) // strip @
@@ -525,10 +732,33 @@ function MentionSpan({ mention }: { mention: string }) {
   )
   const user = member?.user
 
+  // Buddy metadata
+  const buddyAgentsList =
+    queryClient.getQueryData<BuddyAgentEntry[]>(['members-buddy-agents', activeServerId]) ?? []
+  const buddyAgent = user?.isBot
+    ? buddyAgentsList.find((a: BuddyAgentEntry) => a.botUser?.id === user.id)
+    : undefined
+
+  // Current user's role for kick/remove ability
+  const currentMember = members.find((m: MemberEntry) => m.userId === currentUser?.id)
+  const canKick = currentMember?.role === 'owner' || currentMember?.role === 'admin'
+
+  const computeCardPos = () => {
+    if (!spanRef.current) return
+    const rect = spanRef.current.getBoundingClientRect()
+    setCardPos({
+      left: rect.left,
+      top: Math.max(8, rect.top - 280),
+    })
+  }
+
   const handleMouseEnter = () => {
     if (pinned) return
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
-    timeoutRef.current = setTimeout(() => setShowCard(true), 300)
+    timeoutRef.current = setTimeout(() => {
+      computeCardPos()
+      setShowCard(true)
+    }, 300)
   }
 
   const handleMouseLeave = () => {
@@ -541,12 +771,18 @@ function MentionSpan({ mention }: { mention: string }) {
     if (user) {
       setPinned(true)
       setShowCard(true)
+      computeCardPos()
     }
   }
 
   const handleClose = () => {
     setPinned(false)
     setShowCard(false)
+  }
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setCtxMenu({ x: e.clientX, y: e.clientY })
   }
 
   return (
@@ -557,11 +793,20 @@ function MentionSpan({ mention }: { mention: string }) {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onClick={handleClick}
+        onContextMenu={handleContextMenu}
       >
         {mention}
-        {showCard && !pinned && user && (
+      </span>
+
+      {/* Hover card (portal to body to avoid clipping) */}
+      {showCard &&
+        !pinned &&
+        user &&
+        cardPos &&
+        createPortal(
           <div
-            className="absolute bottom-full left-0 mb-2 z-50"
+            className="fixed z-[80]"
+            style={{ left: cardPos.left, top: cardPos.top }}
             onMouseEnter={() => {
               if (timeoutRef.current) clearTimeout(timeoutRef.current)
             }}
@@ -570,24 +815,99 @@ function MentionSpan({ mention }: { mention: string }) {
             <UserProfileCard
               user={user}
               role={(member?.role as 'owner' | 'admin' | 'member') ?? null}
+              ownerName={buddyAgent?.owner?.displayName ?? buddyAgent?.owner?.username}
+              description={
+                typeof buddyAgent?.config?.description === 'string'
+                  ? buddyAgent.config.description
+                  : undefined
+              }
             />
-          </div>
+          </div>,
+          document.body,
         )}
-      </span>
+
       {/* Pinned profile card as a centered overlay */}
-      {pinned && showCard && user && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-          onClick={handleClose}
-        >
-          <div onClick={(e) => e.stopPropagation()}>
-            <UserProfileCard
-              user={user}
-              role={(member?.role as 'owner' | 'admin' | 'member') ?? null}
+      {pinned &&
+        showCard &&
+        user &&
+        createPortal(
+          <div
+            className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+            onClick={handleClose}
+          >
+            <div onClick={(e) => e.stopPropagation()}>
+              <UserProfileCard
+                user={user}
+                role={(member?.role as 'owner' | 'admin' | 'member') ?? null}
+                ownerName={buddyAgent?.owner?.displayName ?? buddyAgent?.owner?.username}
+                description={
+                  typeof buddyAgent?.config?.description === 'string'
+                    ? buddyAgent.config.description
+                    : undefined
+                }
+              />
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      {/* Right-click context menu */}
+      {ctxMenu &&
+        createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-[60]"
+              onClick={() => setCtxMenu(null)}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                setCtxMenu(null)
+              }}
             />
-          </div>
-        </div>
-      )}
+            <div
+              className="fixed z-[61] bg-bg-tertiary border border-white/10 rounded-lg shadow-xl py-1 min-w-[160px]"
+              style={{ left: ctxMenu.x, top: ctxMenu.y }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setCtxMenu(null)
+                  handleClick()
+                }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
+              >
+                {t('member.viewProfile')}
+              </button>
+              {canKick && user?.id !== currentUser?.id && member?.role !== 'owner' && (
+                <>
+                  <div className="h-px bg-white/5 my-1" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const name = user?.displayName ?? user?.username
+                      const confirmKey = user?.isBot
+                        ? 'member.removeBotConfirm'
+                        : 'member.kickConfirm'
+                      if (confirm(t(confirmKey, { name }))) {
+                        fetchApi(`/api/servers/${activeServerId}/members/${user?.id}`, {
+                          method: 'DELETE',
+                        }).then(() => {
+                          queryClient.invalidateQueries({
+                            queryKey: ['members', activeServerId],
+                          })
+                        })
+                      }
+                      setCtxMenu(null)
+                    }}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition"
+                  >
+                    {user?.isBot ? t('member.removeBot') : t('member.kickMember')}
+                  </button>
+                </>
+              )}
+            </div>
+          </>,
+          document.body,
+        )}
     </>
   )
 }

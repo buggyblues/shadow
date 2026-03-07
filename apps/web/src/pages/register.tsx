@@ -1,12 +1,14 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useAppStatus } from '../hooks/use-app-status'
 import { fetchApi } from '../lib/api'
 import { getAllCatAvatars, getCatAvatar } from '../lib/pixel-cats'
 import { useAuthStore } from '../stores/auth.store'
 
 export function RegisterPage() {
   const { t } = useTranslation()
+  useAppStatus({ title: t('auth.registerTitle'), variant: 'auth' })
   const navigate = useNavigate()
   const setAuth = useAuthStore((s) => s.setAuth)
   const [email, setEmail] = useState('')
@@ -77,7 +79,9 @@ export function RegisterPage() {
       <div className="w-full max-w-[480px] bg-[#313338] rounded-[5px] p-8 shadow-[0_2px_10px_0_rgba(0,0,0,0.2)]">
         <div className="text-center mb-6">
           <img src="/Logo.svg" alt="Shadow" className="w-12 h-12 mx-auto mb-3" />
-          <h1 className="text-2xl font-semibold text-white mb-2 tracking-wide">{t('auth.registerTitle')}</h1>
+          <h1 className="text-2xl font-semibold text-white mb-2 tracking-wide">
+            {t('auth.registerTitle')}
+          </h1>
           <p className="text-[#b5bac1] text-[15px]">{t('auth.registerSubtitle')}</p>
         </div>
 

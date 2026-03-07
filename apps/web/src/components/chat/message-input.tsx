@@ -1,7 +1,7 @@
+import { useQuery } from '@tanstack/react-query'
 import { FileText, Image as ImageIcon, Plus, Send, Smile, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
 import { fetchApi } from '../../lib/api'
 import { sendTyping, sendWsMessage } from '../../lib/socket'
 import { playSendSound } from '../../lib/sounds'
@@ -65,14 +65,17 @@ export function MessageInput({
   })
 
   // Filter members by mention query
-  const filteredMembers = mentionQuery !== null
-    ? members.filter((m) => {
-        const q = mentionQuery.toLowerCase()
-        const username = m.user?.username?.toLowerCase() ?? ''
-        const displayName = m.user?.displayName?.toLowerCase() ?? ''
-        return username.includes(q) || displayName.includes(q)
-      }).slice(0, 8)
-    : []
+  const filteredMembers =
+    mentionQuery !== null
+      ? members
+          .filter((m) => {
+            const q = mentionQuery.toLowerCase()
+            const username = m.user?.username?.toLowerCase() ?? ''
+            const displayName = m.user?.displayName?.toLowerCase() ?? ''
+            return username.includes(q) || displayName.includes(q)
+          })
+          .slice(0, 8)
+      : []
 
   // Scroll active mention item into view
   useEffect(() => {
@@ -83,32 +86,35 @@ export function MessageInput({
   }, [mentionIndex, mentionQuery])
 
   // Insert mention at cursor
-  const insertMention = useCallback((username: string) => {
-    const textarea = textareaRef.current
-    if (!textarea) return
+  const insertMention = useCallback(
+    (username: string) => {
+      const textarea = textareaRef.current
+      if (!textarea) return
 
-    const cursorPos = textarea.selectionStart
-    const text = content
+      const cursorPos = textarea.selectionStart
+      const text = content
 
-    // Find the @ that triggered this mention
-    const beforeCursor = text.slice(0, cursorPos)
-    const atIndex = beforeCursor.lastIndexOf('@')
-    if (atIndex === -1) return
+      // Find the @ that triggered this mention
+      const beforeCursor = text.slice(0, cursorPos)
+      const atIndex = beforeCursor.lastIndexOf('@')
+      if (atIndex === -1) return
 
-    const before = text.slice(0, atIndex)
-    const after = text.slice(cursorPos)
-    const newContent = `${before}@${username} ${after}`
-    setContent(newContent)
-    setMentionQuery(null)
-    setMentionIndex(0)
+      const before = text.slice(0, atIndex)
+      const after = text.slice(cursorPos)
+      const newContent = `${before}@${username} ${after}`
+      setContent(newContent)
+      setMentionQuery(null)
+      setMentionIndex(0)
 
-    // Restore cursor position after React re-render
-    const newCursorPos = atIndex + username.length + 2 // @ + username + space
-    requestAnimationFrame(() => {
-      textarea.focus()
-      textarea.setSelectionRange(newCursorPos, newCursorPos)
-    })
-  }, [content])
+      // Restore cursor position after React re-render
+      const newCursorPos = atIndex + username.length + 2 // @ + username + space
+      requestAnimationFrame(() => {
+        textarea.focus()
+        textarea.setSelectionRange(newCursorPos, newCursorPos)
+      })
+    },
+    [content],
+  )
 
   const handleSend = useCallback(async () => {
     const text = content.trim()
@@ -117,37 +123,39 @@ export function MessageInput({
     setUploading(true)
 
     try {
-      // Upload files first
-      const uploadedUrls: string[] = []
-      for (const pf of pendingFiles) {
-        const formData = new FormData()
-        formData.append('file', pf.file)
-        const result = await fetchApi<{ url: string; size: number }>('/api/media/upload', {
-          method: 'POST',
-          body: formData,
-        })
-        uploadedUrls.push(result.url)
-      }
+      if (pendingFiles.length > 0) {
+        // When files are attached, use REST API to create the message first,
+        // then upload files with the messageId so proper attachment records
+        // are created and the message:updated event broadcasts them.
+        const contentToSend = text || '\u200B' // zero-width space for file-only messages
+        const message = await fetchApi<{ id: string; channelId: string }>(
+          `/api/channels/${channelId}/messages`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              content: contentToSend,
+              ...(replyToId ? { replyToId } : {}),
+            }),
+          },
+        )
 
-      // Build message content with file links
-      let finalContent = text
-      if (uploadedUrls.length > 0) {
-        const fileLinks = uploadedUrls.map((url, i) => {
-          const file = pendingFiles[i]!
-          if (file.file.type.startsWith('image/')) {
-            return `![${file.file.name}](${url})`
-          }
-          return `[${file.file.name}](${url})`
-        })
-        finalContent = finalContent
-          ? `${finalContent}\n${fileLinks.join('\n')}`
-          : fileLinks.join('\n')
-      }
+        // Upload each file linked to the message
+        for (const pf of pendingFiles) {
+          const formData = new FormData()
+          formData.append('file', pf.file)
+          formData.append('messageId', message.id)
+          await fetchApi('/api/media/upload', {
+            method: 'POST',
+            body: formData,
+          })
+        }
 
-      if (finalContent) {
+        playSendSound()
+      } else if (text) {
+        // Text-only message — use WebSocket for low latency
         sendWsMessage({
           channelId,
-          content: finalContent,
+          content: text,
           replyToId: replyToId ?? undefined,
         })
         playSendSound()
@@ -277,7 +285,11 @@ export function MessageInput({
   }, [])
 
   return (
-    <div className="px-4 pb-4 mobile-safe-bottom relative" onDrop={handleDrop} onDragOver={handleDragOver}>
+    <div
+      className="px-4 pb-4 mobile-safe-bottom relative"
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+    >
       {/* @mention autocomplete popup */}
       {mentionQuery !== null && filteredMembers.length > 0 && (
         <div
@@ -305,7 +317,9 @@ export function MessageInput({
                 displayName={member.user?.displayName ?? member.user?.username}
                 size="sm"
               />
-              <span className="font-medium">{member.user?.displayName ?? member.user?.username}</span>
+              <span className="font-medium">
+                {member.user?.displayName ?? member.user?.username}
+              </span>
               <span className="text-text-muted text-xs">@{member.user?.username}</span>
               {member.user?.isBot && (
                 <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-medium ml-auto">

@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bot, Check, Copy, UserPlus, X } from 'lucide-react'
-import { useCallback, useRef, useState } from 'react'
+import { Check, Copy, UserPlus, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
-import { useChatStore } from '../../stores/chat.store'
 import { useAuthStore } from '../../stores/auth.store'
+import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
 import { UserAvatar } from '../common/avatar'
 import { UserProfileCard } from '../common/user-profile-card'
@@ -27,6 +28,23 @@ interface Member {
   nickname: string | null
   joinedAt: string
   user?: MemberUser
+}
+
+interface BuddyAgent {
+  id: string
+  ownerId: string
+  config?: Record<string, unknown>
+  owner?: {
+    id: string
+    username: string
+    displayName: string | null
+  } | null
+  botUser?: {
+    id: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+  } | null
 }
 
 const statusColors: Record<string, string> = {
@@ -51,6 +69,12 @@ export function MemberList() {
 
   // Hover card state
   const [hoveredMemberId, setHoveredMemberId] = useState<string | null>(null)
+  const [hoveredCard, setHoveredCard] = useState<{
+    member: Member
+    ownerName?: string
+    description?: string
+    anchorRect: DOMRect
+  } | null>(null)
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Context menu state
@@ -68,8 +92,13 @@ export function MemberList() {
 
   const { data: server } = useQuery({
     queryKey: ['server', activeServerId],
-    queryFn: () =>
-      fetchApi<{ id: string; inviteCode: string }>(`/api/servers/${activeServerId}`),
+    queryFn: () => fetchApi<{ id: string; inviteCode: string }>(`/api/servers/${activeServerId}`),
+    enabled: !!activeServerId,
+  })
+
+  const { data: buddyAgents = [] } = useQuery({
+    queryKey: ['members-buddy-agents', activeServerId],
+    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents'),
     enabled: !!activeServerId,
   })
 
@@ -103,14 +132,38 @@ export function MemberList() {
   })
 
   // Hover card handlers
-  const handleMemberMouseEnter = useCallback((memberId: string) => {
-    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
-    hoverTimeoutRef.current = setTimeout(() => setHoveredMemberId(memberId), 400)
-  }, [])
+  const handleMemberMouseEnter = useCallback(
+    (
+      member: Member,
+      anchorEl: HTMLElement,
+      buddyMeta?: { ownerName?: string; description?: string },
+    ) => {
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+      hoverTimeoutRef.current = setTimeout(() => {
+        setHoveredMemberId(member.id)
+        setHoveredCard({
+          member,
+          ownerName: buddyMeta?.ownerName,
+          description: buddyMeta?.description,
+          anchorRect: anchorEl.getBoundingClientRect(),
+        })
+      }, 400)
+    },
+    [],
+  )
 
   const handleMemberMouseLeave = useCallback(() => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
-    hoverTimeoutRef.current = setTimeout(() => setHoveredMemberId(null), 200)
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredMemberId(null)
+      setHoveredCard(null)
+    }, 200)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+    }
   }, [])
 
   // Context menu handler
@@ -136,73 +189,121 @@ export function MemberList() {
         <h4 className="text-[12px] font-bold uppercase text-text-muted px-4 mb-2 tracking-wide">
           {label} — {items.length}
         </h4>
-        {items.map((member) => {
-          const user = member.user
-          if (!user) return null
-          const badge =
-            member.role === 'owner'
-              ? { label: t('member.owner'), color: 'text-yellow-400' }
-              : member.role === 'admin'
-                ? { label: t('member.admin'), color: 'text-blue-400' }
-                : null
-          const isHovered = hoveredMemberId === member.id
-          return (
-            <div key={member.id} className="relative mx-2">
-              <button
-                type="button"
-                className="flex items-center gap-3 px-2 py-1.5 w-full rounded-md hover:bg-white/[0.06] transition group"
-                onMouseEnter={() => handleMemberMouseEnter(member.id)}
-                onMouseLeave={handleMemberMouseLeave}
-                onContextMenu={(e) => handleContextMenu(e, member)}
-              >
-                {/* Avatar with status dot */}
-                <div className="relative shrink-0">
-                  <UserAvatar
-                    userId={user.id}
-                    avatarUrl={user.avatarUrl}
-                    displayName={user.displayName || user.username}
-                    size="sm"
-                  />
-                  <div
-                    className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-[2.5px] border-bg-secondary ${statusColors[user.status]}`}
-                    title={t(`member.${user.status}`)}
-                  />
-                </div>
+        {(() => {
+          const botOwnerByUserId = new Map<string, string>()
+          const buddyMetaByUserId = new Map<string, { ownerName?: string; description?: string }>()
+          for (const a of buddyAgents) {
+            const botUserId = a.botUser?.id
+            if (botUserId) botOwnerByUserId.set(botUserId, a.ownerId)
+            if (botUserId) {
+              const ownerName = a.owner?.displayName ?? a.owner?.username ?? undefined
+              const description =
+                typeof a.config?.description === 'string' ? a.config.description : undefined
+              buddyMetaByUserId.set(botUserId, { ownerName, description })
+            }
+          }
 
-                {/* Name */}
-                <div className="flex-1 min-w-0 text-left">
-                  <div className="flex items-center gap-1">
-                    <span
-                      className={`text-[15px] truncate font-medium ${user.status === 'offline' ? 'text-text-muted' : 'text-[#dbdee1] group-hover:text-white'} transition`}
-                    >
-                      {member.nickname ?? user.displayName}
-                    </span>
-                    {user.isBot && (
-                      <span className="text-[10px] bg-[#5865F2] text-white px-1.5 py-0.5 rounded-[3px] font-semibold flex items-center gap-1 shrink-0">
-                        <Check size={8} className="text-white" />
-                        BOT
+          const membersByUserId = new Map(items.map((m) => [m.userId, m]))
+          const ownerChildren = new Map<string, Member[]>()
+          const orphanBots: Member[] = []
+
+          for (const m of items) {
+            if (!m.user?.isBot) continue
+            const ownerId = botOwnerByUserId.get(m.userId)
+            if (ownerId && membersByUserId.has(ownerId)) {
+              ownerChildren.set(ownerId, [...(ownerChildren.get(ownerId) ?? []), m])
+            } else {
+              orphanBots.push(m)
+            }
+          }
+
+          const topLevelMembers = items.filter((m) => !m.user?.isBot)
+
+          const renderMemberRow = (member: Member, opts?: { child?: boolean }) => {
+            const user = member.user
+            if (!user) return null
+            const buddyMeta = user.isBot ? buddyMetaByUserId.get(user.id) : undefined
+            const badge =
+              member.role === 'owner'
+                ? { label: t('member.owner'), color: 'text-yellow-400' }
+                : member.role === 'admin'
+                  ? { label: t('member.admin'), color: 'text-blue-400' }
+                  : null
+            const isHovered = hoveredMemberId === member.id
+            return (
+              <div key={member.id} className={`relative ${opts?.child ? 'pl-3' : 'mx-2'}`}>
+                {opts?.child && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-3 h-px bg-white/20" />
+                )}
+                <button
+                  type="button"
+                  className="flex items-center gap-3 px-2 py-1.5 w-full rounded-md hover:bg-white/[0.06] transition group"
+                  onMouseEnter={(e) =>
+                    handleMemberMouseEnter(member, e.currentTarget, {
+                      ownerName: buddyMeta?.ownerName,
+                      description: buddyMeta?.description,
+                    })
+                  }
+                  onMouseLeave={handleMemberMouseLeave}
+                  onContextMenu={(e) => handleContextMenu(e, member)}
+                >
+                  {/* Avatar with status dot */}
+                  <div className="relative shrink-0">
+                    <UserAvatar
+                      userId={user.id}
+                      avatarUrl={user.avatarUrl}
+                      displayName={user.displayName || user.username}
+                      size="sm"
+                    />
+                    <div
+                      className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-[2.5px] border-bg-secondary ${statusColors[user.status]}`}
+                      title={t(`member.${user.status}`)}
+                    />
+                  </div>
+
+                  {/* Name */}
+                  <div className="flex-1 min-w-0 text-left">
+                    <div className="flex items-center gap-1">
+                      <span
+                        className={`text-[15px] truncate font-medium ${user.status === 'offline' ? 'text-text-muted' : 'text-[#dbdee1] group-hover:text-white'} transition`}
+                      >
+                        {member.nickname ?? user.displayName}
                       </span>
+                      {user.isBot && (
+                        <span className="text-[10px] bg-[#5865F2] text-white px-1.5 py-0.5 rounded-[3px] font-semibold flex items-center gap-1 shrink-0">
+                          <Check size={8} className="text-white" />
+                          Buddy
+                        </span>
+                      )}
+                    </div>
+                    {badge && <span className={`text-[10px] ${badge.color}`}>{badge.label}</span>}
+                  </div>
+                </button>
+
+                {isHovered && null}
+              </div>
+            )
+          }
+
+          return (
+            <>
+              {topLevelMembers.map((member) => {
+                const children = ownerChildren.get(member.userId) ?? []
+                return (
+                  <div key={member.id}>
+                    {renderMemberRow(member)}
+                    {children.length > 0 && (
+                      <div className="relative ml-5 border-l border-white/15">
+                        {children.map((child) => renderMemberRow(child, { child: true }))}
+                      </div>
                     )}
                   </div>
-                  {badge && <span className={`text-[10px] ${badge.color}`}>{badge.label}</span>}
-                </div>
-              </button>
-
-              {/* Hover card */}
-              {isHovered && (
-                <div
-                  className="absolute right-full top-0 mr-2 z-50"
-                  onMouseEnter={() => {
-                    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
-                  }}
-                  onMouseLeave={handleMemberMouseLeave}
-                >
-                  <UserProfileCard user={user} role={member.role} />
-                </div>
-              )}
-            </div>
+                )
+              })}
+              {orphanBots.map((member) => renderMemberRow(member, { child: true }))}
+            </>
           )
-        })}
+        })()}
       </div>
     )
   }
@@ -226,7 +327,7 @@ export function MemberList() {
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-text-muted hover:text-text-primary hover:bg-bg-primary/30 transition flex-1"
           title={t('channel.addAgent')}
         >
-          <Bot size={13} />
+          <img src="/Logo.svg" alt="Buddy" className="w-[13px] h-[13px]" />
           <span className="truncate">{t('channel.addAgent')}</span>
         </button>
       </div>
@@ -300,11 +401,7 @@ export function MemberList() {
                 className="px-3 py-3 bg-bg-tertiary rounded-lg text-text-muted hover:text-text-primary transition"
                 title={t('common.copy')}
               >
-                {inviteCopied ? (
-                  <Check size={16} className="text-green-400" />
-                ) : (
-                  <Copy size={16} />
-                )}
+                {inviteCopied ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
               </button>
             </div>
           </div>
@@ -327,7 +424,14 @@ export function MemberList() {
       {/* Context menu */}
       {contextMenu && (
         <>
-          <div className="fixed inset-0 z-[60]" onClick={closeContextMenu} onContextMenu={(e) => { e.preventDefault(); closeContextMenu() }} />
+          <div
+            className="fixed inset-0 z-[60]"
+            onClick={closeContextMenu}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              closeContextMenu()
+            }}
+          />
           <div
             className="fixed z-[61] bg-bg-tertiary border border-white/10 rounded-lg shadow-xl py-1 min-w-[160px]"
             style={{ left: contextMenu.x, top: contextMenu.y }}
@@ -354,8 +458,11 @@ export function MemberList() {
                     type="button"
                     onClick={() => {
                       if (!activeServerId) return
-                      const name = contextMenu.member.user?.displayName ?? contextMenu.member.user?.username
-                      const confirmKey = contextMenu.member.user?.isBot ? 'member.removeBotConfirm' : 'member.kickConfirm'
+                      const name =
+                        contextMenu.member.user?.displayName ?? contextMenu.member.user?.username
+                      const confirmKey = contextMenu.member.user?.isBot
+                        ? 'member.removeBotConfirm'
+                        : 'member.kickConfirm'
                       if (confirm(t(confirmKey, { name }))) {
                         kickMember.mutate({
                           serverId: activeServerId,
@@ -382,10 +489,57 @@ export function MemberList() {
           onClick={() => setProfileMember(null)}
         >
           <div onClick={(e) => e.stopPropagation()}>
-            <UserProfileCard user={profileMember.user} role={profileMember.role} />
+            <UserProfileCard
+              user={profileMember.user}
+              role={profileMember.role}
+              ownerName={
+                profileMember.user.isBot
+                  ? (buddyAgents.find((a) => a.botUser?.id === profileMember.user?.id)?.owner
+                      ?.displayName ??
+                    buddyAgents.find((a) => a.botUser?.id === profileMember.user?.id)?.owner
+                      ?.username ??
+                    undefined)
+                  : undefined
+              }
+              description={
+                profileMember.user.isBot
+                  ? (() => {
+                      const cfg = buddyAgents.find(
+                        (a) => a.botUser?.id === profileMember.user?.id,
+                      )?.config
+                      return typeof cfg?.description === 'string' ? cfg.description : undefined
+                    })()
+                  : undefined
+              }
+            />
           </div>
         </div>
       )}
+
+      {/* Hover profile card (portal to avoid clipping in scroll containers) */}
+      {hoveredCard &&
+        hoveredCard.member.user &&
+        createPortal(
+          <div
+            className="fixed z-[80]"
+            style={{
+              left: Math.max(8, hoveredCard.anchorRect.left - 272 - 12),
+              top: Math.max(8, Math.min(hoveredCard.anchorRect.top, window.innerHeight - 260)),
+            }}
+            onMouseEnter={() => {
+              if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+            }}
+            onMouseLeave={handleMemberMouseLeave}
+          >
+            <UserProfileCard
+              user={hoveredCard.member.user}
+              role={hoveredCard.member.role}
+              ownerName={hoveredCard.ownerName}
+              description={hoveredCard.description}
+            />
+          </div>,
+          document.body,
+        )}
     </>
   )
 }
@@ -396,6 +550,12 @@ interface AgentDialogOption {
   id: string
   userId: string
   status: string
+  config?: Record<string, unknown>
+  owner?: {
+    id: string
+    username: string
+    displayName: string | null
+  } | null
   botUser?: {
     id: string
     username: string
@@ -413,38 +573,42 @@ function MemberAddAgentDialog({
   serverId: string
   onClose: () => void
   onSuccess: () => void
-  t: (key: string) => string
+  t: (key: string, opts?: Record<string, unknown>) => string
 }) {
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [adding, setAdding] = useState(false)
+  const [search, setSearch] = useState('')
+  const [addingId, setAddingId] = useState<string | null>(null)
+  const queryClient = useQueryClient()
 
   const { data: agents = [] } = useQuery({
     queryKey: ['agents'],
     queryFn: () => fetchApi<AgentDialogOption[]>('/api/agents'),
   })
 
-  const toggleAgent = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
+  // Already-added buddy user IDs
+  const members = queryClient.getQueryData<Member[]>(['members', serverId]) ?? []
+  const addedBotUserIds = new Set(members.filter((m) => m.user?.isBot).map((m) => m.userId))
 
-  const handleAdd = async () => {
-    if (selectedIds.size === 0) return
-    setAdding(true)
+  const filtered = agents.filter((a) => {
+    if (!search.trim()) return true
+    const name = (a.botUser?.displayName ?? a.botUser?.username ?? '').toLowerCase()
+    const desc = typeof a.config?.description === 'string' ? a.config.description.toLowerCase() : ''
+    const q = search.trim().toLowerCase()
+    return name.includes(q) || desc.includes(q)
+  })
+
+  const handleAdd = async (agentId: string) => {
+    setAddingId(agentId)
     try {
       await fetchApi(`/api/servers/${serverId}/agents`, {
         method: 'POST',
-        body: JSON.stringify({ agentIds: Array.from(selectedIds) }),
+        body: JSON.stringify({ agentIds: [agentId] }),
       })
+      queryClient.invalidateQueries({ queryKey: ['members', serverId] })
       onSuccess()
     } catch {
-      /* error handled silently */
+      /* silently handle */
     } finally {
-      setAdding(false)
+      setAddingId(null)
     }
   }
 
@@ -454,68 +618,118 @@ function MemberAddAgentDialog({
       onClick={onClose}
     >
       <div
-        className="bg-bg-secondary rounded-xl p-6 w-96 max-h-[60vh] flex flex-col border border-white/5"
+        className="bg-bg-secondary rounded-xl w-[440px] max-h-[70vh] flex flex-col border border-white/5 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-bold text-text-primary mb-4">{t('channel.addAgent')}</h2>
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-3">
+          <h2 className="text-lg font-bold text-text-primary">{t('channel.addAgent')}</h2>
+          <button
+            onClick={onClose}
+            className="text-text-muted hover:text-text-primary transition p-1"
+          >
+            <X size={18} />
+          </button>
+        </div>
 
-        {agents.length === 0 ? (
-          <p className="text-text-muted text-sm py-4">{t('channel.noAgentsAvailable')}</p>
+        {/* Search */}
+        <div className="px-5 pb-3">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('channel.searchBuddy')}
+            className="w-full bg-bg-tertiary text-text-primary rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary placeholder:text-text-muted"
+          />
+        </div>
+
+        {/* Buddy list */}
+        {filtered.length === 0 ? (
+          <div className="px-5 py-8 text-center text-text-muted text-sm">
+            {agents.length === 0 ? t('channel.noAgentsAvailable') : t('channel.noSearchResults')}
+          </div>
         ) : (
-          <div className="flex-1 overflow-y-auto space-y-1 mb-4">
-            {agents.map((agent) => {
-              const name = agent.botUser?.displayName ?? agent.botUser?.username ?? 'Agent'
-              const isSelected = selectedIds.has(agent.id)
+          <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-1.5">
+            {filtered.map((agent) => {
+              const name = agent.botUser?.displayName ?? agent.botUser?.username ?? 'Buddy'
+              const description =
+                typeof agent.config?.description === 'string' ? agent.config.description : null
+              const ownerName = agent.owner?.displayName ?? agent.owner?.username ?? null
+              const isAdded = addedBotUserIds.has(agent.userId)
+              const isAdding = addingId === agent.id
+
               return (
-                <button
+                <div
                   key={agent.id}
-                  type="button"
-                  onClick={() => toggleAgent(agent.id)}
-                  className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm transition ${
-                    isSelected
-                      ? 'bg-primary/20 text-text-primary'
-                      : 'text-text-secondary hover:bg-bg-primary/30'
+                  className={`flex items-start gap-3 px-3 py-3 rounded-lg border transition ${
+                    isAdded
+                      ? 'border-white/5 bg-white/[0.02] opacity-60'
+                      : 'border-white/5 bg-bg-tertiary/50 hover:bg-bg-tertiary hover:border-white/10'
                   }`}
                 >
-                  <div
-                    className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
-                      isSelected ? 'border-primary bg-primary' : 'border-white/20'
-                    }`}
-                  >
-                    {isSelected && <Check size={10} className="text-white" />}
+                  {/* Avatar */}
+                  <div className="shrink-0 mt-0.5">
+                    <UserAvatar
+                      userId={agent.botUser?.id}
+                      avatarUrl={agent.botUser?.avatarUrl}
+                      displayName={name}
+                      size="md"
+                    />
                   </div>
-                  <span className="truncate">{name}</span>
-                  <span
-                    className={`ml-auto w-2 h-2 rounded-full ${
-                      agent.status === 'running'
-                        ? 'bg-green-400'
-                        : agent.status === 'error'
-                          ? 'bg-red-400'
-                          : 'bg-zinc-500'
-                    }`}
-                  />
-                </button>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-semibold text-text-primary truncate">
+                        {name}
+                      </span>
+                      <span className="text-[10px] bg-[#5865F2] text-white px-1.5 py-0.5 rounded-[3px] font-semibold flex items-center gap-0.5 shrink-0">
+                        <Check size={8} className="text-white" />
+                        Buddy
+                      </span>
+                      <span
+                        className={`ml-1 w-2 h-2 rounded-full shrink-0 ${
+                          agent.status === 'running'
+                            ? 'bg-green-400'
+                            : agent.status === 'error'
+                              ? 'bg-red-400'
+                              : 'bg-zinc-500'
+                        }`}
+                        title={agent.status}
+                      />
+                    </div>
+                    {description && (
+                      <p className="text-xs text-text-muted mt-0.5 line-clamp-2">{description}</p>
+                    )}
+                    {ownerName && (
+                      <p className="text-[11px] text-text-muted/70 mt-0.5">
+                        {t('channel.buddyOwner')} {ownerName}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Action button */}
+                  <div className="shrink-0 mt-0.5">
+                    {isAdded ? (
+                      <span className="text-xs text-text-muted px-2.5 py-1.5 rounded-md bg-white/5">
+                        {t('channel.alreadyAdded')}
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleAdd(agent.id)}
+                        disabled={isAdding}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-md bg-primary hover:bg-primary-hover text-white transition disabled:opacity-50"
+                      >
+                        {isAdding ? t('common.loading') : t('channel.addAgentConfirm')}
+                      </button>
+                    )}
+                  </div>
+                </div>
               )
             })}
           </div>
         )}
-
-        <div className="flex justify-end gap-3 pt-2 border-t border-white/5">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-text-secondary hover:text-text-primary transition rounded-lg"
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            onClick={handleAdd}
-            disabled={selectedIds.size === 0 || adding}
-            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg font-bold transition disabled:opacity-50"
-          >
-            <Bot size={14} />
-            {adding ? t('common.loading') : t('channel.addAgentConfirm')}
-          </button>
-        </div>
       </div>
     </div>
   )

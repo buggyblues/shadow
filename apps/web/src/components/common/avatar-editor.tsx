@@ -2,7 +2,7 @@ import { Dices, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
-import { generateRandomCatConfig, renderCatSvg, type CatConfig } from '../../lib/avatar-generator'
+import { type CatConfig, generateRandomCatConfig, renderCatSvg } from '../../lib/avatar-generator'
 
 interface AvatarEditorProps {
   value?: string
@@ -66,7 +66,9 @@ export function AvatarEditor({ value, onChange }: AvatarEditorProps) {
               type="button"
               onClick={() => setTab('preset')}
               className={`px-4 py-1.5 rounded-[5px] text-[13px] font-bold transition flex items-center gap-1 ${
-                tab === 'preset' ? 'bg-[#313338] text-[#f2f3f5] shadow-sm' : 'text-[#949ba4] hover:text-[#dbdee1] hover:bg-[#2b2d31]'
+                tab === 'preset'
+                  ? 'bg-[#313338] text-[#f2f3f5] shadow-sm'
+                  : 'text-[#949ba4] hover:text-[#dbdee1] hover:bg-[#2b2d31]'
               }`}
             >
               <Dices size={16} />
@@ -76,7 +78,9 @@ export function AvatarEditor({ value, onChange }: AvatarEditorProps) {
               type="button"
               onClick={() => setTab('upload')}
               className={`px-4 py-1.5 rounded-[5px] text-[13px] font-bold transition flex items-center gap-1 ${
-                tab === 'upload' ? 'bg-[#313338] text-[#f2f3f5] shadow-sm' : 'text-[#949ba4] hover:text-[#dbdee1] hover:bg-[#2b2d31]'
+                tab === 'upload'
+                  ? 'bg-[#313338] text-[#f2f3f5] shadow-sm'
+                  : 'text-[#949ba4] hover:text-[#dbdee1] hover:bg-[#2b2d31]'
               }`}
             >
               <Upload size={16} />
@@ -89,22 +93,26 @@ export function AvatarEditor({ value, onChange }: AvatarEditorProps) {
 
       {tab === 'preset' && (
         <div className="bg-[#2b2d31] border border-[#1e1f22] rounded-[8px] p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-[48px] h-[48px] rounded-[10px] bg-[#1e1f22] border-[2px] border-transparent overflow-hidden">
-                <img src={renderCatSvg(catConfig)} alt="Preview" className="w-full h-full object-contain" />
-              </div>
-              <div>
-                <h4 className="text-[14px] font-bold text-[#f2f3f5]">{t('agentMgmt.diceCat')}</h4>
-                <p className="text-[12px] text-[#949ba4]">{t('agentMgmt.diceCatDesc')}</p>
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="w-[48px] h-[48px] rounded-[10px] bg-[#1e1f22] border-[2px] border-transparent overflow-hidden">
+              <img
+                src={renderCatSvg(catConfig)}
+                alt="Preview"
+                className="w-full h-full object-contain"
+              />
             </div>
-            <button
-              type="button"
-              onClick={handleRollDice}
-              className="flex items-center gap-2 px-4 py-1.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-[14px] font-bold rounded-[3px] transition"
-            >
-              {t('agentMgmt.generateBtn')}
-            </button>
+            <div>
+              <h4 className="text-[14px] font-bold text-[#f2f3f5]">{t('agentMgmt.diceCat')}</h4>
+              <p className="text-[12px] text-[#949ba4]">{t('agentMgmt.diceCatDesc')}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleRollDice}
+            className="flex items-center gap-2 px-4 py-1.5 bg-[#5865F2] hover:bg-[#4752C4] text-white text-[14px] font-bold rounded-[3px] transition"
+          >
+            {t('agentMgmt.generateBtn')}
+          </button>
         </div>
       )}
 

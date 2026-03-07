@@ -11,6 +11,8 @@ interface UserProfileCardProps {
     isBot?: boolean
   }
   role?: 'owner' | 'admin' | 'member' | null
+  ownerName?: string
+  description?: string
   className?: string
 }
 
@@ -28,7 +30,13 @@ const statusLabels: Record<string, string> = {
   offline: 'member.offline',
 }
 
-export function UserProfileCard({ user, role, className = '' }: UserProfileCardProps) {
+export function UserProfileCard({
+  user,
+  role,
+  ownerName,
+  description,
+  className = '',
+}: UserProfileCardProps) {
   const { t } = useTranslation()
   const status = user.status ?? 'offline'
 
@@ -59,9 +67,7 @@ export function UserProfileCard({ user, role, className = '' }: UserProfileCardP
       {/* User info */}
       <div className="px-4 pt-2 pb-4">
         <div className="flex items-center gap-1.5">
-          <h3 className="text-base font-bold text-text-primary truncate">
-            {user.displayName}
-          </h3>
+          <h3 className="text-base font-bold text-text-primary truncate">{user.displayName}</h3>
           {user.isBot && (
             <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-medium shrink-0">
               {t('common.bot')}
@@ -92,6 +98,24 @@ export function UserProfileCard({ user, role, className = '' }: UserProfileCardP
             {t(statusLabels[status] ?? 'member.offline')}
           </span>
         </div>
+
+        {user.isBot && ownerName && (
+          <div className="mt-3 pt-3 border-t border-white/5">
+            <p className="text-[10px] uppercase tracking-wide text-text-muted">OWNER / 主人</p>
+            <p className="text-sm text-text-primary mt-1 truncate">{ownerName}</p>
+          </div>
+        )}
+
+        {user.isBot && description && (
+          <div className="mt-3 pt-3 border-t border-white/5">
+            <p className="text-[10px] uppercase tracking-wide text-text-muted">
+              Description / 描述
+            </p>
+            <p className="text-sm text-text-secondary mt-1 whitespace-pre-wrap break-words line-clamp-4">
+              {description}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )

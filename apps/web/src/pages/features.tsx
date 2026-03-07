@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
-import { Bot, Globe, Layers, MessageSquare, Shield, Zap } from 'lucide-react'
+import { Globe, Layers, MessageSquare, Shield, Zap } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useAppStatus } from '../hooks/use-app-status'
 import { PublicFooter, PublicNav } from './home'
 
 const featureItems = [
@@ -12,7 +13,7 @@ const featureItems = [
     bg: 'bg-cyan-50',
   },
   {
-    icon: Bot,
+    icon: null,
     titleKey: 'features.multiAgent',
     descKey: 'features.multiAgentDesc',
     color: 'text-yellow-500',
@@ -50,6 +51,8 @@ const featureItems = [
 
 export function FeaturesPage() {
   const { t } = useTranslation()
+  useAppStatus({ title: t('nav.features'), variant: 'default' })
+
   return (
     <div
       className="min-h-screen bg-[#f2f7fc] text-gray-800"
@@ -79,7 +82,11 @@ export function FeaturesPage() {
               <div
                 className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl ${f.bg} mb-5`}
               >
-                <f.icon className={`w-7 h-7 ${f.color}`} />
+                {f.icon ? (
+                  <f.icon className={`w-7 h-7 ${f.color}`} />
+                ) : (
+                  <img src="/Logo.svg" alt="Buddy" className="w-7 h-7" />
+                )}
               </div>
               <h3
                 style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}

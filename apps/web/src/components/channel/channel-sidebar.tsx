@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
-  Bot,
   Check,
   ChevronDown,
   ChevronRight,
@@ -298,7 +297,11 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
           onClick={() => toggleGroup(label)}
           className="flex items-center gap-1 px-4 py-1.5 text-[12px] font-bold tracking-wide uppercase text-[#949ba4] hover:text-[#dbdee1] w-full transition"
         >
-          {isCollapsed ? <ChevronRight size={12} className="shrink-0" /> : <ChevronDown size={12} className="shrink-0" />}
+          {isCollapsed ? (
+            <ChevronRight size={12} className="shrink-0" />
+          ) : (
+            <ChevronDown size={12} className="shrink-0" />
+          )}
           <span className="truncate">{label}</span>
         </button>
         {!isCollapsed &&
@@ -307,7 +310,10 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
             const isActive = activeChannelId === ch.id
             const isEditing = editingChannel?.id === ch.id
             return isEditing ? (
-              <div key={ch.id} className="flex items-center gap-1.5 px-2 mx-2 py-1 bg-white/[0.04] rounded">
+              <div
+                key={ch.id}
+                className="flex items-center gap-1.5 px-2 mx-2 py-1 bg-white/[0.04] rounded"
+              >
                 <Icon size={18} className="shrink-0 opacity-80" />
                 <input
                   type="text"
@@ -354,7 +360,10 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
                     : 'text-[#949ba4] hover:bg-white/[0.04] hover:text-[#dbdee1]'
                 }`}
               >
-                <Icon size={18} className={`shrink-0 ${isActive ? 'opacity-80 text-white' : 'opacity-60 group-hover:text-[#dbdee1]'}`} />
+                <Icon
+                  size={18}
+                  className={`shrink-0 ${isActive ? 'opacity-80 text-white' : 'opacity-60 group-hover:text-[#dbdee1]'}`}
+                />
                 <span className="truncate">{ch.name}</span>
               </button>
             )
@@ -683,7 +692,7 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
             }}
             className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
           >
-            <Bot size={14} />
+            <img src="/Logo.svg" alt="Buddy" className="w-4 h-4" />
             {t('channel.addAgent')}
           </button>
           <div className="h-px bg-white/5 my-1" />
@@ -759,11 +768,7 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
                 className="px-3 py-3 bg-bg-tertiary rounded-lg text-text-muted hover:text-text-primary transition"
                 title={t('common.copy')}
               >
-                {copiedInvite ? (
-                  <Check size={16} className="text-green-400" />
-                ) : (
-                  <Copy size={16} />
-                )}
+                {copiedInvite ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
               </button>
             </div>
           </div>
@@ -860,7 +865,7 @@ function AddAgentDialog({
         ) : (
           <div className="flex-1 overflow-y-auto space-y-1 mb-4">
             {agents.map((agent) => {
-              const name = agent.botUser?.displayName ?? agent.botUser?.username ?? 'Agent'
+              const name = agent.botUser?.displayName ?? agent.botUser?.username ?? 'Buddy'
               const isSelected = selectedIds.has(agent.id)
               return (
                 <button
@@ -908,7 +913,7 @@ function AddAgentDialog({
             disabled={selectedIds.size === 0 || adding}
             className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg font-bold transition disabled:opacity-50"
           >
-            <Bot size={14} />
+            <img src="/Logo.svg" alt="Buddy" className="w-4 h-4" />
             {adding ? t('common.loading') : t('channel.addAgentConfirm')}
           </button>
         </div>

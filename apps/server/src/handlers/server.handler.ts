@@ -112,7 +112,9 @@ export function createServerHandler(container: AppContainer) {
         for (const ch of channels) {
           io.to(`channel:${ch.id}`).emit('member:joined', payload)
         }
-      } catch { /* non-critical */ }
+      } catch {
+        /* non-critical */
+      }
 
       return c.json(server)
     } catch (error) {
@@ -152,7 +154,9 @@ export function createServerHandler(container: AppContainer) {
         avatarUrl: fullUser?.avatarUrl ?? null,
         isBot: fullUser?.isBot ?? false,
       }
-    } catch { /* non-critical */ }
+    } catch {
+      /* non-critical */
+    }
 
     await serverService.leave(id, user.userId)
 
@@ -165,7 +169,9 @@ export function createServerHandler(container: AppContainer) {
         for (const ch of channels) {
           io.to(`channel:${ch.id}`).emit('member:left', leavePayload)
         }
-      } catch { /* non-critical */ }
+      } catch {
+        /* non-critical */
+      }
     }
 
     return c.json({ success: true })
@@ -180,19 +186,15 @@ export function createServerHandler(container: AppContainer) {
   })
 
   // PATCH /api/servers/:id/members/:userId
-  serverHandler.patch(
-    '/:id/members/:userId',
-    zValidator('json', updateMemberSchema),
-    async (c) => {
-      const serverService = container.resolve('serverService')
-      const id = c.req.param('id')
-      const targetUserId = c.req.param('userId')
-      const input = c.req.valid('json')
-      const user = c.get('user')
-      const member = await serverService.updateMember(id, targetUserId, user.userId, input)
-      return c.json(member)
-    },
-  )
+  serverHandler.patch('/:id/members/:userId', zValidator('json', updateMemberSchema), async (c) => {
+    const serverService = container.resolve('serverService')
+    const id = c.req.param('id')
+    const targetUserId = c.req.param('userId')
+    const input = c.req.valid('json')
+    const user = c.get('user')
+    const member = await serverService.updateMember(id, targetUserId, user.userId, input)
+    return c.json(member)
+  })
 
   // DELETE /api/servers/:id/members/:userId
   serverHandler.delete('/:id/members/:userId', async (c) => {
@@ -221,7 +223,9 @@ export function createServerHandler(container: AppContainer) {
         avatarUrl: fullUser?.avatarUrl ?? null,
         isBot: fullUser?.isBot ?? false,
       }
-    } catch { /* non-critical */ }
+    } catch {
+      /* non-critical */
+    }
 
     await serverService.kickMember(id, targetUserId, user.userId)
 
@@ -234,7 +238,9 @@ export function createServerHandler(container: AppContainer) {
         for (const ch of channels) {
           io.to(`channel:${ch.id}`).emit('member:left', kickPayload)
         }
-      } catch { /* non-critical */ }
+      } catch {
+        /* non-critical */
+      }
     }
 
     return c.json({ success: true })
@@ -304,7 +310,9 @@ export function createServerHandler(container: AppContainer) {
             serverId: id,
             agentId,
           })
-        } catch { /* non-critical */ }
+        } catch {
+          /* non-critical */
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error'
         results.push({ agentId, success: false, error: msg })
