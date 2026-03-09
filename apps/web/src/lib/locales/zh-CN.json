@@ -158,7 +158,9 @@
     "inviteMembers": "邀请成员",
     "copyServerId": "复制服务器 ID",
     "leaveServer": "离开服务器",
-    "leaveConfirm": "确定要离开服务器 \"{{name}}\" 吗？"
+    "leaveConfirm": "确定要离开服务器 \"{{name}}\" 吗？",
+    "publicBadge": "公开",
+    "homeWelcome": "从侧栏选择频道开始聊天，或浏览服务器。"
   },
   "channel": {
     "serverSettings": "服务器设置",
@@ -198,7 +200,10 @@
     "searchBuddy": "搜索 Buddy...",
     "buddyOwner": "创建者:",
     "alreadyAdded": "已添加",
-    "noSearchResults": "未找到匹配的 Buddy"
+    "noSearchResults": "未找到匹配的 Buddy",
+    "homepageHtml": "主页 HTML",
+    "homepageHtmlPlaceholder": "<h1>欢迎！</h1>\n<p>这是服务器主页。</p>",
+    "homepageHtmlDesc": "服务器主页的自定义 HTML。留空使用默认主页。"
   },
   "chat": {
     "selectChannel": "选择一个频道开始聊天",

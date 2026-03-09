@@ -71,6 +71,7 @@ export class ServerDao {
       bannerUrl: string | null
       description: string | null
       slug: string | null
+      homepageHtml: string | null
       isPublic: boolean
     }>,
   ) {

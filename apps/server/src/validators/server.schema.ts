@@ -18,6 +18,7 @@ export const updateServerSchema = z.object({
   slug: z.string().max(100).nullable().optional(),
   iconUrl: z.string().nullable().optional(),
   bannerUrl: z.string().nullable().optional(),
+  homepageHtml: z.string().max(50000).nullable().optional(),
   isPublic: z.boolean().optional(),
 })
 

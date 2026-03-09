@@ -158,7 +158,9 @@
     "inviteMembers": "Invite Members",
     "copyServerId": "Copy Server ID",
     "leaveServer": "Leave Server",
-    "leaveConfirm": "Are you sure you want to leave \"{{name}}\"?"
+    "leaveConfirm": "Are you sure you want to leave \"{{name}}\"?",
+    "publicBadge": "Public",
+    "homeWelcome": "Select a channel from the sidebar to start chatting, or explore the server."
   },
   "channel": {
     "serverSettings": "Server Settings",
@@ -198,7 +200,10 @@
     "searchBuddy": "Search Buddy...",
     "buddyOwner": "Created by:",
     "alreadyAdded": "Added",
-    "noSearchResults": "No matching Buddy found"
+    "noSearchResults": "No matching Buddy found",
+    "homepageHtml": "Homepage HTML",
+    "homepageHtmlPlaceholder": "<h1>Welcome!</h1>\n<p>This is the server homepage.</p>",
+    "homepageHtmlDesc": "Custom HTML for the server homepage. Leave empty to use the default."
   },
   "chat": {
     "selectChannel": "Select a channel to start chatting",

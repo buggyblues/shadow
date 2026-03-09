@@ -50,6 +50,13 @@
       "when": 1773100000000,
       "tag": "0006_add_channel_members",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1773200000000,
+      "tag": "0007_add_server_homepage_html",
+      "breakpoints": true
     }
   ]
 }

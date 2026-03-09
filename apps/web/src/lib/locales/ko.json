@@ -158,7 +158,9 @@
     "inviteMembers": "멤버 초대",
     "copyServerId": "서버 ID 복사",
     "leaveServer": "서버 나가기",
-    "leaveConfirm": "서버 \"{{name}}\"에서 나가시겠습니까?"
+    "leaveConfirm": "서버 \"{{name}}\"에서 나가시겠습니까?",
+    "publicBadge": "공개",
+    "homeWelcome": "사이드바에서 채널을 선택하여 채팅을 시작하거나 서버를 탐색하세요."
   },
   "channel": {
     "serverSettings": "서버 설정",
@@ -198,7 +200,10 @@
     "searchBuddy": "Buddy 검색...",
     "buddyOwner": "생성자:",
     "alreadyAdded": "추가됨",
-    "noSearchResults": "일치하는 Buddy를 찾을 수 없습니다"
+    "noSearchResults": "일치하는 Buddy를 찾을 수 없습니다",
+    "homepageHtml": "홈페이지 HTML",
+    "homepageHtmlPlaceholder": "<h1>환영합니다!</h1>\n<p>이것은 서버 홈페이지입니다.</p>",
+    "homepageHtmlDesc": "서버 홈페이지의 사용자 정의 HTML. 비워두면 기본값이 사용됩니다."
   },
   "chat": {
     "selectChannel": "채널을 선택하여 채팅을 시작하세요",

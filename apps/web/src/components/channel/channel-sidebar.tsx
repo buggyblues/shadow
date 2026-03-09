@@ -7,6 +7,7 @@ import {
   Copy,
   Edit3,
   Hash,
+  Home,
   Megaphone,
   Menu,
   Plus,
@@ -41,6 +42,7 @@ interface Server {
   slug: string | null
   iconUrl: string | null
   bannerUrl: string | null
+  homepageHtml: string | null
   isPublic: boolean
   inviteCode: string
   ownerId: string
@@ -67,6 +69,7 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
   const [editDescription, setEditDescription] = useState('')
   const [editSlug, setEditSlug] = useState('')
   const [editIsPublic, setEditIsPublic] = useState(false)
+  const [editHomepageHtml, setEditHomepageHtml] = useState('')
   const [bannerUploading, setBannerUploading] = useState(false)
   const [iconUploading, setIconUploading] = useState(false)
   const [copiedInvite, setCopiedInvite] = useState(false)
@@ -120,6 +123,7 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
       description?: string | null
       slug?: string | null
       bannerUrl?: string | null
+      homepageHtml?: string | null
       isPublic?: boolean
     }) =>
       fetchApi<Server>(`/api/servers/${serverId}`, {
@@ -143,6 +147,7 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
     setEditDescription(server?.description ?? '')
     setEditSlug(server?.slug ?? '')
     setEditIsPublic(server?.isPublic ?? false)
+    setEditHomepageHtml(server?.homepageHtml ?? '')
     setShowServerEdit(true)
   }
 
@@ -252,6 +257,10 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
       setActiveChannel(channelId)
       joinChannel(channelId)
       setMobileView('chat')
+      // Update URL search param to persist channel across refresh
+      const url = new URL(window.location.href)
+      url.searchParams.set('channel', channelId)
+      window.history.replaceState({}, '', url.toString())
     },
     [activeChannelId, setActiveChannel, setMobileView],
   )
@@ -262,6 +271,10 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
       const first = channels[0]!
       setActiveChannel(first.id)
       joinChannel(first.id)
+      // Persist in URL
+      const url = new URL(window.location.href)
+      url.searchParams.set('channel', first.id)
+      window.history.replaceState({}, '', url.toString())
     }
   }, [channels, activeChannelId, setActiveChannel])
 
@@ -418,7 +431,7 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
 
       {/* Channel list */}
       <div
-        className="flex-1 overflow-y-auto pt-4"
+        className="flex-1 overflow-y-auto pt-2"
         onContextMenu={(e) => {
           // Only trigger if clicking on the blank area (not on a channel item)
           if ((e.target as HTMLElement).closest('[data-channel-item]')) return
@@ -426,6 +439,27 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
           setBlankContextMenu({ x: e.clientX, y: e.clientY })
         }}
       >
+        {/* Server Home button */}
+        <button
+          type="button"
+          onClick={() => {
+            if (activeChannelId) leaveChannel(activeChannelId)
+            setActiveChannel(null)
+            const url = new URL(window.location.href)
+            url.searchParams.delete('channel')
+            window.history.replaceState({}, '', url.toString())
+            setMobileView('chat')
+          }}
+          className={`group flex items-center gap-1.5 px-2 py-[6px] mx-2 mb-2 rounded-md text-[15px] font-medium w-[calc(100%-16px)] text-left transition ${
+            !activeChannelId
+              ? 'bg-white/[0.08] text-white'
+              : 'text-[#949ba4] hover:bg-white/[0.04] hover:text-[#dbdee1]'
+          }`}
+        >
+          <Home size={18} className={`shrink-0 ${!activeChannelId ? 'opacity-80 text-white' : 'opacity-60 group-hover:text-[#dbdee1]'}`} />
+          <span className="truncate">{t('server.home')}</span>
+        </button>
+        <div className="h-px bg-white/5 mx-4 mb-2" />
         {renderChannelGroup(t('channel.announcement'), announcementChannels)}
         {renderChannelGroup(t('channel.text'), textChannels)}
         {renderChannelGroup(t('channel.voice'), voiceChannels)}
@@ -650,6 +684,21 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
               <p className="text-xs text-text-muted mt-1">{t('channel.publicServerDesc')}</p>
             </div>
 
+            {/* Homepage HTML */}
+            <div className="mb-4">
+              <label className="block text-xs font-bold uppercase text-text-secondary mb-2">
+                {t('channel.homepageHtml')}
+              </label>
+              <textarea
+                value={editHomepageHtml}
+                onChange={(e) => setEditHomepageHtml(e.target.value)}
+                rows={6}
+                placeholder={t('channel.homepageHtmlPlaceholder')}
+                className="w-full bg-bg-tertiary text-text-primary rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-primary resize-y font-mono text-xs"
+              />
+              <p className="text-xs text-text-muted mt-1">{t('channel.homepageHtmlDesc')}</p>
+            </div>
+
             {server?.inviteCode && (
               <div className="mb-5">
                 <label className="block text-xs font-bold uppercase text-text-secondary mb-2">
@@ -689,6 +738,7 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
                     description: editDescription.trim() || null,
                     slug: editSlug.trim() || null,
                     isPublic: editIsPublic,
+                    homepageHtml: editHomepageHtml.trim() || null,
                   })
                 }
                 disabled={!editName.trim() || updateServer.isPending}

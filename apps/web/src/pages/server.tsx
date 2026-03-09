@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChannelSidebar } from '../components/channel/channel-sidebar'
 import { ChatArea } from '../components/chat/chat-area'
@@ -8,6 +8,7 @@ import { MemberList } from '../components/member/member-list'
 import { useAppStatus } from '../hooks/use-app-status'
 import { useUnreadCount } from '../hooks/use-unread-count'
 import { fetchApi } from '../lib/api'
+import { joinChannel } from '../lib/socket'
 import { useChatStore } from '../stores/chat.store'
 import { useUIStore } from '../stores/ui.store'
 
@@ -24,8 +25,14 @@ interface ChannelMeta {
 export function ServerPage() {
   const { t } = useTranslation()
   const { serverId } = useParams({ strict: false })
-  const { activeChannelId, setActiveServer } = useChatStore()
+  const { activeChannelId, setActiveServer, setActiveChannel } = useChatStore()
   const { mobileView, setMobileView } = useUIStore()
+  const restoredRef = useRef(false)
+
+  // Read channel from URL search param (for persistence across refresh)
+  const channelFromUrl = useRef(
+    new URLSearchParams(window.location.search).get('channel') ?? undefined,
+  ).current
 
   const { data: server } = useQuery({
     queryKey: ['server', serverId],
@@ -62,6 +69,16 @@ export function ServerPage() {
       setMobileView('channels')
     }
   }, [server?.id, serverId, setActiveServer, setMobileView])
+
+  // Restore channel from URL search param (on initial load / refresh)
+  useEffect(() => {
+    if (channelFromUrl && !restoredRef.current) {
+      restoredRef.current = true
+      setActiveChannel(channelFromUrl)
+      joinChannel(channelFromUrl)
+      setMobileView('chat')
+    }
+  }, [channelFromUrl, setActiveChannel, setMobileView])
 
   if (!serverId) return null
 

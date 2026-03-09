@@ -158,7 +158,9 @@
     "inviteMembers": "邀請成員",
     "copyServerId": "複製伺服器 ID",
     "leaveServer": "離開伺服器",
-    "leaveConfirm": "確定要離開伺服器 \"{{name}}\" 嗎？"
+    "leaveConfirm": "確定要離開伺服器 \"{{name}}\" 嗎？",
+    "publicBadge": "公開",
+    "homeWelcome": "從側欄選擇頻道開始聊天，或瀏覽伺服器。"
   },
   "channel": {
     "serverSettings": "伺服器設定",
@@ -198,7 +200,10 @@
     "searchBuddy": "搜尋 Buddy...",
     "buddyOwner": "建立者:",
     "alreadyAdded": "已新增",
-    "noSearchResults": "未找到符合的 Buddy"
+    "noSearchResults": "未找到符合的 Buddy",
+    "homepageHtml": "主頁 HTML",
+    "homepageHtmlPlaceholder": "<h1>歡迎！</h1>\n<p>這是伺服器主頁。</p>",
+    "homepageHtmlDesc": "伺服器主頁的自訂 HTML。留空使用預設主頁。"
   },
   "chat": {
     "selectChannel": "選擇一個頻道開始聊天",

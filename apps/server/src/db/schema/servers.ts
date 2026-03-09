@@ -8,6 +8,7 @@ export const servers = pgTable('servers', {
   slug: varchar('slug', { length: 100 }),
   iconUrl: text('icon_url'),
   bannerUrl: text('banner_url'),
+  homepageHtml: text('homepage_html'),
   ownerId: uuid('owner_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),

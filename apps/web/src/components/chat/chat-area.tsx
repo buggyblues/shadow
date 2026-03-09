@@ -16,6 +16,7 @@ import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
 import { NotificationBell } from '../notification/notification-bell'
+import { ServerHome } from '../server/server-home'
 import { FilePreviewPanel } from './file-preview-panel'
 import { MessageBubble } from './message-bubble'
 import { MessageInput } from './message-input'
@@ -536,14 +537,7 @@ export function ChatArea() {
   }, [])
 
   if (!activeChannelId) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-bg-primary">
-        <div className="text-center">
-          <img src="/Logo.svg" alt="Shadow" className="w-16 h-16 mx-auto mb-4 opacity-30" />
-          <p className="text-text-muted text-lg">{t('chat.selectChannel')}</p>
-        </div>
-      </div>
-    )
+    return <ServerHome />
   }
 
   const virtualItems = virtualizer.getVirtualItems()

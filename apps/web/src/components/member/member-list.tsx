@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Copy, MessageSquare, UserPlus, X } from 'lucide-react'
+import { Check, Copy, LogOut, MessageSquare, Trash2, User, UserPlus, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
@@ -170,9 +170,6 @@ export function MemberList() {
         method: 'PUT',
         body: JSON.stringify({ mentionOnly }),
       }),
-    onSuccess: () => {
-      setContextMenu(null)
-    },
   })
 
   // Hover card handlers
@@ -585,6 +582,10 @@ function BotContextMenu({
   t: (key: string, opts?: Record<string, unknown>) => string
 }) {
   const [policyOpen, setPolicyOpen] = useState(false)
+  const queryClient = useQueryClient()
+  const menuRef = useRef<HTMLDivElement>(null)
+  const policyRowRef = useRef<HTMLDivElement>(null)
+  const policyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isBot = contextMenu.member.user?.isBot
   const agent = isBot ? buddyAgents.find((a) => a.botUser?.id === contextMenu.member.user?.id) : null
 
@@ -598,6 +599,58 @@ function BotContextMenu({
     enabled: !!isBot && !!activeChannelId && !!agent,
   })
 
+  // Hover handlers for policy submenu
+  const handlePolicyEnter = useCallback(() => {
+    if (policyTimeoutRef.current) clearTimeout(policyTimeoutRef.current)
+    setPolicyOpen(true)
+  }, [])
+  const handlePolicyLeave = useCallback(() => {
+    policyTimeoutRef.current = setTimeout(() => setPolicyOpen(false), 150)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (policyTimeoutRef.current) clearTimeout(policyTimeoutRef.current)
+    }
+  }, [])
+
+  // Calculate submenu position to avoid window overflow
+  const getSubmenuStyle = (): React.CSSProperties => {
+    if (!policyRowRef.current) return { left: '100%', top: 0 }
+    const rect = policyRowRef.current.getBoundingClientRect()
+    const submenuWidth = 180
+    const submenuHeight = 90
+    const spaceRight = window.innerWidth - rect.right
+    const spaceBelow = window.innerHeight - rect.top
+    return {
+      ...(spaceRight >= submenuWidth ? { left: '100%' } : { right: '100%' }),
+      ...(spaceBelow < submenuHeight ? { bottom: 0 } : { top: 0 }),
+    }
+  }
+
+  // Calculate main menu position to avoid window overflow
+  const getMenuStyle = (): React.CSSProperties => {
+    const menuWidth = 200
+    const menuHeight = 200
+    let x = contextMenu.x
+    let y = contextMenu.y
+    if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 8
+    if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 8
+    if (x < 8) x = 8
+    if (y < 8) y = 8
+    return { left: x, top: y }
+  }
+
+  // Determine which actions to show
+  const isSelf = contextMenu.member.userId === currentUser?.id
+  const isOwner = contextMenu.member.role === 'owner'
+  const showPolicySubmenu = isBot && activeChannelId && agent
+  const showRemoveFromChannel = isBot && activeChannelId && !isSelf && !isOwner
+  const showKickFromServer = !isSelf && !isOwner && (
+    (isBot && !activeChannelId && canKick) || (!isBot && canKick)
+  )
+  const hasDestructiveAction = showRemoveFromChannel || showKickFromServer
+
   return (
     <>
       <div
@@ -609,8 +662,9 @@ function BotContextMenu({
         }}
       />
       <div
+        ref={menuRef}
         className="fixed z-[61] bg-bg-tertiary border border-white/10 rounded-lg shadow-xl py-1 min-w-[180px]"
-        style={{ left: contextMenu.x, top: contextMenu.y }}
+        style={getMenuStyle()}
       >
         {/* View profile — always visible */}
         <button
@@ -621,17 +675,22 @@ function BotContextMenu({
           }}
           className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
         >
+          <User size={14} />
           {t('member.viewProfile')}
         </button>
 
         {/* Policy submenu — only for bots in a channel */}
-        {isBot && activeChannelId && agent && (
+        {showPolicySubmenu && (
           <>
             <div className="h-px bg-white/5 my-1" />
-            <div className="relative">
+            <div
+              ref={policyRowRef}
+              className="relative"
+              onMouseEnter={handlePolicyEnter}
+              onMouseLeave={handlePolicyLeave}
+            >
               <button
                 type="button"
-                onClick={() => setPolicyOpen(!policyOpen)}
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
               >
                 <MessageSquare size={14} />
@@ -639,15 +698,22 @@ function BotContextMenu({
                 <span className="text-[10px] text-text-muted ml-1">▸</span>
               </button>
               {policyOpen && (
-                <div className="absolute left-full top-0 ml-1 bg-bg-tertiary border border-white/10 rounded-lg shadow-xl py-1 min-w-[160px] z-[62]">
+                <div
+                  className="absolute ml-1 bg-bg-tertiary border border-white/10 rounded-lg shadow-xl py-1 min-w-[160px] z-[62]"
+                  style={getSubmenuStyle()}
+                >
                   <button
                     type="button"
                     onClick={() => {
-                      updateBotPolicy.mutate({
-                        channelId: activeChannelId,
-                        agentId: agent.id,
-                        mentionOnly: true,
-                      })
+                      updateBotPolicy.mutate(
+                        { channelId: activeChannelId!, agentId: agent!.id, mentionOnly: true },
+                        {
+                          onSuccess: () => {
+                            queryClient.invalidateQueries({ queryKey: ['agent-policy', activeChannelId, agent!.id] })
+                            setContextMenu(null)
+                          },
+                        },
+                      )
                     }}
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
                   >
@@ -661,11 +727,15 @@ function BotContextMenu({
                   <button
                     type="button"
                     onClick={() => {
-                      updateBotPolicy.mutate({
-                        channelId: activeChannelId,
-                        agentId: agent.id,
-                        mentionOnly: false,
-                      })
+                      updateBotPolicy.mutate(
+                        { channelId: activeChannelId!, agentId: agent!.id, mentionOnly: false },
+                        {
+                          onSuccess: () => {
+                            queryClient.invalidateQueries({ queryKey: ['agent-policy', activeChannelId, agent!.id] })
+                            setContextMenu(null)
+                          },
+                        },
+                      )
                     }}
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
                   >
@@ -683,51 +753,52 @@ function BotContextMenu({
         )}
 
         {/* Remove / kick actions */}
-        {contextMenu.member.userId !== currentUser?.id &&
-          contextMenu.member.role !== 'owner' && (
-            <>
-              <div className="h-px bg-white/5 my-1" />
-              {/* For bots in a channel: show "Remove from Channel" */}
-              {isBot && activeChannelId && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const name =
-                      contextMenu.member.user?.displayName ?? contextMenu.member.user?.username
-                    if (confirm(t('member.removeFromChannelConfirm', { name }))) {
-                      removeBotFromChannel.mutate({
-                        channelId: activeChannelId,
-                        userId: contextMenu.member.userId,
-                      })
-                    }
-                  }}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition"
-                >
-                  {t('member.removeFromChannel')}
-                </button>
-              )}
-              {/* Kick from server — admin+ only, not for bots (use "remove from channel" instead) */}
-              {canKick && !isBot && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!activeServerId) return
-                    const name =
-                      contextMenu.member.user?.displayName ?? contextMenu.member.user?.username
-                    if (confirm(t('member.kickConfirm', { name }))) {
-                      kickMember.mutate({
-                        serverId: activeServerId,
-                        userId: contextMenu.member.userId,
-                      })
-                    }
-                  }}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition"
-                >
-                  {t('member.kickMember')}
-                </button>
-              )}
-            </>
-          )}
+        {hasDestructiveAction && (
+          <>
+            <div className="h-px bg-white/5 my-1" />
+            {/* For bots in a channel: show "Remove from Channel" */}
+            {showRemoveFromChannel && (
+              <button
+                type="button"
+                onClick={() => {
+                  const name =
+                    contextMenu.member.user?.displayName ?? contextMenu.member.user?.username
+                  if (confirm(t('member.removeFromChannelConfirm', { name }))) {
+                    removeBotFromChannel.mutate({
+                      channelId: activeChannelId!,
+                      userId: contextMenu.member.userId,
+                    })
+                  }
+                }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition"
+              >
+                <Trash2 size={14} />
+                {t('member.removeFromChannel')}
+              </button>
+            )}
+            {/* Kick from server — admin+ only */}
+            {showKickFromServer && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!activeServerId) return
+                  const name =
+                    contextMenu.member.user?.displayName ?? contextMenu.member.user?.username
+                  if (confirm(isBot ? t('member.removeBotConfirm', { name }) : t('member.kickConfirm', { name }))) {
+                    kickMember.mutate({
+                      serverId: activeServerId,
+                      userId: contextMenu.member.userId,
+                    })
+                  }
+                }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition"
+              >
+                <LogOut size={14} />
+                {isBot ? t('member.removeBot') : t('member.kickMember')}
+              </button>
+            )}
+          </>
+        )}
       </div>
     </>
   )

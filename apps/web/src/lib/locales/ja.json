@@ -158,7 +158,9 @@
     "inviteMembers": "メンバーを招待",
     "copyServerId": "サーバーIDをコピー",
     "leaveServer": "サーバーから退出",
-    "leaveConfirm": "サーバー \"{{name}}\" から退出しますか？"
+    "leaveConfirm": "サーバー \"{{name}}\" から退出しますか？",
+    "publicBadge": "公開",
+    "homeWelcome": "サイドバーからチャンネルを選択してチャットを開始するか、サーバーを探索してください。"
   },
   "channel": {
     "serverSettings": "サーバー設定",
@@ -198,7 +200,10 @@
     "searchBuddy": "Buddy を検索...",
     "buddyOwner": "作成者:",
     "alreadyAdded": "追加済み",
-    "noSearchResults": "一致する Buddy が見つかりません"
+    "noSearchResults": "一致する Buddy が見つかりません",
+    "homepageHtml": "ホームページ HTML",
+    "homepageHtmlPlaceholder": "<h1>ようこそ！</h1>\n<p>これはサーバーのホームページです。</p>",
+    "homepageHtmlDesc": "サーバーホームページのカスタムHTML。空にするとデフォルトが使用されます。"
   },
   "chat": {
     "selectChannel": "チャンネルを選んでチャットを始めましょう",
