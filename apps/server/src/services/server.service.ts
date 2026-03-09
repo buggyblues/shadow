@@ -13,7 +13,7 @@ function toSlug(name: string): string {
     .toLowerCase()
     .trim()
     .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af-]/g, '')
+    .replace(/[^a-z0-9-]/g, '')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
     || 'server'
@@ -42,10 +42,10 @@ export class ServerService {
   }
 
   async create(input: CreateServerInput, userId: string) {
-    // Auto-generate slug if not provided
+    // Only set slug if explicitly provided (slug is optional, URL uses UUID otherwise)
     const slug = input.slug?.trim()
-      ? await this.generateUniqueSlug(input.slug, undefined)
-      : await this.generateUniqueSlug(input.name)
+      ? await this.generateUniqueSlug(input.slug)
+      : null
 
     const server = await this.deps.serverDao.create({
       name: input.name,
@@ -114,10 +114,14 @@ export class ServerService {
       throw Object.assign(new Error('Server not found'), { status: 404 })
     }
 
-    // If slug is being changed, ensure uniqueness
+    // Handle slug changes: null/empty clears it; non-empty validates uniqueness
     const updateData: typeof input & { slug?: string | null } = { ...input }
-    if (input.slug !== undefined && input.slug !== null && input.slug !== server.slug) {
-      updateData.slug = await this.generateUniqueSlug(input.slug, id)
+    if (input.slug !== undefined) {
+      if (input.slug === null || input.slug.trim() === '') {
+        updateData.slug = null
+      } else if (input.slug !== server.slug) {
+        updateData.slug = await this.generateUniqueSlug(input.slug, id)
+      }
     }
 
     return this.deps.serverDao.update(id, updateData)

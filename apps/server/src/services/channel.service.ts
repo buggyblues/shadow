@@ -12,9 +12,32 @@ export class ChannelService {
     },
   ) {}
 
+  /** Generate a unique channel name within a server, appending -2, -3, etc. if needed. */
+  private async generateUniqueName(serverId: string, name: string, excludeChannelId?: string): Promise<string> {
+    const existing = await this.deps.channelDao.findByServerIdAndNamePrefix(serverId, name)
+    const existingNames = new Set(existing.map((ch) => ch.name.toLowerCase()))
+    // If no conflict (or only conflict is the channel being renamed), return as-is
+    if (!existingNames.has(name.toLowerCase())) return name
+    if (excludeChannelId) {
+      // When renaming, check if the only conflict IS the channel itself
+      const allChannels = await this.deps.channelDao.findByServerId(serverId)
+      const conflicting = allChannels.filter(
+        (ch) => ch.name.toLowerCase() === name.toLowerCase() && ch.id !== excludeChannelId,
+      )
+      if (conflicting.length === 0) return name
+    }
+    // Find the next available suffix
+    for (let i = 2; i < 100; i++) {
+      const candidate = `${name}-${i}`
+      if (!existingNames.has(candidate.toLowerCase())) return candidate
+    }
+    return `${name}-${Date.now()}`
+  }
+
   async create(serverId: string, input: CreateChannelInput) {
+    const uniqueName = await this.generateUniqueName(serverId, input.name)
     const channel = await this.deps.channelDao.create({
-      name: input.name,
+      name: uniqueName,
       serverId,
       type: input.type,
       topic: input.topic,
@@ -74,6 +97,10 @@ export class ChannelService {
     const channel = await this.deps.channelDao.findById(id)
     if (!channel) {
       throw Object.assign(new Error('Channel not found'), { status: 404 })
+    }
+    // Auto-rename if the new name conflicts with an existing channel in the same server
+    if (input.name) {
+      input = { ...input, name: await this.generateUniqueName(channel.serverId, input.name, id) }
     }
     return this.deps.channelDao.update(id, input)
   }

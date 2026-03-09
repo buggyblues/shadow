@@ -194,18 +194,55 @@ export function createChannelHandler(container: AppContainer) {
     const user = c.get('user')
     const channelId = c.req.param('channelId')
     const agentId = c.req.param('agentId')
-    const body = await c.req.json<{ mentionOnly?: boolean }>()
+    const body = await c.req.json<{
+      mentionOnly?: boolean
+      mode?: 'replyAll' | 'mentionOnly' | 'custom' | 'disabled'
+      config?: { replyToUsers?: string[]; keywords?: string[] }
+    }>()
 
     // Verify channel exists
     const channel = await channelService.getById(channelId)
 
-    // Verify agent exists and user owns it
+    // Verify agent exists and user owns it OR user is server admin/owner
     const agent = await agentService.getById(agentId)
     if (!agent) {
       return c.json({ error: 'Agent not found' }, 404)
     }
-    if (agent.ownerId !== user.userId) {
-      return c.json({ error: 'Not the owner of this agent' }, 403)
+    const serverService = container.resolve('serverService')
+    const serverMembers = await serverService.getMembers(channel.serverId)
+    const requester = serverMembers.find((m) => m.userId === user.userId)
+    const isAdminOrOwner = requester?.role === 'owner' || requester?.role === 'admin'
+    if (agent.ownerId !== user.userId && !isAdminOrOwner) {
+      return c.json({ error: 'Not authorized' }, 403)
+    }
+
+    // Determine policy fields based on mode
+    let listen = true
+    let reply = true
+    let mentionOnly = body.mentionOnly ?? false
+    const config: Record<string, unknown> = {}
+
+    if (body.mode) {
+      switch (body.mode) {
+        case 'replyAll':
+          mentionOnly = false
+          break
+        case 'mentionOnly':
+          mentionOnly = true
+          break
+        case 'disabled':
+          reply = false
+          break
+        case 'custom':
+          mentionOnly = false
+          if (body.config?.replyToUsers?.length) {
+            config.replyToUsers = body.config.replyToUsers
+          }
+          if (body.config?.keywords?.length) {
+            config.keywords = body.config.keywords
+          }
+          break
+      }
     }
 
     // Upsert channel-level policy
@@ -213,9 +250,10 @@ export function createChannelHandler(container: AppContainer) {
       {
         serverId: channel.serverId,
         channelId,
-        listen: true,
-        reply: true,
-        mentionOnly: body.mentionOnly ?? false,
+        listen,
+        reply,
+        mentionOnly,
+        config,
       },
     ])
 
@@ -226,7 +264,9 @@ export function createChannelHandler(container: AppContainer) {
         agentId,
         serverId: channel.serverId,
         channelId,
-        mentionOnly: body.mentionOnly ?? false,
+        mentionOnly,
+        reply,
+        config,
       })
     } catch {
       /* non-critical */
@@ -256,6 +296,7 @@ export function createChannelHandler(container: AppContainer) {
         mentionOnly: channelPolicy.mentionOnly,
         listen: channelPolicy.listen,
         reply: channelPolicy.reply,
+        config: channelPolicy.config ?? {},
       })
     }
 
@@ -264,6 +305,7 @@ export function createChannelHandler(container: AppContainer) {
       mentionOnly: serverDefault?.mentionOnly ?? false,
       listen: serverDefault?.listen ?? true,
       reply: serverDefault?.reply ?? true,
+      config: serverDefault?.config ?? {},
     })
   })
 

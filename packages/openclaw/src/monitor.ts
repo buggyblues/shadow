@@ -83,6 +83,12 @@ async function processShadowMessage(params: {
     return
   }
 
+  // If reply is false (disabled/silent mode), skip
+  if (policy && !policy.reply) {
+    runtime.log?.(`[msg] Policy blocks reply for channel ${channelId}, skipping (${message.id})`)
+    return
+  }
+
   // If mentionOnly, check for @mention using bot username
   if (policy?.mentionOnly) {
     const escapedUsername = botUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -93,6 +99,28 @@ async function processShadowMessage(params: {
       return
     }
     runtime.log?.(`[msg] mentionOnly policy — @${botUsername} mentioned, processing (${message.id})`)
+  }
+
+  // Custom policy: replyToUsers — only reply to specific users
+  const policyConfig = policy?.config as { replyToUsers?: string[]; keywords?: string[] } | undefined
+  if (policyConfig?.replyToUsers?.length) {
+    const allowedUsers = policyConfig.replyToUsers.map((u) => u.toLowerCase())
+    const senderUser = (message.author?.username ?? '').toLowerCase()
+    if (!allowedUsers.includes(senderUser)) {
+      runtime.log?.(`[msg] replyToUsers policy — sender "${senderUser}" not in allowed list, skipping (${message.id})`)
+      return
+    }
+  }
+
+  // Custom policy: keywords — only reply when message contains any keyword
+  if (policyConfig?.keywords?.length) {
+    const lowerContent = message.content.toLowerCase()
+    const matched = policyConfig.keywords.some((kw) => lowerContent.includes(kw.toLowerCase()))
+    if (!matched) {
+      runtime.log?.(`[msg] keywords policy — no matching keyword found, skipping (${message.id})`)
+      return
+    }
+    runtime.log?.(`[msg] keywords policy — keyword matched, processing (${message.id})`)
   }
 
   runtime.log?.(
@@ -593,20 +621,25 @@ export async function monitorShadowProvider(
   // Listen for agent:policy-changed — update channel policy in real-time
   socket.on(
     'agent:policy-changed',
-    (data: { agentId: string; serverId: string; channelId: string; mentionOnly: boolean }) => {
+    (data: { agentId: string; serverId: string; channelId: string; mentionOnly: boolean; reply?: boolean; config?: Record<string, unknown> }) => {
       if (data.agentId !== agentId) return
       runtime.log?.(
-        `[ws] Received agent:policy-changed for channel ${data.channelId}: mentionOnly=${data.mentionOnly}`,
+        `[ws] Received agent:policy-changed for channel ${data.channelId}: mentionOnly=${data.mentionOnly}, reply=${data.reply}, config=${JSON.stringify(data.config ?? {})}`,
       )
       const existing = channelPolicies.get(data.channelId)
       if (existing) {
-        channelPolicies.set(data.channelId, { ...existing, mentionOnly: data.mentionOnly })
+        channelPolicies.set(data.channelId, {
+          ...existing,
+          mentionOnly: data.mentionOnly,
+          reply: data.reply ?? existing.reply,
+          config: data.config ?? existing.config,
+        })
       } else {
         channelPolicies.set(data.channelId, {
           listen: true,
-          reply: true,
+          reply: data.reply ?? true,
           mentionOnly: data.mentionOnly,
-          config: {},
+          config: data.config ?? {},
         })
       }
     },

@@ -65,6 +65,7 @@ interface Channel {
 
 interface MemberEvent {
   serverId: string
+  channelId?: string
   userId: string
   username: string
   displayName: string
@@ -76,6 +77,7 @@ interface MemberEvent {
 interface SystemEvent {
   id: string
   type: 'joined' | 'left'
+  scope: 'server' | 'channel'
   displayName: string
   isBot: boolean
   timestamp: number
@@ -298,16 +300,32 @@ export function ChatArea() {
   // Listen for member join events
   useSocketEvent('member:joined', (data: MemberEvent) => {
     if (data.serverId === activeServerId) {
-      setSystemEvents((prev) => [
-        ...prev,
-        {
-          id: `join-${data.userId}-${Date.now()}`,
-          type: 'joined',
-          displayName: data.displayName,
-          isBot: data.isBot,
-          timestamp: Date.now(),
-        },
-      ])
+      const scope = data.channelId ? 'channel' : 'server'
+      setSystemEvents((prev) => {
+        // Deduplicate: if a server-level join exists for this user within 5s, replace with channel-level
+        if (scope === 'channel') {
+          const recentServerJoin = prev.find(
+            (e) => e.type === 'joined' && e.scope === 'server' && e.displayName === data.displayName
+              && Date.now() - e.timestamp < 5000,
+          )
+          if (recentServerJoin) {
+            return prev.map((e) =>
+              e.id === recentServerJoin.id ? { ...e, scope: 'channel' } : e,
+            )
+          }
+        }
+        return [
+          ...prev,
+          {
+            id: `join-${data.userId}-${Date.now()}`,
+            type: 'joined',
+            scope,
+            displayName: data.displayName,
+            isBot: data.isBot,
+            timestamp: Date.now(),
+          },
+        ]
+      })
       // Invalidate members cache
       queryClient.invalidateQueries({ queryKey: ['members', activeServerId] })
     }
@@ -316,11 +334,13 @@ export function ChatArea() {
   // Listen for member leave events
   useSocketEvent('member:left', (data: MemberEvent) => {
     if (data.serverId === activeServerId) {
+      const scope = data.channelId ? 'channel' : 'server'
       setSystemEvents((prev) => [
         ...prev,
         {
           id: `leave-${data.userId}-${Date.now()}`,
           type: 'left',
+          scope,
           displayName: data.displayName,
           isBot: data.isBot,
           timestamp: Date.now(),
@@ -665,8 +685,8 @@ export function ChatArea() {
                               {item.data.displayName}
                             </span>{' '}
                             {item.data.type === 'joined'
-                              ? t('member.joinedServer')
-                              : t('member.leftServer')}
+                              ? (item.data.scope === 'channel' ? t('member.joinedChannel') : t('member.joinedServer'))
+                              : (item.data.scope === 'channel' ? t('member.leftChannel') : t('member.leftServer'))}
                           </span>
                         </div>
                       </div>

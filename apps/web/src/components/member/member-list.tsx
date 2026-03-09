@@ -164,11 +164,12 @@ export function MemberList() {
     mutationFn: ({
       channelId,
       agentId,
-      mentionOnly,
-    }: { channelId: string; agentId: string; mentionOnly: boolean }) =>
+      mode,
+      config,
+    }: { channelId: string; agentId: string; mode: string; config?: { replyToUsers?: string[]; keywords?: string[] } }) =>
       fetchApi(`/api/channels/${channelId}/agents/${agentId}/policy`, {
         method: 'PUT',
-        body: JSON.stringify({ mentionOnly }),
+        body: JSON.stringify({ mode, config }),
       }),
   })
 
@@ -574,7 +575,7 @@ function BotContextMenu({
   activeChannelId: string | null
   activeServerId: string | null
   buddyAgents: BuddyAgent[]
-  updateBotPolicy: ReturnType<typeof useMutation<unknown, Error, { channelId: string; agentId: string; mentionOnly: boolean }>>
+  updateBotPolicy: ReturnType<typeof useMutation<unknown, Error, { channelId: string; agentId: string; mode: string; config?: { replyToUsers?: string[]; keywords?: string[] } }>>
   removeBotFromChannel: ReturnType<typeof useMutation<unknown, Error, { channelId: string; userId: string }>>
   kickMember: ReturnType<typeof useMutation<unknown, Error, { serverId: string; userId: string }>>
   canKick: boolean
@@ -582,6 +583,9 @@ function BotContextMenu({
   t: (key: string, opts?: Record<string, unknown>) => string
 }) {
   const [policyOpen, setPolicyOpen] = useState(false)
+  const [customPolicyOpen, setCustomPolicyOpen] = useState(false)
+  const [customReplyToUsers, setCustomReplyToUsers] = useState('')
+  const [customKeywords, setCustomKeywords] = useState('')
   const queryClient = useQueryClient()
   const menuRef = useRef<HTMLDivElement>(null)
   const policyRowRef = useRef<HTMLDivElement>(null)
@@ -593,11 +597,21 @@ function BotContextMenu({
   const { data: currentPolicy } = useQuery({
     queryKey: ['agent-policy', activeChannelId, agent?.id],
     queryFn: () =>
-      fetchApi<{ mentionOnly: boolean; listen: boolean; reply: boolean }>(
+      fetchApi<{ mentionOnly: boolean; listen: boolean; reply: boolean; config: Record<string, unknown> }>(
         `/api/channels/${activeChannelId}/agents/${agent!.id}/policy`,
       ),
     enabled: !!isBot && !!activeChannelId && !!agent,
   })
+
+  // Derive the current mode from policy
+  const currentMode = (() => {
+    if (!currentPolicy) return 'replyAll'
+    if (!currentPolicy.reply) return 'disabled'
+    if (currentPolicy.mentionOnly) return 'mentionOnly'
+    const cfg = currentPolicy.config as { replyToUsers?: string[]; keywords?: string[] } | undefined
+    if (cfg?.replyToUsers?.length || cfg?.keywords?.length) return 'custom'
+    return 'replyAll'
+  })()
 
   // Hover handlers for policy submenu
   const handlePolicyEnter = useCallback(() => {
@@ -702,14 +716,15 @@ function BotContextMenu({
               </button>
               {policyOpen && (
                 <div
-                  className="absolute ml-1 bg-bg-tertiary border border-white/10 rounded-lg shadow-xl py-1 min-w-[160px] z-[82]"
+                  className="absolute ml-1 bg-bg-tertiary border border-white/10 rounded-lg shadow-xl py-1 min-w-[180px] z-[82]"
                   style={getSubmenuStyle()}
                 >
+                  {/* Reply All */}
                   <button
                     type="button"
                     onClick={() => {
                       updateBotPolicy.mutate(
-                        { channelId: activeChannelId!, agentId: agent!.id, mentionOnly: true },
+                        { channelId: activeChannelId!, agentId: agent!.id, mode: 'replyAll' },
                         {
                           onSuccess: () => {
                             queryClient.invalidateQueries({ queryKey: ['agent-policy', activeChannelId, agent!.id] })
@@ -720,18 +735,63 @@ function BotContextMenu({
                     }}
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
                   >
-                    {currentPolicy?.mentionOnly ? (
+                    {currentMode === 'replyAll' ? (
+                      <Check size={14} className="text-green-400" />
+                    ) : (
+                      <span className="w-[14px]" />
+                    )}
+                    {t('member.policyReplyAll')}
+                  </button>
+                  {/* Mention Only */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateBotPolicy.mutate(
+                        { channelId: activeChannelId!, agentId: agent!.id, mode: 'mentionOnly' },
+                        {
+                          onSuccess: () => {
+                            queryClient.invalidateQueries({ queryKey: ['agent-policy', activeChannelId, agent!.id] })
+                            setContextMenu(null)
+                          },
+                        },
+                      )
+                    }}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
+                  >
+                    {currentMode === 'mentionOnly' ? (
                       <Check size={14} className="text-green-400" />
                     ) : (
                       <span className="w-[14px]" />
                     )}
                     {t('member.policyMentionOnly')}
                   </button>
+                  {/* Custom Rules */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Pre-fill with current config
+                      const cfg = currentPolicy?.config as { replyToUsers?: string[]; keywords?: string[] } | undefined
+                      setCustomReplyToUsers(cfg?.replyToUsers?.join('\n') ?? '')
+                      setCustomKeywords(cfg?.keywords?.join('\n') ?? '')
+                      setCustomPolicyOpen(true)
+                      setPolicyOpen(false)
+                    }}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
+                  >
+                    {currentMode === 'custom' ? (
+                      <Check size={14} className="text-green-400" />
+                    ) : (
+                      <span className="w-[14px]" />
+                    )}
+                    {t('member.policyCustom')}
+                  </button>
+                  <div className="h-px bg-white/5 my-1" />
+                  {/* Disabled / Silent */}
                   <button
                     type="button"
                     onClick={() => {
                       updateBotPolicy.mutate(
-                        { channelId: activeChannelId!, agentId: agent!.id, mentionOnly: false },
+                        { channelId: activeChannelId!, agentId: agent!.id, mode: 'disabled' },
                         {
                           onSuccess: () => {
                             queryClient.invalidateQueries({ queryKey: ['agent-policy', activeChannelId, agent!.id] })
@@ -742,12 +802,14 @@ function BotContextMenu({
                     }}
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
                   >
-                    {currentPolicy && !currentPolicy.mentionOnly ? (
-                      <Check size={14} className="text-green-400" />
+                    {currentMode === 'disabled' ? (
+                      <Check size={14} className="text-red-400" />
                     ) : (
                       <span className="w-[14px]" />
                     )}
-                    {t('member.policyReplyAll')}
+                    <span className={currentMode === 'disabled' ? 'text-red-400' : ''}>
+                      {t('member.policyDisabled')}
+                    </span>
                   </button>
                 </div>
               )}
@@ -803,6 +865,87 @@ function BotContextMenu({
           </>
         )}
       </div>
+
+      {/* Custom policy modal */}
+      {customPolicyOpen && activeChannelId && agent && createPortal(
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-[90]"
+          onClick={() => setCustomPolicyOpen(false)}
+        >
+          <div
+            className="bg-bg-secondary rounded-xl p-5 w-[420px] max-w-[90vw] border border-white/10 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold text-text-primary">{t('member.policyCustomTitle')}</h3>
+              <button type="button" onClick={() => setCustomPolicyOpen(false)} className="text-text-muted hover:text-text-primary">
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Reply to specific users */}
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-text-secondary mb-1.5">
+                {t('member.policyReplyToUsers')}
+              </label>
+              <p className="text-[11px] text-text-muted mb-1.5">{t('member.policyReplyToUsersDesc')}</p>
+              <textarea
+                value={customReplyToUsers}
+                onChange={(e) => setCustomReplyToUsers(e.target.value)}
+                placeholder={t('member.policyReplyToUsersPlaceholder')}
+                className="w-full bg-bg-primary border border-white/10 rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary/50 resize-none"
+                rows={3}
+              />
+            </div>
+
+            {/* Keyword triggers */}
+            <div className="mb-5">
+              <label className="block text-xs font-semibold text-text-secondary mb-1.5">
+                {t('member.policyKeywords')}
+              </label>
+              <p className="text-[11px] text-text-muted mb-1.5">{t('member.policyKeywordsDesc')}</p>
+              <textarea
+                value={customKeywords}
+                onChange={(e) => setCustomKeywords(e.target.value)}
+                placeholder={t('member.policyKeywordsPlaceholder')}
+                className="w-full bg-bg-primary border border-white/10 rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary/50 resize-none"
+                rows={3}
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                const replyToUsers = customReplyToUsers.split('\n').map((s) => s.trim()).filter(Boolean)
+                const keywords = customKeywords.split('\n').map((s) => s.trim()).filter(Boolean)
+                updateBotPolicy.mutate(
+                  {
+                    channelId: activeChannelId,
+                    agentId: agent.id,
+                    mode: 'custom',
+                    config: {
+                      ...(replyToUsers.length ? { replyToUsers } : {}),
+                      ...(keywords.length ? { keywords } : {}),
+                    },
+                  },
+                  {
+                    onSuccess: () => {
+                      queryClient.invalidateQueries({ queryKey: ['agent-policy', activeChannelId, agent.id] })
+                      setCustomPolicyOpen(false)
+                      setContextMenu(null)
+                    },
+                  },
+                )
+              }}
+              disabled={updateBotPolicy.isPending}
+              className="w-full px-4 py-2.5 bg-primary hover:bg-primary/80 text-white rounded-lg transition font-semibold text-sm disabled:opacity-50"
+            >
+              {t('member.policySave')}
+            </button>
+          </div>
+        </div>,
+        document.body,
+      )}
     </>
   )
 }

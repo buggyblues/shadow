@@ -15,7 +15,7 @@ export const createServerSchema = z.object({
 export const updateServerSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).nullable().optional(),
-  slug: z.string().min(1).max(100).optional(),
+  slug: z.string().min(1).max(100).nullable().optional(),
   iconUrl: z.string().nullable().optional(),
   bannerUrl: z.string().nullable().optional(),
   homepageHtml: z.string().max(50000).nullable().optional(),

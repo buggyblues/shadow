@@ -43,7 +43,7 @@ export class ServerDao {
     iconUrl?: string
     bannerUrl?: string
     description?: string
-    slug?: string
+    slug?: string | null
     isPublic?: boolean
   }) {
     const inviteCode = generateInviteCode()
@@ -55,7 +55,7 @@ export class ServerDao {
         iconUrl: data.iconUrl,
         bannerUrl: data.bannerUrl,
         description: data.description,
-        slug: data.slug,
+        slug: data.slug ?? undefined,
         isPublic: data.isPublic ?? false,
         inviteCode,
       })

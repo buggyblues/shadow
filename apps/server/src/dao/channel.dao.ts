@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { and, eq, like } from 'drizzle-orm'
 import type { Database } from '../db'
 import { channels } from '../db/schema'
 
@@ -20,6 +20,14 @@ export class ChannelDao {
       .from(channels)
       .where(eq(channels.serverId, serverId))
       .orderBy(channels.position)
+  }
+
+  /** Find channels in a server whose name starts with the given prefix (for dedup). */
+  async findByServerIdAndNamePrefix(serverId: string, namePrefix: string) {
+    return this.db
+      .select({ name: channels.name })
+      .from(channels)
+      .where(and(eq(channels.serverId, serverId), like(channels.name, `${namePrefix}%`)))
   }
 
   async create(data: {
