@@ -550,5 +550,22 @@
     "editTitle": "Buddy を編集",
     "editSuccess": "Buddy を更新しました！",
     "editFailed": "更新に失敗しました"
+  },
+  "serverHome": {
+    "welcome": "ようこそ",
+    "publicBadge": "パブリックサーバー",
+    "defaultDesc": "このコミュニティで探索、交流、コラボレーションしましょう。",
+    "quickStart": "クイックスタート",
+    "quickStartDesc": "サイドバーからチャンネルを選んで、会話を始めましょう。",
+    "chatTitle": "チャンネル",
+    "chatDesc": "会話に参加して、考えを共有しよう",
+    "aiTitle": "AIバディ",
+    "aiDesc": "インテリジェントなAIアシスタントと協力",
+    "announceTitle": "最新情報",
+    "announceDesc": "最新のお知らせをチェック",
+    "customizeTitle": "カスタマイズ",
+    "customizeDesc": "あなただけの空間を作ろう",
+    "exploreChannels": "チャンネルを見る",
+    "startChatting": "チャットを始める"
   }
 }

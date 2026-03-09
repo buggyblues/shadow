@@ -50,10 +50,12 @@ async function processShadowMessage(params: {
   runtime: { log?: (msg: string) => void; error?: (msg: string) => void }
   core: PluginRuntime
   botUserId: string
+  botUsername: string
   channelPolicies: Map<string, ShadowChannelPolicy>
+  channelServerMap: Map<string, { serverId: string; serverSlug: string; serverName: string }>
   socket: Socket
 }): Promise<void> {
-  const { message, account, accountId, config, runtime, core, botUserId, channelPolicies, socket } =
+  const { message, account, accountId, config, runtime, core, botUserId, botUsername, channelPolicies, channelServerMap, socket } =
     params
   const cfg = config as OpenClawConfig
 
@@ -81,14 +83,15 @@ async function processShadowMessage(params: {
     return
   }
 
-  // If mentionOnly, check for @mention
+  // If mentionOnly, check for @mention using bot username
   if (policy?.mentionOnly) {
-    const mentionPatterns = core.channel.mentions?.buildMentionRegexes?.({}) ?? []
-    const wasMentioned = mentionPatterns.some((re: RegExp) => re.test(message.content))
+    const mentionRegex = new RegExp(`@${botUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
+    const wasMentioned = mentionRegex.test(message.content)
     if (!wasMentioned) {
-      runtime.log?.(`[msg] mentionOnly policy — no mention found, skipping (${message.id})`)
+      runtime.log?.(`[msg] mentionOnly policy — no @${botUsername} mention found, skipping (${message.id})`)
       return
     }
+    runtime.log?.(`[msg] mentionOnly policy — @${botUsername} mentioned, processing (${message.id})`)
   }
 
   runtime.log?.(
@@ -238,6 +241,11 @@ async function processShadowMessage(params: {
   }
 
   // 3. Build and finalize MsgContext
+  // Resolve server context from channel → server mapping
+  const serverInfo = channelServerMap.get(channelId)
+  const mentionRegex = new RegExp(`@${botUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
+  const wasMentioned = mentionRegex.test(message.content)
+
   const ctxPayload = core.channel.reply.finalizeInboundContext({
     Body: body,
     BodyForAgent: cleanBody,
@@ -255,8 +263,15 @@ async function processShadowMessage(params: {
     Provider: 'shadowob',
     Surface: 'shadowob',
     MessageSid: message.id,
+    WasMentioned: wasMentioned,
     OriginatingChannel: 'shadowob',
     OriginatingTo: `shadowob:channel:${channelId}`,
+    // Server context — allows the AI agent to know which server it's operating in
+    ...(serverInfo ? {
+      ServerId: serverInfo.serverId,
+      ServerSlug: serverInfo.serverSlug,
+      ServerName: serverInfo.serverName,
+    } : {}),
     ...(message.threadId ? { ThreadId: message.threadId } : {}),
     ...(message.replyToId ? { ReplyToId: message.replyToId } : {}),
     ...mediaCtx,
@@ -412,6 +427,7 @@ export async function monitorShadowProvider(
   // Fetch remote config (servers, channels, policies)
   let remoteConfig: ShadowRemoteConfig | null = null
   const channelPolicies = new Map<string, ShadowChannelPolicy>()
+  const channelServerMap = new Map<string, { serverId: string; serverSlug: string; serverName: string }>()
   const allChannelIds: string[] = []
 
   if (agentId) {
@@ -419,13 +435,18 @@ export async function monitorShadowProvider(
       remoteConfig = await client.getAgentConfig(agentId)
       runtime.log?.(`[config] Fetched remote config: ${remoteConfig.servers.length} server(s)`)
 
-      // Build channel → policy map
+      // Build channel → policy map and channel → server map
       for (const server of remoteConfig.servers) {
         runtime.log?.(
           `[config] Server "${server.name}" (${server.id}) — ${server.channels.length} channel(s)`,
         )
         for (const ch of server.channels) {
           channelPolicies.set(ch.id, ch.policy)
+          channelServerMap.set(ch.id, {
+            serverId: server.id,
+            serverSlug: server.slug ?? server.id,
+            serverName: server.name,
+          })
           // Only join channels where listen is enabled
           if (ch.policy.listen) {
             allChannelIds.push(ch.id)
@@ -523,6 +544,11 @@ export async function monitorShadowProvider(
       // Rebuild channel policies and join new channels
       for (const server of updatedConfig.servers) {
         for (const ch of server.channels) {
+          channelServerMap.set(ch.id, {
+            serverId: server.id,
+            serverSlug: server.slug ?? server.id,
+            serverName: server.name,
+          })
           if (!channelPolicies.has(ch.id)) {
             channelPolicies.set(ch.id, ch.policy)
             if (ch.policy.listen) {
@@ -578,6 +604,7 @@ export async function monitorShadowProvider(
           listen: true,
           reply: true,
           mentionOnly: data.mentionOnly,
+          config: {},
         })
       }
     },
@@ -591,7 +618,7 @@ export async function monitorShadowProvider(
         `[ws] Received channel:member-added: channel ${data.channelId} in server ${data.serverId}`,
       )
       if (!channelPolicies.has(data.channelId)) {
-        const defaultPolicy: ShadowChannelPolicy = { listen: true, reply: true, mentionOnly: false }
+        const defaultPolicy: ShadowChannelPolicy = { listen: true, reply: true, mentionOnly: false, config: {} }
         channelPolicies.set(data.channelId, defaultPolicy)
         allChannelIds.push(data.channelId)
       }
@@ -649,7 +676,9 @@ export async function monitorShadowProvider(
       runtime,
       core,
       botUserId,
+      botUsername: me.username,
       channelPolicies,
+      channelServerMap,
       socket,
     }).catch((err) => {
       runtime.error?.(`[ws] Message processing failed: ${String(err)}`)

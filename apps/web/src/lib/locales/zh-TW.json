@@ -550,5 +550,22 @@
     "editTitle": "編輯 Buddy",
     "editSuccess": "Buddy 更新成功！",
     "editFailed": "更新失敗"
+  },
+  "serverHome": {
+    "welcome": "歡迎來到",
+    "publicBadge": "公開伺服器",
+    "defaultDesc": "在這個社群中探索、交流與協作。",
+    "quickStart": "快速開始",
+    "quickStartDesc": "從側邊欄選擇一個頻道，開始你的對話之旅。",
+    "chatTitle": "頻道",
+    "chatDesc": "加入討論，分享你的想法",
+    "aiTitle": "AI 夥伴",
+    "aiDesc": "與智能 AI 助手一起協作",
+    "announceTitle": "最新動態",
+    "announceDesc": "及時獲取最新公告資訊",
+    "customizeTitle": "個性化",
+    "customizeDesc": "打造屬於你的專屬空間",
+    "exploreChannels": "瀏覽頻道",
+    "startChatting": "開始聊天"
   }
 }

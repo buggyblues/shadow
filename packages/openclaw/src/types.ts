@@ -380,6 +380,7 @@ export interface ShadowRemoteChannel {
 export interface ShadowRemoteServer {
   id: string
   name: string
+  slug?: string
   iconUrl?: string | null
   defaultPolicy: ShadowChannelPolicy
   channels: ShadowRemoteChannel[]

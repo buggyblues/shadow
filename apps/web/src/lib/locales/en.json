@@ -550,5 +550,22 @@
     "editTitle": "Edit Agent",
     "editSuccess": "Agent updated successfully!",
     "editFailed": "Failed to update agent"
+  },
+  "serverHome": {
+    "welcome": "Welcome to",
+    "publicBadge": "Public Server",
+    "defaultDesc": "Explore, chat, and collaborate in this community.",
+    "quickStart": "Quick Start",
+    "quickStartDesc": "Pick a channel from the sidebar and start your conversation.",
+    "chatTitle": "Channels",
+    "chatDesc": "Join conversations and share your thoughts",
+    "aiTitle": "AI Buddies",
+    "aiDesc": "Collaborate with intelligent AI assistants",
+    "announceTitle": "Latest Updates",
+    "announceDesc": "Stay in the loop with announcements",
+    "customizeTitle": "Customize",
+    "customizeDesc": "Make this space uniquely yours",
+    "exploreChannels": "Explore Channels",
+    "startChatting": "Start Chatting"
   }
 }

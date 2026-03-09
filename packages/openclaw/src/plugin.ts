@@ -475,6 +475,16 @@ export const shadowPlugin: ChannelPlugin<ShadowAccountConfig> = {
     },
   },
 
+  /** Agent prompt hints — injected into the AI's system prompt for the message tool */
+  agentPrompt: {
+    messageToolHints: () => [
+      '- Shadow server management: use `action: "get-server"` with `serverId` (slug or UUID) to fetch server info including homepage HTML.',
+      '- Shadow homepage decoration: use `action: "update-homepage"` with `serverId` (slug or UUID) and `html` (full HTML string) to update the server\'s homepage. Set `html` to null to reset to default.',
+      '- The server slug or ID is provided in the message context as ServerSlug/ServerId when the message originates from a Shadow channel.',
+      '- When a user asks to customize/decorate the server homepage, first use `get-server` to see current state, then generate beautiful HTML and use `update-homepage` to apply it.',
+    ],
+  },
+
   /** Mention handling — strips @username patterns from incoming messages */
   mentions: {
     stripPatterns: () => ['@[\\w-]+'],

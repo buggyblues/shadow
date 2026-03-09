@@ -84,6 +84,7 @@ export class AgentPolicyService {
         return {
           id: server.id,
           name: server.name,
+          slug: server.slug,
           iconUrl: server.iconUrl,
           defaultPolicy,
           channels: channels.map((ch) => {

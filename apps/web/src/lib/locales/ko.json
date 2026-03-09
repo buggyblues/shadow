@@ -550,5 +550,22 @@
     "editTitle": "Buddy 편집",
     "editSuccess": "Buddy가 업데이트되었습니다!",
     "editFailed": "업데이트 실패"
+  },
+  "serverHome": {
+    "welcome": "환영합니다",
+    "publicBadge": "공개 서버",
+    "defaultDesc": "이 커뮤니티에서 탐색하고 소통하며 협업하세요.",
+    "quickStart": "빠른 시작",
+    "quickStartDesc": "사이드바에서 채널을 선택하고 대화를 시작하세요.",
+    "chatTitle": "채널",
+    "chatDesc": "대화에 참여하고 생각을 공유하세요",
+    "aiTitle": "AI 버디",
+    "aiDesc": "지능형 AI 어시스턴트와 함께 협업",
+    "announceTitle": "최신 소식",
+    "announceDesc": "최신 공지사항을 확인하세요",
+    "customizeTitle": "커스터마이즈",
+    "customizeDesc": "나만의 공간을 만들어보세요",
+    "exploreChannels": "채널 탐색",
+    "startChatting": "채팅 시작"
   }
 }
