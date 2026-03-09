@@ -25,10 +25,28 @@ export class AuthService {
       throw Object.assign(new Error('Email already in use'), { status: 409 })
     }
 
-    // Check existing username
-    const existingUsername = await userDao.findByUsername(input.username)
-    if (existingUsername) {
-      throw Object.assign(new Error('Username already taken'), { status: 409 })
+    // Auto-generate username if not provided
+    let username = input.username
+    if (!username) {
+      const prefix = input.email.split('@')[0].replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 24)
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const suffix = Math.floor(1000 + Math.random() * 9000).toString()
+        const candidate = `${prefix}_${suffix}`
+        const existing = await userDao.findByUsername(candidate)
+        if (!existing) {
+          username = candidate
+          break
+        }
+      }
+      if (!username) {
+        throw Object.assign(new Error('Failed to generate unique username'), { status: 500 })
+      }
+    } else {
+      // Check existing username only when explicitly provided
+      const existingUsername = await userDao.findByUsername(username)
+      if (existingUsername) {
+        throw Object.assign(new Error('Username already taken'), { status: 409 })
+      }
     }
 
     // Hash password
@@ -37,7 +55,7 @@ export class AuthService {
     // Create user
     const user = await userDao.create({
       email: input.email,
-      username: input.username,
+      username: username,
       passwordHash,
       displayName: input.displayName,
     })

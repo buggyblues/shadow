@@ -1,9 +1,10 @@
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { AvatarEditor } from '../components/common/avatar-editor'
 import { useAppStatus } from '../hooks/use-app-status'
 import { fetchApi } from '../lib/api'
-import { getAllCatAvatars, getCatAvatar } from '../lib/pixel-cats'
+import { generateRandomCatConfig, renderCatSvg } from '../lib/avatar-generator'
 import { useAuthStore } from '../stores/auth.store'
 
 export function RegisterPage() {
@@ -13,16 +14,12 @@ export function RegisterPage() {
   const searchParams = useSearch({ strict: false }) as { redirect?: string; code?: string }
   const setAuth = useAuthStore((s) => s.setAuth)
   const [email, setEmail] = useState('')
-  const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
   const [inviteCode, setInviteCode] = useState(searchParams.code ?? '')
-  const [selectedAvatar, setSelectedAvatar] = useState(getCatAvatar(0))
-  const [showAvatarPicker, setShowAvatarPicker] = useState(false)
+  const [selectedAvatar, setSelectedAvatar] = useState(() => renderCatSvg(generateRandomCatConfig()))
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-
-  const allCats = getAllCatAvatars()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -44,7 +41,6 @@ export function RegisterPage() {
         method: 'POST',
         body: JSON.stringify({
           email,
-          username,
           password,
           displayName: displayName || undefined,
           inviteCode,
@@ -98,46 +94,8 @@ export function RegisterPage() {
             </div>
           )}
 
-          {/* Avatar selection */}
-          <div className="flex justify-center mb-2">
-            <button
-              type="button"
-              onClick={() => setShowAvatarPicker(!showAvatarPicker)}
-              className="relative group"
-            >
-              <img
-                src={selectedAvatar}
-                alt="Avatar"
-                className="w-[72px] h-[72px] rounded-full bg-[#1e1f22] border-2 border-transparent group-hover:border-primary/50 transition cursor-pointer"
-              />
-              <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-[11px] text-white font-bold tracking-wide pointer-events-none">
-                {t('auth.changeAvatar')}
-              </div>
-            </button>
-          </div>
-
-          {showAvatarPicker && (
-            <div className="grid grid-cols-4 gap-2 bg-[#1e1f22] rounded-[5px] p-3 mt-1 shadow-inner max-h-[160px] overflow-y-auto">
-              {allCats.map((cat) => (
-                <button
-                  key={cat.index}
-                  type="button"
-                  onClick={() => {
-                    setSelectedAvatar(cat.dataUri)
-                    setShowAvatarPicker(false)
-                  }}
-                  className={`flex flex-col items-center gap-1 p-1.5 rounded-[5px] transition ${
-                    selectedAvatar === cat.dataUri
-                      ? 'bg-[#5865F2]/20 ring-1 ring-[#5865F2]'
-                      : 'hover:bg-white/5'
-                  }`}
-                >
-                  <img src={cat.dataUri} alt={cat.name} className="w-9 h-9 rounded-full" />
-                  <span className="text-[10px] text-[#b5bac1]">{cat.name}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Avatar selection - unified AvatarEditor */}
+          <AvatarEditor value={selectedAvatar} onChange={setSelectedAvatar} />
 
           <div>
             <label className="block text-[12px] font-bold uppercase text-[#b5bac1] mb-2 tracking-wide">
@@ -148,22 +106,9 @@ export function RegisterPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              autoComplete="email"
               className="w-full bg-[#1e1f22] text-[#dbdee1] rounded-[3px] px-3 py-2.5 outline-none focus:ring-0 transition"
               placeholder="you@example.com"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[12px] font-bold uppercase text-[#b5bac1] mb-2 tracking-wide">
-              {t('auth.usernameLabel')} <span className="text-[#f23f43]">*</span>
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              className="w-full bg-[#1e1f22] text-[#dbdee1] rounded-[3px] px-3 py-2.5 outline-none focus:ring-0 transition"
-              placeholder="shadow_user"
             />
           </div>
 
@@ -176,6 +121,7 @@ export function RegisterPage() {
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
+              autoComplete="nickname"
               className="w-full bg-[#1e1f22] text-[#dbdee1] rounded-[3px] px-3 py-2.5 outline-none focus:ring-0 transition"
               placeholder={t('auth.displayNamePlaceholder')}
             />
@@ -191,6 +137,7 @@ export function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={8}
+              autoComplete="new-password"
               className="w-full bg-[#1e1f22] text-[#dbdee1] rounded-[3px] px-3 py-2.5 outline-none focus:ring-0 transition"
               placeholder={t('auth.passwordPlaceholder')}
             />

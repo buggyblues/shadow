@@ -85,7 +85,8 @@ async function processShadowMessage(params: {
 
   // If mentionOnly, check for @mention using bot username
   if (policy?.mentionOnly) {
-    const mentionRegex = new RegExp(`@${botUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
+    const escapedUsername = botUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const mentionRegex = new RegExp(`@${escapedUsername}(?:\\s|$)`, 'i')
     const wasMentioned = mentionRegex.test(message.content)
     if (!wasMentioned) {
       runtime.log?.(`[msg] mentionOnly policy — no @${botUsername} mention found, skipping (${message.id})`)
@@ -243,7 +244,8 @@ async function processShadowMessage(params: {
   // 3. Build and finalize MsgContext
   // Resolve server context from channel → server mapping
   const serverInfo = channelServerMap.get(channelId)
-  const mentionRegex = new RegExp(`@${botUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
+  const escapedBotUsername = botUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const mentionRegex = new RegExp(`@${escapedBotUsername}(?:\\s|$)`, 'i')
   const wasMentioned = mentionRegex.test(message.content)
 
   const ctxPayload = core.channel.reply.finalizeInboundContext({

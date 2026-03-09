@@ -74,7 +74,8 @@ export function ServerPage() {
       setMobileView('channels')
       return
     }
-    if (serverId) {
+    // Only set activeServer from URL param if it looks like a UUID (not a slug)
+    if (serverId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(serverId)) {
       setActiveServer(serverId)
       setMobileView('channels')
     }

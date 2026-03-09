@@ -266,7 +266,7 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
         const serverSlug = server?.slug ?? serverId
         navigate({
           to: '/app/servers/$serverId/$channelName',
-          params: { serverId: serverSlug, channelName: encodeURIComponent(ch.name) },
+          params: { serverId: serverSlug, channelName: ch.name },
           replace: true,
         })
       }
@@ -297,7 +297,7 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
 
   // Auto-refresh channel list when a new channel is created
   useSocketEvent('channel:created', (data: { serverId: string }) => {
-    if (data.serverId === serverId) {
+    if (data.serverId === serverId || data.serverId === server?.id) {
       queryClient.invalidateQueries({ queryKey: ['channels', serverId] })
     }
   })
@@ -945,7 +945,7 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
           serverId={serverId}
           onClose={() => setShowAddAgent(false)}
           onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['members', serverId] })
+            queryClient.invalidateQueries({ queryKey: ['members'] })
             setShowAddAgent(false)
           }}
           t={t}

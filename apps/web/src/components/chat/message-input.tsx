@@ -242,7 +242,7 @@ export function MessageInput({
     // Detect @mention trigger
     const cursorPos = el.selectionStart
     const beforeCursor = value.slice(0, cursorPos)
-    const mentionMatch = beforeCursor.match(/@(\w*)$/)
+    const mentionMatch = beforeCursor.match(/@([\w-]*)$/)
     if (mentionMatch) {
       setMentionQuery(mentionMatch[1] ?? '')
       setMentionIndex(0)

@@ -654,7 +654,7 @@ function BotContextMenu({
   return (
     <>
       <div
-        className="fixed inset-0 z-[60]"
+        className="fixed inset-0 z-[80]"
         onClick={closeContextMenu}
         onContextMenu={(e) => {
           e.preventDefault()
@@ -663,7 +663,7 @@ function BotContextMenu({
       />
       <div
         ref={menuRef}
-        className="fixed z-[61] bg-bg-tertiary border border-white/10 rounded-lg shadow-xl py-1 min-w-[180px]"
+        className="fixed z-[81] bg-bg-tertiary border border-white/10 rounded-lg shadow-xl py-1 min-w-[180px]"
         style={getMenuStyle()}
       >
         {/* View profile — always visible */}
@@ -699,7 +699,7 @@ function BotContextMenu({
               </button>
               {policyOpen && (
                 <div
-                  className="absolute ml-1 bg-bg-tertiary border border-white/10 rounded-lg shadow-xl py-1 min-w-[160px] z-[62]"
+                  className="absolute ml-1 bg-bg-tertiary border border-white/10 rounded-lg shadow-xl py-1 min-w-[160px] z-[82]"
                   style={getSubmenuStyle()}
                 >
                   <button

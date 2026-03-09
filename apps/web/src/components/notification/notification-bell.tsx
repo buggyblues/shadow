@@ -43,7 +43,7 @@ export function NotificationBell() {
           setActiveChannel(message.channelId)
           navigate({
             to: '/app/servers/$serverId/$channelName',
-            params: { serverId: server.slug ?? channel.serverId, channelName: encodeURIComponent(channel.name) },
+            params: { serverId: server.slug ?? channel.serverId, channelName: channel.name },
           })
         } catch {
           // Message may have been deleted
