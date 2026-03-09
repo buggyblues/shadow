@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
@@ -7,8 +7,18 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="shortcut icon" type="image/svg+xml" href="/favicon.svg" />
     <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Nunito:wght@400;700;900&display=swap" rel="stylesheet" />
+    <script>
+      // Apply saved theme before first paint to prevent flash
+      (function(){
+        var t = localStorage.getItem('shadow-theme') || 'dark';
+        var e = t === 'system'
+          ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+          : t;
+        document.documentElement.className = e;
+      })();
+    </script>
   </head>
-  <body class="bg-zinc-900 text-zinc-100">
+  <body class="bg-bg-primary text-text-primary">
     <div id="root"></div>
   </body>
 </html>

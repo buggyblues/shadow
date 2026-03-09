@@ -16,6 +16,57 @@
   --color-text-muted: #949ba4;
 }
 
+/* ─── Light Theme ─── */
+:root.light {
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f2f3f5;
+  --color-bg-tertiary: #e3e5e8;
+  --color-text-primary: #060607;
+  --color-text-secondary: #4e5058;
+  --color-text-muted: #80848e;
+  --color-primary: #009da8;
+  --color-primary-hover: #007d86;
+  --color-danger: #da373c;
+}
+
+/* ─── Light Theme Utility Overrides ─── */
+:root.light {
+  color-scheme: light;
+}
+:root.light body {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+:root.light ::-webkit-scrollbar-thumb {
+  background: #c4c9ce;
+}
+:root.light ::-webkit-scrollbar-thumb:hover {
+  background: #a8adb3;
+}
+:root.light .msg-markdown code {
+  background: var(--color-bg-tertiary);
+}
+:root.light .msg-markdown pre {
+  background: var(--color-bg-tertiary);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+:root.light .msg-markdown th {
+  background: var(--color-bg-tertiary);
+}
+:root.light .msg-markdown th,
+:root.light .msg-markdown td {
+  border-color: rgba(0, 0, 0, 0.1);
+}
+:root.light .msg-markdown hr {
+  border-color: rgba(0, 0, 0, 0.1);
+}
+:root.light .msg-markdown blockquote {
+  color: var(--color-text-muted);
+}
+:root.light .message-row:hover {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
 @layer base {
   * {
     box-sizing: border-box;

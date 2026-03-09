@@ -6,6 +6,7 @@
     "brandFull": "虾豆 ShadowOwnBuddy",
     "brandLegal": "虾豆 ShadowOwnBuddy © 2026",
     "cancel": "キャンセル",
+    "confirm": "確認",
     "create": "作成",
     "save": "保存",
     "saving": "保存中...",
@@ -142,7 +143,16 @@
     "inviteActive": "有効",
     "inviteUsedBy": "使用者",
     "inviteCopyLink": "登録リンクをコピー",
-    "inviteDeactivate": "無効化"
+    "inviteDeactivate": "無効化",
+    "tabAppearance": "外観",
+    "appearanceDesc": "インターフェースの外観をカスタマイズします。",
+    "themeLabel": "テーマ",
+    "themeLight": "ライト",
+    "themeLightDesc": "明るくクリア",
+    "themeDark": "ダーク",
+    "themeDarkDesc": "目に優しい",
+    "themeSystem": "システム",
+    "themeSystemDesc": "OSの設定に従う"
   },
   "server": {
     "home": "ホーム",
@@ -565,7 +575,11 @@
     "uploadTip": "推奨サイズ 128x128、JPG/PNG/GIF対応",
     "editTitle": "Buddy を編集",
     "editSuccess": "Buddy を更新しました！",
-    "editFailed": "更新に失敗しました"
+    "editFailed": "更新に失敗しました",
+    "openclawGuideTitle": "OpenClaw セットアップガイド",
+    "openclawGuideDesc": "OpenClaw プラグインを使用して、この Buddy を AI バックエンドに接続します。",
+    "openclawRunTitle": "OpenClaw を起動",
+    "openclawFullDocs": "完全なドキュメントを見る →"
   },
   "serverHome": {
     "welcome": "ようこそ",
@@ -582,6 +596,8 @@
     "customizeTitle": "カスタマイズ",
     "customizeDesc": "あなただけの空間を作ろう",
     "exploreChannels": "チャンネルを見る",
-    "startChatting": "チャットを始める"
+    "startChatting": "チャットを始める",
+    "openNewWindow": "新しいウィンドウで開く",
+    "backToServer": "サーバーに戻る"
   }
 }

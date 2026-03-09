@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
   ArrowLeft,
+  BookOpen,
   CheckCircle,
   ClipboardCopy,
   Edit2,
@@ -174,9 +175,75 @@ export function AgentManagementPage() {
   }
 
   return (
-    <div className="flex-1 flex bg-bg-primary overflow-hidden">
-      {/* Sidebar */}
-      <div className="w-60 bg-bg-secondary flex flex-col shrink-0">
+    <div className="flex-1 flex flex-col md:flex-row bg-bg-primary overflow-hidden">
+      {/* Mobile header */}
+      <div className="md:hidden flex items-center gap-2 px-4 py-3 bg-bg-secondary border-b border-white/5 shrink-0">
+        {selectedAgent ? (
+          <button
+            onClick={() => { setSelectedAgent(null); setGeneratedToken(null) }}
+            className="flex items-center gap-2 text-text-muted hover:text-text-primary transition text-sm font-medium"
+          >
+            <ArrowLeft size={16} />
+            {t('agentMgmt.title')}
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={() => navigate({ to: '/app' })}
+              className="flex items-center gap-2 text-text-muted hover:text-text-primary transition text-sm font-medium"
+            >
+              <ArrowLeft size={16} />
+              {t('common.back')}
+            </button>
+            <span className="flex-1" />
+            <button
+              onClick={() => setShowCreate(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-[#23a559] bg-[#23a559]/10 hover:bg-[#23a559]/20 transition"
+            >
+              <Plus size={14} />
+              {t('agentMgmt.newAgent')}
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Mobile agent list (when no agent selected) */}
+      {!selectedAgent && (
+        <div className="md:hidden flex-1 overflow-y-auto px-3 py-2 space-y-[2px]">
+          {agents.map((agent) => (
+            <button
+              key={agent.id}
+              onClick={() => {
+                setSelectedAgent(agent)
+                setGeneratedToken(null)
+              }}
+              className="flex items-center gap-3 w-full px-3 py-2 rounded-md text-[15px] font-medium text-text-secondary hover:bg-white/[0.04] hover:text-text-primary transition"
+            >
+              <UserAvatar
+                userId={agent.botUser?.id ?? agent.userId}
+                avatarUrl={agent.botUser?.avatarUrl}
+                displayName={agent.botUser?.displayName ?? undefined}
+                size="sm"
+              />
+              <span className="truncate flex-1 text-left">
+                {agent.botUser?.displayName ?? agent.botUser?.username ?? 'Agent'}
+              </span>
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  agent.status === 'running'
+                    ? 'bg-[#23a559]'
+                    : agent.status === 'error'
+                      ? 'bg-[#da373c]'
+                      : 'bg-[#80848e]'
+                }`}
+              />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Desktop Sidebar */}
+      <div className="w-60 bg-bg-secondary hidden md:flex flex-col shrink-0">
         <div className="p-4 border-b-2 border-bg-tertiary">
           <button
             onClick={() => navigate({ to: '/app' })}
@@ -239,8 +306,8 @@ export function AgentManagementPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto p-8">
+      <div className={`flex-1 overflow-y-auto ${!selectedAgent ? 'hidden md:block' : ''}`}>
+        <div className="max-w-2xl mx-auto p-4 md:p-8">
           {/* Global message */}
           {message && (
             <div
@@ -316,7 +383,7 @@ export function AgentManagementPage() {
           onClick={() => setDeleteConfirmId(null)}
         >
           <div
-            className="bg-bg-secondary rounded-xl p-6 w-96 border border-white/5"
+            className="bg-bg-secondary rounded-xl p-6 w-full max-w-96 mx-4 border border-white/5"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-xl font-bold text-text-primary mb-2">{t('common.confirm')}</h2>
@@ -480,7 +547,7 @@ function AgentDetail({
       </div>
 
       {/* Status & info */}
-      <div className="bg-bg-secondary rounded-xl p-6 mb-6 border border-white/5 grid grid-cols-2 gap-4">
+      <div className="bg-bg-secondary rounded-xl p-6 mb-6 border border-white/5 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-[10px] font-bold uppercase text-text-muted mb-1">
             {t('agentMgmt.status')}
@@ -651,6 +718,81 @@ function AgentDetail({
           )
         })()}
       </div>
+
+      {/* OpenClaw Setup Guide */}
+      <div className="bg-bg-secondary rounded-xl p-6 mb-6 border border-white/5">
+        <div className="flex items-center gap-2 mb-3">
+          <BookOpen size={16} className="text-primary" />
+          <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider">
+            {t('agentMgmt.openclawGuideTitle')}
+          </h3>
+        </div>
+        <p className="text-sm text-text-muted mb-4">{t('agentMgmt.openclawGuideDesc')}</p>
+
+        {/* Step 1: Install */}
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center justify-center">1</span>
+            <span className="text-sm font-bold text-text-primary">{t('docs.openclawStep1Title')}</span>
+          </div>
+          <div className="bg-bg-tertiary rounded-lg p-3 font-mono text-xs text-green-400 border border-white/5 ml-7">
+            openclaw plugins install @shadowob/openclaw
+          </div>
+        </div>
+
+        {/* Step 2: Config */}
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center justify-center">2</span>
+            <span className="text-sm font-bold text-text-primary">{t('docs.openclawConfig')}</span>
+          </div>
+          <p className="text-xs text-text-muted mb-2 ml-7">{t('docs.openclawConfigDesc')}</p>
+          <pre className="bg-bg-tertiary rounded-lg p-3 font-mono text-xs text-text-secondary border border-white/5 overflow-x-auto ml-7">{`channels:
+  shadow:
+    token: "${(() => {
+      const tk = (agent.config?.lastToken as string | undefined) ?? generatedToken
+      return tk ? `${tk.slice(0, 24)}...` : '<agent-jwt-token>'
+    })()}"
+    serverUrl: "${window.location.origin}"`}</pre>
+        </div>
+
+        {/* Step 3: Run */}
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center justify-center">3</span>
+            <span className="text-sm font-bold text-text-primary">{t('agentMgmt.openclawRunTitle')}</span>
+          </div>
+          <div className="bg-bg-tertiary rounded-lg p-3 font-mono text-xs text-green-400 border border-white/5 ml-7">
+            openclaw start
+          </div>
+        </div>
+
+        {/* Capabilities */}
+        <div className="mt-4 pt-4 border-t border-white/5">
+          <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">{t('docs.openclawCapabilities')}</p>
+          <div className="grid grid-cols-2 gap-2">
+            {['messaging', 'threads', 'reactions', 'media', 'mentions', 'editDelete'].map((cap) => (
+              <div key={cap} className="flex items-center gap-1.5 text-xs text-text-secondary">
+                <span className="text-green-400">✓</span>
+                {t(`docs.openclawCap_${cap}`)}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Link to full docs */}
+        <div className="mt-4 pt-3 border-t border-white/5">
+          <a
+            href="/docs"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-primary hover:text-primary-hover font-bold flex items-center gap-1 transition"
+          >
+            <BookOpen size={12} />
+            {t('agentMgmt.openclawFullDocs')}
+          </a>
+        </div>
+      </div>
     </>
   )
 }
@@ -737,7 +879,7 @@ function CreateAgentDialog({
       onClick={onClose}
     >
       <div
-        className="bg-bg-secondary rounded-xl p-6 w-[480px] max-h-[80vh] overflow-y-auto border border-white/5"
+        className="bg-bg-secondary rounded-xl p-6 w-full max-w-[480px] mx-4 max-h-[80vh] overflow-y-auto border border-white/5"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-xl font-bold text-text-primary mb-6">{t('agentMgmt.createTitle')}</h2>
@@ -846,7 +988,7 @@ function EditAgentDialog({
       onClick={onClose}
     >
       <div
-        className="bg-bg-secondary rounded-xl p-6 w-[480px] max-h-[80vh] overflow-y-auto border border-white/5"
+        className="bg-bg-secondary rounded-xl p-6 w-full max-w-[480px] mx-4 max-h-[80vh] overflow-y-auto border border-white/5"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-xl font-bold text-text-primary mb-6">{t('agentMgmt.editTitle')}</h2>
@@ -1125,7 +1267,7 @@ export function BuddyManagementContent() {
           onClick={() => setDeleteConfirmId(null)}
         >
           <div
-            className="bg-bg-secondary rounded-xl p-6 w-96 border border-white/5"
+            className="bg-bg-secondary rounded-xl p-6 w-full max-w-96 mx-4 border border-white/5"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-xl font-bold text-text-primary mb-2">{t('common.confirm')}</h2>

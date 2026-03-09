@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router'
-import { Bot, BookOpen, Check, Compass, Copy, FileText, Link2, LogOut, Plus, Rocket, Save, Shield, Trash2, User, X } from 'lucide-react'
+import { Bot, BookOpen, Check, Compass, Copy, FileText, Link2, LogOut, Monitor, Moon, Paintbrush, Plus, Rocket, Save, Shield, Sun, Trash2, User, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { UserAvatar } from '../components/common/avatar'
@@ -10,6 +10,7 @@ import { useUnreadCount } from '../hooks/use-unread-count'
 import { fetchApi } from '../lib/api'
 import { disconnectSocket } from '../lib/socket'
 import { useAuthStore } from '../stores/auth.store'
+import { type ThemeMode, useUIStore } from '../stores/ui.store'
 import { BuddyManagementContent } from './agent-management'
 
 export function SettingsPage() {
@@ -28,7 +29,7 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [saveSuccess, setSaveSuccess] = useState(false)
-  const [activeTab, setActiveTab] = useState<'quickstart' | 'profile' | 'account' | 'invite' | 'buddy'>('quickstart')
+  const [activeTab, setActiveTab] = useState<'quickstart' | 'profile' | 'account' | 'invite' | 'buddy' | 'appearance'>('quickstart')
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
   useEffect(() => {
@@ -76,9 +77,34 @@ export function SettingsPage() {
   if (!user) return null
 
   return (
-    <div className="flex-1 flex bg-bg-primary overflow-hidden">
-      {/* Sidebar */}
-      <div className="w-60 bg-bg-secondary flex flex-col shrink-0">
+    <div className="flex-1 flex flex-col md:flex-row bg-bg-primary overflow-hidden">
+      {/* Mobile tab bar */}
+      <div className="md:hidden flex overflow-x-auto border-b border-white/5 bg-bg-secondary px-2 py-2 gap-1 shrink-0">
+        {([
+          { key: 'quickstart' as const, icon: Rocket, label: t('settings.tabQuickStart') },
+          { key: 'profile' as const, icon: User, label: t('settings.tabProfile') },
+          { key: 'appearance' as const, icon: Paintbrush, label: t('settings.tabAppearance') },
+          { key: 'buddy' as const, icon: Bot, label: t('settings.tabBuddy') },
+          { key: 'account' as const, icon: Shield, label: t('settings.tabAccount') },
+          { key: 'invite' as const, icon: Link2, label: t('settings.tabInvite') },
+        ]).map(({ key, icon: Icon, label }) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition ${
+              activeTab === key
+                ? 'bg-primary/10 text-primary'
+                : 'text-text-muted hover:text-text-primary hover:bg-white/5'
+            }`}
+          >
+            <Icon size={14} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Desktop Sidebar */}
+      <div className="w-60 bg-bg-secondary hidden md:flex flex-col shrink-0">
         <nav className="px-3 pt-4 space-y-0.5">
           <button
             onClick={() => setActiveTab('quickstart')}
@@ -110,6 +136,20 @@ export function SettingsPage() {
               className={`shrink-0 ${activeTab === 'profile' ? 'opacity-80 text-white' : 'opacity-60 group-hover:text-[#dbdee1]'}`}
             />
             {t('settings.tabProfile')}
+          </button>
+          <button
+            onClick={() => setActiveTab('appearance')}
+            className={`group flex items-center gap-3 w-full px-3 py-2 rounded-md text-[15px] font-medium transition ${
+              activeTab === 'appearance'
+                ? 'bg-white/[0.08] text-white'
+                : 'text-[#949ba4] hover:bg-white/[0.04] hover:text-[#dbdee1]'
+            }`}
+          >
+            <Paintbrush
+              size={18}
+              className={`shrink-0 ${activeTab === 'appearance' ? 'opacity-80 text-white' : 'opacity-60 group-hover:text-[#dbdee1]'}`}
+            />
+            {t('settings.tabAppearance')}
           </button>
           <button
             onClick={() => setActiveTab('buddy')}
@@ -168,7 +208,7 @@ export function SettingsPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto p-8">
+        <div className="max-w-2xl mx-auto p-4 md:p-8">
           {activeTab === 'quickstart' && (
             <>
               {/* Profile Card */}
@@ -387,6 +427,10 @@ export function SettingsPage() {
             </>
           )}
 
+          {activeTab === 'appearance' && (
+            <AppearanceSettings />
+          )}
+
           {activeTab === 'account' && (
             <>
               <h2 className="text-2xl font-bold text-text-primary mb-6">
@@ -440,7 +484,7 @@ export function SettingsPage() {
           onClick={() => setShowLogoutConfirm(false)}
         >
           <div
-            className="bg-bg-secondary rounded-xl p-6 w-96 border border-white/5"
+            className="bg-bg-secondary rounded-xl p-6 w-full max-w-96 mx-4 border border-white/5"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-xl font-bold text-text-primary mb-2">
@@ -688,6 +732,57 @@ function InviteManagement() {
           })}
         </div>
       )}
+    </>
+  )
+}
+
+function AppearanceSettings() {
+  const { t } = useTranslation()
+  const { theme, setTheme } = useUIStore()
+
+  const options: { value: ThemeMode; icon: typeof Sun; label: string; desc: string }[] = [
+    { value: 'light', icon: Sun, label: t('settings.themeLight'), desc: t('settings.themeLightDesc') },
+    { value: 'dark', icon: Moon, label: t('settings.themeDark'), desc: t('settings.themeDarkDesc') },
+    { value: 'system', icon: Monitor, label: t('settings.themeSystem'), desc: t('settings.themeSystemDesc') },
+  ]
+
+  return (
+    <>
+      <h2 className="text-2xl font-bold text-text-primary mb-2">
+        {t('settings.tabAppearance')}
+      </h2>
+      <p className="text-text-muted text-sm mb-6">{t('settings.appearanceDesc')}</p>
+
+      <div className="bg-bg-secondary rounded-xl border border-white/5 p-6">
+        <label className="block text-xs font-bold uppercase text-text-secondary mb-4 tracking-wide">
+          {t('settings.themeLabel')}
+        </label>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {options.map(({ value, icon: Icon, label, desc }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setTheme(value)}
+              className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition ${
+                theme === value
+                  ? 'border-primary bg-primary/10'
+                  : 'border-transparent bg-bg-tertiary hover:border-white/10'
+              }`}
+            >
+              <Icon size={28} className={theme === value ? 'text-primary' : 'text-text-muted'} />
+              <span className={`text-sm font-bold ${theme === value ? 'text-primary' : 'text-text-primary'}`}>
+                {label}
+              </span>
+              <span className="text-[11px] text-text-muted text-center leading-tight">{desc}</span>
+              {theme === value && (
+                <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                  <Check size={12} className="text-white" />
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
     </>
   )
 }

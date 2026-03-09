@@ -6,6 +6,7 @@
     "brandFull": "虾豆 ShadowOwnBuddy",
     "brandLegal": "虾豆 ShadowOwnBuddy © 2026",
     "cancel": "Cancel",
+    "confirm": "Confirm",
     "create": "Create",
     "save": "Save",
     "saving": "Saving...",
@@ -142,7 +143,16 @@
     "inviteActive": "Active",
     "inviteUsedBy": "Used by",
     "inviteCopyLink": "Copy register link",
-    "inviteDeactivate": "Deactivate"
+    "inviteDeactivate": "Deactivate",
+    "tabAppearance": "Appearance",
+    "appearanceDesc": "Customize the look and feel of your interface.",
+    "themeLabel": "Theme",
+    "themeLight": "Light",
+    "themeLightDesc": "Clean and bright",
+    "themeDark": "Dark",
+    "themeDarkDesc": "Easy on the eyes",
+    "themeSystem": "System",
+    "themeSystemDesc": "Follow OS setting"
   },
   "server": {
     "home": "Home",
@@ -565,7 +575,11 @@
     "uploadTip": "Recommended size 128x128, supports JPG/PNG/GIF",
     "editTitle": "Edit Agent",
     "editSuccess": "Agent updated successfully!",
-    "editFailed": "Failed to update agent"
+    "editFailed": "Failed to update agent",
+    "openclawGuideTitle": "OpenClaw Setup Guide",
+    "openclawGuideDesc": "Connect this Buddy to your AI backend using the OpenClaw plugin.",
+    "openclawRunTitle": "Start OpenClaw",
+    "openclawFullDocs": "View full documentation →"
   },
   "serverHome": {
     "welcome": "Welcome to",
@@ -582,6 +596,8 @@
     "customizeTitle": "Customize",
     "customizeDesc": "Make this space uniquely yours",
     "exploreChannels": "Explore Channels",
-    "startChatting": "Start Chatting"
+    "startChatting": "Start Chatting",
+    "openNewWindow": "Open in new window",
+    "backToServer": "Back to server"
   }
 }

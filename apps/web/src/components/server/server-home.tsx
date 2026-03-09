@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { useCallback, useEffect } from 'react'
+import { Copy, Check, ExternalLink, Settings, Home } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from '@tanstack/react-router'
 import { fetchApi } from '../../lib/api'
@@ -293,32 +294,41 @@ function generateDefaultHtml(
 </html>`
 }
 
-export function ServerHome() {
+interface ServerHomeProps {
+  /** Override serverId instead of using chat store */
+  serverId?: string
+  /** Show enhanced toolbar with actions */
+  standalone?: boolean
+}
+
+export function ServerHome({ serverId: propServerId, standalone }: ServerHomeProps = {}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { activeServerId, setActiveChannel } = useChatStore()
+  const effectiveServerId = propServerId || activeServerId
+  const [copied, setCopied] = useState(false)
 
   const { data: server } = useQuery({
-    queryKey: ['server', activeServerId],
-    queryFn: () => fetchApi<ServerDetail>(`/api/servers/${activeServerId}`),
-    enabled: !!activeServerId,
+    queryKey: ['server', effectiveServerId],
+    queryFn: () => fetchApi<ServerDetail>(`/api/servers/${effectiveServerId}`),
+    enabled: !!effectiveServerId,
   })
 
   // Fetch channels for navigation
   const { data: channels } = useQuery({
-    queryKey: ['channels', activeServerId],
+    queryKey: ['channels', effectiveServerId],
     queryFn: () =>
       fetchApi<Array<{ id: string; name: string; type: string }>>(
-        `/api/servers/${activeServerId}/channels`,
+        `/api/servers/${effectiveServerId}/channels`,
       ),
-    enabled: !!activeServerId,
+    enabled: !!effectiveServerId,
   })
 
   // Handle postMessage from iframe for navigation
   const handleMessage = useCallback(
     (event: MessageEvent) => {
       if (!event.data || typeof event.data !== 'object') return
-      const { type, channelName } = event.data
+      const { type, channelName, url } = event.data
 
       if (type === 'server-home:explore-channels' || type === 'navigate-channel') {
         // Navigate to the first channel, or by name if specified
@@ -331,6 +341,20 @@ export function ServerHome() {
             to: '/app/servers/$serverId/$channelName',
             params: { serverId: server.slug || server.id, channelName: targetChannel.name },
           })
+        }
+      } else if (type === 'server-home:navigate' && url) {
+        // Handle link clicks from iframe
+        try {
+          const parsed = new URL(url, window.location.origin)
+          if (parsed.origin === window.location.origin) {
+            // Internal link — navigate in parent
+            void navigate({ to: parsed.pathname + parsed.search + parsed.hash })
+          } else {
+            // External link — open in new tab
+            window.open(url, '_blank', 'noopener,noreferrer')
+          }
+        } catch {
+          window.open(url, '_blank', 'noopener,noreferrer')
         }
       }
     },
@@ -354,14 +378,73 @@ export function ServerHome() {
   }
 
   // Use custom HTML if set, otherwise generate default with i18n
-  const htmlContent = server.homepageHtml || generateDefaultHtml(server, t)
+  const rawHtml = server.homepageHtml || generateDefaultHtml(server, t)
+
+  // Inject link interceptor script to prevent app-in-app navigation
+  const linkInterceptorScript = `<script>
+document.addEventListener('click', function(e) {
+  var a = e.target.closest('a');
+  if (!a) return;
+  var href = a.getAttribute('href');
+  if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+  e.preventDefault();
+  window.parent.postMessage({ type: 'server-home:navigate', url: a.href }, '*');
+}, true);
+</script>`
+  const htmlContent = rawHtml.includes('</body>')
+    ? rawHtml.replace('</body>', linkInterceptorScript + '</body>')
+    : rawHtml + linkInterceptorScript
+
+  const handleCopyLink = () => {
+    const slug = server.slug || server.id
+    const url = `${window.location.origin}/app/servers/${slug}/home`
+    navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleOpenNewWindow = () => {
+    const slug = server.slug || server.id
+    window.open(`/app/servers/${slug}/home`, '_blank')
+  }
 
   return (
     <div className="flex-1 flex flex-col bg-bg-primary overflow-hidden">
       {/* Header bar */}
       <div className="h-12 px-4 flex items-center border-b border-white/5 shrink-0">
-        <img src="/Logo.svg" alt="" className="w-5 h-5 mr-2 opacity-60" />
-        <h2 className="font-semibold text-text-primary text-sm truncate">{server.name}</h2>
+        <Home size={16} className="mr-2 text-text-muted" />
+        <h2 className="font-semibold text-text-primary text-sm truncate flex-1">{server.name}</h2>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            className="p-2 text-text-muted hover:text-text-primary hover:bg-white/5 rounded-lg transition"
+            title={t('common.copy')}
+          >
+            {copied ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenNewWindow}
+            className="p-2 text-text-muted hover:text-text-primary hover:bg-white/5 rounded-lg transition"
+            title={t('serverHome.openNewWindow')}
+          >
+            <ExternalLink size={16} />
+          </button>
+          {standalone && (
+            <button
+              type="button"
+              onClick={() => {
+                const slug = server.slug || server.id
+                navigate({ to: '/app/servers/$serverId', params: { serverId: slug } })
+              }}
+              className="p-2 text-text-muted hover:text-text-primary hover:bg-white/5 rounded-lg transition"
+              title={t('serverHome.backToServer')}
+            >
+              <Settings size={16} />
+            </button>
+          )}
+        </div>
       </div>
       {/* HTML content in sandboxed iframe */}
       <div className="flex-1 overflow-auto">

@@ -9,6 +9,7 @@ import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
 import { UserAvatar } from '../common/avatar'
+import { useConfirmStore } from '../common/confirm-dialog'
 import { UserProfileCard } from '../common/user-profile-card'
 
 interface MemberUser {
@@ -832,10 +833,14 @@ function BotContextMenu({
             {showRemoveFromChannel && (
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   const name =
                     contextMenu.member.user?.displayName ?? contextMenu.member.user?.username
-                  if (confirm(t('member.removeFromChannelConfirm', { name }))) {
+                  const ok = await useConfirmStore.getState().confirm({
+                    title: t('member.removeFromChannel'),
+                    message: t('member.removeFromChannelConfirm', { name }),
+                  })
+                  if (ok) {
                     removeBotFromChannel.mutate({
                       channelId: activeChannelId!,
                       userId: contextMenu.member.userId,
@@ -852,11 +857,15 @@ function BotContextMenu({
             {showKickFromServer && (
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   if (!activeServerId) return
                   const name =
                     contextMenu.member.user?.displayName ?? contextMenu.member.user?.username
-                  if (confirm(isBot ? t('member.removeBotConfirm', { name }) : t('member.kickConfirm', { name }))) {
+                  const ok = await useConfirmStore.getState().confirm({
+                    title: isBot ? t('member.removeBot') : t('member.kickMember'),
+                    message: isBot ? t('member.removeBotConfirm', { name }) : t('member.kickConfirm', { name }),
+                  })
+                  if (ok) {
                     kickMember.mutate({
                       serverId: activeServerId,
                       userId: contextMenu.member.userId,

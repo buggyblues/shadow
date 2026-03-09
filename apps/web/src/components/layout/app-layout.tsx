@@ -5,6 +5,7 @@ import { fetchApi } from '../../lib/api'
 import { connectSocket, disconnectSocket } from '../../lib/socket'
 import { useAuthStore } from '../../stores/auth.store'
 import { useUIStore } from '../../stores/ui.store'
+import { ConfirmDialog } from '../common/confirm-dialog'
 import { ServerSidebar } from '../server/server-sidebar'
 
 export function AppLayout() {
@@ -65,6 +66,8 @@ export function AppLayout() {
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <Outlet />
       </div>
+
+      <ConfirmDialog />
     </div>
   )
 }

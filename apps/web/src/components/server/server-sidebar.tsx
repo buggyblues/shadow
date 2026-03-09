@@ -8,6 +8,7 @@ import { getCatAvatar } from '../../lib/pixel-cats'
 import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
+import { useConfirmStore } from '../common/confirm-dialog'
 
 interface ServerEntry {
   server: { id: string; name: string; slug: string | null; iconUrl: string | null }
@@ -319,9 +320,13 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
             <div className="h-px bg-white/5 my-1" />
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
                 const name = contextMenu.server.server.name
-                if (confirm(t('server.leaveConfirm', { name }))) {
+                const ok = await useConfirmStore.getState().confirm({
+                  title: t('server.leaveServer'),
+                  message: t('server.leaveConfirm', { name }),
+                })
+                if (ok) {
                   leaveServer.mutate(contextMenu.server.server.id)
                 }
               }}

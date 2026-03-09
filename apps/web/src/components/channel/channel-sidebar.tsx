@@ -26,6 +26,7 @@ import { joinChannel, leaveChannel } from '../../lib/socket'
 import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
+import { useConfirmStore } from '../common/confirm-dialog'
 
 interface Channel {
   id: string
@@ -836,8 +837,12 @@ export function ChannelSidebar({ serverId, channelNameFromUrl }: { serverId: str
           <div className="h-px bg-white/5 my-1" />
           <button
             type="button"
-            onClick={() => {
-              if (confirm(t('channel.deleteChannelConfirm'))) {
+            onClick={async () => {
+              const ok = await useConfirmStore.getState().confirm({
+                title: t('channel.deleteChannel'),
+                message: t('channel.deleteChannelConfirm'),
+              })
+              if (ok) {
                 deleteChannel.mutate(contextMenu.channel.id)
               }
               setContextMenu(null)

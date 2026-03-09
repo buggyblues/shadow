@@ -6,6 +6,7 @@
     "brandFull": "蝦豆 ShadowOwnBuddy",
     "brandLegal": "蝦豆 ShadowOwnBuddy © 2026",
     "cancel": "取消",
+    "confirm": "確認",
     "create": "建立",
     "save": "儲存",
     "saving": "儲存中...",
@@ -142,7 +143,16 @@
     "inviteActive": "可用",
     "inviteUsedBy": "使用者",
     "inviteCopyLink": "複製註冊連結",
-    "inviteDeactivate": "停用"
+    "inviteDeactivate": "停用",
+    "tabAppearance": "外觀",
+    "appearanceDesc": "自訂你的介面外觀。",
+    "themeLabel": "主題",
+    "themeLight": "淺色",
+    "themeLightDesc": "清新明亮",
+    "themeDark": "深色",
+    "themeDarkDesc": "護眼模式",
+    "themeSystem": "跟隨系統",
+    "themeSystemDesc": "跟隨作業系統設定"
   },
   "server": {
     "home": "首頁",
@@ -565,7 +575,11 @@
     "uploadTip": "推薦尺寸 128x128，支援 JPG/PNG/GIF",
     "editTitle": "編輯 Buddy",
     "editSuccess": "Buddy 更新成功！",
-    "editFailed": "更新失敗"
+    "editFailed": "更新失敗",
+    "openclawGuideTitle": "OpenClaw 配置指南",
+    "openclawGuideDesc": "透過 OpenClaw 外掛將此 Buddy 連接到你的 AI 後端。",
+    "openclawRunTitle": "啟動 OpenClaw",
+    "openclawFullDocs": "查看完整文件 →"
   },
   "serverHome": {
     "welcome": "歡迎來到",
@@ -582,6 +596,8 @@
     "customizeTitle": "個性化",
     "customizeDesc": "打造屬於你的專屬空間",
     "exploreChannels": "瀏覽頻道",
-    "startChatting": "開始聊天"
+    "startChatting": "開始聊天",
+    "openNewWindow": "在新視窗開啟",
+    "backToServer": "返回伺服器"
   }
 }

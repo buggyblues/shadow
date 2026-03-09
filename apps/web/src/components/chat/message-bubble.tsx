@@ -21,6 +21,7 @@ import { fetchApi } from '../../lib/api'
 import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { UserAvatar } from '../common/avatar'
+import { useConfirmStore } from '../common/confirm-dialog'
 import { EmojiPicker } from '../common/emoji-picker'
 import { UserProfileCard } from '../common/user-profile-card'
 import { FileCard } from './file-card'
@@ -141,7 +142,11 @@ export function MessageBubble({
 
   const handleDelete = useCallback(async () => {
     setShowMoreMenu(false)
-    if (!confirm(t('chat.deleteConfirm'))) return
+    const ok = await useConfirmStore.getState().confirm({
+      title: t('chat.deleteMessage'),
+      message: t('chat.deleteConfirm'),
+    })
+    if (!ok) return
     try {
       await fetchApi(`/api/messages/${message.id}`, { method: 'DELETE' })
       onMessageDelete?.(message.id)
@@ -716,12 +721,19 @@ export function MessageBubble({
                   <div className="h-px bg-white/5 my-1" />
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       const name = author?.displayName ?? author?.username
                       const confirmKey = author?.isBot
                         ? 'member.removeBotConfirm'
                         : 'member.kickConfirm'
-                      if (confirm(t(confirmKey, { name }))) {
+                      const titleKey = author?.isBot
+                        ? 'member.removeBot'
+                        : 'member.kickMember'
+                      const ok = await useConfirmStore.getState().confirm({
+                        title: t(titleKey),
+                        message: t(confirmKey, { name }),
+                      })
+                      if (ok) {
                         fetchApi(`/api/servers/${activeServerId}/members/${author?.id}`, {
                           method: 'DELETE',
                         }).then(() => {
@@ -952,12 +964,19 @@ function MentionSpan({ mention }: { mention: string }) {
                   <div className="h-px bg-white/5 my-1" />
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       const name = user?.displayName ?? user?.username
                       const confirmKey = user?.isBot
                         ? 'member.removeBotConfirm'
                         : 'member.kickConfirm'
-                      if (confirm(t(confirmKey, { name }))) {
+                      const titleKey = user?.isBot
+                        ? 'member.removeBot'
+                        : 'member.kickMember'
+                      const ok = await useConfirmStore.getState().confirm({
+                        title: t(titleKey),
+                        message: t(confirmKey, { name }),
+                      })
+                      if (ok) {
                         fetchApi(`/api/servers/${activeServerId}/members/${user?.id}`, {
                           method: 'DELETE',
                         }).then(() => {

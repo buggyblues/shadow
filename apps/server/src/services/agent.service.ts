@@ -14,8 +14,10 @@ export class AgentService {
     config: Record<string, unknown>
     ownerId: string
   }) {
-    // Create a bot user for the agent
-    const username = `agent-${data.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`
+    // Create a bot user for the agent — append random suffix to avoid unique constraint collisions
+    const baseName = data.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+    const suffix = Math.random().toString(36).slice(2, 6)
+    const username = `agent-${baseName}-${suffix}`
     const botUser = await this.deps.agentDao.createBotUser({
       username,
       displayName: data.name,

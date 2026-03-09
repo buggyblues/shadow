@@ -6,6 +6,7 @@
     "brandFull": "虾豆 ShadowOwnBuddy",
     "brandLegal": "虾豆 ShadowOwnBuddy © 2026",
     "cancel": "取消",
+    "confirm": "确认",
     "create": "创建",
     "save": "保存",
     "saving": "保存中...",
@@ -142,7 +143,16 @@
     "inviteActive": "可用",
     "inviteUsedBy": "使用者",
     "inviteCopyLink": "复制注册链接",
-    "inviteDeactivate": "停用"
+    "inviteDeactivate": "停用",
+    "tabAppearance": "外观",
+    "appearanceDesc": "自定义你的界面外观。",
+    "themeLabel": "主题",
+    "themeLight": "浅色",
+    "themeLightDesc": "清新明亮",
+    "themeDark": "深色",
+    "themeDarkDesc": "护眼模式",
+    "themeSystem": "跟随系统",
+    "themeSystemDesc": "跟随操作系统设置"
   },
   "server": {
     "home": "首页",
@@ -565,7 +575,11 @@
     "uploadTip": "推荐尺寸 128x128，支持 JPG/PNG/GIF",
     "editTitle": "编辑 Buddy",
     "editSuccess": "Buddy 更新成功！",
-    "editFailed": "更新失败"
+    "editFailed": "更新失败",
+    "openclawGuideTitle": "OpenClaw 配置指南",
+    "openclawGuideDesc": "通过 OpenClaw 插件将此 Buddy 连接到你的 AI 后端。",
+    "openclawRunTitle": "启动 OpenClaw",
+    "openclawFullDocs": "查看完整文档 →"
   },
   "serverHome": {
     "welcome": "欢迎来到",
@@ -582,6 +596,8 @@
     "customizeTitle": "个性化",
     "customizeDesc": "打造属于你的专属空间",
     "exploreChannels": "浏览频道",
-    "startChatting": "开始聊天"
+    "startChatting": "开始聊天",
+    "openNewWindow": "在新窗口打开",
+    "backToServer": "返回服务器"
   }
 }

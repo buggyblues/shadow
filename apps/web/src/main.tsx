@@ -23,6 +23,7 @@ import { LoginPage } from './pages/login'
 import { PricingPage } from './pages/pricing'
 import { RegisterPage } from './pages/register'
 import { ServerPage } from './pages/server'
+import { ServerHomePage } from './pages/server-home'
 import { SettingsPage } from './pages/settings'
 import { useAuthStore } from './stores/auth.store'
 import './styles/globals.css'
@@ -123,6 +124,12 @@ const serverChannelRoute = createRoute({
   component: ServerPage,
 })
 
+const serverHomeRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/servers/$serverId/home',
+  component: ServerHomePage,
+})
+
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/settings',
@@ -151,7 +158,7 @@ const routeTree = rootRoute.addChildren([
   pricingRoute,
   docsRoute,
   inviteRoute,
-  appRoute.addChildren([appIndexRoute, serverRoute, serverChannelRoute, settingsRoute, agentMgmtRoute, discoverRoute]),
+  appRoute.addChildren([appIndexRoute, serverRoute, serverChannelRoute, serverHomeRoute, settingsRoute, agentMgmtRoute, discoverRoute]),
 ])
 
 const router = createRouter({ routeTree })
