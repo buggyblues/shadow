@@ -3,7 +3,9 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStatus } from '../hooks/use-app-status'
 import { fetchApi } from '../lib/api'
+import { queryClient } from '../lib/query-client'
 import { useAuthStore } from '../stores/auth.store'
+import { useChatStore } from '../stores/chat.store'
 
 export function LoginPage() {
   const { t } = useTranslation()
@@ -38,6 +40,10 @@ export function LoginPage() {
       })
 
       setAuth(result.user, result.accessToken, result.refreshToken)
+      // Clear stale state from any previous session
+      useChatStore.getState().setActiveServer(null)
+      queryClient.removeQueries()
+      queryClient.clear()
       const redirectTo = searchParams.redirect
       if (redirectTo && redirectTo.startsWith('/')) {
         navigate({ to: redirectTo })

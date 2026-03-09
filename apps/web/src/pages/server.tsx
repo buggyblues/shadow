@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useParams } from '@tanstack/react-router'
+import { useParams } from '@tanstack/react-router'
 import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChannelSidebar } from '../components/channel/channel-sidebar'
@@ -31,11 +31,11 @@ interface ChannelListItem {
 
 export function ServerPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const { serverId, channelName } = useParams({ strict: false }) as { serverId?: string; channelName?: string }
-  const { activeChannelId, setActiveServer, setActiveChannel } = useChatStore()
+  const { activeChannelId, activeServerId, setActiveServer, setActiveChannel } = useChatStore()
   const { mobileView, setMobileView } = useUIStore()
-  const restoredRef = useRef(false)
+  // Track whether we've restored the channel from URL for this server navigation
+  const restoredServerRef = useRef<string | null>(null)
 
   const { data: server } = useQuery({
     queryKey: ['server', serverId],
@@ -68,38 +68,37 @@ export function ServerPage() {
     variant: 'workspace',
   })
 
+  // 1. Resolve server slug → UUID and set activeServer in store
+  //    Only update when the resolved server ID actually changes to avoid
+  //    unnecessary store resets (setActiveServer resets activeChannelId)
   useEffect(() => {
-    if (server?.id) {
+    if (server?.id && server.id !== activeServerId) {
       setActiveServer(server.id)
       setMobileView('channels')
-      return
     }
-    // Only set activeServer from URL param if it looks like a UUID (not a slug)
-    if (serverId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(serverId)) {
-      setActiveServer(serverId)
-      setMobileView('channels')
-    }
-  }, [server?.id, serverId, setActiveServer, setMobileView])
+  }, [server?.id, activeServerId, setActiveServer, setMobileView])
 
-  // Resolve channelName from URL to channel ID
+  // 2. Resolve channelName from URL to channel ID
+  //    This runs when URL has a channelName (e.g., /servers/slug/general)
+  //    It MUST run before channel-sidebar's auto-select to prevent redirect to default channel
   useEffect(() => {
-    if (!channelName || channels.length === 0 || restoredRef.current) return
+    if (!channelName || channels.length === 0) return
+    // Only resolve once per server navigation to avoid loops
+    if (restoredServerRef.current === `${serverId}/${channelName}`) return
+
     const decodedName = decodeURIComponent(channelName)
     const matched = channels.find(
       (ch) => ch.name === decodedName || ch.name.toLowerCase() === decodedName.toLowerCase(),
     )
-    if (matched && matched.id !== activeChannelId) {
-      restoredRef.current = true
-      setActiveChannel(matched.id)
-      joinChannel(matched.id)
+    if (matched) {
+      restoredServerRef.current = `${serverId}/${channelName}`
+      if (matched.id !== activeChannelId) {
+        setActiveChannel(matched.id)
+        joinChannel(matched.id)
+      }
       setMobileView('chat')
     }
-  }, [channelName, channels, activeChannelId, setActiveChannel, setMobileView])
-
-  // Reset restored flag when serverId changes
-  useEffect(() => {
-    restoredRef.current = false
-  }, [serverId])
+  }, [channelName, channels, serverId, activeChannelId, setActiveChannel, setMobileView])
 
   if (!serverId) return null
 
@@ -110,7 +109,7 @@ export function ServerPage() {
           mobileView === 'channels' ? 'flex absolute inset-0 z-20 md:relative' : 'hidden'
         } md:flex flex-col w-full md:w-60 flex-shrink-0 transition-transform duration-300 ease-in-out`}
       >
-        <ChannelSidebar serverId={serverId} />
+        <ChannelSidebar serverId={serverId} channelNameFromUrl={channelName} />
       </div>
 
       <div

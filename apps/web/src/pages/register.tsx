@@ -5,7 +5,9 @@ import { AvatarEditor } from '../components/common/avatar-editor'
 import { useAppStatus } from '../hooks/use-app-status'
 import { fetchApi } from '../lib/api'
 import { generateRandomCatConfig, renderCatSvg } from '../lib/avatar-generator'
+import { queryClient } from '../lib/query-client'
 import { useAuthStore } from '../stores/auth.store'
+import { useChatStore } from '../stores/chat.store'
 
 export function RegisterPage() {
   const { t } = useTranslation()
@@ -63,6 +65,10 @@ export function RegisterPage() {
         result.accessToken,
         result.refreshToken,
       )
+      // Clear stale state from any previous session
+      useChatStore.getState().setActiveServer(null)
+      queryClient.removeQueries()
+      queryClient.clear()
       const redirectTo = searchParams.redirect
       if (redirectTo && redirectTo.startsWith('/')) {
         navigate({ to: redirectTo })

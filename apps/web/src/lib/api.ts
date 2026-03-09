@@ -1,3 +1,5 @@
+import { queryClient } from './query-client'
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? ''
 
 let isRefreshing = false
@@ -6,7 +8,10 @@ let refreshPromise: Promise<string | null> | null = null
 function clearAuthState() {
   localStorage.removeItem('accessToken')
   localStorage.removeItem('refreshToken')
-  // Redirect to login page if not already there
+  // Clear query cache to prevent stale data on next session
+  queryClient.removeQueries()
+  queryClient.clear()
+  // Redirect to login page if not already there (full reload clears all in-memory state)
   if (
     !window.location.pathname.startsWith('/login') &&
     !window.location.pathname.startsWith('/register')

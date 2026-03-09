@@ -54,7 +54,7 @@ const channelIcons = {
   announcement: Megaphone,
 }
 
-export function ChannelSidebar({ serverId }: { serverId: string }) {
+export function ChannelSidebar({ serverId, channelNameFromUrl }: { serverId: string; channelNameFromUrl?: string }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -95,9 +95,18 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
   // Auto-redirect to slug URL if server has a slug and URL uses UUID
   useEffect(() => {
     if (server?.slug && serverId !== server.slug) {
-      navigate({ to: '/app/servers/$serverId', params: { serverId: server.slug }, replace: true })
+      // Preserve channelName when redirecting from UUID to slug URL
+      if (channelNameFromUrl) {
+        navigate({
+          to: '/app/servers/$serverId/$channelName',
+          params: { serverId: server.slug, channelName: channelNameFromUrl },
+          replace: true,
+        })
+      } else {
+        navigate({ to: '/app/servers/$serverId', params: { serverId: server.slug }, replace: true })
+      }
     }
-  }, [server?.slug, serverId, navigate])
+  }, [server?.slug, serverId, channelNameFromUrl, navigate])
 
   const { data: channels = [] } = useQuery({
     queryKey: ['channels', serverId],
@@ -275,12 +284,14 @@ export function ChannelSidebar({ serverId }: { serverId: string }) {
   )
 
   // Auto-select first channel (in useEffect, not render body)
+  // SKIP auto-select when URL already has a channelName — let server.tsx resolve it first
   useEffect(() => {
+    if (channelNameFromUrl) return // URL has a channel name, server.tsx will resolve it
     if (channels.length > 0 && !activeChannelId && !userChoseHomeRef.current) {
       const first = channels[0]!
       handleSelectChannel(first.id)
     }
-  }, [channels, activeChannelId, handleSelectChannel])
+  }, [channels, activeChannelId, handleSelectChannel, channelNameFromUrl])
 
   // Reset homeRef when serverId changes (navigating to a new server)
   useEffect(() => {

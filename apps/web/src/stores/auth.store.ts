@@ -1,4 +1,6 @@
 import { create } from 'zustand'
+import { queryClient } from '../lib/query-client'
+import { useChatStore } from './chat.store'
 
 interface User {
   id: string
@@ -32,6 +34,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: () => {
     localStorage.removeItem('accessToken')
     localStorage.removeItem('refreshToken')
+    // Clear all query cache to prevent stale data leaking across sessions
+    queryClient.removeQueries()
+    queryClient.clear()
+    // Reset chat state (activeServerId, activeChannelId, etc.)
+    useChatStore.getState().setActiveServer(null)
     set({ user: null, accessToken: null, isAuthenticated: false })
   },
 
