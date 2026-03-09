@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Copy, UserPlus, X } from 'lucide-react'
+import { Check, Copy, MessageSquare, UserPlus, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
@@ -127,12 +127,50 @@ export function MemberList() {
     queryClient.invalidateQueries({ queryKey: ['members', activeServerId, activeChannelId] })
   })
 
+  // Listen for channel member changes (buddy added/removed from channel)
+  useSocketEvent('channel:member-added', (data: { channelId: string }) => {
+    if (data.channelId === activeChannelId) {
+      queryClient.invalidateQueries({ queryKey: ['members', activeServerId, activeChannelId] })
+    }
+  })
+  useSocketEvent('channel:member-removed', (data: { channelId: string }) => {
+    if (data.channelId === activeChannelId) {
+      queryClient.invalidateQueries({ queryKey: ['members', activeServerId, activeChannelId] })
+    }
+  })
+
   // Kick / remove member mutation
   const kickMember = useMutation({
     mutationFn: ({ serverId, userId }: { serverId: string; userId: string }) =>
       fetchApi(`/api/servers/${serverId}/members/${userId}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['members', activeServerId, activeChannelId] })
+      setContextMenu(null)
+    },
+  })
+
+  // Remove bot from channel mutation
+  const removeBotFromChannel = useMutation({
+    mutationFn: ({ channelId, userId }: { channelId: string; userId: string }) =>
+      fetchApi(`/api/channels/${channelId}/members/${userId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['members', activeServerId, activeChannelId] })
+      setContextMenu(null)
+    },
+  })
+
+  // Update bot policy mutation
+  const updateBotPolicy = useMutation({
+    mutationFn: ({
+      channelId,
+      agentId,
+      mentionOnly,
+    }: { channelId: string; agentId: string; mentionOnly: boolean }) =>
+      fetchApi(`/api/channels/${channelId}/agents/${agentId}/policy`, {
+        method: 'PUT',
+        body: JSON.stringify({ mentionOnly }),
+      }),
+    onSuccess: () => {
       setContextMenu(null)
     },
   })
@@ -424,6 +462,7 @@ export function MemberList() {
       {showAddAgent && activeServerId && (
         <MemberAddAgentDialog
           serverId={activeServerId}
+          channelId={activeChannelId ?? undefined}
           onClose={() => setShowAddAgent(false)}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['members'] })
@@ -459,6 +498,72 @@ export function MemberList() {
             >
               {t('member.viewProfile')}
             </button>
+
+            {/* Channel-level buddy actions — only for bots in a channel */}
+            {contextMenu.member.user?.isBot && activeChannelId && (
+              <>
+                <div className="h-px bg-white/5 my-1" />
+                {/* Policy toggle */}
+                {(() => {
+                  const agent = buddyAgents.find(
+                    (a) => a.botUser?.id === contextMenu.member.user?.id,
+                  )
+                  if (!agent) return null
+                  return (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!activeChannelId) return
+                          updateBotPolicy.mutate({
+                            channelId: activeChannelId,
+                            agentId: agent.id,
+                            mentionOnly: true,
+                          })
+                        }}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
+                      >
+                        <MessageSquare size={14} />
+                        {t('member.policyMentionOnly')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!activeChannelId) return
+                          updateBotPolicy.mutate({
+                            channelId: activeChannelId,
+                            agentId: agent.id,
+                            mentionOnly: false,
+                          })
+                        }}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
+                      >
+                        <MessageSquare size={14} />
+                        {t('member.policyReplyAll')}
+                      </button>
+                    </>
+                  )
+                })()}
+                {/* Remove from channel */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!activeChannelId) return
+                    const name =
+                      contextMenu.member.user?.displayName ?? contextMenu.member.user?.username
+                    if (confirm(t('member.removeFromChannelConfirm', { name }))) {
+                      removeBotFromChannel.mutate({
+                        channelId: activeChannelId,
+                        userId: contextMenu.member.userId,
+                      })
+                    }
+                  }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-orange-400 hover:bg-orange-500/10 transition"
+                >
+                  {t('member.removeFromChannel')}
+                </button>
+              </>
+            )}
 
             {/* Kick / remove — admin+ only, not self, not owner */}
             {canKick &&
@@ -578,11 +683,13 @@ interface AgentDialogOption {
 
 function MemberAddAgentDialog({
   serverId,
+  channelId,
   onClose,
   onSuccess,
   t,
 }: {
   serverId: string
+  channelId?: string
   onClose: () => void
   onSuccess: () => void
   t: (key: string, opts?: Record<string, unknown>) => string
@@ -596,9 +703,30 @@ function MemberAddAgentDialog({
     queryFn: () => fetchApi<AgentDialogOption[]>('/api/agents'),
   })
 
-  // Already-added buddy user IDs
-  const members = queryClient.getQueryData<Member[]>(['members', serverId]) ?? []
-  const addedBotUserIds = new Set(members.filter((m) => m.user?.isBot).map((m) => m.userId))
+  // Server-level members (to find bots on the server)
+  const { data: serverMembers = [] } = useQuery({
+    queryKey: ['members', serverId, null],
+    queryFn: () => fetchApi<Member[]>(`/api/servers/${serverId}/members`),
+    enabled: !!channelId,
+  })
+
+  // Channel-level members (to find bots already in the channel)
+  const channelMembers =
+    queryClient.getQueryData<Member[]>(['members', serverId, channelId]) ?? []
+  const channelBotUserIds = new Set(
+    channelMembers.filter((m) => m.user?.isBot).map((m) => m.userId),
+  )
+
+  // Server-level bot user IDs
+  const serverBotUserIds = new Set(
+    serverMembers.filter((m) => m.user?.isBot).map((m) => m.userId),
+  )
+
+  // When a channel is active, show server bots not in this channel
+  // When no channel, show user's agents not yet on the server
+  const serverOnlyBotMembers = channelId
+    ? serverMembers.filter((m) => m.user?.isBot && !channelBotUserIds.has(m.userId))
+    : []
 
   const filtered = agents.filter((a) => {
     if (!search.trim()) return true
@@ -608,14 +736,17 @@ function MemberAddAgentDialog({
     return name.includes(q) || desc.includes(q)
   })
 
-  const handleAdd = async (agentId: string) => {
+  // Filter to only agents not yet on the server
+  const agentsNotOnServer = filtered.filter((a) => !serverBotUserIds.has(a.userId))
+
+  const handleAddToServer = async (agentId: string) => {
     setAddingId(agentId)
     try {
       await fetchApi(`/api/servers/${serverId}/agents`, {
         method: 'POST',
         body: JSON.stringify({ agentIds: [agentId] }),
       })
-      queryClient.invalidateQueries({ queryKey: ['members', serverId] })
+      queryClient.invalidateQueries({ queryKey: ['members'] })
       onSuccess()
     } catch {
       /* silently handle */
@@ -623,6 +754,25 @@ function MemberAddAgentDialog({
       setAddingId(null)
     }
   }
+
+  const handleAddToChannel = async (botUserId: string) => {
+    if (!channelId) return
+    setAddingId(botUserId)
+    try {
+      await fetchApi(`/api/channels/${channelId}/members`, {
+        method: 'POST',
+        body: JSON.stringify({ userId: botUserId }),
+      })
+      queryClient.invalidateQueries({ queryKey: ['members', serverId, channelId] })
+      onSuccess()
+    } catch {
+      /* silently handle */
+    } finally {
+      setAddingId(null)
+    }
+  }
+
+  const dialogTitle = channelId ? t('member.addBuddyToChannel') : t('channel.addAgent')
 
   return (
     <div
@@ -635,7 +785,7 @@ function MemberAddAgentDialog({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
-          <h2 className="text-lg font-bold text-text-primary">{t('channel.addAgent')}</h2>
+          <h2 className="text-lg font-bold text-text-primary">{dialogTitle}</h2>
           <button
             onClick={onClose}
             className="text-text-muted hover:text-text-primary transition p-1"
@@ -655,31 +805,78 @@ function MemberAddAgentDialog({
           />
         </div>
 
-        {/* Buddy list */}
-        {filtered.length === 0 ? (
-          <div className="px-5 py-8 text-center text-text-muted text-sm">
-            {agents.length === 0 ? t('channel.noAgentsAvailable') : t('channel.noSearchResults')}
-          </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-1.5">
-            {filtered.map((agent) => {
+        <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-1.5">
+          {/* Section: Server bots not in channel (when channel is active) */}
+          {channelId && serverOnlyBotMembers.length > 0 && (
+            <>
+              {serverOnlyBotMembers.map((member) => {
+                const user = member.user
+                if (!user) return null
+                const name = user.displayName || user.username
+                const agent = agents.find((a) => a.botUser?.id === user.id)
+                const description = agent?.config?.description
+                const isAdding = addingId === user.id
+
+                return (
+                  <div
+                    key={member.id}
+                    className="flex items-start gap-3 px-3 py-3 rounded-lg border transition border-white/5 bg-bg-tertiary/50 hover:bg-bg-tertiary hover:border-white/10"
+                  >
+                    <div className="shrink-0 mt-0.5">
+                      <UserAvatar
+                        userId={user.id}
+                        avatarUrl={user.avatarUrl}
+                        displayName={name}
+                        size="md"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-semibold text-text-primary truncate">
+                          {name}
+                        </span>
+                        <span className="text-[10px] bg-[#5865F2] text-white px-1.5 py-0.5 rounded-[3px] font-semibold flex items-center gap-0.5 shrink-0">
+                          <Check size={8} className="text-white" />
+                          Buddy
+                        </span>
+                      </div>
+                      {typeof description === 'string' && (
+                        <p className="text-xs text-text-muted mt-0.5 line-clamp-2">{description}</p>
+                      )}
+                      <p className="text-[11px] text-text-muted/70 mt-0.5">
+                        {t('member.notInChannel')}
+                      </p>
+                    </div>
+                    <div className="shrink-0 mt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => handleAddToChannel(user.id)}
+                        disabled={isAdding}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-md bg-primary hover:bg-primary-hover text-white transition disabled:opacity-50"
+                      >
+                        {isAdding ? t('common.loading') : t('member.addToChannel')}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </>
+          )}
+
+          {/* Section: Agents not on server */}
+          {agentsNotOnServer.length > 0 &&
+            agentsNotOnServer.map((agent) => {
               const name = agent.botUser?.displayName ?? agent.botUser?.username ?? 'Buddy'
               const description =
                 typeof agent.config?.description === 'string' ? agent.config.description : null
               const ownerName = agent.owner?.displayName ?? agent.owner?.username ?? null
-              const isAdded = addedBotUserIds.has(agent.userId)
               const isAdding = addingId === agent.id
 
               return (
                 <div
                   key={agent.id}
-                  className={`flex items-start gap-3 px-3 py-3 rounded-lg border transition ${
-                    isAdded
-                      ? 'border-white/5 bg-white/[0.02] opacity-60'
-                      : 'border-white/5 bg-bg-tertiary/50 hover:bg-bg-tertiary hover:border-white/10'
-                  }`}
+                  className="flex items-start gap-3 px-3 py-3 rounded-lg border transition border-white/5 bg-bg-tertiary/50 hover:bg-bg-tertiary hover:border-white/10"
                 >
-                  {/* Avatar */}
                   <div className="shrink-0 mt-0.5">
                     <UserAvatar
                       userId={agent.botUser?.id}
@@ -688,8 +885,6 @@ function MemberAddAgentDialog({
                       size="md"
                     />
                   </div>
-
-                  {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm font-semibold text-text-primary truncate">
@@ -719,29 +914,29 @@ function MemberAddAgentDialog({
                       </p>
                     )}
                   </div>
-
-                  {/* Action button */}
                   <div className="shrink-0 mt-0.5">
-                    {isAdded ? (
-                      <span className="text-xs text-text-muted px-2.5 py-1.5 rounded-md bg-white/5">
-                        {t('channel.alreadyAdded')}
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleAdd(agent.id)}
-                        disabled={isAdding}
-                        className="text-xs font-semibold px-3 py-1.5 rounded-md bg-primary hover:bg-primary-hover text-white transition disabled:opacity-50"
-                      >
-                        {isAdding ? t('common.loading') : t('channel.addAgentConfirm')}
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleAddToServer(agent.id)}
+                      disabled={isAdding}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-md bg-primary hover:bg-primary-hover text-white transition disabled:opacity-50"
+                    >
+                      {isAdding ? t('common.loading') : t('channel.addAgentConfirm')}
+                    </button>
                   </div>
                 </div>
               )
             })}
-          </div>
-        )}
+
+          {/* Empty state */}
+          {serverOnlyBotMembers.length === 0 && agentsNotOnServer.length === 0 && (
+            <div className="px-5 py-8 text-center text-text-muted text-sm">
+              {agents.length === 0
+                ? t('channel.noAgentsAvailable')
+                : t('channel.noSearchResults')}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

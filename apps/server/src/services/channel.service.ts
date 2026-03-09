@@ -20,13 +20,16 @@ export class ChannelService {
       topic: input.topic,
     })
 
-    // Auto-add all server members to the new channel
+    // Auto-add non-bot server members to the new channel
+    // Bots must be explicitly added to channels for per-channel isolation
     if (channel) {
       try {
         const members = await this.deps.serverDao.getMembers(serverId)
         const channelId = channel.id
         for (const m of members) {
-          await this.deps.channelMemberDao.add(channelId, m.userId)
+          if (!m.user?.isBot) {
+            await this.deps.channelMemberDao.add(channelId, m.userId)
+          }
         }
       } catch {
         /* channel_members table may not exist yet */

@@ -255,7 +255,15 @@
     "activityThinking": "思考中...",
     "activityWorking": "工作中...",
     "activityReady": "就绪",
-    "activityPreparing": "准备中..."
+    "activityPreparing": "准备中...",
+    "addToChannel": "添加到频道",
+    "removeFromChannel": "从频道移除",
+    "removeFromChannelConfirm": "确定要将 {{name}} 从此频道移除吗？",
+    "addBuddyToChannel": "添加 Buddy 到频道",
+    "policyMentionOnly": "仅 @提及时回复",
+    "policyReplyAll": "回复所有消息",
+    "notInChannel": "未加入频道",
+    "inChannel": "已加入频道"
   },
   "features": {
     "pageTitle": "所有你需要的协作功能",

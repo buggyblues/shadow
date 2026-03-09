@@ -551,36 +551,74 @@ export async function monitorShadowProvider(
   })
 
   // Listen for channel:created — new channel added to a server the bot is in
+  // With channel member isolation, bots don't auto-join new channels.
+  // This event is only sent to non-bot members now, but guard anyway.
   socket.on(
     'channel:created',
     async (data: { id: string; name: string; serverId: string; type: string }) => {
       runtime.log?.(
-        `[ws] Received channel:created: #${data.name} (${data.id}) in server ${data.serverId}`,
+        `[ws] Received channel:created: #${data.name} (${data.id}) in server ${data.serverId} — ignoring (bot must be explicitly added)`,
       )
+    },
+  )
 
-      // Check if this channel is in a server we're monitoring
-      const monitoredServer = remoteConfig?.servers.find((s) => s.id === data.serverId)
-      if (!monitoredServer) {
-        runtime.log?.(`[ws] channel:created for unknown server ${data.serverId}, ignoring`)
-        return
+  // Listen for agent:policy-changed — update channel policy in real-time
+  socket.on(
+    'agent:policy-changed',
+    (data: { agentId: string; serverId: string; channelId: string; mentionOnly: boolean }) => {
+      if (data.agentId !== agentId) return
+      runtime.log?.(
+        `[ws] Received agent:policy-changed for channel ${data.channelId}: mentionOnly=${data.mentionOnly}`,
+      )
+      const existing = channelPolicies.get(data.channelId)
+      if (existing) {
+        channelPolicies.set(data.channelId, { ...existing, mentionOnly: data.mentionOnly })
+      } else {
+        channelPolicies.set(data.channelId, {
+          listen: true,
+          reply: true,
+          mentionOnly: data.mentionOnly,
+        })
       }
+    },
+  )
 
-      // Default policy: listen + reply (same as when added from config)
-      if (!channelPolicies.has(data.id)) {
+  // Listen for channel:member-added — bot added to a channel, join its room
+  socket.on(
+    'channel:member-added',
+    (data: { channelId: string; serverId: string }) => {
+      runtime.log?.(
+        `[ws] Received channel:member-added: channel ${data.channelId} in server ${data.serverId}`,
+      )
+      if (!channelPolicies.has(data.channelId)) {
         const defaultPolicy: ShadowChannelPolicy = { listen: true, reply: true, mentionOnly: false }
-        channelPolicies.set(data.id, defaultPolicy)
-        allChannelIds.push(data.id)
-        runtime.log?.(`[config] New channel: #${data.name} (${data.id}) — joining with default policy`)
-        socket.emit(
-          'channel:join',
-          { channelId: data.id },
-          (ack: { ok: boolean } | undefined) => {
-            if (ack?.ok) {
-              runtime.log?.(`[ws] ✓ Joined new channel room ${data.id}`)
-            }
-          },
-        )
+        channelPolicies.set(data.channelId, defaultPolicy)
+        allChannelIds.push(data.channelId)
       }
+      socket.emit(
+        'channel:join',
+        { channelId: data.channelId },
+        (ack: { ok: boolean } | undefined) => {
+          if (ack?.ok) {
+            runtime.log?.(`[ws] ✓ Joined channel room ${data.channelId} after member-added`)
+          }
+        },
+      )
+    },
+  )
+
+  // Listen for channel:member-removed — bot removed from a channel, leave its room
+  socket.on(
+    'channel:member-removed',
+    (data: { channelId: string; serverId: string }) => {
+      runtime.log?.(
+        `[ws] Received channel:member-removed: channel ${data.channelId} in server ${data.serverId}`,
+      )
+      channelPolicies.delete(data.channelId)
+      const idx = allChannelIds.indexOf(data.channelId)
+      if (idx !== -1) allChannelIds.splice(idx, 1)
+      socket.emit('channel:leave', { channelId: data.channelId })
+      runtime.log?.(`[ws] Left channel room ${data.channelId} after member-removed`)
     },
   )
 

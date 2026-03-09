@@ -255,7 +255,15 @@
     "activityThinking": "Thinking...",
     "activityWorking": "Working...",
     "activityReady": "Ready",
-    "activityPreparing": "Preparing..."
+    "activityPreparing": "Preparing...",
+    "addToChannel": "Add to Channel",
+    "removeFromChannel": "Remove from Channel",
+    "removeFromChannelConfirm": "Are you sure you want to remove {{name}} from this channel?",
+    "addBuddyToChannel": "Add Buddy to Channel",
+    "policyMentionOnly": "@mention only",
+    "policyReplyAll": "Reply to all",
+    "notInChannel": "Not in channel",
+    "inChannel": "In channel"
   },
   "features": {
     "pageTitle": "All the Collaboration Features You Need",

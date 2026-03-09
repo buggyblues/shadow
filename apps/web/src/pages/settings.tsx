@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router'
-import { ArrowLeft, Bot, BookOpen, Check, Compass, Copy, FileText, Link2, LogOut, Plus, Rocket, Save, Shield, Trash2, User, X } from 'lucide-react'
+import { Bot, BookOpen, Check, Compass, Copy, FileText, Link2, LogOut, Plus, Rocket, Save, Shield, Trash2, User, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { UserAvatar } from '../components/common/avatar'
@@ -79,19 +79,7 @@ export function SettingsPage() {
     <div className="flex-1 flex bg-bg-primary overflow-hidden">
       {/* Sidebar */}
       <div className="w-60 bg-bg-secondary flex flex-col shrink-0">
-        <div className="p-4 border-b-2 border-bg-tertiary">
-          <button
-            onClick={() => navigate({ to: '/app' })}
-            className="flex items-center gap-2 text-[#949ba4] hover:text-[#dbdee1] transition text-[15px] font-medium"
-          >
-            <ArrowLeft size={16} />
-            {t('settings.back')}
-          </button>
-        </div>
-        <div className="px-5 py-3 text-[12px] font-bold uppercase text-[#949ba4] tracking-wide mt-2">
-          {t('settings.sidebarTitle')}
-        </div>
-        <nav className="px-3 space-y-0.5">
+        <nav className="px-3 pt-4 space-y-0.5">
           <button
             onClick={() => setActiveTab('quickstart')}
             className={`group flex items-center gap-3 w-full px-3 py-2 rounded-md text-[15px] font-medium transition ${
@@ -106,6 +94,9 @@ export function SettingsPage() {
             />
             {t('settings.tabQuickStart')}
           </button>
+          <div className="px-2 py-3 text-[11px] font-bold uppercase text-[#949ba4] tracking-wide mt-2">
+            {t('settings.sidebarTitle')}
+          </div>
           <button
             onClick={() => setActiveTab('profile')}
             className={`group flex items-center gap-3 w-full px-3 py-2 rounded-md text-[15px] font-medium transition ${
@@ -180,6 +171,30 @@ export function SettingsPage() {
         <div className="max-w-2xl mx-auto p-8">
           {activeTab === 'quickstart' && (
             <>
+              {/* Profile Card */}
+              <div className="bg-bg-secondary rounded-xl border border-white/5 p-6 mb-8 flex items-center gap-5">
+                <UserAvatar
+                  userId={user.id}
+                  avatarUrl={user.avatarUrl}
+                  displayName={user.displayName || user.username}
+                  size="xl"
+                />
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-xl font-bold text-text-primary truncate">
+                    {user.displayName || user.username}
+                  </h2>
+                  <p className="text-sm text-text-muted">@{user.username}</p>
+                  <p className="text-xs text-text-muted mt-1">{user.email}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('profile')}
+                  className="px-3 py-1.5 text-xs text-text-muted hover:text-text-primary bg-white/5 hover:bg-white/10 rounded-lg transition"
+                >
+                  {t('common.edit')}
+                </button>
+              </div>
+
               {/* Hero */}
               <div className="text-center mb-10">
                 <img src="/Logo.svg" alt="Shadow" className="w-16 h-16 mx-auto mb-4 opacity-80" />

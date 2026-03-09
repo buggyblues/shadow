@@ -255,7 +255,15 @@
     "activityThinking": "考え中...",
     "activityWorking": "作業中...",
     "activityReady": "準備完了",
-    "activityPreparing": "準備中..."
+    "activityPreparing": "準備中...",
+    "addToChannel": "チャンネルに追加",
+    "removeFromChannel": "チャンネルから削除",
+    "removeFromChannelConfirm": "{{name}} をこのチャンネルから削除してもよろしいですか？",
+    "addBuddyToChannel": "Buddy をチャンネルに追加",
+    "policyMentionOnly": "@メンションのみ",
+    "policyReplyAll": "すべてに返信",
+    "notInChannel": "未参加",
+    "inChannel": "参加中"
   },
   "features": {
     "pageTitle": "必要なコラボ機能がすべて揃っています",

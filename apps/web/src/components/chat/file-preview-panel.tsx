@@ -684,6 +684,7 @@ export function FilePreviewPanel({ attachment, onClose }: FilePreviewPanelProps)
 
   // Drag-to-resize state
   const [panelWidth, setPanelWidth] = useState(520)
+  const [isResizing, setIsResizing] = useState(false)
   const isDragging = useRef(false)
   const dragStartX = useRef(0)
   const dragStartWidth = useRef(520)
@@ -691,6 +692,7 @@ export function FilePreviewPanel({ attachment, onClose }: FilePreviewPanelProps)
   const handleDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     isDragging.current = true
+    setIsResizing(true)
     dragStartX.current = e.clientX
     dragStartWidth.current = panelWidth
     document.body.style.cursor = 'col-resize'
@@ -699,12 +701,15 @@ export function FilePreviewPanel({ attachment, onClose }: FilePreviewPanelProps)
     const handleMouseMove = (ev: MouseEvent) => {
       if (!isDragging.current) return
       const delta = dragStartX.current - ev.clientX
-      const newWidth = Math.max(320, Math.min(window.innerWidth * 0.8, dragStartWidth.current + delta))
+      // Limit: min 320px, max = window width minus 400px for message area (at least)
+      const maxWidth = Math.min(window.innerWidth * 0.6, window.innerWidth - 400)
+      const newWidth = Math.max(320, Math.min(maxWidth, dragStartWidth.current + delta))
       setPanelWidth(newWidth)
     }
 
     const handleMouseUp = () => {
       isDragging.current = false
+      setIsResizing(false)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
       document.removeEventListener('mousemove', handleMouseMove)
@@ -935,6 +940,10 @@ export function FilePreviewPanel({ attachment, onClose }: FilePreviewPanelProps)
         <div className="fixed inset-0 z-40 bg-black/60" onClick={() => setIsFullscreen(false)} />
       )}
       <div className={panelClasses} style={isFullscreen ? undefined : { width: panelWidth }}>
+      {/* Transparent overlay during drag to prevent iframe from capturing mouse events */}
+      {isResizing && (
+        <div className="absolute inset-0 z-20" />
+      )}
       {/* Drag handle on left edge */}
       {!isFullscreen && (
         <div

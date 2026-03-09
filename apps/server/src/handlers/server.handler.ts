@@ -287,13 +287,14 @@ export function createServerHandler(container: AppContainer) {
         await agentPolicyService.ensureServerDefault(agentId, id)
         results.push({ agentId, success: true })
 
-        // Emit member:joined for the bot
+        // Emit member:joined to the server's channels so existing members see the bot
+        // The bot is not yet in any channel, but server members should know it's available
         try {
           const io = container.resolve('io')
-          const channelDao = container.resolve('channelDao')
           const userDao = container.resolve('userDao')
+          const serverDao = container.resolve('serverDao')
           const botUser = await userDao.findById(agent.userId)
-          const channels = await channelDao.findByServerId(id)
+          const serverMembers = await serverDao.getMembers(id)
           const payload = {
             serverId: id,
             userId: agent.userId,
@@ -302,10 +303,13 @@ export function createServerHandler(container: AppContainer) {
             avatarUrl: botUser?.avatarUrl ?? null,
             isBot: true,
           }
-          for (const ch of channels) {
-            io.to(`channel:${ch.id}`).emit('member:joined', payload)
+          // Notify all non-bot server members about the new bot
+          for (const m of serverMembers) {
+            if (!m.user?.isBot) {
+              io.to(`user:${m.userId}`).emit('member:joined', payload)
+            }
           }
-          // Notify the bot directly so its monitor can join new channels
+          // Notify the bot directly so its monitor can connect
           io.to(`user:${agent.userId}`).emit('server:joined', {
             serverId: id,
             agentId,

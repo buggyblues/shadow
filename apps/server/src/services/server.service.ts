@@ -244,14 +244,9 @@ export class ServerService {
     }
     const member = await this.deps.serverDao.addMember(serverId, botUserId, 'member')
 
-    // Auto-add bot to all existing channels in the server
-    try {
-      const channels = await this.deps.channelDao.findByServerId(serverId)
-      const channelIds = channels.map((ch) => ch.id)
-      await this.deps.channelMemberDao.addBulk(channelIds, botUserId)
-    } catch {
-      /* channel_members table may not exist yet */
-    }
+    // NOTE: Bots are NOT auto-added to all channels.
+    // They must explicitly join channels via the channel join API or be added by the owner.
+    // This enables per-channel Buddy isolation.
 
     return member
   }

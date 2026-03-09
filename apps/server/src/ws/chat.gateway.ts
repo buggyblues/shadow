@@ -11,6 +11,21 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
     socket.on(
       'channel:join',
       async ({ channelId }: { channelId: string }, ack?: (res: { ok: boolean }) => void) => {
+        // Verify channel membership before joining the room
+        if (userId) {
+          try {
+            const channelMemberDao = container.resolve('channelMemberDao')
+            const membership = await channelMemberDao.get(channelId, userId)
+            if (!membership) {
+              logger.warn({ userId, channelId }, 'Denied channel:join — not a member')
+              if (typeof ack === 'function') ack({ ok: false })
+              return
+            }
+          } catch {
+            /* membership check failed, allow join as fallback */
+          }
+        }
+
         await socket.join(`channel:${channelId}`)
         logger.info({ userId, channelId, socketId: socket.id }, 'Joined channel room')
         // Send ack if client provided a callback
@@ -38,6 +53,14 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
         if (!userId) return
 
         try {
+          // Verify channel membership before sending
+          const channelMemberDao = container.resolve('channelMemberDao')
+          const membership = await channelMemberDao.get(data.channelId, userId)
+          if (!membership) {
+            socket.emit('error', { message: 'You are not a member of this channel' })
+            return
+          }
+
           const messageService = container.resolve('messageService')
 
           let threadId = data.threadId

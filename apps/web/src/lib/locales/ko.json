@@ -255,7 +255,15 @@
     "activityThinking": "생각 중...",
     "activityWorking": "작업 중...",
     "activityReady": "준비 완료",
-    "activityPreparing": "준비 중..."
+    "activityPreparing": "준비 중...",
+    "addToChannel": "채널에 추가",
+    "removeFromChannel": "채널에서 제거",
+    "removeFromChannelConfirm": "{{name}}을(를) 이 채널에서 제거하시겠습니까?",
+    "addBuddyToChannel": "Buddy를 채널에 추가",
+    "policyMentionOnly": "@멘션만",
+    "policyReplyAll": "모든 메시지에 답장",
+    "notInChannel": "채널 미참여",
+    "inChannel": "채널 참여 중"
   },
   "features": {
     "pageTitle": "필요한 모든 협업 기능",
