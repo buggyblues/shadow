@@ -12,6 +12,14 @@ import {
 export function createServerHandler(container: AppContainer) {
   const serverHandler = new Hono()
 
+  const resolveServerId = async (idOrSlug: string) => {
+    const serverService = container.resolve('serverService')
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug)
+    if (isUuid) return idOrSlug
+    const bySlug = await serverService.getBySlug(idOrSlug)
+    return bySlug.id
+  }
+
   // Public endpoint: GET /api/servers/discover - browse public servers
   serverHandler.get('/discover', async (c) => {
     const serverService = container.resolve('serverService')
@@ -180,8 +188,9 @@ export function createServerHandler(container: AppContainer) {
   // GET /api/servers/:id/members
   serverHandler.get('/:id/members', async (c) => {
     const serverService = container.resolve('serverService')
-    const id = c.req.param('id')
-    const members = await serverService.getMembers(id)
+    const idOrSlug = c.req.param('id')
+    const serverId = await resolveServerId(idOrSlug)
+    const members = await serverService.getMembers(serverId)
     return c.json(members)
   })
 

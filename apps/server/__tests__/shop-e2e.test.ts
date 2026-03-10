@@ -24,6 +24,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { type AppContainer, createAppContainer } from '../src/container'
 import type { Database } from '../src/db'
 import * as schema from '../src/db/schema'
+import { createServerHandler } from '../src/handlers/server.handler'
 import { createShopHandler } from '../src/handlers/shop.handler'
 import { signAccessToken } from '../src/lib/jwt'
 
@@ -45,6 +46,7 @@ let buddyUserId: string
 let adminToken: string
 let buyerToken: string
 let serverId: string
+let serverSlug: string
 
 // IDs tracked across tests
 let shopId: string
@@ -106,6 +108,7 @@ beforeAll(async () => {
   })
 
   app.route('/api', createShopHandler(container))
+  app.route('/api/servers', createServerHandler(container))
 
   // Create test users directly in DB
   const userDao = container.resolve('userDao')
@@ -147,9 +150,16 @@ beforeAll(async () => {
   // Create a server + admin membership
   const server = await serverDao.create({ name: `ShopTestServer-${ts}`, ownerId: adminUserId })
   serverId = server!.id
+  serverSlug = (server as { slug?: string }).slug || ''
   await serverDao.addMember(serverId, adminUserId, 'owner')
   await serverDao.addMember(serverId, buyerUserId, 'member')
   await serverDao.addMember(serverId, buddyUserId, 'member')
+
+  if (!serverSlug) {
+    const serverService = container.resolve('serverService')
+    const loaded = await serverService.getById(serverId)
+    serverSlug = loaded.slug
+  }
 }, 30_000)
 
 afterAll(async () => {
@@ -188,6 +198,14 @@ afterAll(async () => {
    ══════════════════════════════════════════════════════════ */
 
 describe('Shop metadata', () => {
+  it('members endpoint should not 500 on non-uuid identifier', async () => {
+    const identifier = serverSlug || '测试'
+    const res = await req('GET', `/api/servers/${encodeURIComponent(identifier)}/members`, {
+      token: adminToken,
+    })
+    expect(res.status).not.toBe(500)
+  })
+
   it('should auto-create shop on first GET', async () => {
     const res = await req('GET', `/api/servers/${serverId}/shop`, { token: adminToken })
     expect(res.status).toBe(200)

@@ -107,7 +107,7 @@ export function MessageInput({
 
   // Insert mention at cursor
   const insertMention = useCallback(
-    (username: string) => {
+    (member: Member) => {
       const textarea = textareaRef.current
       if (!textarea) return
 
@@ -121,13 +121,14 @@ export function MessageInput({
 
       const before = text.slice(0, atIndex)
       const after = text.slice(cursorPos)
-      const newContent = `${before}@${username} ${after}`
+      const newContent = `${before}<@${member.userId}> ${after}`
       setContent(newContent)
       setMentionQuery(null)
       setMentionIndex(0)
 
       // Restore cursor position after React re-render
-      const newCursorPos = atIndex + username.length + 2 // @ + username + space
+      const mentionToken = `<@${member.userId}> `
+      const newCursorPos = atIndex + mentionToken.length
       requestAnimationFrame(() => {
         textarea.focus()
         textarea.setSelectionRange(newCursorPos, newCursorPos)
@@ -146,7 +147,12 @@ export function MessageInput({
       if (pendingFiles.length > 0) {
         // Upload files first, then create the message with all attachments
         // so the broadcast includes complete attachment data for AI agents.
-        const uploadedAttachments: { filename: string; url: string; contentType: string; size: number }[] = []
+        const uploadedAttachments: {
+          filename: string
+          url: string
+          contentType: string
+          size: number
+        }[] = []
         for (const pf of pendingFiles) {
           const formData = new FormData()
           formData.append('file', pf.file)
@@ -215,7 +221,7 @@ export function MessageInput({
         e.preventDefault()
         const selected = filteredMembers[mentionIndex]
         if (selected?.user) {
-          insertMention(selected.user.username)
+          insertMention(selected)
         }
         return
       }
@@ -331,7 +337,7 @@ export function MessageInput({
               onMouseEnter={() => setMentionIndex(i)}
               onMouseDown={(e) => {
                 e.preventDefault() // prevent textarea blur
-                if (member.user) insertMention(member.user.username)
+                if (member.user) insertMention(member)
               }}
             >
               <UserAvatar

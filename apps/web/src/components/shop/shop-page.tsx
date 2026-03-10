@@ -290,6 +290,10 @@ export function ShopPage({ serverId, isAdmin, onClose }: ShopPageProps) {
         <OverlayContainer onClose={() => setOverlay(null)} title="我的收藏">
           <FavoriteProducts
             serverId={serverId}
+            onAddToCart={(product, e) => {
+              e.stopPropagation()
+              quickAddToCart.mutate({ productId: product.id, quantity: 1 })
+            }}
             onOpenProduct={(productId) => {
               setActiveProductId(productId)
               setOverlay(null)
@@ -303,9 +307,11 @@ export function ShopPage({ serverId, isAdmin, onClose }: ShopPageProps) {
 
 function FavoriteProducts({
   serverId,
+  onAddToCart,
   onOpenProduct,
 }: {
   serverId: string
+  onAddToCart?: (product: Product, e: React.MouseEvent) => void
   onOpenProduct: (productId: string) => void
 }) {
   const [favoriteIds, setFavoriteIds] = useState<string[]>([])
@@ -341,35 +347,17 @@ function FavoriteProducts({
   }
 
   return (
-    <div className="p-4 grid gap-3 overflow-y-auto h-full">
-      {products.map((product) => (
-        <button
-          key={product.id}
-          type="button"
-          onClick={() => onOpenProduct(product.id)}
-          className="w-full text-left p-3 rounded-2xl bg-white dark:bg-bg-secondary border border-gray-100 dark:border-border-dim hover:border-rose-200 dark:hover:border-rose-800 transition-all"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 shrink-0">
-              {product.media?.[0]?.url ? (
-                <img
-                  src={product.media[0].url}
-                  alt={product.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : null}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="font-bold text-sm text-gray-900 dark:text-text-primary truncate">
-                {product.name}
-              </div>
-              <div className="text-xs text-rose-500 mt-1">
-                <PriceDisplay amount={product.basePrice} />
-              </div>
-            </div>
-          </div>
-        </button>
-      ))}
+    <div className="h-full overflow-y-auto custom-scrollbar px-4 md:px-8 py-6">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+        {products.map((product) => (
+          <ProductCard
+            key={product.id}
+            product={product}
+            onClick={() => onOpenProduct(product.id)}
+            onAddToCart={onAddToCart}
+          />
+        ))}
+      </div>
     </div>
   )
 }

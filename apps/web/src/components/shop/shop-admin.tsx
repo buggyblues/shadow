@@ -1422,25 +1422,6 @@ function ShopSettings({ serverId }: { serverId: string }) {
           </div>
         </div>
 
-        <div className="mt-8 pt-6 border-t border-gray-100 dark:border-border-dim flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex-1">
-            {updateMutation.isSuccess && (
-              <span className="text-emerald-500 font-bold text-sm bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 animate-pulse">
-                <CheckCircle size={14} /> 设置已生效并保存
-              </span>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => updateMutation.mutate()}
-            disabled={updateMutation.isPending}
-            className="w-full md:w-auto flex items-center justify-center gap-2 px-8 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-bold rounded-xl hover:scale-[1.02] active:scale-[0.98] shadow-xl hover:shadow-gray-900/20 dark:hover:shadow-white/20 transition-all disabled:opacity-50"
-          >
-            <Settings size={18} />
-            {updateMutation.isPending ? '保存中...' : '保存最新设置'}
-          </button>
-        </div>
-
         <div className="mt-6 p-4 rounded-2xl border border-gray-100 dark:border-border-dim bg-gray-50 dark:bg-bg-tertiary">
           <p className="text-sm font-bold text-gray-900 dark:text-white mb-2">客服 Buddy 配置</p>
           <p className="text-xs text-gray-500 dark:text-text-muted mb-3">
@@ -1466,6 +1447,25 @@ function ShopSettings({ serverId }: { serverId: string }) {
               <ChevronDown size={14} />
             </div>
           </div>
+        </div>
+
+        <div className="mt-8 pt-6 border-t border-gray-100 dark:border-border-dim flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex-1">
+            {updateMutation.isSuccess && (
+              <span className="text-emerald-500 font-bold text-sm bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 animate-pulse">
+                <CheckCircle size={14} /> 设置已生效并保存
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => updateMutation.mutate()}
+            disabled={updateMutation.isPending}
+            className="w-full md:w-auto flex items-center justify-center gap-2 px-8 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-bold rounded-xl hover:scale-[1.02] active:scale-[0.98] shadow-xl hover:shadow-gray-900/20 dark:hover:shadow-white/20 transition-all disabled:opacity-50"
+          >
+            <Settings size={18} />
+            {updateMutation.isPending ? '保存中...' : '保存最新设置'}
+          </button>
         </div>
       </div>
     </div>

@@ -12,7 +12,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
@@ -241,25 +241,45 @@ export function MessageBubble({
     addSuffix: true,
   })
 
+  const resolveMentionLabel = useCallback(
+    (mention: string) => {
+      const idMatch = mention.match(/^<@([0-9a-f-]{36})>$/i)
+      if (idMatch?.[1]) {
+        const byId = membersList.find((m: MemberEntry) => m.userId === idMatch[1])
+        const display = byId?.user?.displayName ?? byId?.user?.username
+        return display ? `@${display}` : mention
+      }
+      return mention
+    },
+    [membersList],
+  )
+
   /**
-   * Process React children to highlight @mention patterns.
-   * Splits text nodes on @username and wraps matches in styled spans with hover cards.
+   * Process React children to highlight mention patterns.
+   * Supports both canonical <@userId> and legacy @username forms.
    */
   const renderMentions = (children: React.ReactNode): React.ReactNode => {
     if (!children) return children
     const childArray = Array.isArray(children) ? children : [children]
     return childArray.map((child, idx) => {
       if (typeof child !== 'string') return child
-      const parts = child.split(/(@\w+)/g)
+      const parts = child.split(/(<@[0-9a-f-]{36}>|@[A-Za-z0-9_-]+)/gi)
       if (parts.length === 1) return child
       return parts.map((part, pi) => {
-        if (/^@\w+$/.test(part)) {
-          return <MentionSpan key={`${idx}-${pi}`} mention={part} />
+        if (/^<@[0-9a-f-]{36}>$/i.test(part) || /^@[A-Za-z0-9_-]+$/.test(part)) {
+          return (
+            <MentionSpan key={`${idx}-${pi}`} mention={part} label={resolveMentionLabel(part)} />
+          )
         }
         return part
       })
     })
   }
+
+  const markdownContent = useMemo(
+    () => message.content.replace(/<@([0-9a-f-]{36})>/gi, (raw) => resolveMentionLabel(raw)),
+    [message.content, resolveMentionLabel],
+  )
 
   return (
     <div
@@ -346,7 +366,12 @@ export function MessageBubble({
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+                if (
+                  e.key === 'Enter' &&
+                  !e.shiftKey &&
+                  !e.nativeEvent.isComposing &&
+                  e.keyCode !== 229
+                ) {
                   e.preventDefault()
                   handleSaveEdit()
                 } else if (e.key === 'Escape') {
@@ -395,7 +420,7 @@ export function MessageBubble({
                   td: ({ children }) => <td>{renderMentions(children)}</td>,
                 }}
               >
-                {message.content}
+                {markdownContent}
               </ReactMarkdown>
             </div>
           )
@@ -726,9 +751,7 @@ export function MessageBubble({
                       const confirmKey = author?.isBot
                         ? 'member.removeBotConfirm'
                         : 'member.kickConfirm'
-                      const titleKey = author?.isBot
-                        ? 'member.removeBot'
-                        : 'member.kickMember'
+                      const titleKey = author?.isBot ? 'member.removeBot' : 'member.kickMember'
                       const ok = await useConfirmStore.getState().confirm({
                         title: t(titleKey),
                         message: t(confirmKey, { name }),
@@ -793,7 +816,7 @@ interface BuddyAgentEntry {
   } | null
 }
 
-function MentionSpan({ mention }: { mention: string }) {
+function MentionSpan({ mention, label }: { mention: string; label?: string }) {
   const { t } = useTranslation()
   const [showCard, setShowCard] = useState(false)
   const [pinned, setPinned] = useState(false)
@@ -805,13 +828,14 @@ function MentionSpan({ mention }: { mention: string }) {
   const currentUser = useAuthStore((s) => s.user)
   const queryClient = useQueryClient()
 
-  const username = mention.slice(1) // strip @
+  const mentionedUserId = mention.match(/^<@([0-9a-f-]{36})>$/i)?.[1]
+  const username = mention.startsWith('@') ? mention.slice(1) : undefined
 
   // Look up user from cached members query
   const members = queryClient.getQueryData<MemberEntry[]>(['members', activeServerId]) ?? []
-  const member = members.find(
-    (m) => m.user?.username === username || m.user?.displayName === username,
-  )
+  const member = mentionedUserId
+    ? members.find((m) => m.userId === mentionedUserId)
+    : members.find((m) => m.user?.username === username || m.user?.displayName === username)
   const user = member?.user
 
   // Buddy metadata
@@ -877,7 +901,7 @@ function MentionSpan({ mention }: { mention: string }) {
         onClick={handleClick}
         onContextMenu={handleContextMenu}
       >
-        {mention}
+        {label ?? mention}
       </span>
 
       {/* Hover card (portal to body to avoid clipping) */}
@@ -969,9 +993,7 @@ function MentionSpan({ mention }: { mention: string }) {
                       const confirmKey = user?.isBot
                         ? 'member.removeBotConfirm'
                         : 'member.kickConfirm'
-                      const titleKey = user?.isBot
-                        ? 'member.removeBot'
-                        : 'member.kickMember'
+                      const titleKey = user?.isBot ? 'member.removeBot' : 'member.kickMember'
                       const ok = await useConfirmStore.getState().confirm({
                         title: t(titleKey),
                         message: t(confirmKey, { name }),
