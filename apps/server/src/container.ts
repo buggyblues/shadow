@@ -8,6 +8,14 @@ import { InviteCodeDao } from './dao/invite-code.dao'
 import { MessageDao } from './dao/message.dao'
 import { NotificationDao } from './dao/notification.dao'
 import { ServerDao } from './dao/server.dao'
+import { CartDao } from './dao/cart.dao'
+import { EntitlementDao } from './dao/entitlement.dao'
+import { OrderDao } from './dao/order.dao'
+import { ProductCategoryDao } from './dao/product-category.dao'
+import { ProductDao, ProductMediaDao, SkuDao } from './dao/product.dao'
+import { ReviewDao } from './dao/review.dao'
+import { ShopDao } from './dao/shop.dao'
+import { WalletDao } from './dao/wallet.dao'
 // DAO classes
 import { UserDao } from './dao/user.dao'
 import type { Database } from './db'
@@ -25,6 +33,13 @@ import { NotificationService } from './services/notification.service'
 import { PermissionService } from './services/permission.service'
 import { SearchService } from './services/search.service'
 import { ServerService } from './services/server.service'
+import { ShopService } from './services/shop.service'
+import { ProductService } from './services/product.service'
+import { WalletService } from './services/wallet.service'
+import { CartService } from './services/cart.service'
+import { OrderService } from './services/order.service'
+import { ReviewService } from './services/review.service'
+import { EntitlementService } from './services/entitlement.service'
 
 export interface Cradle {
   // Infrastructure
@@ -43,6 +58,18 @@ export interface Cradle {
   agentPolicyDao: AgentPolicyDao
   inviteCodeDao: InviteCodeDao
 
+  // Shop DAOs
+  shopDao: ShopDao
+  productDao: ProductDao
+  productCategoryDao: ProductCategoryDao
+  productMediaDao: ProductMediaDao
+  skuDao: SkuDao
+  walletDao: WalletDao
+  orderDao: OrderDao
+  reviewDao: ReviewDao
+  entitlementDao: EntitlementDao
+  cartDao: CartDao
+
   // Services
   authService: AuthService
   serverService: ServerService
@@ -55,6 +82,13 @@ export interface Cradle {
   mediaService: MediaService
   agentService: AgentService
   agentPolicyService: AgentPolicyService
+  shopService: ShopService
+  productService: ProductService
+  walletService: WalletService
+  cartService: CartService
+  orderService: OrderService
+  reviewService: ReviewService
+  entitlementService: EntitlementService
 }
 
 export type AppContainer = AwilixContainer<Cradle>
@@ -81,6 +115,18 @@ export function createAppContainer(db: Database): AppContainer {
     agentPolicyDao: asClass(AgentPolicyDao).singleton(),
     inviteCodeDao: asClass(InviteCodeDao).singleton(),
 
+    // Shop DAOs
+    shopDao: asClass(ShopDao).singleton(),
+    productDao: asClass(ProductDao).singleton(),
+    productCategoryDao: asClass(ProductCategoryDao).singleton(),
+    productMediaDao: asClass(ProductMediaDao).singleton(),
+    skuDao: asClass(SkuDao).singleton(),
+    walletDao: asClass(WalletDao).singleton(),
+    orderDao: asClass(OrderDao).singleton(),
+    reviewDao: asClass(ReviewDao).singleton(),
+    entitlementDao: asClass(EntitlementDao).singleton(),
+    cartDao: asClass(CartDao).singleton(),
+
     // Services
     authService: asClass(AuthService).singleton(),
     serverService: asClass(ServerService).singleton(),
@@ -93,6 +139,13 @@ export function createAppContainer(db: Database): AppContainer {
     mediaService: asClass(MediaService).singleton(),
     agentService: asClass(AgentService).singleton(),
     agentPolicyService: asClass(AgentPolicyService).singleton(),
+    shopService: asClass(ShopService).singleton(),
+    productService: asClass(ProductService).singleton(),
+    walletService: asClass(WalletService).singleton(),
+    cartService: asClass(CartService).singleton(),
+    orderService: asClass(OrderService).singleton(),
+    reviewService: asClass(ReviewService).singleton(),
+    entitlementService: asClass(EntitlementService).singleton(),
   })
 
   return container

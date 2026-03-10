@@ -25,6 +25,8 @@ import { RegisterPage } from './pages/register'
 import { ServerPage } from './pages/server'
 import { ServerHomePage } from './pages/server-home'
 import { SettingsPage } from './pages/settings'
+import { ShopPageRoute } from './pages/shop'
+import { ShopAdminPageRoute } from './pages/shop-admin'
 import { useAuthStore } from './stores/auth.store'
 import './styles/globals.css'
 
@@ -124,6 +126,18 @@ const serverChannelRoute = createRoute({
   component: ServerPage,
 })
 
+const serverShopRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/servers/$serverId/shop',
+  component: ShopPageRoute,
+})
+
+const serverShopAdminRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/servers/$serverId/shop/admin',
+  component: ShopAdminPageRoute,
+})
+
 const serverHomeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/s/$serverId',
@@ -164,7 +178,7 @@ const routeTree = rootRoute.addChildren([
   docsRoute,
   inviteRoute,
   serverHomeRoute,
-  appRoute.addChildren([appIndexRoute, serverRoute, serverChannelRoute, settingsRoute, agentMgmtRoute, discoverRoute]),
+  appRoute.addChildren([appIndexRoute, serverRoute, serverShopAdminRoute, serverShopRoute, serverChannelRoute, settingsRoute, agentMgmtRoute, discoverRoute]),
 ])
 
 const router = createRouter({ routeTree })

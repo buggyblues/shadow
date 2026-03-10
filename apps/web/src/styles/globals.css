@@ -239,6 +239,15 @@ body {
   }
 }
 
+@keyframes panelSlideIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
 @keyframes scale-in {
   from {
     opacity: 0;
@@ -370,4 +379,28 @@ body {
   .mobile-safe-top {
     padding-top: env(safe-area-inset-top, 0px);
   }
+}
+
+/* ─── Shop form input ─── */
+.form-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-dim);
+  border-radius: 0.5rem;
+}
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+.form-input::placeholder {
+  color: var(--color-text-muted);
+}
+select.form-input {
+  appearance: auto;
+}
+textarea.form-input {
+  resize: vertical;
 }

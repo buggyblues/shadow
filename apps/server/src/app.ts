@@ -13,6 +13,7 @@ import { createMessageHandler } from './handlers/message.handler'
 import { createNotificationHandler } from './handlers/notification.handler'
 import { createSearchHandler } from './handlers/search.handler'
 import { createServerHandler } from './handlers/server.handler'
+import { createShopHandler } from './handlers/shop.handler'
 import { logger } from './lib/logger'
 import { loggerMiddleware } from './middleware/logger.middleware'
 
@@ -55,6 +56,7 @@ export function createApp(container: AppContainer) {
   app.route('/api/agents', createAgentHandler(container))
   app.route('/api/invite-codes', createInviteHandler(container))
   app.route('/api/admin', createAdminHandler(container))
+  app.route('/api', createShopHandler(container))
 
   // 404 handler
   app.notFound((c) => c.json({ error: 'Not Found' }, 404))

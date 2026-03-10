@@ -9,6 +9,7 @@ import {
   Hash,
   Home,
   Megaphone,
+  ShoppingBag,
   Menu,
   Plus,
   Save,
@@ -490,6 +491,20 @@ export function ChannelSidebar({ serverId, channelNameFromUrl }: { serverId: str
         >
           <Home size={18} className={`shrink-0 ${!activeChannelId ? 'opacity-80 text-text-primary' : 'opacity-60 group-hover:text-text-primary'}`} />
           <span className="truncate">{t('server.home')}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (activeChannelId) leaveChannel(activeChannelId)
+            userChoseHomeRef.current = true
+            setActiveChannel(null)
+            navigate({ to: '/app/servers/$serverId/shop', params: { serverId: server?.slug ?? serverId } })
+            setMobileView('chat')
+          }}
+          className="group flex items-center gap-1.5 px-2 py-[6px] mx-2 mb-2 rounded-md text-[15px] font-medium w-[calc(100%-16px)] text-left transition text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary"
+        >
+          <ShoppingBag size={18} className="shrink-0 opacity-60 group-hover:text-text-primary" />
+          <span className="truncate">{t('serverHome.shop', '店铺')}</span>
         </button>
         <div className="h-px bg-divider mx-4 mb-2" />
         {renderChannelGroup(t('channel.announcement'), announcementChannels)}

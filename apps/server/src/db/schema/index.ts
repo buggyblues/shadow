@@ -10,5 +10,26 @@ export { messages } from './messages'
 export { notifications, notificationTypeEnum } from './notifications'
 export { reactions } from './reactions'
 export { servers } from './servers'
+export {
+  cartItems,
+  currencyEnum,
+  entitlementTypeEnum,
+  entitlements,
+  orderItems,
+  orderStatusEnum,
+  orders,
+  productCategories,
+  productMedia,
+  productStatusEnum,
+  productTypeEnum,
+  products,
+  reviews,
+  shopStatusEnum,
+  shops,
+  skus,
+  walletTransactions,
+  walletTxTypeEnum,
+  wallets,
+} from './shops'
 export { threads } from './threads'
 export { userStatusEnum, users } from './users'
