@@ -73,4 +73,24 @@ export class MediaService {
     const bucketName = process.env.MINIO_BUCKET ?? 'shadow'
     return this.minioClient.presignedGetObject(bucketName, key, 3600)
   }
+
+  /** Retrieve file content from MinIO by its contentRef (e.g. /shadow/uploads/...) */
+  async getFileBuffer(contentRef: string): Promise<Buffer | null> {
+    if (!this.minioClient) return null
+    const bucketName = process.env.MINIO_BUCKET ?? 'shadow'
+    const prefix = `/${bucketName}/`
+    if (!contentRef.startsWith(prefix)) return null
+    const key = contentRef.slice(prefix.length)
+
+    try {
+      const stream = await this.minioClient.getObject(bucketName, key)
+      const chunks: Buffer[] = []
+      for await (const chunk of stream) {
+        chunks.push(Buffer.from(chunk))
+      }
+      return Buffer.concat(chunks)
+    } catch {
+      return null
+    }
+  }
 }

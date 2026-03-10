@@ -27,38 +27,44 @@ export function WorkspaceWorkbench({ node, serverId, onClose }: WorkspaceWorkben
   const category = getFileCategory(node)
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 overflow-hidden border-l border-border-subtle">
+    <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
       {/* Header bar */}
-      <div className="h-12 px-4 flex items-center gap-3 bg-bg-secondary border-b border-border-subtle shrink-0">
-        <Icon size={18} className="text-text-muted shrink-0" />
-        <span className="font-medium text-text-primary text-sm truncate flex-1">{node.name}</span>
+      <div className="h-11 px-4 flex items-center gap-3 bg-bg-secondary/80 backdrop-blur-sm border-b border-border-subtle shrink-0">
+        <Icon size={16} className="text-text-muted shrink-0" />
+        <span className="font-medium text-text-primary text-[13px] truncate">{node.name}</span>
         {node.sizeBytes != null && (
-          <span className="text-xs text-text-muted">{formatFileSize(node.sizeBytes)}</span>
+          <span className="text-[11px] text-text-muted bg-bg-tertiary/60 px-1.5 py-0.5 rounded">
+            {formatFileSize(node.sizeBytes)}
+          </span>
         )}
-        <span className="text-xs text-text-muted hidden sm:block">{node.path}</span>
-        {node.contentRef && (
-          <a
-            href={node.contentRef}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="p-1.5 text-text-muted hover:text-text-primary rounded transition"
-            title="下载"
+        <span className="text-[11px] text-text-muted/60 hidden sm:block truncate flex-1">
+          {node.path}
+        </span>
+        <div className="flex items-center gap-0.5 ml-auto">
+          {node.contentRef && (
+            <a
+              href={node.contentRef}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition-all duration-150"
+              title="下载"
+            >
+              <Download size={15} />
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition-all duration-150"
+            title="关闭"
           >
-            <Download size={16} />
-          </a>
-        )}
-        <button
-          type="button"
-          onClick={onClose}
-          className="p-1.5 text-text-muted hover:text-text-primary rounded transition"
-          title="关闭"
-        >
-          <X size={16} />
-        </button>
+            <X size={15} />
+          </button>
+        </div>
       </div>
 
       {/* Renderer area */}
-      <div className="flex-1 overflow-auto flex items-center justify-center p-6 bg-bg-primary">
+      <div className="flex-1 overflow-auto flex items-center justify-center bg-bg-primary">
         <FileRenderer node={node} category={category} serverId={serverId} />
       </div>
     </div>

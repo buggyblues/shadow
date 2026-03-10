@@ -142,21 +142,21 @@ export function MarkdownRenderer({ node, serverId }: { node: WorkspaceNode; serv
   return (
     <div className="w-full h-full overflow-auto flex flex-col">
       {/* Header bar */}
-      <div className="flex items-center justify-between px-4 py-2 bg-bg-tertiary border-b border-border-subtle rounded-t-lg shrink-0">
-        <span className="text-xs text-text-muted font-mono">{node.name}</span>
-        <div className="flex items-center gap-2">
-          {isEditing && isDirty && <span className="text-xs text-yellow-400">● 未保存</span>}
+      <div className="flex items-center justify-between px-3 py-1.5 bg-bg-tertiary/80 border-b border-border-subtle shrink-0">
+        <span className="text-[11px] text-text-muted font-mono">{node.name}</span>
+        <div className="flex items-center gap-1.5">
+          {isEditing && isDirty && <span className="text-[11px] text-amber-400">● 未保存</span>}
           <button
             type="button"
             onClick={() => setShowVersions(!showVersions)}
-            className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition ${
+            className={`flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-md transition-all duration-150 ${
               showVersions
-                ? 'bg-[#5865F2]/20 text-[#5865F2]'
+                ? 'bg-primary/15 text-primary'
                 : 'text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover'
             }`}
             title="版本历史"
           >
-            <Clock size={12} />
+            <Clock size={11} />
             {versionCount > 0 && <span>{versionCount}</span>}
           </button>
           {isEditing ? (
@@ -165,20 +165,20 @@ export function MarkdownRenderer({ node, serverId }: { node: WorkspaceNode; serv
                 type="button"
                 onClick={handleSave}
                 disabled={!isDirty || mutations.updateFileContent.isPending}
-                className="flex items-center gap-1 text-xs px-2 py-1 bg-primary hover:bg-primary-hover text-white rounded transition disabled:opacity-40"
+                className="flex items-center gap-1 text-[11px] px-2 py-0.5 bg-primary/90 hover:bg-primary text-white rounded-md transition-all duration-150 disabled:opacity-40"
                 title="保存 (⌘S)"
               >
                 {mutations.updateFileContent.isPending ? (
-                  <Loader2 size={12} className="animate-spin" />
+                  <Loader2 size={11} className="animate-spin" />
                 ) : (
-                  <Save size={12} />
+                  <Save size={11} />
                 )}
                 保存
               </button>
               <button
                 type="button"
                 onClick={handleCancel}
-                className="text-xs px-2 py-1 text-text-muted hover:text-text-primary rounded transition"
+                className="text-[11px] px-1.5 py-0.5 text-text-muted hover:text-text-primary rounded-md transition-colors"
               >
                 取消
               </button>
@@ -187,10 +187,10 @@ export function MarkdownRenderer({ node, serverId }: { node: WorkspaceNode; serv
             <button
               type="button"
               onClick={handleEdit}
-              className="flex items-center gap-1 text-xs px-2 py-1 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded transition"
+              className="flex items-center gap-1 text-[11px] px-1.5 py-0.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition-all duration-150"
               title="编辑"
             >
-              <Edit3 size={12} />
+              <Edit3 size={11} />
               编辑
             </button>
           )}
@@ -205,8 +205,8 @@ export function MarkdownRenderer({ node, serverId }: { node: WorkspaceNode; serv
             <div className="flex flex-1 min-h-0">
               {/* Editor */}
               <div className="flex-1 flex flex-col border-r border-border-subtle">
-                <div className="px-3 py-1.5 text-[10px] text-text-muted bg-bg-secondary border-b border-border-subtle flex items-center gap-1">
-                  <Edit3 size={10} />
+                <div className="px-3 py-1 text-[10px] text-text-muted/70 bg-bg-secondary/60 border-b border-border-subtle flex items-center gap-1">
+                  <Edit3 size={9} />
                   编辑
                 </div>
                 <textarea
@@ -223,13 +223,13 @@ export function MarkdownRenderer({ node, serverId }: { node: WorkspaceNode; serv
               </div>
               {/* Live preview */}
               <div className="flex-1 flex flex-col overflow-hidden">
-                <div className="px-3 py-1.5 text-[10px] text-text-muted bg-bg-secondary border-b border-border-subtle flex items-center gap-1">
-                  <Eye size={10} />
+                <div className="px-3 py-1 text-[10px] text-text-muted/70 bg-bg-secondary/60 border-b border-border-subtle flex items-center gap-1">
+                  <Eye size={9} />
                   预览
                 </div>
                 <div className="flex-1 overflow-auto">
-                  <article
-                    className="prose prose-invert prose-sm max-w-none p-6"
+                  <div
+                    className="msg-markdown p-6 text-sm leading-relaxed text-text-primary"
                     // biome-ignore lint: dangerouslySetInnerHTML needed for markdown rendering
                     dangerouslySetInnerHTML={{ __html: previewHtml }}
                   />
@@ -238,8 +238,8 @@ export function MarkdownRenderer({ node, serverId }: { node: WorkspaceNode; serv
             </div>
           ) : (
             <div className="flex-1 overflow-auto">
-              <article
-                className="prose prose-invert prose-sm max-w-none p-6"
+              <div
+                className="msg-markdown p-6 text-sm leading-relaxed text-text-primary"
                 // biome-ignore lint: dangerouslySetInnerHTML needed for markdown rendering
                 dangerouslySetInnerHTML={{ __html: previewHtml }}
               />
@@ -408,21 +408,21 @@ function EmptyMarkdownEditor({ node, serverId }: { node: WorkspaceNode; serverId
 
   return (
     <div className="w-full h-full overflow-auto flex flex-col">
-      <div className="flex items-center justify-between px-4 py-2 bg-bg-tertiary border-b border-border-subtle rounded-t-lg shrink-0">
-        <span className="text-xs text-text-muted font-mono">{node.name}</span>
-        <div className="flex items-center gap-2">
-          {isDirty && <span className="text-xs text-yellow-400">● 未保存</span>}
+      <div className="flex items-center justify-between px-3 py-1.5 bg-bg-tertiary/80 border-b border-border-subtle shrink-0">
+        <span className="text-[11px] text-text-muted font-mono">{node.name}</span>
+        <div className="flex items-center gap-1.5">
+          {isDirty && <span className="text-[11px] text-amber-400">● 未保存</span>}
           <button
             type="button"
             onClick={handleSave}
             disabled={!isDirty || mutations.updateFileContent.isPending}
-            className="flex items-center gap-1 text-xs px-2 py-1 bg-primary hover:bg-primary-hover text-white rounded transition disabled:opacity-40"
+            className="flex items-center gap-1 text-[11px] px-2 py-0.5 bg-primary/90 hover:bg-primary text-white rounded-md transition-all duration-150 disabled:opacity-40"
             title="保存 (⌘S)"
           >
             {mutations.updateFileContent.isPending ? (
-              <Loader2 size={12} className="animate-spin" />
+              <Loader2 size={11} className="animate-spin" />
             ) : (
-              <Save size={12} />
+              <Save size={11} />
             )}
             保存
           </button>
@@ -444,7 +444,7 @@ function EmptyMarkdownEditor({ node, serverId }: { node: WorkspaceNode; serverId
         {content && (
           <div className="flex-1 p-4 overflow-auto border-l border-border-subtle">
             <div
-              className="prose prose-invert max-w-none text-text-primary text-sm leading-relaxed markdown-body"
+              className="msg-markdown text-text-primary text-sm leading-relaxed"
               // biome-ignore lint/security/noDangerouslySetInnerHtml: markdown preview
               dangerouslySetInnerHTML={{ __html: previewHtml }}
             />

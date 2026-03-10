@@ -306,6 +306,7 @@ export function createWorkspaceHandler(container: AppContainer) {
     const workspace = await resolveWorkspace(serverId)
     const workspaceService = container.resolve('workspaceService')
 
+    const mediaService = container.resolve('mediaService')
     const allNodes = await workspaceService.getDescendants(workspace.id, '/')
     const files = allNodes.filter((n) => n.kind === 'file' && n.contentRef)
 
@@ -320,9 +321,8 @@ export function createWorkspaceHandler(container: AppContainer) {
     for (const node of files) {
       try {
         const relativePath = node.path.startsWith('/') ? node.path.slice(1) : node.path
-        const res = await fetch(node.contentRef!)
-        if (res.ok) {
-          const buffer = Buffer.from(await res.arrayBuffer())
+        const buffer = await mediaService.getFileBuffer(node.contentRef!)
+        if (buffer) {
           archive.append(buffer, { name: relativePath })
         }
       } catch {
@@ -355,6 +355,7 @@ export function createWorkspaceHandler(container: AppContainer) {
     }
 
     // Get all descendants
+    const mediaService = container.resolve('mediaService')
     const descendants = await workspaceService.getDescendants(workspace.id, folder.path)
     const files = descendants.filter((n) => n.kind === 'file' && n.contentRef)
 
@@ -372,9 +373,8 @@ export function createWorkspaceHandler(container: AppContainer) {
         const relativePath = node.path.startsWith(folder.path)
           ? node.path.slice(folder.path.length + 1)
           : node.name
-        const res = await fetch(node.contentRef!)
-        if (res.ok) {
-          const buffer = Buffer.from(await res.arrayBuffer())
+        const buffer = await mediaService.getFileBuffer(node.contentRef!)
+        if (buffer) {
           archive.append(buffer, { name: relativePath })
         }
       } catch {

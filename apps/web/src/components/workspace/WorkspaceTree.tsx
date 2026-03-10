@@ -6,6 +6,7 @@ import {
   GripVertical,
   Plus,
   RefreshCw,
+  Upload,
 } from 'lucide-react'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useWorkspaceStore, type WorkspaceNode } from '../../stores/workspace.store'
@@ -61,6 +62,8 @@ export function WorkspaceTree({
   const treeContainerRef = useRef<HTMLDivElement>(null)
   const [dragOverState, setDragOverState] = useState<DragOverState | null>(null)
   const [draggingIds, setDraggingIds] = useState<Set<string>>(new Set())
+  const [nativeFileDragOver, setNativeFileDragOver] = useState(false)
+  const nativeFileDragCounter = useRef(0)
 
   // ─── Build visible rows ───
 
@@ -217,6 +220,8 @@ export function WorkspaceTree({
     (e: React.DragEvent, parentId: string | null) => {
       e.preventDefault()
       e.stopPropagation()
+      nativeFileDragCounter.current = 0
+      setNativeFileDragOver(false)
       const files = Array.from(e.dataTransfer.files)
       if (files.length > 0) {
         onUploadToDir(parentId, files)
@@ -225,12 +230,35 @@ export function WorkspaceTree({
     [onUploadToDir],
   )
 
+  // ─── Native file drag tracking for the whole tree panel ───
+
+  const handleTreeDragEnter = useCallback((e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('Files')) {
+      nativeFileDragCounter.current++
+      setNativeFileDragOver(true)
+    }
+  }, [])
+
+  const handleTreeDragLeavePanel = useCallback((e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('Files')) {
+      nativeFileDragCounter.current--
+      if (nativeFileDragCounter.current <= 0) {
+        nativeFileDragCounter.current = 0
+        setNativeFileDragOver(false)
+      }
+    }
+  }, [])
+
   // ─── Root node element ───
 
   const rootNodeElement = (
     <div
-      className="flex items-center h-8 px-2 cursor-pointer select-none text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary transition-colors text-sm group"
-      style={{ paddingLeft: '8px' }}
+      className={`flex items-center h-7 mx-1 px-1.5 cursor-pointer select-none transition-all duration-100 text-[13px] group rounded-md ${
+        nativeFileDragOver
+          ? 'bg-primary/10 text-primary'
+          : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary'
+      }`}
+      style={{ paddingLeft: '6px' }}
       onContextMenu={(e) => {
         e.preventDefault()
         e.stopPropagation()
@@ -248,11 +276,24 @@ export function WorkspaceTree({
         }
       }}
     >
-      <span className="w-4 h-4 flex items-center justify-center shrink-0 mr-0.5">
-        <ChevronDown size={14} className="text-text-muted" />
+      <span className="w-3.5 h-3.5 flex items-center justify-center shrink-0 mr-0.5">
+        <ChevronDown size={12} className="text-text-muted" />
       </span>
-      <FolderClosed size={16} className="shrink-0 mr-1.5 text-[#e8a838]" />
-      <span className="flex-1 min-w-0 truncate font-medium">{workspaceName || '工作区'}</span>
+      <FolderClosed size={14} className="shrink-0 mr-1.5 text-[#e8a838]" />
+      <span className="flex-1 min-w-0 truncate font-medium text-[12px] uppercase tracking-wide text-text-muted">
+        {workspaceName || '工作区'}
+      </span>
+    </div>
+  )
+
+  // ─── Drag overlay for native file drag (scoped to tree panel) ───
+
+  const nativeDropOverlay = nativeFileDragOver && (
+    <div className="absolute inset-1 z-40 bg-primary/5 border border-dashed border-primary/30 rounded-lg flex items-center justify-center pointer-events-none backdrop-blur-[1px]">
+      <div className="flex flex-col items-center gap-1 text-primary/60">
+        <Upload size={22} strokeWidth={1.5} />
+        <p className="text-[11px] font-medium">拖放上传</p>
+      </div>
     </div>
   )
 
@@ -260,7 +301,19 @@ export function WorkspaceTree({
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex flex-col" onContextMenu={onBlankContextMenu}>
+      <div
+        className="flex-1 flex flex-col relative"
+        onContextMenu={onBlankContextMenu}
+        onDragEnter={handleTreeDragEnter}
+        onDragLeave={handleTreeDragLeavePanel}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes('Files')) e.preventDefault()
+        }}
+        onDrop={(e) => {
+          if (e.dataTransfer.types.includes('Files')) handleNativeFileDrop(e, null)
+        }}
+      >
+        {nativeDropOverlay}
         {rootNodeElement}
         <div className="flex-1 flex items-center justify-center">
           <RefreshCw size={20} className="text-text-muted animate-spin" />
@@ -271,20 +324,34 @@ export function WorkspaceTree({
 
   if (visibleRows.length === 0) {
     return (
-      <div className="flex-1 flex flex-col text-text-muted" onContextMenu={onBlankContextMenu}>
+      <div
+        className="flex-1 flex flex-col text-text-muted relative"
+        onContextMenu={onBlankContextMenu}
+        onDragEnter={handleTreeDragEnter}
+        onDragLeave={handleTreeDragLeavePanel}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes('Files')) e.preventDefault()
+        }}
+        onDrop={(e) => {
+          if (e.dataTransfer.types.includes('Files')) handleNativeFileDrop(e, null)
+        }}
+      >
+        {nativeDropOverlay}
         {rootNodeElement}
         <div className="flex-1 flex flex-col items-center justify-center px-6">
-          <FolderClosed size={48} strokeWidth={1} className="mb-4 opacity-50" />
-          <p className="text-sm font-medium mb-2">工作区为空</p>
-          <p className="text-xs text-center leading-relaxed mb-4">
-            拖放文件到此处上传，或使用右键菜单创建文件夹
+          <div className="w-12 h-12 rounded-xl bg-bg-tertiary/60 flex items-center justify-center mb-3">
+            <FolderClosed size={24} strokeWidth={1.2} className="text-text-muted/50" />
+          </div>
+          <p className="text-[13px] font-medium mb-1 text-text-secondary">工作区为空</p>
+          <p className="text-[11px] text-center leading-relaxed mb-4 text-text-muted/70">
+            拖放文件上传或右键创建
           </p>
           <button
             type="button"
             onClick={() => onNewFolder(null)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary hover:bg-primary-hover text-white rounded-lg transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] bg-primary/90 hover:bg-primary text-white rounded-md transition-all duration-150 shadow-sm"
           >
-            <Plus size={14} />
+            <Plus size={12} />
             新建文件夹
           </button>
         </div>
@@ -297,8 +364,10 @@ export function WorkspaceTree({
   return (
     <div
       ref={treeContainerRef}
-      className="flex-1 overflow-y-auto overflow-x-hidden py-1 scroll-smooth custom-scrollbar"
+      className="flex-1 overflow-y-auto overflow-x-hidden py-1 scroll-smooth custom-scrollbar relative"
       onContextMenu={onBlankContextMenu}
+      onDragEnter={handleTreeDragEnter}
+      onDragLeave={handleTreeDragLeavePanel}
       onDragOver={handleBlankDragOver}
       onDrop={(e) => {
         if (e.dataTransfer.types.includes('Files')) {
@@ -308,6 +377,7 @@ export function WorkspaceTree({
         }
       }}
     >
+      {nativeDropOverlay}
       {rootNodeElement}
       <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>
         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
@@ -344,6 +414,10 @@ export function WorkspaceTree({
                 onDrop={handleDrop}
                 onDragEnd={handleTreeDragEnd}
                 onNativeFileDrop={onUploadToDir}
+                onNativeFileDragReset={() => {
+                  nativeFileDragCounter.current = 0
+                  setNativeFileDragOver(false)
+                }}
               />
             </div>
           )
@@ -374,6 +448,7 @@ interface TreeRowProps {
   onDrop: (e: React.DragEvent, node: WorkspaceNode) => void
   onDragEnd: () => void
   onNativeFileDrop: (parentId: string | null, files: globalThis.File[]) => void
+  onNativeFileDragReset: () => void
 }
 
 function TreeRow({
@@ -395,6 +470,7 @@ function TreeRow({
   onDrop,
   onDragEnd,
   onNativeFileDrop,
+  onNativeFileDragReset,
 }: TreeRowProps) {
   const { node, depth } = row
   const Icon = getNodeIcon(node, isExpanded)
@@ -403,14 +479,14 @@ function TreeRow({
   return (
     <div
       data-node-id={node.id}
-      className={`relative flex items-center h-8 px-2 cursor-pointer select-none transition-colors text-sm group ${
+      className={`relative flex items-center h-7 mx-1 px-1.5 cursor-pointer select-none transition-all duration-100 text-[13px] group rounded-md ${
         isDragging
           ? 'opacity-40'
           : highlighted
-            ? 'bg-[#5865F2]/20 text-text-primary'
+            ? 'bg-primary/15 text-text-primary'
             : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary'
-      } ${dragOverState?.position === 'inside' ? 'bg-[#5865F2]/10 ring-1 ring-inset ring-[#5865F2]/40 rounded' : ''}`}
-      style={{ paddingLeft: `${depth * 16 + 8}px` }}
+      } ${dragOverState?.position === 'inside' ? 'bg-primary/10 ring-1 ring-inset ring-primary/40 rounded-md' : ''}`}
+      style={{ paddingLeft: `${depth * 14 + 6}px` }}
       draggable={!isRenaming}
       onClick={(e) => onClick(node, e)}
       onContextMenu={(e) => onContextMenu(e, node)}
@@ -430,6 +506,7 @@ function TreeRow({
         if (e.dataTransfer.types.includes('Files')) {
           e.preventDefault()
           e.stopPropagation()
+          onNativeFileDragReset()
           const files = Array.from(e.dataTransfer.files)
           if (files.length > 0) {
             const targetParent = node.kind === 'dir' ? node.id : node.parentId
@@ -443,15 +520,15 @@ function TreeRow({
     >
       {/* Drop indicator lines */}
       {dragOverState?.position === 'before' && (
-        <div className="absolute top-0 left-2 right-2 h-0.5 bg-[#5865F2] rounded-full z-10" />
+        <div className="absolute top-0 left-1 right-1 h-0.5 bg-primary rounded-full z-10" />
       )}
       {dragOverState?.position === 'after' && (
-        <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-[#5865F2] rounded-full z-10" />
+        <div className="absolute bottom-0 left-1 right-1 h-0.5 bg-primary rounded-full z-10" />
       )}
 
       {/* Drag handle */}
-      <span className="w-3 h-4 flex items-center justify-center shrink-0 mr-0.5 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab active:cursor-grabbing">
-        <GripVertical size={10} />
+      <span className="w-3 h-3.5 flex items-center justify-center shrink-0 mr-0.5 opacity-0 group-hover:opacity-30 transition-opacity cursor-grab active:cursor-grabbing">
+        <GripVertical size={9} />
       </span>
 
       {/* Expand/collapse arrow for folders */}
@@ -468,14 +545,14 @@ function TreeRow({
       )}
 
       <Icon
-        size={16}
+        size={15}
         className={`shrink-0 mr-1.5 ${node.kind === 'dir' ? 'text-[#e8a838]' : 'text-text-muted'}`}
       />
 
       {isRenaming ? (
         <input
           defaultValue={node.name}
-          className="flex-1 min-w-0 bg-bg-tertiary text-text-primary text-sm rounded px-1 outline-none border border-primary"
+          className="flex-1 min-w-0 bg-bg-tertiary text-text-primary text-[13px] rounded-md px-1.5 py-0.5 outline-none border border-primary/60 focus:border-primary"
           onFocus={(e) => {
             const dotIdx = node.name.lastIndexOf('.')
             if (dotIdx > 0 && node.kind === 'file') {
@@ -497,12 +574,12 @@ function TreeRow({
         <>
           <span className="flex-1 min-w-0 truncate">{node.name}</span>
           {node.kind === 'file' && node.sizeBytes != null && (
-            <span className="text-[10px] text-text-muted ml-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className="text-[10px] text-text-muted ml-1.5 shrink-0 opacity-0 group-hover:opacity-70 transition-opacity">
               {formatFileSize(node.sizeBytes)}
             </span>
           )}
           {isMultiSelected && !isSelected && (
-            <span className="w-1.5 h-1.5 rounded-full bg-[#5865F2] shrink-0 ml-1" />
+            <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 ml-1" />
           )}
         </>
       )}

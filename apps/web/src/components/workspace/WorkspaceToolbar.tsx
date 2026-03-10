@@ -31,24 +31,27 @@ export function WorkspaceToolbar({
   const { searchQuery, setSearchQuery } = useWorkspaceStore()
 
   return (
-    <div className="h-12 px-4 flex items-center bg-bg-secondary border-b border-border-subtle shrink-0 gap-3 z-20">
+    <div className="h-11 px-3 flex items-center bg-bg-secondary/80 backdrop-blur-sm border-b border-border-subtle shrink-0 gap-2 z-20">
       {onClose && (
         <button
           type="button"
           onClick={onClose}
-          className="p-1.5 -ml-1 text-text-muted hover:text-text-primary rounded transition"
+          className="p-1.5 -ml-0.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition-all duration-150"
+          title="返回"
         >
-          <ArrowLeft size={18} />
+          <ArrowLeft size={16} />
         </button>
       )}
-      <FolderClosed size={18} className="text-[#e8a838] shrink-0" />
-      <h2 className="font-bold text-text-primary text-sm truncate">{workspaceName || '工作区'}</h2>
+      <FolderClosed size={16} className="text-[#e8a838] shrink-0" />
+      <h2 className="font-semibold text-text-primary text-[13px] truncate">
+        {workspaceName || '工作区'}
+      </h2>
       <div className="flex-1" />
 
       {/* Stats badge */}
       {stats && (
-        <div className="flex items-center gap-1.5 px-2 py-1 text-xs text-text-muted">
-          <BarChart3 size={14} />
+        <div className="flex items-center gap-1 px-2 py-0.5 text-[11px] text-text-muted bg-bg-tertiary/60 rounded-md">
+          <BarChart3 size={12} />
           <span>
             {stats.folderCount} 文件夹 · {stats.fileCount} 文件
           </span>
@@ -57,54 +60,54 @@ export function WorkspaceToolbar({
 
       {/* Search */}
       <div className="relative flex items-center">
-        <Search size={14} className="absolute left-2.5 text-text-muted pointer-events-none" />
+        <Search size={13} className="absolute left-2.5 text-text-muted pointer-events-none" />
         <input
           type="text"
           placeholder="搜索文件..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-40 pl-8 pr-7 py-1.5 bg-bg-tertiary text-text-primary text-xs rounded-lg border border-border-subtle focus:outline-none focus:border-primary transition"
+          className="w-36 pl-7 pr-6 py-1 bg-bg-tertiary/70 text-text-primary text-xs rounded-md border border-transparent focus:outline-none focus:border-primary/50 focus:bg-bg-tertiary transition-all duration-150 placeholder:text-text-muted/60"
         />
         {searchQuery && (
           <button
             type="button"
             onClick={() => setSearchQuery('')}
-            className="absolute right-2 text-text-muted hover:text-text-primary"
+            className="absolute right-2 text-text-muted hover:text-text-primary transition-colors"
           >
-            <X size={12} />
+            <X size={11} />
           </button>
         )}
       </div>
 
-      {/* Upload */}
-      <button
-        type="button"
-        onClick={onUpload}
-        className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded transition"
-        title="上传文件"
-      >
-        <Upload size={16} />
-      </button>
+      {/* Action buttons */}
+      <div className="flex items-center gap-0.5">
+        <button
+          type="button"
+          onClick={onUpload}
+          className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition-all duration-150"
+          title="上传文件"
+        >
+          <Upload size={15} />
+        </button>
 
-      {/* New folder */}
-      <button
-        type="button"
-        onClick={onNewFolder}
-        className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded transition"
-        title="新建文件夹"
-      >
-        <FolderPlus size={16} />
-      </button>
+        <button
+          type="button"
+          onClick={onNewFolder}
+          className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition-all duration-150"
+          title="新建文件夹"
+        >
+          <FolderPlus size={15} />
+        </button>
 
-      {/* Refresh */}
-      <button
-        type="button"
-        onClick={onRefresh}
-        className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded transition"
-        title="刷新"
-      >
-        <RefreshCw size={16} />
-      </button>
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition-all duration-150"
+          title="刷新"
+        >
+          <RefreshCw size={15} />
+        </button>
+      </div>
     </div>
   )
 }

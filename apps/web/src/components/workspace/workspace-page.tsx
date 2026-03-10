@@ -1,4 +1,4 @@
-import { Eye, Upload } from 'lucide-react'
+import { Eye } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { showToast } from '../../lib/toast'
@@ -66,7 +66,7 @@ export function WorkspacePage({ serverId, onClose }: WorkspacePageProps) {
     [selectedNodeId, tree, mutations.uploadFile.mutate],
   )
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps } = useDropzone({
     onDrop,
     noClick: true,
     noKeyboard: true,
@@ -363,15 +363,6 @@ export function WorkspacePage({ serverId, onClose }: WorkspacePageProps) {
     >
       <input {...getInputProps()} />
 
-      {isDragActive && (
-        <div className="absolute inset-0 z-50 bg-primary/10 border-2 border-dashed border-primary rounded-xl flex items-center justify-center pointer-events-none">
-          <div className="flex flex-col items-center gap-2 text-primary">
-            <Upload size={48} strokeWidth={1.5} />
-            <p className="text-lg font-bold">拖放文件到此处上传</p>
-          </div>
-        </div>
-      )}
-
       <WorkspaceToolbar
         workspaceName={workspace?.name ?? ''}
         stats={stats}
@@ -388,7 +379,7 @@ export function WorkspacePage({ serverId, onClose }: WorkspacePageProps) {
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <div
-          className="flex flex-col w-64 shrink-0 overflow-hidden border-r border-border-subtle bg-bg-secondary"
+          className="flex flex-col w-60 shrink-0 overflow-hidden border-r border-border-subtle bg-bg-secondary/50"
           onContextMenu={handleBlankContextMenu}
         >
           <WorkspaceTree
@@ -416,9 +407,11 @@ export function WorkspacePage({ serverId, onClose }: WorkspacePageProps) {
             onClose={() => setActiveFileId(null)}
           />
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-text-muted gap-2">
-            <Eye size={48} strokeWidth={1} className="opacity-40" />
-            <p className="text-sm">选择文件以预览</p>
+          <div className="flex-1 flex flex-col items-center justify-center text-text-muted gap-3">
+            <div className="w-16 h-16 rounded-2xl bg-bg-tertiary/40 flex items-center justify-center">
+              <Eye size={28} strokeWidth={1} className="opacity-30" />
+            </div>
+            <p className="text-[13px] text-text-muted/70">选择文件以预览</p>
           </div>
         )}
       </div>

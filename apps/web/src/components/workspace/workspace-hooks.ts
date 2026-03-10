@@ -51,7 +51,7 @@ export function useWorkspaceData(serverId: string) {
   })
 
   const refetchTree = useCallback(() => {
-    treeQuery.refetch()
+    return treeQuery.refetch()
   }, [treeQuery])
 
   const invalidateStats = useCallback(() => {
@@ -122,10 +122,10 @@ export function useWorkspaceMutations({ serverId, refetchTree, invalidateStats }
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    onSuccess: (newFile) => {
-      refetchTree()
+    onSuccess: async (newFile) => {
+      await refetchTree()
       invalidateStats()
-      // Auto-focus the newly created file
+      // Auto-focus the newly created file (after tree is updated)
       setActiveFileId(newFile.id)
       // Expand parent folder so the new file is visible
       if (newFile.parentId) setExpanded(newFile.parentId, true)

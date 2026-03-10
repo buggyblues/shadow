@@ -120,7 +120,7 @@ export function WorkspaceContextMenu({
       />
       <div
         ref={menuRef}
-        className="fixed z-[61] bg-bg-tertiary border border-border-dim rounded-xl shadow-2xl py-1.5 min-w-[200px]"
+        className="fixed z-[61] bg-bg-tertiary/95 backdrop-blur-md border border-border-dim/60 rounded-xl shadow-2xl py-1 min-w-[190px] animate-scale-in"
         style={{ left: pos.x, top: pos.y }}
       >
         {groups.map((group, gi) => (
@@ -142,15 +142,16 @@ export function WorkspaceContextMenu({
                     onClose()
                   }
                 }}
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-[13px] transition-colors ${
+                className={`flex items-center gap-2 w-full px-2.5 py-[5px] text-[12px] transition-all duration-100 rounded-md mx-1 ${
                   item.disabled
                     ? 'text-text-muted/40 cursor-not-allowed'
                     : item.danger
                       ? 'text-red-400 hover:bg-red-500/10 hover:text-red-300'
                       : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary'
                 }`}
+                style={{ width: 'calc(100% - 8px)' }}
               >
-                <item.icon size={15} className="shrink-0" />
+                <item.icon size={14} className="shrink-0" />
                 <span className="flex-1 text-left">{item.label}</span>
                 {item.shortcut && (
                   <span className="text-[11px] text-text-muted/50 font-mono ml-4 shrink-0">
