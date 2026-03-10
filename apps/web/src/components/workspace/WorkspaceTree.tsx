@@ -18,15 +18,18 @@ interface WorkspaceTreeProps {
   tree: WorkspaceNode[]
   searchResults: WorkspaceNode[]
   isLoading: boolean
+  workspaceName: string
   /* actions */
   onNodeClick: (node: WorkspaceNode, e: React.MouseEvent) => void
   onNodeDoubleClick: (node: WorkspaceNode) => void
   onNodeContextMenu: (e: React.MouseEvent, node: WorkspaceNode) => void
   onBlankContextMenu: (e: React.MouseEvent) => void
+  onRootContextMenu: (e: React.MouseEvent) => void
   onRenameSubmit: (nodeId: string, newName: string, kind: 'dir' | 'file') => void
   onNewFolder: (parentId: string | null) => void
   onRefresh: () => void
   onMoveNodes: (nodeIds: string[], targetParentId: string | null) => void
+  onUploadToDir: (parentId: string | null, files: globalThis.File[]) => void
 }
 
 /* ─── WorkspaceTree ─── */
@@ -35,14 +38,17 @@ export function WorkspaceTree({
   tree,
   searchResults,
   isLoading,
+  workspaceName,
   onNodeClick,
   onNodeDoubleClick,
   onNodeContextMenu,
   onBlankContextMenu,
+  onRootContextMenu,
   onRenameSubmit,
   onNewFolder,
   onRefresh,
   onMoveNodes,
+  onUploadToDir,
 }: WorkspaceTreeProps) {
   const {
     expandedIds,
@@ -60,9 +66,9 @@ export function WorkspaceTree({
 
   const visibleRows = useMemo(() => {
     if (searchQuery.trim() && searchResults.length > 0) {
-      return searchResults.map((node) => ({ id: node.id, node, depth: 0 }))
+      return searchResults.map((node) => ({ id: node.id, node, depth: 1 }))
     }
-    return buildVisibleRows(tree, expandedIds)
+    return buildVisibleRows(tree, expandedIds, 1)
   }, [tree, expandedIds, searchQuery, searchResults])
 
   // ─── Virtualizer ───
@@ -200,39 +206,88 @@ export function WorkspaceTree({
 
   const handleBlankDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
+    // Accept both node moves and native file drops
+    e.dataTransfer.dropEffect = e.dataTransfer.types.includes('Files') ? 'copy' : 'move'
     setDragOverState(null)
   }, [])
+
+  // ─── Native file drop on root / blank area ───
+
+  const handleNativeFileDrop = useCallback(
+    (e: React.DragEvent, parentId: string | null) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const files = Array.from(e.dataTransfer.files)
+      if (files.length > 0) {
+        onUploadToDir(parentId, files)
+      }
+    },
+    [onUploadToDir],
+  )
+
+  // ─── Root node element ───
+
+  const rootNodeElement = (
+    <div
+      className="flex items-center h-8 px-2 cursor-pointer select-none text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary transition-colors text-sm group"
+      style={{ paddingLeft: '8px' }}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        onRootContextMenu(e)
+      }}
+      onDragOver={(e) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = e.dataTransfer.types.includes('Files') ? 'copy' : 'move'
+      }}
+      onDrop={(e) => {
+        if (e.dataTransfer.types.includes('Files')) {
+          handleNativeFileDrop(e, null)
+        } else {
+          handleBlankDrop(e)
+        }
+      }}
+    >
+      <span className="w-4 h-4 flex items-center justify-center shrink-0 mr-0.5">
+        <ChevronDown size={14} className="text-text-muted" />
+      </span>
+      <FolderClosed size={16} className="shrink-0 mr-1.5 text-[#e8a838]" />
+      <span className="flex-1 min-w-0 truncate font-medium">{workspaceName || '工作区'}</span>
+    </div>
+  )
 
   // ─── Empty state ───
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center" onContextMenu={onBlankContextMenu}>
-        <RefreshCw size={20} className="text-text-muted animate-spin" />
+      <div className="flex-1 flex flex-col" onContextMenu={onBlankContextMenu}>
+        {rootNodeElement}
+        <div className="flex-1 flex items-center justify-center">
+          <RefreshCw size={20} className="text-text-muted animate-spin" />
+        </div>
       </div>
     )
   }
 
   if (visibleRows.length === 0) {
     return (
-      <div
-        className="flex-1 flex flex-col items-center justify-center text-text-muted px-6"
-        onContextMenu={onBlankContextMenu}
-      >
-        <FolderClosed size={48} strokeWidth={1} className="mb-4 opacity-50" />
-        <p className="text-sm font-medium mb-2">工作区为空</p>
-        <p className="text-xs text-center leading-relaxed mb-4">
-          拖放文件到此处上传，或使用右键菜单创建文件夹
-        </p>
-        <button
-          type="button"
-          onClick={() => onNewFolder(null)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary hover:bg-primary-hover text-white rounded-lg transition"
-        >
-          <Plus size={14} />
-          新建文件夹
-        </button>
+      <div className="flex-1 flex flex-col text-text-muted" onContextMenu={onBlankContextMenu}>
+        {rootNodeElement}
+        <div className="flex-1 flex flex-col items-center justify-center px-6">
+          <FolderClosed size={48} strokeWidth={1} className="mb-4 opacity-50" />
+          <p className="text-sm font-medium mb-2">工作区为空</p>
+          <p className="text-xs text-center leading-relaxed mb-4">
+            拖放文件到此处上传，或使用右键菜单创建文件夹
+          </p>
+          <button
+            type="button"
+            onClick={() => onNewFolder(null)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary hover:bg-primary-hover text-white rounded-lg transition"
+          >
+            <Plus size={14} />
+            新建文件夹
+          </button>
+        </div>
       </div>
     )
   }
@@ -245,8 +300,15 @@ export function WorkspaceTree({
       className="flex-1 overflow-y-auto overflow-x-hidden py-1 scroll-smooth custom-scrollbar"
       onContextMenu={onBlankContextMenu}
       onDragOver={handleBlankDragOver}
-      onDrop={handleBlankDrop}
+      onDrop={(e) => {
+        if (e.dataTransfer.types.includes('Files')) {
+          handleNativeFileDrop(e, null)
+        } else {
+          handleBlankDrop(e)
+        }
+      }}
     >
+      {rootNodeElement}
       <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>
         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
           const row = visibleRows[virtualRow.index]!
@@ -281,6 +343,7 @@ export function WorkspaceTree({
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 onDragEnd={handleTreeDragEnd}
+                onNativeFileDrop={onUploadToDir}
               />
             </div>
           )
@@ -310,6 +373,7 @@ interface TreeRowProps {
   onDragLeave: (e: React.DragEvent) => void
   onDrop: (e: React.DragEvent, node: WorkspaceNode) => void
   onDragEnd: () => void
+  onNativeFileDrop: (parentId: string | null, files: globalThis.File[]) => void
 }
 
 function TreeRow({
@@ -330,6 +394,7 @@ function TreeRow({
   onDragLeave,
   onDrop,
   onDragEnd,
+  onNativeFileDrop,
 }: TreeRowProps) {
   const { node, depth } = row
   const Icon = getNodeIcon(node, isExpanded)
@@ -351,9 +416,29 @@ function TreeRow({
       onContextMenu={(e) => onContextMenu(e, node)}
       onDoubleClick={() => onDoubleClick(node)}
       onDragStart={(e) => onDragStart(e, node)}
-      onDragOver={(e) => onDragOver(e, node)}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes('Files')) {
+          e.preventDefault()
+          e.stopPropagation()
+          e.dataTransfer.dropEffect = 'copy'
+        } else {
+          onDragOver(e, node)
+        }
+      }}
       onDragLeave={onDragLeave}
-      onDrop={(e) => onDrop(e, node)}
+      onDrop={(e) => {
+        if (e.dataTransfer.types.includes('Files')) {
+          e.preventDefault()
+          e.stopPropagation()
+          const files = Array.from(e.dataTransfer.files)
+          if (files.length > 0) {
+            const targetParent = node.kind === 'dir' ? node.id : node.parentId
+            onNativeFileDrop(targetParent, files)
+          }
+        } else {
+          onDrop(e, node)
+        }
+      }}
       onDragEnd={onDragEnd}
     >
       {/* Drop indicator lines */}

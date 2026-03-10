@@ -138,11 +138,7 @@ export function CodeRenderer({ node, serverId }: { node: WorkspaceNode; serverId
   )
 
   if (!node.contentRef) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center text-text-muted">
-        <p className="text-sm">文件暂无内容，可通过上传替换</p>
-      </div>
-    )
+    return <EmptyFileEditor node={node} serverId={serverId} language={language} />
   }
 
   if (isLoading) {
@@ -256,6 +252,110 @@ export function CodeRenderer({ node, serverId }: { node: WorkspaceNode; serverId
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+/* ─── Empty file inline editor ─── */
+
+function EmptyFileEditor({
+  node,
+  serverId,
+  language,
+}: {
+  node: WorkspaceNode
+  serverId: string
+  language: string
+}) {
+  const [content, setContent] = useState('')
+  const [isDirty, setIsDirty] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const { refetchTree, invalidateStats } = useWorkspaceData(serverId)
+  const mutations = useWorkspaceMutations({ serverId, refetchTree, invalidateStats })
+
+  useEffect(() => {
+    textareaRef.current?.focus()
+  }, [])
+
+  const handleSave = useCallback(() => {
+    mutations.updateFileContent.mutate(
+      {
+        fileId: node.id,
+        content,
+        filename: node.name,
+        currentContentRef: null,
+        currentSizeBytes: null,
+        currentFlags: null,
+      },
+      {
+        onSuccess: () => {
+          setIsDirty(false)
+        },
+      },
+    )
+  }, [content, node.id, node.name, mutations.updateFileContent])
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault()
+        if (isDirty) handleSave()
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault()
+        const textarea = textareaRef.current
+        if (!textarea) return
+        const start = textarea.selectionStart
+        const end = textarea.selectionEnd
+        const newVal = `${content.substring(0, start)}  ${content.substring(end)}`
+        setContent(newVal)
+        setIsDirty(true)
+        requestAnimationFrame(() => {
+          textarea.selectionStart = textarea.selectionEnd = start + 2
+        })
+      }
+    },
+    [isDirty, handleSave, content],
+  )
+
+  return (
+    <div className="w-full h-full overflow-auto flex flex-col">
+      <div className="flex items-center justify-between px-4 py-2 bg-bg-tertiary border-b border-border-subtle rounded-t-lg">
+        <span className="text-xs text-text-muted font-mono">{node.name}</span>
+        <div className="flex items-center gap-2">
+          {isDirty && <span className="text-xs text-yellow-400">● 未保存</span>}
+          <span className="text-xs text-text-muted bg-bg-primary px-2 py-0.5 rounded">
+            {language}
+          </span>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!isDirty || mutations.updateFileContent.isPending}
+            className="flex items-center gap-1 text-xs px-2 py-1 bg-primary hover:bg-primary-hover text-white rounded transition disabled:opacity-40"
+            title="保存 (⌘S)"
+          >
+            {mutations.updateFileContent.isPending ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <Save size={12} />
+            )}
+            保存
+          </button>
+        </div>
+      </div>
+      <textarea
+        ref={textareaRef}
+        value={content}
+        onChange={(e) => {
+          setContent(e.target.value)
+          setIsDirty(true)
+        }}
+        onKeyDown={handleKeyDown}
+        className="flex-1 p-4 text-sm leading-relaxed bg-[#1e1e2e] text-[#cdd6f4] font-mono resize-none outline-none rounded-b-lg"
+        spellCheck={false}
+        placeholder="开始编辑..."
+      />
     </div>
   )
 }

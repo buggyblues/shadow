@@ -299,6 +299,48 @@ export function createWorkspaceHandler(container: AppContainer) {
     return c.json(node, 201)
   })
 
+  // ─── Download entire workspace as ZIP ───
+
+  handler.get('/servers/:serverId/workspace/download', async (c) => {
+    const serverId = await resolveServerId(c.req.param('serverId'))
+    const workspace = await resolveWorkspace(serverId)
+    const workspaceService = container.resolve('workspaceService')
+
+    const allNodes = await workspaceService.getDescendants(workspace.id, '/')
+    const files = allNodes.filter((n) => n.kind === 'file' && n.contentRef)
+
+    const archive = archiver('zip', { zlib: { level: 6 } })
+    const chunks: Buffer[] = []
+    const collectPromise = new Promise<Buffer>((resolve, reject) => {
+      archive.on('data', (chunk: Buffer) => chunks.push(chunk))
+      archive.on('end', () => resolve(Buffer.concat(chunks)))
+      archive.on('error', reject)
+    })
+
+    for (const node of files) {
+      try {
+        const relativePath = node.path.startsWith('/') ? node.path.slice(1) : node.path
+        const res = await fetch(node.contentRef!)
+        if (res.ok) {
+          const buffer = Buffer.from(await res.arrayBuffer())
+          archive.append(buffer, { name: relativePath })
+        }
+      } catch {
+        // Skip files that can't be fetched
+      }
+    }
+
+    archive.finalize()
+    const buffer = await collectPromise
+
+    return new Response(new Uint8Array(buffer), {
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(workspace.name || 'workspace')}.zip"`,
+      },
+    })
+  })
+
   // ─── Download folder as ZIP ───
 
   handler.get('/servers/:serverId/workspace/folders/:folderId/download', async (c) => {

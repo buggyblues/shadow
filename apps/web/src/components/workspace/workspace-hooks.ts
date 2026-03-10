@@ -98,32 +98,37 @@ interface MutationDeps {
 }
 
 export function useWorkspaceMutations({ serverId, refetchTree, invalidateStats }: MutationDeps) {
-  const { setRenamingNodeId, setActiveFileId, setClipboard, clipboard, workspace } =
+  const { setRenamingNodeId, setActiveFileId, setClipboard, setExpanded, clipboard, workspace } =
     useWorkspaceStore()
   const queryClient = useQueryClient()
 
   const createFolder = useMutation({
     mutationFn: (data: { parentId: string | null; name: string }) =>
-      fetchApi(`/api/servers/${serverId}/workspace/folders`, {
+      fetchApi<WorkspaceNode>(`/api/servers/${serverId}/workspace/folders`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    onSuccess: () => {
+    onSuccess: (newFolder) => {
       refetchTree()
       invalidateStats()
+      if (newFolder.parentId) setExpanded(newFolder.parentId, true)
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })
 
   const createFileNode = useMutation({
     mutationFn: (data: { parentId: string | null; name: string }) =>
-      fetchApi(`/api/servers/${serverId}/workspace/files`, {
+      fetchApi<WorkspaceNode>(`/api/servers/${serverId}/workspace/files`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    onSuccess: () => {
+    onSuccess: (newFile) => {
       refetchTree()
       invalidateStats()
+      // Auto-focus the newly created file
+      setActiveFileId(newFile.id)
+      // Expand parent folder so the new file is visible
+      if (newFile.parentId) setExpanded(newFile.parentId, true)
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })

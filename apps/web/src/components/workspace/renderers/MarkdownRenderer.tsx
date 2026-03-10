@@ -119,7 +119,7 @@ export function MarkdownRenderer({ node, serverId }: { node: WorkspaceNode; serv
   )
 
   if (!node.contentRef) {
-    return <div className="text-text-muted text-sm">Markdown 文件暂无内容</div>
+    return <EmptyMarkdownEditor node={node} serverId={serverId} />
   }
 
   if (isLoading) {
@@ -359,5 +359,98 @@ function inlineFormat(text: string): string {
         /`([^`]+)`/g,
         '<code class="bg-bg-tertiary px-1 py-0.5 rounded text-xs font-mono">$1</code>',
       )
+  )
+}
+
+/* ─── Empty Markdown file inline editor ─── */
+
+function EmptyMarkdownEditor({ node, serverId }: { node: WorkspaceNode; serverId: string }) {
+  const [content, setContent] = useState('')
+  const [isDirty, setIsDirty] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const { refetchTree, invalidateStats } = useWorkspaceData(serverId)
+  const mutations = useWorkspaceMutations({ serverId, refetchTree, invalidateStats })
+
+  useEffect(() => {
+    textareaRef.current?.focus()
+  }, [])
+
+  const handleSave = useCallback(() => {
+    mutations.updateFileContent.mutate(
+      {
+        fileId: node.id,
+        content,
+        filename: node.name,
+        currentContentRef: null,
+        currentSizeBytes: null,
+        currentFlags: null,
+      },
+      {
+        onSuccess: () => {
+          setIsDirty(false)
+        },
+      },
+    )
+  }, [content, node.id, node.name, mutations.updateFileContent])
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault()
+        if (isDirty) handleSave()
+      }
+    },
+    [isDirty, handleSave],
+  )
+
+  const previewHtml = simpleMarkdownToHtml(content)
+
+  return (
+    <div className="w-full h-full overflow-auto flex flex-col">
+      <div className="flex items-center justify-between px-4 py-2 bg-bg-tertiary border-b border-border-subtle rounded-t-lg shrink-0">
+        <span className="text-xs text-text-muted font-mono">{node.name}</span>
+        <div className="flex items-center gap-2">
+          {isDirty && <span className="text-xs text-yellow-400">● 未保存</span>}
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!isDirty || mutations.updateFileContent.isPending}
+            className="flex items-center gap-1 text-xs px-2 py-1 bg-primary hover:bg-primary-hover text-white rounded transition disabled:opacity-40"
+            title="保存 (⌘S)"
+          >
+            {mutations.updateFileContent.isPending ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <Save size={12} />
+            )}
+            保存
+          </button>
+        </div>
+      </div>
+      <div className="flex flex-1 min-h-0">
+        <textarea
+          ref={textareaRef}
+          value={content}
+          onChange={(e) => {
+            setContent(e.target.value)
+            setIsDirty(true)
+          }}
+          onKeyDown={handleKeyDown}
+          className="flex-1 p-4 text-sm leading-relaxed bg-[#1e1e2e] text-[#cdd6f4] font-mono resize-none outline-none"
+          spellCheck={false}
+          placeholder="开始编写 Markdown..."
+        />
+        {content && (
+          <div className="flex-1 p-4 overflow-auto border-l border-border-subtle">
+            <div
+              className="prose prose-invert max-w-none text-text-primary text-sm leading-relaxed markdown-body"
+              // biome-ignore lint/security/noDangerouslySetInnerHtml: markdown preview
+              dangerouslySetInnerHTML={{ __html: previewHtml }}
+            />
+          </div>
+        )}
+      </div>
+    </div>
   )
 }

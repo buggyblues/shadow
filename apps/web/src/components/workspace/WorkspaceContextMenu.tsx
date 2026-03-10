@@ -48,6 +48,7 @@ interface WorkspaceContextMenuProps {
   onOpen: (nodeId: string) => void
   onRefresh: () => void
   onDownloadZip?: (folderId: string) => void
+  onDownloadWorkspaceZip?: () => void
 }
 
 const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.userAgent)
@@ -69,6 +70,7 @@ export function WorkspaceContextMenu({
   onOpen,
   onRefresh,
   onDownloadZip,
+  onDownloadWorkspaceZip,
 }: WorkspaceContextMenuProps) {
   const node = menu.node
   const menuRef = useRef<HTMLDivElement>(null)
@@ -103,6 +105,7 @@ export function WorkspaceContextMenu({
     onOpen,
     onRefresh,
     onDownloadZip,
+    onDownloadWorkspaceZip,
   })
 
   return (
@@ -180,6 +183,7 @@ function buildMenuGroups(ctx: {
   onOpen: (nodeId: string) => void
   onRefresh: () => void
   onDownloadZip?: (folderId: string) => void
+  onDownloadWorkspaceZip?: () => void
 }): ContextMenuGroup[] {
   const { node } = ctx
 
@@ -203,6 +207,9 @@ function buildMenuGroups(ctx: {
                   onClick: () => ctx.onPaste(null),
                 },
               ]
+            : []),
+          ...(ctx.onDownloadWorkspaceZip
+            ? [{ icon: Archive, label: '下载为 ZIP', onClick: () => ctx.onDownloadWorkspaceZip!() }]
             : []),
           { icon: RefreshCw, label: '刷新', onClick: ctx.onRefresh },
         ],

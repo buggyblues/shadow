@@ -275,6 +275,20 @@ export function WorkspacePage({ serverId, onClose }: WorkspacePageProps) {
     input.click()
   }
 
+  /* Upload files to a specific directory (native drag-drop) */
+  function handleUploadToDir(parentId: string | null, files: globalThis.File[]) {
+    for (const file of files) {
+      mutations.uploadFile.mutate({ file, parentId })
+    }
+  }
+
+  /* Root context menu — acts like a folder-at-root */
+  function handleRootContextMenu(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    setContextMenu({ x: e.clientX, y: e.clientY, node: null })
+  }
+
   /* Drag-drop move */
   function handleMoveNodes(nodeIds: string[], targetParentId: string | null) {
     for (const nodeId of nodeIds) {
@@ -291,12 +305,35 @@ export function WorkspacePage({ serverId, onClose }: WorkspacePageProps) {
     const node = findNodeById(tree, folderId)
     if (!node) return
     try {
-      const res = await fetch(`/api/servers/${serverId}/workspace/folders/${folderId}/download`)
+      const token = localStorage.getItem('accessToken')
+      const res = await fetch(`/api/servers/${serverId}/workspace/folders/${folderId}/download`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
       if (!res.ok) throw new Error('下载失败')
       const blob = await res.blob()
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
       a.download = `${node.name}.zip`
+      a.click()
+      URL.revokeObjectURL(a.href)
+      showToast('下载完成', 'success')
+    } catch (err: unknown) {
+      showToast((err as Error).message || '下载失败', 'error')
+    }
+  }
+
+  /* Download entire workspace as ZIP */
+  async function handleDownloadWorkspaceZip() {
+    try {
+      const token = localStorage.getItem('accessToken')
+      const res = await fetch(`/api/servers/${serverId}/workspace/download`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!res.ok) throw new Error('下载失败')
+      const blob = await res.blob()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `${workspace?.name ?? '工作区'}.zip`
       a.click()
       URL.revokeObjectURL(a.href)
       showToast('下载完成', 'success')
@@ -358,14 +395,17 @@ export function WorkspacePage({ serverId, onClose }: WorkspacePageProps) {
             tree={tree}
             searchResults={searchResults}
             isLoading={isLoading}
+            workspaceName={workspace?.name ?? ''}
             onNodeClick={handleNodeClick}
             onNodeDoubleClick={handleNodeDoubleClick}
             onNodeContextMenu={handleNodeContextMenu}
             onBlankContextMenu={handleBlankContextMenu}
+            onRootContextMenu={handleRootContextMenu}
             onRenameSubmit={handleRenameSubmit}
             onNewFolder={(parentId) => setDialog({ kind: 'create-folder', parentId })}
             onRefresh={refetchTree}
             onMoveNodes={handleMoveNodes}
+            onUploadToDir={handleUploadToDir}
           />
         </div>
 
@@ -412,6 +452,7 @@ export function WorkspacePage({ serverId, onClose }: WorkspacePageProps) {
           onOpen={(nodeId) => setActiveFileId(nodeId)}
           onRefresh={refetchTree}
           onDownloadZip={handleDownloadZip}
+          onDownloadWorkspaceZip={handleDownloadWorkspaceZip}
         />
       )}
 
