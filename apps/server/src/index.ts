@@ -20,6 +20,7 @@ async function main() {
     process.env.MIGRATIONS_DIR,
     path.resolve(process.cwd(), 'src/db/migrations'),
     path.resolve(process.cwd(), 'dist/db/migrations'),
+    path.resolve(process.cwd(), 'apps/server/migrations'),
     path.resolve(process.cwd(), 'apps/server/src/db/migrations'),
   ].filter((p): p is string => Boolean(p))
 
