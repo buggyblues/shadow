@@ -701,13 +701,17 @@ function AgentDetail({
                 {/* YAML example */}
                 <div className="mt-4">
                   <label className="block text-[10px] font-bold uppercase text-text-muted mb-2">
-                    {t('agentMgmt.yamlExample')}
+                    {t('agentMgmt.configExample')}
                   </label>
                   <pre className="bg-bg-tertiary rounded-lg p-4 text-xs text-text-secondary border border-border-subtle overflow-x-auto">
-                    {`channels:
-  shadow:
-    token: "${displayToken.slice(0, 20)}..."
-    serverUrl: "https://shadowob.com"`}
+                    {`{
+  "channels": {
+    "shadowob": {
+      "token": "${displayToken}...",
+      "serverUrl": "https://shadowob.com"
+    }
+  }
+}`}
                   </pre>
                 </div>
               </div>
