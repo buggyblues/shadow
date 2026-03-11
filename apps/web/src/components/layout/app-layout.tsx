@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Outlet, useNavigate } from '@tanstack/react-router'
+import { Menu } from 'lucide-react'
 import { useEffect } from 'react'
 import { fetchApi } from '../../lib/api'
 import { connectSocket, disconnectSocket } from '../../lib/socket'
@@ -11,7 +12,8 @@ import { ServerSidebar } from '../server/server-sidebar'
 export function AppLayout() {
   const navigate = useNavigate()
   const { setUser, logout } = useAuthStore()
-  const { mobileServerSidebarOpen, closeMobileServerSidebar } = useUIStore()
+  const { mobileServerSidebarOpen, closeMobileServerSidebar, openMobileServerSidebar } =
+    useUIStore()
 
   // Fetch current user on mount
   const { data: me, error: meError } = useQuery({
@@ -47,7 +49,7 @@ export function AppLayout() {
   }, [])
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-bg-tertiary">
+    <div className="flex h-dvh w-screen overflow-hidden bg-bg-tertiary">
       {/* Server sidebar — always visible on md+, overlay on mobile */}
       <div className="hidden md:flex">
         <ServerSidebar />
@@ -66,6 +68,17 @@ export function AppLayout() {
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <Outlet />
       </div>
+
+      {/* Mobile hamburger button to open server sidebar */}
+      {!mobileServerSidebarOpen && (
+        <button
+          type="button"
+          onClick={openMobileServerSidebar}
+          className="fixed bottom-4 left-4 z-40 md:hidden flex items-center justify-center w-12 h-12 bg-primary rounded-full shadow-lg text-white"
+        >
+          <Menu size={22} />
+        </button>
+      )}
 
       <ConfirmDialog />
     </div>

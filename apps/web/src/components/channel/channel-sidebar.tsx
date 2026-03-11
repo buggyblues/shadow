@@ -162,6 +162,14 @@ export function ChannelSidebar({
     },
   })
 
+  const deleteServer = useMutation({
+    mutationFn: () => fetchApi(`/api/servers/${serverId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['servers'] })
+      navigate({ to: '/app' })
+    },
+  })
+
   const openServerEdit = () => {
     setEditName(server?.name ?? '')
     setEditDescription(server?.description ?? '')
@@ -564,9 +572,11 @@ export function ChannelSidebar({
       {showCreate && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={() => setShowCreate(false)}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setShowCreate(false)
+          }}
         >
-          <div className="bg-bg-secondary rounded-xl p-6 w-96" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-bg-secondary rounded-xl p-6 w-96">
             <h2 className="text-xl font-bold text-text-primary mb-4">
               {t('channel.createChannel')}
             </h2>
@@ -633,12 +643,11 @@ export function ChannelSidebar({
       {showServerEdit && (
         <div
           className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-          onClick={() => setShowServerEdit(false)}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setShowServerEdit(false)
+          }}
         >
-          <div
-            className="bg-bg-secondary rounded-xl p-6 w-[460px] max-h-[85vh] overflow-y-auto border border-border-subtle"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="bg-bg-secondary rounded-xl p-6 w-[460px] max-h-[85vh] overflow-y-auto border border-border-subtle">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-xl font-bold text-text-primary">{t('channel.serverSettings')}</h2>
               <button
@@ -808,30 +817,53 @@ export function ChannelSidebar({
               </div>
             )}
 
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowServerEdit(false)}
-                className="px-4 py-2 text-text-secondary hover:text-text-primary transition rounded-lg"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={() =>
-                  editName.trim() &&
-                  updateServer.mutate({
-                    name: editName.trim(),
-                    description: editDescription.trim() || null,
-                    slug: editSlug.trim() || undefined,
-                    isPublic: editIsPublic,
-                    homepageHtml: editHomepageHtml.trim() || null,
-                  })
-                }
-                disabled={!editName.trim() || updateServer.isPending}
-                className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg transition disabled:opacity-50 font-bold"
-              >
-                <Save size={14} />
-                {t('common.save')}
-              </button>
+            <div className="flex justify-between gap-3">
+              <div>
+                {_currentUser?.id === server?.ownerId && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const ok = await useConfirmStore.getState().confirm({
+                        title: t('channel.deleteServer'),
+                        message: t('channel.deleteServerConfirm'),
+                      })
+                      if (ok) {
+                        deleteServer.mutate()
+                      }
+                    }}
+                    disabled={deleteServer.isPending}
+                    className="flex items-center gap-2 px-4 py-2 text-red-400 hover:bg-red-500/10 transition rounded-lg disabled:opacity-50"
+                  >
+                    <Trash2 size={14} />
+                    {t('channel.deleteServer')}
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowServerEdit(false)}
+                  className="px-4 py-2 text-text-secondary hover:text-text-primary transition rounded-lg"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  onClick={() =>
+                    editName.trim() &&
+                    updateServer.mutate({
+                      name: editName.trim(),
+                      description: editDescription.trim() || null,
+                      slug: editSlug.trim() || undefined,
+                      isPublic: editIsPublic,
+                      homepageHtml: editHomepageHtml.trim() || null,
+                    })
+                  }
+                  disabled={!editName.trim() || updateServer.isPending}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg transition disabled:opacity-50 font-bold"
+                >
+                  <Save size={14} />
+                  {t('common.save')}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -991,12 +1023,11 @@ export function ChannelSidebar({
       {showInvitePanel && server?.inviteCode && (
         <div
           className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-          onClick={() => setShowInvitePanel(false)}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setShowInvitePanel(false)
+          }}
         >
-          <div
-            className="bg-bg-secondary rounded-xl p-6 w-96 border border-border-subtle"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="bg-bg-secondary rounded-xl p-6 w-96 border border-border-subtle">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-text-primary">{t('channel.inviteMember')}</h2>
               <button
@@ -1102,12 +1133,11 @@ function AddAgentDialog({
   return (
     <div
       className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-      onClick={onClose}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
     >
-      <div
-        className="bg-bg-secondary rounded-xl p-6 w-96 max-h-[60vh] flex flex-col border border-border-subtle"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="bg-bg-secondary rounded-xl p-6 w-96 max-h-[60vh] flex flex-col border border-border-subtle">
         <h2 className="text-lg font-bold text-text-primary mb-4">{t('channel.addAgent')}</h2>
 
         {agents.length === 0 ? (

@@ -32,7 +32,8 @@ export function createChannelHandler(container: AppContainer) {
       const channelService = container.resolve('channelService')
       const serverId = await resolveServerId(c.req.param('serverId'))
       const input = c.req.valid('json')
-      const channel = await channelService.create(serverId, input)
+      const userId = c.get('user').userId
+      const channel = await channelService.create(serverId, input, userId)
 
       // Broadcast channel:created to non-bot members of the server via their user rooms
       try {
@@ -146,6 +147,23 @@ export function createChannelHandler(container: AppContainer) {
           channelId: id,
           serverId: channel.serverId,
         })
+
+        // Send channel invite notification (skip for bots)
+        if (!targetUser.isBot) {
+          try {
+            const notificationService = container.resolve('notificationService')
+            const notification = await notificationService.create({
+              userId: body.userId,
+              type: 'system',
+              title: `You have been added to channel #${channel.name}`,
+              referenceId: id,
+              referenceType: 'channel_invite',
+            })
+            io.to(`user:${body.userId}`).emit('notification:new', notification)
+          } catch {
+            /* non-critical */
+          }
+        }
       }
     } catch {
       /* non-critical */

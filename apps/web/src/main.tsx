@@ -41,6 +41,11 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
   component: HomePage,
+  beforeLoad: () => {
+    if (useAuthStore.getState().isAuthenticated) {
+      throw redirect({ to: '/app' })
+    }
+  },
 })
 
 const loginRoute = createRoute({

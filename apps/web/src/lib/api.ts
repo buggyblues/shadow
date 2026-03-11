@@ -81,7 +81,10 @@ export async function fetchApi<T>(path: string, options?: RequestInit): Promise<
     let errorMessage = `Request failed (${response.status})`
     if (typeof body === 'object' && body !== null) {
       const b = body as Record<string, unknown>
-      if (typeof b.error === 'string') {
+      if (typeof b.detail === 'string') {
+        // Beta: show server error detail for easier debugging
+        errorMessage = b.detail
+      } else if (typeof b.error === 'string') {
         errorMessage = b.error
       } else if (
         b.error &&

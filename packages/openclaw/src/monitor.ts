@@ -346,33 +346,39 @@ async function processShadowMessage(params: {
   // Emit activity: thinking
   socket.updateActivity(channelId, 'thinking')
 
-  await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
-    ctx: ctxPayload,
-    cfg,
-    dispatcherOptions: {
-      deliver: async (payload: ReplyPayload) => {
-        // Emit activity: working (during reply delivery)
-        socket.updateActivity(channelId, 'working')
+  try {
+    await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
+      ctx: ctxPayload,
+      cfg,
+      dispatcherOptions: {
+        deliver: async (payload: ReplyPayload) => {
+          // Emit activity: working (during reply delivery)
+          socket.updateActivity(channelId, 'working')
 
-        await deliverShadowReply({
-          payload,
-          channelId,
-          threadId: message.threadId ?? undefined,
-          replyToId: message.id,
-          client,
-          runtime,
-        })
+          await deliverShadowReply({
+            payload,
+            channelId,
+            threadId: message.threadId ?? undefined,
+            replyToId: message.id,
+            client,
+            runtime,
+          })
+        },
       },
-    },
-  })
+    })
 
-  // Emit activity: ready (after reply sent)
-  socket.updateActivity(channelId, 'ready')
-
-  // Auto-clear activity after 3 seconds
-  setTimeout(() => {
+    // Emit activity: ready (after reply sent)
+    socket.updateActivity(channelId, 'ready')
+  } catch (err) {
+    runtime.error?.(`[msg] AI dispatch failed for message ${message.id}: ${String(err)}`)
     socket.updateActivity(channelId, null)
-  }, 3000)
+    throw err
+  } finally {
+    // Auto-clear activity after 3 seconds
+    setTimeout(() => {
+      socket.updateActivity(channelId, null)
+    }, 3000)
+  }
 }
 
 /**
@@ -715,22 +721,35 @@ export async function monitorShadowProvider(
       return
     }
 
-    // Fire-and-forget: process message without blocking
-    void processShadowMessage({
-      message,
-      account,
-      accountId,
-      config,
-      runtime,
-      core,
-      botUserId,
-      botUsername: me.username,
-      channelPolicies,
-      channelServerMap,
-      socket,
-    }).catch((err) => {
-      runtime.error?.(`[ws] Message processing failed: ${String(err)}`)
-    })
+    // Retry-aware message processing
+    const processWithRetry = async (attempt = 0) => {
+      try {
+        await processShadowMessage({
+          message,
+          account,
+          accountId,
+          config,
+          runtime,
+          core,
+          botUserId,
+          botUsername: me.username,
+          channelPolicies,
+          channelServerMap,
+          socket,
+        })
+      } catch (err) {
+        const MAX_RETRIES = 2
+        runtime.error?.(`[ws] Message processing failed (attempt ${attempt + 1}): ${String(err)}`)
+        if (attempt < MAX_RETRIES) {
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
+          return processWithRetry(attempt + 1)
+        }
+        runtime.error?.(
+          `[ws] Message permanently failed after ${MAX_RETRIES + 1} attempts: ${message.id}`,
+        )
+      }
+    }
+    void processWithRetry()
   })
 
   // Start the socket connection after all listeners are registered

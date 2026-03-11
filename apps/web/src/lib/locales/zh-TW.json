@@ -194,6 +194,8 @@
     "copyChannelLink": "複製頻道連結",
     "deleteChannel": "刪除頻道",
     "deleteChannelConfirm": "確定要刪除此頻道嗎？此操作不可撤銷。",
+    "deleteServer": "刪除伺服器",
+    "deleteServerConfirm": "確定要刪除此伺服器嗎？所有頻道、訊息和成員資料將被永久刪除，此操作不可撤銷。",
     "serverIcon": "伺服器頭像",
     "uploadIcon": "上傳",
     "iconDesc": "建議尺寸：128x128px",

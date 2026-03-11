@@ -29,19 +29,28 @@ export class ShadowClient {
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
     const url = `${this.baseUrl}${path}`
-    const res = await fetch(url, {
-      ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.token}`,
-        ...init?.headers,
-      },
-    })
-    if (!res.ok) {
-      const body = await res.text().catch(() => '')
-      throw new Error(`Shadow API ${init?.method ?? 'GET'} ${path} failed (${res.status}): ${body}`)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 60_000)
+    try {
+      const res = await fetch(url, {
+        ...init,
+        signal: init?.signal ?? controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.token}`,
+          ...init?.headers,
+        },
+      })
+      if (!res.ok) {
+        const body = await res.text().catch(() => '')
+        throw new Error(
+          `Shadow API ${init?.method ?? 'GET'} ${path} failed (${res.status}): ${body}`,
+        )
+      }
+      return res.json() as Promise<T>
+    } finally {
+      clearTimeout(timeout)
     }
-    return res.json() as Promise<T>
   }
 
   private async requestRaw(path: string, init?: RequestInit): Promise<Response> {

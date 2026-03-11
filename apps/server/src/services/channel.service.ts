@@ -38,7 +38,7 @@ export class ChannelService {
     return `${name}-${Date.now()}`
   }
 
-  async create(serverId: string, input: CreateChannelInput) {
+  async create(serverId: string, input: CreateChannelInput, creatorUserId?: string) {
     const uniqueName = await this.generateUniqueName(serverId, input.name)
     const channel = await this.deps.channelDao.create({
       name: uniqueName,
@@ -47,14 +47,18 @@ export class ChannelService {
       topic: input.topic,
     })
 
-    // Auto-add non-bot server members to the new channel
-    // Bots must be explicitly added to channels for per-channel isolation
+    // Add creator and bot members to the new channel
+    // Other human members need to be explicitly invited
     if (channel) {
       try {
-        const members = await this.deps.serverDao.getMembers(serverId)
         const channelId = channel.id
+        if (creatorUserId) {
+          await this.deps.channelMemberDao.add(channelId, creatorUserId)
+        }
+        // Auto-add bot members so they can respond in the channel
+        const members = await this.deps.serverDao.getMembers(serverId)
         for (const m of members) {
-          if (!m.user?.isBot) {
+          if (m.user?.isBot) {
             await this.deps.channelMemberDao.add(channelId, m.userId)
           }
         }

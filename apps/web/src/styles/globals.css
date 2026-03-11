@@ -89,11 +89,11 @@ body {
   font-family: "Nunito", "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 #root {
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Scrollbar styling */

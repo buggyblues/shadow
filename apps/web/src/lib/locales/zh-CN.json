@@ -194,6 +194,8 @@
     "copyChannelLink": "复制频道链接",
     "deleteChannel": "删除频道",
     "deleteChannelConfirm": "确定要删除此频道吗？此操作不可撤销。",
+    "deleteServer": "删除服务器",
+    "deleteServerConfirm": "确定要删除此服务器吗？所有频道、消息和成员数据将被永久删除，此操作不可撤销。",
     "serverIcon": "服务器头像",
     "uploadIcon": "上传",
     "iconDesc": "推荐尺寸：128x128px",

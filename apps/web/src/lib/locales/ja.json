@@ -194,6 +194,8 @@
     "copyChannelLink": "チャンネルリンクをコピー",
     "deleteChannel": "チャンネルを削除",
     "deleteChannelConfirm": "このチャンネルを削除してもよろしいですか？この操作は元に戻せません。",
+    "deleteServer": "サーバーを削除",
+    "deleteServerConfirm": "このサーバーを削除してもよろしいですか？すべてのチャンネル、メッセージ、メンバーデータが完全に削除されます。この操作は元に戻せません。",
     "serverIcon": "サーバーアイコン",
     "uploadIcon": "アップロード",
     "iconDesc": "推奨サイズ：128x128px",

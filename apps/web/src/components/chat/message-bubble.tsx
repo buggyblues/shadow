@@ -117,6 +117,7 @@ export function MessageBubble({
     att: Attachment
   } | null>(null)
   const avatarHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isOwn = message.authorId === currentUserId
   const currentUser = useAuthStore((s) => s.user)
@@ -298,6 +299,23 @@ export function MessageBubble({
           setShowFullPicker(false)
         }
       }}
+      onTouchStart={() => {
+        longPressTimerRef.current = setTimeout(() => {
+          setShowActions(true)
+        }, 500)
+      }}
+      onTouchEnd={() => {
+        if (longPressTimerRef.current) {
+          clearTimeout(longPressTimerRef.current)
+          longPressTimerRef.current = null
+        }
+      }}
+      onTouchMove={() => {
+        if (longPressTimerRef.current) {
+          clearTimeout(longPressTimerRef.current)
+          longPressTimerRef.current = null
+        }
+      }}
     >
       {/* Avatar container */}
       <div
@@ -417,6 +435,11 @@ export function MessageBubble({
                   img: ({ src, alt }) => (
                     <a href={src} target="_blank" rel="noopener noreferrer">
                       <img src={src} alt={alt ?? ''} loading="lazy" />
+                    </a>
+                  ),
+                  a: ({ href, children }) => (
+                    <a href={href} target="_blank" rel="noopener noreferrer">
+                      {children}
                     </a>
                   ),
                   p: ({ children }) => <p>{renderMentions(children)}</p>,

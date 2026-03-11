@@ -3,6 +3,7 @@ import { FileText, FolderOpen, Image as ImageIcon, Plus, Send, Smile, X } from '
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
+import { matchPinyin } from '../../lib/pinyin'
 import { sendTyping, sendWsMessage } from '../../lib/socket'
 import { playSendSound } from '../../lib/sounds'
 import { useChatStore } from '../../stores/chat.store'
@@ -75,7 +76,7 @@ export function MessageInput({
     enabled: !!activeServerId,
   })
 
-  // Filter members by mention query
+  // Filter members by mention query — buddies first, pinyin support, show all results
   const filteredMembers = useMemo(() => {
     if (mentionQuery === null) return []
     const q = mentionQuery.trim().toLocaleLowerCase()
@@ -85,17 +86,31 @@ export function MessageInput({
         const displayName = m.user?.displayName ?? ''
         const usernameLc = username.toLocaleLowerCase()
         const displayNameLc = displayName.toLocaleLowerCase()
+        const isBot = m.user?.isBot ?? false
 
-        // Query empty => show top members (stable alphabetical fallback)
+        // Base bonus: buddies/bots get priority (+500)
+        const botBonus = isBot ? 500 : 0
+
+        // Query empty => show all members, buddies first
         if (!q) {
-          return { member: m, score: 1000 + (m.user?.isBot ? -1 : 0), usernameLc, displayNameLc }
+          return { member: m, score: 1000 + botBonus, usernameLc, displayNameLc }
         }
 
         let score = -1
+        // Standard text matching
         if (usernameLc.startsWith(q)) score = Math.max(score, 300)
         else if (displayNameLc.startsWith(q)) score = Math.max(score, 250)
         else if (usernameLc.includes(q)) score = Math.max(score, 200)
         else if (displayNameLc.includes(q)) score = Math.max(score, 150)
+
+        // Pinyin matching for Chinese names
+        if (score < 0) {
+          const pinyinMatch = matchPinyin(displayName, q) || matchPinyin(username, q)
+          if (pinyinMatch === 'start') score = Math.max(score, 240)
+          else if (pinyinMatch === 'partial') score = Math.max(score, 140)
+        }
+
+        if (score >= 0) score += botBonus
 
         return { member: m, score, usernameLc, displayNameLc }
       })
@@ -104,7 +119,6 @@ export function MessageInput({
         if (b.score !== a.score) return b.score - a.score
         return (a.displayNameLc || a.usernameLc).localeCompare(b.displayNameLc || b.usernameLc)
       })
-      .slice(0, 8)
 
     return scored.map((x) => x.member)
   }, [members, mentionQuery])

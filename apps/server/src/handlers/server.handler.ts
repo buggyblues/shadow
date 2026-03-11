@@ -76,21 +76,25 @@ export function createServerHandler(container: AppContainer) {
     return c.json(server)
   })
 
-  // PATCH /api/servers/:id
+  // PATCH /api/servers/:id (supports UUID or slug)
   serverHandler.patch('/:id', zValidator('json', updateServerSchema), async (c) => {
     const serverService = container.resolve('serverService')
     const id = c.req.param('id')
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+    const resolvedId = isUuid ? id : (await serverService.getBySlug(id)).id
     const input = c.req.valid('json')
-    const server = await serverService.update(id, input, c.get('user').userId)
+    const server = await serverService.update(resolvedId, input, c.get('user').userId)
     return c.json(server)
   })
 
-  // DELETE /api/servers/:id
+  // DELETE /api/servers/:id (supports UUID or slug)
   serverHandler.delete('/:id', async (c) => {
     const serverService = container.resolve('serverService')
     const id = c.req.param('id')
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+    const resolvedId = isUuid ? id : (await serverService.getBySlug(id)).id
     const user = c.get('user')
-    await serverService.delete(id, user.userId)
+    await serverService.delete(resolvedId, user.userId)
     return c.json({ success: true })
   })
 
@@ -119,6 +123,24 @@ export function createServerHandler(container: AppContainer) {
         }
         for (const ch of channels) {
           io.to(`channel:${ch.id}`).emit('member:joined', payload)
+        }
+
+        // Send notification to server owner about the new member
+        if (server.ownerId && server.ownerId !== user.userId) {
+          try {
+            const notificationService = container.resolve('notificationService')
+            const displayName = fullUser?.displayName ?? fullUser?.username ?? 'unknown'
+            const notification = await notificationService.create({
+              userId: server.ownerId,
+              type: 'system',
+              title: `${displayName} joined your server "${server.name}"`,
+              referenceId: server.id,
+              referenceType: 'server_join',
+            })
+            io.to(`user:${server.ownerId}`).emit('notification:new', notification)
+          } catch {
+            /* non-critical */
+          }
         }
       } catch {
         /* non-critical */
