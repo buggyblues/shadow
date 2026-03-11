@@ -1,6 +1,8 @@
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import type { Database } from '../db'
-import { notifications } from '../db/schema'
+import { channels, messages, notificationPreferences, notifications } from '../db/schema'
+
+type NotificationStrategy = 'all' | 'mention_only' | 'none'
 
 export class NotificationDao {
   constructor(private deps: { db: Database }) {}
@@ -17,6 +19,14 @@ export class NotificationDao {
       .orderBy(desc(notifications.createdAt))
       .limit(limit)
       .offset(offset)
+  }
+
+  async findUnreadByUserId(userId: string) {
+    return this.db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)))
+      .orderBy(desc(notifications.createdAt))
   }
 
   async create(data: {
@@ -47,11 +57,82 @@ export class NotificationDao {
       .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)))
   }
 
+  async markAsReadByIds(ids: string[]) {
+    if (ids.length === 0) return
+    await this.db.update(notifications).set({ isRead: true }).where(inArray(notifications.id, ids))
+  }
+
   async getUnreadCount(userId: string) {
     const result = await this.db
       .select()
       .from(notifications)
       .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)))
     return result.length
+  }
+
+  async getPreference(userId: string) {
+    const result = await this.db
+      .select()
+      .from(notificationPreferences)
+      .where(eq(notificationPreferences.userId, userId))
+      .limit(1)
+    return result[0] ?? null
+  }
+
+  async upsertPreference(data: {
+    userId: string
+    strategy: NotificationStrategy
+    mutedServerIds: string[]
+    mutedChannelIds: string[]
+  }) {
+    const existing = await this.getPreference(data.userId)
+    if (!existing) {
+      const inserted = await this.db
+        .insert(notificationPreferences)
+        .values({
+          userId: data.userId,
+          strategy: data.strategy,
+          mutedServerIds: data.mutedServerIds,
+          mutedChannelIds: data.mutedChannelIds,
+        })
+        .returning()
+      return inserted[0]!
+    }
+
+    const updated = await this.db
+      .update(notificationPreferences)
+      .set({
+        strategy: data.strategy,
+        mutedServerIds: data.mutedServerIds,
+        mutedChannelIds: data.mutedChannelIds,
+        updatedAt: new Date(),
+      })
+      .where(eq(notificationPreferences.userId, data.userId))
+      .returning()
+    return updated[0]!
+  }
+
+  async findMessageScopesByMessageIds(messageIds: string[]) {
+    if (messageIds.length === 0) return []
+    return this.db
+      .select({
+        messageId: messages.id,
+        channelId: channels.id,
+        serverId: channels.serverId,
+      })
+      .from(messages)
+      .innerJoin(channels, eq(messages.channelId, channels.id))
+      .where(inArray(messages.id, messageIds))
+  }
+
+  async findChannelScopes(channelIds: string[]) {
+    if (channelIds.length === 0) return []
+    return this.db
+      .select({
+        channelId: channels.id,
+        serverId: channels.serverId,
+      })
+      .from(channels)
+      .where(inArray(channels.id, channelIds))
   }
 }

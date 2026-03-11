@@ -7,6 +7,7 @@ export const createChannelSchema = z.object({
     .max(100, 'Channel name must be at most 100 characters'),
   type: z.enum(['text', 'voice', 'announcement']).default('text'),
   topic: z.string().max(1024).optional(),
+  isPrivate: z.boolean().optional(),
 })
 
 export const updateChannelSchema = z.object({
@@ -14,6 +15,7 @@ export const updateChannelSchema = z.object({
   type: z.enum(['text', 'voice', 'announcement']).optional(),
   topic: z.string().max(1024).nullable().optional(),
   position: z.number().int().min(0).optional(),
+  isPrivate: z.boolean().optional(),
 })
 
 export const channelPositionsSchema = z.object({

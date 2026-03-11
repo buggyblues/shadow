@@ -35,6 +35,7 @@ export class ChannelDao {
     serverId: string
     type?: 'text' | 'voice' | 'announcement'
     topic?: string
+    isPrivate?: boolean
   }) {
     const result = await this.db
       .insert(channels)
@@ -43,6 +44,7 @@ export class ChannelDao {
         serverId: data.serverId,
         type: data.type ?? 'text',
         topic: data.topic,
+        isPrivate: data.isPrivate ?? false,
       })
       .returning()
     return result[0]
@@ -55,6 +57,7 @@ export class ChannelDao {
       type: 'text' | 'voice' | 'announcement'
       topic: string | null
       position: number
+      isPrivate: boolean
     }>,
   ) {
     const result = await this.db

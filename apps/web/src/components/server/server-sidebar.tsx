@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Check, Compass, Copy, Info, LogOut, Plus, UserPlus } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
+import { getLastChannelId } from '../../lib/last-channel'
 import { getCatAvatar } from '../../lib/pixel-cats'
 import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
@@ -13,6 +15,17 @@ import { useConfirmStore } from '../common/confirm-dialog'
 interface ServerEntry {
   server: { id: string; name: string; slug: string | null; iconUrl: string | null; ownerId: string }
   member: { role: string }
+}
+
+interface NotificationPreference {
+  strategy: 'all' | 'mention_only' | 'none'
+  mutedServerIds: string[]
+  mutedChannelIds: string[]
+}
+
+interface ScopedUnread {
+  channelUnread: Record<string, number>
+  serverUnread: Record<string, number>
 }
 
 export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
@@ -30,11 +43,37 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
     y: number
     server: ServerEntry
   } | null>(null)
+  const scopeReadCooldownRef = useRef<Map<string, number>>(new Map())
+  const scopeReadInFlightRef = useRef<Set<string>>(new Set())
   const { user } = useAuthStore()
 
   const { data: servers = [] } = useQuery({
     queryKey: ['servers'],
     queryFn: () => fetchApi<ServerEntry[]>('/api/servers'),
+  })
+
+  const { data: scopedUnread } = useQuery({
+    queryKey: ['notification-scoped-unread'],
+    queryFn: () => fetchApi<ScopedUnread>('/api/notifications/scoped-unread'),
+    refetchInterval: 15_000,
+  })
+
+  const { data: notificationPreference } = useQuery({
+    queryKey: ['notification-preferences'],
+    queryFn: () => fetchApi<NotificationPreference>('/api/notifications/preferences'),
+  })
+
+  const updateNotificationPreference = useMutation({
+    mutationFn: (payload: Partial<NotificationPreference>) =>
+      fetchApi<NotificationPreference>('/api/notifications/preferences', {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notification-preferences'] })
+      queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+    },
   })
 
   const createServer = useMutation({
@@ -49,6 +88,41 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
       setNewName('')
       handleSelect(data.id, data.slug)
     },
+  })
+
+  const requestMarkScopeRead = useCallback(
+    async (payload: { serverId?: string; channelId?: string }) => {
+      const key = payload.channelId
+        ? `channel:${payload.channelId}`
+        : payload.serverId
+          ? `server:${payload.serverId}`
+          : ''
+      if (!key) return
+
+      const now = Date.now()
+      const last = scopeReadCooldownRef.current.get(key) ?? 0
+      if (now - last < 1200) return
+      if (scopeReadInFlightRef.current.has(key)) return
+
+      scopeReadCooldownRef.current.set(key, now)
+      scopeReadInFlightRef.current.add(key)
+      try {
+        await fetchApi('/api/notifications/read-scope', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        })
+        queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
+        queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      } finally {
+        scopeReadInFlightRef.current.delete(key)
+      }
+    },
+    [queryClient],
+  )
+
+  useSocketEvent('notification:new', () => {
+    queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
+    queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
   })
 
   const joinServer = useMutation({
@@ -87,7 +161,18 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   const handleSelect = (serverId: string, slug?: string | null) => {
     setActiveServer(serverId)
     setMobileView('channels')
-    navigate({ to: '/app/servers/$serverId', params: { serverId: slug ?? serverId } })
+    const serverSlug = slug ?? serverId
+    // Navigate to last-visited channel if available, otherwise show server home
+    const lastChannelId = getLastChannelId(serverId)
+    if (lastChannelId) {
+      navigate({
+        to: '/app/servers/$serverSlug/channels/$channelId',
+        params: { serverSlug, channelId: lastChannelId },
+      })
+    } else {
+      navigate({ to: '/app/servers/$serverSlug', params: { serverSlug } })
+    }
+    requestMarkScopeRead({ serverId })
     onNavigate?.()
   }
 
@@ -136,6 +221,10 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                 <img src={getCatAvatar(i)} alt={s.server.name} className="w-10 h-10" />
               )}
             </button>
+            {(scopedUnread?.serverUnread?.[s.server.id] ?? 0) > 0 &&
+              !notificationPreference?.mutedServerIds?.includes(s.server.id) && (
+                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-danger border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.35)]" />
+              )}
             {/* Tooltip */}
             <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-bg-tertiary text-text-primary text-sm font-medium rounded-md shadow-lg whitespace-nowrap pointer-events-none opacity-0 group-hover/server:opacity-100 transition-opacity z-50">
               {s.server.name}
@@ -316,6 +405,26 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
             >
               <UserPlus size={14} />
               {t('server.inviteMembers')}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const targetId = contextMenu.server.server.id
+                const current = notificationPreference?.mutedServerIds ?? []
+                const isMuted = current.includes(targetId)
+                const next = isMuted
+                  ? current.filter((id) => id !== targetId)
+                  : [...current, targetId]
+                updateNotificationPreference.mutate({ mutedServerIds: next })
+                setContextMenu(null)
+              }}
+              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
+            >
+              <Info size={14} />
+              {(notificationPreference?.mutedServerIds ?? []).includes(contextMenu.server.server.id)
+                ? '取消静音服务器'
+                : '静音服务器通知'}
             </button>
 
             {/* Copy server ID */}

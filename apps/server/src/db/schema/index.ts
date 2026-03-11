@@ -7,7 +7,12 @@ export { dmChannels } from './dm-channels'
 export { inviteCodes } from './invite-codes'
 export { memberRoleEnum, members } from './members'
 export { messages } from './messages'
-export { notifications, notificationTypeEnum } from './notifications'
+export {
+  notificationPreferences,
+  notificationStrategyEnum,
+  notifications,
+  notificationTypeEnum,
+} from './notifications'
 export { reactions } from './reactions'
 export { servers } from './servers'
 export {

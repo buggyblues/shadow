@@ -157,8 +157,8 @@ export function ProductDetail({
       setSupportMessage('')
       setSupportImages([])
       navigate({
-        to: '/app/servers/$serverId/$channelName',
-        params: { serverId, channelName: encodeURIComponent(res.channelName) },
+        to: '/app/servers/$serverSlug/channels/$channelId',
+        params: { serverSlug: serverId, channelId: res.channelId },
       })
       if (res.buddyUserId) {
         if (res.buddyReady) {

@@ -113,29 +113,57 @@ export function createChannelHandler(container: AppContainer) {
   // POST /api/channels/:id/members — add a user (typically a bot) to a channel
   channelHandler.post('/channels/:id/members', async (c) => {
     const channelService = container.resolve('channelService')
+    const serverDao = container.resolve('serverDao')
+    const channelMemberDao = container.resolve('channelMemberDao')
     const id = c.req.param('id')
-    const body = await c.req.json<{ userId: string }>()
+    const body = await c.req.json<{ userId?: string }>()
+    const requesterId = c.get('user').userId
 
-    if (!body.userId) {
-      return c.json({ error: 'userId is required' }, 400)
-    }
+    const targetUserId = body.userId ?? requesterId
 
     // Make sure channel exists
     const channel = await channelService.getById(id)
 
+    // Both requester and target must be server members
+    const [requesterServerMember, targetServerMember] = await Promise.all([
+      serverDao.getMember(channel.serverId, requesterId),
+      serverDao.getMember(channel.serverId, targetUserId),
+    ])
+    if (!requesterServerMember) {
+      return c.json({ error: 'Not a member of this server' }, 403)
+    }
+    if (!targetServerMember) {
+      return c.json({ error: 'Target user is not a server member' }, 400)
+    }
+
+    const isSelfJoin = requesterId === targetUserId
+    const requesterInChannel = await channelMemberDao.get(id, requesterId)
+
+    if (isSelfJoin) {
+      // Self-join is allowed only for public channels
+      if (channel.isPrivate) {
+        return c.json({ error: 'Private channel requires an invite' }, 403)
+      }
+    } else {
+      // Inviting others requires inviter already in channel
+      if (!requesterInChannel) {
+        return c.json({ error: 'Only channel members can invite others' }, 403)
+      }
+    }
+
     // Add member
-    await channelService.addMember(id, body.userId)
+    await channelService.addMember(id, targetUserId)
 
     // Broadcast member:joined to the channel
     try {
       const io = container.resolve('io')
       const userDao = container.resolve('userDao')
-      const targetUser = await userDao.findById(body.userId)
+      const targetUser = await userDao.findById(targetUserId)
       if (targetUser) {
         const payload = {
           serverId: channel.serverId,
           channelId: id,
-          userId: body.userId,
+          userId: targetUserId,
           username: targetUser.username ?? 'unknown',
           displayName: targetUser.displayName ?? targetUser.username ?? 'unknown',
           avatarUrl: targetUser.avatarUrl ?? null,
@@ -143,7 +171,7 @@ export function createChannelHandler(container: AppContainer) {
         }
         io.to(`channel:${id}`).emit('member:joined', payload)
         // Notify the user directly so they can join the channel room
-        io.to(`user:${body.userId}`).emit('channel:member-added', {
+        io.to(`user:${targetUserId}`).emit('channel:member-added', {
           channelId: id,
           serverId: channel.serverId,
         })
@@ -153,13 +181,13 @@ export function createChannelHandler(container: AppContainer) {
           try {
             const notificationService = container.resolve('notificationService')
             const notification = await notificationService.create({
-              userId: body.userId,
+              userId: targetUserId,
               type: 'system',
               title: `You have been added to channel #${channel.name}`,
               referenceId: id,
               referenceType: 'channel_invite',
             })
-            io.to(`user:${body.userId}`).emit('notification:new', notification)
+            io.to(`user:${targetUserId}`).emit('notification:new', notification)
           } catch {
             /* non-critical */
           }

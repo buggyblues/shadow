@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { useLocation, useNavigate } from '@tanstack/react-router'
 import {
   Check,
   ChevronDown,
@@ -9,6 +9,7 @@ import {
   FolderClosed,
   Hash,
   Home,
+  Lock,
   Megaphone,
   Menu,
   Plus,
@@ -24,7 +25,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
-import { joinChannel, leaveChannel } from '../../lib/socket'
+import { joinChannel } from '../../lib/socket'
 import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
@@ -36,6 +37,8 @@ interface Channel {
   type: 'text' | 'voice' | 'announcement'
   topic: string | null
   position: number
+  isPrivate: boolean
+  isMember?: boolean
 }
 
 interface Server {
@@ -51,21 +54,39 @@ interface Server {
   ownerId: string
 }
 
+interface NotificationPreference {
+  strategy: 'all' | 'mention_only' | 'none'
+  mutedServerIds: string[]
+  mutedChannelIds: string[]
+}
+
+interface ScopedUnread {
+  channelUnread: Record<string, number>
+  serverUnread: Record<string, number>
+}
+
+interface ServerMember {
+  userId: string
+  role: string
+  user?: {
+    id: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+    isBot: boolean
+  } | null
+}
+
 const channelIcons = {
   text: Hash,
   voice: Volume2,
   announcement: Megaphone,
 }
 
-export function ChannelSidebar({
-  serverId,
-  channelNameFromUrl,
-}: {
-  serverId: string
-  channelNameFromUrl?: string
-}) {
+export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
   const { activeChannelId, setActiveChannel } = useChatStore()
   const _currentUser = useAuthStore((s) => s.user)
@@ -74,6 +95,7 @@ export function ChannelSidebar({
   const [showServerEdit, setShowServerEdit] = useState(false)
   const [newName, setNewName] = useState('')
   const [newType, setNewType] = useState<'text' | 'voice' | 'announcement'>('text')
+  const [newIsPrivate, setNewIsPrivate] = useState(false)
   const [editName, setEditName] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [editSlug, setEditSlug] = useState('')
@@ -89,53 +111,97 @@ export function ChannelSidebar({
   } | null>(null)
   const [showAddAgent, setShowAddAgent] = useState(false)
   const [showInvitePanel, setShowInvitePanel] = useState(false)
+  const [inviteTargetChannel, setInviteTargetChannel] = useState<Channel | null>(null)
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null)
   const [editChannelName, setEditChannelName] = useState('')
   const [blankContextMenu, setBlankContextMenu] = useState<{ x: number; y: number } | null>(null)
   const contextMenuRef = useRef<HTMLDivElement>(null)
-  // When user clicks Home, we set this to prevent auto-select from overriding
-  const userChoseHomeRef = useRef(false)
+  const scopeReadCooldownRef = useRef<Map<string, number>>(new Map())
+  const scopeReadInFlightRef = useRef<Set<string>>(new Set())
+  const lastMarkedChannelRef = useRef<string | null>(null)
 
   const { data: server } = useQuery({
-    queryKey: ['server', serverId],
-    queryFn: () => fetchApi<Server>(`/api/servers/${serverId}`),
+    queryKey: ['server', serverSlug],
+    queryFn: () => fetchApi<Server>(`/api/servers/${serverSlug}`),
   })
-
-  // Auto-redirect to slug URL if server has a slug and URL uses UUID
-  useEffect(() => {
-    if (server?.slug && serverId !== server.slug) {
-      // Preserve channelName when redirecting from UUID to slug URL
-      if (channelNameFromUrl) {
-        navigate({
-          to: '/app/servers/$serverId/$channelName',
-          params: { serverId: server.slug, channelName: channelNameFromUrl },
-          replace: true,
-        })
-      } else {
-        navigate({ to: '/app/servers/$serverId', params: { serverId: server.slug }, replace: true })
-      }
-    }
-  }, [server?.slug, serverId, channelNameFromUrl, navigate])
 
   const { data: channels = [] } = useQuery({
-    queryKey: ['channels', serverId],
-    queryFn: () => fetchApi<Channel[]>(`/api/servers/${serverId}/channels`),
+    queryKey: ['channels', serverSlug],
+    queryFn: () => fetchApi<Channel[]>(`/api/servers/${serverSlug}/channels`),
   })
 
+  const { data: scopedUnread } = useQuery({
+    queryKey: ['notification-scoped-unread'],
+    queryFn: () => fetchApi<ScopedUnread>('/api/notifications/scoped-unread'),
+    refetchInterval: 15_000,
+  })
+
+  const { data: notificationPreference } = useQuery({
+    queryKey: ['notification-preferences'],
+    queryFn: () => fetchApi<NotificationPreference>('/api/notifications/preferences'),
+  })
+
+  const updateNotificationPreference = useMutation({
+    mutationFn: (payload: Partial<NotificationPreference>) =>
+      fetchApi<NotificationPreference>('/api/notifications/preferences', {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notification-preferences'] })
+      queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    },
+  })
+
+  const serverUnreadCount = scopedUnread?.serverUnread?.[server?.id ?? serverSlug] ?? 0
+
   const createChannel = useMutation({
-    mutationFn: (data: { name: string; type: string }) =>
-      fetchApi<{ id: string }>(`/api/servers/${serverId}/channels`, {
+    mutationFn: (data: { name: string; type: string; isPrivate?: boolean }) =>
+      fetchApi<{ id: string }>(`/api/servers/${serverSlug}/channels`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['channels', serverId] })
+      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
       setShowCreate(false)
       setNewName('')
+      setNewIsPrivate(false)
       // Auto-navigate to the newly created channel
       handleSelectChannel(data.id)
     },
   })
+
+  const requestMarkScopeRead = useCallback(
+    async (payload: { serverId?: string; channelId?: string }) => {
+      const key = payload.channelId
+        ? `channel:${payload.channelId}`
+        : payload.serverId
+          ? `server:${payload.serverId}`
+          : ''
+      if (!key) return
+
+      const now = Date.now()
+      const last = scopeReadCooldownRef.current.get(key) ?? 0
+      if (now - last < 1200) return
+      if (scopeReadInFlightRef.current.has(key)) return
+
+      scopeReadCooldownRef.current.set(key, now)
+      scopeReadInFlightRef.current.add(key)
+      try {
+        await fetchApi('/api/notifications/read-scope', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        })
+        queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
+        queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      } finally {
+        scopeReadInFlightRef.current.delete(key)
+      }
+    },
+    [queryClient],
+  )
 
   const updateServer = useMutation({
     mutationFn: (data: {
@@ -146,24 +212,24 @@ export function ChannelSidebar({
       homepageHtml?: string | null
       isPublic?: boolean
     }) =>
-      fetchApi<Server>(`/api/servers/${serverId}`, {
+      fetchApi<Server>(`/api/servers/${serverSlug}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),
     onSuccess: (updatedServer) => {
-      queryClient.invalidateQueries({ queryKey: ['server', serverId] })
+      queryClient.invalidateQueries({ queryKey: ['server', serverSlug] })
       queryClient.invalidateQueries({ queryKey: ['servers'] })
       queryClient.invalidateQueries({ queryKey: ['discover-servers'] })
       setShowServerEdit(false)
       // Redirect to slug-based URL if slug changed
-      if (updatedServer.slug !== serverId) {
-        navigate({ to: '/app/servers/$serverId', params: { serverId: updatedServer.slug } })
+      if (updatedServer.slug !== serverSlug) {
+        navigate({ to: '/app/servers/$serverSlug', params: { serverSlug: updatedServer.slug } })
       }
     },
   })
 
   const deleteServer = useMutation({
-    mutationFn: () => fetchApi(`/api/servers/${serverId}`, { method: 'DELETE' }),
+    mutationFn: () => fetchApi(`/api/servers/${serverSlug}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['servers'] })
       navigate({ to: '/app' })
@@ -191,11 +257,11 @@ export function ChannelSidebar({
         body: formData,
       })
       // Update server banner immediately
-      await fetchApi(`/api/servers/${serverId}`, {
+      await fetchApi(`/api/servers/${serverSlug}`, {
         method: 'PATCH',
         body: JSON.stringify({ bannerUrl: result.url }),
       })
-      queryClient.invalidateQueries({ queryKey: ['server', serverId] })
+      queryClient.invalidateQueries({ queryKey: ['server', serverSlug] })
       queryClient.invalidateQueries({ queryKey: ['discover-servers'] })
     } catch {
       /* upload failed */
@@ -215,11 +281,11 @@ export function ChannelSidebar({
         method: 'POST',
         body: formData,
       })
-      await fetchApi(`/api/servers/${serverId}`, {
+      await fetchApi(`/api/servers/${serverSlug}`, {
         method: 'PATCH',
         body: JSON.stringify({ iconUrl: result.url }),
       })
-      queryClient.invalidateQueries({ queryKey: ['server', serverId] })
+      queryClient.invalidateQueries({ queryKey: ['server', serverSlug] })
       queryClient.invalidateQueries({ queryKey: ['servers'] })
       queryClient.invalidateQueries({ queryKey: ['discover-servers'] })
     } catch {
@@ -235,7 +301,7 @@ export function ChannelSidebar({
         method: 'DELETE',
       }),
     onSuccess: (_data, deletedChannelId) => {
-      queryClient.invalidateQueries({ queryKey: ['channels', serverId] })
+      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
       // If the deleted channel was active, navigate to next available channel
       if (activeChannelId === deletedChannelId) {
         const remaining = channels.filter((ch) => ch.id !== deletedChannelId)
@@ -244,20 +310,23 @@ export function ChannelSidebar({
         } else {
           // No channels left — go to server home
           setActiveChannel(null)
-          navigate({ to: '/app/servers/$serverId', params: { serverId: server?.slug ?? serverId } })
+          navigate({
+            to: '/app/servers/$serverSlug',
+            params: { serverSlug: server?.slug ?? serverSlug },
+          })
         }
       }
     },
   })
 
   const updateChannel = useMutation({
-    mutationFn: (data: { channelId: string; name: string }) =>
+    mutationFn: (data: { channelId: string; name?: string; isPrivate?: boolean }) =>
       fetchApi(`/api/channels/${data.channelId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ name: data.name }),
+        body: JSON.stringify({ name: data.name, isPrivate: data.isPrivate }),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['channels', serverId] })
+      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
       setEditingChannel(null)
       setEditChannelName('')
     },
@@ -290,41 +359,16 @@ export function ChannelSidebar({
 
   const handleSelectChannel = useCallback(
     (channelId: string) => {
-      if (activeChannelId) {
-        leaveChannel(activeChannelId)
-      }
-      userChoseHomeRef.current = false
-      setActiveChannel(channelId)
-      joinChannel(channelId)
+      requestMarkScopeRead({ channelId })
       setMobileView('chat')
-      // Navigate to channel URL using channel name
-      const ch = channels.find((c) => c.id === channelId)
-      if (ch) {
-        const serverSlug = server?.slug ?? serverId
-        navigate({
-          to: '/app/servers/$serverId/$channelName',
-          params: { serverId: serverSlug, channelName: ch.name },
-          replace: true,
-        })
-      }
+      // Navigate to channel URL using channel ID
+      navigate({
+        to: '/app/servers/$serverSlug/channels/$channelId',
+        params: { serverSlug: server?.slug ?? serverSlug, channelId },
+      })
     },
-    [activeChannelId, setActiveChannel, setMobileView, channels, server?.slug, serverId, navigate],
+    [setMobileView, server?.slug, serverSlug, navigate, requestMarkScopeRead],
   )
-
-  // Auto-select first channel (in useEffect, not render body)
-  // SKIP auto-select when URL already has a channelName — let server.tsx resolve it first
-  useEffect(() => {
-    if (channelNameFromUrl) return // URL has a channel name, server.tsx will resolve it
-    if (channels.length > 0 && !activeChannelId && !userChoseHomeRef.current) {
-      const first = channels[0]!
-      handleSelectChannel(first.id)
-    }
-  }, [channels, activeChannelId, handleSelectChannel, channelNameFromUrl])
-
-  // Reset homeRef when serverId changes (navigating to a new server)
-  useEffect(() => {
-    userChoseHomeRef.current = false
-  }, [])
 
   // Rejoin active channel room on socket reconnect
   useSocketEvent('connect', () => {
@@ -334,22 +378,27 @@ export function ChannelSidebar({
     }
   })
 
+  useEffect(() => {
+    if (!activeChannelId) {
+      lastMarkedChannelRef.current = null
+      return
+    }
+    if (lastMarkedChannelRef.current === activeChannelId) return
+    lastMarkedChannelRef.current = activeChannelId
+    requestMarkScopeRead({ channelId: activeChannelId })
+  }, [activeChannelId, requestMarkScopeRead])
+
   // Auto-refresh channel list when a new channel is created
   useSocketEvent('channel:created', (data: { serverId: string }) => {
-    if (data.serverId === serverId || data.serverId === server?.id) {
-      queryClient.invalidateQueries({ queryKey: ['channels', serverId] })
+    if (data.serverId === serverSlug || data.serverId === server?.id) {
+      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
     }
   })
 
-  // Cleanup: leave channel on unmount
-  useEffect(() => {
-    return () => {
-      const currentChannel = useChatStore.getState().activeChannelId
-      if (currentChannel) {
-        leaveChannel(currentChannel)
-      }
-    }
-  }, [])
+  useSocketEvent('notification:new', () => {
+    queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
+    queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+  })
 
   const toggleGroup = (label: string) => {
     setCollapsedGroups((prev) => ({ ...prev, [label]: !prev[label] }))
@@ -358,6 +407,10 @@ export function ChannelSidebar({
   const textChannels = channels.filter((c) => c.type === 'text')
   const voiceChannels = channels.filter((c) => c.type === 'voice')
   const announcementChannels = channels.filter((c) => c.type === 'announcement')
+  const isInShop = /\/app\/servers\/[^/]+\/shop(?:\/|$)/.test(location.pathname)
+  const isInWorkspace = /\/app\/servers\/[^/]+\/workspace(?:\/|$)/.test(location.pathname)
+  const isInChannel = /\/app\/servers\/[^/]+\/channels\//.test(location.pathname)
+  const isHomeActive = !isInChannel && !isInShop && !isInWorkspace
 
   const renderChannelGroup = (label: string, items: Channel[]) => {
     if (items.length === 0) return null
@@ -434,7 +487,16 @@ export function ChannelSidebar({
               <button
                 key={ch.id}
                 data-channel-item
-                onClick={() => handleSelectChannel(ch.id)}
+                onClick={async () => {
+                  if (ch.isMember === false) {
+                    await fetchApi(`/api/channels/${ch.id}/members`, {
+                      method: 'POST',
+                      body: JSON.stringify({}),
+                    })
+                    queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+                  }
+                  handleSelectChannel(ch.id)
+                }}
                 onContextMenu={(e) => handleContextMenu(e, ch)}
                 className={`group flex items-center gap-1.5 px-2 py-[6px] mx-2 mb-[2px] rounded-md text-[15px] font-medium w-[calc(100%-16px)] text-left transition ${
                   isActive
@@ -447,6 +509,15 @@ export function ChannelSidebar({
                   className={`shrink-0 ${isActive ? 'opacity-80 text-text-primary' : 'opacity-60 group-hover:text-text-primary'}`}
                 />
                 <span className="truncate">{ch.name}</span>
+                {ch.isPrivate && <Lock size={12} className="text-text-muted shrink-0" />}
+                {ch.isMember === false && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/15 text-primary shrink-0">
+                    加入
+                  </span>
+                )}
+                {!isActive && (scopedUnread?.channelUnread?.[ch.id] ?? 0) > 0 && (
+                  <span className="ml-auto w-2 h-2 rounded-full bg-danger shrink-0" />
+                )}
               </button>
             )
           })}
@@ -467,6 +538,9 @@ export function ChannelSidebar({
             <Menu size={20} />
           </button>
           <h2 className="font-bold text-text-primary truncate">{server?.name ?? '...'}</h2>
+          {serverUnreadCount > 0 && (
+            <span className="w-2 h-2 rounded-full bg-danger shrink-0" title="该服务器有未读通知" />
+          )}
         </div>
         <button
           onClick={openServerEdit}
@@ -491,60 +565,71 @@ export function ChannelSidebar({
         <button
           type="button"
           onClick={() => {
-            if (activeChannelId) leaveChannel(activeChannelId)
-            userChoseHomeRef.current = true
-            setActiveChannel(null)
-            // Navigate to server home URL (no channel)
             navigate({
-              to: '/app/servers/$serverId',
-              params: { serverId: server?.slug ?? serverId },
+              to: '/app/servers/$serverSlug',
+              params: { serverSlug: server?.slug ?? serverSlug },
             })
+            requestMarkScopeRead({ serverId: server?.id ?? serverSlug })
             setMobileView('chat')
           }}
           className={`group flex items-center gap-1.5 px-2 py-[6px] mx-2 mb-2 rounded-md text-[15px] font-medium w-[calc(100%-16px)] text-left transition ${
-            !activeChannelId
+            isHomeActive
               ? 'bg-bg-modifier-active text-text-primary'
               : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary'
           }`}
         >
           <Home
             size={18}
-            className={`shrink-0 ${!activeChannelId ? 'opacity-80 text-text-primary' : 'opacity-60 group-hover:text-text-primary'}`}
+            className={`shrink-0 ${isHomeActive ? 'opacity-80 text-text-primary' : 'opacity-60 group-hover:text-text-primary'}`}
           />
           <span className="truncate">{t('server.home')}</span>
         </button>
         <button
           type="button"
           onClick={() => {
-            if (activeChannelId) leaveChannel(activeChannelId)
-            userChoseHomeRef.current = true
-            setActiveChannel(null)
             navigate({
-              to: '/app/servers/$serverId/shop',
-              params: { serverId: server?.slug ?? serverId },
+              to: '/app/servers/$serverSlug/shop',
+              params: { serverSlug: server?.slug ?? serverSlug },
             })
+            requestMarkScopeRead({ serverId: server?.id ?? serverSlug })
             setMobileView('chat')
           }}
-          className="group flex items-center gap-1.5 px-2 py-[6px] mx-2 mb-2 rounded-md text-[15px] font-medium w-[calc(100%-16px)] text-left transition text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary"
+          className={`group flex items-center gap-1.5 px-2 py-[6px] mx-2 mb-2 rounded-md text-[15px] font-medium w-[calc(100%-16px)] text-left transition ${
+            isInShop
+              ? 'bg-bg-modifier-active text-text-primary'
+              : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary'
+          }`}
         >
-          <ShoppingBag size={18} className="shrink-0 opacity-60 group-hover:text-text-primary" />
+          <ShoppingBag
+            size={18}
+            className={`shrink-0 ${isInShop ? 'opacity-80 text-text-primary' : 'opacity-60 group-hover:text-text-primary'}`}
+          />
           <span className="truncate">{t('serverHome.shop', '店铺')}</span>
         </button>
         <button
           type="button"
           onClick={() => {
-            if (activeChannelId) leaveChannel(activeChannelId)
-            userChoseHomeRef.current = true
-            setActiveChannel(null)
             navigate({
-              to: '/app/servers/$serverId/workspace',
-              params: { serverId: server?.slug ?? serverId },
+              to: '/app/servers/$serverSlug/workspace',
+              params: { serverSlug: server?.slug ?? serverSlug },
             })
+            requestMarkScopeRead({ serverId: server?.id ?? serverSlug })
             setMobileView('chat')
           }}
-          className="group flex items-center gap-1.5 px-2 py-[6px] mx-2 mb-2 rounded-md text-[15px] font-medium w-[calc(100%-16px)] text-left transition text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary"
+          className={`group flex items-center gap-1.5 px-2 py-[6px] mx-2 mb-2 rounded-md text-[15px] font-medium w-[calc(100%-16px)] text-left transition ${
+            isInWorkspace
+              ? 'bg-bg-modifier-active text-text-primary'
+              : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary'
+          }`}
         >
-          <FolderClosed size={18} className="shrink-0 opacity-60 group-hover:text-text-primary" />
+          <FolderClosed
+            size={18}
+            className={`shrink-0 ${
+              isInWorkspace
+                ? 'opacity-80 text-text-primary'
+                : 'opacity-60 group-hover:text-text-primary'
+            }`}
+          />
           <span className="truncate">{t('serverHome.workspace', '工作区')}</span>
         </button>
         <div className="h-px bg-divider mx-4 mb-2" />
@@ -593,7 +678,11 @@ export function ChannelSidebar({
                   newName.trim()
                 ) {
                   e.preventDefault()
-                  createChannel.mutate({ name: newName.trim(), type: newType })
+                  createChannel.mutate({
+                    name: newName.trim(),
+                    type: newType,
+                    isPrivate: newIsPrivate,
+                  })
                 }
               }}
               placeholder={t('channel.channelName')}
@@ -618,6 +707,22 @@ export function ChannelSidebar({
                 </button>
               ))}
             </div>
+            <label className="flex items-center justify-between mb-4 bg-bg-tertiary rounded-lg px-3 py-2">
+              <span className="text-sm text-text-primary">私有频道（仅受邀加入）</span>
+              <button
+                type="button"
+                onClick={() => setNewIsPrivate(!newIsPrivate)}
+                className={`relative w-11 h-6 rounded-full transition-colors ${
+                  newIsPrivate ? 'bg-primary' : 'bg-bg-primary'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
+                    newIsPrivate ? 'translate-x-5' : ''
+                  }`}
+                />
+              </button>
+            </label>
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowCreate(false)}
@@ -626,9 +731,14 @@ export function ChannelSidebar({
                 {t('common.cancel')}
               </button>
               <button
-                onClick={() =>
-                  newName.trim() && createChannel.mutate({ name: newName.trim(), type: newType })
-                }
+                onClick={() => {
+                  if (!newName.trim()) return
+                  createChannel.mutate({
+                    name: newName.trim(),
+                    type: newType,
+                    isPrivate: newIsPrivate,
+                  })
+                }}
                 disabled={!newName.trim() || createChannel.isPending}
                 className="px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg transition disabled:opacity-50"
               >
@@ -888,6 +998,7 @@ export function ChannelSidebar({
             <button
               type="button"
               onClick={() => {
+                setInviteTargetChannel(contextMenu.channel)
                 setShowInvitePanel(true)
                 setContextMenu(null)
               }}
@@ -911,6 +1022,25 @@ export function ChannelSidebar({
             <button
               type="button"
               onClick={() => {
+                const current = notificationPreference?.mutedChannelIds ?? []
+                const isMuted = current.includes(contextMenu.channel.id)
+                const next = isMuted
+                  ? current.filter((id) => id !== contextMenu.channel.id)
+                  : [...current, contextMenu.channel.id]
+                updateNotificationPreference.mutate({ mutedChannelIds: next })
+                setContextMenu(null)
+              }}
+              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
+            >
+              <Volume2 size={14} />
+              {(notificationPreference?.mutedChannelIds ?? []).includes(contextMenu.channel.id)
+                ? '取消静音频道'
+                : '静音频道通知'}
+            </button>
+            <div className="h-px bg-border-subtle my-1" />
+            <button
+              type="button"
+              onClick={() => {
                 setEditingChannel(contextMenu.channel)
                 setEditChannelName(contextMenu.channel.name)
                 setContextMenu(null)
@@ -923,8 +1053,23 @@ export function ChannelSidebar({
             <button
               type="button"
               onClick={() => {
-                const serverSlug = server?.slug ?? serverId
-                const channelLink = `${window.location.origin}/app/servers/${serverSlug}/${encodeURIComponent(contextMenu.channel.name)}`
+                updateChannel.mutate({
+                  channelId: contextMenu.channel.id,
+                  name: contextMenu.channel.name,
+                  isPrivate: !contextMenu.channel.isPrivate,
+                })
+                setContextMenu(null)
+              }}
+              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
+            >
+              <Lock size={14} />
+              {contextMenu.channel.isPrivate ? '设为公开频道' : '设为私有频道'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const slug = server?.slug ?? serverSlug
+                const channelLink = `${window.location.origin}/app/servers/${slug}/channels/${contextMenu.channel.id}`
                 navigator.clipboard.writeText(channelLink)
                 setContextMenu(null)
               }}
@@ -984,6 +1129,7 @@ export function ChannelSidebar({
             <button
               type="button"
               onClick={() => {
+                setInviteTargetChannel(null)
                 setShowInvitePanel(true)
                 setBlankContextMenu(null)
               }}
@@ -1007,6 +1153,25 @@ export function ChannelSidebar({
             <button
               type="button"
               onClick={() => {
+                if (!server?.id) return
+                const current = notificationPreference?.mutedServerIds ?? []
+                const isMuted = current.includes(server.id)
+                const next = isMuted
+                  ? current.filter((id) => id !== server.id)
+                  : [...current, server.id]
+                updateNotificationPreference.mutate({ mutedServerIds: next })
+                setBlankContextMenu(null)
+              }}
+              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
+            >
+              <Volume2 size={14} />
+              {(notificationPreference?.mutedServerIds ?? []).includes(server?.id ?? '')
+                ? '取消静音服务器'
+                : '静音服务器通知'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
                 openServerEdit()
                 setBlankContextMenu(null)
               }}
@@ -1021,45 +1186,23 @@ export function ChannelSidebar({
 
       {/* Invite Panel */}
       {showInvitePanel && server?.inviteCode && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setShowInvitePanel(false)
+        <InvitePanel
+          serverId={serverSlug}
+          serverInviteCode={server.inviteCode}
+          inviteTargetChannel={inviteTargetChannel}
+          copiedInvite={copiedInvite}
+          onCopyInvite={copyInviteCode}
+          onClose={() => {
+            setShowInvitePanel(false)
+            setInviteTargetChannel(null)
           }}
-        >
-          <div className="bg-bg-secondary rounded-xl p-6 w-96 border border-border-subtle">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-text-primary">{t('channel.inviteMember')}</h2>
-              <button
-                onClick={() => setShowInvitePanel(false)}
-                className="text-text-muted hover:text-text-primary transition"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <label className="block text-xs font-bold uppercase text-text-secondary mb-2">
-              {t('channel.inviteLink')}
-            </label>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 bg-bg-tertiary text-text-primary rounded-lg px-4 py-3 font-mono text-xs truncate">
-                {`${window.location.origin}/invite/${server.inviteCode}`}
-              </code>
-              <button
-                onClick={copyInviteCode}
-                className="px-3 py-3 bg-bg-tertiary rounded-lg text-text-muted hover:text-text-primary transition"
-                title={t('common.copy')}
-              >
-                {copiedInvite ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
-              </button>
-            </div>
-          </div>
-        </div>
+        />
       )}
 
       {/* Add Agent dialog */}
       {showAddAgent && (
         <AddAgentDialog
-          serverId={serverId}
+          serverId={serverSlug}
           onClose={() => setShowAddAgent(false)}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['members'] })
@@ -1068,6 +1211,131 @@ export function ChannelSidebar({
           t={t}
         />
       )}
+    </div>
+  )
+}
+
+function InvitePanel({
+  serverId,
+  serverInviteCode,
+  inviteTargetChannel,
+  copiedInvite,
+  onCopyInvite,
+  onClose,
+}: {
+  serverId: string
+  serverInviteCode: string
+  inviteTargetChannel: Channel | null
+  copiedInvite: boolean
+  onCopyInvite: () => void
+  onClose: () => void
+}) {
+  const queryClient = useQueryClient()
+
+  const { data: serverMembers = [] } = useQuery({
+    queryKey: ['server-members', serverId],
+    queryFn: () => fetchApi<ServerMember[]>(`/api/servers/${serverId}/members`),
+    enabled: !!serverId,
+  })
+
+  const { data: channelMembers = [] } = useQuery({
+    queryKey: ['channel-members', inviteTargetChannel?.id],
+    queryFn: () =>
+      fetchApi<
+        Array<{
+          user: { id: string }
+        }>
+      >(`/api/channels/${inviteTargetChannel?.id}/members`),
+    enabled: !!inviteTargetChannel?.id,
+  })
+
+  const inviteToChannel = useMutation({
+    mutationFn: (userId: string) =>
+      fetchApi(`/api/channels/${inviteTargetChannel?.id}/members`, {
+        method: 'POST',
+        body: JSON.stringify({ userId }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['channel-members', inviteTargetChannel?.id] })
+      queryClient.invalidateQueries({ queryKey: ['members'] })
+    },
+  })
+
+  const joinedUserIds = new Set(channelMembers.map((m) => m.user.id))
+  const candidates = serverMembers.filter((m) => !!m.user && !m.user.isBot)
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div className="bg-bg-secondary rounded-xl p-6 w-[520px] border border-border-subtle max-h-[80vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-text-primary">邀请成员</h2>
+          <button onClick={onClose} className="text-text-muted hover:text-text-primary transition">
+            <X size={18} />
+          </button>
+        </div>
+
+        <label className="block text-xs font-bold uppercase text-text-secondary mb-2">
+          邀请链接
+        </label>
+        <div className="flex items-center gap-2 mb-4">
+          <code className="flex-1 bg-bg-tertiary text-text-primary rounded-lg px-4 py-3 font-mono text-xs truncate">
+            {`${window.location.origin}/invite/${serverInviteCode}`}
+          </code>
+          <button
+            onClick={onCopyInvite}
+            className="px-3 py-3 bg-bg-tertiary rounded-lg text-text-muted hover:text-text-primary transition"
+            title="复制"
+          >
+            {copiedInvite ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
+          </button>
+        </div>
+
+        <div className="text-xs text-text-muted mb-2">
+          {inviteTargetChannel
+            ? `邀请同服务器成员加入频道 #${inviteTargetChannel.name}（对方会在通知中心收到）`
+            : '可先在某个频道右键打开本面板，然后一键邀请同服务器成员加入该频道。'}
+        </div>
+
+        <div className="flex-1 overflow-y-auto space-y-1 pr-1">
+          {candidates.map((m) => {
+            const u = m.user!
+            const inChannel = inviteTargetChannel ? joinedUserIds.has(u.id) : false
+            return (
+              <div
+                key={u.id}
+                className="flex items-center gap-3 px-3 py-2 rounded-lg bg-bg-tertiary/40 border border-border-subtle"
+              >
+                <div className="w-8 h-8 rounded-full bg-bg-tertiary overflow-hidden flex items-center justify-center text-xs text-text-primary font-bold">
+                  {u.avatarUrl ? (
+                    <img src={u.avatarUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    (u.displayName || u.username).charAt(0).toUpperCase()
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-text-primary truncate">
+                    {u.displayName || u.username}
+                  </p>
+                  <p className="text-xs text-text-muted truncate">@{u.username}</p>
+                </div>
+                <button
+                  type="button"
+                  disabled={!inviteTargetChannel || inChannel || inviteToChannel.isPending}
+                  onClick={() => inviteToChannel.mutate(u.id)}
+                  className="px-3 py-1.5 text-xs rounded-md bg-primary hover:bg-primary-hover text-white font-bold disabled:opacity-40"
+                >
+                  {inChannel ? '已在频道中' : '邀请'}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }

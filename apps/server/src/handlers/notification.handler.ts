@@ -1,6 +1,23 @@
+import { zValidator } from '@hono/zod-validator'
 import { Hono } from 'hono'
+import { z } from 'zod'
 import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
+
+const updatePreferenceSchema = z.object({
+  strategy: z.enum(['all', 'mention_only', 'none']).optional(),
+  mutedServerIds: z.array(z.string().uuid()).optional(),
+  mutedChannelIds: z.array(z.string().uuid()).optional(),
+})
+
+const readScopeSchema = z
+  .object({
+    serverId: z.string().uuid().optional(),
+    channelId: z.string().uuid().optional(),
+  })
+  .refine((v) => !!v.serverId || !!v.channelId, {
+    message: 'serverId or channelId is required',
+  })
 
 export function createNotificationHandler(container: AppContainer) {
   const notificationHandler = new Hono()
@@ -33,6 +50,15 @@ export function createNotificationHandler(container: AppContainer) {
     return c.json({ success: true })
   })
 
+  // POST /api/notifications/read-scope
+  notificationHandler.post('/read-scope', zValidator('json', readScopeSchema), async (c) => {
+    const notificationService = container.resolve('notificationService')
+    const user = c.get('user')
+    const input = c.req.valid('json')
+    const result = await notificationService.markScopeAsRead(user.userId, input)
+    return c.json(result)
+  })
+
   // GET /api/notifications/unread-count
   notificationHandler.get('/unread-count', async (c) => {
     const notificationService = container.resolve('notificationService')
@@ -40,6 +66,35 @@ export function createNotificationHandler(container: AppContainer) {
     const count = await notificationService.getUnreadCount(user.userId)
     return c.json({ count })
   })
+
+  // GET /api/notifications/scoped-unread
+  notificationHandler.get('/scoped-unread', async (c) => {
+    const notificationService = container.resolve('notificationService')
+    const user = c.get('user')
+    const data = await notificationService.getScopedUnread(user.userId)
+    return c.json(data)
+  })
+
+  // GET /api/notifications/preferences
+  notificationHandler.get('/preferences', async (c) => {
+    const notificationService = container.resolve('notificationService')
+    const user = c.get('user')
+    const pref = await notificationService.getPreference(user.userId)
+    return c.json(pref)
+  })
+
+  // PATCH /api/notifications/preferences
+  notificationHandler.patch(
+    '/preferences',
+    zValidator('json', updatePreferenceSchema),
+    async (c) => {
+      const notificationService = container.resolve('notificationService')
+      const user = c.get('user')
+      const input = c.req.valid('json')
+      const pref = await notificationService.updatePreference(user.userId, input)
+      return c.json(pref)
+    },
+  )
 
   return notificationHandler
 }

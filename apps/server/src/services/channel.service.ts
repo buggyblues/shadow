@@ -45,6 +45,7 @@ export class ChannelService {
       serverId,
       type: input.type,
       topic: input.topic,
+      isPrivate: input.isPrivate,
     })
 
     // Add only the creator to the new channel
@@ -74,12 +75,17 @@ export class ChannelService {
         userId,
         channelIds,
       )
-      // If user has no channel memberships at all (legacy data), return all channels
-      if (memberChannelIds.length === 0) return allChannels
-      return allChannels.filter((ch) => memberChannelIds.includes(ch.id))
-    } catch {
-      // Table may not exist yet (pre-migration) — fall back to all channels
+      // Legacy fallback: if memberships are empty, only expose public channels
+      if (memberChannelIds.length === 0) {
+        return allChannels.filter((ch) => !ch.isPrivate).map((ch) => ({ ...ch, isMember: false }))
+      }
+      const memberSet = new Set(memberChannelIds)
       return allChannels
+        .filter((ch) => !ch.isPrivate || memberSet.has(ch.id))
+        .map((ch) => ({ ...ch, isMember: memberSet.has(ch.id) }))
+    } catch {
+      // Table may not exist yet (pre-migration) — do not leak private channels
+      return allChannels.filter((ch) => !ch.isPrivate).map((ch) => ({ ...ch, isMember: false }))
     }
   }
 

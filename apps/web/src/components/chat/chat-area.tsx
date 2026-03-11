@@ -6,7 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ArrowLeft, Hash, LogIn, LogOut, Users } from 'lucide-react'
+import { ArrowLeft, Hash, Loader2, LogIn, LogOut, Users } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSocketEvent } from '../../hooks/use-socket'
@@ -17,7 +17,6 @@ import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
 import { NotificationBell } from '../notification/notification-bell'
-import { ServerHome } from '../server/server-home'
 import { type PickerResult, WorkspaceFilePicker } from '../workspace'
 import { FilePreviewPanel } from './file-preview-panel'
 import { MessageBubble } from './message-bubble'
@@ -596,7 +595,11 @@ export function ChatArea() {
   )
 
   if (!activeChannelId) {
-    return <ServerHome />
+    return (
+      <div className="flex-1 flex items-center justify-center text-text-muted bg-bg-primary">
+        <Loader2 size={16} className="animate-spin opacity-60" />
+      </div>
+    )
   }
 
   const virtualItems = virtualizer.getVirtualItems()

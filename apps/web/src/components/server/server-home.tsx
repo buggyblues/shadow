@@ -321,7 +321,7 @@ interface ServerHomeProps {
 export function ServerHome({ serverId: propServerId, standalone }: ServerHomeProps = {}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { activeServerId, setActiveChannel } = useChatStore()
+  const { activeServerId } = useChatStore()
   const effectiveServerId = propServerId || activeServerId
   const [copied, setCopied] = useState(false)
 
@@ -353,10 +353,9 @@ export function ServerHome({ serverId: propServerId, standalone }: ServerHomePro
           ? channels?.find((ch) => ch.name === channelName)
           : channels?.[0]
         if (targetChannel && server) {
-          setActiveChannel(targetChannel.id)
           void navigate({
-            to: '/app/servers/$serverId/$channelName',
-            params: { serverId: server.slug || server.id, channelName: targetChannel.name },
+            to: '/app/servers/$serverSlug/channels/$channelId',
+            params: { serverSlug: server.slug || server.id, channelId: targetChannel.id },
           })
         }
       } else if (type === 'server-home:navigate' && url) {
@@ -375,7 +374,7 @@ export function ServerHome({ serverId: propServerId, standalone }: ServerHomePro
         }
       }
     },
-    [channels, server, navigate, setActiveChannel],
+    [channels, server, navigate],
   )
 
   useEffect(() => {
@@ -409,7 +408,7 @@ document.addEventListener('click', function(e) {
 }, true);
 </script>`
   const htmlContent = rawHtml.includes('</body>')
-    ? rawHtml.replace('</body>', linkInterceptorScript + '</body>')
+    ? rawHtml.replace('</body>', `${linkInterceptorScript}</body>`)
     : rawHtml + linkInterceptorScript
 
   const handleCopyLink = () => {
@@ -463,7 +462,7 @@ document.addEventListener('click', function(e) {
               type="button"
               onClick={() => {
                 const slug = server.slug || server.id
-                navigate({ to: '/app/servers/$serverId', params: { serverId: slug } })
+                navigate({ to: '/app/servers/$serverSlug', params: { serverSlug: slug } })
               }}
               className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-lg transition"
               title={t('serverHome.backToServer')}

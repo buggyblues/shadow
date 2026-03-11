@@ -147,6 +147,14 @@ describe('Channel Validators', () => {
       expect(result.success).toBe(true)
     })
 
+    it('should accept optional isPrivate', () => {
+      const result = createChannelSchema.safeParse({
+        name: 'private-room',
+        isPrivate: true,
+      })
+      expect(result.success).toBe(true)
+    })
+
     it('should reject topic exceeding 1024 chars', () => {
       const result = createChannelSchema.safeParse({
         name: 'general',
@@ -175,6 +183,11 @@ describe('Channel Validators', () => {
     it('should reject negative position', () => {
       const result = updateChannelSchema.safeParse({ position: -1 })
       expect(result.success).toBe(false)
+    })
+
+    it('should accept isPrivate update', () => {
+      const result = updateChannelSchema.safeParse({ isPrivate: false })
+      expect(result.success).toBe(true)
     })
   })
 })

@@ -1,5 +1,7 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
+  Bell,
   BookOpen,
   Bot,
   Check,
@@ -50,7 +52,7 @@ export function SettingsPage() {
   const [message, setMessage] = useState('')
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [activeTab, setActiveTab] = useState<
-    'quickstart' | 'profile' | 'account' | 'invite' | 'buddy' | 'appearance'
+    'quickstart' | 'profile' | 'account' | 'invite' | 'buddy' | 'appearance' | 'notification'
   >('quickstart')
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
@@ -106,6 +108,7 @@ export function SettingsPage() {
           { key: 'quickstart' as const, icon: Rocket, label: t('settings.tabQuickStart') },
           { key: 'profile' as const, icon: User, label: t('settings.tabProfile') },
           { key: 'appearance' as const, icon: Paintbrush, label: t('settings.tabAppearance') },
+          { key: 'notification' as const, icon: Bell, label: '通知' },
           { key: 'buddy' as const, icon: Bot, label: t('settings.tabBuddy') },
           { key: 'account' as const, icon: Shield, label: t('settings.tabAccount') },
           { key: 'invite' as const, icon: Link2, label: t('settings.tabInvite') },
@@ -174,6 +177,20 @@ export function SettingsPage() {
             {t('settings.tabAppearance')}
           </button>
           <button
+            onClick={() => setActiveTab('notification')}
+            className={`group flex items-center gap-3 w-full px-3 py-2 rounded-md text-[15px] font-medium transition ${
+              activeTab === 'notification'
+                ? 'bg-bg-modifier-active text-text-primary'
+                : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary'
+            }`}
+          >
+            <Bell
+              size={18}
+              className={`shrink-0 ${activeTab === 'notification' ? 'opacity-80 text-text-primary' : 'opacity-60 group-hover:text-text-primary'}`}
+            />
+            通知
+          </button>
+          <button
             onClick={() => setActiveTab('buddy')}
             className={`group flex items-center gap-3 w-full px-3 py-2 rounded-md text-[15px] font-medium transition ${
               activeTab === 'buddy'
@@ -233,30 +250,6 @@ export function SettingsPage() {
         <div className="max-w-2xl mx-auto p-4 md:p-8">
           {activeTab === 'quickstart' && (
             <>
-              {/* Profile Card */}
-              <div className="bg-bg-secondary rounded-xl border border-border-subtle p-6 mb-8 flex items-center gap-5">
-                <UserAvatar
-                  userId={user.id}
-                  avatarUrl={user.avatarUrl}
-                  displayName={user.displayName || user.username}
-                  size="xl"
-                />
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-xl font-bold text-text-primary truncate">
-                    {user.displayName || user.username}
-                  </h2>
-                  <p className="text-sm text-text-muted">@{user.username}</p>
-                  <p className="text-xs text-text-muted mt-1">{user.email}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('profile')}
-                  className="px-3 py-1.5 text-xs text-text-muted hover:text-text-primary bg-bg-modifier-hover hover:bg-bg-modifier-active rounded-lg transition"
-                >
-                  {t('common.edit')}
-                </button>
-              </div>
-
               {/* Hero */}
               <div className="text-center mb-10">
                 <img src="/Logo.svg" alt="Shadow" className="w-16 h-16 mx-auto mb-4 opacity-80" />
@@ -490,6 +483,8 @@ export function SettingsPage() {
 
           {activeTab === 'appearance' && <AppearanceSettings />}
 
+          {activeTab === 'notification' && <NotificationSettings />}
+
           {activeTab === 'account' && (
             <>
               <h2 className="text-2xl font-bold text-text-primary mb-6">
@@ -568,6 +563,136 @@ export function SettingsPage() {
         </div>
       )}
     </div>
+  )
+}
+
+function NotificationSettings() {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+
+  const { data: pref } = useQuery({
+    queryKey: ['notification-preferences'],
+    queryFn: () =>
+      fetchApi<{
+        strategy: 'all' | 'mention_only' | 'none'
+        mutedServerIds: string[]
+        mutedChannelIds: string[]
+      }>('/api/notifications/preferences'),
+  })
+
+  const { data: servers = [] } = useQuery({
+    queryKey: ['servers'],
+    queryFn: () =>
+      fetchApi<
+        Array<{ server: { id: string; name: string; slug: string | null; iconUrl: string | null } }>
+      >('/api/servers'),
+  })
+
+  const updatePref = useMutation({
+    mutationFn: (
+      payload: Partial<{
+        strategy: 'all' | 'mention_only' | 'none'
+        mutedServerIds: string[]
+        mutedChannelIds: string[]
+      }>,
+    ) =>
+      fetchApi('/api/notifications/preferences', {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notification-preferences'] })
+      queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    },
+  })
+
+  const mutedServers = servers.filter((s) => (pref?.mutedServerIds ?? []).includes(s.server.id))
+
+  return (
+    <>
+      <h2 className="text-2xl font-bold text-text-primary mb-2">通知设置</h2>
+      <p className="text-text-muted text-sm mb-6">管理通知策略、频道/服务器静音。</p>
+
+      <div className="bg-bg-secondary rounded-xl border border-border-subtle p-6 mb-6">
+        <label className="block text-xs font-bold uppercase text-text-secondary mb-4 tracking-wide">
+          通知策略
+        </label>
+        <div className="space-y-2">
+          {[
+            {
+              value: 'all' as const,
+              title: '全部通知',
+              desc: '接收提及、回复与系统通知。',
+            },
+            {
+              value: 'mention_only' as const,
+              title: '仅提及',
+              desc: '只接收@提及和系统通知。',
+            },
+            {
+              value: 'none' as const,
+              title: '仅系统',
+              desc: '屏蔽消息类通知，仅保留系统通知。',
+            },
+          ].map((item) => {
+            const checked = (pref?.strategy ?? 'all') === item.value
+            return (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => updatePref.mutate({ strategy: item.value })}
+                className={`w-full text-left p-3 rounded-lg border transition ${
+                  checked
+                    ? 'border-primary bg-primary/10'
+                    : 'border-border-subtle hover:border-border-dim bg-bg-tertiary'
+                }`}
+              >
+                <p
+                  className={`text-sm font-bold ${checked ? 'text-primary' : 'text-text-primary'}`}
+                >
+                  {item.title}
+                </p>
+                <p className="text-xs text-text-muted mt-0.5">{item.desc}</p>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="bg-bg-secondary rounded-xl border border-border-subtle p-6">
+        <h3 className="text-lg font-bold text-text-primary mb-3">已静音服务器</h3>
+        {mutedServers.length === 0 ? (
+          <p className="text-sm text-text-muted">暂无已静音服务器</p>
+        ) : (
+          <div className="space-y-2">
+            {mutedServers.map((s) => (
+              <div
+                key={s.server.id}
+                className="flex items-center justify-between rounded-lg bg-bg-tertiary px-3 py-2"
+              >
+                <span className="text-sm text-text-primary truncate">{s.server.name}</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    updatePref.mutate({
+                      mutedServerIds: (pref?.mutedServerIds ?? []).filter(
+                        (id) => id !== s.server.id,
+                      ),
+                    })
+                  }
+                  className="text-xs px-2 py-1 rounded bg-bg-modifier-hover hover:bg-bg-modifier-active text-text-secondary"
+                >
+                  取消静音
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="text-xs text-text-muted mt-4">频道静音可在频道列表右键菜单中设置。</p>
+      </div>
+    </>
   )
 }
 

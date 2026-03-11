@@ -1,14 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { useParams } from '@tanstack/react-router'
-import { useEffect, useRef } from 'react'
+import { Outlet, useNavigate, useParams } from '@tanstack/react-router'
+import { Loader2 } from 'lucide-react'
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChannelSidebar } from '../components/channel/channel-sidebar'
-import { ChatArea } from '../components/chat/chat-area'
-import { MemberList } from '../components/member/member-list'
 import { useAppStatus } from '../hooks/use-app-status'
 import { useUnreadCount } from '../hooks/use-unread-count'
 import { fetchApi } from '../lib/api'
-import { joinChannel } from '../lib/socket'
 import { useChatStore } from '../stores/chat.store'
 import { useUIStore } from '../stores/ui.store'
 
@@ -23,36 +21,44 @@ interface ChannelMeta {
   name: string
 }
 
-interface ChannelListItem {
-  id: string
-  name: string
-  type: string
-}
-
-export function ServerPage() {
+/**
+ * Server layout route — wraps all server child routes with the channel sidebar.
+ *
+ * URL: /app/servers/$serverSlug
+ * Children: ServerHomeView, ChannelView, ShopView, WorkspaceView, etc.
+ */
+export function ServerLayout() {
   const { t } = useTranslation()
-  const { serverId, channelName } = useParams({ strict: false }) as {
-    serverId?: string
-    channelName?: string
-  }
-  const { activeChannelId, activeServerId, setActiveServer, setActiveChannel } = useChatStore()
-  const { mobileView, setMobileView } = useUIStore()
-  // Track whether we've restored the channel from URL for this server navigation
-  const restoredServerRef = useRef<string | null>(null)
+  const navigate = useNavigate()
+  const { serverSlug } = useParams({ strict: false }) as { serverSlug: string }
+  const { activeServerId, activeChannelId, setActiveServer } = useChatStore()
+  const { mobileView } = useUIStore()
 
-  const { data: server } = useQuery({
-    queryKey: ['server', serverId],
-    queryFn: () => fetchApi<ServerMeta>(`/api/servers/${serverId}`),
-    enabled: !!serverId,
+  const { data: server, isLoading: isServerLoading } = useQuery({
+    queryKey: ['server', serverSlug],
+    queryFn: () => fetchApi<ServerMeta>(`/api/servers/${serverSlug}`),
+    enabled: !!serverSlug,
   })
 
-  // Fetch channels to resolve channelName → channelId
-  const { data: channels = [] } = useQuery({
-    queryKey: ['channels', serverId],
-    queryFn: () => fetchApi<ChannelListItem[]>(`/api/servers/${serverId}/channels`),
-    enabled: !!serverId,
-  })
+  // Redirect UUID URL → slug URL
+  useEffect(() => {
+    if (server?.slug && serverSlug !== server.slug) {
+      navigate({
+        to: '/app/servers/$serverSlug',
+        params: { serverSlug: server.slug },
+        replace: true,
+      })
+    }
+  }, [server?.slug, serverSlug, navigate])
 
+  // Sync server to store
+  useEffect(() => {
+    if (server?.id && server.id !== activeServerId) {
+      setActiveServer(server.id)
+    }
+  }, [server?.id, activeServerId, setActiveServer])
+
+  // Channel name for title bar
   const { data: channel } = useQuery({
     queryKey: ['channel', activeChannelId],
     queryFn: () => fetchApi<ChannelMeta>(`/api/channels/${activeChannelId}`),
@@ -71,59 +77,35 @@ export function ServerPage() {
     variant: 'workspace',
   })
 
-  // 1. Resolve server slug → UUID and set activeServer in store
-  //    Only update when the resolved server ID actually changes to avoid
-  //    unnecessary store resets (setActiveServer resets activeChannelId)
-  useEffect(() => {
-    if (server?.id && server.id !== activeServerId) {
-      setActiveServer(server.id)
-      setMobileView('channels')
-    }
-  }, [server?.id, activeServerId, setActiveServer, setMobileView])
+  if (!serverSlug) return null
 
-  // 2. Resolve channelName from URL to channel ID
-  //    This runs when URL has a channelName (e.g., /servers/slug/general)
-  //    It MUST run before channel-sidebar's auto-select to prevent redirect to default channel
-  useEffect(() => {
-    if (!channelName || channels.length === 0) return
-    // Only resolve once per server navigation to avoid loops
-    if (restoredServerRef.current === `${serverId}/${channelName}`) return
-
-    const decodedName = decodeURIComponent(channelName)
-    const matched = channels.find(
-      (ch) => ch.name === decodedName || ch.name.toLowerCase() === decodedName.toLowerCase(),
+  if (isServerLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-text-muted bg-bg-primary">
+        <Loader2 size={20} className="animate-spin opacity-60" />
+      </div>
     )
-    if (matched) {
-      restoredServerRef.current = `${serverId}/${channelName}`
-      if (matched.id !== activeChannelId) {
-        setActiveChannel(matched.id)
-        joinChannel(matched.id)
-      }
-      setMobileView('chat')
-    }
-  }, [channelName, channels, serverId, activeChannelId, setActiveChannel, setMobileView])
-
-  if (!serverId) return null
+  }
 
   return (
     <div className="flex flex-1 min-w-0 overflow-hidden h-full bg-bg-tertiary">
+      {/* Channel sidebar */}
       <div
         className={`${
           mobileView === 'channels' ? 'flex absolute inset-0 z-20 md:relative' : 'hidden'
         } md:flex flex-col w-full md:w-60 flex-shrink-0 transition-transform duration-300 ease-in-out`}
       >
-        <ChannelSidebar serverId={serverId} channelNameFromUrl={channelName} />
+        <ChannelSidebar serverSlug={serverSlug} />
       </div>
 
+      {/* Content: child routes render here via Outlet */}
       <div
         className={`${
           mobileView === 'chat' ? 'flex absolute inset-0 z-10 md:relative md:z-auto' : 'hidden'
-        } md:flex flex-1 min-w-0 flex-col transition-all duration-300 ease-in-out`}
+        } md:flex flex-1 min-w-0 overflow-hidden transition-all duration-300 ease-in-out`}
       >
-        <ChatArea />
+        <Outlet />
       </div>
-
-      <MemberList />
     </div>
   )
 }

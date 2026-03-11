@@ -48,8 +48,8 @@ export function InvitePage() {
       }),
     onSuccess: (data) => {
       navigate({
-        to: '/app/servers/$serverId',
-        params: { serverId: (data as { slug?: string; id: string }).slug ?? data.id },
+        to: '/app/servers/$serverSlug',
+        params: { serverSlug: (data as { slug?: string; id: string }).slug ?? data.id },
       })
     },
     onError: (err: unknown) => {
@@ -57,8 +57,8 @@ export function InvitePage() {
       if (status === 409 && serverInfo) {
         // Already a member, just navigate to the server
         navigate({
-          to: '/app/servers/$serverId',
-          params: { serverId: serverInfo.slug ?? serverInfo.id },
+          to: '/app/servers/$serverSlug',
+          params: { serverSlug: serverInfo.slug ?? serverInfo.id },
         })
       } else if (status === 401) {
         navigate({ to: '/login' })

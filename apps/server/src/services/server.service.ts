@@ -158,7 +158,7 @@ export class ServerService {
     // Auto-add user to all existing channels in the server
     try {
       const channels = await this.deps.channelDao.findByServerId(server.id)
-      const channelIds = channels.map((ch) => ch.id)
+      const channelIds = channels.filter((ch) => !ch.isPrivate).map((ch) => ch.id)
       await this.deps.channelMemberDao.addBulk(channelIds, userId)
     } catch {
       /* channel_members table may not exist yet */

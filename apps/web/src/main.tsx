@@ -15,6 +15,7 @@ import { queryClient } from './lib/query-client'
 import { BuddyMarketPage } from './pages/buddies'
 import { BuddyContractPage } from './pages/buddy-contract'
 import { BuddyManagementPage } from './pages/buddy-management'
+import { ChannelView } from './pages/channel-view'
 import { DiscoverPage } from './pages/discover'
 import { DocsPage } from './pages/docs'
 import { FeaturesPage } from './pages/features'
@@ -23,8 +24,9 @@ import { InvitePage } from './pages/invite'
 import { LoginPage } from './pages/login'
 import { PricingPage } from './pages/pricing'
 import { RegisterPage } from './pages/register'
-import { ServerPage } from './pages/server'
+import { ServerLayout } from './pages/server'
 import { ServerHomePage } from './pages/server-home'
+import { ServerHomeView } from './pages/server-home-view'
 import { SettingsPage } from './pages/settings'
 import { ShopPageRoute } from './pages/shop'
 import { ShopAdminPageRoute } from './pages/shop-admin'
@@ -127,33 +129,40 @@ const appIndexRoute = createRoute({
   component: () => null,
 })
 
-const serverRoute = createRoute({
+// --- Server layout with nested child routes ---
+const serverLayoutRoute = createRoute({
   getParentRoute: () => appRoute,
-  path: '/servers/$serverId',
-  component: ServerPage,
+  path: '/servers/$serverSlug',
+  component: ServerLayout,
 })
 
-const serverChannelRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/servers/$serverId/$channelName',
-  component: ServerPage,
+const serverIndexRoute = createRoute({
+  getParentRoute: () => serverLayoutRoute,
+  path: '/',
+  component: ServerHomeView,
+})
+
+const channelRoute = createRoute({
+  getParentRoute: () => serverLayoutRoute,
+  path: '/channels/$channelId',
+  component: ChannelView,
 })
 
 const serverShopRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/servers/$serverId/shop',
+  getParentRoute: () => serverLayoutRoute,
+  path: '/shop',
   component: ShopPageRoute,
 })
 
 const serverShopAdminRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/servers/$serverId/shop/admin',
+  getParentRoute: () => serverLayoutRoute,
+  path: '/shop/admin',
   component: ShopAdminPageRoute,
 })
 
 const serverWorkspaceRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/servers/$serverId/workspace',
+  getParentRoute: () => serverLayoutRoute,
+  path: '/workspace',
   component: WorkspacePageRoute,
 })
 
@@ -200,11 +209,13 @@ const routeTree = rootRoute.addChildren([
   serverHomeRoute,
   appRoute.addChildren([
     appIndexRoute,
-    serverRoute,
-    serverShopAdminRoute,
-    serverShopRoute,
-    serverWorkspaceRoute,
-    serverChannelRoute,
+    serverLayoutRoute.addChildren([
+      serverIndexRoute,
+      channelRoute,
+      serverShopAdminRoute,
+      serverShopRoute,
+      serverWorkspaceRoute,
+    ]),
     settingsRoute,
     buddyMgmtRoute,
     discoverRoute,

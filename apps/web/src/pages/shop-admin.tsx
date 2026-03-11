@@ -5,28 +5,28 @@ import { fetchApi } from '../lib/api'
 import { useAuthStore } from '../stores/auth.store'
 
 export function ShopAdminPageRoute() {
-  const { serverId } = useParams({ strict: false }) as { serverId: string }
+  const { serverSlug } = useParams({ strict: false }) as { serverSlug: string }
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
 
   const { data: server } = useQuery({
-    queryKey: ['server', serverId],
-    queryFn: () => fetchApi<{ id: string; ownerId: string }>(`/api/servers/${serverId}`),
-    enabled: !!serverId,
+    queryKey: ['server', serverSlug],
+    queryFn: () => fetchApi<{ id: string; ownerId: string }>(`/api/servers/${serverSlug}`),
+    enabled: !!serverSlug,
   })
 
   const isAdmin = !!server && !!user && server.ownerId === user.id
 
   // Non-admins get redirected back to shop
   if (server && !isAdmin) {
-    navigate({ to: '/app/servers/$serverId/shop', params: { serverId } })
+    navigate({ to: '/app/servers/$serverSlug/shop', params: { serverSlug } })
     return null
   }
 
   return (
     <ShopAdmin
-      serverId={serverId}
-      onBack={() => navigate({ to: '/app/servers/$serverId/shop', params: { serverId } })}
+      serverId={serverSlug}
+      onBack={() => navigate({ to: '/app/servers/$serverSlug/shop', params: { serverSlug } })}
     />
   )
 }

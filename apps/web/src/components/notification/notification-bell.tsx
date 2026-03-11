@@ -5,7 +5,6 @@ import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
-import { useChatStore } from '../../stores/chat.store'
 
 interface Notification {
   id: string
@@ -24,7 +23,6 @@ export function NotificationBell() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [showPanel, setShowPanel] = useState(false)
-  const { setActiveServer, setActiveChannel } = useChatStore()
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: markRead and setShowPanel are stable refs
   const handleNotificationClick = useCallback(
@@ -46,18 +44,45 @@ export function NotificationBell() {
             `/api/servers/${channel.serverId}`,
           )
           setShowPanel(false)
-          setActiveServer(channel.serverId)
-          setActiveChannel(message.channelId)
           navigate({
-            to: '/app/servers/$serverId/$channelName',
-            params: { serverId: server.slug ?? channel.serverId, channelName: channel.name },
+            to: '/app/servers/$serverSlug/channels/$channelId',
+            params: { serverSlug: server.slug ?? channel.serverId, channelId: message.channelId },
           })
         } catch {
           // Message may have been deleted
         }
+      } else if (n.referenceType === 'channel_invite' && n.referenceId) {
+        try {
+          const channel = await fetchApi<{ id: string; name: string; serverId: string }>(
+            `/api/channels/${n.referenceId}`,
+          )
+          const server = await fetchApi<{ id: string; slug: string }>(
+            `/api/servers/${channel.serverId}`,
+          )
+          setShowPanel(false)
+          navigate({
+            to: '/app/servers/$serverSlug/channels/$channelId',
+            params: { serverSlug: server.slug ?? channel.serverId, channelId: channel.id },
+          })
+        } catch {
+          // Channel may have been deleted
+        }
+      } else if (n.referenceType === 'server_join' && n.referenceId) {
+        try {
+          const server = await fetchApi<{ id: string; slug: string }>(
+            `/api/servers/${n.referenceId}`,
+          )
+          setShowPanel(false)
+          navigate({
+            to: '/app/servers/$serverSlug',
+            params: { serverSlug: server.slug ?? server.id },
+          })
+        } catch {
+          // Server may have been deleted
+        }
       }
     },
-    [navigate, setActiveServer, setActiveChannel],
+    [navigate],
   )
 
   // Fetch unread count

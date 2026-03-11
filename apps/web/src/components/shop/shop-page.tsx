@@ -248,8 +248,8 @@ export function ShopPage({ serverId, isAdmin, onClose }: ShopPageProps) {
               type="button"
               onClick={() =>
                 navigate({
-                  to: '/app/servers/$serverId/shop/admin',
-                  params: { serverId },
+                  to: '/app/servers/$serverSlug/shop/admin',
+                  params: { serverSlug: serverId },
                 })
               }
               className="p-2.5 text-gray-500 hover:text-gray-900 dark:text-text-muted dark:hover:text-text-primary hover:bg-gray-100 dark:hover:bg-bg-modifier-hover rounded-xl transition-all duration-200 ml-1 border border-transparent hover:border-gray-200 dark:hover:border-border-subtle active:scale-95"

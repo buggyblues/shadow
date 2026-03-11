@@ -58,10 +58,20 @@ function createMockUserDao(overrides = {}) {
 function createMockNotificationDao(overrides = {}) {
   return {
     findByUserId: vi.fn(),
+    findUnreadByUserId: vi.fn().mockResolvedValue([]),
     create: vi.fn(),
     markAsRead: vi.fn(),
     markAllAsRead: vi.fn(),
     getUnreadCount: vi.fn(),
+    getPreference: vi.fn().mockResolvedValue({
+      userId: 'u1',
+      strategy: 'all',
+      mutedServerIds: [],
+      mutedChannelIds: [],
+    }),
+    upsertPreference: vi.fn(),
+    findMessageScopesByMessageIds: vi.fn().mockResolvedValue([]),
+    findChannelScopes: vi.fn().mockResolvedValue([]),
     ...overrides,
   }
 }
@@ -289,12 +299,33 @@ describe('NotificationService', () => {
   describe('getUnreadCount', () => {
     it('should return the unread count', async () => {
       const notificationDao = createMockNotificationDao({
-        getUnreadCount: vi.fn().mockResolvedValue(5),
+        findUnreadByUserId: vi.fn().mockResolvedValue([
+          {
+            id: 'n1',
+            userId: 'u1',
+            type: 'mention',
+            referenceId: 'm1',
+            referenceType: 'message',
+            isRead: false,
+          },
+          {
+            id: 'n2',
+            userId: 'u1',
+            type: 'reply',
+            referenceId: 'm2',
+            referenceType: 'message',
+            isRead: false,
+          },
+        ]),
+        findMessageScopesByMessageIds: vi.fn().mockResolvedValue([
+          { messageId: 'm1', channelId: 'c1', serverId: 's1' },
+          { messageId: 'm2', channelId: 'c1', serverId: 's1' },
+        ]),
       })
       const service = new NotificationService({ notificationDao: notificationDao as any })
 
       const result = await service.getUnreadCount('u1')
-      expect(result).toBe(5)
+      expect(result).toBe(2)
     })
   })
 

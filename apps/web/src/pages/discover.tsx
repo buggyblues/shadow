@@ -61,8 +61,8 @@ export function DiscoverPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['servers'] })
       navigate({
-        to: '/app/servers/$serverId',
-        params: { serverId: (data as { slug?: string; id: string }).slug ?? data.id },
+        to: '/app/servers/$serverSlug',
+        params: { serverSlug: (data as { slug?: string; id: string }).slug ?? data.id },
       })
     },
     onError: (err: unknown, variables) => {
@@ -72,8 +72,8 @@ export function DiscoverPage() {
         queryClient.invalidateQueries({ queryKey: ['servers'] })
         const srv = servers.find((s) => s.id === variables.serverId)
         navigate({
-          to: '/app/servers/$serverId',
-          params: { serverId: srv?.slug ?? variables.serverId },
+          to: '/app/servers/$serverSlug',
+          params: { serverSlug: srv?.slug ?? variables.serverId },
         })
       }
     },
@@ -129,8 +129,8 @@ export function DiscoverPage() {
                   onClick={() => {
                     if (isJoined) {
                       navigate({
-                        to: '/app/servers/$serverId',
-                        params: { serverId: server.slug ?? server.id },
+                        to: '/app/servers/$serverSlug',
+                        params: { serverSlug: server.slug ?? server.id },
                       })
                     }
                   }}
@@ -204,8 +204,8 @@ export function DiscoverPage() {
                           onClick={(e) => {
                             e.stopPropagation()
                             navigate({
-                              to: '/app/servers/$serverId',
-                              params: { serverId: server.slug ?? server.id },
+                              to: '/app/servers/$serverSlug',
+                              params: { serverSlug: server.slug ?? server.id },
                             })
                           }}
                           className="flex items-center gap-1.5 px-4 py-1.5 bg-[#23a559] hover:bg-[#1d8749] text-white rounded-[3px] text-[14px] font-medium transition"
