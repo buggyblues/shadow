@@ -84,7 +84,22 @@
     "loginLink": "로그인",
     "inviteCodeLabel": "초대 코드",
     "inviteCodePlaceholder": "초대 코드 입력",
-    "inviteCodeHint": "등록하려면 초대 코드가 필요합니다. 관리자에게 문의하세요."
+    "inviteCodeHint": "등록하려면 초대 코드가 필요합니다. 관리자에게 문의하세요.",
+    "orContinueWith": "또는",
+    "continueWithGoogle": "Google로 계속하기",
+    "continueWithGitHub": "GitHub로 계속하기"
+  },
+  "oauth": {
+    "authorizeTitle": "애플리케이션 승인",
+    "invalidRequest": "잘못된 승인 요청",
+    "loadFailed": "앱 정보를 불러오지 못했습니다",
+    "permissionsLabel": "이 애플리케이션이 다음 권한을 요청합니다:",
+    "scopeUserRead": "기본 프로필 읽기 (사용자명, 표시 이름, 아바타)",
+    "scopeUserEmail": "이메일 주소 읽기",
+    "authorize": "승인",
+    "authorizing": "승인 중...",
+    "deny": "거부",
+    "approveFailed": "승인에 실패했습니다"
   },
   "guide": {
     "discoverTitle": "서버 탐색",

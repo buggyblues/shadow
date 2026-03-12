@@ -84,7 +84,22 @@
     "loginLink": "登入",
     "inviteCodeLabel": "體驗邀請碼",
     "inviteCodePlaceholder": "請輸入邀請碼",
-    "inviteCodeHint": "需要邀請碼才能註冊，請聯繫管理員獲取"
+    "inviteCodeHint": "需要邀請碼才能註冊，請聯繫管理員獲取",
+    "orContinueWith": "或",
+    "continueWithGoogle": "使用 Google 帳號登入",
+    "continueWithGitHub": "使用 GitHub 帳號登入"
+  },
+  "oauth": {
+    "authorizeTitle": "授權應用程式",
+    "invalidRequest": "無效的授權請求",
+    "loadFailed": "載入應用程式資訊失敗",
+    "permissionsLabel": "該應用程式請求以下權限：",
+    "scopeUserRead": "讀取您的基本資料（使用者名稱、暱稱、頭像）",
+    "scopeUserEmail": "讀取您的電子郵件地址",
+    "authorize": "授權",
+    "authorizing": "授權中...",
+    "deny": "拒絕",
+    "approveFailed": "授權失敗"
   },
   "guide": {
     "discoverTitle": "探索伺服器",

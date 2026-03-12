@@ -84,7 +84,22 @@
     "loginLink": "Login",
     "inviteCodeLabel": "Invite code",
     "inviteCodePlaceholder": "Enter invite code",
-    "inviteCodeHint": "Invite code is required for registration"
+    "inviteCodeHint": "Invite code is required for registration",
+    "orContinueWith": "OR",
+    "continueWithGoogle": "Continue with Google",
+    "continueWithGitHub": "Continue with GitHub"
+  },
+  "oauth": {
+    "authorizeTitle": "Authorize Application",
+    "invalidRequest": "Invalid authorization request",
+    "loadFailed": "Failed to load app info",
+    "permissionsLabel": "This application requests the following permissions:",
+    "scopeUserRead": "Read your basic profile (username, display name, avatar)",
+    "scopeUserEmail": "Read your email address",
+    "authorize": "Authorize",
+    "authorizing": "Authorizing...",
+    "deny": "Deny",
+    "approveFailed": "Authorization failed"
   },
   "guide": {
     "discoverTitle": "Discover Servers",

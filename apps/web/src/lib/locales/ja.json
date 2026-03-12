@@ -84,7 +84,22 @@
     "loginLink": "ログイン",
     "inviteCodeLabel": "招待コード",
     "inviteCodePlaceholder": "招待コードを入力",
-    "inviteCodeHint": "登録には招待コードが必要です。管理者にお問い合わせください。"
+    "inviteCodeHint": "登録には招待コードが必要です。管理者にお問い合わせください。",
+    "orContinueWith": "または",
+    "continueWithGoogle": "Google で続ける",
+    "continueWithGitHub": "GitHub で続ける"
+  },
+  "oauth": {
+    "authorizeTitle": "アプリケーションを認可",
+    "invalidRequest": "無効な認可リクエスト",
+    "loadFailed": "アプリ情報の読み込みに失敗しました",
+    "permissionsLabel": "このアプリケーションは以下の権限を要求しています：",
+    "scopeUserRead": "基本プロフィールの閲覧（ユーザー名、表示名、アバター）",
+    "scopeUserEmail": "メールアドレスの閲覧",
+    "authorize": "認可",
+    "authorizing": "認可中...",
+    "deny": "拒否",
+    "approveFailed": "認可に失敗しました"
   },
   "guide": {
     "discoverTitle": "サーバーを探す",

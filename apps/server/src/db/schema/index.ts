@@ -13,6 +13,14 @@ export {
   notifications,
   notificationTypeEnum,
 } from './notifications'
+export {
+  oauthAccessTokens,
+  oauthAccounts,
+  oauthApps,
+  oauthAuthorizationCodes,
+  oauthConsents,
+  oauthRefreshTokens,
+} from './oauth'
 export { reactions } from './reactions'
 export { servers } from './servers'
 export {

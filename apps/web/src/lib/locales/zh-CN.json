@@ -84,7 +84,22 @@
     "loginLink": "登录",
     "inviteCodeLabel": "体验邀请码",
     "inviteCodePlaceholder": "请输入邀请码",
-    "inviteCodeHint": "需要邀请码才能注册，请联系管理员获取"
+    "inviteCodeHint": "需要邀请码才能注册，请联系管理员获取",
+    "orContinueWith": "或",
+    "continueWithGoogle": "使用 Google 账号登录",
+    "continueWithGitHub": "使用 GitHub 账号登录"
+  },
+  "oauth": {
+    "authorizeTitle": "授权应用",
+    "invalidRequest": "无效的授权请求",
+    "loadFailed": "加载应用信息失败",
+    "permissionsLabel": "该应用请求以下权限：",
+    "scopeUserRead": "读取您的基本资料（用户名、昵称、头像）",
+    "scopeUserEmail": "读取您的邮箱地址",
+    "authorize": "授权",
+    "authorizing": "授权中...",
+    "deny": "拒绝",
+    "approveFailed": "授权失败"
   },
   "guide": {
     "discoverTitle": "发现服务器",

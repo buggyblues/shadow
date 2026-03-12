@@ -72,6 +72,11 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@shadowob.app}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123456}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      OAUTH_BASE_URL: ${OAUTH_BASE_URL:-http://localhost:3000}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy

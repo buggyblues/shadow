@@ -11,6 +11,7 @@ import { createInviteHandler } from './handlers/invite.handler'
 import { createMediaHandler } from './handlers/media.handler'
 import { createMessageHandler } from './handlers/message.handler'
 import { createNotificationHandler } from './handlers/notification.handler'
+import { createOAuthHandler } from './handlers/oauth.handler'
 import { createSearchHandler } from './handlers/search.handler'
 import { createServerHandler } from './handlers/server.handler'
 import { createShopHandler } from './handlers/shop.handler'
@@ -48,6 +49,7 @@ export function createApp(container: AppContainer) {
 
   // API routes
   app.route('/api/auth', createAuthHandler(container))
+  app.route('/api/oauth', createOAuthHandler(container))
   app.route('/api/servers', createServerHandler(container))
   app.route('/api', createChannelHandler(container))
   app.route('/api', createMessageHandler(container))

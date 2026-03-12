@@ -83,5 +83,54 @@ export function createAuthHandler(container: AppContainer) {
     return c.json({ ok: true })
   })
 
+  // ─── External OAuth (Google, GitHub) ──────────────
+
+  // GET /api/auth/oauth/:provider — redirect to provider login
+  authHandler.get('/oauth/:provider', (c) => {
+    const externalOAuthService = container.resolve('externalOAuthService')
+    const provider = c.req.param('provider')
+    const redirect = c.req.query('redirect')
+    const url = externalOAuthService.getAuthorizeUrl(provider, redirect)
+    return c.redirect(url)
+  })
+
+  // GET /api/auth/oauth/:provider/callback — provider callback
+  authHandler.get('/oauth/:provider/callback', async (c) => {
+    const externalOAuthService = container.resolve('externalOAuthService')
+    const provider = c.req.param('provider')
+    const code = c.req.query('code')
+    const state = c.req.query('state')
+
+    if (!code) {
+      return c.redirect('/login?error=oauth_failed')
+    }
+
+    try {
+      const result = await externalOAuthService.handleCallback(provider, code, state)
+      // Redirect to frontend callback page with tokens in hash
+      const callbackUrl = `/oauth-callback#access_token=${encodeURIComponent(result.accessToken)}&refresh_token=${encodeURIComponent(result.refreshToken)}&redirect=${encodeURIComponent(result.redirect)}`
+      return c.redirect(callbackUrl)
+    } catch {
+      return c.redirect('/login?error=oauth_failed')
+    }
+  })
+
+  // GET /api/auth/oauth/accounts — list linked OAuth accounts
+  authHandler.get('/oauth/accounts', authMiddleware, async (c) => {
+    const externalOAuthService = container.resolve('externalOAuthService')
+    const user = c.get('user')
+    const result = await externalOAuthService.listLinkedAccounts(user.userId)
+    return c.json(result)
+  })
+
+  // DELETE /api/auth/oauth/accounts/:accountId — unlink an OAuth account
+  authHandler.delete('/oauth/accounts/:accountId', authMiddleware, async (c) => {
+    const externalOAuthService = container.resolve('externalOAuthService')
+    const user = c.get('user')
+    const { accountId } = c.req.param()
+    await externalOAuthService.unlinkAccount(user.userId, accountId)
+    return c.json({ ok: true })
+  })
+
   return authHandler
 }

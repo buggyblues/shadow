@@ -9,6 +9,8 @@ import { EntitlementDao } from './dao/entitlement.dao'
 import { InviteCodeDao } from './dao/invite-code.dao'
 import { MessageDao } from './dao/message.dao'
 import { NotificationDao } from './dao/notification.dao'
+import { OAuthAppDao } from './dao/oauth.dao'
+import { OAuthAccountDao } from './dao/oauth-account.dao'
 import { OrderDao } from './dao/order.dao'
 import { ProductDao, ProductMediaDao, SkuDao } from './dao/product.dao'
 import { ProductCategoryDao } from './dao/product-category.dao'
@@ -31,9 +33,11 @@ import { CartService } from './services/cart.service'
 import { ChannelService } from './services/channel.service'
 import { DmService } from './services/dm.service'
 import { EntitlementService } from './services/entitlement.service'
+import { ExternalOAuthService } from './services/external-oauth.service'
 import { MediaService } from './services/media.service'
 import { MessageService } from './services/message.service'
 import { NotificationService } from './services/notification.service'
+import { OAuthService } from './services/oauth.service'
 import { OrderService } from './services/order.service'
 import { PermissionService } from './services/permission.service'
 import { ProductService } from './services/product.service'
@@ -60,6 +64,8 @@ export interface Cradle {
   agentDao: AgentDao
   agentPolicyDao: AgentPolicyDao
   inviteCodeDao: InviteCodeDao
+  oauthAppDao: OAuthAppDao
+  oauthAccountDao: OAuthAccountDao
 
   // Shop DAOs
   shopDao: ShopDao
@@ -79,6 +85,8 @@ export interface Cradle {
 
   // Services
   authService: AuthService
+  oauthService: OAuthService
+  externalOAuthService: ExternalOAuthService
   serverService: ServerService
   channelService: ChannelService
   messageService: MessageService
@@ -122,6 +130,8 @@ export function createAppContainer(db: Database): AppContainer {
     agentDao: asClass(AgentDao).singleton(),
     agentPolicyDao: asClass(AgentPolicyDao).singleton(),
     inviteCodeDao: asClass(InviteCodeDao).singleton(),
+    oauthAppDao: asClass(OAuthAppDao).singleton(),
+    oauthAccountDao: asClass(OAuthAccountDao).singleton(),
 
     // Shop DAOs
     shopDao: asClass(ShopDao).singleton(),
@@ -141,6 +151,8 @@ export function createAppContainer(db: Database): AppContainer {
 
     // Services
     authService: asClass(AuthService).singleton(),
+    oauthService: asClass(OAuthService).singleton(),
+    externalOAuthService: asClass(ExternalOAuthService).singleton(),
     serverService: asClass(ServerService).singleton(),
     channelService: asClass(ChannelService).singleton(),
     messageService: asClass(MessageService).singleton(),

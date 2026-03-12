@@ -22,6 +22,8 @@ import { FeaturesPage } from './pages/features'
 import { HomePage } from './pages/home'
 import { InvitePage } from './pages/invite'
 import { LoginPage } from './pages/login'
+import { OAuthAuthorizePage } from './pages/oauth-authorize'
+import { OAuthCallbackPage } from './pages/oauth-callback'
 import { PricingPage } from './pages/pricing'
 import { RegisterPage } from './pages/register'
 import { ServerLayout } from './pages/server'
@@ -106,6 +108,27 @@ const inviteRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/invite/$code',
   component: InvitePage,
+})
+
+const oauthCallbackRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/oauth-callback',
+  component: OAuthCallbackPage,
+})
+
+const oauthAuthorizeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/oauth/authorize',
+  component: OAuthAuthorizePage,
+  beforeLoad: () => {
+    if (!useAuthStore.getState().isAuthenticated) {
+      // Preserve the full URL so we redirect back after login
+      throw redirect({
+        to: '/login',
+        search: { redirect: window.location.pathname + window.location.search },
+      })
+    }
+  },
 })
 
 // Authenticated layout route
@@ -206,6 +229,8 @@ const routeTree = rootRoute.addChildren([
   pricingRoute,
   docsRoute,
   inviteRoute,
+  oauthCallbackRoute,
+  oauthAuthorizeRoute,
   serverHomeRoute,
   appRoute.addChildren([
     appIndexRoute,
