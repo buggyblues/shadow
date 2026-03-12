@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
 import { verifyToken } from '../lib/jwt'
+import { logger } from '../lib/logger'
 import { authMiddleware } from '../middleware/auth.middleware'
 import { loginSchema, registerSchema } from '../validators/auth.schema'
 import { forceDisconnectUser } from '../ws/presence.gateway'
@@ -110,7 +111,8 @@ export function createAuthHandler(container: AppContainer) {
       // Redirect to frontend callback page with tokens in hash
       const callbackUrl = `/oauth-callback#access_token=${encodeURIComponent(result.accessToken)}&refresh_token=${encodeURIComponent(result.refreshToken)}&redirect=${encodeURIComponent(result.redirect)}`
       return c.redirect(callbackUrl)
-    } catch {
+    } catch (error) {
+      logger.warn({ err: error, provider }, 'External OAuth callback failed')
       return c.redirect('/login?error=oauth_failed')
     }
   })
@@ -128,6 +130,9 @@ export function createAuthHandler(container: AppContainer) {
     const externalOAuthService = container.resolve('externalOAuthService')
     const user = c.get('user')
     const { accountId } = c.req.param()
+    if (!accountId) {
+      return c.json({ error: 'Missing accountId' }, 400)
+    }
     await externalOAuthService.unlinkAccount(user.userId, accountId)
     return c.json({ ok: true })
   })

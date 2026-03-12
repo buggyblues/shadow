@@ -15,6 +15,7 @@ interface OAuthProfile {
 interface ProviderConfig {
   clientId: string
   clientSecret: string
+  providerName: string
   authorizeUrl: string
   tokenUrl: string
   profileUrl: string
@@ -29,6 +30,7 @@ function getProviderConfig(provider: string): ProviderConfig {
       return {
         clientId: process.env.GOOGLE_CLIENT_ID ?? '',
         clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+        providerName: 'google',
         authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
         tokenUrl: 'https://oauth2.googleapis.com/token',
         profileUrl: 'https://www.googleapis.com/oauth2/v2/userinfo',
@@ -38,6 +40,7 @@ function getProviderConfig(provider: string): ProviderConfig {
       return {
         clientId: process.env.GITHUB_CLIENT_ID ?? '',
         clientSecret: process.env.GITHUB_CLIENT_SECRET ?? '',
+        providerName: 'github',
         authorizeUrl: 'https://github.com/login/oauth/authorize',
         tokenUrl: 'https://github.com/login/oauth/access_token',
         profileUrl: 'https://api.github.com/user',
@@ -106,8 +109,16 @@ export class ExternalOAuthService {
       throw Object.assign(new Error('Failed to exchange OAuth code'), { status: 502 })
     }
 
-    const tokenData = (await tokenRes.json()) as { access_token: string }
+    const tokenData = (await tokenRes.json()) as {
+      access_token?: string
+      error?: string
+      error_description?: string
+    }
     const providerAccessToken = tokenData.access_token
+    if (!providerAccessToken) {
+      const detail = tokenData.error_description ?? tokenData.error ?? 'unknown_error'
+      throw Object.assign(new Error(`OAuth token missing access_token: ${detail}`), { status: 502 })
+    }
 
     // Fetch user profile
     const profile = await this.fetchProfile(provider, providerAccessToken)
@@ -145,6 +156,7 @@ export class ExternalOAuthService {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: 'application/json',
+        'User-Agent': 'shadowob-server',
       },
     })
 
@@ -187,6 +199,7 @@ export class ExternalOAuthService {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: 'application/json',
+        'User-Agent': 'shadowob-server',
       },
     })
     if (!res.ok) return null
