@@ -36,6 +36,13 @@ interface Agent {
   lastHeartbeat: string | null
   createdAt: string
   updatedAt: string
+  isListed?: boolean
+  isRented?: boolean
+  listingInfo?: {
+    listingId: string
+    listingStatus: string
+    isListed: boolean
+  } | null
   botUser?: {
     id: string
     username: string
@@ -55,6 +62,54 @@ interface TokenResponse {
   token: string
   agent: { id: string; userId: string; status: string }
   botUser: { id: string; username: string; displayName: string | null; avatarUrl: string | null }
+}
+
+/** Renders a compact status badge for an agent's rental/listing status */
+function AgentListingBadge({ agent }: { agent: Agent }) {
+  const { t } = useTranslation()
+  if (agent.isRented) {
+    return (
+      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 font-bold shrink-0">
+        🔒 {t('agentMgmt.rented')}
+      </span>
+    )
+  }
+  if (agent.isListed) {
+    return (
+      <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-500 font-bold shrink-0">
+        📋 {t('agentMgmt.listed')}
+      </span>
+    )
+  }
+  if (agent.listingInfo) {
+    const statusMap: Record<string, { label: string; className: string }> = {
+      draft: {
+        label: t('agentMgmt.listingDraft'),
+        className: 'bg-gray-500/20 text-gray-400',
+      },
+      paused: {
+        label: t('agentMgmt.listingPaused'),
+        className: 'bg-yellow-500/20 text-yellow-500',
+      },
+      expired: {
+        label: t('agentMgmt.listingExpired'),
+        className: 'bg-gray-500/20 text-gray-400',
+      },
+      closed: {
+        label: t('agentMgmt.listingClosed'),
+        className: 'bg-red-500/20 text-red-400',
+      },
+    }
+    const info = statusMap[agent.listingInfo.listingStatus]
+    if (info) {
+      return (
+        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${info.className}`}>
+          {info.label}
+        </span>
+      )
+    }
+  }
+  return null
 }
 
 /* ── Agent Management Page ──────────────────────────── */
@@ -235,6 +290,7 @@ export function BuddyManagementPage() {
               <span className="truncate flex-1 text-left">
                 {agent.botUser?.displayName ?? agent.botUser?.username ?? 'Agent'}
               </span>
+              <AgentListingBadge agent={agent} />
               <span
                 className={`w-2 h-2 rounded-full ${
                   agent.status === 'running'
@@ -289,6 +345,7 @@ export function BuddyManagementPage() {
               <span className="truncate flex-1 text-left">
                 {agent.botUser?.displayName ?? agent.botUser?.username ?? 'Agent'}
               </span>
+              <AgentListingBadge agent={agent} />
               <span
                 className={`w-2 h-2 rounded-full ${
                   agent.status === 'running'
@@ -652,6 +709,42 @@ function AgentDetail({
               </div>
             )
           })()}
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold uppercase text-text-muted mb-1">
+            {t('agentMgmt.rentalStatus')}
+          </label>
+          <div className="flex items-center gap-2">
+            {agent.isRented ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-amber-400" />
+                <span className="text-sm text-amber-400 font-medium">{t('agentMgmt.rented')}</span>
+              </>
+            ) : agent.isListed ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-green-400" />
+                <span className="text-sm text-green-400 font-medium">{t('agentMgmt.listed')}</span>
+              </>
+            ) : agent.listingInfo ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-yellow-400" />
+                <span className="text-sm text-yellow-400 font-medium">
+                  {agent.listingInfo.listingStatus === 'draft'
+                    ? t('agentMgmt.listingDraft')
+                    : agent.listingInfo.listingStatus === 'paused'
+                      ? t('agentMgmt.listingPaused')
+                      : agent.listingInfo.listingStatus === 'expired'
+                        ? t('agentMgmt.listingExpired')
+                        : t('agentMgmt.listingClosed')}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="w-2 h-2 rounded-full bg-zinc-500" />
+                <span className="text-sm text-text-muted">{t('agentMgmt.notListed')}</span>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1392,6 +1485,7 @@ export function BuddyManagementContent() {
                   size="sm"
                 />
                 <span className="truncate flex-1">{name}</span>
+                <AgentListingBadge agent={agent} />
                 <span
                   className={`w-2 h-2 rounded-full shrink-0 ${
                     agent.status === 'running'

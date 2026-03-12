@@ -234,6 +234,27 @@ export function SettingsPage() {
           </button>
         </nav>
 
+        {/* Quick Links */}
+        <div className="px-3 mt-4">
+          <div className="px-2 py-2 text-[11px] font-bold uppercase text-text-secondary tracking-wide">
+            {t('settings.quickLinks', '快捷链接')}
+          </div>
+          <a
+            href="/?forceHome=true"
+            className="group flex items-center gap-3 w-full px-3 py-2 rounded-md text-[15px] font-medium text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary transition"
+          >
+            <Compass size={18} className="shrink-0 opacity-60 group-hover:text-text-primary" />
+            {t('settings.goHome', '返回官网')}
+          </a>
+          <button
+            onClick={() => navigate({ to: '/buddies' })}
+            className="group flex items-center gap-3 w-full px-3 py-2 rounded-md text-[15px] font-medium text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary transition"
+          >
+            <Bot size={18} className="shrink-0 opacity-60 group-hover:text-text-primary" />
+            {t('settings.goBuddyMarket', 'Buddy 集市')}
+          </button>
+        </div>
+
         <div className="mt-auto p-4 border-t-2 border-bg-tertiary">
           <button
             onClick={() => setShowLogoutConfirm(true)}
@@ -302,6 +323,37 @@ export function SettingsPage() {
                     {t('guide.docsTitle')}
                   </h3>
                   <p className="text-text-muted text-[13px]">{t('guide.docsDesc')}</p>
+                </button>
+                <a
+                  href="/?forceHome=true"
+                  className="bg-bg-secondary hover:bg-bg-tertiary border border-border-subtle rounded-xl p-5 text-left transition group block"
+                >
+                  <Compass
+                    size={24}
+                    className="text-amber-500 mb-3 group-hover:scale-110 transition-transform"
+                  />
+                  <h3 className="font-bold text-text-primary text-[15px] mb-1">
+                    {t('settings.goHome', '返回官网')}
+                  </h3>
+                  <p className="text-text-muted text-[13px]">
+                    {t('settings.goHomeDesc', '访问 Shadow 官方首页')}
+                  </p>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => navigate({ to: '/buddies' })}
+                  className="bg-bg-secondary hover:bg-bg-tertiary border border-border-subtle rounded-xl p-5 text-left transition group"
+                >
+                  <Bot
+                    size={24}
+                    className="text-cyan-500 mb-3 group-hover:scale-110 transition-transform"
+                  />
+                  <h3 className="font-bold text-text-primary text-[15px] mb-1">
+                    {t('settings.goBuddyMarket', 'Buddy 集市')}
+                  </h3>
+                  <p className="text-text-muted text-[13px]">
+                    {t('settings.goBuddyMarketDesc', '浏览和租赁 AI Buddy')}
+                  </p>
                 </button>
               </div>
 

@@ -9,9 +9,11 @@ export function createAgentHandler(container: AppContainer) {
 
   agentHandler.use('*', authMiddleware)
 
-  // GET /api/agents — list current user's agents
+  // GET /api/agents — list current user's agents (with rental status)
   agentHandler.get('/', async (c) => {
     const agentService = container.resolve('agentService')
+    const clawListingDao = container.resolve('clawListingDao')
+    const rentalContractDao = container.resolve('rentalContractDao')
     const user = c.get('user')
     const agents = await agentService.getByOwnerId(user.userId)
     // Enrich with bot user info
@@ -21,7 +23,54 @@ export function createAgentHandler(container: AppContainer) {
         return full
       }),
     )
-    return c.json(enriched.filter(Boolean))
+    const result = enriched.filter(Boolean)
+
+    // Enrich with rental status: check all listings (any status) for each agent
+    const agentIds = result.map((a) => a!.id)
+    const allListings = await clawListingDao.findByAgentIds(agentIds)
+    const rentedAgentIds = new Set<string>()
+    const listedAgentIds = new Set<string>()
+    // Map agentId → listing status for detailed display
+    const agentListingStatus = new Map<
+      string,
+      { listingId: string; listingStatus: string; isListed: boolean }
+    >()
+    for (const listing of allListings) {
+      if (!listing.agentId) continue
+      // Track any listing (regardless of status) → agentListingStatus
+      const existing = agentListingStatus.get(listing.agentId)
+      // Prefer active > paused > draft > others
+      const priority: Record<string, number> = { active: 4, paused: 3, draft: 2 }
+      const existingPriority = existing ? (priority[existing.listingStatus] ?? 1) : 0
+      const currentPriority = priority[listing.listingStatus] ?? 1
+      if (currentPriority > existingPriority) {
+        agentListingStatus.set(listing.agentId, {
+          listingId: listing.id,
+          listingStatus: listing.listingStatus,
+          isListed: listing.isListed,
+        })
+      }
+      // isListed = has an active+listed listing
+      if (listing.listingStatus === 'active' && listing.isListed) {
+        listedAgentIds.add(listing.agentId)
+      }
+      // isRented = has an active contract on any listing
+      if (listing.listingStatus === 'active') {
+        const activeContract = await rentalContractDao.findActiveByListingId(listing.id)
+        if (activeContract) {
+          rentedAgentIds.add(listing.agentId)
+        }
+      }
+    }
+
+    return c.json(
+      result.map((agent) => ({
+        ...agent,
+        isListed: listedAgentIds.has(agent!.id),
+        isRented: rentedAgentIds.has(agent!.id),
+        listingInfo: agentListingStatus.get(agent!.id) ?? null,
+      })),
+    )
   })
 
   // POST /api/agents — create a new agent

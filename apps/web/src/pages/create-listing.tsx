@@ -1,0 +1,622 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link, useNavigate, useParams } from '@tanstack/react-router'
+import { ChevronLeft, Cpu, HardDrive, Lock, MemoryStick, Monitor, Plus, Save } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { fetchApi } from '../lib/api'
+import { showToast } from '../lib/toast'
+
+interface AgentOption {
+  id: string
+  botUser?: {
+    id: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+  } | null
+  isListed?: boolean
+  isRented?: boolean
+}
+
+interface ListingForm {
+  agentId: string
+  title: string
+  description: string
+  skills: string
+  guidelines: string
+  deviceTier: 'high_end' | 'mid_range' | 'low_end'
+  osType: 'macos' | 'windows' | 'linux'
+  deviceModel: string
+  deviceCpu: string
+  deviceRam: string
+  deviceStorage: string
+  deviceGpu: string
+  softwareTools: string
+  hourlyRate: number
+  dailyRate: number
+  monthlyRate: number
+  premiumMarkup: number
+  depositAmount: number
+  tokenFeePassthrough: boolean
+  availableFrom: string
+  availableUntil: string
+}
+
+const INITIAL_FORM: ListingForm = {
+  agentId: '',
+  title: '',
+  description: '',
+  skills: '',
+  guidelines: '',
+  deviceTier: 'mid_range',
+  osType: 'macos',
+  deviceModel: '',
+  deviceCpu: '',
+  deviceRam: '',
+  deviceStorage: '',
+  deviceGpu: '',
+  softwareTools: '',
+  hourlyRate: 10,
+  dailyRate: 200,
+  monthlyRate: 5000,
+  premiumMarkup: 0,
+  depositAmount: 100,
+  tokenFeePassthrough: true,
+  availableFrom: '',
+  availableUntil: '',
+}
+
+export function CreateListingPage() {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const { listingId } = useParams({ strict: false }) as { listingId?: string }
+  const isEdit = !!listingId
+
+  const [form, setForm] = useState<ListingForm>(INITIAL_FORM)
+
+  // Fetch user's agents for the dropdown
+  const { data: agents = [] } = useQuery({
+    queryKey: ['agents'],
+    queryFn: () => fetchApi<AgentOption[]>('/api/agents'),
+  })
+
+  // Load existing listing for edit
+  const { data: existing } = useQuery({
+    queryKey: ['marketplace', 'listing', listingId],
+    queryFn: () => fetchApi<Record<string, unknown>>(`/api/marketplace/listings/${listingId}`),
+    enabled: isEdit,
+  })
+
+  useEffect(() => {
+    if (existing && isEdit) {
+      const e = existing as Record<string, unknown>
+      const deviceInfo = (e.deviceInfo || {}) as Record<string, string>
+      setForm({
+        agentId: (e.agentId as string) || '',
+        title: (e.title as string) || '',
+        description: (e.description as string) || '',
+        skills: ((e.skills as string[]) || []).join(', '),
+        guidelines: (e.guidelines as string) || '',
+        deviceTier: (e.deviceTier as ListingForm['deviceTier']) || 'mid_range',
+        osType: (e.osType as ListingForm['osType']) || 'macos',
+        deviceModel: deviceInfo.model || '',
+        deviceCpu: deviceInfo.cpu || '',
+        deviceRam: deviceInfo.ram || '',
+        deviceStorage: deviceInfo.storage || '',
+        deviceGpu: deviceInfo.gpu || '',
+        softwareTools: ((e.softwareTools as string[]) || []).join(', '),
+        hourlyRate: (e.hourlyRate as number) || 10,
+        dailyRate: (e.dailyRate as number) || 200,
+        monthlyRate: (e.monthlyRate as number) || 5000,
+        premiumMarkup: (e.premiumMarkup as number) || 0,
+        depositAmount: (e.depositAmount as number) || 100,
+        tokenFeePassthrough: (e.tokenFeePassthrough as boolean) ?? true,
+        availableFrom: (e.availableFrom as string) || '',
+        availableUntil: (e.availableUntil as string) || '',
+      })
+    }
+  }, [existing, isEdit])
+
+  const mutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => {
+      if (isEdit) {
+        return fetchApi(`/api/marketplace/listings/${listingId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        })
+      }
+      return fetchApi('/api/marketplace/listings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marketplace'] })
+      showToast(
+        isEdit
+          ? t('marketplace.listingUpdated', '挂单已更新')
+          : t('marketplace.listingCreated', '挂单已创建'),
+        'success',
+      )
+      navigate({ to: '/app/marketplace/my-rentals' })
+    },
+    onError: (err: Error) => showToast(err.message, 'error'),
+  })
+
+  const handleSubmit = (e: React.FormEvent, status: 'draft' | 'active') => {
+    e.preventDefault()
+    mutation.mutate({
+      agentId: form.agentId || undefined,
+      title: form.title.trim(),
+      description: form.description.trim() || undefined,
+      skills: form.skills
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      guidelines: form.guidelines.trim() || undefined,
+      deviceTier: form.deviceTier,
+      osType: form.osType,
+      deviceInfo: {
+        model: form.deviceModel.trim() || undefined,
+        cpu: form.deviceCpu.trim() || undefined,
+        ram: form.deviceRam.trim() || undefined,
+        storage: form.deviceStorage.trim() || undefined,
+        gpu: form.deviceGpu.trim() || undefined,
+      },
+      softwareTools: form.softwareTools
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      hourlyRate: form.hourlyRate,
+      dailyRate: form.dailyRate || undefined,
+      monthlyRate: form.monthlyRate || undefined,
+      premiumMarkup: form.premiumMarkup,
+      depositAmount: form.depositAmount,
+      tokenFeePassthrough: form.tokenFeePassthrough,
+      availableFrom: form.availableFrom ? new Date(form.availableFrom).toISOString() : undefined,
+      availableUntil: form.availableUntil ? new Date(form.availableUntil).toISOString() : undefined,
+      listingStatus: status,
+    })
+  }
+
+  const update = (key: keyof ListingForm, value: ListingForm[keyof ListingForm]) =>
+    setForm((f) => ({ ...f, [key]: value }))
+
+  return (
+    <div
+      className="min-h-screen overflow-y-auto bg-[#f2f7fc] text-gray-800"
+      style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}
+    >
+      <div className="max-w-3xl mx-auto px-6 py-8 pb-24">
+        {/* Header */}
+        <Link
+          to="/app/marketplace/my-rentals"
+          className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-800 transition-colors font-bold mb-6"
+        >
+          <ChevronLeft className="w-5 h-5" />
+          {t('marketplace.backToRentals', '返回我的租赁')}
+        </Link>
+
+        <h1 style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }} className="text-3xl font-bold mb-8">
+          {isEdit
+            ? t('marketplace.editListing', '编辑挂单')
+            : t('marketplace.newListing', '创建挂单')}
+        </h1>
+
+        <form onSubmit={(e) => handleSubmit(e, 'active')} className="space-y-8">
+          {/* Basic Info */}
+          <section className="bg-white/80 backdrop-blur rounded-2xl border-2 border-white/90 shadow-lg p-8">
+            <h2
+              style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
+              className="text-lg font-bold mb-4"
+            >
+              {t('marketplace.basicInfo', '基本信息')}
+            </h2>
+            <div className="space-y-4">
+              {/* Agent / Claw selector */}
+              <label className="block">
+                <span className="text-sm font-bold text-gray-500 block mb-1">
+                  {t('marketplace.selectClaw', '选择 Claw')}
+                </span>
+                <select
+                  value={form.agentId}
+                  onChange={(e) => update('agentId', e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100 bg-white"
+                >
+                  <option value="">{t('marketplace.noClawSelected', '-- 不绑定 Claw --')}</option>
+                  {agents.map((agent) => {
+                    const name = agent.botUser?.displayName ?? agent.botUser?.username ?? agent.id
+                    const disabled = !!agent.isRented
+                    return (
+                      <option key={agent.id} value={agent.id} disabled={disabled}>
+                        {name}
+                        {disabled ? ` 🔒 ${t('marketplace.clawRented', '租赁中')}` : ''}
+                        {agent.isListed && !disabled
+                          ? ` (${t('marketplace.clawListed', '已上架')})`
+                          : ''}
+                      </option>
+                    )
+                  })}
+                </select>
+                {agents.length === 0 && (
+                  <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                    <Lock className="w-3 h-3" />
+                    {t('marketplace.noClawHint', '你还没有 Claw，请先在 Buddy 管理页面创建')}
+                  </p>
+                )}
+              </label>
+
+              <label className="block">
+                <span className="text-sm font-bold text-gray-500 block mb-1">
+                  {t('marketplace.listingTitle', '标题')} *
+                </span>
+                <input
+                  type="text"
+                  required
+                  maxLength={100}
+                  value={form.title}
+                  onChange={(e) => update('title', e.target.value)}
+                  placeholder={t(
+                    'marketplace.titlePlaceholder',
+                    '例：高配 Mac Studio 全栈开发环境',
+                  )}
+                  className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-bold text-gray-500 block mb-1">
+                  {t('marketplace.listingDesc', '描述')}
+                </span>
+                <textarea
+                  value={form.description}
+                  onChange={(e) => update('description', e.target.value)}
+                  maxLength={2000}
+                  rows={4}
+                  placeholder={t('marketplace.descPlaceholder', '介绍你的 Claw 可以做什么...')}
+                  className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100 resize-none"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-bold text-gray-500 block mb-1">
+                  {t('marketplace.skillTags', '技能标签')}
+                </span>
+                <input
+                  type="text"
+                  value={form.skills}
+                  onChange={(e) => update('skills', e.target.value)}
+                  placeholder={t(
+                    'marketplace.skillsPlaceholder',
+                    'Web 开发, Python, DevOps (逗号分隔)',
+                  )}
+                  className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-bold text-gray-500 block mb-1">
+                  {t('marketplace.usageGuidelines', '使用准则')}
+                </span>
+                <textarea
+                  value={form.guidelines}
+                  onChange={(e) => update('guidelines', e.target.value)}
+                  rows={3}
+                  maxLength={5000}
+                  placeholder={t('marketplace.guidelinesPlaceholder', '对使用方的要求和限制...')}
+                  className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100 resize-none"
+                />
+              </label>
+            </div>
+          </section>
+
+          {/* Device Info */}
+          <section className="bg-white/80 backdrop-blur rounded-2xl border-2 border-white/90 shadow-lg p-8">
+            <h2
+              style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
+              className="text-lg font-bold mb-4"
+            >
+              {t('marketplace.deviceInfo', '设备信息')}
+            </h2>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block">
+                    <span className="text-sm font-bold text-gray-500 block mb-1">
+                      {t('marketplace.deviceTier', '设备档次')}
+                    </span>
+                    <select
+                      value={form.deviceTier}
+                      onChange={(e) => update('deviceTier', e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100 bg-white"
+                    >
+                      <option value="high_end">🔥 {t('marketplace.deviceHighEnd')}</option>
+                      <option value="mid_range">⚡ {t('marketplace.deviceMidRange')}</option>
+                      <option value="low_end">💡 {t('marketplace.deviceLowEnd')}</option>
+                    </select>
+                  </label>
+                </div>
+                <div>
+                  <label className="block">
+                    <span className="text-sm font-bold text-gray-500 block mb-1">
+                      {t('marketplace.osType', '操作系统')}
+                    </span>
+                    <select
+                      value={form.osType}
+                      onChange={(e) => update('osType', e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100 bg-white"
+                    >
+                      <option value="macos">macOS</option>
+                      <option value="windows">Windows</option>
+                      <option value="linux">Linux</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block">
+                    <span className="text-sm font-bold text-gray-400 block mb-1 flex items-center gap-1">
+                      <Monitor className="w-3.5 h-3.5" /> {t('marketplace.model', '型号')}
+                    </span>
+                    <input
+                      type="text"
+                      value={form.deviceModel}
+                      onChange={(e) => update('deviceModel', e.target.value)}
+                      placeholder="Mac Studio M2 Ultra"
+                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                    />
+                  </label>
+                </div>
+                <div>
+                  <label className="block">
+                    <span className="text-sm font-bold text-gray-400 block mb-1 flex items-center gap-1">
+                      <Cpu className="w-3.5 h-3.5" /> CPU
+                    </span>
+                    <input
+                      type="text"
+                      value={form.deviceCpu}
+                      onChange={(e) => update('deviceCpu', e.target.value)}
+                      placeholder="M2 Ultra 24-core"
+                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                    />
+                  </label>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block">
+                    <span className="text-sm font-bold text-gray-400 block mb-1 flex items-center gap-1">
+                      <MemoryStick className="w-3.5 h-3.5" /> RAM
+                    </span>
+                    <input
+                      type="text"
+                      value={form.deviceRam}
+                      onChange={(e) => update('deviceRam', e.target.value)}
+                      placeholder="192GB"
+                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                    />
+                  </label>
+                </div>
+                <div>
+                  <label className="block">
+                    <span className="text-sm font-bold text-gray-400 block mb-1 flex items-center gap-1">
+                      <HardDrive className="w-3.5 h-3.5" /> {t('marketplace.storage', '存储')}
+                    </span>
+                    <input
+                      type="text"
+                      value={form.deviceStorage}
+                      onChange={(e) => update('deviceStorage', e.target.value)}
+                      placeholder="2TB SSD"
+                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                    />
+                  </label>
+                </div>
+                <div>
+                  <label className="block">
+                    <span className="text-sm font-bold text-gray-400 block mb-1">GPU</span>
+                    <input
+                      type="text"
+                      value={form.deviceGpu}
+                      onChange={(e) => update('deviceGpu', e.target.value)}
+                      placeholder="76-core GPU"
+                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                    />
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label className="block">
+                  <span className="text-sm font-bold text-gray-500 block mb-1">
+                    {t('marketplace.softwareTools', '已安装工具')}
+                  </span>
+                  <input
+                    type="text"
+                    value={form.softwareTools}
+                    onChange={(e) => update('softwareTools', e.target.value)}
+                    placeholder="VS Code, Docker, Node.js, Python (逗号分隔)"
+                    className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                  />
+                </label>
+              </div>
+            </div>
+          </section>
+
+          {/* Pricing */}
+          <section className="bg-white/80 backdrop-blur rounded-2xl border-2 border-white/90 shadow-lg p-8">
+            <h2
+              style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
+              className="text-lg font-bold mb-4"
+            >
+              {t('marketplace.pricingSetup', '定价设置')}
+            </h2>
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block">
+                    <span className="text-sm font-bold text-gray-500 block mb-1">
+                      {t('marketplace.hourlyRate', '时租')} (🦐/h) *
+                    </span>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      value={form.hourlyRate}
+                      onChange={(e) => update('hourlyRate', Number(e.target.value))}
+                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-bold text-center focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                    />
+                  </label>
+                </div>
+                <div>
+                  <label className="block">
+                    <span className="text-sm font-bold text-gray-500 block mb-1">
+                      {t('marketplace.dailyRate', '日租')} (🦐/d)
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={form.dailyRate}
+                      onChange={(e) => update('dailyRate', Number(e.target.value))}
+                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-bold text-center focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                    />
+                  </label>
+                </div>
+                <div>
+                  <label className="block">
+                    <span className="text-sm font-bold text-gray-500 block mb-1">
+                      {t('marketplace.monthlyRate', '月租')} (🦐/m)
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={form.monthlyRate}
+                      onChange={(e) => update('monthlyRate', Number(e.target.value))}
+                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-bold text-center focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                    />
+                  </label>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block">
+                    <span className="text-sm font-bold text-gray-500 block mb-1">
+                      {t('marketplace.premiumMarkup', '溢价比例')} (%)
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={form.premiumMarkup}
+                      onChange={(e) => update('premiumMarkup', Number(e.target.value))}
+                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-bold text-center focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                    />
+                  </label>
+                </div>
+                <div>
+                  <label className="block">
+                    <span className="text-sm font-bold text-gray-500 block mb-1">
+                      {t('marketplace.deposit', '押金')} (🦐)
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={form.depositAmount}
+                      onChange={(e) => update('depositAmount', Number(e.target.value))}
+                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-bold text-center focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                    />
+                  </label>
+                </div>
+              </div>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.tokenFeePassthrough}
+                  onChange={(e) => update('tokenFeePassthrough', e.target.checked)}
+                  className="w-5 h-5 rounded border-gray-300 text-amber-500 focus:ring-amber-300"
+                />
+                <span className="text-sm font-bold text-gray-600">
+                  {t('marketplace.tokenPassthrough', 'Token 费用由使用方承担')}
+                </span>
+              </label>
+
+              <div className="bg-amber-50 rounded-xl p-4 text-xs text-amber-800 leading-relaxed">
+                <strong>{t('marketplace.pricingNote', '定价说明：')}</strong>{' '}
+                {t(
+                  'marketplace.pricingExplain',
+                  '最终费用 = 基础租金 + 电费 (2🦐/h) + Token消耗 (如开启代付) + 溢价 + 5% 平台手续费。日租/月租为优惠价，系统会自动选择最优方案。',
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* Availability */}
+          <section className="bg-white/80 backdrop-blur rounded-2xl border-2 border-white/90 shadow-lg p-8">
+            <h2
+              style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
+              className="text-lg font-bold mb-4"
+            >
+              {t('marketplace.availability', '可用时间')}
+            </h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block">
+                  <span className="text-sm font-bold text-gray-500 block mb-1">
+                    {t('marketplace.availableFrom', '开始时间')}
+                  </span>
+                  <input
+                    type="datetime-local"
+                    value={form.availableFrom}
+                    onChange={(e) => update('availableFrom', e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                  />
+                </label>
+              </div>
+              <div>
+                <label className="block">
+                  <span className="text-sm font-bold text-gray-500 block mb-1">
+                    {t('marketplace.availableUntil', '结束时间')}
+                  </span>
+                  <input
+                    type="datetime-local"
+                    value={form.availableUntil}
+                    onChange={(e) => update('availableUntil', e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                  />
+                </label>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mt-2 font-medium">
+              {t('marketplace.availabilityNote', '留空表示不限制可用时间范围')}
+            </p>
+          </section>
+
+          {/* Submit */}
+          <div className="flex gap-4 justify-end pb-12">
+            <button
+              type="button"
+              onClick={(e) => handleSubmit(e as unknown as React.FormEvent, 'draft')}
+              disabled={mutation.isPending || !form.title.trim()}
+              className="px-6 py-3 rounded-xl bg-gray-100 text-gray-700 font-bold hover:bg-gray-200 transition-colors disabled:opacity-50"
+            >
+              <Save className="w-4 h-4 inline mr-1.5" />
+              {t('marketplace.saveDraft', '保存草稿')}
+            </button>
+            <button
+              type="submit"
+              disabled={mutation.isPending || !form.title.trim()}
+              className="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-gray-900 font-bold hover:from-amber-500 hover:to-amber-600 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50"
+              style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
+            >
+              <Plus className="w-4 h-4 inline mr-1.5" />
+              {mutation.isPending
+                ? t('common.loading', '处理中...')
+                : isEdit
+                  ? t('marketplace.updateListing', '更新挂单')
+                  : t('marketplace.publishListing', '发布挂单')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}

@@ -22,6 +22,16 @@ export {
   oauthRefreshTokens,
 } from './oauth'
 export { reactions } from './reactions'
+export {
+  clawListings,
+  deviceTierEnum,
+  listingStatusEnum,
+  osTypeEnum,
+  rentalContractStatusEnum,
+  rentalContracts,
+  rentalUsageRecords,
+  rentalViolations,
+} from './rentals'
 export { servers } from './servers'
 export {
   cartItems,

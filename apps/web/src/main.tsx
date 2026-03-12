@@ -16,12 +16,16 @@ import { BuddyMarketPage } from './pages/buddies'
 import { BuddyContractPage } from './pages/buddy-contract'
 import { BuddyManagementPage } from './pages/buddy-management'
 import { ChannelView } from './pages/channel-view'
+import { ContractDetailPage } from './pages/contract-detail'
+import { CreateListingPage } from './pages/create-listing'
 import { DiscoverPage } from './pages/discover'
 import { DocsPage } from './pages/docs'
 import { FeaturesPage } from './pages/features'
 import { HomePage } from './pages/home'
 import { InvitePage } from './pages/invite'
 import { LoginPage } from './pages/login'
+import { MarketplaceDetailPage } from './pages/marketplace-detail'
+import { MyRentalsPage } from './pages/my-rentals'
 import { OAuthAuthorizePage } from './pages/oauth-authorize'
 import { OAuthCallbackPage } from './pages/oauth-callback'
 import { PricingPage } from './pages/pricing'
@@ -45,8 +49,11 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
   component: HomePage,
-  beforeLoad: () => {
-    if (useAuthStore.getState().isAuthenticated) {
+  validateSearch: (search: Record<string, unknown>) => ({
+    forceHome: search.forceHome === true || search.forceHome === 'true',
+  }),
+  beforeLoad: ({ search }) => {
+    if (useAuthStore.getState().isAuthenticated && !search.forceHome) {
       throw redirect({ to: '/app' })
     }
   },
@@ -110,6 +117,14 @@ const inviteRoute = createRoute({
   component: InvitePage,
 })
 
+const marketplaceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/marketplace',
+  beforeLoad: () => {
+    throw redirect({ to: '/buddies' })
+  },
+  component: () => null,
+})
 const oauthCallbackRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/oauth-callback',
@@ -218,6 +233,36 @@ const discoverRoute = createRoute({
   component: DiscoverPage,
 })
 
+const marketplaceDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/marketplace/$listingId',
+  component: MarketplaceDetailPage,
+})
+
+const myRentalsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/marketplace/my-rentals',
+  component: MyRentalsPage,
+})
+
+const contractDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/marketplace/contracts/$contractId',
+  component: ContractDetailPage,
+})
+
+const createListingRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/marketplace/create',
+  component: CreateListingPage,
+})
+
+const editListingRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/marketplace/edit/$listingId',
+  component: CreateListingPage,
+})
+
 // Router
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -229,6 +274,7 @@ const routeTree = rootRoute.addChildren([
   pricingRoute,
   docsRoute,
   inviteRoute,
+  marketplaceRoute,
   oauthCallbackRoute,
   oauthAuthorizeRoute,
   serverHomeRoute,
@@ -244,6 +290,11 @@ const routeTree = rootRoute.addChildren([
     settingsRoute,
     buddyMgmtRoute,
     discoverRoute,
+    myRentalsRoute,
+    contractDetailRoute,
+    createListingRoute,
+    editListingRoute,
+    marketplaceDetailRoute,
   ]),
 ])
 

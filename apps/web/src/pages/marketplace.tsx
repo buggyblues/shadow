@@ -4,76 +4,21 @@ import {
   Apple,
   ArrowUpDown,
   ChevronDown,
-  Code,
   Eye,
-  FileText,
   Laptop,
-  Loader2,
   Monitor,
-  Palette,
   Plus,
   Search,
   SlidersHorizontal,
   Users,
-  Wrench,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { UserAvatar } from '../components/common/avatar'
 import { useAppStatus } from '../hooks/use-app-status'
 import { fetchApi } from '../lib/api'
 import { useAuthStore } from '../stores/auth.store'
 import { useMarketplaceStore } from '../stores/marketplace.store'
 import { PublicFooter, PublicNav } from './home'
-
-/* ──────────── Official Buddy Data ──────────── */
-
-const agentItems = [
-  {
-    nameKey: 'agents.codingCat',
-    descKey: 'agents.codingCatDesc',
-    icon: Code,
-    color: 'from-cyan-400 to-blue-400',
-    tagKeys: ['agents.tagCodeGen', 'agents.tagCodeReview', 'agents.tagDebug'],
-  },
-  {
-    nameKey: 'agents.docuMeow',
-    descKey: 'agents.docuMeowDesc',
-    icon: FileText,
-    color: 'from-yellow-400 to-orange-400',
-    tagKeys: ['agents.tagDocGen', 'agents.tagSummary', 'agents.tagApiDoc'],
-  },
-  {
-    nameKey: 'agents.designCat',
-    descKey: 'agents.designCatDesc',
-    icon: Palette,
-    color: 'from-pink-400 to-rose-400',
-    tagKeys: ['agents.tagUiDesign', 'agents.tagColor', 'agents.tagComponent'],
-  },
-  {
-    nameKey: 'agents.detectiveCat',
-    descKey: 'agents.detectiveCatDesc',
-    icon: Search,
-    color: 'from-green-400 to-emerald-400',
-    tagKeys: ['agents.tagDebug', 'agents.tagLogAnalysis', 'agents.tagSearch'],
-  },
-  {
-    nameKey: 'agents.opsCat',
-    descKey: 'agents.opsCatDesc',
-    icon: Wrench,
-    color: 'from-purple-400 to-violet-400',
-    tagKeys: ['agents.tagDevOps', 'agents.tagMonitor', 'agents.tagDeploy'],
-  },
-  {
-    nameKey: 'agents.customAgent',
-    descKey: 'agents.customAgentDesc',
-    icon: null,
-    color: 'from-gray-500 to-gray-600',
-    tagKeys: ['agents.tagCustom', 'agents.tagMcp', 'agents.tagApi'],
-  },
-]
-
-/* ──────────── P2P Marketplace Data ──────────── */
 
 interface Listing {
   id: string
@@ -124,13 +69,11 @@ const SORT_OPTIONS = [
   { value: 'price-desc', labelKey: 'marketplace.priceDesc' },
 ] as const
 
-/* ──────────── Main Page ──────────── */
-
-export function BuddyMarketPage() {
+export function MarketplacePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  useAppStatus({ title: t('nav.buddies'), variant: 'market' })
+  useAppStatus({ title: t('marketplace.title', 'Buddy 集市'), variant: 'market' })
 
   const {
     searchQuery,
@@ -145,7 +88,6 @@ export function BuddyMarketPage() {
 
   const [showFilters, setShowFilters] = useState(false)
   const [sortOpen, setSortOpen] = useState(false)
-  const [listMyClawLoading, setListMyClawLoading] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['marketplace', 'listings', searchQuery, deviceTier, osType, sortBy],
@@ -162,45 +104,7 @@ export function BuddyMarketPage() {
   })
 
   const listings = data?.listings ?? []
-
-  // Filter official buddies by search keyword (client-side)
-  const filteredOfficialBuddies = useMemo(() => {
-    if (!searchQuery) return agentItems
-    const q = searchQuery.toLowerCase()
-    return agentItems.filter(
-      (a) =>
-        t(a.nameKey).toLowerCase().includes(q) ||
-        t(a.descKey).toLowerCase().includes(q) ||
-        a.tagKeys.some((tk) => t(tk).toLowerCase().includes(q)),
-    )
-  }, [searchQuery, t])
-
-  // Only show official buddies when no device/OS filters are active
-  const showOfficialBuddies = !deviceTier && !osType
-
-  // Total count includes official buddies when visible
-  const totalCount = (data?.total ?? 0) + (showOfficialBuddies ? filteredOfficialBuddies.length : 0)
-
-  // Handle "上架我的 Claw" click
-  const handleListMyClaw = async () => {
-    if (!isAuthenticated) {
-      navigate({ to: '/login', search: { redirect: '/app/marketplace/create' } })
-      return
-    }
-    setListMyClawLoading(true)
-    try {
-      const agents = await fetchApi<{ id: string }[]>('/api/agents')
-      if (!agents || agents.length === 0) {
-        navigate({ to: '/app/buddies' })
-      } else {
-        navigate({ to: '/app/marketplace/create' })
-      }
-    } catch {
-      navigate({ to: '/app/marketplace/create' })
-    } finally {
-      setListMyClawLoading(false)
-    }
-  }
+  const total = data?.total ?? 0
 
   return (
     <div
@@ -209,31 +113,32 @@ export function BuddyMarketPage() {
     >
       <PublicNav />
 
-      {/* ───── Hero + Search ───── */}
-      <section className="pt-32 pb-8 px-8 md:px-16 max-w-6xl mx-auto text-center relative overflow-hidden">
+      {/* Hero Section */}
+      <section className="pt-28 pb-8 px-8 md:px-16 max-w-7xl mx-auto text-center relative overflow-hidden">
         <div className="absolute top-20 left-10 w-72 h-72 bg-yellow-300/15 rounded-full blur-3xl -z-10 animate-pulse" />
         <div
           className="absolute top-32 right-10 w-80 h-80 bg-cyan-300/15 rounded-full blur-3xl -z-10 animate-pulse"
           style={{ animationDelay: '1s' }}
         />
+
         <h1
           style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
-          className="text-4xl md:text-6xl mb-6 leading-tight"
+          className="text-4xl md:text-6xl mb-4 leading-tight"
         >
-          {t('agents.pageTitle')}
+          {t('marketplace.title', 'Buddy 集市')}
         </h1>
-        <p className="text-lg md:text-xl text-gray-600 font-bold max-w-2xl mx-auto mb-8">
-          {t('agents.pageSubtitle')}
+        <p className="text-lg md:text-xl text-gray-600 font-bold max-w-3xl mx-auto mb-8">
+          {t('marketplace.subtitle', '在这里找到适合你的 OpenClaw，让别人的 Buddy 为你打工！')}
         </p>
 
         {/* Search Bar */}
-        <div className="max-w-2xl mx-auto relative mb-4">
+        <div className="max-w-2xl mx-auto relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t('marketplace.searchPlaceholder')}
+            placeholder={t('marketplace.searchPlaceholder', '搜索 OpenClaw 名称、技能、标签...')}
             className="w-full pl-12 pr-12 py-4 rounded-2xl bg-white/80 backdrop-blur border-2 border-white/90 shadow-lg text-base font-medium placeholder:text-gray-400 focus:outline-none focus:border-cyan-300 focus:ring-4 focus:ring-cyan-100 transition-all"
           />
           <button
@@ -247,11 +152,12 @@ export function BuddyMarketPage() {
 
         {/* Filters */}
         {showFilters && (
-          <div className="max-w-2xl mx-auto mb-4 bg-white/80 backdrop-blur rounded-2xl border-2 border-white/90 shadow-lg p-6 animate-fade-in-up text-left">
+          <div className="max-w-2xl mx-auto mt-4 bg-white/80 backdrop-blur rounded-2xl border-2 border-white/90 shadow-lg p-6 animate-fade-in-up">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Device Tier */}
               <div>
                 <div className="text-sm font-bold text-gray-500 mb-2">
-                  {t('marketplace.deviceTier')}
+                  {t('marketplace.deviceTier', '设备级别')}
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   {Object.entries(DEVICE_TIER_COLORS).map(([key, { icon, labelKey }]) => (
@@ -270,9 +176,10 @@ export function BuddyMarketPage() {
                   ))}
                 </div>
               </div>
+              {/* OS Type */}
               <div>
                 <div className="text-sm font-bold text-gray-500 mb-2">
-                  {t('marketplace.osType', 'OS')}
+                  {t('marketplace.osType', '操作系统')}
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   {Object.entries(OS_LABELS).map(([key, { label }]) => (
@@ -296,14 +203,14 @@ export function BuddyMarketPage() {
         )}
       </section>
 
-      {/* ───── Unified Buddy Grid ───── */}
-      <section className="max-w-7xl mx-auto px-8 md:px-16 pt-4 pb-8">
-        {/* Toolbar */}
-        <div className="flex items-center justify-between mb-6">
+      {/* Toolbar */}
+      <section className="max-w-7xl mx-auto px-8 md:px-16 pb-4">
+        <div className="flex items-center justify-between">
           <div className="text-sm font-bold text-gray-500">
-            {t('marketplace.resultCount', { count: totalCount })}
+            {t('marketplace.resultCount', '共 {{count}} 个 OpenClaw 可供租赁', { count: total })}
           </div>
           <div className="flex items-center gap-3">
+            {/* Sort */}
             <div className="relative">
               <button
                 type="button"
@@ -311,7 +218,10 @@ export function BuddyMarketPage() {
                 className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/80 border-2 border-white/90 text-sm font-bold text-gray-600 hover:border-gray-300 transition-all"
               >
                 <ArrowUpDown className="w-4 h-4" />
-                {t(SORT_OPTIONS.find((o) => o.value === sortBy)?.labelKey ?? 'marketplace.popular')}
+                {t(
+                  SORT_OPTIONS.find((o) => o.value === sortBy)?.labelKey ??
+                    'marketplace.sortPopular',
+                )}
                 <ChevronDown className="w-3.5 h-3.5" />
               </button>
               {sortOpen && (
@@ -336,51 +246,39 @@ export function BuddyMarketPage() {
                 </div>
               )}
             </div>
-            <button
-              type="button"
-              onClick={handleListMyClaw}
-              disabled={listMyClawLoading}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-gray-900 font-bold text-sm hover:scale-105 transition-transform shadow-md disabled:opacity-60"
-              style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
-            >
-              {listMyClawLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
+
+            {/* List my claw button */}
+            {isAuthenticated && (
+              <Link
+                to="/app/marketplace/create"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-gray-900 font-bold text-sm hover:scale-105 transition-transform shadow-md"
+                style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
+              >
                 <Plus className="w-4 h-4" />
-              )}
-              {t('marketplace.listMyClaw')}
-            </button>
+                {t('marketplace.listMyClaw', '出租我的 Claw')}
+              </Link>
+            )}
           </div>
         </div>
+      </section>
 
-        {/* Grid */}
+      {/* Listing Grid */}
+      <section className="max-w-7xl mx-auto px-8 md:px-16 pb-24">
         {isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {[0, 1, 2, 3, 4, 5, 6, 7].map((n) => (
               <div key={`skel-${n}`} className="bg-white/60 rounded-2xl p-6 animate-pulse h-72" />
             ))}
           </div>
-        ) : totalCount === 0 ? (
-          <div className="text-center py-16">
+        ) : listings.length === 0 ? (
+          <div className="text-center py-20">
             <div className="text-6xl mb-4">🔍</div>
-            <p className="text-lg font-bold text-gray-500">{t('marketplace.noResults')}</p>
+            <p className="text-lg font-bold text-gray-500">
+              {t('marketplace.noResults', '暂无可租赁的 OpenClaw，快来发布第一个吧！')}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {showOfficialBuddies &&
-              filteredOfficialBuddies.map((a) => (
-                <OfficialBuddyCard
-                  key={a.nameKey}
-                  agent={a}
-                  onClick={() => {
-                    if (isAuthenticated) {
-                      navigate({ to: `/buddies/${a.nameKey.split('.')[1].toLowerCase()}/contract` })
-                    } else {
-                      navigate({ to: '/login' })
-                    }
-                  }}
-                />
-              ))}
             {listings.map((listing) => (
               <ListingCard
                 key={listing.id}
@@ -398,118 +296,32 @@ export function BuddyMarketPage() {
         )}
       </section>
 
-      {/* ───── My Rentals CTA ───── */}
+      {/* CTA: My Rentals */}
       {isAuthenticated && (
-        <section className="max-w-4xl mx-auto px-8 md:px-16 py-12">
+        <section className="max-w-4xl mx-auto px-8 md:px-16 pb-20">
           <div className="bg-gradient-to-r from-yellow-50 to-cyan-50 border-2 border-white/90 rounded-3xl p-10 md:p-14 text-center">
             <h2
               style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
               className="text-3xl md:text-4xl mb-4"
             >
-              {t('marketplace.myRentalsCta')}
+              {t('marketplace.myRentalsCta', '查看我的租赁')}
             </h2>
             <p className="text-lg text-gray-600 font-bold mb-8">
-              {t('marketplace.myRentalsCtaDesc')}
+              {t('marketplace.myRentalsCtaDesc', '管理你出租和使用中的 OpenClaw 合约')}
             </p>
             <Link
               to="/app/marketplace/my-rentals"
               className="inline-flex items-center gap-2 bg-gradient-to-r from-cyan-400 to-cyan-500 text-white font-bold px-10 py-4 rounded-full text-xl hover:scale-105 transition-transform shadow-lg"
               style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
             >
-              {t('marketplace.goToMyRentals')}
+              {t('marketplace.goToMyRentals', '我的租赁')}
             </Link>
           </div>
         </section>
       )}
 
-      {/* ───── Docs CTA ───── */}
-      <section className="max-w-4xl mx-auto px-8 md:px-16 pb-20">
-        <div className="bg-gradient-to-r from-yellow-50 to-cyan-50 border-2 border-white/90 rounded-3xl p-10 md:p-14 text-center">
-          <h2
-            style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
-            className="text-3xl md:text-4xl mb-4"
-          >
-            {t('agents.ctaTitle')}
-          </h2>
-          <p className="text-lg text-gray-600 font-bold mb-8">{t('agents.ctaSubtitle')}</p>
-          <Link
-            to="/docs"
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-gray-900 font-bold px-10 py-4 rounded-full border-3 border-gray-800 text-xl hover:scale-105 transition-transform"
-            style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
-          >
-            {t('agents.ctaButton')}
-          </Link>
-        </div>
-      </section>
-
       <PublicFooter />
     </div>
-  )
-}
-
-/* ──────────────── Official Buddy Card ──────────────── */
-
-function OfficialBuddyCard({
-  agent,
-  onClick,
-}: {
-  agent: (typeof agentItems)[number]
-  onClick: () => void
-}) {
-  const { t } = useTranslation()
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="block w-full text-left bg-white/70 backdrop-blur-lg border-2 border-white/90 rounded-2xl p-6 hover:-translate-y-1.5 hover:shadow-xl transition-all group cursor-pointer"
-    >
-      {/* Top row: avatar left, tags right */}
-      <div className="flex items-center justify-between mb-4">
-        <div
-          className={`inline-flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br ${agent.color} shrink-0`}
-        >
-          {agent.icon ? (
-            <agent.icon className="w-5 h-5 text-white" />
-          ) : (
-            <img src="/Logo.svg" alt="Buddy" className="w-5 h-5" />
-          )}
-        </div>
-        <div className="flex flex-wrap justify-end gap-1.5">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-cyan-500 to-blue-500 text-white">
-            ✦ {t('marketplace.official', '官方')}
-          </span>
-        </div>
-      </div>
-
-      {/* Title: 1 line */}
-      <h3
-        style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
-        className="text-lg font-bold mb-2 line-clamp-1 group-hover:text-cyan-600 transition-colors"
-      >
-        {t(agent.nameKey)}
-      </h3>
-
-      {/* Description: fixed 2-line height */}
-      <p className="text-sm text-gray-500 font-medium line-clamp-2 mb-4 leading-relaxed h-[2.8em]">
-        {t(agent.descKey)}
-      </p>
-
-      {/* Footer: price left, stats right */}
-      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-        <span className="text-sm font-bold text-cyan-600">
-          {t('marketplace.viewContract', '查看签约 →')}
-        </span>
-        <div className="flex items-center gap-3 text-xs text-gray-400 font-bold">
-          <span className="flex items-center gap-0.5">
-            <Eye className="w-3.5 h-3.5" /> -
-          </span>
-          <span className="flex items-center gap-0.5">
-            <Users className="w-3.5 h-3.5" /> -
-          </span>
-        </div>
-      </div>
-    </button>
   )
 }
 
@@ -518,6 +330,7 @@ function OfficialBuddyCard({
 function ListingCard({ listing, onClick }: { listing: Listing; onClick: () => void }) {
   const { t } = useTranslation()
   const tier = DEVICE_TIER_COLORS[listing.deviceTier] || DEVICE_TIER_COLORS.mid_range
+  const os = OS_LABELS[listing.osType] || OS_LABELS.macos
 
   return (
     <button
@@ -525,27 +338,17 @@ function ListingCard({ listing, onClick }: { listing: Listing; onClick: () => vo
       onClick={onClick}
       className="block w-full text-left bg-white/70 backdrop-blur-lg border-2 border-white/90 rounded-2xl p-6 hover:-translate-y-1.5 hover:shadow-xl transition-all group cursor-pointer"
     >
-      {/* Top row: avatar left, tags right */}
+      {/* Header: device tier badge + OS */}
       <div className="flex items-center justify-between mb-4">
-        <UserAvatar userId={listing.ownerId} size="md" className="shrink-0" />
-        <div className="flex flex-wrap justify-end gap-1.5">
-          <span
-            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold text-white bg-gradient-to-r ${tier.color}`}
-          >
-            {tier.icon} {t(tier.labelKey)}
-          </span>
-          {listing.tags.slice(0, 2).map((tag) => (
-            <span
-              key={tag}
-              className="bg-cyan-50 text-cyan-700 text-[10px] font-bold px-2 py-0.5 rounded-full"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
+        <span
+          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold text-white bg-gradient-to-r ${tier.color}`}
+        >
+          {tier.icon} {t(tier.labelKey)}
+        </span>
+        <span className="text-xs font-bold text-gray-400 flex items-center gap-1">{os.label}</span>
       </div>
 
-      {/* Title: 1 line */}
+      {/* Title */}
       <h3
         style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
         className="text-lg font-bold mb-2 line-clamp-1 group-hover:text-cyan-600 transition-colors"
@@ -553,12 +356,29 @@ function ListingCard({ listing, onClick }: { listing: Listing; onClick: () => vo
         {listing.title}
       </h3>
 
-      {/* Description: fixed 2-line height */}
-      <p className="text-sm text-gray-500 font-medium line-clamp-2 mb-4 leading-relaxed h-[2.8em]">
-        {listing.description || t('marketplace.noDescription')}
+      {/* Description */}
+      <p className="text-sm text-gray-500 font-medium line-clamp-2 mb-4 leading-relaxed">
+        {listing.description || t('marketplace.noDescription', '暂无描述')}
       </p>
 
-      {/* Footer: price left, stats right */}
+      {/* Skills */}
+      {listing.skills.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {listing.skills.slice(0, 3).map((skill) => (
+            <span
+              key={skill}
+              className="bg-cyan-50 text-cyan-700 text-xs font-bold px-2 py-0.5 rounded-full"
+            >
+              {skill}
+            </span>
+          ))}
+          {listing.skills.length > 3 && (
+            <span className="text-xs font-bold text-gray-400">+{listing.skills.length - 3}</span>
+          )}
+        </div>
+      )}
+
+      {/* Price & Stats */}
       <div className="flex items-center justify-between pt-3 border-t border-gray-100">
         <div className="flex items-center gap-1">
           <span className="text-lg font-bold text-amber-600">{listing.hourlyRate}</span>

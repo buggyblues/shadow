@@ -1,13 +1,16 @@
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
+import { UserAvatar } from '../components/common/avatar'
 import { LanguageSwitcher } from '../components/common/language-switcher'
 
 import { useAppStatus } from '../hooks/use-app-status'
 import { BRAND_EN } from '../lib/brand'
+import { useAuthStore } from '../stores/auth.store'
 
 /* Shared nav component for public pages */
 export function PublicNav() {
   const { t } = useTranslation()
+  const { isAuthenticated, user } = useAuthStore()
   return (
     <nav className="glass-nav fixed w-full top-0 z-50 py-4 px-8 md:px-16 flex justify-between items-center transition-all bg-white/70 backdrop-blur-xl border-b border-border-dim shadow-sm">
       <Link to="/" className="flex items-center gap-3 cursor-pointer hover:scale-105 transition">
@@ -44,18 +47,31 @@ export function PublicNav() {
       </div>
       <div className="flex items-center gap-3">
         <LanguageSwitcher compact />
-        <Link
-          to="/login"
-          className="text-base font-bold px-4 py-2 hover:text-cyan-600 transition hidden md:block"
-        >
-          {t('nav.login')}
-        </Link>
-        <Link
-          to="/register"
-          className="btn-primary zcool text-lg px-6 py-2 hover:scale-105 transition-transform duration-300 shadow-lg hover:shadow-cyan-500/30"
-        >
-          {t('nav.launch')}
-        </Link>
+        {isAuthenticated && user ? (
+          <Link to="/app" className="hover:scale-105 transition-transform">
+            <UserAvatar
+              userId={user.id}
+              avatarUrl={user.avatarUrl}
+              displayName={user.displayName ?? undefined}
+              size="sm"
+            />
+          </Link>
+        ) : (
+          <>
+            <Link
+              to="/login"
+              className="text-base font-bold px-4 py-2 hover:text-cyan-600 transition hidden md:block"
+            >
+              {t('nav.login')}
+            </Link>
+            <Link
+              to="/register"
+              className="btn-primary zcool text-lg px-6 py-2 hover:scale-105 transition-transform duration-300 shadow-lg hover:shadow-cyan-500/30"
+            >
+              {t('nav.launch')}
+            </Link>
+          </>
+        )}
       </div>
     </nav>
   )

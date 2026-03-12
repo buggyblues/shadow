@@ -92,6 +92,13 @@
       "when": 1773500000000,
       "tag": "0012_add_notification_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1773600000000,
+      "tag": "0013_add_rental_schema",
+      "breakpoints": true
     }
   ]
 }

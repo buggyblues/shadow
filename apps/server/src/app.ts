@@ -12,6 +12,7 @@ import { createMediaHandler } from './handlers/media.handler'
 import { createMessageHandler } from './handlers/message.handler'
 import { createNotificationHandler } from './handlers/notification.handler'
 import { createOAuthHandler } from './handlers/oauth.handler'
+import { createRentalHandler } from './handlers/rental.handler'
 import { createSearchHandler } from './handlers/search.handler'
 import { createServerHandler } from './handlers/server.handler'
 import { createShopHandler } from './handlers/shop.handler'
@@ -61,6 +62,7 @@ export function createApp(container: AppContainer) {
   app.route('/api/invite-codes', createInviteHandler(container))
   app.route('/api/admin', createAdminHandler(container))
   app.route('/api', createShopHandler(container))
+  app.route('/api', createRentalHandler(container))
   app.route('/api', createWorkspaceHandler(container))
 
   // 404 handler

@@ -5,6 +5,7 @@ import { AgentPolicyDao } from './dao/agent-policy.dao'
 import { CartDao } from './dao/cart.dao'
 import { ChannelDao } from './dao/channel.dao'
 import { ChannelMemberDao } from './dao/channel-member.dao'
+import { ClawListingDao } from './dao/claw-listing.dao'
 import { EntitlementDao } from './dao/entitlement.dao'
 import { InviteCodeDao } from './dao/invite-code.dao'
 import { MessageDao } from './dao/message.dao'
@@ -14,6 +15,7 @@ import { OAuthAccountDao } from './dao/oauth-account.dao'
 import { OrderDao } from './dao/order.dao'
 import { ProductDao, ProductMediaDao, SkuDao } from './dao/product.dao'
 import { ProductCategoryDao } from './dao/product-category.dao'
+import { RentalContractDao, RentalUsageDao, RentalViolationDao } from './dao/rental-contract.dao'
 import { ReviewDao } from './dao/review.dao'
 import { ServerDao } from './dao/server.dao'
 import { ShopDao } from './dao/shop.dao'
@@ -41,6 +43,7 @@ import { OAuthService } from './services/oauth.service'
 import { OrderService } from './services/order.service'
 import { PermissionService } from './services/permission.service'
 import { ProductService } from './services/product.service'
+import { RentalService } from './services/rental.service'
 import { ReviewService } from './services/review.service'
 import { SearchService } from './services/search.service'
 import { ServerService } from './services/server.service'
@@ -83,6 +86,12 @@ export interface Cradle {
   workspaceDao: WorkspaceDao
   workspaceNodeDao: WorkspaceNodeDao
 
+  // Rental DAOs
+  clawListingDao: ClawListingDao
+  rentalContractDao: RentalContractDao
+  rentalUsageDao: RentalUsageDao
+  rentalViolationDao: RentalViolationDao
+
   // Services
   authService: AuthService
   oauthService: OAuthService
@@ -105,6 +114,7 @@ export interface Cradle {
   reviewService: ReviewService
   entitlementService: EntitlementService
   workspaceService: WorkspaceService
+  rentalService: RentalService
 }
 
 export type AppContainer = AwilixContainer<Cradle>
@@ -149,6 +159,12 @@ export function createAppContainer(db: Database): AppContainer {
     workspaceDao: asClass(WorkspaceDao).singleton(),
     workspaceNodeDao: asClass(WorkspaceNodeDao).singleton(),
 
+    // Rental DAOs
+    clawListingDao: asClass(ClawListingDao).singleton(),
+    rentalContractDao: asClass(RentalContractDao).singleton(),
+    rentalUsageDao: asClass(RentalUsageDao).singleton(),
+    rentalViolationDao: asClass(RentalViolationDao).singleton(),
+
     // Services
     authService: asClass(AuthService).singleton(),
     oauthService: asClass(OAuthService).singleton(),
@@ -171,6 +187,7 @@ export function createAppContainer(db: Database): AppContainer {
     reviewService: asClass(ReviewService).singleton(),
     entitlementService: asClass(EntitlementService).singleton(),
     workspaceService: asClass(WorkspaceService).singleton(),
+    rentalService: asClass(RentalService).singleton(),
   })
 
   return container
