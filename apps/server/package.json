@@ -27,6 +27,7 @@
     "drizzle-orm": "^0.44.2",
     "hono": "^4.7.10",
     "jsonwebtoken": "^9.0.2",
+    "jszip": "^3.10.1",
     "mime-types": "^3.0.1",
     "minio": "^8.0.5",
     "nanoid": "^5.1.5",

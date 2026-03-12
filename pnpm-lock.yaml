@@ -135,6 +135,9 @@ importers:
       jsonwebtoken:
         specifier: ^9.0.2
         version: 9.0.3
+      jszip:
+        specifier: ^3.10.1
+        version: 3.10.1
       mime-types:
         specifier: ^3.0.1
         version: 3.0.2

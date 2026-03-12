@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchApi } from '../../lib/api'
 import { joinApp, leaveApp } from '../../lib/socket'
 import { useAppStore } from '../../stores/app.store'
+import { WorkspaceFilePicker } from '../workspace/WorkspaceFilePicker'
 
 /* ───────── Types ───────── */
 
@@ -213,13 +214,11 @@ export function AppPage({ serverId, isAdmin, onClose }: AppPageProps) {
 
 /* ───────── iOS-style App Icon ───────── */
 
-/** Generate a deterministic pastel background color from a string */
+/** Generate a deterministic pastel background color from the first character */
 function nameToColor(name: string): string {
-  let hash = 0
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  const hue = ((hash % 360) + 360) % 360
+  const char = name[0] ?? 'A'
+  const code = char.toUpperCase().charCodeAt(0)
+  const hue = (code * 137) % 360
   return `hsl(${hue}, 60%, 65%)`
 }
 
@@ -396,8 +395,9 @@ function AppViewer({
   const resolveAppUrl = useCallback(() => {
     if (!currentApp) return ''
     if (currentApp.sourceType === 'url') return currentApp.sourceUrl
-    return `/api/media/files/${currentApp.sourceUrl}`
-  }, [currentApp])
+    // Serve zip/html content through the server extraction endpoint
+    return `/api/servers/${serverId}/apps/${currentApp.id}/serve/`
+  }, [currentApp, serverId])
 
   const openInNewWindow = useCallback(() => {
     const url = resolveAppUrl()
@@ -478,14 +478,6 @@ function AppViewer({
 
 /* ───────── Create / Edit App Overlay ───────── */
 
-interface WorkspaceFileNode {
-  id: string
-  name: string
-  kind: 'file' | 'dir'
-  mime?: string | null
-  contentRef?: string | null
-}
-
 function CreateEditOverlay({
   serverId,
   editingApp,
@@ -512,6 +504,7 @@ function CreateEditOverlay({
   const [isHomepage, setIsHomepage] = useState(editingApp?.isHomepage ?? false)
   const [isUploading, setIsUploading] = useState(false)
   const [isUploadingIcon, setIsUploadingIcon] = useState(false)
+  const [showFilePicker, setShowFilePicker] = useState(false)
 
   // For zip: workspace file picker
   const [selectedFileId, setSelectedFileId] = useState(publishFileId ?? '')
@@ -521,23 +514,6 @@ function CreateEditOverlay({
   useEffect(() => {
     return () => setPublishFile(null)
   }, [setPublishFile])
-
-  // Fetch workspace zip/html files for picker
-  const { data: workspaceFiles = [] } = useQuery({
-    queryKey: ['workspace-publishable-files', serverId],
-    queryFn: async () => {
-      const ws = await fetchApi<{ id: string }>(`/api/servers/${serverId}/workspace`)
-      const nodes = await fetchApi<WorkspaceFileNode[]>(
-        `/api/workspaces/${ws.id}/nodes?parentId=root`,
-      )
-      return nodes.filter(
-        (n) =>
-          n.kind === 'file' &&
-          (n.name.endsWith('.zip') || n.name.endsWith('.html') || n.mime?.includes('zip')),
-      )
-    },
-    enabled: sourceType === 'zip' && !isEdit,
-  })
 
   const create = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
@@ -563,12 +539,10 @@ function CreateEditOverlay({
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const res = await fetch('/api/media/upload', {
+      const result = await fetchApi<{ url: string }>('/api/media/upload', {
         method: 'POST',
         body: formData,
-        credentials: 'include',
       })
-      const result = (await res.json()) as { url: string }
       setIconUrl(result.url)
     } finally {
       setIsUploadingIcon(false)
@@ -581,12 +555,10 @@ function CreateEditOverlay({
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const res = await fetch('/api/media/upload', {
+      const result = await fetchApi<{ url: string }>('/api/media/upload', {
         method: 'POST',
         body: formData,
-        credentials: 'include',
       })
-      const result = (await res.json()) as { url: string }
       setSourceUrl(result.url)
       setSelectedFileName(file.name)
       setSelectedFileId('')
@@ -645,7 +617,7 @@ function CreateEditOverlay({
   const isPending = create.isPending || update.isPending || isUploading
   const canSubmit =
     name.trim() &&
-    (sourceType === 'url' ? sourceUrl.trim() : sourceUrl.trim() || selectedFileId) &&
+    (sourceType === 'url' ? sourceUrl.trim() : sourceUrl?.trim() || selectedFileId) &&
     !isPending
 
   return (
@@ -800,27 +772,15 @@ function CreateEditOverlay({
                 />
               </label>
               {/* Or pick from workspace */}
-              {!isEdit && workspaceFiles.length > 0 && (
-                <div>
-                  <span className="block text-[11px] text-text-muted mb-1">或从工作区选择文件</span>
-                  <select
-                    value={selectedFileId}
-                    onChange={(e) => {
-                      setSelectedFileId(e.target.value)
-                      setSourceUrl('')
-                      const f = workspaceFiles.find((wf) => wf.id === e.target.value)
-                      setSelectedFileName(f?.name ?? '')
-                    }}
-                    className="w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded-lg text-sm text-text-primary outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <option value="">请选择文件...</option>
-                    {workspaceFiles.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {!isEdit && (
+                <button
+                  type="button"
+                  onClick={() => setShowFilePicker(true)}
+                  className="flex items-center gap-2 w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded-lg text-sm text-text-muted hover:text-text-primary hover:border-primary/30 transition"
+                >
+                  <Package size={14} />
+                  从工作区选择文件
+                </button>
               )}
               {/* Show selected info */}
               {(sourceUrl || selectedFileName) && (
@@ -857,6 +817,23 @@ function CreateEditOverlay({
           </button>
         </form>
       </div>
+
+      {/* Workspace file picker modal */}
+      {showFilePicker && (
+        <WorkspaceFilePicker
+          serverId={serverId}
+          mode="select-file"
+          title="选择应用文件"
+          accept={['.zip', '.html', '.htm']}
+          onConfirm={(result) => {
+            setSelectedFileId(result.node.id)
+            setSelectedFileName(result.node.name)
+            setSourceUrl('')
+            setShowFilePicker(false)
+          }}
+          onClose={() => setShowFilePicker(false)}
+        />
+      )}
     </div>
   )
 }

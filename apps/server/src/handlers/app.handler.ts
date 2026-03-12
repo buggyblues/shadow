@@ -1,5 +1,7 @@
 import { zValidator } from '@hono/zod-validator'
 import { Hono } from 'hono'
+import JSZip from 'jszip'
+import { lookup } from 'mime-types'
 import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
 import {
@@ -13,7 +15,6 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export function createAppHandler(container: AppContainer) {
   const h = new Hono()
-  h.use('*', authMiddleware)
 
   /* ─── Helpers ─── */
 
@@ -29,6 +30,99 @@ export function createAppHandler(container: AppContainer) {
     const permissionService = container.resolve('permissionService')
     await permissionService.requireRole(serverId, userId, 'admin')
   }
+
+  /* ══════════════════════════════════════════
+     Serve App Content (no auth – public)
+     ══════════════════════════════════════════ */
+
+  // In-memory cache for zip contents to avoid re-downloading for every asset
+  const zipCache = new Map<string, { zip: JSZip; ts: number }>()
+  const ZIP_CACHE_TTL = 5 * 60_000
+
+  // GET /servers/:serverId/apps/:appId/serve/* — serve files from zip/html app
+  h.get('/servers/:serverId/apps/:appId/serve/*', async (c) => {
+    const serverId = await resolveServerId(c.req.param('serverId'))
+    const appId = c.req.param('appId')
+
+    const appService = container.resolve('appService')
+    const app = UUID_RE.test(appId)
+      ? await appService.getApp(appId)
+      : await appService.getAppBySlug(serverId, appId)
+
+    if (!app.sourceUrl) return c.text('No source URL', 404)
+
+    const filePath = c.req.param('*') || 'index.html'
+
+    const mediaService = container.resolve('mediaService')
+
+    if (app.sourceType === 'url') {
+      return c.redirect(app.sourceUrl)
+    }
+
+    // Determine if the source is a zip or a single HTML file
+    const isZip = app.sourceUrl.endsWith('.zip')
+
+    if (!isZip) {
+      // Single HTML file — serve directly
+      const buf = await mediaService.getFileBuffer(app.sourceUrl)
+      if (!buf) return c.text('File not found', 404)
+      return c.body(new Uint8Array(buf), 200, { 'Content-Type': 'text/html; charset=utf-8' })
+    }
+
+    // ZIP — extract the requested file
+    const cacheKey = `${app.id}:${app.sourceUrl}`
+    let cached = zipCache.get(cacheKey)
+    if (!cached || Date.now() - cached.ts > ZIP_CACHE_TTL) {
+      const buf = await mediaService.getFileBuffer(app.sourceUrl)
+      if (!buf) return c.text('Zip file not found', 404)
+      const zip = await JSZip.loadAsync(buf)
+      cached = { zip, ts: Date.now() }
+      zipCache.set(cacheKey, cached)
+    }
+
+    // Try to find the file in the zip (handle both with and without root folder)
+    let zipFile = cached.zip.file(filePath)
+    if (!zipFile) {
+      // Try with first root folder prefix stripped or added
+      const entries = Object.keys(cached.zip.files)
+      const rootFolder = entries[0]?.split('/')[0]
+      if (rootFolder) {
+        zipFile = cached.zip.file(`${rootFolder}/${filePath}`)
+      }
+    }
+
+    if (!zipFile || zipFile.dir) {
+      // If requesting a path without extension, try index.html in that directory
+      if (!filePath.includes('.')) {
+        const indexPath = filePath.endsWith('/')
+          ? `${filePath}index.html`
+          : `${filePath}/index.html`
+        zipFile = cached.zip.file(indexPath)
+        if (!zipFile) {
+          const entries = Object.keys(cached.zip.files)
+          const rootFolder = entries[0]?.split('/')[0]
+          if (rootFolder) {
+            zipFile = cached.zip.file(`${rootFolder}/${indexPath}`)
+          }
+        }
+      }
+      if (!zipFile || zipFile.dir) return c.text('File not found in archive', 404)
+    }
+
+    const content = await zipFile.async('nodebuffer')
+    const mimeType = lookup(filePath) || 'application/octet-stream'
+    return c.body(new Uint8Array(content), 200, { 'Content-Type': mimeType })
+  })
+
+  // Shorter alias without trailing path — serves index.html
+  h.get('/servers/:serverId/apps/:appId/serve', async (c) => {
+    const url = new URL(c.req.url)
+    url.pathname = `${url.pathname}/`
+    return c.redirect(url.toString(), 301)
+  })
+
+  /* ── All routes below require auth ── */
+  h.use('*', authMiddleware)
 
   /* ══════════════════════════════════════════
      List & Get Apps
