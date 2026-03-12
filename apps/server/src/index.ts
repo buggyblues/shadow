@@ -6,6 +6,7 @@ import { hash } from 'bcryptjs'
 import { eq } from 'drizzle-orm'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import { Server as SocketIOServer } from 'socket.io'
+import { WebSocket, WebSocketServer } from 'ws'
 import { createApp } from './app'
 import { createAppContainer } from './container'
 import { db } from './db'
@@ -91,6 +92,94 @@ async function main() {
       logger.info(`🚀 Shadow Server running on http://localhost:${info.port}`)
     },
   )
+
+  // WebSocket proxy for URL apps:
+  // /api/app-proxy-ws/:appId/*
+  const appProxyWss = new WebSocketServer({ noServer: true })
+
+  server.on('upgrade', async (req, socket, head) => {
+    try {
+      const reqUrl = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
+      const match = reqUrl.pathname.match(/^\/api\/app-proxy-ws\/([^/]+)(?:\/(.*))?$/)
+      if (!match) return
+
+      const appId = match[1]
+      const pathPart = match[2] ?? ''
+      if (!appId) {
+        socket.destroy()
+        return
+      }
+
+      const appService = container.resolve('appService')
+      const app = await appService.getApp(appId)
+
+      const proxyEnabled =
+        app.settings &&
+        typeof app.settings === 'object' &&
+        (app.settings as Record<string, unknown>).proxyEnabled === true
+
+      if (app.sourceType !== 'url' || !proxyEnabled) {
+        socket.destroy()
+        return
+      }
+
+      const base = new URL(app.sourceUrl)
+      const upstream = new URL(pathPart ? `./${pathPart}` : './', base)
+      upstream.search = reqUrl.search
+      upstream.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:'
+
+      appProxyWss.handleUpgrade(req, socket, head, (clientWs: WebSocket) => {
+        const protocolsHeader = req.headers['sec-websocket-protocol']
+        const protocols =
+          typeof protocolsHeader === 'string'
+            ? protocolsHeader
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : []
+
+        const upstreamWs = new WebSocket(upstream.toString(), protocols)
+
+        clientWs.on('message', (data: WebSocket.RawData, isBinary: boolean) => {
+          if (upstreamWs.readyState === WebSocket.OPEN) {
+            upstreamWs.send(data, { binary: isBinary })
+          }
+        })
+
+        clientWs.on('close', () => {
+          if (
+            upstreamWs.readyState === WebSocket.OPEN ||
+            upstreamWs.readyState === WebSocket.CONNECTING
+          ) {
+            upstreamWs.close()
+          }
+        })
+
+        clientWs.on('error', () => {
+          try {
+            upstreamWs.close()
+          } catch {}
+        })
+
+        upstreamWs.on('message', (data: WebSocket.RawData, isBinary: boolean) => {
+          if (clientWs.readyState === clientWs.OPEN) {
+            clientWs.send(data, { binary: isBinary })
+          }
+        })
+
+        upstreamWs.on('close', () => {
+          if (clientWs.readyState === clientWs.OPEN) clientWs.close()
+        })
+
+        upstreamWs.on('error', () => {
+          if (clientWs.readyState === clientWs.OPEN)
+            clientWs.close(1011, 'upstream websocket error')
+        })
+      })
+    } catch {
+      socket.destroy()
+    }
+  })
 
   // Attach Socket.IO to the HTTP server
   const io = new SocketIOServer(server, {

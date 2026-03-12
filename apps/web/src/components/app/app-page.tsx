@@ -395,7 +395,19 @@ function AppViewer({
 
   const resolveAppUrl = useCallback(() => {
     if (!currentApp) return ''
-    if (currentApp.sourceType === 'url') return currentApp.sourceUrl
+    if (currentApp.sourceType === 'url') {
+      const proxyEnabled = currentApp.settings?.proxyEnabled === true
+      if (!proxyEnabled) return currentApp.sourceUrl
+
+      const suffix = (import.meta.env.VITE_APP_PROXY_HOST_SUFFIX as string | undefined)?.trim()
+      if (suffix) {
+        const prefix =
+          (import.meta.env.VITE_APP_PROXY_SUBDOMAIN_PREFIX as string | undefined)?.trim() || 'app'
+        return `${window.location.protocol}//${prefix}-${currentApp.id}.${suffix}/`
+      }
+      // Fallback for local dev without wildcard DNS/Caddy subdomain routing
+      return `/api/app-proxy/${currentApp.id}/`
+    }
     // Serve zip/html content through the server extraction endpoint
     return `/api/servers/${serverId}/apps/${currentApp.id}/serve/`
   }, [currentApp, serverId])
@@ -501,6 +513,7 @@ function CreateEditOverlay({
     editingApp?.sourceType ?? (publishFileId ? 'zip' : 'url'),
   )
   const [sourceUrl, setSourceUrl] = useState(editingApp?.sourceUrl ?? '')
+  const [proxyEnabled, setProxyEnabled] = useState(editingApp?.settings?.proxyEnabled === true)
   const [version, setVersion] = useState(editingApp?.version ?? '')
   const [isHomepage, setIsHomepage] = useState(editingApp?.isHomepage ?? false)
   const [isUploading, setIsUploading] = useState(false)
@@ -606,6 +619,8 @@ function CreateEditOverlay({
         iconUrl: iconUrl || null,
         sourceType,
         sourceUrl: finalSourceUrl || undefined,
+        settings:
+          sourceType === 'url' ? { ...(editingApp?.settings ?? {}), proxyEnabled } : undefined,
         version: version || undefined,
         isHomepage,
       })
@@ -641,6 +656,7 @@ function CreateEditOverlay({
       iconUrl: iconUrl || undefined,
       sourceType,
       sourceUrl: finalSourceUrl,
+      settings: sourceType === 'url' ? { proxyEnabled } : undefined,
       version: version || undefined,
       isHomepage,
       status: 'active',
@@ -792,6 +808,17 @@ function CreateEditOverlay({
                 className="w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded-lg text-sm text-text-primary outline-none focus:ring-1 focus:ring-primary"
                 placeholder="https://example.com"
               />
+              <label className="mt-2 flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={proxyEnabled}
+                  onChange={(e) => setProxyEnabled(e.target.checked)}
+                  className="rounded border-border-subtle"
+                />
+                <span className="text-xs text-text-secondary">
+                  通过子域名代理访问（支持绝对路径、SSE、WebSocket）
+                </span>
+              </label>
             </div>
           ) : (
             <div className="space-y-2">

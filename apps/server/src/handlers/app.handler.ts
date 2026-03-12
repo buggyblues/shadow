@@ -51,6 +51,113 @@ export function createAppHandler(container: AppContainer) {
     }
   }
 
+  function isProxyEnabled(settings: Record<string, unknown> | null | undefined): boolean {
+    return settings?.proxyEnabled === true
+  }
+
+  function sanitizeProxyRequestHeaders(headers: Headers) {
+    // Hop-by-hop headers must not be forwarded by proxies.
+    const hopByHop = [
+      'connection',
+      'keep-alive',
+      'proxy-authenticate',
+      'proxy-authorization',
+      'te',
+      'trailer',
+      'transfer-encoding',
+      'upgrade',
+      'host',
+      'content-length',
+    ]
+    for (const key of hopByHop) headers.delete(key)
+    return headers
+  }
+
+  function sanitizeProxyResponseHeaders(headers: Headers) {
+    const hopByHop = ['connection', 'keep-alive', 'trailer', 'transfer-encoding', 'upgrade']
+    for (const key of hopByHop) headers.delete(key)
+    return headers
+  }
+
+  /* ══════════════════════════════════════════
+     URL App Proxy (public, subdomain gateway target)
+     ══════════════════════════════════════════ */
+
+  // Gateway should rewrite: app-subdomain request -> /api/app-proxy/:appId/*
+  h.all('/app-proxy/:appId/*', async (c) => {
+    const appService = container.resolve('appService')
+    const appId = c.req.param('appId')
+    const app = await appService.getApp(appId)
+
+    if (app.sourceType !== 'url') {
+      return c.text('Proxy only supports URL apps', 400)
+    }
+    if (!isProxyEnabled(app.settings)) {
+      return c.text('Proxy is disabled for this app', 403)
+    }
+
+    let upstreamBase: URL
+    try {
+      upstreamBase = new URL(app.sourceUrl)
+    } catch {
+      return c.text('Invalid source URL', 400)
+    }
+
+    const pathPart = c.req.param('*') || ''
+    const upstreamUrl = new URL(pathPart ? `./${pathPart}` : './', upstreamBase)
+
+    // Preserve query string from client request.
+    const reqUrl = new URL(c.req.url)
+    upstreamUrl.search = reqUrl.search
+
+    const reqHeaders = sanitizeProxyRequestHeaders(new Headers(c.req.raw.headers))
+    reqHeaders.set('x-forwarded-proto', reqUrl.protocol.replace(':', ''))
+    reqHeaders.set('x-forwarded-host', c.req.header('host') ?? '')
+
+    const body =
+      c.req.method === 'GET' || c.req.method === 'HEAD' ? undefined : await c.req.raw.arrayBuffer()
+
+    const upstreamRes = await fetch(upstreamUrl.toString(), {
+      method: c.req.method,
+      headers: reqHeaders,
+      body,
+      redirect: 'manual',
+    })
+
+    const headers = sanitizeProxyResponseHeaders(new Headers(upstreamRes.headers))
+
+    // Rewrite absolute redirects to stay on proxy origin.
+    const location = headers.get('location')
+    if (location) {
+      try {
+        const loc = new URL(location, upstreamBase)
+        if (loc.origin === upstreamBase.origin) {
+          const proxyPathBase = `/api/app-proxy/${app.id}`
+          headers.set('location', `${proxyPathBase}${loc.pathname}${loc.search}${loc.hash}`)
+        }
+      } catch {
+        // Keep original location if parsing fails.
+      }
+    }
+
+    // SSE: keep streaming, disable buffering hints.
+    if ((headers.get('content-type') ?? '').includes('text/event-stream')) {
+      headers.set('cache-control', 'no-cache')
+      headers.set('x-accel-buffering', 'no')
+    }
+
+    return new Response(upstreamRes.body, {
+      status: upstreamRes.status,
+      headers,
+    })
+  })
+
+  h.all('/app-proxy/:appId', async (c) => {
+    const url = new URL(c.req.url)
+    url.pathname = `${url.pathname}/`
+    return c.redirect(url.toString(), 301)
+  })
+
   /* ══════════════════════════════════════════
      Serve App Content (no auth – public)
      ══════════════════════════════════════════ */
@@ -139,13 +246,17 @@ export function createAppHandler(container: AppContainer) {
     return c.redirect(url.toString(), 301)
   })
 
-  /* ── All routes below require auth (except /serve public route) ── */
+  /* ── All routes below require auth (except public runtime/proxy routes) ── */
   h.use('*', async (c, next) => {
     const path = c.req.path
     // Public app runtime endpoint:
     // - /api/servers/:serverId/apps/:appId/serve[/...]
     // - /servers/:serverId/apps/:appId/serve[/...] (sub-router path)
-    if (/^(?:\/api)?\/servers\/[^/]+\/apps\/[^/]+\/serve(?:\/.*)?$/.test(path)) {
+    if (
+      /^(?:\/api)?\/servers\/[^/]+\/apps\/[^/]+\/serve(?:\/.*)?$/.test(path) ||
+      /^\/api\/app-proxy\/[^/]+(?:\/.*)?$/.test(path) ||
+      /^\/app-proxy\/[^/]+(?:\/.*)?$/.test(path)
+    ) {
       await next()
       return
     }
