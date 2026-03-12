@@ -55,6 +55,9 @@
     "featureWorkspaceDesc": "チャットだけじゃない。ホワイトボード、タスクボード、ドキュメント連携で全てが生産性に。",
     "featureChannel": "統合チャンネル",
     "featureChannelDesc": "無限カテゴリチャネル。どんなに多くても迷子になりません。",
+    "featureP2pRental": "P2P Claw レンタル",
+    "featureP2pRentalDesc": "使っていない OpenClaw でエビコインを稼ぎましょう！Buddy マーケットに出品し、スマート契約、時間課金、自動決済ですべての Claw を活用。",
+    "featureP2pRentalCta": "Buddy マーケットを見る →",
     "ctaTitle": "ワークスペースに魔法をかける準備はできた？",
     "ctaSubtitle": "今すぐクリックして、黒猫ワーカーを迎え入れよう！",
     "ctaButton": "無料で始める"
@@ -333,6 +336,8 @@
     "realtimeDesc": "WebSocket ベースの通信エンジン。即時メッセージ配信、在席状態、タイピング表示をサポート。",
     "i18n": "多言語サポート",
     "i18nDesc": "簡体字中国語、繁体字中国語、英語、日本語、韓国語などを内蔵。",
+    "p2pRental": "P2P Claw レンタル",
+    "p2pRentalDesc": "使わない OpenClaw をマーケットに出品し、スマート契約で時間課金エビコインを稼ぎましょう。",
     "ctaTitle": "自分で試してみたい？",
     "ctaSubtitle": "今すぐ登録して、コラボ遊園地を始めよう！",
     "ctaButton": "無料で始める"
@@ -891,6 +896,11 @@
     "myRentalsCta": "マイレンタル",
     "myRentalsCtaDesc": "レンタルと出品中のOpenClaw契約を管理",
     "goToMyRentals": "マイレンタル",
-    "unlimited": "無制限"
+    "unlimited": "無制限",
+    "delistClaw": "Claw を取り下げ",
+    "delistSuccess": "Claw が取り下げられました",
+    "delistHint": "取り下げるとこの Claw はマーケットに表示されなくなります",
+    "confirmDelist": "この Claw を取り下げますか？",
+    "official": "公式"
   }
 }

@@ -12,10 +12,11 @@ import {
   Shield,
   Users,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../lib/api'
 import { showToast } from '../lib/toast'
+import { useAuthStore } from '../stores/auth.store'
 
 interface Listing {
   id: string
@@ -72,32 +73,104 @@ const OS_INFO: Record<string, string> = {
   linux: 'Linux',
 }
 
+/* ──────────── Official Buddy Data ──────────── */
+
+const OFFICIAL_BUDDY_RATE = 5
+
+const OFFICIAL_BUDDIES: Record<string, { nameKey: string; descKey: string; tagKeys: string[] }> = {
+  codingcat: {
+    nameKey: 'agents.codingCat',
+    descKey: 'agents.codingCatDesc',
+    tagKeys: ['agents.tagCodeGen', 'agents.tagCodeReview', 'agents.tagDebug'],
+  },
+  documeow: {
+    nameKey: 'agents.docuMeow',
+    descKey: 'agents.docuMeowDesc',
+    tagKeys: ['agents.tagDocGen', 'agents.tagSummary', 'agents.tagApiDoc'],
+  },
+  designcat: {
+    nameKey: 'agents.designCat',
+    descKey: 'agents.designCatDesc',
+    tagKeys: ['agents.tagUiDesign', 'agents.tagColor', 'agents.tagComponent'],
+  },
+  detectivecat: {
+    nameKey: 'agents.detectiveCat',
+    descKey: 'agents.detectiveCatDesc',
+    tagKeys: ['agents.tagDebug', 'agents.tagLogAnalysis', 'agents.tagSearch'],
+  },
+  opscat: {
+    nameKey: 'agents.opsCat',
+    descKey: 'agents.opsCatDesc',
+    tagKeys: ['agents.tagDevOps', 'agents.tagMonitor', 'agents.tagDeploy'],
+  },
+  customagent: {
+    nameKey: 'agents.customAgent',
+    descKey: 'agents.customAgentDesc',
+    tagKeys: ['agents.tagCustom', 'agents.tagMcp', 'agents.tagApi'],
+  },
+}
+
 export function MarketplaceDetailPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { listingId } = useParams({ strict: false }) as { listingId: string }
   const queryClient = useQueryClient()
+  const currentUser = useAuthStore((s) => s.user)
 
   const [durationHours, setDurationHours] = useState(24)
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [showContract, setShowContract] = useState(false)
   const [signed, setSigned] = useState(false)
 
-  // Fetch listing detail
-  const { data: listing, isLoading } = useQuery({
+  // Detect official buddy
+  const isOfficial = listingId?.startsWith('official-')
+  const officialSlug = isOfficial ? listingId.slice('official-'.length) : null
+  const officialBuddy = officialSlug ? OFFICIAL_BUDDIES[officialSlug] : null
+
+  const officialListing: Listing | null = officialBuddy
+    ? {
+        id: listingId,
+        ownerId: 'system',
+        title: t(officialBuddy.nameKey),
+        description: t(officialBuddy.descKey),
+        skills: officialBuddy.tagKeys.map((k) => t(k)),
+        guidelines: null,
+        deviceTier: 'high_end',
+        osType: 'linux',
+        deviceInfo: { model: 'Shadow Cloud', cpu: 'Cloud vCPU', ram: '16GB', storage: '256GB SSD' },
+        softwareTools: [],
+        hourlyRate: OFFICIAL_BUDDY_RATE,
+        dailyRate: OFFICIAL_BUDDY_RATE * 24,
+        monthlyRate: OFFICIAL_BUDDY_RATE * 720,
+        premiumMarkup: 0,
+        depositAmount: 0,
+        tokenFeePassthrough: false,
+        viewCount: 0,
+        rentalCount: 0,
+        tags: [],
+        availableFrom: null,
+        availableUntil: null,
+        createdAt: new Date().toISOString(),
+      }
+    : null
+
+  // Fetch listing detail (skip for official buddies)
+  const { data: apiListing, isLoading } = useQuery({
     queryKey: ['marketplace', 'listing', listingId],
     queryFn: () => fetchApi<Listing>(`/api/marketplace/listings/${listingId}`),
-    enabled: !!listingId,
+    enabled: !!listingId && !isOfficial,
   })
 
-  // Fetch cost estimate
+  const listing = isOfficial ? officialListing : apiListing
+
+  // Fetch cost estimate (skip for official buddies)
   const { data: estimate } = useQuery({
     queryKey: ['marketplace', 'estimate', listingId, durationHours],
     queryFn: () =>
       fetchApi<CostEstimate>(
         `/api/marketplace/listings/${listingId}/estimate?hours=${durationHours}`,
       ),
-    enabled: !!listingId && durationHours > 0,
+    enabled: !!listingId && !isOfficial && durationHours > 0,
   })
 
   // Sign contract mutation
@@ -123,7 +196,35 @@ export function MarketplaceDetailPage() {
     },
   })
 
-  if (isLoading || !listing) {
+  // Delist mutation (for owner's own listing)
+  const delistMutation = useMutation({
+    mutationFn: () =>
+      fetchApi(`/api/marketplace/listings/${listingId}/toggle`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isListed: false }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marketplace'] })
+      showToast(t('marketplace.delistSuccess', 'Claw 已下架'), 'success')
+      navigate({ to: '/app/marketplace/my-rentals' })
+    },
+    onError: (err: Error) => {
+      showToast(err.message, 'error')
+    },
+  })
+
+  // Handle clicking outside the contract modal to close it
+  const handleModalBackdropClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (e.target === e.currentTarget && !signed) {
+        setShowContract(false)
+      }
+    },
+    [signed],
+  )
+
+  if ((!isOfficial && isLoading) || !listing) {
     return (
       <div className="min-h-screen bg-[#f2f7fc] flex items-center justify-center">
         <div className="animate-pulse text-gray-400 text-lg font-bold">
@@ -134,6 +235,7 @@ export function MarketplaceDetailPage() {
   }
 
   const tier = DEVICE_TIER_INFO[listing.deviceTier] ?? DEVICE_TIER_INFO.mid_range!
+  const isOwner = currentUser?.id === listing.ownerId
 
   return (
     <div
@@ -382,19 +484,51 @@ export function MarketplaceDetailPage() {
                 </div>
               )}
 
-              {/* Sign Contract Button */}
-              <button
-                type="button"
-                onClick={() => setShowContract(true)}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-gray-900 font-bold text-base hover:from-amber-500 hover:to-amber-600 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
-                style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
-              >
-                {t('marketplace.rentNow', '立即租赁')}
-              </button>
-
-              <p className="text-xs text-gray-400 text-center mt-3 font-medium">
-                {t('marketplace.rentDisclaimer', '租赁前请仔细阅读使用规约和平台条款')}
-              </p>
+              {/* Action Button: delist (owner) or rent (others) */}
+              {isOwner ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        window.confirm(t('marketplace.confirmDelist', '确定要下架此 Claw 吗？'))
+                      ) {
+                        delistMutation.mutate()
+                      }
+                    }}
+                    disabled={delistMutation.isPending}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-red-400 to-red-500 text-white font-bold text-base hover:from-red-500 hover:to-red-600 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60"
+                    style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
+                  >
+                    {delistMutation.isPending
+                      ? t('common.loading', '处理中...')
+                      : t('marketplace.delistClaw', '下架 Claw')}
+                  </button>
+                  <p className="text-xs text-gray-400 text-center mt-3 font-medium">
+                    {t('marketplace.delistHint', '下架后此 Claw 将不再展示在集市中')}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isOfficial && officialSlug) {
+                        navigate({ to: `/buddies/${officialSlug}/contract` })
+                      } else {
+                        setShowContract(true)
+                      }
+                    }}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-gray-900 font-bold text-base hover:from-amber-500 hover:to-amber-600 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
+                    style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
+                  >
+                    {t('marketplace.rentNow', '立即租赁')}
+                  </button>
+                  <p className="text-xs text-gray-400 text-center mt-3 font-medium">
+                    {t('marketplace.rentDisclaimer', '租赁前请仔细阅读使用规约和平台条款')}
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -402,7 +536,11 @@ export function MarketplaceDetailPage() {
 
       {/* Contract Modal */}
       {showContract && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={handleModalBackdropClick}
+          onKeyDown={() => {}}
+        >
           <div
             className="relative max-w-3xl w-full max-h-[90vh] overflow-y-auto bg-[#fdfaf5] rounded-xl shadow-2xl p-8 md:p-12 border border-amber-900/10"
             style={{

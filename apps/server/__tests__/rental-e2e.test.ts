@@ -314,6 +314,63 @@ describe('P2P Rental E2E', () => {
     expect(res.status).toBe(200)
   })
 
+  /* ─────── 5b. Delist own listing (toggle isListed false) ─────── */
+
+  it('should delist own active listing', async () => {
+    const res = await req('PUT', `/api/marketplace/listings/${listingId}/toggle`, {
+      token: ownerToken,
+      body: { isListed: false },
+    })
+    expect(res.status).toBe(200)
+    const data = await json<{ isListed: boolean }>(res)
+    expect(data.isListed).toBe(false)
+
+    // Verify it no longer appears in browse results
+    const browseRes = await req('GET', '/api/marketplace/listings', {
+      query: { limit: '100' },
+    })
+    expect(browseRes.status).toBe(200)
+    const browseData = await json<{ listings: { id: string }[] }>(browseRes)
+    const found = browseData.listings.find((l) => l.id === listingId)
+    expect(found).toBeUndefined()
+
+    // Re-list it for subsequent tests
+    const relistRes = await req('PUT', `/api/marketplace/listings/${listingId}/toggle`, {
+      token: ownerToken,
+      body: { isListed: true },
+    })
+    expect(relistRes.status).toBe(200)
+  })
+
+  it('should reject delist from non-owner', async () => {
+    const res = await req('PUT', `/api/marketplace/listings/${listingId}/toggle`, {
+      token: tenantToken,
+      body: { isListed: false },
+    })
+    expect(res.status).toBe(403)
+  })
+
+  /* ─────── 5c. Browse pagination ─────── */
+
+  it('should paginate browse results with limit and offset', async () => {
+    const res1 = await req('GET', '/api/marketplace/listings', {
+      query: { limit: '1', offset: '0' },
+    })
+    expect(res1.status).toBe(200)
+    const page1 = await json<{ listings: { id: string }[]; total: number }>(res1)
+    expect(page1.listings.length).toBeLessThanOrEqual(1)
+    expect(page1.total).toBeGreaterThanOrEqual(1)
+
+    // With offset beyond total, should return empty
+    const res2 = await req('GET', '/api/marketplace/listings', {
+      query: { limit: '10', offset: '9999' },
+    })
+    expect(res2.status).toBe(200)
+    const page2 = await json<{ listings: unknown[]; total: number }>(res2)
+    expect(page2.listings.length).toBe(0)
+    expect(page2.total).toBeGreaterThanOrEqual(1)
+  })
+
   /* ─────── 6. Cost Estimation ─────── */
 
   it('should estimate rental cost', async () => {

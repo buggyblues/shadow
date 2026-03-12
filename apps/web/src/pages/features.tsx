@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { Globe, Layers, MessageSquare, Shield, Zap } from 'lucide-react'
+import { Handshake, Layers, MessageSquare, Shield, Zap } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStatus } from '../hooks/use-app-status'
 import { PublicFooter, PublicNav } from './home'
@@ -41,11 +41,11 @@ const featureItems = [
     bg: 'bg-orange-50',
   },
   {
-    icon: Globe,
-    titleKey: 'features.i18n',
-    descKey: 'features.i18nDesc',
-    color: 'text-indigo-500',
-    bg: 'bg-indigo-50',
+    icon: Handshake,
+    titleKey: 'features.p2pRental',
+    descKey: 'features.p2pRentalDesc',
+    color: 'text-amber-500',
+    bg: 'bg-amber-50',
   },
 ]
 

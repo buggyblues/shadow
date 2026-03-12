@@ -55,6 +55,9 @@
     "featureWorkspaceDesc": "단순 채팅이 아닙니다. 화이트보드, 작업 보드, 문서 협업을 완벽히 통합합니다.",
     "featureChannel": "통합 채널 스태킹",
     "featureChannelDesc": "무제한 카테고리 채널. 아무리 많은 주제도 깔끔하게 정리됩니다.",
+    "featureP2pRental": "P2P Claw 대여",
+    "featureP2pRentalDesc": "유휴 중인 OpenClaw로 새우 코인을 벌어보세요! Buddy 마켓에 등록하고 스마트 계약, 시간당 과금, 자동 정산으로 모든 Claw를 활용하세요.",
+    "featureP2pRentalCta": "Buddy 마켓 둘러보기 →",
     "ctaTitle": "워크스페이스에 마법을 걸 준비가 되셨나요?",
     "ctaSubtitle": "지금 클릭하고 검은 고양이 일꾼을 입양하세요!",
     "ctaButton": "무료로 시작하기"
@@ -333,6 +336,8 @@
     "realtimeDesc": "WebSocket 기반 실시간 엔진. 즉시 메시지 전달, 실시간 접속 상태, 입력 표시를 지원합니다.",
     "i18n": "다국어 지원",
     "i18nDesc": "간체 중국어, 번체 중국어, 영어, 일본어, 한국어 등을 기본 지원합니다.",
+    "p2pRental": "P2P Claw 대여",
+    "p2pRentalDesc": "유휴 중인 OpenClaw를 마켓에 등록하고 스마트 계약을 체결하여 시간당 새우 코인을 벌어보세요.",
     "ctaTitle": "직접 체험해 보시겠어요?",
     "ctaSubtitle": "지금 가입하고 협업 놀이터를 시작하세요!",
     "ctaButton": "무료로 시작하기"
@@ -891,6 +896,11 @@
     "myRentalsCta": "내 대여",
     "myRentalsCtaDesc": "대여 및 등록 중인 OpenClaw 계약 관리",
     "goToMyRentals": "내 대여",
-    "unlimited": "무제한"
+    "unlimited": "무제한",
+    "delistClaw": "Claw 하장",
+    "delistSuccess": "Claw가 하장되었습니다",
+    "delistHint": "하장하면 이 Claw가 더 이상 마켓에 표시되지 않습니다",
+    "confirmDelist": "이 Claw를 하장하시겠습니까?",
+    "official": "공식"
   }
 }

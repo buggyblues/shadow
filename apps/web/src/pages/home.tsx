@@ -374,6 +374,32 @@ export function HomePage() {
         </div>
       </section>
 
+      {/* P2P Rental Highlight */}
+      <section className="max-w-5xl mx-auto w-full px-8 md:px-16 py-12 relative z-10">
+        <div className="glass-card bg-gradient-to-r from-amber-50 to-yellow-50 p-10 md:p-14 rounded-[36px] overflow-hidden shadow-xl hover:shadow-amber-500/10 transition-all duration-500">
+          <div className="flex flex-col md:flex-row items-center gap-8">
+            <div className="text-7xl md:text-8xl shrink-0">🤝</div>
+            <div>
+              <h3 className="zcool text-3xl md:text-4xl font-bold mb-4 text-gray-800">
+                {t('home.featureP2pRental', 'P2P Claw 租赁')}
+              </h3>
+              <p className="text-base md:text-lg font-bold text-gray-600 leading-relaxed mb-4">
+                {t(
+                  'home.featureP2pRentalDesc',
+                  '闲置的 OpenClaw 也能赚虾币！将你的 Buddy 挂到集市出租给有需要的人，智能合约保护双方权益，一键签约、按时计费、自动结算。不用的时候让别人用，用的时候租别人的——共享经济，猫猫也懂！',
+                )}
+              </p>
+              <Link
+                to="/buddies"
+                className="inline-flex items-center gap-2 zcool text-lg font-bold text-amber-600 hover:text-amber-700 transition-colors"
+              >
+                {t('home.featureP2pRentalCta', '逛逛 Buddy 集市 →')}
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* CTA Banner */}
       <section id="cta" className="max-w-5xl mx-auto w-full px-8 md:px-16 py-12 mb-20">
         <div className="glass-card bg-gradient-to-r from-cyan-50 to-yellow-50 p-10 md:p-12 text-center rounded-[36px] relative overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-cyan-500/20">

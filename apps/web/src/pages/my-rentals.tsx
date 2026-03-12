@@ -1,6 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { ChevronLeft, Clock, Edit, Eye, Pause, Play, Plus, Trash2, Users } from 'lucide-react'
+import {
+  ChevronLeft,
+  Clock,
+  Edit,
+  Eye,
+  PackageMinus,
+  Pause,
+  Play,
+  Plus,
+  Trash2,
+  Users,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../lib/api'
@@ -105,6 +116,21 @@ export function MyRentalsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplace'] })
       showToast(t('marketplace.listingDeleted', '挂单已删除'), 'success')
+    },
+    onError: (err: Error) => showToast(err.message, 'error'),
+  })
+
+  // Delist listing (toggle isListed to false)
+  const delistMutation = useMutation({
+    mutationFn: (id: string) =>
+      fetchApi(`/api/marketplace/listings/${id}/toggle`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isListed: false }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marketplace'] })
+      showToast(t('marketplace.delistSuccess', 'Claw 已下架'), 'success')
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })
@@ -313,6 +339,25 @@ export function MyRentalsPage() {
                       </div>
 
                       <div className="flex items-center gap-2">
+                        {/* Delist button for active listed items */}
+                        {l.listingStatus === 'active' && l.isListed && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  t('marketplace.confirmDelist', '确定要下架此 Claw 吗？'),
+                                )
+                              ) {
+                                delistMutation.mutate(l.id)
+                              }
+                            }}
+                            className="p-2 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                            title={t('marketplace.delistClaw', '下架 Claw')}
+                          >
+                            <PackageMinus className="w-4 h-4" />
+                          </button>
+                        )}
                         {l.listingStatus === 'active' && (
                           <button
                             type="button"

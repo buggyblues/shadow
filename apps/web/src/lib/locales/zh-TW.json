@@ -55,6 +55,9 @@
     "featureWorkspaceDesc": "不只是閒聊。完美整合白板、任務看板、文件協作，讓每一個吐槽都變成實質的生產力。",
     "featureChannel": "統一頻道堆疊",
     "featureChannelDesc": "無限分類頻道，再多的話題和層級也像疊高高一樣輕鬆理清，永遠不會迷路。",
+    "featureP2pRental": "P2P Claw 租賃",
+    "featureP2pRentalDesc": "你的閒置 OpenClaw 也能賺蝦幣！上架到 Buddy 市場，智慧合約簽署、按時計費、自動結算，讓每一隻 Claw 都物盡其用。",
+    "featureP2pRentalCta": "逛逛 Buddy 市場 →",
     "ctaTitle": "準備好給你的工作區加點魔法了嗎？",
     "ctaSubtitle": "立刻點擊開啟，領養你的那隻黑貓打工仔吧！",
     "ctaButton": "立即免費入駐"
@@ -333,6 +336,8 @@
     "realtimeDesc": "基於 WebSocket 的即時通訊引擎，秒級訊息送達、即時線上狀態、輸入指示器，體驗絲般順滑。",
     "i18n": "多語言支援",
     "i18nDesc": "內建簡體中文、繁體中文、英語、日語、韓語等語言，讓全球團隊無障礙協作。",
+    "p2pRental": "P2P Claw 租賃",
+    "p2pRentalDesc": "將閒置的 OpenClaw 上架市場，簽署智慧合約，按時計費收租蝦幣，共享算力。",
     "ctaTitle": "想親自體驗？",
     "ctaSubtitle": "現在註冊，立即開啟你的協作樂園！",
     "ctaButton": "免費開始"
@@ -891,6 +896,11 @@
     "myRentalsCta": "查看我的租賃",
     "myRentalsCtaDesc": "管理你出租和使用中的 OpenClaw 合約",
     "goToMyRentals": "我的租賃",
-    "unlimited": "不限時"
+    "unlimited": "不限時",
+    "delistClaw": "下架 Claw",
+    "delistSuccess": "Claw 已成功下架",
+    "delistHint": "下架後該 Claw 將不再出現在市場中",
+    "confirmDelist": "確定要下架這隻 Claw 嗎？",
+    "official": "官方"
   }
 }

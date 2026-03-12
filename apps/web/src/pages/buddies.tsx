@@ -10,6 +10,8 @@ import {
   Laptop,
   Loader2,
   Monitor,
+  ChevronLeft as PageLeft,
+  ChevronRight as PageRight,
   Palette,
   Plus,
   Search,
@@ -28,8 +30,12 @@ import { PublicFooter, PublicNav } from './home'
 
 /* ──────────── Official Buddy Data ──────────── */
 
+/** Official claw hourly rate (in 虾币) */
+const OFFICIAL_HOURLY_RATE = 5
+
 const agentItems = [
   {
+    slug: 'codingcat',
     nameKey: 'agents.codingCat',
     descKey: 'agents.codingCatDesc',
     icon: Code,
@@ -37,6 +43,7 @@ const agentItems = [
     tagKeys: ['agents.tagCodeGen', 'agents.tagCodeReview', 'agents.tagDebug'],
   },
   {
+    slug: 'documeow',
     nameKey: 'agents.docuMeow',
     descKey: 'agents.docuMeowDesc',
     icon: FileText,
@@ -44,6 +51,7 @@ const agentItems = [
     tagKeys: ['agents.tagDocGen', 'agents.tagSummary', 'agents.tagApiDoc'],
   },
   {
+    slug: 'designcat',
     nameKey: 'agents.designCat',
     descKey: 'agents.designCatDesc',
     icon: Palette,
@@ -51,6 +59,7 @@ const agentItems = [
     tagKeys: ['agents.tagUiDesign', 'agents.tagColor', 'agents.tagComponent'],
   },
   {
+    slug: 'detectivecat',
     nameKey: 'agents.detectiveCat',
     descKey: 'agents.detectiveCatDesc',
     icon: Search,
@@ -58,6 +67,7 @@ const agentItems = [
     tagKeys: ['agents.tagDebug', 'agents.tagLogAnalysis', 'agents.tagSearch'],
   },
   {
+    slug: 'opscat',
     nameKey: 'agents.opsCat',
     descKey: 'agents.opsCatDesc',
     icon: Wrench,
@@ -65,6 +75,7 @@ const agentItems = [
     tagKeys: ['agents.tagDevOps', 'agents.tagMonitor', 'agents.tagDeploy'],
   },
   {
+    slug: 'customagent',
     nameKey: 'agents.customAgent',
     descKey: 'agents.customAgentDesc',
     icon: null,
@@ -146,6 +157,10 @@ export function BuddyMarketPage() {
   const [showFilters, setShowFilters] = useState(false)
   const [sortOpen, setSortOpen] = useState(false)
   const [listMyClawLoading, setListMyClawLoading] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+
+  /** Items per page = 4 rows × 4 columns on xl, fits different breakpoints */
+  const ITEMS_PER_PAGE = 16
 
   const { data, isLoading } = useQuery({
     queryKey: ['marketplace', 'listings', searchQuery, deviceTier, osType, sortBy],
@@ -162,6 +177,36 @@ export function BuddyMarketPage() {
   })
 
   const listings = data?.listings ?? []
+
+  // Query to check if user has any active listings or rental contracts
+  const { data: myListingsData } = useQuery({
+    queryKey: ['marketplace', 'my-listings'],
+    queryFn: () =>
+      fetchApi<{ listings: { id: string; isListed: boolean; listingStatus: string }[] }>(
+        '/api/marketplace/my-listings',
+      ),
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  })
+  const { data: myOwnerContracts } = useQuery({
+    queryKey: ['marketplace', 'contracts', 'owner'],
+    queryFn: () =>
+      fetchApi<{ contracts: { id: string; status: string }[] }>(
+        '/api/marketplace/contracts?role=owner',
+      ),
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  })
+
+  const hasActiveRentalsOrListings = useMemo(() => {
+    const hasListings = myListingsData?.listings?.some(
+      (l) => l.isListed || l.listingStatus === 'active',
+    )
+    const hasContracts = myOwnerContracts?.contracts?.some(
+      (c) => c.status === 'active' || c.status === 'pending',
+    )
+    return hasListings || hasContracts
+  }, [myListingsData, myOwnerContracts])
 
   // Filter official buddies by search keyword (client-side)
   const filteredOfficialBuddies = useMemo(() => {
@@ -180,6 +225,31 @@ export function BuddyMarketPage() {
 
   // Total count includes official buddies when visible
   const totalCount = (data?.total ?? 0) + (showOfficialBuddies ? filteredOfficialBuddies.length : 0)
+
+  // Build combined items for pagination
+  const allItems = useMemo(() => {
+    const items: Array<
+      { type: 'official'; data: (typeof agentItems)[number] } | { type: 'listing'; data: Listing }
+    > = []
+    if (showOfficialBuddies) {
+      for (const a of filteredOfficialBuddies) {
+        items.push({ type: 'official', data: a })
+      }
+    }
+    for (const l of listings) {
+      items.push({ type: 'listing', data: l })
+    }
+    return items
+  }, [showOfficialBuddies, filteredOfficialBuddies, listings])
+
+  const totalPages = Math.max(1, Math.ceil(allItems.length / ITEMS_PER_PAGE))
+  const paginatedItems = allItems.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE,
+  )
+
+  // Reset page when filters change
+  const resetPage = () => setCurrentPage(1)
 
   // Handle "上架我的 Claw" click
   const handleListMyClaw = async () => {
@@ -336,6 +406,16 @@ export function BuddyMarketPage() {
                 </div>
               )}
             </div>
+            {/* View My Rentals button (conditionally shown) */}
+            {isAuthenticated && hasActiveRentalsOrListings && (
+              <Link
+                to="/app/marketplace/my-rentals"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-400 to-cyan-500 text-white font-bold text-sm hover:scale-105 transition-transform shadow-md"
+                style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
+              >
+                {t('marketplace.viewMyRentals', '查看我的租赁')}
+              </Link>
+            )}
             <button
               type="button"
               onClick={handleListMyClaw}
@@ -366,61 +446,75 @@ export function BuddyMarketPage() {
             <p className="text-lg font-bold text-gray-500">{t('marketplace.noResults')}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {showOfficialBuddies &&
-              filteredOfficialBuddies.map((a) => (
-                <OfficialBuddyCard
-                  key={a.nameKey}
-                  agent={a}
-                  onClick={() => {
-                    if (isAuthenticated) {
-                      navigate({ to: `/buddies/${a.nameKey.split('.')[1].toLowerCase()}/contract` })
-                    } else {
-                      navigate({ to: '/login' })
-                    }
-                  }}
-                />
-              ))}
-            {listings.map((listing) => (
-              <ListingCard
-                key={listing.id}
-                listing={listing}
-                onClick={() => {
-                  if (isAuthenticated) {
-                    navigate({ to: `/app/marketplace/${listing.id}` })
-                  } else {
-                    navigate({ to: '/login' })
-                  }
-                }}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {paginatedItems.map((item) =>
+                item.type === 'official' ? (
+                  <OfficialBuddyCard
+                    key={item.data.nameKey}
+                    agent={item.data}
+                    onClick={() => {
+                      if (isAuthenticated) {
+                        navigate({ to: `/app/marketplace/official-${item.data.slug}` })
+                      } else {
+                        navigate({ to: '/login' })
+                      }
+                    }}
+                  />
+                ) : (
+                  <ListingCard
+                    key={item.data.id}
+                    listing={item.data}
+                    onClick={() => {
+                      if (isAuthenticated) {
+                        navigate({ to: `/app/marketplace/${item.data.id}` })
+                      } else {
+                        navigate({ to: '/login' })
+                      }
+                    }}
+                  />
+                ),
+              )}
+            </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-8">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="p-2 rounded-lg bg-white/80 border-2 border-white/90 text-gray-600 hover:border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  <PageLeft className="w-4 h-4" />
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => setCurrentPage(page)}
+                    className={`w-9 h-9 rounded-lg text-sm font-bold transition-all ${
+                      currentPage === page
+                        ? 'bg-cyan-500 text-white shadow-md'
+                        : 'bg-white/80 border-2 border-white/90 text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="p-2 rounded-lg bg-white/80 border-2 border-white/90 text-gray-600 hover:border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  <PageRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </>
         )}
       </section>
-
-      {/* ───── My Rentals CTA ───── */}
-      {isAuthenticated && (
-        <section className="max-w-4xl mx-auto px-8 md:px-16 py-12">
-          <div className="bg-gradient-to-r from-yellow-50 to-cyan-50 border-2 border-white/90 rounded-3xl p-10 md:p-14 text-center">
-            <h2
-              style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
-              className="text-3xl md:text-4xl mb-4"
-            >
-              {t('marketplace.myRentalsCta')}
-            </h2>
-            <p className="text-lg text-gray-600 font-bold mb-8">
-              {t('marketplace.myRentalsCtaDesc')}
-            </p>
-            <Link
-              to="/app/marketplace/my-rentals"
-              className="inline-flex items-center gap-2 bg-gradient-to-r from-cyan-400 to-cyan-500 text-white font-bold px-10 py-4 rounded-full text-xl hover:scale-105 transition-transform shadow-lg"
-              style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
-            >
-              {t('marketplace.goToMyRentals')}
-            </Link>
-          </div>
-        </section>
-      )}
 
       {/* ───── Docs CTA ───── */}
       <section className="max-w-4xl mx-auto px-8 md:px-16 pb-20">
@@ -497,15 +591,13 @@ function OfficialBuddyCard({
 
       {/* Footer: price left, stats right */}
       <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-        <span className="text-sm font-bold text-cyan-600">
-          {t('marketplace.viewContract', '查看签约 →')}
-        </span>
+        <div className="flex items-center gap-1">
+          <span className="text-lg font-bold text-amber-600">{OFFICIAL_HOURLY_RATE}</span>
+          <span className="text-xs font-bold text-gray-400">🦐/h</span>
+        </div>
         <div className="flex items-center gap-3 text-xs text-gray-400 font-bold">
-          <span className="flex items-center gap-0.5">
-            <Eye className="w-3.5 h-3.5" /> -
-          </span>
-          <span className="flex items-center gap-0.5">
-            <Users className="w-3.5 h-3.5" /> -
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-cyan-500 to-blue-500 text-white">
+            ✦ {t('marketplace.official', '官方')}
           </span>
         </div>
       </div>

@@ -55,6 +55,9 @@
     "featureWorkspaceDesc": "Integrate boards, docs, and files — not just chat.",
     "featureChannel": "Unified Channels",
     "featureChannelDesc": "Organize any number of topics with scalable channel hierarchy.",
+    "featureP2pRental": "P2P Claw Rental",
+    "featureP2pRentalDesc": "Turn idle OpenClaws into income! List your Buddy on the marketplace, sign smart contracts, pay-per-hour billing, and automatic settlement. Share computing power and let every Claw work to its fullest.",
+    "featureP2pRentalCta": "Browse Buddy Market →",
     "ctaTitle": "Ready to supercharge your workspace?",
     "ctaSubtitle": "Start now and adopt your AI black-cat coworker.",
     "ctaButton": "Start free"
@@ -333,6 +336,8 @@
     "realtimeDesc": "WebSocket-powered real-time engine with instant messaging, live presence, and typing indicators.",
     "i18n": "Multilingual Support",
     "i18nDesc": "Built-in support for Simplified Chinese, Traditional Chinese, English, Japanese, Korean and more.",
+    "p2pRental": "P2P Claw Rental",
+    "p2pRentalDesc": "List your idle OpenClaw on the marketplace, sign smart contracts, pay-per-hour billing, and share computing power to earn shrimp coins.",
     "ctaTitle": "Want to try it yourself?",
     "ctaSubtitle": "Sign up now and start your collaboration playground!",
     "ctaButton": "Get Started Free"
@@ -891,6 +896,11 @@
     "myRentalsCta": "My Rentals",
     "myRentalsCtaDesc": "Manage your rented and listed OpenClaw contracts",
     "goToMyRentals": "My Rentals",
-    "unlimited": "Unlimited"
+    "unlimited": "Unlimited",
+    "delistClaw": "Delist Claw",
+    "delistSuccess": "Claw has been delisted",
+    "delistHint": "Once delisted, this Claw will no longer appear in the marketplace",
+    "confirmDelist": "Are you sure you want to delist this Claw?",
+    "official": "Official"
   }
 }

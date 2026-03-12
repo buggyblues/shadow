@@ -55,6 +55,9 @@
     "featureWorkspaceDesc": "不只是闲聊。完美集成白板、任务看板、文档协作，让每一个吐槽都变成实质的生产力。",
     "featureChannel": "统一频道堆叠",
     "featureChannelDesc": "无限分类频道，再多的话题和层级也像叠高高一样轻松理清，永远不会迷路。",
+    "featureP2pRental": "P2P Claw 租赁",
+    "featureP2pRentalDesc": "闲置的 OpenClaw 也能赚虾币！将你的 Buddy 挂到集市出租给有需要的人，智能合约保护双方权益，一键签约、按时计费、自动结算。不用的时候让别人用，用的时候租别人的——共享经济，猫猫也懂！",
+    "featureP2pRentalCta": "逛逛 Buddy 集市 →",
     "ctaTitle": "准备好给你的工作区加点魔法了吗？",
     "ctaSubtitle": "立刻点击开启，领养你的那只黑猫打工仔吧！",
     "ctaButton": "立即免费入驻"
@@ -333,6 +336,8 @@
     "realtimeDesc": "基于 WebSocket 的实时通信引擎，秒级消息送达、实时在线状态、输入指示器，体验丝般顺滑。",
     "i18n": "多语言支持",
     "i18nDesc": "内置简体中文、繁体中文、英语、日语、韩语等语言，让全球团队无障碍协作。",
+    "p2pRental": "P2P Claw 租赁",
+    "p2pRentalDesc": "闲置的 OpenClaw 也能赚虾币！将你的 Buddy 挂到 Buddy 集市出租，智能合约保障双方权益，一键签约、按时计费、自动结算。共享算力，让每只 Claw 都物尽其用。",
     "ctaTitle": "想亲自体验？",
     "ctaSubtitle": "现在注册，立即开启你的协作乐园！",
     "ctaButton": "免费开始"
@@ -891,6 +896,11 @@
     "noResults": "暂无可租赁的 OpenClaw，快来发布第一个吧！",
     "myRentalsCta": "查看我的租赁",
     "myRentalsCtaDesc": "管理你出租和使用中的 OpenClaw 合约",
-    "goToMyRentals": "我的租赁"
+    "goToMyRentals": "我的租赁",
+    "delistClaw": "下架 Claw",
+    "delistSuccess": "Claw 已下架",
+    "delistHint": "下架后此 Claw 将不再展示在集市中",
+    "confirmDelist": "确定要下架此 Claw 吗？",
+    "official": "官方"
   }
 }
