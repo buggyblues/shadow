@@ -28,7 +28,7 @@ import { useTranslation } from 'react-i18next'
 import { UserAvatar } from '../components/common/avatar'
 import { AvatarEditor } from '../components/common/avatar-editor'
 import { LanguageSwitcher } from '../components/common/language-switcher'
-import { PriceDisplay, ShrimpCoinIcon } from '../components/shop/ui/currency'
+import { PriceDisplay } from '../components/shop/ui/currency'
 import { useAppStatus } from '../hooks/use-app-status'
 import { useUnreadCount } from '../hooks/use-unread-count'
 import { fetchApi } from '../lib/api'
@@ -521,7 +521,6 @@ export function SettingsPage() {
                     <p className="text-sm text-text-muted">@{user.username}</p>
                     <p className="text-xs text-text-muted mt-1">{user.email}</p>
                     <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-bg-tertiary border border-border-subtle">
-                      <ShrimpCoinIcon className="w-4 h-4 text-rose-400" />
                       <span className="text-xs text-text-muted">虾币</span>
                       <PriceDisplay amount={wallet?.balance ?? 0} size={13} className="ml-0.5" />
                     </div>
@@ -1062,6 +1061,7 @@ function TaskCenter({
 }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const { setPendingAction } = useUIStore()
 
   const getActionLabel = (taskKey: string) => {
     switch (taskKey) {
@@ -1154,7 +1154,6 @@ function TaskCenter({
       <div className="bg-bg-secondary rounded-xl border border-border-subtle p-5 mb-6">
         <p className="text-xs text-text-muted uppercase font-bold mb-1">当前虾币</p>
         <div className="flex items-center gap-2">
-          <ShrimpCoinIcon className="w-5 h-5 text-rose-400" />
           <PriceDisplay amount={data?.wallet.balance ?? 0} size={20} />
         </div>
       </div>
@@ -1210,19 +1209,65 @@ function TaskCenter({
                   onClick={() => {
                     switch (task.key) {
                       case 'create_server':
-                      case 'create_channel':
-                      case 'first_message':
+                        setPendingAction('create-server')
                         navigate({ to: '/app/discover' })
                         break
+                      case 'create_channel': {
+                        const servers = queryClient.getQueryData<
+                          Array<{ server: { slug: string | null } }>
+                        >(['servers'])
+                        const firstSlug = servers?.[0]?.server?.slug
+                        if (firstSlug) {
+                          setPendingAction('create-channel')
+                          navigate({
+                            to: '/app/servers/$serverSlug',
+                            params: { serverSlug: firstSlug },
+                          })
+                        } else {
+                          setPendingAction('create-server')
+                          navigate({ to: '/app/discover' })
+                        }
+                        break
+                      }
+                      case 'first_message': {
+                        const srvs = queryClient.getQueryData<
+                          Array<{ server: { slug: string | null } }>
+                        >(['servers'])
+                        const slug = srvs?.[0]?.server?.slug
+                        if (slug) {
+                          navigate({ to: '/app/servers/$serverSlug', params: { serverSlug: slug } })
+                        } else {
+                          navigate({ to: '/app/discover' })
+                        }
+                        break
+                      }
                       case 'create_buddy':
+                        setPendingAction('create-buddy')
+                        onSwitchTab('buddy')
+                        break
                       case 'list_buddy':
                         onSwitchTab('buddy')
                         break
                       case 'rent_buddy':
                         navigate({ to: '/buddies' })
                         break
-                      case 'list_product':
-                        navigate({ to: '/app/discover' })
+                      case 'list_product': {
+                        const srvList = queryClient.getQueryData<
+                          Array<{ server: { slug: string | null } }>
+                        >(['servers'])
+                        const shopSlug = srvList?.[0]?.server?.slug
+                        if (shopSlug) {
+                          navigate({
+                            to: '/app/servers/$serverSlug/shop/admin',
+                            params: { serverSlug: shopSlug },
+                          })
+                        } else {
+                          navigate({ to: '/app/discover' })
+                        }
+                        break
+                      }
+                      case 'invite_signup':
+                        onSwitchTab('invite')
                         break
                       default:
                         break

@@ -8,7 +8,7 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import { Server as SocketIOServer } from 'socket.io'
 import { WebSocket, WebSocketServer } from 'ws'
 import { createApp } from './app'
-import { createAppContainer } from './container'
+import { type AppContainer, createAppContainer } from './container'
 import { db } from './db'
 import { users } from './db/schema'
 import { randomFixedDigits } from './lib/id'
@@ -198,15 +198,54 @@ async function main() {
   const { asValue } = await import('awilix')
   container.register({ io: asValue(io) })
 
+  // Start scheduled jobs
+  startScheduledJobs(container)
+
   // Graceful shutdown
   const gracefulShutdown = () => {
     logger.info('Shutting down gracefully...')
+    stopScheduledJobs()
     io.close()
     process.exit(0)
   }
 
   process.on('SIGTERM', gracefulShutdown)
   process.on('SIGINT', gracefulShutdown)
+}
+
+/* ──────────── Scheduled Jobs ──────────── */
+
+const RENTAL_CHECK_INTERVAL = 5 * 60 * 1000 // 5 minutes
+let rentalTimer: ReturnType<typeof setInterval> | null = null
+
+function startScheduledJobs(container: AppContainer) {
+  const rentalService = container.resolve('rentalService')
+
+  // Periodically terminate expired rental contracts
+  rentalTimer = setInterval(async () => {
+    try {
+      const results = await rentalService.terminateExpiredContracts()
+      const terminated = results.filter((r) => r.success)
+      if (terminated.length > 0) {
+        logger.info({ count: terminated.length }, 'Auto-terminated expired rental contracts')
+      }
+      const failed = results.filter((r) => !r.success)
+      if (failed.length > 0) {
+        logger.warn({ failed }, 'Failed to terminate some expired rental contracts')
+      }
+    } catch (err) {
+      logger.error({ err }, 'Rental expiration check failed')
+    }
+  }, RENTAL_CHECK_INTERVAL)
+
+  logger.info('Scheduled jobs started')
+}
+
+function stopScheduledJobs() {
+  if (rentalTimer) {
+    clearInterval(rentalTimer)
+    rentalTimer = null
+  }
 }
 
 main().catch((error) => {

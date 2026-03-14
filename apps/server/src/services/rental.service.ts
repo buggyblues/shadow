@@ -383,9 +383,11 @@ export class RentalService {
 
     // Credit owner (minus platform fee)
     const ownerPayout = totalCost - platformFee
-    await this.deps.walletService.topUp(
+    await this.deps.walletService.settle(
       contract.ownerId,
       ownerPayout,
+      usage.id,
+      'rental_usage',
       `OpenClaw 出租收入 - 合同 ${contract.contractNo}`,
     )
 
@@ -476,5 +478,47 @@ export class RentalService {
         ? 'Token 消耗费用按实际使用量额外计费'
         : 'Token 费用已包含在租赁费用中',
     }
+  }
+
+  /* ═══════════════ Scheduled Billing ═══════════════ */
+
+  /**
+   * Auto-terminate expired active contracts. Called periodically by scheduler.
+   * Refunds deposit and marks as completed.
+   */
+  async terminateExpiredContracts() {
+    const expired = await this.deps.rentalContractDao.findExpiredActive()
+    const results: Array<{ contractId: string; success: boolean; error?: string }> = []
+
+    for (const contract of expired) {
+      try {
+        // Refund unused deposit to tenant
+        if (contract.depositAmount > 0) {
+          await this.deps.walletService.refund(
+            contract.tenantId,
+            contract.depositAmount,
+            contract.id,
+            'rental_deposit',
+            `退还租赁押金（合同到期）- 合同 ${contract.contractNo}`,
+          )
+        }
+
+        await this.deps.rentalContractDao.update(contract.id, {
+          status: 'completed',
+          terminatedAt: new Date(),
+          terminationReason: '合同到期自动终止',
+        })
+
+        results.push({ contractId: contract.id, success: true })
+      } catch (err) {
+        results.push({
+          contractId: contract.id,
+          success: false,
+          error: err instanceof Error ? err.message : 'Unknown error',
+        })
+      }
+    }
+
+    return results
   }
 }

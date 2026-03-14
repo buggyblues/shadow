@@ -46,6 +46,7 @@ export const walletTxTypeEnum = pgEnum('wallet_tx_type', [
   'reward',
   'transfer',
   'adjustment',
+  'settlement',
 ])
 
 export const currencyEnum = pgEnum('currency_type', ['shrimp_coin'])

@@ -93,4 +93,29 @@ export class WalletService {
     })
     return newBalance
   }
+
+  /**
+   * Settle (payout) to seller/owner wallet after order completion or rental usage.
+   */
+  async settle(
+    userId: string,
+    amount: number,
+    referenceId: string,
+    referenceType: string,
+    note: string,
+  ) {
+    const wallet = await this.deps.walletDao.getOrCreate(userId)
+    const newBalance = wallet.balance + amount
+    await this.deps.walletDao.credit(wallet.id, amount)
+    await this.deps.walletDao.addTransaction({
+      walletId: wallet.id,
+      type: 'settlement',
+      amount,
+      balanceAfter: newBalance,
+      referenceId,
+      referenceType,
+      note,
+    })
+    return newBalance
+  }
 }

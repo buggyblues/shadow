@@ -14,6 +14,8 @@ interface UIState {
   filePreviewOpen: boolean
   /** Theme mode: dark, light, or system */
   theme: ThemeMode
+  /** Pending action for cross-component task triggers (e.g. 'create-server', 'create-buddy') */
+  pendingAction: string | null
 
   setMobileView: (view: MobileView) => void
   openMobileServerSidebar: () => void
@@ -22,6 +24,7 @@ interface UIState {
   closeMobileMemberList: () => void
   setFilePreviewOpen: (open: boolean) => void
   setTheme: (theme: ThemeMode) => void
+  setPendingAction: (action: string | null) => void
 }
 
 /** Apply theme class to document root and persist to localStorage */
@@ -46,6 +49,7 @@ export const useUIStore = create<UIState>((set) => ({
   mobileMemberListOpen: false,
   filePreviewOpen: false,
   theme: savedTheme,
+  pendingAction: null,
 
   setMobileView: (view) => set({ mobileView: view, mobileMemberListOpen: false }),
   openMobileServerSidebar: () => set({ mobileServerSidebarOpen: true }),
@@ -57,6 +61,7 @@ export const useUIStore = create<UIState>((set) => ({
     applyTheme(theme)
     set({ theme })
   },
+  setPendingAction: (action) => set({ pendingAction: action }),
 }))
 
 // Apply theme on load

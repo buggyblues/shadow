@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import { agents, users } from '../db/schema'
 
@@ -47,9 +47,19 @@ export class AgentDao {
 
   async updateHeartbeat(id: string) {
     const now = new Date()
+    // Accumulate online seconds: if lastHeartbeat is recent (<= 120s), add the delta
     const result = await this.db
       .update(agents)
-      .set({ lastHeartbeat: now, status: 'running', updatedAt: now })
+      .set({
+        lastHeartbeat: now,
+        status: 'running',
+        updatedAt: now,
+        totalOnlineSeconds: sql`${agents.totalOnlineSeconds} + CASE
+          WHEN ${agents.lastHeartbeat} IS NOT NULL
+            AND EXTRACT(EPOCH FROM (${now}::timestamptz - ${agents.lastHeartbeat})) <= 120
+          THEN FLOOR(EXTRACT(EPOCH FROM (${now}::timestamptz - ${agents.lastHeartbeat})))::int
+          ELSE 0 END`,
+      })
       .where(eq(agents.id, id))
       .returning()
     return result[0] ?? null

@@ -1007,10 +1007,10 @@ function DashboardContent() {
                             }`}
                           >
                             {agent.status === 'running'
-                              ? '运行中'
+                              ? '在线'
                               : agent.status === 'error'
                                 ? '异常'
-                                : '已停止'}
+                                : '离线'}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-zinc-500">

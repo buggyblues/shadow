@@ -98,6 +98,16 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
   const [newType, setNewType] = useState<'text' | 'voice' | 'announcement'>('text')
   const [newIsPrivate, setNewIsPrivate] = useState(false)
   const [editName, setEditName] = useState('')
+
+  // Listen for 'create-channel' pending action from task center
+  const pendingAction = useUIStore((s) => s.pendingAction)
+  const setPendingAction = useUIStore((s) => s.setPendingAction)
+  useEffect(() => {
+    if (pendingAction === 'create-channel') {
+      setShowCreate(true)
+      setPendingAction(null)
+    }
+  }, [pendingAction, setPendingAction])
   const [editDescription, setEditDescription] = useState('')
   const [editSlug, setEditSlug] = useState('')
   const [editIsPublic, setEditIsPublic] = useState(false)

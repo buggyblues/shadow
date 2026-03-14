@@ -1,4 +1,4 @@
-import { jsonb, pgEnum, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import { integer, jsonb, pgEnum, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 import { users } from './users'
 
 export const agentStatusEnum = pgEnum('agent_status', ['running', 'stopped', 'error'])
@@ -16,6 +16,7 @@ export const agents = pgTable('agents', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   lastHeartbeat: timestamp('last_heartbeat', { withTimezone: true }),
+  totalOnlineSeconds: integer('total_online_seconds').default(0).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })

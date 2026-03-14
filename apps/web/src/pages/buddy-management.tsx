@@ -22,6 +22,7 @@ import { AvatarEditor } from '../components/common/avatar-editor'
 import { useAppStatus } from '../hooks/use-app-status'
 import { useUnreadCount } from '../hooks/use-unread-count'
 import { fetchApi } from '../lib/api'
+import { useUIStore } from '../stores/ui.store'
 
 /* ── Types ───────────────────────────────────────────── */
 
@@ -34,6 +35,7 @@ interface Agent {
   status: 'running' | 'stopped' | 'error'
   containerId: string | null
   lastHeartbeat: string | null
+  totalOnlineSeconds: number
   createdAt: string
   updatedAt: string
   isListed?: boolean
@@ -110,6 +112,29 @@ function AgentListingBadge({ agent }: { agent: Agent }) {
     }
   }
   return null
+}
+
+/** Returns the status dot color class for an agent based on heartbeat-based online detection */
+function getAgentOnlineDotClass(agent: Agent): string {
+  if (agent.status === 'error') return 'bg-[#da373c]'
+  if (agent.status === 'stopped') return 'bg-[#80848e]'
+  // running — check heartbeat
+  if (agent.lastHeartbeat && Date.now() - new Date(agent.lastHeartbeat).getTime() < 90000) {
+    return 'bg-green-500'
+  }
+  return 'bg-yellow-500' // running but heartbeat stale
+}
+
+/** Formats total online seconds into a human-readable duration string */
+function formatOnlineDuration(totalSeconds: number): string {
+  if (totalSeconds < 60) return `${totalSeconds}秒`
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  if (hours === 0) return `${minutes}分钟`
+  if (hours < 24) return `${hours}小时${minutes > 0 ? `${minutes}分钟` : ''}`
+  const days = Math.floor(hours / 24)
+  const remainHours = hours % 24
+  return `${days}天${remainHours > 0 ? `${remainHours}小时` : ''}`
 }
 
 /* ── Agent Management Page ──────────────────────────── */
@@ -291,15 +316,7 @@ export function BuddyManagementPage() {
                 {agent.botUser?.displayName ?? agent.botUser?.username ?? 'Agent'}
               </span>
               <AgentListingBadge agent={agent} />
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  agent.status === 'running'
-                    ? 'bg-[#23a559]'
-                    : agent.status === 'error'
-                      ? 'bg-[#da373c]'
-                      : 'bg-[#80848e]'
-                }`}
-              />
+              <span className={`w-2 h-2 rounded-full ${getAgentOnlineDotClass(agent)}`} />
             </button>
           ))}
         </div>
@@ -346,15 +363,7 @@ export function BuddyManagementPage() {
                 {agent.botUser?.displayName ?? agent.botUser?.username ?? 'Agent'}
               </span>
               <AgentListingBadge agent={agent} />
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  agent.status === 'running'
-                    ? 'bg-[#23a559]'
-                    : agent.status === 'error'
-                      ? 'bg-[#da373c]'
-                      : 'bg-[#80848e]'
-                }`}
-              />
+              <span className={`w-2 h-2 rounded-full ${getAgentOnlineDotClass(agent)}`} />
             </button>
           ))}
 
@@ -617,16 +626,39 @@ function AgentDetail({
             {t('agentMgmt.status')}
           </label>
           <div className="flex items-center gap-2">
-            <div className={`flex items-center gap-2 ${statusColor(agent.status)}`}>
-              {agent.status === 'running' ? (
-                <CheckCircle size={14} />
-              ) : agent.status === 'error' ? (
-                <XCircle size={14} />
-              ) : (
-                <span className="w-3.5 h-3.5 rounded-full border-2 border-current" />
-              )}
-              <span className="text-sm font-medium">{statusLabel(agent.status)}</span>
-            </div>
+            {(() => {
+              if (agent.status === 'error') {
+                return (
+                  <div className="flex items-center gap-2 text-red-400">
+                    <XCircle size={14} />
+                    <span className="text-sm font-medium">{t('agentMgmt.statusError')}</span>
+                  </div>
+                )
+              }
+              if (agent.status === 'stopped') {
+                return (
+                  <div className="flex items-center gap-2 text-zinc-400">
+                    <span className="w-3 h-3 rounded-full bg-gray-500" />
+                    <span className="text-sm font-medium">{t('agentMgmt.statusStopped')}</span>
+                  </div>
+                )
+              }
+              // running — use heartbeat to determine online/offline
+              const isOnline =
+                agent.lastHeartbeat && Date.now() - new Date(agent.lastHeartbeat).getTime() < 90000
+              return (
+                <div
+                  className={`flex items-center gap-2 ${isOnline ? 'text-green-400' : 'text-yellow-400'}`}
+                >
+                  <span
+                    className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-yellow-500'}`}
+                  />
+                  <span className="text-sm font-medium">
+                    {isOnline ? t('member.online') : '连接中'}
+                  </span>
+                </div>
+              )
+            })()}
           </div>
         </div>
         <div>
@@ -671,6 +703,14 @@ function AgentDetail({
             {t('agentMgmt.createdAt')}
           </label>
           <p className="text-sm text-text-primary">{new Date(agent.createdAt).toLocaleString()}</p>
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold uppercase text-text-muted mb-1">
+            累计在线时长
+          </label>
+          <p className="text-sm text-text-primary">
+            {formatOnlineDuration(agent.totalOnlineSeconds ?? 0)}
+          </p>
         </div>
         <div>
           <label className="block text-[10px] font-bold uppercase text-text-muted mb-1">
@@ -886,7 +926,7 @@ function OpenClawSetupGuide({
   const token = (agent.config?.lastToken as string | undefined) ?? generatedToken ?? ''
   const hasToken = !!token.trim()
   const serverUrl = window.location.origin
-  const [activeTab, setActiveTab] = useState<'manual' | 'chat'>('manual')
+  const [activeTab, setActiveTab] = useState<'manual' | 'chat'>('chat')
 
   // Bash one-liner for manual setup
   const bashCommand = `openclaw plugins install @shadowob/openclaw && openclaw config set channels.shadowob.token "${token || '<TOKEN>'}" && openclaw config set channels.shadowob.serverUrl "${serverUrl}" && openclaw gateway restart`
@@ -1375,6 +1415,16 @@ export function BuddyManagementContent() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [message, setMessage] = useState<{ text: string; success: boolean } | null>(null)
 
+  // Listen for 'create-buddy' pending action from task center
+  const pendingAction = useUIStore((s) => s.pendingAction)
+  const setPendingAction = useUIStore((s) => s.setPendingAction)
+  useEffect(() => {
+    if (pendingAction === 'create-buddy') {
+      setShowCreate(true)
+      setPendingAction(null)
+    }
+  }, [pendingAction, setPendingAction])
+
   const { data: agents = [], isLoading } = useQuery({
     queryKey: ['agents'],
     queryFn: () => fetchApi<Agent[]>('/api/agents'),
@@ -1510,15 +1560,14 @@ export function BuddyManagementContent() {
                   size="sm"
                 />
                 <span className="truncate flex-1">{name}</span>
+                {(agent.totalOnlineSeconds ?? 0) > 0 && (
+                  <span className="text-[10px] text-text-muted shrink-0">
+                    {formatOnlineDuration(agent.totalOnlineSeconds)}
+                  </span>
+                )}
                 <AgentListingBadge agent={agent} />
                 <span
-                  className={`w-2 h-2 rounded-full shrink-0 ${
-                    agent.status === 'running'
-                      ? 'bg-[#23a559]'
-                      : agent.status === 'error'
-                        ? 'bg-[#da373c]'
-                        : 'bg-[#80848e]'
-                  }`}
+                  className={`w-2 h-2 rounded-full shrink-0 ${getAgentOnlineDotClass(agent)}`}
                 />
               </button>
             )

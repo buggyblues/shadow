@@ -51,7 +51,7 @@ export class WalletDao {
 
   async addTransaction(data: {
     walletId: string
-    type: 'topup' | 'purchase' | 'refund' | 'reward' | 'transfer' | 'adjustment'
+    type: 'topup' | 'purchase' | 'refund' | 'reward' | 'transfer' | 'adjustment' | 'settlement'
     amount: number
     balanceAfter: number
     referenceId?: string

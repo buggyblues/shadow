@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Check, Compass, Copy, Info, LogOut, Plus, UserPlus } from 'lucide-react'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
@@ -46,6 +46,16 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   const scopeReadCooldownRef = useRef<Map<string, number>>(new Map())
   const scopeReadInFlightRef = useRef<Set<string>>(new Set())
   const { user } = useAuthStore()
+
+  // Listen for 'create-server' pending action from task center
+  const pendingAction = useUIStore((s) => s.pendingAction)
+  const setPendingAction = useUIStore((s) => s.setPendingAction)
+  useEffect(() => {
+    if (pendingAction === 'create-server') {
+      setShowCreate(true)
+      setPendingAction(null)
+    }
+  }, [pendingAction, setPendingAction])
 
   const { data: servers = [] } = useQuery({
     queryKey: ['servers'],

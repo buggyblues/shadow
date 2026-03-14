@@ -120,6 +120,20 @@
       "when": 1773900000000,
       "tag": "0016_add_task_center_and_rewards",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1773986400000,
+      "tag": "0017_add_agent_online_duration",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1774072800000,
+      "tag": "0018_add_settlement_tx_type",
+      "breakpoints": true
     }
   ]
 }

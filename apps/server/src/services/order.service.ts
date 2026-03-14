@@ -1,10 +1,14 @@
 import { nanoid } from 'nanoid'
 import type { OrderDao } from '../dao/order.dao'
+import type { ServerDao } from '../dao/server.dao'
 import type { CartService } from './cart.service'
 import type { EntitlementService } from './entitlement.service'
 import type { ProductService } from './product.service'
 import type { ShopService } from './shop.service'
 import type { WalletService } from './wallet.service'
+
+/** Platform fee rate in basis points (500 = 5%) */
+const PLATFORM_FEE_BPS = 500
 
 const ORDER_STATE_TRANSITIONS: Record<
   string,
@@ -28,6 +32,7 @@ export class OrderService {
   constructor(
     private deps: {
       orderDao: OrderDao
+      serverDao: ServerDao
       productService: ProductService
       walletService: WalletService
       entitlementService: EntitlementService
@@ -234,9 +239,52 @@ export class OrderService {
     if (status === 'shipped') timestamps.shippedAt = new Date()
     if (status === 'completed') timestamps.completedAt = new Date()
     if (status === 'cancelled') timestamps.cancelledAt = new Date()
-    return this.deps.orderDao.update(orderId, { status, ...extra, ...timestamps } as Parameters<
-      OrderDao['update']
-    >[1])
+
+    const result = await this.deps.orderDao.update(orderId, {
+      status,
+      ...extra,
+      ...timestamps,
+    } as Parameters<OrderDao['update']>[1])
+
+    // Settle: credit the shop owner (server owner) on order completion
+    if (status === 'completed') {
+      try {
+        await this.settleOrder(currentOrder)
+      } catch {
+        // Settlement failure should not block order completion
+      }
+    }
+
+    return result
+  }
+
+  /**
+   * Credit the shop owner after order completion, minus platform fee (5%).
+   */
+  private async settleOrder(order: {
+    id: string
+    shopId: string
+    totalAmount: number
+    orderNo: string
+  }) {
+    const shop = await this.deps.shopService.getShopById(order.shopId)
+    if (!shop) return
+
+    const server = await this.deps.serverDao.findById(shop.serverId)
+    if (!server) return
+
+    const platformFee = Math.ceil((order.totalAmount * PLATFORM_FEE_BPS) / 10000)
+    const sellerPayout = order.totalAmount - platformFee
+
+    if (sellerPayout > 0) {
+      await this.deps.walletService.settle(
+        server.ownerId,
+        sellerPayout,
+        order.id,
+        'order',
+        `订单结算 - ${order.orderNo}（扣除${platformFee}虾币手续费）`,
+      )
+    }
   }
 
   async cancelOrder(orderId: string, userId: string) {

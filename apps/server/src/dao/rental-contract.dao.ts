@@ -1,4 +1,4 @@
-import { and, desc, eq, or, sql } from 'drizzle-orm'
+import { and, desc, eq, isNotNull, lt, or, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import { rentalContracts, rentalUsageRecords, rentalViolations } from '../db/schema'
 
@@ -104,6 +104,20 @@ export class RentalContractDao {
       .where(and(eq(rentalContracts.listingId, listingId), eq(rentalContracts.status, 'active')))
       .limit(1)
     return r[0] ?? null
+  }
+
+  /** Find active contracts that have passed their expiration time */
+  async findExpiredActive() {
+    return this.db
+      .select()
+      .from(rentalContracts)
+      .where(
+        and(
+          eq(rentalContracts.status, 'active'),
+          isNotNull(rentalContracts.expiresAt),
+          lt(rentalContracts.expiresAt, new Date()),
+        ),
+      )
   }
 
   async create(data: {
