@@ -13,6 +13,7 @@ import {
 import { useEffect, useState } from 'react'
 import { fetchApi } from '../../lib/api'
 import { showToast } from '../../lib/toast'
+import { useShopStore } from '../../stores/shop.store'
 import { PriceDisplay } from './ui/currency'
 
 interface OrderItem {
@@ -112,8 +113,9 @@ interface ShopOrdersProps {
 
 export function ShopOrders({ serverId }: ShopOrdersProps) {
   const queryClient = useQueryClient()
+  const lastOrderId = useShopStore((s) => s.lastOrderId)
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
-  const [expandedOrder, setExpandedOrder] = useState<string | null>(null)
+  const [expandedOrder, setExpandedOrder] = useState<string | null>(lastOrderId)
   const [reviewingOrder, setReviewingOrder] = useState<string | null>(null)
   const [reviewRating, setReviewRating] = useState(5)
   const [reviewContent, setReviewContent] = useState('')
@@ -121,6 +123,12 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
   const [reviewAnonymous, setReviewAnonymous] = useState(false)
   const [orderReviews, setOrderReviews] = useState<Record<string, OrderReview[]>>({})
 
+  // Clear lastOrderId after consuming it
+  useEffect(() => {
+    if (lastOrderId) {
+      useShopStore.setState({ lastOrderId: null })
+    }
+  }, [lastOrderId])
   const { data: orders = [] } = useQuery({
     queryKey: ['shop-orders', serverId, statusFilter],
     queryFn: () =>

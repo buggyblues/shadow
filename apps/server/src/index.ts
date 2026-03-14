@@ -221,7 +221,7 @@ let rentalTimer: ReturnType<typeof setInterval> | null = null
 function startScheduledJobs(container: AppContainer) {
   const rentalService = container.resolve('rentalService')
 
-  // Periodically terminate expired rental contracts
+  // Periodically terminate expired rental contracts and bill active ones
   rentalTimer = setInterval(async () => {
     try {
       const results = await rentalService.terminateExpiredContracts()
@@ -235,6 +235,24 @@ function startScheduledJobs(container: AppContainer) {
       }
     } catch (err) {
       logger.error({ err }, 'Rental expiration check failed')
+    }
+
+    // Auto-bill active contracts based on agent online time
+    try {
+      const billingResults = await rentalService.billActiveContracts()
+      const billed = billingResults.filter((r) => r.success && r.billed > 0)
+      if (billed.length > 0) {
+        logger.info(
+          { count: billed.length, total: billed.reduce((s, r) => s + r.billed, 0) },
+          'Auto-billed active rental contracts',
+        )
+      }
+      const billingFailed = billingResults.filter((r) => !r.success)
+      if (billingFailed.length > 0) {
+        logger.warn({ billingFailed }, 'Failed to auto-bill some rental contracts')
+      }
+    } catch (err) {
+      logger.error({ err }, 'Rental auto-billing failed')
     }
   }, RENTAL_CHECK_INTERVAL)
 

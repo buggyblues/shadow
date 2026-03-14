@@ -1,4 +1,5 @@
 import { nanoid } from 'nanoid'
+import type { AgentDao } from '../dao/agent.dao'
 import type { ClawListingDao } from '../dao/claw-listing.dao'
 import type {
   RentalContractDao,
@@ -52,6 +53,7 @@ export class RentalService {
       rentalUsageDao: RentalUsageDao
       rentalViolationDao: RentalViolationDao
       walletService: WalletService
+      agentDao: AgentDao
     },
   ) {}
 
@@ -263,8 +265,18 @@ export class RentalService {
       )
     }
 
+    // Initialize lastBilledOnlineSeconds with agent's current totalOnlineSeconds
+    let initialOnlineSeconds = 0
+    if (listing.agentId) {
+      const agent = await this.deps.agentDao.findById(listing.agentId)
+      if (agent) initialOnlineSeconds = agent.totalOnlineSeconds ?? 0
+    }
+
     // Activate the contract
-    await this.deps.rentalContractDao.update(contract.id, { status: 'active' })
+    await this.deps.rentalContractDao.update(contract.id, {
+      status: 'active',
+      lastBilledOnlineSeconds: initialOnlineSeconds,
+    })
 
     // Increment rental count
     await this.deps.clawListingDao.incrementRentalCount(listing.id)
@@ -513,6 +525,114 @@ export class RentalService {
       } catch (err) {
         results.push({
           contractId: contract.id,
+          success: false,
+          error: err instanceof Error ? err.message : 'Unknown error',
+        })
+      }
+    }
+
+    return results
+  }
+
+  /**
+   * Auto-bill active contracts based on agent online time.
+   * Compares agent's totalOnlineSeconds with contract's lastBilledOnlineSeconds
+   * to compute incremental billable seconds and charges the tenant.
+   */
+  async billActiveContracts() {
+    const contracts = await this.deps.rentalContractDao.findAllActive()
+    const results: Array<{ contractId: string; billed: number; success: boolean; error?: string }> =
+      []
+
+    for (const contract of contracts) {
+      try {
+        // Get the listing to find the agentId
+        const listing = await this.deps.clawListingDao.findById(contract.listingId)
+        if (!listing?.agentId) {
+          results.push({ contractId: contract.id, billed: 0, success: true })
+          continue
+        }
+
+        // Get agent to check online time
+        const agent = await this.deps.agentDao.findById(listing.agentId)
+        if (!agent) {
+          results.push({ contractId: contract.id, billed: 0, success: true })
+          continue
+        }
+
+        const currentOnlineSeconds = agent.totalOnlineSeconds ?? 0
+        const lastBilled = contract.lastBilledOnlineSeconds ?? 0
+        const billableSeconds = currentOnlineSeconds - lastBilled
+
+        // Only bill if at least 60 seconds of new online time
+        if (billableSeconds < 60) {
+          results.push({ contractId: contract.id, billed: 0, success: true })
+          continue
+        }
+
+        const billableMinutes = Math.floor(billableSeconds / 60)
+        const durationHours = billableMinutes / 60
+
+        // Calculate cost (same formula as recordUsage, without token cost)
+        const rentalCost = Math.ceil(contract.hourlyRate * durationHours)
+        const electricityCost = Math.ceil(durationHours * PLATFORM_ELECTRICITY_RATE)
+        const subtotal = rentalCost + electricityCost
+        const platformFee = Math.ceil((subtotal * contract.platformFeeRate) / 10000)
+        const totalCost = subtotal + platformFee
+
+        if (totalCost <= 0) {
+          results.push({ contractId: contract.id, billed: 0, success: true })
+          continue
+        }
+
+        const now = new Date()
+
+        // Create usage record
+        const usage = await this.deps.rentalUsageDao.create({
+          contractId: contract.id,
+          startedAt: new Date(now.getTime() - billableMinutes * 60 * 1000),
+          endedAt: now,
+          durationMinutes: billableMinutes,
+          tokensConsumed: 0,
+          tokenCost: 0,
+          electricityCost,
+          rentalCost,
+          platformFee,
+          totalCost,
+        })
+
+        // Debit tenant
+        await this.deps.walletService.debit(
+          contract.tenantId,
+          totalCost,
+          contract.id,
+          'rental_usage',
+          `OpenClaw 使用费（自动结算）- 合同 ${contract.contractNo}`,
+        )
+
+        // Credit owner (minus platform fee)
+        const ownerPayout = totalCost - platformFee
+        if (ownerPayout > 0 && usage) {
+          await this.deps.walletService.settle(
+            contract.ownerId,
+            ownerPayout,
+            usage.id,
+            'rental_usage',
+            `OpenClaw 出租收入（自动结算）- 合同 ${contract.contractNo}`,
+          )
+        }
+
+        // Update running total and last billed snapshot
+        await this.deps.rentalContractDao.addCost(contract.id, totalCost)
+        await this.deps.rentalContractDao.update(contract.id, {
+          lastBilledOnlineSeconds: currentOnlineSeconds,
+        })
+
+        results.push({ contractId: contract.id, billed: totalCost, success: true })
+      } catch (err) {
+        results.push({
+          contractId: contract.id,
+          billed: 0,
           success: false,
           error: err instanceof Error ? err.message : 'Unknown error',
         })

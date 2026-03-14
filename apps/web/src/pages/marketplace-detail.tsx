@@ -73,43 +73,6 @@ const OS_INFO: Record<string, string> = {
   linux: 'Linux',
 }
 
-/* ──────────── Official Buddy Data ──────────── */
-
-const OFFICIAL_BUDDY_RATE = 5
-
-const OFFICIAL_BUDDIES: Record<string, { nameKey: string; descKey: string; tagKeys: string[] }> = {
-  codingcat: {
-    nameKey: 'agents.codingCat',
-    descKey: 'agents.codingCatDesc',
-    tagKeys: ['agents.tagCodeGen', 'agents.tagCodeReview', 'agents.tagDebug'],
-  },
-  documeow: {
-    nameKey: 'agents.docuMeow',
-    descKey: 'agents.docuMeowDesc',
-    tagKeys: ['agents.tagDocGen', 'agents.tagSummary', 'agents.tagApiDoc'],
-  },
-  designcat: {
-    nameKey: 'agents.designCat',
-    descKey: 'agents.designCatDesc',
-    tagKeys: ['agents.tagUiDesign', 'agents.tagColor', 'agents.tagComponent'],
-  },
-  detectivecat: {
-    nameKey: 'agents.detectiveCat',
-    descKey: 'agents.detectiveCatDesc',
-    tagKeys: ['agents.tagDebug', 'agents.tagLogAnalysis', 'agents.tagSearch'],
-  },
-  opscat: {
-    nameKey: 'agents.opsCat',
-    descKey: 'agents.opsCatDesc',
-    tagKeys: ['agents.tagDevOps', 'agents.tagMonitor', 'agents.tagDeploy'],
-  },
-  customagent: {
-    nameKey: 'agents.customAgent',
-    descKey: 'agents.customAgentDesc',
-    tagKeys: ['agents.tagCustom', 'agents.tagMcp', 'agents.tagApi'],
-  },
-}
-
 export function MarketplaceDetailPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -122,55 +85,21 @@ export function MarketplaceDetailPage() {
   const [showContract, setShowContract] = useState(false)
   const [signed, setSigned] = useState(false)
 
-  // Detect official buddy
-  const isOfficial = listingId?.startsWith('official-')
-  const officialSlug = isOfficial ? listingId.slice('official-'.length) : null
-  const officialBuddy = officialSlug ? OFFICIAL_BUDDIES[officialSlug] : null
-
-  const officialListing: Listing | null = officialBuddy
-    ? {
-        id: listingId,
-        ownerId: 'system',
-        title: t(officialBuddy.nameKey),
-        description: t(officialBuddy.descKey),
-        skills: officialBuddy.tagKeys.map((k) => t(k)),
-        guidelines: null,
-        deviceTier: 'high_end',
-        osType: 'linux',
-        deviceInfo: { model: 'Shadow Cloud', cpu: 'Cloud vCPU', ram: '16GB', storage: '256GB SSD' },
-        softwareTools: [],
-        hourlyRate: OFFICIAL_BUDDY_RATE,
-        dailyRate: OFFICIAL_BUDDY_RATE * 24,
-        monthlyRate: OFFICIAL_BUDDY_RATE * 720,
-        premiumMarkup: 0,
-        depositAmount: 0,
-        tokenFeePassthrough: false,
-        viewCount: 0,
-        rentalCount: 0,
-        tags: [],
-        availableFrom: null,
-        availableUntil: null,
-        createdAt: new Date().toISOString(),
-      }
-    : null
-
-  // Fetch listing detail (skip for official buddies)
-  const { data: apiListing, isLoading } = useQuery({
+  // Fetch listing detail
+  const { data: listing, isLoading } = useQuery({
     queryKey: ['marketplace', 'listing', listingId],
     queryFn: () => fetchApi<Listing>(`/api/marketplace/listings/${listingId}`),
-    enabled: !!listingId && !isOfficial,
+    enabled: !!listingId,
   })
 
-  const listing = isOfficial ? officialListing : apiListing
-
-  // Fetch cost estimate (skip for official buddies)
+  // Fetch cost estimate
   const { data: estimate } = useQuery({
     queryKey: ['marketplace', 'estimate', listingId, durationHours],
     queryFn: () =>
       fetchApi<CostEstimate>(
         `/api/marketplace/listings/${listingId}/estimate?hours=${durationHours}`,
       ),
-    enabled: !!listingId && !isOfficial && durationHours > 0,
+    enabled: !!listingId && durationHours > 0,
   })
 
   // Sign contract mutation
@@ -224,7 +153,7 @@ export function MarketplaceDetailPage() {
     [signed],
   )
 
-  if ((!isOfficial && isLoading) || !listing) {
+  if (isLoading || !listing) {
     return (
       <div className="min-h-screen bg-[#f2f7fc] flex items-center justify-center">
         <div className="animate-pulse text-gray-400 text-lg font-bold">
@@ -512,13 +441,7 @@ export function MarketplaceDetailPage() {
                 <>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (isOfficial && officialSlug) {
-                        navigate({ to: `/buddies/${officialSlug}/contract` })
-                      } else {
-                        setShowContract(true)
-                      }
-                    }}
+                    onClick={() => setShowContract(true)}
                     className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-gray-900 font-bold text-base hover:from-amber-500 hover:to-amber-600 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
                     style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
                   >

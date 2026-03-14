@@ -34,6 +34,7 @@ interface Member {
 interface BuddyAgent {
   id: string
   ownerId: string
+  totalOnlineSeconds?: number
   config?: Record<string, unknown>
   owner?: {
     id: string
@@ -74,6 +75,7 @@ export function MemberList() {
     member: Member
     ownerName?: string
     description?: string
+    totalOnlineSeconds?: number
     anchorRect: DOMRect
   } | null>(null)
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -184,7 +186,7 @@ export function MemberList() {
     (
       member: Member,
       anchorEl: HTMLElement,
-      buddyMeta?: { ownerName?: string; description?: string },
+      buddyMeta?: { ownerName?: string; description?: string; totalOnlineSeconds?: number },
     ) => {
       if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
       hoverTimeoutRef.current = setTimeout(() => {
@@ -193,6 +195,7 @@ export function MemberList() {
           member,
           ownerName: buddyMeta?.ownerName,
           description: buddyMeta?.description,
+          totalOnlineSeconds: buddyMeta?.totalOnlineSeconds,
           anchorRect: anchorEl.getBoundingClientRect(),
         })
       }, 400)
@@ -240,7 +243,10 @@ export function MemberList() {
         </h4>
         {(() => {
           const botOwnerByUserId = new Map<string, string>()
-          const buddyMetaByUserId = new Map<string, { ownerName?: string; description?: string }>()
+          const buddyMetaByUserId = new Map<
+            string,
+            { ownerName?: string; description?: string; totalOnlineSeconds?: number }
+          >()
           for (const a of buddyAgents) {
             const botUserId = a.botUser?.id
             if (botUserId) botOwnerByUserId.set(botUserId, a.ownerId)
@@ -248,7 +254,11 @@ export function MemberList() {
               const ownerName = a.owner?.displayName ?? a.owner?.username ?? undefined
               const description =
                 typeof a.config?.description === 'string' ? a.config.description : undefined
-              buddyMetaByUserId.set(botUserId, { ownerName, description })
+              buddyMetaByUserId.set(botUserId, {
+                ownerName,
+                description,
+                totalOnlineSeconds: a.totalOnlineSeconds,
+              })
             }
           }
 
@@ -525,6 +535,12 @@ export function MemberList() {
                     })()
                   : undefined
               }
+              totalOnlineSeconds={
+                profileMember.user.isBot
+                  ? buddyAgents.find((a) => a.botUser?.id === profileMember.user?.id)
+                      ?.totalOnlineSeconds
+                  : undefined
+              }
             />
           </div>
         </div>
@@ -550,6 +566,7 @@ export function MemberList() {
               role={hoveredCard.member.role}
               ownerName={hoveredCard.ownerName}
               description={hoveredCard.description}
+              totalOnlineSeconds={hoveredCard.totalOnlineSeconds}
             />
           </div>,
           document.body,

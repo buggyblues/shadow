@@ -276,7 +276,13 @@ export function ShopPage({ serverId, isAdmin, onClose }: ShopPageProps) {
       {/* Overlays */}
       {overlay === 'cart' && (
         <OverlayContainer onClose={() => setOverlay(null)} title="购物车">
-          <ShopCart serverId={serverId} onCheckout={() => setOverlay('orders')} />
+          <ShopCart
+            serverId={serverId}
+            onCheckout={(orderId) => {
+              setOverlay('orders')
+              useShopStore.setState({ lastOrderId: orderId })
+            }}
+          />
         </OverlayContainer>
       )}
 

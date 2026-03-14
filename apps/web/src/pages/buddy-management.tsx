@@ -122,7 +122,7 @@ function getAgentOnlineDotClass(agent: Agent): string {
   if (agent.lastHeartbeat && Date.now() - new Date(agent.lastHeartbeat).getTime() < 90000) {
     return 'bg-green-500'
   }
-  return 'bg-yellow-500' // running but heartbeat stale
+  return 'bg-[#80848e]' // running but heartbeat stale → show as offline
 }
 
 /** Formats total online seconds into a human-readable duration string */
@@ -648,13 +648,13 @@ function AgentDetail({
                 agent.lastHeartbeat && Date.now() - new Date(agent.lastHeartbeat).getTime() < 90000
               return (
                 <div
-                  className={`flex items-center gap-2 ${isOnline ? 'text-green-400' : 'text-yellow-400'}`}
+                  className={`flex items-center gap-2 ${isOnline ? 'text-green-400' : 'text-zinc-400'}`}
                 >
                   <span
-                    className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-yellow-500'}`}
+                    className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-[#80848e]'}`}
                   />
                   <span className="text-sm font-medium">
-                    {isOnline ? t('member.online') : '连接中'}
+                    {isOnline ? t('member.online') : t('member.offline')}
                   </span>
                 </div>
               )

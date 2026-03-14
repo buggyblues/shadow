@@ -4,20 +4,16 @@ import {
   Apple,
   ArrowUpDown,
   ChevronDown,
-  Code,
   Eye,
-  FileText,
   Laptop,
   Loader2,
   Monitor,
   ChevronLeft as PageLeft,
   ChevronRight as PageRight,
-  Palette,
   Plus,
   Search,
   SlidersHorizontal,
   Users,
-  Wrench,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -27,62 +23,6 @@ import { fetchApi } from '../lib/api'
 import { useAuthStore } from '../stores/auth.store'
 import { useMarketplaceStore } from '../stores/marketplace.store'
 import { PublicFooter, PublicNav } from './home'
-
-/* ──────────── Official Buddy Data ──────────── */
-
-/** Official claw hourly rate (in 虾币) */
-const OFFICIAL_HOURLY_RATE = 5
-
-const agentItems = [
-  {
-    slug: 'codingcat',
-    nameKey: 'agents.codingCat',
-    descKey: 'agents.codingCatDesc',
-    icon: Code,
-    color: 'from-cyan-400 to-blue-400',
-    tagKeys: ['agents.tagCodeGen', 'agents.tagCodeReview', 'agents.tagDebug'],
-  },
-  {
-    slug: 'documeow',
-    nameKey: 'agents.docuMeow',
-    descKey: 'agents.docuMeowDesc',
-    icon: FileText,
-    color: 'from-yellow-400 to-orange-400',
-    tagKeys: ['agents.tagDocGen', 'agents.tagSummary', 'agents.tagApiDoc'],
-  },
-  {
-    slug: 'designcat',
-    nameKey: 'agents.designCat',
-    descKey: 'agents.designCatDesc',
-    icon: Palette,
-    color: 'from-pink-400 to-rose-400',
-    tagKeys: ['agents.tagUiDesign', 'agents.tagColor', 'agents.tagComponent'],
-  },
-  {
-    slug: 'detectivecat',
-    nameKey: 'agents.detectiveCat',
-    descKey: 'agents.detectiveCatDesc',
-    icon: Search,
-    color: 'from-green-400 to-emerald-400',
-    tagKeys: ['agents.tagDebug', 'agents.tagLogAnalysis', 'agents.tagSearch'],
-  },
-  {
-    slug: 'opscat',
-    nameKey: 'agents.opsCat',
-    descKey: 'agents.opsCatDesc',
-    icon: Wrench,
-    color: 'from-purple-400 to-violet-400',
-    tagKeys: ['agents.tagDevOps', 'agents.tagMonitor', 'agents.tagDeploy'],
-  },
-  {
-    slug: 'customagent',
-    nameKey: 'agents.customAgent',
-    descKey: 'agents.customAgentDesc',
-    icon: null,
-    color: 'from-gray-500 to-gray-600',
-    tagKeys: ['agents.tagCustom', 'agents.tagMcp', 'agents.tagApi'],
-  },
-]
 
 /* ──────────── P2P Marketplace Data ──────────── */
 
@@ -208,42 +148,10 @@ export function BuddyMarketPage() {
     return hasListings || hasContracts
   }, [myListingsData, myOwnerContracts])
 
-  // Filter official buddies by search keyword (client-side)
-  const filteredOfficialBuddies = useMemo(() => {
-    if (!searchQuery) return agentItems
-    const q = searchQuery.toLowerCase()
-    return agentItems.filter(
-      (a) =>
-        t(a.nameKey).toLowerCase().includes(q) ||
-        t(a.descKey).toLowerCase().includes(q) ||
-        a.tagKeys.some((tk) => t(tk).toLowerCase().includes(q)),
-    )
-  }, [searchQuery, t])
+  const totalCount = data?.total ?? 0
 
-  // Only show official buddies when no device/OS filters are active
-  const showOfficialBuddies = !deviceTier && !osType
-
-  // Total count includes official buddies when visible
-  const totalCount = (data?.total ?? 0) + (showOfficialBuddies ? filteredOfficialBuddies.length : 0)
-
-  // Build combined items for pagination
-  const allItems = useMemo(() => {
-    const items: Array<
-      { type: 'official'; data: (typeof agentItems)[number] } | { type: 'listing'; data: Listing }
-    > = []
-    if (showOfficialBuddies) {
-      for (const a of filteredOfficialBuddies) {
-        items.push({ type: 'official', data: a })
-      }
-    }
-    for (const l of listings) {
-      items.push({ type: 'listing', data: l })
-    }
-    return items
-  }, [showOfficialBuddies, filteredOfficialBuddies, listings])
-
-  const totalPages = Math.max(1, Math.ceil(allItems.length / ITEMS_PER_PAGE))
-  const paginatedItems = allItems.slice(
+  const totalPages = Math.max(1, Math.ceil(listings.length / ITEMS_PER_PAGE))
+  const paginatedItems = listings.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE,
   )
@@ -448,33 +356,19 @@ export function BuddyMarketPage() {
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {paginatedItems.map((item) =>
-                item.type === 'official' ? (
-                  <OfficialBuddyCard
-                    key={item.data.nameKey}
-                    agent={item.data}
-                    onClick={() => {
-                      if (isAuthenticated) {
-                        navigate({ to: `/app/marketplace/official-${item.data.slug}` })
-                      } else {
-                        navigate({ to: '/login' })
-                      }
-                    }}
-                  />
-                ) : (
-                  <ListingCard
-                    key={item.data.id}
-                    listing={item.data}
-                    onClick={() => {
-                      if (isAuthenticated) {
-                        navigate({ to: `/app/marketplace/${item.data.id}` })
-                      } else {
-                        navigate({ to: '/login' })
-                      }
-                    }}
-                  />
-                ),
-              )}
+              {paginatedItems.map((listing) => (
+                <ListingCard
+                  key={listing.id}
+                  listing={listing}
+                  onClick={() => {
+                    if (isAuthenticated) {
+                      navigate({ to: `/app/marketplace/${listing.id}` })
+                    } else {
+                      navigate({ to: '/login' })
+                    }
+                  }}
+                />
+              ))}
             </div>
 
             {/* Pagination Controls */}
@@ -538,70 +432,6 @@ export function BuddyMarketPage() {
 
       <PublicFooter />
     </div>
-  )
-}
-
-/* ──────────────── Official Buddy Card ──────────────── */
-
-function OfficialBuddyCard({
-  agent,
-  onClick,
-}: {
-  agent: (typeof agentItems)[number]
-  onClick: () => void
-}) {
-  const { t } = useTranslation()
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="block w-full text-left bg-white/70 backdrop-blur-lg border-2 border-white/90 rounded-2xl p-6 hover:-translate-y-1.5 hover:shadow-xl transition-all group cursor-pointer"
-    >
-      {/* Top row: avatar left, tags right */}
-      <div className="flex items-center justify-between mb-4">
-        <div
-          className={`inline-flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br ${agent.color} shrink-0`}
-        >
-          {agent.icon ? (
-            <agent.icon className="w-5 h-5 text-white" />
-          ) : (
-            <img src="/Logo.svg" alt="Buddy" className="w-5 h-5" />
-          )}
-        </div>
-        <div className="flex flex-wrap justify-end gap-1.5">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-cyan-500 to-blue-500 text-white">
-            ✦ {t('marketplace.official', '官方')}
-          </span>
-        </div>
-      </div>
-
-      {/* Title: 1 line */}
-      <h3
-        style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
-        className="text-lg font-bold mb-2 line-clamp-1 group-hover:text-cyan-600 transition-colors"
-      >
-        {t(agent.nameKey)}
-      </h3>
-
-      {/* Description: fixed 2-line height */}
-      <p className="text-sm text-gray-500 font-medium line-clamp-2 mb-4 leading-relaxed h-[2.8em]">
-        {t(agent.descKey)}
-      </p>
-
-      {/* Footer: price left, stats right */}
-      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-        <div className="flex items-center gap-1">
-          <span className="text-lg font-bold text-amber-600">{OFFICIAL_HOURLY_RATE}</span>
-          <span className="text-xs font-bold text-gray-400">🦐/h</span>
-        </div>
-        <div className="flex items-center gap-3 text-xs text-gray-400 font-bold">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-cyan-500 to-blue-500 text-white">
-            ✦ {t('marketplace.official', '官方')}
-          </span>
-        </div>
-      </div>
-    </button>
   )
 }
 

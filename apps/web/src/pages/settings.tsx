@@ -1063,6 +1063,14 @@ function TaskCenter({
   const navigate = useNavigate()
   const { setPendingAction } = useUIStore()
 
+  const { data: servers = [] } = useQuery({
+    queryKey: ['servers'],
+    queryFn: () =>
+      fetchApi<
+        Array<{ server: { id: string; name: string; slug: string | null; iconUrl: string | null } }>
+      >('/api/servers'),
+  })
+
   const getActionLabel = (taskKey: string) => {
     switch (taskKey) {
       case 'create_server':
@@ -1213,10 +1221,7 @@ function TaskCenter({
                         navigate({ to: '/app/discover' })
                         break
                       case 'create_channel': {
-                        const servers = queryClient.getQueryData<
-                          Array<{ server: { slug: string | null } }>
-                        >(['servers'])
-                        const firstSlug = servers?.[0]?.server?.slug
+                        const firstSlug = servers[0]?.server?.slug
                         if (firstSlug) {
                           setPendingAction('create-channel')
                           navigate({
@@ -1230,10 +1235,7 @@ function TaskCenter({
                         break
                       }
                       case 'first_message': {
-                        const srvs = queryClient.getQueryData<
-                          Array<{ server: { slug: string | null } }>
-                        >(['servers'])
-                        const slug = srvs?.[0]?.server?.slug
+                        const slug = servers[0]?.server?.slug
                         if (slug) {
                           navigate({ to: '/app/servers/$serverSlug', params: { serverSlug: slug } })
                         } else {
@@ -1252,10 +1254,7 @@ function TaskCenter({
                         navigate({ to: '/buddies' })
                         break
                       case 'list_product': {
-                        const srvList = queryClient.getQueryData<
-                          Array<{ server: { slug: string | null } }>
-                        >(['servers'])
-                        const shopSlug = srvList?.[0]?.server?.slug
+                        const shopSlug = servers[0]?.server?.slug
                         if (shopSlug) {
                           navigate({
                             to: '/app/servers/$serverSlug/shop/admin',

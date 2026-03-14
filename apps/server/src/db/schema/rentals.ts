@@ -157,6 +157,8 @@ export const rentalContracts = pgTable('rental_contracts', {
 
   /* ── Running Cost ── */
   totalCost: integer('total_cost').default(0).notNull(),
+  /** Agent's totalOnlineSeconds snapshot at last auto-billing */
+  lastBilledOnlineSeconds: integer('last_billed_online_seconds').default(0).notNull(),
 
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

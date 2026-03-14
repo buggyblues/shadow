@@ -120,6 +120,11 @@ export class RentalContractDao {
       )
   }
 
+  /** Find all active contracts (for scheduled billing) */
+  async findAllActive() {
+    return this.db.select().from(rentalContracts).where(eq(rentalContracts.status, 'active'))
+  }
+
   async create(data: {
     contractNo: string
     listingId: string
@@ -149,6 +154,7 @@ export class RentalContractDao {
       terminatedAt: Date
       terminationReason: string
       totalCost: number
+      lastBilledOnlineSeconds: number
     }>,
   ) {
     const r = await this.db

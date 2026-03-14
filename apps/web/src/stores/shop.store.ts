@@ -16,6 +16,8 @@ interface ShopState {
   /** Overlay panel: cart / orders / favorites */
   overlay: 'cart' | 'orders' | 'favorites' | null
   setOverlay: (o: ShopState['overlay']) => void
+  /** Auto-expand this order ID in ShopOrders after checkout */
+  lastOrderId: string | null
 }
 
 export const useShopStore = create<ShopState>((set) => ({
@@ -29,4 +31,5 @@ export const useShopStore = create<ShopState>((set) => ({
   setSortBy: (s) => set({ sortBy: s }),
   overlay: null,
   setOverlay: (o) => set({ overlay: o }),
+  lastOrderId: null,
 }))

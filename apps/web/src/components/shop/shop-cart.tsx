@@ -20,7 +20,7 @@ interface CartItem {
 
 interface ShopCartProps {
   serverId: string
-  onCheckout?: () => void
+  onCheckout?: (orderId: string) => void
 }
 
 export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
@@ -61,17 +61,17 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
 
   const placeOrder = useMutation({
     mutationFn: (items: Array<{ productId: string; skuId?: string; quantity: number }>) =>
-      fetchApi(`/api/servers/${serverId}/shop/orders`, {
+      fetchApi<{ id: string }>(`/api/servers/${serverId}/shop/orders`, {
         method: 'POST',
         body: JSON.stringify({ items }),
       }),
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['shop-cart', serverId] })
       queryClient.invalidateQueries({ queryKey: ['shop-orders', serverId] })
       queryClient.invalidateQueries({ queryKey: ['wallet'] })
       setSelectedIds(new Set())
       showToast('下单成功！', 'success')
-      if (onCheckout) onCheckout()
+      if (onCheckout) onCheckout(data.id)
     },
     onError: (err: Error) => showToast(err.message || '下单失败，请检查余额或库存', 'error'),
   })
