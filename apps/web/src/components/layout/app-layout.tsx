@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Outlet, useNavigate } from '@tanstack/react-router'
 import { Menu } from 'lucide-react'
 import { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import { connectSocket, disconnectSocket } from '../../lib/socket'
 import { useAuthStore } from '../../stores/auth.store'
@@ -10,13 +11,18 @@ import { ConfirmDialog } from '../common/confirm-dialog'
 import { ServerSidebar } from '../server/server-sidebar'
 
 export function AppLayout() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { setUser, logout } = useAuthStore()
   const { mobileServerSidebarOpen, closeMobileServerSidebar, openMobileServerSidebar } =
     useUIStore()
 
   // Fetch current user on mount
-  const { data: me, error: meError } = useQuery({
+  const {
+    data: me,
+    error: meError,
+    isLoading: isLoadingMe,
+  } = useQuery({
     queryKey: ['me'],
     queryFn: () =>
       fetchApi<{
@@ -66,7 +72,15 @@ export function AppLayout() {
       )}
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <Outlet />
+        {isLoadingMe && !me ? (
+          <div className="desktop-loading-state flex-1 bg-bg-primary">
+            <div className="inline-flex items-center gap-2 text-sm animate-pulse">
+              {t('common.loading')}
+            </div>
+          </div>
+        ) : (
+          <Outlet />
+        )}
       </div>
 
       {/* Mobile hamburger button to open server sidebar */}

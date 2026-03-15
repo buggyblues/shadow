@@ -88,7 +88,7 @@ export function DiscoverPage() {
   return (
     <div className="flex-1 flex flex-col bg-bg-primary overflow-y-auto">
       {/* Header */}
-      <div className="border-b-2 border-bg-tertiary px-6 py-8 bg-bg-primary">
+      <div className="desktop-drag-titlebar border-b-2 border-bg-tertiary px-6 py-8 bg-bg-primary">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center gap-3 mb-4">
             <Globe size={28} className="text-primary" />

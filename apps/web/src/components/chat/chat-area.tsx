@@ -621,7 +621,7 @@ export function ChatArea() {
           </div>
         )}
         {/* Channel header */}
-        <div className="h-12 px-4 flex items-center gap-2 border-b-2 border-bg-tertiary shrink-0 z-10 bg-bg-primary">
+        <div className="desktop-drag-titlebar h-12 px-4 flex items-center gap-2 border-b-2 border-bg-tertiary shrink-0 z-10 bg-bg-primary">
           {/* Mobile back button */}
           <button
             onClick={() => setMobileView('channels')}

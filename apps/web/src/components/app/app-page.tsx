@@ -99,7 +99,7 @@ export function AppPage({ serverId, isAdmin, onClose }: AppPageProps) {
   return (
     <div className="flex-1 flex flex-col h-full bg-bg-primary overflow-hidden">
       {/* Header */}
-      <div className="h-12 px-4 flex items-center gap-3 border-b border-border-subtle bg-bg-secondary/50 shrink-0">
+      <div className="desktop-drag-titlebar h-12 px-4 flex items-center gap-3 border-b border-border-subtle bg-bg-secondary/50 shrink-0">
         {onClose && (
           <button
             type="button"
@@ -465,7 +465,7 @@ function AppViewer({
 
   return (
     <div ref={containerRef} className="flex-1 flex flex-col h-full bg-bg-primary overflow-hidden">
-      <div className="h-10 px-3 flex items-center gap-2 border-b border-border-subtle bg-bg-secondary/80 shrink-0">
+      <div className="desktop-drag-titlebar h-12 px-3 flex items-center gap-2 border-b border-border-subtle bg-bg-secondary/50 shrink-0">
         <button
           type="button"
           onClick={onBack}

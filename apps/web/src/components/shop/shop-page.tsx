@@ -155,7 +155,7 @@ export function ShopPage({ serverId, isAdmin, onClose }: ShopPageProps) {
   return (
     <div className="flex-1 flex flex-col bg-[#F9FAFB] dark:bg-bg-primary overflow-hidden h-full relative font-sans">
       {/* ── Header ── */}
-      <div className="h-14 px-4 flex items-center bg-white/80 dark:bg-bg-primary/80 backdrop-blur-md border-b border-gray-200 dark:border-border-subtle shrink-0 gap-3 z-20 transition-colors">
+      <div className="desktop-drag-titlebar h-12 px-4 flex items-center bg-bg-secondary/50 backdrop-blur-sm border-b border-border-subtle shrink-0 gap-3 z-20 transition-colors">
         {onClose && (
           <button
             type="button"

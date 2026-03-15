@@ -1,0 +1,12 @@
+# Electron Forge build artifacts
+out/
+dist/
+
+# Generated icons (regenerate with: pnpm generate-icons)
+assets/*.png
+assets/*.ico
+assets/*.icns
+
+# Test artifacts
+test-results/
+playwright-report/

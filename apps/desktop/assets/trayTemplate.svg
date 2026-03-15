@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="16" height="16">
+  <!-- Cat silhouette for macOS tray template image (black on transparent) -->
+  <g transform="translate(0, -5) scale(1.1) translate(-5, 0)">
+    <!-- Left Ear -->
+    <path d="M 22,47 Q 15,24 28,24 Q 34,24 40,40" fill="black"/>
+    <!-- Right Ear -->
+    <path d="M 78,47 Q 85,24 72,24 Q 66,24 60,40" fill="black"/>
+    <!-- Body -->
+    <ellipse cx="50" cy="62" rx="38" ry="26" fill="black"/>
+  </g>
+</svg>

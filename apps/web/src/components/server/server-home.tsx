@@ -450,7 +450,7 @@ document.addEventListener('click', function(e) {
   return (
     <div className="flex-1 flex flex-col bg-bg-primary overflow-hidden">
       {/* Header bar */}
-      <div className="h-12 px-4 flex items-center border-b border-border-subtle shrink-0">
+      <div className="desktop-drag-titlebar h-12 px-4 flex items-center border-b border-border-subtle shrink-0">
         {/* Mobile back button — return to channel list */}
         {!standalone && (
           <button

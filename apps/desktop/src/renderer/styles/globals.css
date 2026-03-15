@@ -1,0 +1,56 @@
+/* Desktop globals: import web styles and tell Tailwind v4 where to find source */
+@import "../../../../web/src/styles/globals.css";
+@source "../../../../web/src";
+@source "../../..";
+
+/* ===== Desktop Window Chrome ===== */
+
+/* Unified draggable title bars */
+html.desktop-app .desktop-drag-titlebar {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+/* Standard desktop drag strip for top spacing under system controls */
+html.desktop-app .desktop-drag-strip {
+  height: 1.75rem;
+  flex-shrink: 0;
+}
+
+html.desktop-app .desktop-loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted, rgb(156 163 175));
+}
+
+/* Exclude interactive elements from drag */
+html.desktop-app .desktop-drag-titlebar button,
+html.desktop-app .desktop-drag-titlebar a,
+html.desktop-app .desktop-drag-titlebar input,
+html.desktop-app .desktop-drag-titlebar select,
+html.desktop-app .desktop-drag-titlebar textarea,
+html.desktop-app .desktop-drag-titlebar [role="button"],
+html.desktop-app .desktop-drag-titlebar [role="switch"],
+html.desktop-app .desktop-drag-titlebar [data-no-drag] {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* macOS: push server sidebar content below traffic lights */
+html.desktop-darwin .w-\[72px\].bg-bg-tertiary {
+  padding-top: 1.75rem;
+  position: relative;
+}
+
+/* macOS: drag region in the server sidebar above icons */
+html.desktop-darwin .w-\[72px\].bg-bg-tertiary::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1.75rem;
+  -webkit-app-region: drag;
+  app-region: drag;
+}

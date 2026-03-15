@@ -31,7 +31,7 @@ export function WorkspaceToolbar({
   const { searchQuery, setSearchQuery } = useWorkspaceStore()
 
   return (
-    <div className="h-11 px-3 flex items-center bg-bg-secondary/80 backdrop-blur-sm border-b border-border-subtle shrink-0 gap-2 z-20">
+    <div className="desktop-drag-titlebar h-12 px-3 flex items-center bg-bg-secondary/50 backdrop-blur-sm border-b border-border-subtle shrink-0 gap-2 z-20">
       {onClose && (
         <button
           type="button"

@@ -143,8 +143,12 @@ export function SettingsPage() {
       </div>
 
       {/* Desktop Sidebar */}
-      <div className="w-60 bg-bg-secondary hidden md:flex flex-col shrink-0">
-        <nav className="px-3 pt-4 space-y-0.5">
+      <div className="w-64 bg-bg-secondary hidden md:flex flex-col shrink-0">
+        <div className="desktop-drag-titlebar h-7 shrink-0 border-b border-border-subtle" />
+        <nav className="px-3 pt-4 space-y-0.5 overflow-y-auto">
+          <div className="px-2 py-1 text-[11px] font-bold uppercase text-text-secondary tracking-wide">
+            快速开始
+          </div>
           <button
             onClick={() => setActiveTab('quickstart')}
             className={`group flex items-center gap-3 w-full px-3 py-2 rounded-md text-[15px] font-medium transition ${
@@ -160,7 +164,7 @@ export function SettingsPage() {
             {t('settings.tabQuickStart')}
           </button>
           <div className="px-2 py-3 text-[11px] font-bold uppercase text-text-secondary tracking-wide mt-2">
-            {t('settings.sidebarTitle')}
+            个人设置
           </div>
           <button
             onClick={() => setActiveTab('profile')}
@@ -190,6 +194,10 @@ export function SettingsPage() {
             />
             {t('settings.tabAppearance')}
           </button>
+
+          <div className="px-2 py-3 text-[11px] font-bold uppercase text-text-secondary tracking-wide mt-2">
+            工作与安全
+          </div>
           <button
             onClick={() => setActiveTab('notification')}
             className={`group flex items-center gap-3 w-full px-3 py-2 rounded-md text-[15px] font-medium transition ${
@@ -219,20 +227,6 @@ export function SettingsPage() {
             任务中心
           </button>
           <button
-            onClick={() => setActiveTab('buddy')}
-            className={`group flex items-center gap-3 w-full px-3 py-2 rounded-md text-[15px] font-medium transition ${
-              activeTab === 'buddy'
-                ? 'bg-bg-modifier-active text-text-primary'
-                : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary'
-            }`}
-          >
-            <Bot
-              size={18}
-              className={`shrink-0 ${activeTab === 'buddy' ? 'opacity-80 text-text-primary' : 'opacity-60 group-hover:text-text-primary'}`}
-            />
-            {t('settings.tabBuddy')}
-          </button>
-          <button
             onClick={() => setActiveTab('account')}
             className={`group flex items-center gap-3 w-full px-3 py-2 rounded-md text-[15px] font-medium transition ${
               activeTab === 'account'
@@ -245,6 +239,24 @@ export function SettingsPage() {
               className={`shrink-0 ${activeTab === 'account' ? 'opacity-80 text-text-primary' : 'opacity-60 group-hover:text-text-primary'}`}
             />
             {t('settings.tabAccount')}
+          </button>
+
+          <div className="px-2 py-3 text-[11px] font-bold uppercase text-text-secondary tracking-wide mt-2">
+            生态与邀请
+          </div>
+          <button
+            onClick={() => setActiveTab('buddy')}
+            className={`group flex items-center gap-3 w-full px-3 py-2 rounded-md text-[15px] font-medium transition ${
+              activeTab === 'buddy'
+                ? 'bg-bg-modifier-active text-text-primary'
+                : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary'
+            }`}
+          >
+            <Bot
+              size={18}
+              className={`shrink-0 ${activeTab === 'buddy' ? 'opacity-80 text-text-primary' : 'opacity-60 group-hover:text-text-primary'}`}
+            />
+            {t('settings.tabBuddy')}
           </button>
           <button
             onClick={() => setActiveTab('invite')}
@@ -281,6 +293,15 @@ export function SettingsPage() {
             <Bot size={18} className="shrink-0 opacity-60 group-hover:text-text-primary" />
             {t('settings.goBuddyMarket', 'Buddy 集市')}
           </button>
+          {'desktopAPI' in window && (
+            <button
+              onClick={() => navigate({ to: '/app/desktop-settings' })}
+              className="group flex items-center gap-3 w-full px-3 py-2 rounded-md text-[15px] font-medium text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary transition"
+            >
+              <Monitor size={18} className="shrink-0 opacity-60 group-hover:text-text-primary" />
+              {t('desktop.settingsTitle', '桌面端设置')}
+            </button>
+          )}
         </div>
 
         <div className="mt-auto p-4 border-t-2 border-bg-tertiary">
