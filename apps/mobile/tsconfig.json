@@ -1,5 +1,5 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": ["expo/tsconfig.base", "../../tsconfig.json"],
   "compilerOptions": {
     "strict": true,
     "paths": {

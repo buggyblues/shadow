@@ -1,11 +1,30 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
-import { ChevronLeft, Cpu, HardDrive, Lock, MemoryStick, Monitor, Plus, Save } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronLeft,
+  Cpu,
+  HardDrive,
+  Lock,
+  MemoryStick,
+  Monitor,
+  Plus,
+  Save,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../lib/api'
 import { showToast } from '../lib/toast'
 import { useMarketplaceStore } from '../stores/marketplace.store'
+
+/** Convert ISO date string to datetime-local input value (YYYY-MM-DDTHH:mm) */
+function formatDatetimeLocal(isoString: string): string {
+  if (!isoString) return ''
+  const d = new Date(isoString)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
 
 interface AgentOption {
   id: string
@@ -36,7 +55,6 @@ interface ListingForm {
   hourlyRate: number
   dailyRate: number
   monthlyRate: number
-  premiumMarkup: number
   depositAmount: number
   tokenFeePassthrough: boolean
   availableFrom: string
@@ -60,7 +78,6 @@ const INITIAL_FORM: ListingForm = {
   hourlyRate: 10,
   dailyRate: 200,
   monthlyRate: 5000,
-  premiumMarkup: 0,
   depositAmount: 100,
   tokenFeePassthrough: true,
   availableFrom: '',
@@ -75,6 +92,7 @@ export function CreateListingPage() {
   const isEdit = !!listingId
 
   const [form, setForm] = useState<ListingForm>(INITIAL_FORM)
+  const [showDeviceDetail, setShowDeviceDetail] = useState(false)
 
   // Fetch user's agents for the dropdown
   const { data: agents = [] } = useQuery({
@@ -110,12 +128,21 @@ export function CreateListingPage() {
         hourlyRate: (e.hourlyRate as number) || 10,
         dailyRate: (e.dailyRate as number) || 200,
         monthlyRate: (e.monthlyRate as number) || 5000,
-        premiumMarkup: (e.premiumMarkup as number) || 0,
         depositAmount: (e.depositAmount as number) || 100,
         tokenFeePassthrough: (e.tokenFeePassthrough as boolean) ?? true,
-        availableFrom: (e.availableFrom as string) || '',
-        availableUntil: (e.availableUntil as string) || '',
+        availableFrom: formatDatetimeLocal((e.availableFrom as string) || ''),
+        availableUntil: formatDatetimeLocal((e.availableUntil as string) || ''),
       })
+      // Auto-expand device detail section if any detail fields are filled
+      if (
+        deviceInfo.model ||
+        deviceInfo.cpu ||
+        deviceInfo.ram ||
+        deviceInfo.storage ||
+        deviceInfo.gpu
+      ) {
+        setShowDeviceDetail(true)
+      }
     }
   }, [existing, isEdit])
 
@@ -176,7 +203,6 @@ export function CreateListingPage() {
       hourlyRate: form.hourlyRate,
       dailyRate: form.dailyRate || undefined,
       monthlyRate: form.monthlyRate || undefined,
-      premiumMarkup: form.premiumMarkup,
       depositAmount: form.depositAmount,
       tokenFeePassthrough: form.tokenFeePassthrough,
       availableFrom: form.availableFrom ? new Date(form.availableFrom).toISOString() : undefined,
@@ -356,78 +382,6 @@ export function CreateListingPage() {
                   </label>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block">
-                    <span className="text-sm font-bold text-gray-400 block mb-1 flex items-center gap-1">
-                      <Monitor className="w-3.5 h-3.5" /> {t('marketplace.model', '型号')}
-                    </span>
-                    <input
-                      type="text"
-                      value={form.deviceModel}
-                      onChange={(e) => update('deviceModel', e.target.value)}
-                      placeholder="Mac Studio M2 Ultra"
-                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
-                    />
-                  </label>
-                </div>
-                <div>
-                  <label className="block">
-                    <span className="text-sm font-bold text-gray-400 block mb-1 flex items-center gap-1">
-                      <Cpu className="w-3.5 h-3.5" /> CPU
-                    </span>
-                    <input
-                      type="text"
-                      value={form.deviceCpu}
-                      onChange={(e) => update('deviceCpu', e.target.value)}
-                      placeholder="M2 Ultra 24-core"
-                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
-                    />
-                  </label>
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block">
-                    <span className="text-sm font-bold text-gray-400 block mb-1 flex items-center gap-1">
-                      <MemoryStick className="w-3.5 h-3.5" /> RAM
-                    </span>
-                    <input
-                      type="text"
-                      value={form.deviceRam}
-                      onChange={(e) => update('deviceRam', e.target.value)}
-                      placeholder="192GB"
-                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
-                    />
-                  </label>
-                </div>
-                <div>
-                  <label className="block">
-                    <span className="text-sm font-bold text-gray-400 block mb-1 flex items-center gap-1">
-                      <HardDrive className="w-3.5 h-3.5" /> {t('marketplace.storage', '存储')}
-                    </span>
-                    <input
-                      type="text"
-                      value={form.deviceStorage}
-                      onChange={(e) => update('deviceStorage', e.target.value)}
-                      placeholder="2TB SSD"
-                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
-                    />
-                  </label>
-                </div>
-                <div>
-                  <label className="block">
-                    <span className="text-sm font-bold text-gray-400 block mb-1">GPU</span>
-                    <input
-                      type="text"
-                      value={form.deviceGpu}
-                      onChange={(e) => update('deviceGpu', e.target.value)}
-                      placeholder="76-core GPU"
-                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
-                    />
-                  </label>
-                </div>
-              </div>
               <div>
                 <label className="block">
                   <span className="text-sm font-bold text-gray-500 block mb-1">
@@ -442,6 +396,95 @@ export function CreateListingPage() {
                   />
                 </label>
               </div>
+
+              {/* Expandable detailed device config */}
+              <button
+                type="button"
+                onClick={() => setShowDeviceDetail(!showDeviceDetail)}
+                className="flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <ChevronDown
+                  className={`w-4 h-4 transition-transform ${showDeviceDetail ? 'rotate-180' : ''}`}
+                />
+                {t('marketplace.detailedDeviceConfig', '详细设备配置')}
+              </button>
+
+              {showDeviceDetail && (
+                <div className="space-y-4 animate-fade-in-up">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block">
+                        <span className="text-sm font-bold text-gray-400 block mb-1 flex items-center gap-1">
+                          <Monitor className="w-3.5 h-3.5" /> {t('marketplace.model', '型号')}
+                        </span>
+                        <input
+                          type="text"
+                          value={form.deviceModel}
+                          onChange={(e) => update('deviceModel', e.target.value)}
+                          placeholder="Mac Studio M2 Ultra"
+                          className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                        />
+                      </label>
+                    </div>
+                    <div>
+                      <label className="block">
+                        <span className="text-sm font-bold text-gray-400 block mb-1 flex items-center gap-1">
+                          <Cpu className="w-3.5 h-3.5" /> CPU
+                        </span>
+                        <input
+                          type="text"
+                          value={form.deviceCpu}
+                          onChange={(e) => update('deviceCpu', e.target.value)}
+                          placeholder="M2 Ultra 24-core"
+                          className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block">
+                        <span className="text-sm font-bold text-gray-400 block mb-1 flex items-center gap-1">
+                          <MemoryStick className="w-3.5 h-3.5" /> RAM
+                        </span>
+                        <input
+                          type="text"
+                          value={form.deviceRam}
+                          onChange={(e) => update('deviceRam', e.target.value)}
+                          placeholder="192GB"
+                          className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                        />
+                      </label>
+                    </div>
+                    <div>
+                      <label className="block">
+                        <span className="text-sm font-bold text-gray-400 block mb-1 flex items-center gap-1">
+                          <HardDrive className="w-3.5 h-3.5" /> {t('marketplace.storage', '存储')}
+                        </span>
+                        <input
+                          type="text"
+                          value={form.deviceStorage}
+                          onChange={(e) => update('deviceStorage', e.target.value)}
+                          placeholder="2TB SSD"
+                          className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                        />
+                      </label>
+                    </div>
+                    <div>
+                      <label className="block">
+                        <span className="text-sm font-bold text-gray-400 block mb-1">GPU</span>
+                        <input
+                          type="text"
+                          value={form.deviceGpu}
+                          onChange={(e) => update('deviceGpu', e.target.value)}
+                          placeholder="76-core GPU"
+                          className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-medium focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
 
@@ -499,36 +542,19 @@ export function CreateListingPage() {
                   </label>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block">
-                    <span className="text-sm font-bold text-gray-500 block mb-1">
-                      {t('marketplace.premiumMarkup', '溢价比例')} (%)
-                    </span>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={form.premiumMarkup}
-                      onChange={(e) => update('premiumMarkup', Number(e.target.value))}
-                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-bold text-center focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
-                    />
-                  </label>
-                </div>
-                <div>
-                  <label className="block">
-                    <span className="text-sm font-bold text-gray-500 block mb-1">
-                      {t('marketplace.deposit', '押金')} (🦐)
-                    </span>
-                    <input
-                      type="number"
-                      min={0}
-                      value={form.depositAmount}
-                      onChange={(e) => update('depositAmount', Number(e.target.value))}
-                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-bold text-center focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
-                    />
-                  </label>
-                </div>
+              <div>
+                <label className="block">
+                  <span className="text-sm font-bold text-gray-500 block mb-1">
+                    {t('marketplace.deposit', '押金')} (🦐)
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={form.depositAmount}
+                    onChange={(e) => update('depositAmount', Number(e.target.value))}
+                    className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-bold text-center focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
+                  />
+                </label>
               </div>
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
@@ -546,7 +572,7 @@ export function CreateListingPage() {
                 <strong>{t('marketplace.pricingNote', '定价说明：')}</strong>{' '}
                 {t(
                   'marketplace.pricingExplain',
-                  '最终费用 = 基础租金 + 电费 (2🦐/h) + Token消耗 (如开启代付) + 溢价 + 5% 平台手续费。日租/月租为优惠价，系统会自动选择最优方案。',
+                  '最终费用 = 基础租金 + 电费 (2🦐/h) + Token消耗 (如开启代付) + 5% 平台手续费。日租/月租为优惠价，系统会自动选择最优方案。',
                 )}
               </div>
             </div>

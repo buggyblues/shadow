@@ -51,18 +51,25 @@ export class ClawListingDao {
     }
 
     if (opts?.deviceTier) {
-      conditions.push(
-        eq(
-          clawListings.deviceTier,
-          opts.deviceTier as (typeof clawListings.deviceTier.enumValues)[number],
-        ),
-      )
+      const tiers = opts.deviceTier
+        .split(',')
+        .filter(Boolean) as (typeof clawListings.deviceTier.enumValues)[number][]
+      if (tiers.length === 1) {
+        conditions.push(eq(clawListings.deviceTier, tiers[0]!))
+      } else if (tiers.length > 1) {
+        conditions.push(inArray(clawListings.deviceTier, tiers))
+      }
     }
 
     if (opts?.osType) {
-      conditions.push(
-        eq(clawListings.osType, opts.osType as (typeof clawListings.osType.enumValues)[number]),
-      )
+      const types = opts.osType
+        .split(',')
+        .filter(Boolean) as (typeof clawListings.osType.enumValues)[number][]
+      if (types.length === 1) {
+        conditions.push(eq(clawListings.osType, types[0]!))
+      } else if (types.length > 1) {
+        conditions.push(inArray(clawListings.osType, types))
+      }
     }
 
     const getOrderBy = () => {
@@ -109,18 +116,25 @@ export class ClawListingDao {
     }
 
     if (opts?.deviceTier) {
-      conditions.push(
-        eq(
-          clawListings.deviceTier,
-          opts.deviceTier as (typeof clawListings.deviceTier.enumValues)[number],
-        ),
-      )
+      const tiers = opts.deviceTier
+        .split(',')
+        .filter(Boolean) as (typeof clawListings.deviceTier.enumValues)[number][]
+      if (tiers.length === 1) {
+        conditions.push(eq(clawListings.deviceTier, tiers[0]!))
+      } else if (tiers.length > 1) {
+        conditions.push(inArray(clawListings.deviceTier, tiers))
+      }
     }
 
     if (opts?.osType) {
-      conditions.push(
-        eq(clawListings.osType, opts.osType as (typeof clawListings.osType.enumValues)[number]),
-      )
+      const types = opts.osType
+        .split(',')
+        .filter(Boolean) as (typeof clawListings.osType.enumValues)[number][]
+      if (types.length === 1) {
+        conditions.push(eq(clawListings.osType, types[0]!))
+      } else if (types.length > 1) {
+        conditions.push(inArray(clawListings.osType, types))
+      }
     }
 
     const r = await this.db
@@ -145,7 +159,6 @@ export class ClawListingDao {
     dailyRate?: number
     monthlyRate?: number
     tokenFeePassthrough?: boolean
-    premiumMarkup?: number
     depositAmount?: number
     listingStatus?: 'draft' | 'active'
     availableFrom?: Date
@@ -171,7 +184,6 @@ export class ClawListingDao {
       dailyRate: number
       monthlyRate: number
       tokenFeePassthrough: boolean
-      premiumMarkup: number
       depositAmount: number
       listingStatus: 'draft' | 'active' | 'paused' | 'expired' | 'closed'
       isListed: boolean

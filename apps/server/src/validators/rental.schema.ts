@@ -24,7 +24,6 @@ export const createListingSchema = z.object({
   dailyRate: z.number().int().min(0).max(1_000_000).optional().default(0),
   monthlyRate: z.number().int().min(0).max(10_000_000).optional().default(0),
   tokenFeePassthrough: z.boolean().optional().default(true),
-  premiumMarkup: z.number().int().min(0).max(100).optional().default(0),
   depositAmount: z.number().int().min(0).max(1_000_000).optional().default(0),
   listingStatus: z.enum(['draft', 'active']).optional().default('draft'),
   availableFrom: z
@@ -90,8 +89,8 @@ export const reportViolationSchema = z.object({
 
 export const browseListingsSchema = z.object({
   keyword: z.string().max(100).optional(),
-  deviceTier: z.enum(['high_end', 'mid_range', 'low_end']).optional(),
-  osType: z.enum(['macos', 'windows', 'linux']).optional(),
+  deviceTier: z.string().max(50).optional(),
+  osType: z.string().max(50).optional(),
   sortBy: z.enum(['popular', 'newest', 'price-asc', 'price-desc']).optional().default('popular'),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   offset: z.coerce.number().int().min(0).optional().default(0),

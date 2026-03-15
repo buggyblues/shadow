@@ -1,21 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
-  Apple,
   ArrowUpDown,
+  Check,
   ChevronDown,
+  Clock,
   Eye,
-  Laptop,
   Loader2,
-  Monitor,
   ChevronLeft as PageLeft,
   ChevronRight as PageRight,
   Plus,
   Search,
-  SlidersHorizontal,
   Users,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { UserAvatar } from '../components/common/avatar'
 import { formatDuration, OnlineRank } from '../components/common/online-rank'
@@ -41,13 +39,20 @@ interface Listing {
   hourlyRate: number
   dailyRate: number
   monthlyRate: number
-  premiumMarkup: number
   depositAmount: number
   viewCount: number
   rentalCount: number
   tags: string[]
   totalOnlineSeconds: number
+  availableFrom: string | null
+  availableUntil: string | null
   createdAt: string
+  owner: {
+    id: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+  } | null
 }
 
 const DEVICE_TIER_COLORS: Record<
@@ -67,10 +72,10 @@ const DEVICE_TIER_COLORS: Record<
   low_end: { color: 'from-gray-400 to-gray-500', icon: '💡', labelKey: 'marketplace.deviceLowEnd' },
 }
 
-const OS_LABELS: Record<string, { label: string; icon: typeof Apple }> = {
-  macos: { label: 'macOS', icon: Apple },
-  windows: { label: 'Windows', icon: Monitor },
-  linux: { label: 'Linux', icon: Laptop },
+const OS_LABELS: Record<string, { label: string }> = {
+  macos: { label: 'macOS' },
+  windows: { label: 'Windows' },
+  linux: { label: 'Linux' },
 }
 
 const SORT_OPTIONS = [
@@ -91,29 +96,49 @@ export function BuddyMarketPage() {
   const {
     searchQuery,
     setSearchQuery,
-    deviceTier,
-    setDeviceTier,
-    osType,
-    setOsType,
+    deviceTiers,
+    toggleDeviceTier,
+    setDeviceTiers,
+    osTypes,
+    toggleOsType,
+    setOsTypes,
     sortBy,
     setSortBy,
   } = useMarketplaceStore()
 
-  const [showFilters, setShowFilters] = useState(false)
   const [sortOpen, setSortOpen] = useState(false)
+  const [tierDropdownOpen, setTierDropdownOpen] = useState(false)
+  const [osDropdownOpen, setOsDropdownOpen] = useState(false)
   const [listMyClawLoading, setListMyClawLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+  const sortRef = useRef<HTMLDivElement>(null)
+  const tierRef = useRef<HTMLDivElement>(null)
+  const osRef = useRef<HTMLDivElement>(null)
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (sortOpen && sortRef.current && !sortRef.current.contains(target)) setSortOpen(false)
+      if (tierDropdownOpen && tierRef.current && !tierRef.current.contains(target))
+        setTierDropdownOpen(false)
+      if (osDropdownOpen && osRef.current && !osRef.current.contains(target))
+        setOsDropdownOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [sortOpen, tierDropdownOpen, osDropdownOpen])
 
   /** Items per page = 4 rows × 4 columns on xl, fits different breakpoints */
   const ITEMS_PER_PAGE = 16
 
   const { data, isLoading } = useQuery({
-    queryKey: ['marketplace', 'listings', searchQuery, deviceTier, osType, sortBy],
+    queryKey: ['marketplace', 'listings', searchQuery, deviceTiers, osTypes, sortBy],
     queryFn: () => {
       const params = new URLSearchParams()
       if (searchQuery) params.set('keyword', searchQuery)
-      if (deviceTier) params.set('deviceTier', deviceTier)
-      if (osType) params.set('osType', osType)
+      if (deviceTiers.length > 0) params.set('deviceTier', deviceTiers.join(','))
+      if (osTypes.length > 0) params.set('osType', osTypes.join(','))
       params.set('sortBy', sortBy)
       params.set('limit', '40')
       return fetchApi<{ listings: Listing[]; total: number }>(`/api/marketplace/listings?${params}`)
@@ -217,77 +242,18 @@ export function BuddyMarketPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t('marketplace.searchPlaceholder')}
-            className="w-full pl-12 pr-12 py-4 rounded-2xl bg-white/80 backdrop-blur border-2 border-white/90 shadow-lg text-base font-medium placeholder:text-gray-400 focus:outline-none focus:border-cyan-300 focus:ring-4 focus:ring-cyan-100 transition-all"
+            className="w-full pl-12 pr-4 py-4 rounded-2xl bg-white/80 backdrop-blur border-2 border-white/90 shadow-lg text-base font-medium placeholder:text-gray-400 focus:outline-none focus:border-cyan-300 focus:ring-4 focus:ring-cyan-100 transition-all"
           />
-          <button
-            type="button"
-            onClick={() => setShowFilters(!showFilters)}
-            className={`absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl transition-colors ${showFilters ? 'bg-cyan-100 text-cyan-700' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
-          >
-            <SlidersHorizontal className="w-5 h-5" />
-          </button>
         </div>
-
-        {/* Filters */}
-        {showFilters && (
-          <div className="max-w-2xl mx-auto mb-4 bg-white/80 backdrop-blur rounded-2xl border-2 border-white/90 shadow-lg p-6 animate-fade-in-up text-left">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <div className="text-sm font-bold text-gray-500 mb-2">
-                  {t('marketplace.deviceTier')}
-                </div>
-                <div className="flex gap-2 flex-wrap">
-                  {Object.entries(DEVICE_TIER_COLORS).map(([key, { icon, labelKey }]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setDeviceTier(deviceTier === key ? null : key)}
-                      className={`px-3 py-1.5 rounded-full text-sm font-bold border-2 transition-all ${
-                        deviceTier === key
-                          ? 'bg-cyan-50 border-cyan-300 text-cyan-700'
-                          : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
-                      }`}
-                    >
-                      {icon} {t(labelKey)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <div className="text-sm font-bold text-gray-500 mb-2">
-                  {t('marketplace.osType', 'OS')}
-                </div>
-                <div className="flex gap-2 flex-wrap">
-                  {Object.entries(OS_LABELS).map(([key, { label }]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setOsType(osType === key ? null : key)}
-                      className={`px-3 py-1.5 rounded-full text-sm font-bold border-2 transition-all ${
-                        osType === key
-                          ? 'bg-cyan-50 border-cyan-300 text-cyan-700'
-                          : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </section>
 
       {/* ───── Unified Buddy Grid ───── */}
       <section className="max-w-7xl mx-auto px-8 md:px-16 pt-4 pb-8">
         {/* Toolbar */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="text-sm font-bold text-gray-500">
-            {t('marketplace.resultCount', { count: totalCount })}
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="relative">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Sort dropdown */}
+            <div className="relative" ref={sortRef}>
               <button
                 type="button"
                 onClick={() => setSortOpen(!sortOpen)}
@@ -298,7 +264,7 @@ export function BuddyMarketPage() {
                 <ChevronDown className="w-3.5 h-3.5" />
               </button>
               {sortOpen && (
-                <div className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-20 min-w-[140px]">
+                <div className="absolute left-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-20 min-w-[140px]">
                   {SORT_OPTIONS.map((opt) => (
                     <button
                       key={opt.value}
@@ -319,7 +285,145 @@ export function BuddyMarketPage() {
                 </div>
               )}
             </div>
-            {/* View My Rentals button (conditionally shown) */}
+
+            {/* Divider */}
+            <div className="w-px h-5 bg-gray-200" />
+
+            {/* Device Tier Dropdown */}
+            <div className="relative" ref={tierRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setTierDropdownOpen(!tierDropdownOpen)
+                  setOsDropdownOpen(false)
+                  setSortOpen(false)
+                }}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/80 border-2 text-sm font-bold transition-all ${
+                  deviceTiers.length > 0
+                    ? 'border-cyan-300 text-cyan-700 bg-cyan-50'
+                    : 'border-white/90 text-gray-600 hover:border-gray-300'
+                }`}
+              >
+                {t('marketplace.deviceTier', '设备配置')}
+                {deviceTiers.length > 0 && (
+                  <span className="bg-cyan-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                    {deviceTiers.length}
+                  </span>
+                )}
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+              {tierDropdownOpen && (
+                <div className="absolute left-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-20 min-w-[160px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeviceTiers([])
+                      resetPage()
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm font-medium transition-colors flex items-center justify-between ${
+                      deviceTiers.length === 0
+                        ? 'bg-cyan-50 text-cyan-700'
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {t('marketplace.filterAll', '全部')}
+                    {deviceTiers.length === 0 && <Check className="w-4 h-4 text-cyan-500" />}
+                  </button>
+                  {Object.entries(DEVICE_TIER_COLORS).map(([key, { icon, labelKey }]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => {
+                        toggleDeviceTier(key)
+                        resetPage()
+                      }}
+                      className={`w-full text-left px-4 py-2 text-sm font-medium transition-colors flex items-center justify-between ${
+                        deviceTiers.includes(key)
+                          ? 'bg-cyan-50 text-cyan-700'
+                          : 'text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span>
+                        {icon} {t(labelKey)}
+                      </span>
+                      {deviceTiers.includes(key) && <Check className="w-4 h-4 text-cyan-500" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* OS Type Dropdown */}
+            <div className="relative" ref={osRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setOsDropdownOpen(!osDropdownOpen)
+                  setTierDropdownOpen(false)
+                  setSortOpen(false)
+                }}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/80 border-2 text-sm font-bold transition-all ${
+                  osTypes.length > 0
+                    ? 'border-cyan-300 text-cyan-700 bg-cyan-50'
+                    : 'border-white/90 text-gray-600 hover:border-gray-300'
+                }`}
+              >
+                {t('marketplace.osType', '操作系统')}
+                {osTypes.length > 0 && (
+                  <span className="bg-cyan-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                    {osTypes.length}
+                  </span>
+                )}
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+              {osDropdownOpen && (
+                <div className="absolute left-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-20 min-w-[160px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOsTypes([])
+                      resetPage()
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm font-medium transition-colors flex items-center justify-between ${
+                      osTypes.length === 0
+                        ? 'bg-cyan-50 text-cyan-700'
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {t('marketplace.filterAll', '全部')}
+                    {osTypes.length === 0 && <Check className="w-4 h-4 text-cyan-500" />}
+                  </button>
+                  {Object.entries(OS_LABELS).map(([key, { label }]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => {
+                        toggleOsType(key)
+                        resetPage()
+                      }}
+                      className={`w-full text-left px-4 py-2 text-sm font-medium transition-colors flex items-center justify-between ${
+                        osTypes.includes(key)
+                          ? 'bg-cyan-50 text-cyan-700'
+                          : 'text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span>{label}</span>
+                      {osTypes.includes(key) && <Check className="w-4 h-4 text-cyan-500" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Divider */}
+            <div className="w-px h-5 bg-gray-200" />
+
+            <div className="text-sm font-bold text-gray-500">
+              {t('marketplace.resultCount', { count: totalCount })}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
             {isAuthenticated && hasActiveRentalsOrListings && (
               <Link
                 to="/app/marketplace/my-rentals"
@@ -446,6 +550,19 @@ function ListingCard({ listing, onClick }: { listing: Listing; onClick: () => vo
   const { t } = useTranslation()
   const tier = DEVICE_TIER_COLORS[listing.deviceTier]
 
+  // Format availability time for display
+  const availabilityLabel = (() => {
+    if (!listing.availableUntil) return null
+    const until = new Date(listing.availableUntil)
+    const now = new Date()
+    const diffHours = Math.max(0, Math.round((until.getTime() - now.getTime()) / 3600000))
+    if (diffHours <= 0) return null
+    if (diffHours < 24) return `${diffHours}h`
+    const diffDays = Math.round(diffHours / 24)
+    if (diffDays < 30) return `${diffDays}d`
+    return `${Math.round(diffDays / 30)}mo`
+  })()
+
   return (
     <button
       type="button"
@@ -454,21 +571,31 @@ function ListingCard({ listing, onClick }: { listing: Listing; onClick: () => vo
     >
       {/* Top row: avatar left, tags right */}
       <div className="flex items-center justify-between mb-4">
-        <UserAvatar userId={listing.ownerId} size="md" className="shrink-0" />
+        <div className="flex items-center gap-2 min-w-0">
+          <UserAvatar
+            userId={listing.ownerId}
+            avatarUrl={listing.owner?.avatarUrl}
+            displayName={listing.owner?.displayName ?? listing.owner?.username}
+            size="md"
+            className="shrink-0"
+          />
+          {listing.owner && (
+            <span className="text-xs font-bold text-gray-500 truncate">
+              {listing.owner.displayName || listing.owner.username}
+            </span>
+          )}
+        </div>
         <div className="flex flex-wrap justify-end gap-1.5">
           <span
             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold text-white bg-gradient-to-r ${tier.color}`}
           >
             {tier.icon} {t(tier.labelKey)}
           </span>
-          {listing.tags.slice(0, 2).map((tag) => (
-            <span
-              key={tag}
-              className="bg-cyan-50 text-cyan-700 text-[10px] font-bold px-2 py-0.5 rounded-full"
-            >
-              {tag}
+          {availabilityLabel && (
+            <span className="inline-flex items-center gap-0.5 bg-emerald-50 text-emerald-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
+              <Clock className="w-2.5 h-2.5" /> {availabilityLabel}
             </span>
-          ))}
+          )}
         </div>
       </div>
 

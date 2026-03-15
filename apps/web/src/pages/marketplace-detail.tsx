@@ -12,7 +12,7 @@ import {
   Shield,
   Users,
 } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatDuration, OnlineRank } from '../components/common/online-rank'
 import { fetchApi } from '../lib/api'
@@ -33,7 +33,6 @@ interface Listing {
   hourlyRate: number
   dailyRate: number
   monthlyRate: number
-  premiumMarkup: number
   depositAmount: number
   tokenFeePassthrough: boolean
   viewCount: number
@@ -43,6 +42,12 @@ interface Listing {
   availableFrom: string | null
   availableUntil: string | null
   createdAt: string
+  owner: {
+    id: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+  } | null
 }
 
 interface CostEstimate {
@@ -94,14 +99,27 @@ export function MarketplaceDetailPage() {
     enabled: !!listingId,
   })
 
-  // Fetch cost estimate
+  // Compute max available hours based on availability window
+  const maxAvailableHours = useMemo(() => {
+    if (!listing?.availableUntil) return null
+    const until = new Date(listing.availableUntil)
+    const now = new Date()
+    const diffMs = until.getTime() - now.getTime()
+    if (diffMs <= 0) return 0
+    return Math.floor(diffMs / 3600000)
+  }, [listing?.availableUntil])
+
+  const isOverLimit = maxAvailableHours !== null && durationHours > maxAvailableHours
+  const effectiveDurationHours = isOverLimit ? maxAvailableHours : durationHours
+
+  // Fetch cost estimate (use effective duration capped by availability)
   const { data: estimate } = useQuery({
-    queryKey: ['marketplace', 'estimate', listingId, durationHours],
+    queryKey: ['marketplace', 'estimate', listingId, effectiveDurationHours],
     queryFn: () =>
       fetchApi<CostEstimate>(
-        `/api/marketplace/listings/${listingId}/estimate?hours=${durationHours}`,
+        `/api/marketplace/listings/${listingId}/estimate?hours=${effectiveDurationHours}`,
       ),
-    enabled: !!listingId && durationHours > 0,
+    enabled: !!listingId && effectiveDurationHours > 0,
   })
 
   // Sign contract mutation
@@ -112,7 +130,7 @@ export function MarketplaceDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           listingId,
-          durationHours: durationHours || null,
+          durationHours: effectiveDurationHours || null,
           agreedToTerms: true,
         }),
       }),
@@ -311,6 +329,30 @@ export function MarketplaceDetailPage() {
                   </div>
                 </div>
               )}
+
+              {/* Availability Window */}
+              {(listing.availableFrom || listing.availableUntil) && (
+                <div className="bg-emerald-50/50 rounded-xl p-4">
+                  <h3 className="text-sm font-bold text-gray-500 mb-2 flex items-center gap-1.5">
+                    <Clock className="w-4 h-4 text-emerald-500" />
+                    {t('marketplace.availability', '可用时间')}
+                  </h3>
+                  <div className="flex gap-4 text-sm font-medium text-gray-600">
+                    {listing.availableFrom && (
+                      <span>
+                        {t('marketplace.availableFrom', '开始时间')}:{' '}
+                        {new Date(listing.availableFrom).toLocaleString()}
+                      </span>
+                    )}
+                    {listing.availableUntil && (
+                      <span>
+                        {t('marketplace.availableUntil', '结束时间')}:{' '}
+                        {new Date(listing.availableUntil).toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Guidelines */}
@@ -403,6 +445,19 @@ export function MarketplaceDetailPage() {
                     </button>
                   ))}
                 </div>
+                {isOverLimit && maxAvailableHours !== null && (
+                  <div className="mt-2 bg-amber-50 rounded-lg p-3 text-xs text-amber-700 font-medium">
+                    <Clock className="w-3.5 h-3.5 inline mr-1" />
+                    {t(
+                      'marketplace.availabilityWarning',
+                      '此 Claw 最长可用至 {{date}}（剩余 {{hours}} 小时），费用和合同将按限制时间计算。',
+                      {
+                        date: new Date(listing!.availableUntil!).toLocaleString(),
+                        hours: maxAvailableHours,
+                      },
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Cost Estimate */}
@@ -484,7 +539,7 @@ export function MarketplaceDetailPage() {
           onKeyDown={() => {}}
         >
           <div
-            className="relative max-w-3xl w-full max-h-[90vh] overflow-y-auto bg-[#fdfaf5] rounded-xl shadow-2xl p-8 md:p-12 border border-amber-900/10"
+            className="relative max-w-2xl w-full max-h-[90vh] overflow-y-auto bg-[#fdfaf5] rounded-xl shadow-2xl p-6 md:p-8 border border-amber-900/10"
             style={{
               backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E")`,
               boxShadow:
@@ -507,7 +562,7 @@ export function MarketplaceDetailPage() {
             {/* Watermark */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none -z-0">
               <div
-                className="text-7xl md:text-8xl font-black text-amber-900 uppercase tracking-widest whitespace-nowrap opacity-[0.03]"
+                className="text-6xl font-black text-amber-900 uppercase tracking-widest whitespace-nowrap opacity-[0.03]"
                 style={{ fontFamily: "'ZCOOL KuaiLe', cursive", transform: 'rotate(-20deg)' }}
               >
                 SHADOW
@@ -517,7 +572,7 @@ export function MarketplaceDetailPage() {
             {/* Paw Stamp */}
             {signed && (
               <div
-                className="absolute right-8 md:right-12 bottom-20 pointer-events-none z-20 mix-blend-multiply"
+                className="absolute right-6 md:right-10 bottom-16 pointer-events-none z-20 mix-blend-multiply"
                 style={{
                   animation: 'stampIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
                 }}
@@ -525,7 +580,7 @@ export function MarketplaceDetailPage() {
                 <div className="relative">
                   <svg
                     viewBox="0 0 100 100"
-                    className="w-36 h-36 text-red-600/90 drop-shadow-sm fill-current"
+                    className="w-28 h-28 text-red-600/90 drop-shadow-sm fill-current"
                     style={{ filter: 'url(#stamp-tex)' }}
                   >
                     <title>Approved</title>
@@ -552,9 +607,9 @@ export function MarketplaceDetailPage() {
                     <circle cx="60" cy="25" r="11" />
                     <circle cx="75" cy="40" r="10" />
                   </svg>
-                  <div className="absolute inset-0 flex items-center justify-center -rotate-12 mt-10">
+                  <div className="absolute inset-0 flex items-center justify-center -rotate-12 mt-8">
                     <span
-                      className="text-red-700/90 text-xl font-bold border-2 border-red-700/90 px-3 py-1 rounded-sm tracking-widest"
+                      className="text-red-700/90 text-base font-bold border-2 border-red-700/90 px-2 py-0.5 rounded-sm tracking-widest"
                       style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
                     >
                       {t('contract.approved', 'APPROVED')}
@@ -566,110 +621,108 @@ export function MarketplaceDetailPage() {
 
             <div className="relative z-10">
               {/* Header */}
-              <div className="text-center mb-8 border-b-2 border-amber-900/10 pb-6">
+              <div className="text-center mb-5 border-b-2 border-amber-900/10 pb-4">
                 <h2
-                  className="text-3xl md:text-4xl font-bold text-amber-950 mb-2"
+                  className="text-2xl md:text-3xl font-bold text-amber-950 mb-1"
                   style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
                 >
                   {t('marketplace.rentalContract', 'OpenClaw 租赁合同')}
                 </h2>
-                <p className="text-amber-800/60 font-bold uppercase tracking-[0.2em] text-sm">
+                <p className="text-amber-800/60 font-bold uppercase tracking-[0.2em] text-xs">
                   P2P RENTAL AGREEMENT
                 </p>
               </div>
 
               {/* Listing Summary */}
-              <div className="bg-white/60 p-5 rounded-xl border border-amber-900/10 mb-6">
-                <h3 className="font-bold text-amber-950 text-lg mb-1">{listing.title}</h3>
-                <p className="text-sm text-amber-900/60">
+              <div className="bg-white/60 p-3 rounded-xl border border-amber-900/10 mb-4">
+                <h3 className="font-bold text-amber-950 text-base mb-0.5">{listing.title}</h3>
+                <p className="text-xs text-amber-900/60">
                   {tier.icon} {t(tier.labelKey)} · {OS_INFO[listing.osType]} · {listing.hourlyRate}{' '}
                   🦐/h
                 </p>
               </div>
 
-              {/* Terms */}
-              <div className="space-y-4 mb-8">
-                <div className="flex items-center justify-between border-b border-amber-900/10 pb-3">
-                  <span className="font-bold text-amber-950/80 flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-amber-400" />
+              {/* Terms Grid */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 mb-5 text-sm">
+                <div className="flex items-center justify-between border-b border-amber-900/10 pb-2">
+                  <span className="font-bold text-amber-950/80 flex items-center gap-1.5 text-xs">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                     {t('marketplace.contractStart', '租赁开始')}
                   </span>
-                  <span className="font-mono font-medium px-3 py-1 rounded bg-white/50 text-sm">
+                  <span className="font-mono font-medium text-xs">
                     {new Date().toLocaleDateString()}
                   </span>
                 </div>
-                <div className="flex items-center justify-between border-b border-amber-900/10 pb-3">
-                  <span className="font-bold text-amber-950/80 flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-amber-400" />
+                <div className="flex items-center justify-between border-b border-amber-900/10 pb-2">
+                  <span className="font-bold text-amber-950/80 flex items-center gap-1.5 text-xs">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                     {t('marketplace.contractDuration', '租赁时长')}
                   </span>
-                  <span className="font-mono font-medium px-3 py-1 rounded bg-white/50 text-sm">
-                    {durationHours}h
-                  </span>
+                  <span className="font-mono font-medium text-xs">{effectiveDurationHours}h</span>
                 </div>
-                <div className="flex items-center justify-between border-b border-amber-900/10 pb-3">
-                  <span className="font-bold text-amber-950/80 flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-green-400" />
+                <div className="flex items-center justify-between border-b border-amber-900/10 pb-2">
+                  <span className="font-bold text-amber-950/80 flex items-center gap-1.5 text-xs">
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
                     {t('marketplace.estimatedCost', '预估费用')}
                   </span>
-                  <span className="font-mono font-bold px-3 py-1 rounded bg-amber-50 text-amber-700 text-sm">
+                  <span className="font-mono font-bold text-xs text-amber-700">
                     {estimate?.totalEstimate ?? '...'} 🦐
                   </span>
                 </div>
                 {listing.depositAmount > 0 && (
-                  <div className="flex items-center justify-between pb-3">
-                    <span className="font-bold text-amber-950/80 flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-rose-400" />
+                  <div className="flex items-center justify-between pb-2">
+                    <span className="font-bold text-amber-950/80 flex items-center gap-1.5 text-xs">
+                      <div className="w-1.5 h-1.5 rounded-full bg-rose-400" />
                       {t('marketplace.contractDeposit', '违约保证金')}
                     </span>
-                    <span className="font-mono font-bold px-3 py-1 rounded bg-rose-50 text-rose-700 text-sm">
+                    <span className="font-mono font-bold text-xs text-rose-700">
                       {listing.depositAmount} 🦐
                     </span>
                   </div>
                 )}
               </div>
 
-              {/* Owner Terms */}
-              {listing.guidelines && (
-                <div className="mb-6">
-                  <h3 className="font-bold text-amber-950/80 mb-2 flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-amber-500" />
-                    {t('marketplace.ownerTerms', '出租方使用规约')}
-                  </h3>
-                  <div className="bg-white/40 rounded-lg p-4 text-sm text-amber-900/70 leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto">
-                    {listing.guidelines}
+              {/* Owner Terms + Platform Terms side by side on larger screens */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                {listing.guidelines && (
+                  <div>
+                    <h3 className="font-bold text-amber-950/80 mb-1.5 flex items-center gap-1.5 text-xs">
+                      <FileText className="w-3.5 h-3.5 text-amber-500" />
+                      {t('marketplace.ownerTerms', '出租方使用规约')}
+                    </h3>
+                    <div className="bg-white/40 rounded-lg p-3 text-xs text-amber-900/70 leading-relaxed whitespace-pre-wrap max-h-28 overflow-y-auto">
+                      {listing.guidelines}
+                    </div>
                   </div>
-                </div>
-              )}
-
-              {/* Platform Terms */}
-              <div className="mb-8">
-                <h3 className="font-bold text-amber-950/80 mb-2 flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-cyan-500" />
-                  {t('marketplace.platformTerms', '平台服务条款')}
-                </h3>
-                <div className="bg-white/40 rounded-lg p-4 text-sm text-amber-900/70 leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto">
-                  {`虾豆平台 OpenClaw 租赁服务条款
+                )}
+                <div>
+                  <h3 className="font-bold text-amber-950/80 mb-1.5 flex items-center gap-1.5 text-xs">
+                    <Shield className="w-3.5 h-3.5 text-cyan-500" />
+                    {t('marketplace.platformTerms', '平台服务条款')}
+                  </h3>
+                  <div className="bg-white/40 rounded-lg p-3 text-xs text-amber-900/70 leading-relaxed whitespace-pre-wrap max-h-28 overflow-y-auto">
+                    {`虾豆平台 OpenClaw 租赁服务条款
 
 1. 平台收取 5% 的服务手续费。
-2. 出租方在租赁期间不得自行使用已出租的 OpenClaw，违者需支付合同约定的违约金。
-3. 使用方应遵守出租方设定的使用准则，不得滥用或用于非法用途。
+2. 出租方不得自行使用已出租的 OpenClaw，违者需支付违约金。
+3. 使用方应遵守使用准则，不得滥用或用于非法用途。
 4. Token 消耗费用和电费由使用方承担。
 5. 任一方可提前终止租约，已产生的费用不予退还。
 6. 发生争议时，平台有权介入调解。
 7. 平台保留对违规行为进行处罚的权利。`}
+                  </div>
                 </div>
               </div>
 
               {/* Agreement Checkbox */}
-              <label className="flex items-start gap-3 mb-8 cursor-pointer group">
+              <label className="flex items-start gap-2.5 mb-5 cursor-pointer group">
                 <input
                   type="checkbox"
                   checked={agreedToTerms}
                   onChange={(e) => setAgreedToTerms(e.target.checked)}
-                  className="mt-1 w-5 h-5 rounded border-gray-300 text-amber-500 focus:ring-amber-300"
+                  className="mt-0.5 w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-300"
                 />
-                <span className="text-sm text-amber-900/80 font-medium leading-relaxed">
+                <span className="text-xs text-amber-900/80 font-medium leading-relaxed">
                   {t(
                     'marketplace.agreeTerms',
                     '我已阅读并同意出租方的使用规约和虾豆平台服务条款，理解租赁期间的费用计算规则、违约条款及相关责任。',
@@ -678,28 +731,30 @@ export function MarketplaceDetailPage() {
               </label>
 
               {/* Signatures */}
-              <div className="flex flex-col sm:flex-row justify-between items-end gap-8 px-2">
+              <div className="flex flex-col sm:flex-row justify-between items-end gap-6 px-2">
                 <div className="w-full sm:w-2/5">
-                  <div className="border-b-[3px] border-amber-900/30 h-14 flex items-end justify-center pb-2">
+                  <div className="border-b-[3px] border-amber-900/30 h-10 flex items-end justify-center pb-1.5">
                     <span
-                      className="font-medium text-amber-900/40 italic text-xl"
+                      className="font-medium text-amber-900/70 italic text-lg"
                       style={{ fontFamily: "cursive, 'ZCOOL KuaiLe'" }}
                     >
-                      {t('marketplace.ownerSignature', '出租方')}
+                      {listing.owner?.displayName ||
+                        listing.owner?.username ||
+                        t('marketplace.ownerSignature', '出租方')}
                     </span>
                   </div>
-                  <p className="text-center text-xs text-amber-900/60 mt-2 uppercase tracking-widest font-semibold">
+                  <p className="text-center text-[10px] text-amber-900/60 mt-1.5 uppercase tracking-widest font-semibold">
                     {t('marketplace.ownerSignatureLabel', '出租方签名')}
                   </p>
                 </div>
 
-                <div className="w-full sm:w-2/5 relative flex flex-col items-center min-h-[3.5rem]">
+                <div className="w-full sm:w-2/5 relative flex flex-col items-center min-h-[2.5rem]">
                   {!signed ? (
                     <button
                       type="button"
                       disabled={!agreedToTerms || signMutation.isPending}
                       onClick={() => signMutation.mutate()}
-                      className={`w-full max-w-[200px] py-3 px-6 rounded-full font-bold text-lg shadow-xl transition-all transform ${
+                      className={`w-full max-w-[180px] py-2.5 px-5 rounded-full font-bold text-base shadow-xl transition-all transform ${
                         agreedToTerms
                           ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white hover:-translate-y-1 hover:scale-105 active:scale-95 ring-4 ring-amber-100'
                           : 'bg-gray-200 text-gray-400 cursor-not-allowed'
@@ -711,13 +766,15 @@ export function MarketplaceDetailPage() {
                         : t('marketplace.signContract', '确认签约')}
                     </button>
                   ) : (
-                    <div className="border-b-[3px] border-amber-900/30 h-14 w-full flex items-end justify-center pb-2">
-                      <span className="font-medium text-amber-900 font-serif text-2xl italic drop-shadow-sm">
-                        {t('marketplace.signedTenant', '使用方已签')}
+                    <div className="border-b-[3px] border-amber-900/30 h-10 w-full flex items-end justify-center pb-1.5">
+                      <span className="font-medium text-amber-900 font-serif text-xl italic drop-shadow-sm">
+                        {currentUser?.displayName ||
+                          currentUser?.username ||
+                          t('marketplace.signedTenant', '使用方已签')}
                       </span>
                     </div>
                   )}
-                  <p className="text-center text-xs text-amber-900/60 mt-2 uppercase tracking-widest font-semibold">
+                  <p className="text-center text-[10px] text-amber-900/60 mt-1.5 uppercase tracking-widest font-semibold">
                     {t('marketplace.tenantSignatureLabel', '使用方签名')}
                   </p>
                 </div>
@@ -725,7 +782,7 @@ export function MarketplaceDetailPage() {
 
               {/* Close button */}
               {!signed && (
-                <div className="text-center mt-6">
+                <div className="text-center mt-4">
                   <button
                     type="button"
                     onClick={() => setShowContract(false)}

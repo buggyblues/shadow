@@ -77,7 +77,6 @@ export class RentalService {
       dailyRate?: number
       monthlyRate?: number
       tokenFeePassthrough?: boolean
-      premiumMarkup?: number
       depositAmount?: number
       listingStatus?: 'draft' | 'active'
       availableFrom?: string
@@ -149,7 +148,17 @@ export class RentalService {
       const agent = await this.deps.agentDao.findById(listing.agentId)
       totalOnlineSeconds = agent?.totalOnlineSeconds ?? 0
     }
-    return { ...listing, totalOnlineSeconds }
+    // Enrich with owner info
+    const ownerUser = await this.deps.userDao.findById(listing.ownerId)
+    const owner = ownerUser
+      ? {
+          id: ownerUser.id,
+          username: ownerUser.username,
+          displayName: ownerUser.displayName,
+          avatarUrl: ownerUser.avatarUrl,
+        }
+      : null
+    return { ...listing, totalOnlineSeconds, owner }
   }
 
   async getMyListings(ownerId: string, opts?: { limit?: number; offset?: number }) {
@@ -426,13 +435,15 @@ export class RentalService {
 
     // Credit owner (minus platform fee)
     const ownerPayout = totalCost - platformFee
-    await this.deps.walletService.settle(
-      contract.ownerId,
-      ownerPayout,
-      usage.id,
-      'rental_usage',
-      `OpenClaw 出租收入 - 合同 ${contract.contractNo}`,
-    )
+    if (usage) {
+      await this.deps.walletService.settle(
+        contract.ownerId,
+        ownerPayout,
+        usage.id,
+        'rental_usage',
+        `OpenClaw 出租收入 - 合同 ${contract.contractNo}`,
+      )
+    }
 
     // Update running total
     await this.deps.rentalContractDao.addCost(contractId, totalCost)

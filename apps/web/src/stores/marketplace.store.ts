@@ -3,10 +3,10 @@ import { create } from 'zustand'
 interface MarketplaceState {
   /** Search keyword */
   searchQuery: string
-  /** Device tier filter */
-  deviceTier: string | null
-  /** OS type filter */
-  osType: string | null
+  /** Device tier filter (multi-select) */
+  deviceTiers: string[]
+  /** OS type filter (multi-select) */
+  osTypes: string[]
   /** Sort mode */
   sortBy: 'popular' | 'newest' | 'price-asc' | 'price-desc'
   /** Active listing detail ID */
@@ -17,8 +17,10 @@ interface MarketplaceState {
   rentalsSubTab: 'contracts' | 'listings'
 
   setSearchQuery: (q: string) => void
-  setDeviceTier: (tier: string | null) => void
-  setOsType: (os: string | null) => void
+  setDeviceTiers: (tiers: string[]) => void
+  toggleDeviceTier: (tier: string) => void
+  setOsTypes: (types: string[]) => void
+  toggleOsType: (os: string) => void
   setSortBy: (sortBy: 'popular' | 'newest' | 'price-asc' | 'price-desc') => void
   setActiveListingId: (id: string | null) => void
   setRentalsTab: (tab: 'renting' | 'renting-out') => void
@@ -27,16 +29,28 @@ interface MarketplaceState {
 
 export const useMarketplaceStore = create<MarketplaceState>((set) => ({
   searchQuery: '',
-  deviceTier: null,
-  osType: null,
+  deviceTiers: [],
+  osTypes: [],
   sortBy: 'popular',
   activeListingId: null,
   rentalsTab: 'renting',
   rentalsSubTab: 'contracts',
 
   setSearchQuery: (searchQuery) => set({ searchQuery }),
-  setDeviceTier: (deviceTier) => set({ deviceTier }),
-  setOsType: (osType) => set({ osType }),
+  setDeviceTiers: (deviceTiers) => set({ deviceTiers }),
+  toggleDeviceTier: (tier) =>
+    set((state) => ({
+      deviceTiers: state.deviceTiers.includes(tier)
+        ? state.deviceTiers.filter((t) => t !== tier)
+        : [...state.deviceTiers, tier],
+    })),
+  setOsTypes: (osTypes) => set({ osTypes }),
+  toggleOsType: (os) =>
+    set((state) => ({
+      osTypes: state.osTypes.includes(os)
+        ? state.osTypes.filter((t) => t !== os)
+        : [...state.osTypes, os],
+    })),
   setSortBy: (sortBy) => set({ sortBy }),
   setActiveListingId: (activeListingId) => set({ activeListingId }),
   setRentalsTab: (rentalsTab) => set({ rentalsTab }),
