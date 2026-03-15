@@ -10,6 +10,11 @@
     "start": "electron-forge start",
     "package": "pnpm build && electron-forge package",
     "make": "pnpm build && electron-forge make",
+    "release": "node scripts/release.mjs --platform=all --mode=make",
+    "release:mac:x64": "node scripts/release.mjs --platform=darwin --arch=x64 --mode=make --notarize",
+    "release:mac:arm64": "node scripts/release.mjs --platform=darwin --arch=arm64 --mode=make --notarize",
+    "release:win": "node scripts/release.mjs --platform=win32 --arch=x64 --mode=make",
+    "release:linux": "node scripts/release.mjs --platform=linux --arch=x64 --mode=make",
     "test": "npx playwright test",
     "test:e2e": "npx playwright test",
     "generate-icons": "node scripts/generate-icons.mjs"
@@ -20,6 +25,7 @@
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.1",
+    "@electron-forge/maker-dmg": "^7.11.1",
     "@electron-forge/maker-squirrel": "^7.11.1",
     "@electron-forge/maker-zip": "^7.11.1",
     "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
