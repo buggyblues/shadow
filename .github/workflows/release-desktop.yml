@@ -16,16 +16,14 @@ permissions:
 jobs:
   build-macos-notarized:
     name: macOS ${{ matrix.arch }} notarized
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-latest
     environment: ShadowOB Mac
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: x64
-            runner: macos-13
           - arch: arm64
-            runner: macos-14
     env:
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       APPLE_CODESIGN_IDENTITY: ${{ secrets.APPLE_CODESIGN_IDENTITY }}

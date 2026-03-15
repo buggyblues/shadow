@@ -15,9 +15,47 @@ const arch = arg('arch', process.arch)
 const mode = arg('mode', 'make') // make|package
 const notarize = hasFlag('notarize')
 
-function run(cmd) {
+function getRunEnv(targetPlatform) {
+  const env = { ...process.env }
+
+  if (!(notarize && targetPlatform === 'darwin')) {
+    return env
+  }
+
+  const hasApiKey = !!env.APPLE_API_KEY && !!env.APPLE_API_KEY_ID && !!env.APPLE_API_ISSUER
+  const hasAppleIdPassword = !!env.APPLE_ID && !!env.APPLE_APP_SPECIFIC_PASSWORD
+
+  if (hasApiKey) {
+    // Keep API key mode only
+    delete env.APPLE_ID
+    delete env.APPLE_APP_SPECIFIC_PASSWORD
+    delete env.APPLE_KEYCHAIN
+    delete env.APPLE_KEYCHAIN_PROFILE
+    delete env.APPLE_KEYCHAIN_PASSWORD
+    console.log('[release] notarization auth mode: App Store Connect API key')
+    return env
+  }
+
+  if (hasAppleIdPassword) {
+    // Keep Apple ID mode only
+    delete env.APPLE_API_KEY
+    delete env.APPLE_API_KEY_ID
+    delete env.APPLE_API_ISSUER
+    delete env.APPLE_KEYCHAIN
+    delete env.APPLE_KEYCHAIN_PROFILE
+    delete env.APPLE_KEYCHAIN_PASSWORD
+    console.log('[release] notarization auth mode: Apple ID + app-specific password')
+    return env
+  }
+
+  return env
+}
+
+function runForTarget(targetPlatform, targetArch) {
+  const runEnv = getRunEnv(targetPlatform)
+  const cmd = `${base} --platform=${targetPlatform} --arch=${targetArch}`
   console.log(`\n[release] ${cmd}`)
-  execSync(cmd, { stdio: 'inherit', env: process.env })
+  execSync(cmd, { stdio: 'inherit', env: runEnv })
 }
 
 function validateNotarizationEnv() {
@@ -54,10 +92,10 @@ if (platform === 'all') {
     ['linux', 'x64'],
   ]
   for (const [p, a] of targets) {
-    run(`${base} --platform=${p} --arch=${a}`)
+    runForTarget(p, a)
   }
 } else {
-  run(`${base} --platform=${platform} --arch=${arch}`)
+  runForTarget(platform, arch)
 }
 
 console.log('\n[release] done')
