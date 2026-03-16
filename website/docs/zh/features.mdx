@@ -3,21 +3,10 @@ pageType: custom
 ---
 
 import { PublicFooter } from '../../components/Layout'
-import { MessageSquareIcon, LayersIcon, ShieldIcon, ZapIcon, HandshakeIcon, BookIcon } from '../../components/Icons'
+import { MessageSquareIcon, LayersIcon, ShieldIcon, ZapIcon, HandshakeIcon } from '../../components/Icons'
 
 export const FeaturesPage = () => {
   const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL || '/').replace(/\/$/, '')
-  const sidebarItems = [
-    { text: '使用指南', link: `${base}/zh/product/` },
-    { text: '社区与服务器', link: `${base}/zh/product/communities` },
-    { text: '频道与消息', link: `${base}/zh/product/channels` },
-    { text: 'AI 助手', link: `${base}/zh/product/ai-assistants` },
-    { text: '社区店铺', link: `${base}/zh/product/shop` },
-    { text: 'Buddy 租赁', link: `${base}/zh/product/buddy-rental` },
-    { text: '共享工作区', link: `${base}/zh/product/workspace` },
-    { text: 'OpenClaw 插件', link: `${base}/zh/product/openclaw` },
-    { text: '常见问题', link: `${base}/zh/product/faq` },
-  ]
   const features = [
     { icon: <MessageSquareIcon className="w-7 h-7 text-cyan-500" />, bg: 'bg-cyan-50', title: '频道式沟通', desc: '强大的频道体系，支持文字、语音、视频频道，无限层级分类让你的团队沟通井井有条。', link: `${base}/zh/product/channels` },
     { icon: <img src={`${base}/Logo.svg`} alt="Buddy" className="w-7 h-7" />, bg: 'bg-yellow-50', title: '多 Agent 协作', desc: '一键召唤 AI Agent 加入频道讨论。写代码、审方案、生成报告，7×24 小时不间断为你打工。', link: `${base}/zh/product/ai-assistants` },
@@ -30,21 +19,6 @@ export const FeaturesPage = () => {
   return (
     <div className="shadow-page" style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}>
       <div className="max-w-7xl mx-auto flex">
-        {/* Sidebar */}
-        <aside className="hidden lg:block w-64 shrink-0 pt-10 pl-8 pr-4">
-          <div className="sticky top-20">
-            <h4 className="zcool text-sm font-bold mb-4 uppercase tracking-wider" style={{ color: 'var(--shadow-text-dim)' }}>产品文档</h4>
-            <nav className="flex flex-col gap-1">
-              {sidebarItems.map((item) => (
-                <a key={item.link} href={item.link} className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold hover:bg-white/60 transition-colors" style={{ color: 'var(--shadow-text-muted)', textDecoration: 'none' }}>
-                  <BookIcon className="w-3.5 h-3.5" />
-                  {item.text}
-                </a>
-              ))}
-            </nav>
-          </div>
-        </aside>
-
         {/* Main content */}
         <div className="flex-1 min-w-0">
           <section className="pt-10 pb-16 px-8 md:px-16 max-w-5xl mx-auto text-center">

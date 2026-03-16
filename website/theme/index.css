@@ -2,34 +2,57 @@
 @import url("https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Nunito:wght@400;700;900&display=swap");
 
 /* ===== TailwindCSS v4 (utilities only — no preflight to preserve Rspress styles) ===== */
-@import "tailwindcss/theme" layer(theme);
-@import "tailwindcss/utilities" layer(utilities);
+/* Use unlayered imports so utilities aren't outranked by Rspress' unlayered reset rules. */
+@import "tailwindcss/theme";
+@import "tailwindcss/utilities";
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Ensure Tailwind scans all docs/theme/component sources in this workspace */
+@source "../docs/**/*.{md,mdx}";
+@source "../components/**/*.{ts,tsx,js,jsx}";
+@source "../theme/**/*.{css,ts,tsx,js,jsx}";
+@source "../plugins/**/*.{ts,tsx,js,jsx,mjs,cjs}";
+
+/* Safelist dynamic classes composed at runtime (e.g. `bg-gradient-to-r ${tier.color}`) */
+@source inline("from-amber-400 to-orange-500 from-blue-400 to-cyan-500 from-gray-400 to-gray-500");
 
 /* ===== Dark mode CSS variables ===== */
 :root {
-  --shadow-bg: #f2f7fc;
-  --shadow-dot: #c2d2ea;
-  --shadow-text: #2d3748;
-  --shadow-text-muted: #4a5568;
-  --shadow-text-dim: #718096;
-  --shadow-card-bg: rgba(255, 255, 255, 0.65);
-  --shadow-card-border: rgba(255, 255, 255, 0.9);
-  --shadow-nav-bg: rgba(255, 255, 255, 0.75);
-  --shadow-section-from: #fefce8;
-  --shadow-section-to: #ecfdf5;
+  --shadow-bg: var(--rp-c-bg);
+  --shadow-dot: color-mix(in oklab, var(--rp-c-text-1) 10%, var(--rp-c-bg) 90%);
+  --shadow-text: color-mix(in oklab, var(--rp-c-text-1) 96%, black 4%);
+  --shadow-text-muted: color-mix(in oklab, var(--rp-c-text-1) 78%, var(--rp-c-bg) 22%);
+  --shadow-text-dim: color-mix(in oklab, var(--rp-c-text-1) 62%, var(--rp-c-bg) 38%);
+  --shadow-card-bg: color-mix(in oklab, var(--rp-c-bg) 96%, var(--rp-c-brand-tint) 4%);
+  --shadow-card-border: color-mix(in oklab, var(--rp-c-text-1) 14%, var(--rp-c-bg) 86%);
+  --shadow-nav-bg: color-mix(in oklab, var(--rp-c-bg) 94%, var(--rp-c-brand-tint) 6%);
+  --shadow-section-from: color-mix(in oklab, var(--rp-c-bg-soft) 88%, var(--rp-c-brand-tint) 12%);
+  --shadow-section-to: color-mix(in oklab, var(--rp-c-bg-soft) 92%, var(--rp-c-brand-tint) 8%);
+  --shadow-accent: var(--rp-c-brand);
+  --shadow-accent-strong: color-mix(in oklab, var(--rp-c-brand) 82%, #00f3ff 18%);
+  --shadow-accent-contrast: white;
+  --shadow-warm: color-mix(in oklab, #f8e71c 68%, #ffb300 32%);
+  --shadow-warm-strong: color-mix(in oklab, #f8e71c 54%, #ffb300 46%);
+  --shadow-button-text: #1a1a1c;
 }
 
 html.dark {
-  --shadow-bg: #0f1117;
-  --shadow-dot: #1e2028;
-  --shadow-text: #e2e8f0;
-  --shadow-text-muted: #a0aec0;
-  --shadow-text-dim: #718096;
-  --shadow-card-bg: rgba(25, 28, 36, 0.75);
-  --shadow-card-border: rgba(55, 58, 68, 0.6);
-  --shadow-nav-bg: rgba(15, 17, 23, 0.82);
-  --shadow-section-from: rgba(30, 25, 10, 0.5);
-  --shadow-section-to: rgba(10, 30, 25, 0.5);
+  --shadow-bg: var(--rp-c-bg);
+  --shadow-dot: color-mix(in oklab, var(--rp-c-text-1) 12%, var(--rp-c-bg) 88%);
+  --shadow-text: var(--rp-c-text-1);
+  --shadow-text-muted: color-mix(in oklab, var(--rp-c-text-1) 84%, var(--rp-c-bg) 16%);
+  --shadow-text-dim: color-mix(in oklab, var(--rp-c-text-1) 66%, var(--rp-c-bg) 34%);
+  --shadow-card-bg: color-mix(in oklab, var(--rp-c-bg) 90%, var(--rp-c-bg-soft) 10%);
+  --shadow-card-border: color-mix(in oklab, var(--rp-c-text-1) 16%, var(--rp-c-bg) 84%);
+  --shadow-nav-bg: color-mix(in oklab, var(--rp-c-bg) 90%, var(--rp-c-bg-soft) 10%);
+  --shadow-section-from: color-mix(in oklab, var(--rp-c-bg-soft) 90%, var(--rp-c-brand-tint) 10%);
+  --shadow-section-to: color-mix(in oklab, var(--rp-c-bg-soft) 94%, var(--rp-c-brand-tint) 6%);
+  --shadow-accent: color-mix(in oklab, var(--rp-c-brand-light) 80%, #00f3ff 20%);
+  --shadow-accent-strong: color-mix(in oklab, var(--rp-c-brand-light) 70%, #00f3ff 30%);
+  --shadow-accent-contrast: #0f1117;
+  --shadow-warm: color-mix(in oklab, #f8e71c 65%, #ffb300 35%);
+  --shadow-warm-strong: color-mix(in oklab, #f8e71c 52%, #ffb300 48%);
+  --shadow-button-text: #1a1a1c;
 }
 
 /* ZCOOL KuaiLe shorthand */
@@ -52,16 +75,16 @@ html.dark {
   -webkit-backdrop-filter: blur(12px);
   border: 3px solid var(--shadow-card-border);
   border-radius: 36px;
-  box-shadow: 0 12px 40px rgba(31, 41, 55, 0.08);
+  box-shadow: 0 10px 28px color-mix(in oklab, var(--shadow-text) 10%, transparent);
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 html.dark .glass-card {
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.28);
 }
 .glass-card:hover {
   transform: translateY(-10px);
-  box-shadow: 0 20px 50px rgba(31, 41, 55, 0.12);
-  border-color: #00f3ff;
+  box-shadow: 0 18px 42px color-mix(in oklab, var(--shadow-text) 14%, transparent);
+  border-color: var(--shadow-accent-strong);
 }
 html.dark .glass-card:hover {
   box-shadow: 0 20px 50px rgba(0, 243, 255, 0.15);
@@ -69,11 +92,11 @@ html.dark .glass-card:hover {
 
 /* Primary CTA button */
 .btn-primary {
-  background: linear-gradient(135deg, #00f3ff, #00a2ff);
-  box-shadow: 0 6px 20px rgba(0, 243, 255, 0.4);
-  border: 3px solid #1a1a1c;
+  background: linear-gradient(135deg, var(--shadow-accent-strong), var(--shadow-accent));
+  box-shadow: 0 8px 24px color-mix(in oklab, var(--shadow-accent) 38%, transparent);
+  border: 3px solid color-mix(in oklab, var(--shadow-text) 88%, transparent);
   border-radius: 9999px;
-  color: #1a1a1c;
+  color: var(--shadow-button-text);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   text-decoration: none;
   display: inline-flex;
@@ -82,17 +105,21 @@ html.dark .glass-card:hover {
 }
 .btn-primary:hover {
   transform: translateY(-4px) scale(1.05);
-  box-shadow: 0 10px 25px rgba(0, 243, 255, 0.6);
-  background: linear-gradient(135deg, #33f5ff, #33b5ff);
+  box-shadow: 0 12px 28px color-mix(in oklab, var(--shadow-accent) 50%, transparent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--shadow-accent-strong) 84%, white 16%),
+    color-mix(in oklab, var(--shadow-accent) 88%, white 12%)
+  );
 }
 
 /* Secondary CTA button */
 .btn-secondary {
-  background: linear-gradient(135deg, #f8e71c, #ffb300);
-  box-shadow: 0 6px 20px rgba(248, 231, 28, 0.4);
-  border: 3px solid #1a1a1c;
+  background: linear-gradient(135deg, var(--shadow-warm), var(--shadow-warm-strong));
+  box-shadow: 0 8px 24px color-mix(in oklab, var(--shadow-warm-strong) 34%, transparent);
+  border: 3px solid color-mix(in oklab, var(--shadow-text) 88%, transparent);
   border-radius: 9999px;
-  color: #1a1a1c;
+  color: var(--shadow-button-text);
   transition: all 0.2s;
   text-decoration: none;
   display: inline-flex;
@@ -101,7 +128,7 @@ html.dark .glass-card:hover {
 }
 .btn-secondary:hover {
   transform: translateY(-4px) scale(1.05);
-  box-shadow: 0 10px 25px rgba(248, 231, 28, 0.6);
+  box-shadow: 0 12px 28px color-mix(in oklab, var(--shadow-warm-strong) 48%, transparent);
 }
 
 /* Hero blob */
@@ -295,10 +322,10 @@ html.dark .rspress-doc hr {
 
 /* ===== Rspress nav styling — glass morphism ===== */
 .rspress-nav {
-  background: var(--shadow-nav-bg) !important;
-  backdrop-filter: blur(16px) !important;
-  -webkit-backdrop-filter: blur(16px) !important;
-  border-bottom: 2px solid var(--shadow-card-border) !important;
+  background: var(--shadow-nav-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 2px solid var(--shadow-card-border);
 }
 
 /* Logo font in Rspress nav */
@@ -308,8 +335,8 @@ html.dark .rspress-doc hr {
 
 /* Nav menu item styling */
 .rspress-nav-menu-item {
-  font-weight: 700 !important;
-  white-space: nowrap !important;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 /* Launch button in nav — hide on mobile hamburger */
@@ -359,7 +386,7 @@ html.dark .code-group-tabs {
   border-bottom-color: var(--rp-c-brand, #00a2ff);
 }
 .code-group-container pre {
-  margin: 0 !important;
-  border-radius: 0 !important;
-  border: none !important;
+  margin: 0;
+  border-radius: 0;
+  border: none;
 }

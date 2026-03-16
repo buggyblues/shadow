@@ -38,6 +38,7 @@ export default defineConfig({
         label: 'English',
         nav: [
           { text: 'Features', link: '/features' },
+          { text: 'Product', link: '/product/' },
           { text: 'Buddy Market', link: '/buddies' },
           { text: 'Pricing', link: '/pricing' },
           { text: 'API', link: '/api/introduction' },
@@ -122,6 +123,7 @@ export default defineConfig({
         label: '中文',
         nav: [
           { text: '特色功能', link: '/zh/features' },
+          { text: '产品', link: '/zh/product/' },
           { text: 'Buddy 集市', link: '/zh/buddies' },
           { text: '定价', link: '/zh/pricing' },
           { text: 'API', link: '/zh/api/introduction' },
