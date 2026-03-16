@@ -38,7 +38,7 @@ export default function ServerLayout() {
       <HeaderButton
         icon={ChevronLeft}
         onPress={() => router.back()}
-        color={colors.primary}
+        color={colors.text}
         size={22}
       />
     </HeaderButtonGroup>
@@ -51,16 +51,19 @@ export default function ServerLayout() {
         headerTintColor: colors.text,
         headerTitleStyle: { fontWeight: '700' },
         headerBackVisible: false,
+        headerBackTitle: '',
         headerLeft,
       }}
     >
       <Stack.Screen name="index" options={{ title: server?.name ?? t('common.loading') }} />
-      <Stack.Screen name="channels/[channelId]" options={{ title: '' }} />
+      <Stack.Screen name="channels/[channelId]" options={{ headerShown: false }} />
       <Stack.Screen name="shop" options={{ title: t('server.shop') }} />
       <Stack.Screen name="workspace" options={{ title: t('server.workspace') }} />
       <Stack.Screen name="apps" options={{ title: t('server.apps') }} />
       <Stack.Screen name="shop-admin" options={{ title: t('shop.addProduct') }} />
       <Stack.Screen name="members" options={{ title: t('server.members') }} />
+      <Stack.Screen name="channel-members" options={{ title: t('channel.members', '频道成员') }} />
+      <Stack.Screen name="invite" options={{ title: t('members.inviteMembers', '邀请成员') }} />
       <Stack.Screen name="server-settings" options={{ title: t('channel.serverSettings') }} />
     </Stack>
   )

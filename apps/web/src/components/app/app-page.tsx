@@ -825,7 +825,7 @@ function CreateEditOverlay({
                 onChange={(e) => setSourceUrl(e.target.value)}
                 required
                 className="w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded-lg text-sm text-text-primary outline-none focus:ring-1 focus:ring-primary"
-                placeholder="https://example.com"
+                placeholder="https://shadowob.com"
               />
               <label className="mt-2 flex items-center gap-2 cursor-pointer">
                 <input

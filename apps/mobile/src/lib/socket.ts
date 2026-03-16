@@ -1,9 +1,7 @@
-import Constants from 'expo-constants'
 import * as SecureStore from 'expo-secure-store'
 import { AppState, type AppStateStatus } from 'react-native'
 import { io, type Socket } from 'socket.io-client'
-
-const API_BASE = Constants.expoConfig?.extra?.apiBase ?? 'https://shadow.example.com'
+import { API_BASE } from './api'
 
 let socket: Socket | null = null
 let appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = null
@@ -17,6 +15,21 @@ export function getSocket(): Socket {
       },
       transports: ['websocket'],
       autoConnect: false,
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
+    })
+
+    // Log connection lifecycle for debugging
+    socket.on('connect', () => {
+      console.log('[Socket] Connected:', socket?.id)
+    })
+    socket.on('connect_error', (err) => {
+      console.warn('[Socket] Connection error:', err.message)
+    })
+    socket.on('disconnect', (reason) => {
+      console.log('[Socket] Disconnected:', reason)
     })
   }
   return socket

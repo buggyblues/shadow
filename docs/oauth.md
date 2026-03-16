@@ -175,7 +175,7 @@ Response:
   "username": "alice",
   "displayName": "Alice",
   "avatarUrl": "...",
-  "email": "alice@example.com"
+  "email": "alice@shadowob.com"
 }
 ```
 

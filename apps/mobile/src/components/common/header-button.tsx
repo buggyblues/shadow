@@ -29,7 +29,7 @@ export function HeaderButton({
       hitSlop={6}
       style={({ pressed }) => [
         styles.btn,
-        pressed && { backgroundColor: colors.surfaceHover },
+        pressed && { opacity: 0.5 },
         disabled && { opacity: 0.4 },
       ]}
     >

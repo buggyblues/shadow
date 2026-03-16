@@ -183,7 +183,7 @@ describe('AgentService', () => {
       const userDao = createMockUserDao({
         update: vi
           .fn()
-          .mockResolvedValue({ ...botUser, avatarUrl: 'https://example.com/avatar.png' }),
+          .mockResolvedValue({ ...botUser, avatarUrl: 'https://shadowob.com/avatar.png' }),
       })
       const logger = createMockLogger()
 
@@ -196,16 +196,16 @@ describe('AgentService', () => {
       const result = await service.create({
         name: 'Avatar Bot',
         username: 'avatar-bot',
-        avatarUrl: 'https://example.com/avatar.png',
+        avatarUrl: 'https://shadowob.com/avatar.png',
         kernelType: 'openclaw',
         config: {},
         ownerId: 'owner-1',
       })
 
       expect(userDao.update).toHaveBeenCalledWith('bot-user-2', {
-        avatarUrl: 'https://example.com/avatar.png',
+        avatarUrl: 'https://shadowob.com/avatar.png',
       })
-      expect(result.botUser.avatarUrl).toBe('https://example.com/avatar.png')
+      expect(result.botUser.avatarUrl).toBe('https://shadowob.com/avatar.png')
     })
   })
 

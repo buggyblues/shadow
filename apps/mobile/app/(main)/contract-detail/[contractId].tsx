@@ -5,11 +5,11 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ActivityIndicator,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native'
 import { fetchApi } from '../../../src/lib/api'
@@ -113,12 +113,15 @@ export default function ContractDetailScreen() {
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Back */}
-      <TouchableOpacity style={styles.backRow} onPress={() => router.back()}>
+      <Pressable
+        style={({ pressed }) => [styles.backRow, { opacity: pressed ? 0.7 : 1 }]}
+        onPress={() => router.back()}
+      >
         <ChevronLeft size={20} color={colors.textMuted} />
         <Text style={[styles.backText, { color: colors.textMuted }]}>
           {t('marketplace.backToRentals', '返回我的租赁')}
         </Text>
-      </TouchableOpacity>
+      </Pressable>
 
       {/* Contract Header Card */}
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -233,14 +236,17 @@ export default function ContractDetailScreen() {
             </Text>
           </View>
           {!showTerminate ? (
-            <TouchableOpacity
-              style={[styles.dangerBtn, { marginTop: spacing.md }]}
+            <Pressable
+              style={({ pressed }) => [
+                styles.dangerBtn,
+                { marginTop: spacing.md, opacity: pressed ? 0.7 : 1 },
+              ]}
               onPress={() => setShowTerminate(true)}
             >
               <Text style={styles.dangerBtnText}>
                 {t('marketplace.terminateContract', '提前终止合同')}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           ) : (
             <View style={{ marginTop: spacing.md }}>
               <TextInput
@@ -260,8 +266,8 @@ export default function ContractDetailScreen() {
                 numberOfLines={3}
               />
               <View style={[styles.row, { marginTop: spacing.sm, gap: spacing.sm }]}>
-                <TouchableOpacity
-                  style={styles.confirmTermBtn}
+                <Pressable
+                  style={({ pressed }) => [styles.confirmTermBtn, { opacity: pressed ? 0.7 : 1 }]}
                   onPress={() => terminateMutation.mutate()}
                   disabled={terminateMutation.isPending}
                 >
@@ -270,15 +276,18 @@ export default function ContractDetailScreen() {
                       ? t('common.loading', '处理中...')
                       : t('marketplace.confirmTerminate', '确认终止')}
                   </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.cancelBtn, { backgroundColor: colors.background }]}
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.cancelBtn,
+                    { backgroundColor: colors.background, opacity: pressed ? 0.7 : 1 },
+                  ]}
                   onPress={() => setShowTerminate(false)}
                 >
                   <Text style={{ color: colors.textSecondary, fontWeight: '700' }}>
                     {t('common.cancel', '取消')}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
               <Text style={styles.warningText}>
                 {t(

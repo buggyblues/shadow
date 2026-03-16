@@ -48,7 +48,7 @@ let clientId: string
 let clientSecret: string
 let oauthAppId: string
 
-const REDIRECT_URI = 'https://demo-app.example.com/callback'
+const REDIRECT_URI = 'https://demo-app.shadowob.com/callback'
 
 beforeAll(async () => {
   sql = postgres(TEST_DB_URL, { max: 5 })
@@ -155,7 +155,7 @@ describe('OAuth App CRUD', () => {
         name: 'E2E Demo App',
         description: 'Created in E2E test',
         redirectUris: [REDIRECT_URI],
-        homepageUrl: 'https://demo-app.example.com',
+        homepageUrl: 'https://demo-app.shadowob.com',
       },
     })
     expect(status).toBe(201)
@@ -261,7 +261,7 @@ describe('OAuth Authorization Code Flow', () => {
     expect(json.redirectUrl).toBeDefined()
 
     const url = new URL(json.redirectUrl)
-    expect(url.origin).toBe('https://demo-app.example.com')
+    expect(url.origin).toBe('https://demo-app.shadowob.com')
     expect(url.searchParams.get('code')).toBeDefined()
     expect(url.searchParams.get('state')).toBe('test-state-123')
 

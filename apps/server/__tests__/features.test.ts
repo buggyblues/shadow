@@ -33,7 +33,7 @@ describe('Server validators (new fields)', () => {
       const result = createServerSchema.safeParse({
         name: 'My Server',
         description: 'A cool server for gamers',
-        iconUrl: 'https://example.com/icon.png',
+        iconUrl: 'https://shadowob.com/icon.png',
         isPublic: true,
       })
       expect(result.success).toBe(true)

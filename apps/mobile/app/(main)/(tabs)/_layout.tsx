@@ -1,5 +1,5 @@
 import { Tabs, useRouter } from 'expo-router'
-import { Bot, ChevronLeft, Compass, MessageSquare, Plus, Settings } from 'lucide-react-native'
+import { Bot, Compass, MessageSquare, Plus, User } from 'lucide-react-native'
 import { useTranslation } from 'react-i18next'
 import { HeaderButton, HeaderButtonGroup } from '../../../src/components/common/header-button'
 import { NotificationBell } from '../../../src/components/notification/notification-bell'
@@ -17,6 +17,8 @@ export default function TabsLayout() {
         headerStyle: { backgroundColor: colors.surface },
         headerTintColor: colors.text,
         headerTitleStyle: { fontWeight: '700' },
+        headerBackVisible: false,
+        headerBackTitle: '',
         tabBarShowLabel: true,
         tabBarLabelStyle: {
           fontSize: 10,
@@ -35,34 +37,16 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: t('nav.servers'),
+          title: t('nav.community', '社区'),
           tabBarIcon: ({ color }) => <MessageSquare size={24} color={color} />,
           headerLeft: () => (
             <HeaderButtonGroup>
-              <HeaderButton icon={Compass} onPress={() => router.push('/(main)/(tabs)/discover')} />
+              <NotificationBell onPress={() => router.push('/(main)/notifications' as never)} />
             </HeaderButtonGroup>
           ),
           headerRight: () => (
             <HeaderButtonGroup>
               <HeaderButton icon={Plus} onPress={() => router.push('/(main)/create-server')} />
-              <NotificationBell />
-            </HeaderButtonGroup>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="discover"
-        options={{
-          href: null,
-          title: t('discover.title'),
-          headerLeft: () => (
-            <HeaderButtonGroup>
-              <HeaderButton
-                icon={ChevronLeft}
-                onPress={() => router.back()}
-                color={colors.primary}
-                size={22}
-              />
             </HeaderButtonGroup>
           ),
         }}
@@ -70,15 +54,22 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="buddies"
         options={{
-          title: t('buddies.title'),
+          title: 'Buddy',
           tabBarIcon: ({ color }) => <Bot size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="discover"
+        options={{
+          title: t('discover.title', '发现'),
+          tabBarIcon: ({ color }) => <Compass size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
-          title: t('settings.sidebarTitle'),
-          tabBarIcon: ({ color }) => <Settings size={24} color={color} />,
+          title: t('nav.me', '我'),
+          tabBarIcon: ({ color }) => <User size={24} color={color} />,
         }}
       />
     </Tabs>

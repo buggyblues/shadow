@@ -5,6 +5,7 @@ import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import {
   AppWindow,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Crown,
   FolderOpen,
@@ -128,12 +129,7 @@ export default function ServerHomeScreen() {
 
   const { data: memberData } = useQuery({
     queryKey: ['members', server?.id],
-    queryFn: async () => {
-      const res = await fetchApi<{ members: Member[] } | Member[]>(
-        `/api/servers/${server!.id}/members`,
-      )
-      return Array.isArray(res) ? res : (res.members ?? [])
-    },
+    queryFn: () => fetchApi<Member[]>(`/api/servers/${server!.id}/members`),
     enabled: !!server?.id,
   })
 
@@ -274,14 +270,14 @@ export default function ServerHomeScreen() {
             <View style={[styles.bannerImage, { backgroundColor: colors.primary }]} />
           )}
           <LinearGradient
-            colors={['transparent', colors.background]}
-            locations={[0.1, 1]}
+            colors={['rgba(0,0,0,0.45)', 'transparent', colors.background]}
+            locations={[0, 0.35, 1]}
             style={styles.bannerGradient}
           />
 
           {/* Floating nav bar on banner */}
           <View style={[styles.heroNav, { paddingTop: insets.top + 8 }]}>
-            <HeaderButton icon={ChevronDown} onPress={() => router.back()} color="#fff" size={22} />
+            <HeaderButton icon={ChevronLeft} onPress={() => router.back()} color="#fff" size={22} />
             <View style={{ flex: 1 }} />
             {isOwner && (
               <HeaderButton
@@ -709,7 +705,6 @@ const styles = StyleSheet.create({
   bannerImage: { width: '100%', height: 160 },
   bannerGradient: {
     ...StyleSheet.absoluteFillObject,
-    top: 40,
   },
   heroNav: {
     position: 'absolute',

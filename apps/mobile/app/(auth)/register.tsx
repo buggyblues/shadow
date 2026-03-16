@@ -103,7 +103,7 @@ export default function RegisterScreen() {
             ]}
             value={email}
             onChangeText={setEmail}
-            placeholder="you@example.com"
+            placeholder="you@shadowob.com"
             placeholderTextColor={colors.textMuted}
             keyboardType="email-address"
             autoCapitalize="none"

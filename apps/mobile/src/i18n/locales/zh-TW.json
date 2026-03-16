@@ -41,7 +41,9 @@
     "docs": "文件",
     "login": "登入",
     "launch": "啟動！",
-    "servers": "伺服器"
+    "servers": "伺服器",
+    "community": "社群",
+    "me": "我"
   },
   "home": {
     "heroBadge": "v1.0 全新上線喵！",
@@ -230,7 +232,7 @@
     "publicStatus": "公開狀態",
     "publicServer": "公開伺服器",
     "publicServerDesc": "任何人都可以搜尋並加入",
-    "shop": "商店",
+    "shop": "商鋪",
     "workspace": "工作區",
     "membersOnline": "位成員在線",
     "searchChannels": "搜尋頻道...",

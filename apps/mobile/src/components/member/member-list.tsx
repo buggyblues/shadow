@@ -25,12 +25,7 @@ export function MemberList({ serverId }: { serverId: string }) {
 
   const { data: members = [] } = useQuery({
     queryKey: ['server-members', serverId],
-    queryFn: async () => {
-      const res = await fetchApi<{ members: Member[] } | Member[]>(
-        `/api/servers/${serverId}/members`,
-      )
-      return Array.isArray(res) ? res : (res.members ?? [])
-    },
+    queryFn: () => fetchApi<Member[]>(`/api/servers/${serverId}/members`),
     enabled: !!serverId,
   })
 

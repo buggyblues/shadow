@@ -41,7 +41,9 @@
     "docs": "ドキュメント",
     "login": "ログイン",
     "launch": "スタート！",
-    "servers": "サーバー"
+    "servers": "サーバー",
+    "community": "コミュニティ",
+    "me": "マイ"
   },
   "home": {
     "heroBadge": "v1.0 リリースにゃん！",

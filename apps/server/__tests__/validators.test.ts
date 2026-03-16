@@ -17,7 +17,7 @@ describe('Auth Validators', () => {
   describe('registerSchema', () => {
     it('should accept valid registration data', () => {
       const result = registerSchema.safeParse({
-        email: 'test@example.com',
+        email: 'test@shadowob.com',
         username: 'testuser',
         password: 'password123',
         displayName: 'Test User',
@@ -37,7 +37,7 @@ describe('Auth Validators', () => {
 
     it('should reject short username', () => {
       const result = registerSchema.safeParse({
-        email: 'test@example.com',
+        email: 'test@shadowob.com',
         username: 'ab',
         password: 'password123',
       })
@@ -46,7 +46,7 @@ describe('Auth Validators', () => {
 
     it('should reject username with special characters', () => {
       const result = registerSchema.safeParse({
-        email: 'test@example.com',
+        email: 'test@shadowob.com',
         username: 'user name!',
         password: 'password123',
       })
@@ -55,7 +55,7 @@ describe('Auth Validators', () => {
 
     it('should reject short password', () => {
       const result = registerSchema.safeParse({
-        email: 'test@example.com',
+        email: 'test@shadowob.com',
         username: 'testuser',
         password: 'short',
       })
@@ -64,7 +64,7 @@ describe('Auth Validators', () => {
 
     it('should allow optional displayName', () => {
       const result = registerSchema.safeParse({
-        email: 'test@example.com',
+        email: 'test@shadowob.com',
         username: 'testuser',
         password: 'password123',
         inviteCode: 'ABC12345',
@@ -74,7 +74,7 @@ describe('Auth Validators', () => {
 
     it('should accept usernames with hyphens and underscores', () => {
       const result = registerSchema.safeParse({
-        email: 'test@example.com',
+        email: 'test@shadowob.com',
         username: 'test-user_123',
         password: 'password123',
         inviteCode: 'ABC12345',
@@ -86,7 +86,7 @@ describe('Auth Validators', () => {
   describe('loginSchema', () => {
     it('should accept valid login data', () => {
       const result = loginSchema.safeParse({
-        email: 'test@example.com',
+        email: 'test@shadowob.com',
         password: 'password123',
       })
       expect(result.success).toBe(true)
@@ -94,7 +94,7 @@ describe('Auth Validators', () => {
 
     it('should reject empty password', () => {
       const result = loginSchema.safeParse({
-        email: 'test@example.com',
+        email: 'test@shadowob.com',
         password: '',
       })
       expect(result.success).toBe(false)
@@ -294,7 +294,7 @@ describe('Server Validators', () => {
     it('should accept optional iconUrl', () => {
       const result = createServerSchema.safeParse({
         name: 'Server',
-        iconUrl: 'https://example.com/icon.png',
+        iconUrl: 'https://shadowob.com/icon.png',
       })
       expect(result.success).toBe(true)
     })

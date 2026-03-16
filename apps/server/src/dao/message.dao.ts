@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, lt } from 'drizzle-orm'
+import { and, asc, desc, eq, exists, ilike, inArray, lt } from 'drizzle-orm'
 import type { Database } from '../db'
 import { attachments, messages, reactions, threads, users } from '../db/schema'
 
@@ -136,18 +136,49 @@ export class MessageDao {
     await this.db.delete(messages).where(eq(messages.id, id))
   }
 
-  async search(query: string, options?: { serverId?: string; channelId?: string; limit?: number }) {
+  async search(
+    query: string,
+    options?: {
+      serverId?: string
+      channelId?: string
+      from?: string
+      hasAttachment?: boolean
+      limit?: number
+    },
+  ) {
     const conditions = [ilike(messages.content, `%${query}%`)]
     if (options?.channelId) {
       conditions.push(eq(messages.channelId, options.channelId))
     }
+    if (options?.from) {
+      conditions.push(eq(messages.authorId, options.from))
+    }
+    if (options?.hasAttachment) {
+      conditions.push(
+        exists(
+          this.db
+            .select({ x: attachments.id })
+            .from(attachments)
+            .where(eq(attachments.messageId, messages.id)),
+        ),
+      )
+    }
 
-    return this.db
-      .select()
+    const rows = await this.db
+      .select({
+        message: messages,
+        author: this.authorColumns,
+      })
       .from(messages)
+      .leftJoin(users, eq(messages.authorId, users.id))
       .where(and(...conditions))
       .orderBy(desc(messages.createdAt))
       .limit(options?.limit ?? 50)
+
+    return rows.map((r) => ({
+      ...r.message,
+      author: r.author,
+    }))
   }
 
   // Attachments

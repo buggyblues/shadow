@@ -5,12 +5,12 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ActivityIndicator,
+  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native'
 import { fetchApi } from '../../../src/lib/api'
@@ -193,9 +193,12 @@ export default function CreateListingScreen() {
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable
+          onPress={() => router.back()}
+          style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.7 : 1 }]}
+        >
           <ChevronLeft size={20} color={colors.text} />
-        </TouchableOpacity>
+        </Pressable>
         <Text style={[styles.title, { color: colors.text }]}>
           {isEdit
             ? t('marketplace.editListing', '编辑挂单')
@@ -274,14 +277,15 @@ export default function CreateListingScreen() {
         </Text>
         <View style={styles.chipRow}>
           {DEVICE_TIERS.map((d) => (
-            <TouchableOpacity
+            <Pressable
               key={d.value}
-              style={[
+              style={({ pressed }) => [
                 styles.chip,
                 {
                   backgroundColor:
                     form.deviceTier === d.value ? colors.primaryLight : colors.background,
                   borderColor: form.deviceTier === d.value ? colors.primary : colors.border,
+                  opacity: pressed ? 0.7 : 1,
                 },
               ]}
               onPress={() => update('deviceTier', d.value)}
@@ -295,7 +299,7 @@ export default function CreateListingScreen() {
               >
                 {d.label}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           ))}
         </View>
 
@@ -304,14 +308,15 @@ export default function CreateListingScreen() {
         </Text>
         <View style={styles.chipRow}>
           {OS_TYPES.map((o) => (
-            <TouchableOpacity
+            <Pressable
               key={o.value}
-              style={[
+              style={({ pressed }) => [
                 styles.chip,
                 {
                   backgroundColor:
                     form.osType === o.value ? colors.primaryLight : colors.background,
                   borderColor: form.osType === o.value ? colors.primary : colors.border,
+                  opacity: pressed ? 0.7 : 1,
                 },
               ]}
               onPress={() => update('osType', o.value)}
@@ -325,7 +330,7 @@ export default function CreateListingScreen() {
               >
                 {o.label}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           ))}
         </View>
 
@@ -481,8 +486,15 @@ export default function CreateListingScreen() {
 
       {/* Submit */}
       <View style={styles.submitRow}>
-        <TouchableOpacity
-          style={[styles.draftBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        <Pressable
+          style={({ pressed }) => [
+            styles.draftBtn,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              opacity: pressed ? 0.7 : 1,
+            },
+          ]}
           onPress={() => submit('draft')}
           disabled={mutation.isPending || !form.title.trim()}
         >
@@ -490,9 +502,12 @@ export default function CreateListingScreen() {
           <Text style={[styles.draftBtnText, { color: colors.textSecondary }]}>
             {t('marketplace.saveDraft', '保存草稿')}
           </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.publishBtn, { backgroundColor: colors.primary }]}
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [
+            styles.publishBtn,
+            { backgroundColor: colors.primary, opacity: pressed ? 0.7 : 1 },
+          ]}
           onPress={() => submit('active')}
           disabled={mutation.isPending || !form.title.trim()}
         >
@@ -508,7 +523,7 @@ export default function CreateListingScreen() {
               </Text>
             </>
           )}
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       <View style={{ height: 40 }} />

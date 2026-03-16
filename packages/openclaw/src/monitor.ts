@@ -17,7 +17,14 @@
 import type { ShadowChannelPolicy, ShadowMessage, ShadowRemoteConfig } from '@shadowob/sdk'
 import { ShadowClient, ShadowSocket } from '@shadowob/sdk'
 import { getShadowRuntime } from './runtime.js'
-import type { OpenClawConfig, PluginRuntime, ReplyPayload, ShadowAccountConfig } from './types.js'
+import type {
+  CreateTypingCallbacksParams,
+  OpenClawConfig,
+  PluginRuntime,
+  ReplyPayload,
+  ShadowAccountConfig,
+  TypingCallbacks,
+} from './types.js'
 
 export type ShadowMonitorOptions = {
   account: ShadowAccountConfig
@@ -29,6 +36,70 @@ export type ShadowMonitorOptions = {
 
 export type ShadowMonitorResult = {
   stop: () => void
+}
+
+// ─── Typing Keepalive ─────────────────────────────────────────────────────
+
+/**
+ * Creates typing callbacks with a keepalive loop that periodically re-emits
+ * the typing indicator so it stays visible during long AI processing.
+ */
+function createTypingCallbacks(params: CreateTypingCallbacksParams): TypingCallbacks {
+  const {
+    start,
+    stop,
+    onStartError,
+    onStopError,
+    keepaliveIntervalMs = 3000,
+    maxDurationMs = 120_000,
+  } = params
+
+  let keepaliveTimer: ReturnType<typeof setInterval> | null = null
+  let maxDurationTimer: ReturnType<typeof setTimeout> | null = null
+
+  const cleanup = () => {
+    if (keepaliveTimer) {
+      clearInterval(keepaliveTimer)
+      keepaliveTimer = null
+    }
+    if (maxDurationTimer) {
+      clearTimeout(maxDurationTimer)
+      maxDurationTimer = null
+    }
+  }
+
+  return {
+    onReplyStart: async () => {
+      try {
+        await start()
+      } catch (err) {
+        onStartError(err)
+        return
+      }
+
+      // Re-emit typing on an interval so the indicator stays visible
+      keepaliveTimer = setInterval(async () => {
+        try {
+          await start()
+        } catch (err) {
+          onStartError(err)
+        }
+      }, keepaliveIntervalMs)
+
+      // Safety: auto-stop after max duration
+      maxDurationTimer = setTimeout(() => {
+        cleanup()
+        stop?.().catch((err) => onStopError?.(err))
+      }, maxDurationMs)
+    },
+    onIdle: () => {
+      cleanup()
+    },
+    onCleanup: () => {
+      cleanup()
+      stop?.().catch((err) => onStopError?.(err))
+    },
+  }
 }
 
 /**
@@ -343,29 +414,85 @@ async function processShadowMessage(params: {
   runtime.log?.(`[msg] Dispatching to AI pipeline for message ${message.id}`)
   const client = new ShadowClient(account.serverUrl, account.token)
 
+  // Build typing callbacks: emit typing indicator during AI processing
+  const typingCbs = createTypingCallbacks({
+    start: async () => {
+      socket.sendTyping(channelId)
+    },
+    onStartError: (err) => {
+      runtime.error?.(`[typing] Failed to send typing indicator: ${String(err)}`)
+    },
+  })
+
   // Emit activity: thinking
   socket.updateActivity(channelId, 'thinking')
+  // Start typing indicator
+  typingCbs.onReplyStart().catch(() => {})
 
   try {
-    await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
-      ctx: ctxPayload,
-      cfg,
-      dispatcherOptions: {
-        deliver: async (payload: ReplyPayload) => {
-          // Emit activity: working (during reply delivery)
-          socket.updateActivity(channelId, 'working')
+    if (core.channel.reply.createReplyDispatcherWithTyping) {
+      // Use typing-aware dispatcher when available
+      const { markDispatchIdle, markRunComplete } =
+        core.channel.reply.createReplyDispatcherWithTyping({
+          typingCallbacks: typingCbs,
+          deliver: async (payload: ReplyPayload) => {
+            socket.updateActivity(channelId, 'working')
+            await deliverShadowReply({
+              payload,
+              channelId,
+              threadId: message.threadId ?? undefined,
+              replyToId: message.id,
+              client,
+              runtime,
+            })
+          },
+        })
 
-          await deliverShadowReply({
-            payload,
-            channelId,
-            threadId: message.threadId ?? undefined,
-            replyToId: message.id,
-            client,
-            runtime,
-          })
+      // Feed through a standard dispatch call that uses the typed dispatcher
+      await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
+        ctx: ctxPayload,
+        cfg,
+        dispatcherOptions: {
+          deliver: async (payload: ReplyPayload) => {
+            socket.updateActivity(channelId, 'working')
+            await deliverShadowReply({
+              payload,
+              channelId,
+              threadId: message.threadId ?? undefined,
+              replyToId: message.id,
+              client,
+              runtime,
+            })
+          },
         },
-      },
-    })
+      })
+
+      markDispatchIdle()
+      markRunComplete()
+    } else {
+      // Fallback: use standard dispatcher without typing integration
+      await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
+        ctx: ctxPayload,
+        cfg,
+        dispatcherOptions: {
+          deliver: async (payload: ReplyPayload) => {
+            // Emit activity: working (during reply delivery)
+            socket.updateActivity(channelId, 'working')
+            // Re-emit typing during delivery
+            socket.sendTyping(channelId)
+
+            await deliverShadowReply({
+              payload,
+              channelId,
+              threadId: message.threadId ?? undefined,
+              replyToId: message.id,
+              client,
+              runtime,
+            })
+          },
+        },
+      })
+    }
 
     // Emit activity: ready (after reply sent)
     socket.updateActivity(channelId, 'ready')
@@ -374,6 +501,8 @@ async function processShadowMessage(params: {
     socket.updateActivity(channelId, null)
     throw err
   } finally {
+    // Stop typing keepalive
+    typingCbs.onCleanup?.()
     // Auto-clear activity after 3 seconds
     setTimeout(() => {
       socket.updateActivity(channelId, null)
@@ -473,8 +602,7 @@ async function processShadowDmMessage(params: {
   botUsername: string
   socket: ShadowSocket
 }): Promise<void> {
-  const { dmMessage, account, accountId, config, runtime, core, botUserId, botUsername, socket } =
-    params
+  const { dmMessage, account, accountId, config, runtime, core, botUserId, socket } = params
   const cfg = config as OpenClawConfig
 
   const senderLabel = dmMessage.author?.username ?? dmMessage.senderId
@@ -561,12 +689,28 @@ async function processShadowDmMessage(params: {
   runtime.log?.(`[dm] Dispatching to AI pipeline for DM message ${dmMessage.id}`)
   const client = new ShadowClient(account.serverUrl, account.token)
 
+  // Build typing callbacks for DM channel
+  const typingCbs = createTypingCallbacks({
+    start: async () => {
+      socket.sendTyping(dmChannelId)
+    },
+    onStartError: (err) => {
+      runtime.error?.(`[dm-typing] Failed to send typing indicator: ${String(err)}`)
+    },
+  })
+
+  // Start typing indicator
+  typingCbs.onReplyStart().catch(() => {})
+
   try {
     await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
       ctx: ctxPayload,
       cfg,
       dispatcherOptions: {
         deliver: async (payload: ReplyPayload) => {
+          // Re-emit typing during delivery
+          socket.sendTyping(dmChannelId)
+
           await deliverShadowDmReply({
             payload,
             dmChannelId,
@@ -579,6 +723,9 @@ async function processShadowDmMessage(params: {
   } catch (err) {
     runtime.error?.(`[dm] AI dispatch failed for DM message ${dmMessage.id}: ${String(err)}`)
     throw err
+  } finally {
+    // Stop typing keepalive
+    typingCbs.onCleanup?.()
   }
 }
 
@@ -830,7 +977,7 @@ export async function monitorShadowProvider(
   })
 
   // Listen for server:joined — bot added to a new server, refresh channels
-  socket.on('server:joined', async (data: { serverId: string; agentId: string }) => {
+  socket.on('server:joined', async (data: { serverId: string; agentId?: string }) => {
     if (!agentId) return
     runtime.log?.(`[ws] Received server:joined for server ${data.serverId} — refreshing channels`)
 
@@ -886,21 +1033,23 @@ export async function monitorShadowProvider(
     'agent:policy-changed',
     (data: {
       agentId: string
-      serverId: string
-      channelId: string
-      mentionOnly: boolean
+      serverId?: string
+      channelId?: string | null
+      mentionOnly?: boolean
       reply?: boolean
       config?: Record<string, unknown>
     }) => {
       if (data.agentId !== agentId) return
+      if (!data.channelId) return
+      const mentionOnly = data.mentionOnly ?? false
       runtime.log?.(
-        `[ws] Received agent:policy-changed for channel ${data.channelId}: mentionOnly=${data.mentionOnly}, reply=${data.reply}, config=${JSON.stringify(data.config ?? {})}`,
+        `[ws] Received agent:policy-changed for channel ${data.channelId}: mentionOnly=${mentionOnly}, reply=${data.reply}, config=${JSON.stringify(data.config ?? {})}`,
       )
       const existing = channelPolicies.get(data.channelId)
       if (existing) {
         channelPolicies.set(data.channelId, {
           ...existing,
-          mentionOnly: data.mentionOnly,
+          mentionOnly,
           reply: data.reply ?? existing.reply,
           config: data.config ?? existing.config,
         })
@@ -908,7 +1057,7 @@ export async function monitorShadowProvider(
         channelPolicies.set(data.channelId, {
           listen: true,
           reply: data.reply ?? true,
-          mentionOnly: data.mentionOnly,
+          mentionOnly,
           config: data.config ?? {},
         })
       }
@@ -916,7 +1065,7 @@ export async function monitorShadowProvider(
   )
 
   // Listen for channel:member-added — bot added to a channel, join its room
-  socket.on('channel:member-added', (data: { channelId: string; serverId: string }) => {
+  socket.on('channel:member-added', (data: { channelId: string; serverId?: string }) => {
     runtime.log?.(
       `[ws] Received channel:member-added: channel ${data.channelId} in server ${data.serverId}`,
     )
@@ -938,7 +1087,7 @@ export async function monitorShadowProvider(
   })
 
   // Listen for channel:member-removed — bot removed from a channel, leave its room
-  socket.on('channel:member-removed', (data: { channelId: string; serverId: string }) => {
+  socket.on('channel:member-removed', (data: { channelId: string; serverId?: string }) => {
     runtime.log?.(
       `[ws] Received channel:member-removed: channel ${data.channelId} in server ${data.serverId}`,
     )

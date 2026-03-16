@@ -225,6 +225,24 @@ export type PluginRuntimeChannel = {
       }
       replyOptions?: Record<string, unknown>
     }) => Promise<unknown>
+    createReplyDispatcherWithTyping?: (options: {
+      typingCallbacks?: TypingCallbacks
+      deliver: (payload: ReplyPayload, info: { kind: string }) => Promise<void>
+      onIdle?: () => void
+      onCleanup?: () => void
+      [key: string]: unknown
+    }) => {
+      dispatcher: {
+        sendToolResult: (payload: ReplyPayload) => boolean
+        sendBlockReply: (payload: ReplyPayload) => boolean
+        sendFinalReply: (payload: ReplyPayload) => boolean
+        waitForIdle: () => Promise<void>
+        markComplete: () => void
+      }
+      replyOptions: Record<string, unknown>
+      markDispatchIdle: () => void
+      markRunComplete: () => void
+    }
     finalizeInboundContext: (ctx: Partial<MsgContext>) => MsgContext
     formatAgentEnvelope: (params: {
       channel: string
@@ -345,6 +363,24 @@ export type ReplyPayload = {
   isError?: boolean
   isReasoning?: boolean
   channelData?: Record<string, unknown>
+}
+
+// ─── Typing Callbacks ───────────────────────────────────────────────────────
+
+export type TypingCallbacks = {
+  onReplyStart: () => Promise<void>
+  onIdle?: () => void
+  onCleanup?: () => void
+}
+
+export type CreateTypingCallbacksParams = {
+  start: () => Promise<void>
+  stop?: () => Promise<void>
+  onStartError: (err: unknown) => void
+  onStopError?: (err: unknown) => void
+  keepaliveIntervalMs?: number
+  maxConsecutiveFailures?: number
+  maxDurationMs?: number
 }
 
 // ─── Shadow-Specific Types ──────────────────────────────────────────────────

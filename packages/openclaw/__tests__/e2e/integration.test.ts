@@ -580,7 +580,7 @@ describe('Outbound Adapter Integration', () => {
       cfg,
       to: `shadow:channel:${seed.channel.id}`,
       text: 'Image attached',
-      mediaUrl: 'https://example.com/test.png',
+      mediaUrl: 'https://shadowob.com/test.png',
     })
 
     expect(result.ok).toBe(true)

@@ -25,6 +25,7 @@ import {
 import { Avatar } from '../../../src/components/common/avatar'
 import { EmptyState } from '../../../src/components/common/empty-state'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
+import { OnlineRank } from '../../../src/components/common/online-rank'
 import { fetchApi } from '../../../src/lib/api'
 import { fontSize, radius, spacing, useColors } from '../../../src/theme'
 
@@ -197,6 +198,7 @@ export default function BuddiesScreen() {
               <Text style={[styles.statText, { color: colors.textMuted }]}>
                 {formatOnlineTime(item.totalOnlineSeconds)}
               </Text>
+              <OnlineRank totalSeconds={item.totalOnlineSeconds} />
               <Eye size={12} color={colors.textMuted} />
               <Text style={[styles.statText, { color: colors.textMuted }]}>{item.viewCount}</Text>
               <Users size={12} color={colors.textMuted} />

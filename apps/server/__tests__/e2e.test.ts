@@ -6,7 +6,7 @@ describe('JWT lib', () => {
   it('should sign and verify an access token', () => {
     const payload = {
       userId: 'user-123',
-      email: 'test@example.com',
+      email: 'test@shadowob.com',
       username: 'testuser',
     }
 
@@ -16,7 +16,7 @@ describe('JWT lib', () => {
 
     const decoded = verifyToken(token)
     expect(decoded.userId).toBe('user-123')
-    expect(decoded.email).toBe('test@example.com')
+    expect(decoded.email).toBe('test@shadowob.com')
     expect(decoded.username).toBe('testuser')
   })
 
@@ -27,7 +27,7 @@ describe('JWT lib', () => {
   it('should throw on tampered token', () => {
     const payload = {
       userId: 'user-123',
-      email: 'test@example.com',
+      email: 'test@shadowob.com',
       username: 'testuser',
     }
     const token = signAccessToken(payload)
@@ -83,7 +83,7 @@ describe('Auth Middleware integration', () => {
 
     const token = signAccessToken({
       userId: 'user-456',
-      email: 'test@example.com',
+      email: 'test@shadowob.com',
       username: 'testuser',
     })
 

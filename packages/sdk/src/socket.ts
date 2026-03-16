@@ -2,7 +2,7 @@ import { io, type Socket } from 'socket.io-client'
 import type { ClientEventMap, ServerEventMap } from './types'
 
 export interface ShadowSocketOptions {
-  /** Shadow server base URL (e.g. "https://shadow.example.com") */
+  /** Shadow server base URL (e.g. "https://shadowob.shadowob.com") */
   serverUrl: string
   /** JWT token for authentication */
   token: string

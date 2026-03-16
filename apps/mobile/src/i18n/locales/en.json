@@ -41,7 +41,9 @@
     "docs": "Docs",
     "login": "Login",
     "launch": "Launch",
-    "servers": "Servers"
+    "servers": "Servers",
+    "community": "Community",
+    "me": "Me"
   },
   "home": {
     "heroBadge": "v1.0 is live!",

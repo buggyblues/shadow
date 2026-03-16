@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as Clipboard from 'expo-clipboard'
 import { useNavigation } from 'expo-router'
-import { Bot, Copy, Plus, RefreshCw, Trash2 } from 'lucide-react-native'
+import { Bot, Copy, Key, Plus, RefreshCw, Trash2 } from 'lucide-react-native'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -9,14 +9,15 @@ import {
   Alert,
   FlatList,
   Modal,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native'
 import { Avatar } from '../../src/components/common/avatar'
 import { HeaderButton, HeaderButtonGroup } from '../../src/components/common/header-button'
+import { OnlineRank } from '../../src/components/common/online-rank'
 import { fetchApi } from '../../src/lib/api'
 import { showToast } from '../../src/lib/toast'
 import { fontSize, radius, spacing, useColors } from '../../src/theme'
@@ -30,6 +31,7 @@ interface Agent {
   totalOnlineSeconds: number
   isListed?: boolean
   isRented?: boolean
+  config?: { lastToken?: string; [key: string]: unknown }
   botUser?: {
     id: string
     username: string
@@ -58,7 +60,9 @@ export default function BuddyManagementScreen() {
 
   const [showCreate, setShowCreate] = useState(false)
   const [createName, setCreateName] = useState('')
+  const [createUsername, setCreateUsername] = useState('')
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
+  const [generatedToken, setGeneratedToken] = useState<string | null>(null)
 
   const { data: agents = [], isLoading } = useQuery({
     queryKey: ['agents'],
@@ -77,18 +81,31 @@ export default function BuddyManagementScreen() {
   }, [navigation, t])
 
   const createMutation = useMutation({
-    mutationFn: (name: string) =>
+    mutationFn: (data: { name: string; username: string }) =>
       fetchApi<Agent>('/api/agents', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim() || undefined }),
+        body: JSON.stringify({
+          name: data.name.trim(),
+          username: data.username.trim(),
+          kernelType: 'openclaw',
+          config: {},
+        }),
       }),
-    onSuccess: (data) => {
+    onSuccess: async (agent) => {
       queryClient.invalidateQueries({ queryKey: ['agents'] })
       setShowCreate(false)
       setCreateName('')
+      setCreateUsername('')
       showToast(t('buddyMgmt.created', 'Buddy 已创建'))
-      setSelectedAgent(data)
+      setSelectedAgent(agent)
+      // Auto-generate token after creation
+      try {
+        const tokenData = await fetchApi<{ token: string }>(`/api/agents/${agent.id}/token`, {
+          method: 'POST',
+        })
+        setGeneratedToken(tokenData.token)
+        queryClient.invalidateQueries({ queryKey: ['agents'] })
+      } catch {}
     },
     onError: (err: Error) => showToast(err.message),
   })
@@ -98,6 +115,7 @@ export default function BuddyManagementScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agents'] })
       setSelectedAgent(null)
+      setGeneratedToken(null)
       showToast(t('buddyMgmt.deleted', 'Buddy 已删除'))
     },
     onError: (err: Error) => showToast(err.message),
@@ -108,6 +126,7 @@ export default function BuddyManagementScreen() {
       fetchApi<{ token: string }>(`/api/agents/${id}/token`, { method: 'POST' }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['agents'] })
+      setGeneratedToken(data.token)
       if (selectedAgent) {
         setSelectedAgent({ ...selectedAgent, token: data.token })
       }
@@ -125,9 +144,19 @@ export default function BuddyManagementScreen() {
     const online = isOnline(agent)
     const name = agent.botUser?.displayName ?? agent.name ?? agent.id.slice(0, 8)
     return (
-      <TouchableOpacity
-        style={[styles.agentCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        onPress={() => setSelectedAgent(agent)}
+      <Pressable
+        style={({ pressed }) => [
+          styles.agentCard,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            opacity: pressed ? 0.7 : 1,
+          },
+        ]}
+        onPress={() => {
+          setSelectedAgent(agent)
+          setGeneratedToken(null)
+        }}
       >
         <Avatar uri={agent.botUser?.avatarUrl} name={name} size={44} userId={agent.botUser?.id} />
         <View style={{ flex: 1, marginLeft: spacing.sm }}>
@@ -144,13 +173,14 @@ export default function BuddyManagementScreen() {
                 · 累计 {formatDuration(agent.totalOnlineSeconds)}
               </Text>
             )}
+            {agent.totalOnlineSeconds > 0 && <OnlineRank totalSeconds={agent.totalOnlineSeconds} />}
             {agent.isListed && (
               <Text style={[styles.listedBadge, { color: colors.primary }]}> · 已上架</Text>
             )}
             {agent.isRented && <Text style={styles.rentedBadge}> · 租赁中</Text>}
           </View>
         </View>
-      </TouchableOpacity>
+      </Pressable>
     )
   }
 
@@ -195,27 +225,56 @@ export default function BuddyManagementScreen() {
                   color: colors.text,
                 },
               ]}
-              placeholder={t('buddyMgmt.namePlaceholder', 'Buddy 名称（可选）')}
+              placeholder={t('buddyMgmt.namePlaceholder', 'Buddy 名称')}
               placeholderTextColor={colors.textMuted}
               value={createName}
               onChangeText={setCreateName}
             />
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.background,
+                  borderColor: colors.border,
+                  color: colors.text,
+                  marginTop: spacing.sm,
+                },
+              ]}
+              placeholder={t('buddyMgmt.usernamePlaceholder', '用户名（字母、数字、下划线）')}
+              placeholderTextColor={colors.textMuted}
+              value={createUsername}
+              onChangeText={(text) => setCreateUsername(text.replace(/[^a-zA-Z0-9_-]/g, ''))}
+              autoCapitalize="none"
+              autoCorrect={false}
+              maxLength={32}
+            />
             <View style={[styles.row, { gap: spacing.sm, marginTop: spacing.md }]}>
-              <TouchableOpacity
-                style={[styles.cancelBtn, { backgroundColor: colors.background }]}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.cancelBtn,
+                  { backgroundColor: colors.background, opacity: pressed ? 0.7 : 1 },
+                ]}
                 onPress={() => {
                   setShowCreate(false)
                   setCreateName('')
+                  setCreateUsername('')
                 }}
               >
                 <Text style={{ color: colors.textSecondary, fontWeight: '700' }}>
                   {t('common.cancel', '取消')}
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.confirmBtn, { backgroundColor: colors.primary }]}
-                onPress={() => createMutation.mutate(createName)}
-                disabled={createMutation.isPending}
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.confirmBtn,
+                  { backgroundColor: colors.primary, opacity: pressed ? 0.7 : 1 },
+                ]}
+                onPress={() =>
+                  createName.trim() &&
+                  createUsername.trim() &&
+                  createMutation.mutate({ name: createName, username: createUsername })
+                }
+                disabled={!createName.trim() || !createUsername.trim() || createMutation.isPending}
               >
                 {createMutation.isPending ? (
                   <ActivityIndicator color="#fff" size="small" />
@@ -224,7 +283,7 @@ export default function BuddyManagementScreen() {
                     {t('common.create', '创建')}
                   </Text>
                 )}
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -272,45 +331,83 @@ export default function BuddyManagementScreen() {
                       </Text>
                     </View>
                   </View>
-                  <TouchableOpacity onPress={() => setSelectedAgent(null)}>
+                  <Pressable
+                    onPress={() => {
+                      setSelectedAgent(null)
+                      setGeneratedToken(null)
+                    }}
+                    style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                  >
                     <Text style={{ color: colors.textMuted, fontSize: 20 }}>✕</Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
 
                 {/* Token */}
-                {selectedAgent.token && (
-                  <View style={[styles.tokenBox, { backgroundColor: colors.background }]}>
-                    <Text style={[styles.tokenLabel, { color: colors.textMuted }]}>Token</Text>
-                    <Text
-                      style={[styles.tokenValue, { color: colors.text }]}
-                      numberOfLines={1}
-                      ellipsizeMode="middle"
+                {(() => {
+                  const displayToken =
+                    generatedToken ??
+                    selectedAgent.token ??
+                    (selectedAgent.config?.lastToken as string | undefined) ??
+                    null
+                  if (displayToken) {
+                    return (
+                      <View style={[styles.tokenBox, { backgroundColor: colors.background }]}>
+                        <Text style={[styles.tokenLabel, { color: colors.textMuted }]}>Token</Text>
+                        <Text
+                          style={[styles.tokenValue, { color: colors.text }]}
+                          numberOfLines={1}
+                          ellipsizeMode="middle"
+                        >
+                          {displayToken}
+                        </Text>
+                        <View style={[styles.row, { gap: spacing.sm, marginTop: spacing.sm }]}>
+                          <Pressable
+                            style={({ pressed }) => [
+                              styles.tokenBtn,
+                              { borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+                            ]}
+                            onPress={() => copyToken(displayToken)}
+                          >
+                            <Copy size={14} color={colors.textSecondary} />
+                            <Text style={[styles.tokenBtnText, { color: colors.textSecondary }]}>
+                              {t('common.copy', '复制')}
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            style={({ pressed }) => [
+                              styles.tokenBtn,
+                              { borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+                            ]}
+                            onPress={() => regenTokenMutation.mutate(selectedAgent.id)}
+                            disabled={regenTokenMutation.isPending}
+                          >
+                            <RefreshCw size={14} color={colors.textSecondary} />
+                            <Text style={[styles.tokenBtnText, { color: colors.textSecondary }]}>
+                              {t('buddyMgmt.regenerate', '重新生成')}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    )
+                  }
+                  return (
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.generateBtn,
+                        { backgroundColor: colors.primary, opacity: pressed ? 0.7 : 1 },
+                      ]}
+                      onPress={() => regenTokenMutation.mutate(selectedAgent.id)}
+                      disabled={regenTokenMutation.isPending}
                     >
-                      {selectedAgent.token}
-                    </Text>
-                    <View style={[styles.row, { gap: spacing.sm, marginTop: spacing.sm }]}>
-                      <TouchableOpacity
-                        style={[styles.tokenBtn, { borderColor: colors.border }]}
-                        onPress={() => copyToken(selectedAgent.token!)}
-                      >
-                        <Copy size={14} color={colors.textSecondary} />
-                        <Text style={[styles.tokenBtnText, { color: colors.textSecondary }]}>
-                          {t('common.copy', '复制')}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.tokenBtn, { borderColor: colors.border }]}
-                        onPress={() => regenTokenMutation.mutate(selectedAgent.id)}
-                        disabled={regenTokenMutation.isPending}
-                      >
-                        <RefreshCw size={14} color={colors.textSecondary} />
-                        <Text style={[styles.tokenBtnText, { color: colors.textSecondary }]}>
-                          {t('buddyMgmt.regenerate', '重新生成')}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
+                      <Key size={14} color="#fff" />
+                      <Text style={styles.generateBtnText}>
+                        {regenTokenMutation.isPending
+                          ? t('buddyMgmt.generating', '生成中...')
+                          : t('buddyMgmt.generateToken', '生成 Token')}
+                      </Text>
+                    </Pressable>
+                  )
+                })()}
 
                 {/* Info */}
                 <View style={styles.infoSection}>
@@ -334,9 +431,12 @@ export default function BuddyManagementScreen() {
                     <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
                       {t('buddyMgmt.onlineTime', '在线时长')}
                     </Text>
-                    <Text style={[styles.infoValue, { color: colors.text }]}>
-                      {formatDuration(selectedAgent.totalOnlineSeconds)}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[styles.infoValue, { color: colors.text }]}>
+                        {formatDuration(selectedAgent.totalOnlineSeconds)}
+                      </Text>
+                      <OnlineRank totalSeconds={selectedAgent.totalOnlineSeconds} />
+                    </View>
                   </View>
                   <View style={styles.infoRow}>
                     <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
@@ -350,8 +450,8 @@ export default function BuddyManagementScreen() {
 
                 {/* Actions */}
                 <View style={[styles.row, { gap: spacing.sm, marginTop: spacing.lg }]}>
-                  <TouchableOpacity
-                    style={[styles.deleteBtn]}
+                  <Pressable
+                    style={({ pressed }) => [styles.deleteBtn, { opacity: pressed ? 0.7 : 1 }]}
                     onPress={() =>
                       Alert.alert(
                         t('buddyMgmt.confirmDelete', '确定删除此 Buddy？'),
@@ -371,7 +471,7 @@ export default function BuddyManagementScreen() {
                     <Text style={styles.deleteBtnText}>
                       {t('buddyMgmt.deleteBuddy', '删除 Buddy')}
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
               </>
             )}
@@ -489,4 +589,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
   },
   deleteBtnText: { color: '#ef4444', fontWeight: '700' },
+  generateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
+  },
+  generateBtnText: { color: '#fff', fontWeight: '700', fontSize: fontSize.sm },
 })

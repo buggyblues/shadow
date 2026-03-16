@@ -1,14 +1,17 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as DocumentPicker from 'expo-document-picker'
 import * as ImagePicker from 'expo-image-picker'
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
-  ArrowUp,
+  AtSign,
   ChevronDown,
+  ChevronLeft,
+  File,
   Hash,
+  Image as ImageIcon,
+  MessageSquare,
   Mic,
-  MicOff,
-  Paperclip,
+  Plus,
   Search,
   Smile,
   UserPlus,
@@ -37,7 +40,6 @@ import type { EmojiType } from 'rn-emoji-keyboard'
 import EmojiPicker from 'rn-emoji-keyboard'
 import { MessageBubble } from '../../../../../src/components/chat/message-bubble'
 import { Avatar } from '../../../../../src/components/common/avatar'
-import { HeaderButton, HeaderButtonGroup } from '../../../../../src/components/common/header-button'
 import { StatusBadge } from '../../../../../src/components/common/status-badge'
 import { useSocketEvent } from '../../../../../src/hooks/use-socket'
 import { fetchApi } from '../../../../../src/lib/api'
@@ -132,13 +134,12 @@ function TypingDots() {
 }
 
 export default function ChannelViewScreen() {
-  const { channelId } = useLocalSearchParams<{
+  const { serverSlug, channelId } = useLocalSearchParams<{
     serverSlug: string
     channelId: string
   }>()
   const { t } = useTranslation()
   const colors = useColors()
-  const navigation = useNavigation()
   const router = useRouter()
   const queryClient = useQueryClient()
   const flatListRef = useRef<FlatList<TimelineItem>>(null)
@@ -162,10 +163,19 @@ export default function ChannelViewScreen() {
   const [showInputEmojiPicker, setShowInputEmojiPicker] = useState(false)
   const [showMemberList, setShowMemberList] = useState(false)
   const [showInvitePanel, setShowInvitePanel] = useState(false)
+  const [showPlusMenu, setShowPlusMenu] = useState(false)
   const [inviteSearch, setInviteSearch] = useState('')
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [keyboardVisible, setKeyboardVisible] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
+  const [voiceTranscript, setVoiceTranscript] = useState('')
+  const [showSearchPanel, setShowSearchPanel] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchFromUser, setSearchFromUser] = useState<string | null>(null)
+  const [searchHasAttachment, setSearchHasAttachment] = useState(false)
+  const [searchTab, setSearchTab] = useState<'messages' | 'members'>('messages')
+  const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null)
+  const searchInputRef = useRef<TextInput>(null)
   const inputRef = useRef<TextInput>(null)
 
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -214,10 +224,8 @@ export default function ChannelViewScreen() {
   const { data: serverMemberData } = useQuery({
     queryKey: ['server-members-for-invite', channel?.serverId],
     queryFn: async () => {
-      const res = await fetchApi<{ members: ServerMemberEntry[] } | ServerMemberEntry[]>(
-        `/api/servers/${channel!.serverId}/members`,
-      )
-      return Array.isArray(res) ? res : (res.members ?? [])
+      const res = await fetchApi<ServerMemberEntry[]>(`/api/servers/${channel!.serverId}/members`)
+      return res
     },
     enabled: !!channel?.serverId && showInvitePanel,
   })
@@ -269,21 +277,77 @@ export default function ChannelViewScreen() {
       .slice(0, 8)
   }, [mentionQuery, channelMembers])
 
+  const onlineMemberCount = useMemo(
+    () =>
+      channelMembers.filter(
+        (m) => m.user.status === 'online' || m.user.status === 'idle' || m.user.status === 'dnd',
+      ).length,
+    [channelMembers],
+  )
+
+  // ---------- Search ----------
+  const debouncedSearchQuery = useRef(searchQuery)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      debouncedSearchQuery.current = searchQuery
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  interface SearchResult {
+    id: string
+    content: string
+    authorId: string
+    channelId: string
+    createdAt: string
+    author: {
+      id: string
+      username: string
+      displayName: string | null
+      avatarUrl: string | null
+      isBot?: boolean
+    } | null
+  }
+
+  const { data: searchResults = [], isLoading: isSearching } = useQuery({
+    queryKey: [
+      'search-messages',
+      channelId,
+      debouncedSearchQuery.current,
+      searchFromUser,
+      searchHasAttachment,
+    ],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        query: debouncedSearchQuery.current,
+        channelId,
+        limit: '30',
+      })
+      if (searchFromUser) params.set('from', searchFromUser)
+      if (searchHasAttachment) params.set('hasAttachment', 'true')
+      return fetchApi<SearchResult[]>(`/api/search/messages?${params.toString()}`)
+    },
+    enabled:
+      showSearchPanel && searchTab === 'messages' && debouncedSearchQuery.current.length >= 2,
+  })
+
+  // Filter members by search query
+  const filteredMembers = useMemo(() => {
+    if (!searchQuery || searchQuery.length < 1) return channelMembers
+    const q = searchQuery.toLowerCase()
+    return channelMembers.filter((m) => {
+      const name = (m.user.displayName || m.user.username).toLowerCase()
+      return name.includes(q) || m.user.username.toLowerCase().includes(q)
+    })
+  }, [channelMembers, searchQuery])
+
   useEffect(() => {
     if (channel) {
-      navigation.setOptions({
-        title: `# ${channel.name}`,
-        headerRight: () => (
-          <HeaderButtonGroup>
-            <HeaderButton icon={Users} onPress={() => setShowMemberList(true)} />
-          </HeaderButtonGroup>
-        ),
-      })
       setActiveChannel(channel.id)
       void setLastChannel(channel.serverId, channel.id)
     }
     return () => setActiveChannel(null)
-  }, [channel, navigation, setActiveChannel])
+  }, [channel, setActiveChannel])
 
   // ---------- Keyboard visibility tracking ----------
   useEffect(() => {
@@ -306,13 +370,22 @@ export default function ChannelViewScreen() {
 
   // ---------- Speech recognition ----------
   useSpeechRecognitionEventSafe('result', (event) => {
-    const transcript = event.results[0]?.transcript
+    const transcript = event.results?.[0]?.transcript
     if (transcript) {
+      // Show interim transcript as live preview
+      setVoiceTranscript(transcript)
+      // Append final result to input
       setInputText((prev) => (prev ? `${prev} ${transcript}` : transcript))
     }
   })
-  useSpeechRecognitionEventSafe('end', () => setIsRecording(false))
-  useSpeechRecognitionEventSafe('error', () => setIsRecording(false))
+  useSpeechRecognitionEventSafe('end', () => {
+    setIsRecording(false)
+    setVoiceTranscript('')
+  })
+  useSpeechRecognitionEventSafe('error', () => {
+    setIsRecording(false)
+    setVoiceTranscript('')
+  })
 
   const toggleVoiceInput = async () => {
     if (!speechModule) {
@@ -329,7 +402,8 @@ export default function ChannelViewScreen() {
       Alert.alert(t('common.error'), t('chat.micPermissionDenied'))
       return
     }
-    speechModule.start({ lang: t('chat.speechLang'), interimResults: false })
+    setVoiceTranscript('')
+    speechModule.start({ lang: t('chat.speechLang'), interimResults: true })
     setIsRecording(true)
   }
 
@@ -463,6 +537,22 @@ export default function ChannelViewScreen() {
     return withDates
   }, [messages, systemEvents])
 
+  // Scroll to a message
+  const scrollToMessage = useCallback(
+    (messageId: string) => {
+      setShowSearchPanel(false)
+      setHighlightMessageId(messageId)
+      const idx = timeline.findIndex(
+        (item) => item.kind === 'message' && item.data.id === messageId,
+      )
+      if (idx >= 0) {
+        flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 })
+      }
+      setTimeout(() => setHighlightMessageId(null), 3000)
+    },
+    [timeline],
+  )
+
   // Reset scroll position when channel changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: channelId is intentionally the trigger
   useEffect(() => {
@@ -470,18 +560,24 @@ export default function ChannelViewScreen() {
   }, [channelId])
 
   // ---------- WebSocket: join/leave ----------
-  const joinChannelWithAck = useCallback(
-    (chId: string) => {
-      const socket = getSocket()
+  const joinChannelWithAck = useCallback((chId: string) => {
+    const socket = getSocket()
+
+    const doJoin = () => {
       socket.emit('channel:join', { channelId: chId }, (res: { ok: boolean }) => {
         if (!res?.ok) {
-          // Channel join denied — possibly not a channel member, refetch to stay in sync
-          refetch()
+          console.warn('[Channel] Join denied for', chId)
         }
       })
-    },
-    [refetch],
-  )
+    }
+
+    if (socket.connected) {
+      doJoin()
+    } else {
+      // Wait for connection before joining
+      socket.once('connect', doJoin)
+    }
+  }, [])
 
   useEffect(() => {
     if (channelId) {
@@ -846,6 +942,8 @@ export default function ChannelViewScreen() {
       setReplyTo(null)
       setPendingFiles([])
       playSendSound()
+      // Keep input focused for continuous messaging
+      setTimeout(() => inputRef.current?.focus(), 50)
     } catch (err) {
       Alert.alert(t('common.error'), (err as Error).message || t('chat.sendFailed'))
     } finally {
@@ -941,16 +1039,24 @@ export default function ChannelViewScreen() {
         isGrouped = sameAuthor && timeDiff < 5 * 60 * 1000
       }
       return (
-        <MessageBubble
-          message={item.data}
-          onReply={() => handleReply(item.data)}
-          channelId={channelId!}
-          allMessages={messages}
-          isGrouped={isGrouped}
-        />
+        <View
+          style={
+            highlightMessageId === item.data.id
+              ? { backgroundColor: `${colors.primary}15`, borderRadius: radius.md }
+              : undefined
+          }
+        >
+          <MessageBubble
+            message={item.data}
+            onReply={() => handleReply(item.data)}
+            channelId={channelId!}
+            allMessages={messages}
+            isGrouped={isGrouped}
+          />
+        </View>
       )
     },
-    [colors, t, channelId, handleReply, messages, timeline],
+    [colors, t, channelId, handleReply, messages, timeline, highlightMessageId],
   )
 
   const getItemKey = useCallback((item: TimelineItem) => {
@@ -961,8 +1067,57 @@ export default function ChannelViewScreen() {
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.chatBackground }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 44 : 0}
+      keyboardVerticalOffset={0}
     >
+      {/* Custom header bar — left-aligned like Discord */}
+      <View
+        style={[styles.customHeader, { backgroundColor: colors.surface, paddingTop: insets.top }]}
+      >
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          style={({ pressed }) => [styles.headerBackBtn, pressed && { opacity: 0.5 }]}
+        >
+          <ChevronLeft size={26} color={colors.text} />
+        </Pressable>
+        <Pressable
+          onPress={() =>
+            router.push(
+              `/(main)/servers/${serverSlug}/channel-members?channelId=${channelId}` as never,
+            )
+          }
+          style={styles.headerTitleRow}
+        >
+          <Text style={[styles.headerChannel, { color: colors.text }]} numberOfLines={1}>
+            # {channel?.name ?? '...'} ›
+          </Text>
+          <View style={styles.headerOnlineRow}>
+            <View
+              style={[
+                styles.headerOnlineDot,
+                onlineMemberCount === 0 && { backgroundColor: colors.textMuted },
+              ]}
+            />
+            <Text style={[styles.headerOnlineText, { color: colors.textMuted }]}>
+              {onlineMemberCount}
+              {t('chat.onlineSuffix', '人在线')}
+            </Text>
+          </View>
+        </Pressable>
+        <View style={styles.headerRight}>
+          <Pressable
+            onPress={() => {
+              setShowSearchPanel(true)
+              setTimeout(() => searchInputRef.current?.focus(), 300)
+            }}
+            hitSlop={8}
+            style={({ pressed }) => [styles.headerIconBtn, pressed && { opacity: 0.5 }]}
+          >
+            <Search size={24} color={colors.textMuted} />
+          </Pressable>
+        </View>
+      </View>
+
       {isLoading ? (
         <View style={styles.loading}>
           <ActivityIndicator color={colors.primary} />
@@ -1140,6 +1295,33 @@ export default function ChannelViewScreen() {
         </View>
       )}
 
+      {/* Voice recording indicator */}
+      {isRecording && (
+        <View
+          style={[
+            styles.voiceRecordingBar,
+            { backgroundColor: colors.surface, borderTopColor: colors.border },
+          ]}
+        >
+          <View style={styles.voiceRecordingDot} />
+          <Text style={[styles.voiceRecordingLabel, { color: colors.error }]}>
+            {t('chat.recording', '正在录音...')}
+          </Text>
+          {voiceTranscript ? (
+            <Text style={[styles.voiceTranscript, { color: colors.text }]} numberOfLines={1}>
+              {voiceTranscript}
+            </Text>
+          ) : (
+            <Text style={[styles.voiceTranscript, { color: colors.textMuted }]}>
+              {t('chat.speakNow', '请说话...')}
+            </Text>
+          )}
+          <Pressable onPress={toggleVoiceInput} hitSlop={12}>
+            <X size={18} color={colors.textMuted} />
+          </Pressable>
+        </View>
+      )}
+
       {/* Input bar */}
       <View
         style={[
@@ -1147,105 +1329,145 @@ export default function ChannelViewScreen() {
           {
             backgroundColor: colors.surface,
             borderTopColor: colors.border,
-            paddingBottom: keyboardVisible ? spacing.sm : Math.max(spacing.sm, insets.bottom),
+            paddingBottom: keyboardVisible ? 6 : Math.max(6, insets.bottom + 2),
           },
         ]}
       >
+        {/* @ mention button */}
         <Pressable
-          style={styles.attachBtn}
+          style={[styles.actionBtn, { backgroundColor: colors.inputBackground }]}
           onPress={() => {
-            Alert.alert(t('chat.attachFile'), undefined, [
-              { text: t('chat.pickImage'), onPress: handlePickImage },
-              { text: t('chat.pickFile'), onPress: handlePickFile },
-              { text: t('common.cancel'), style: 'cancel' },
-            ])
+            setInputText((prev) => `${prev}@`)
+            setMentionQuery('')
+            inputRef.current?.focus()
           }}
         >
-          <Paperclip size={20} color={colors.textMuted} />
+          <AtSign size={22} color={colors.textMuted} />
         </Pressable>
-        <TextInput
-          ref={inputRef}
-          style={[
-            styles.textInput,
-            { backgroundColor: colors.inputBackground, color: colors.text },
-          ]}
-          value={inputText}
-          onChangeText={handleTextChange}
-          placeholder={
-            channel
-              ? t('chat.messagePlaceholderChannel', { channelName: channel.name })
-              : t('chat.messagePlaceholder')
-          }
-          placeholderTextColor={colors.textMuted}
-          multiline
-          maxLength={4000}
-          submitBehavior="submit"
-          onSubmitEditing={handleSend}
-          returnKeyType="send"
-        />
-        <Pressable style={styles.attachBtn} onPress={() => setShowInputEmojiPicker(true)}>
-          <Smile size={20} color={showInputEmojiPicker ? colors.primary : colors.textMuted} />
+
+        {/* Input field with embedded mic */}
+        <View style={[styles.inputWrapper, { backgroundColor: colors.inputBackground }]}>
+          <TextInput
+            ref={inputRef}
+            style={[styles.textInput, { color: colors.text }]}
+            value={inputText}
+            onChangeText={handleTextChange}
+            placeholder={
+              channel
+                ? t('chat.messagePlaceholderChannel', {
+                    channelName:
+                      channel.name.length > 12 ? `${channel.name.slice(0, 12)}…` : channel.name,
+                  })
+                : t('chat.messagePlaceholder')
+            }
+            placeholderTextColor={colors.textMuted}
+            multiline
+            maxLength={4000}
+            blurOnSubmit={false}
+            submitBehavior="submit"
+            onSubmitEditing={handleSend}
+            returnKeyType="send"
+            keyboardAppearance="dark"
+          />
+          <Pressable
+            style={[styles.inputMicBtn, isRecording && { backgroundColor: colors.primary }]}
+            onPress={toggleVoiceInput}
+          >
+            <Mic size={18} color={isRecording ? '#fff' : colors.textMuted} />
+          </Pressable>
+        </View>
+
+        {/* Emoji button */}
+        <Pressable style={styles.actionBtn} onPress={() => setShowInputEmojiPicker(true)}>
+          <Smile size={24} color={showInputEmojiPicker ? colors.primary : colors.textMuted} />
         </Pressable>
-        <Pressable style={styles.attachBtn} onPress={toggleVoiceInput}>
-          {isRecording ? (
-            <MicOff size={20} color={colors.error} />
-          ) : (
-            <Mic size={20} color={colors.textMuted} />
-          )}
-        </Pressable>
+
+        {/* Plus/attach button */}
         <Pressable
           style={[
-            styles.sendBtn,
-            {
-              backgroundColor:
-                inputText.trim() || pendingFiles.length > 0 ? colors.primary : colors.border,
-            },
+            styles.actionBtn,
+            { borderColor: colors.border, borderWidth: 1.5, borderRadius: 23 },
           ]}
-          onPress={handleSend}
-          disabled={(!inputText.trim() && pendingFiles.length === 0) || sending}
+          onPress={() => setShowPlusMenu(true)}
         >
-          {sending ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <ArrowUp
-              size={18}
-              color={inputText.trim() || pendingFiles.length > 0 ? '#fff' : colors.textMuted}
-            />
-          )}
+          <Plus size={22} color={colors.textMuted} />
         </Pressable>
       </View>
 
-      {/* Emoji picker (rn-emoji-keyboard) */}
-      <EmojiPicker
-        open={showInputEmojiPicker}
-        onClose={() => setShowInputEmojiPicker(false)}
-        onEmojiSelected={(emoji: EmojiType) => {
-          setInputText((prev) => prev + emoji.emoji)
-          setTimeout(() => inputRef.current?.focus(), 100)
-        }}
-        enableSearchBar
-        enableRecentlyUsed
-        categoryPosition="top"
-        theme={{
-          backdrop: 'rgba(0,0,0,0.3)',
-          knob: colors.textMuted,
-          container: colors.surface,
-          header: colors.text,
-          category: {
-            icon: colors.textMuted,
-            iconActive: colors.primary,
+      {/* Emoji picker (rn-emoji-keyboard) — conditionally rendered to avoid ghost overlay */}
+      {showInputEmojiPicker && (
+        <EmojiPicker
+          open={showInputEmojiPicker}
+          onClose={() => setShowInputEmojiPicker(false)}
+          onEmojiSelected={(emoji: EmojiType) => {
+            setInputText((prev) => prev + emoji.emoji)
+            setTimeout(() => inputRef.current?.focus(), 100)
+          }}
+          enableSearchBar
+          enableRecentlyUsed
+          categoryPosition="top"
+          theme={{
+            backdrop: 'rgba(0,0,0,0.3)',
+            knob: colors.textMuted,
             container: colors.surface,
-            containerActive: colors.surfaceHover,
-          },
-          search: {
-            background: colors.inputBackground,
-            text: colors.text,
-            placeholder: colors.textMuted,
-            icon: colors.textMuted,
-          },
-          emoji: { selected: colors.surfaceHover },
-        }}
-      />
+            header: colors.text,
+            category: {
+              icon: colors.textMuted,
+              iconActive: colors.primary,
+              container: colors.surface,
+              containerActive: colors.surfaceHover,
+            },
+            search: {
+              background: colors.inputBackground,
+              text: colors.text,
+              placeholder: colors.textMuted,
+              icon: colors.textMuted,
+            },
+            emoji: { selected: colors.surfaceHover },
+          }}
+        />
+      )}
+
+      {/* Plus menu: attach image/file */}
+      <Modal
+        visible={showPlusMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPlusMenu(false)}
+      >
+        <Pressable style={styles.plusMenuOverlay} onPress={() => setShowPlusMenu(false)}>
+          <View style={[styles.plusMenuSheet, { backgroundColor: colors.surface }]}>
+            <Pressable
+              style={({ pressed }) => [styles.plusMenuItem, { opacity: pressed ? 0.7 : 1 }]}
+              onPress={() => {
+                setShowPlusMenu(false)
+                handlePickImage()
+              }}
+            >
+              <View style={[styles.plusMenuIcon, { backgroundColor: `${colors.primary}18` }]}>
+                <ImageIcon size={20} color={colors.primary} />
+              </View>
+              <Text style={[styles.plusMenuLabel, { color: colors.text }]}>
+                {t('chat.pickImage', '选择图片')}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.plusMenuItem, { opacity: pressed ? 0.7 : 1 }]}
+              onPress={() => {
+                setShowPlusMenu(false)
+                handlePickFile()
+              }}
+            >
+              <View style={[styles.plusMenuIcon, { backgroundColor: '#f59e0b18' }]}>
+                <File size={20} color="#f59e0b" />
+              </View>
+              <Text style={[styles.plusMenuLabel, { color: colors.text }]}>
+                {t('chat.pickFile', '选择文件')}
+              </Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
 
       {/* Member list modal */}
       <Modal
@@ -1453,6 +1675,318 @@ export default function ChannelViewScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Search Panel */}
+      <Modal
+        visible={showSearchPanel}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowSearchPanel(false)}
+      >
+        <View style={[styles.searchPanel, { backgroundColor: colors.background }]}>
+          {/* Search header */}
+          <View
+            style={[
+              styles.searchHeader,
+              { backgroundColor: colors.surface, paddingTop: Platform.OS === 'ios' ? 12 : 0 },
+            ]}
+          >
+            <View style={[styles.searchInputRow, { backgroundColor: colors.inputBackground }]}>
+              <Search size={18} color={colors.textMuted} />
+              <TextInput
+                ref={searchInputRef}
+                style={[styles.searchInput, { color: colors.text }]}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder={
+                  searchTab === 'messages'
+                    ? t('chat.searchPlaceholder', '搜索消息...')
+                    : t('chat.searchMemberPlaceholder', '搜索成员...')
+                }
+                placeholderTextColor={colors.textMuted}
+                autoFocus
+                returnKeyType="search"
+              />
+              {searchQuery.length > 0 && (
+                <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+                  <X size={16} color={colors.textMuted} />
+                </Pressable>
+              )}
+            </View>
+            <Pressable onPress={() => setShowSearchPanel(false)} hitSlop={8}>
+              <Text style={{ color: colors.primary, fontSize: fontSize.md, fontWeight: '600' }}>
+                {t('common.cancel', '取消')}
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Tab bar */}
+          <View style={[styles.searchTabBar, { borderBottomColor: colors.border }]}>
+            <Pressable
+              style={[
+                styles.searchTab,
+                searchTab === 'messages' && {
+                  borderBottomColor: colors.primary,
+                  borderBottomWidth: 2,
+                },
+              ]}
+              onPress={() => setSearchTab('messages')}
+            >
+              <MessageSquare
+                size={14}
+                color={searchTab === 'messages' ? colors.primary : colors.textMuted}
+              />
+              <Text
+                style={[
+                  styles.searchTabText,
+                  { color: searchTab === 'messages' ? colors.primary : colors.textMuted },
+                ]}
+              >
+                {t('chat.tabMessages', '消息')}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.searchTab,
+                searchTab === 'members' && {
+                  borderBottomColor: colors.primary,
+                  borderBottomWidth: 2,
+                },
+              ]}
+              onPress={() => setSearchTab('members')}
+            >
+              <Users
+                size={14}
+                color={searchTab === 'members' ? colors.primary : colors.textMuted}
+              />
+              <Text
+                style={[
+                  styles.searchTabText,
+                  { color: searchTab === 'members' ? colors.primary : colors.textMuted },
+                ]}
+              >
+                {t('chat.tabMembers', '成员')}
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Messages tab content */}
+          {searchTab === 'messages' && (
+            <>
+              {/* Filter chips */}
+              <View style={styles.searchFilters}>
+                <Pressable
+                  style={[
+                    styles.filterChip,
+                    {
+                      backgroundColor: searchHasAttachment ? `${colors.primary}20` : colors.surface,
+                      borderColor: searchHasAttachment ? colors.primary : colors.border,
+                    },
+                  ]}
+                  onPress={() => setSearchHasAttachment(!searchHasAttachment)}
+                >
+                  <File size={12} color={searchHasAttachment ? colors.primary : colors.textMuted} />
+                  <Text
+                    style={{
+                      color: searchHasAttachment ? colors.primary : colors.textMuted,
+                      fontSize: fontSize.xs,
+                      fontWeight: '600',
+                    }}
+                  >
+                    {t('chat.hasFile', '含附件')}
+                  </Text>
+                </Pressable>
+                {searchFromUser && (
+                  <Pressable
+                    style={[
+                      styles.filterChip,
+                      { backgroundColor: `${colors.primary}20`, borderColor: colors.primary },
+                    ]}
+                    onPress={() => setSearchFromUser(null)}
+                  >
+                    <Text
+                      style={{ color: colors.primary, fontSize: fontSize.xs, fontWeight: '600' }}
+                    >
+                      {t('chat.fromUser', '来自')}:{' '}
+                      {channelMembers.find((m) => m.user.id === searchFromUser)?.user.displayName ??
+                        '...'}
+                    </Text>
+                    <X size={10} color={colors.primary} />
+                  </Pressable>
+                )}
+              </View>
+
+              {/* Member filter list (when no query) */}
+              {searchQuery.length < 2 && !searchFromUser && (
+                <View style={{ paddingHorizontal: spacing.md }}>
+                  <Text
+                    style={{
+                      color: colors.textMuted,
+                      fontSize: fontSize.xs,
+                      fontWeight: '700',
+                      marginBottom: spacing.sm,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {t('chat.filterByMember', '按成员筛选')}
+                  </Text>
+                  {channelMembers.slice(0, 10).map((m) => (
+                    <Pressable
+                      key={m.user.id}
+                      style={[styles.searchMemberRow, { backgroundColor: colors.surface }]}
+                      onPress={() => setSearchFromUser(m.user.id)}
+                    >
+                      <Avatar
+                        uri={m.user.avatarUrl}
+                        name={m.user.displayName || m.user.username}
+                        size={28}
+                        userId={m.user.id}
+                      />
+                      <Text
+                        style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: '500' }}
+                      >
+                        {m.user.displayName || m.user.username}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+
+              {/* Search results */}
+              {searchQuery.length >= 2 && (
+                <FlatList
+                  data={searchResults}
+                  keyExtractor={(item) => item.id}
+                  contentContainerStyle={{ padding: spacing.md }}
+                  ListEmptyComponent={
+                    isSearching ? (
+                      <ActivityIndicator
+                        color={colors.primary}
+                        style={{ marginTop: spacing['3xl'] }}
+                      />
+                    ) : (
+                      <Text
+                        style={{
+                          color: colors.textMuted,
+                          textAlign: 'center',
+                          marginTop: spacing['3xl'],
+                          fontSize: fontSize.sm,
+                        }}
+                      >
+                        {t('chat.noSearchResults', '没有找到匹配的消息')}
+                      </Text>
+                    )
+                  }
+                  renderItem={({ item }) => {
+                    const authorName =
+                      item.author?.displayName || item.author?.username || t('common.unknown')
+                    return (
+                      <Pressable
+                        style={[styles.searchResultCard, { backgroundColor: colors.surface }]}
+                        onPress={() => scrollToMessage(item.id)}
+                      >
+                        <View style={styles.searchResultHeader}>
+                          <Avatar
+                            uri={item.author?.avatarUrl ?? null}
+                            name={authorName}
+                            size={24}
+                            userId={item.authorId}
+                          />
+                          <Text
+                            style={{
+                              color: colors.text,
+                              fontSize: fontSize.sm,
+                              fontWeight: '600',
+                              flex: 1,
+                            }}
+                            numberOfLines={1}
+                          >
+                            {authorName}
+                          </Text>
+                          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
+                            {new Date(item.createdAt).toLocaleDateString()}
+                          </Text>
+                        </View>
+                        <Text
+                          style={{
+                            color: colors.textSecondary,
+                            fontSize: fontSize.sm,
+                            lineHeight: 20,
+                            marginTop: spacing.xs,
+                          }}
+                          numberOfLines={3}
+                        >
+                          {item.content}
+                        </Text>
+                      </Pressable>
+                    )
+                  }}
+                />
+              )}
+            </>
+          )}
+
+          {/* Members tab content */}
+          {searchTab === 'members' && (
+            <FlatList
+              data={filteredMembers}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ padding: spacing.md }}
+              ListEmptyComponent={
+                <Text
+                  style={{
+                    color: colors.textMuted,
+                    textAlign: 'center',
+                    marginTop: spacing['3xl'],
+                    fontSize: fontSize.sm,
+                  }}
+                >
+                  {t('chat.noMembersFound', '未找到成员')}
+                </Text>
+              }
+              renderItem={({ item }) => {
+                const name = item.user.displayName || item.user.username
+                return (
+                  <Pressable
+                    style={[styles.searchMemberRow, { backgroundColor: colors.surface }]}
+                    onPress={() => {
+                      setSearchTab('messages')
+                      setSearchFromUser(item.user.id)
+                    }}
+                  >
+                    <View style={styles.memberAvatarWrap}>
+                      <Avatar
+                        uri={item.user.avatarUrl}
+                        name={name}
+                        size={36}
+                        userId={item.user.id}
+                      />
+                      <View style={styles.memberStatusDot}>
+                        <StatusBadge status={item.user.status || 'offline'} size={12} />
+                      </View>
+                    </View>
+                    <View style={styles.memberInfo}>
+                      <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
+                        {name}
+                      </Text>
+                      <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
+                        @{item.user.username}
+                      </Text>
+                    </View>
+                    {item.user.isBot && (
+                      <View
+                        style={[styles.memberRoleBadge, { backgroundColor: `${colors.primary}20` }]}
+                      >
+                        <Text style={[styles.memberRoleText, { color: colors.primary }]}>BOT</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                )
+              }}
+            />
+          )}
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   )
 }
@@ -1460,6 +1994,54 @@ export default function ChannelViewScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  // Custom header (replaces native header for left-aligned Discord style)
+  customHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 56,
+    paddingHorizontal: spacing.md,
+  },
+  headerBackBtn: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.xs,
+  },
+  headerTitleRow: {
+    flex: 1,
+    flexDirection: 'column',
+    justifyContent: 'center',
+  },
+  headerChannel: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+  },
+  headerOnlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  headerOnlineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#22c55e',
+  },
+  headerOnlineText: {
+    fontSize: fontSize.xs,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: spacing.xs,
+  },
+  headerIconBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   emptyState: {
     flex: 1,
     alignItems: 'center',
@@ -1619,33 +2201,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    gap: spacing.xs,
+    paddingTop: 8,
+    gap: 8,
     borderTopWidth: 1,
   },
-  attachBtn: {
-    width: 36,
-    height: 36,
+  actionBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 2,
+    marginBottom: 0,
+  },
+  inputWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    borderRadius: radius.xl,
+    minHeight: 46,
+    maxHeight: 120,
+    position: 'relative',
+  },
+  inputMicBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 4,
+    bottom: 6,
   },
   textInput: {
     flex: 1,
-    minHeight: 36,
+    minHeight: 46,
     maxHeight: 120,
-    borderRadius: radius.xl,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: Platform.OS === 'ios' ? 8 : spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: Platform.OS === 'ios' ? 12 : spacing.md,
     fontSize: fontSize.md,
-  },
-  sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2,
+    paddingRight: 28,
   },
   // Sheet-style modals
   sheetOverlay: {
@@ -1755,5 +2349,136 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  voiceRecordingBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    gap: spacing.sm,
+  },
+  voiceRecordingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ef4444',
+  },
+  voiceRecordingLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+  },
+  voiceTranscript: {
+    flex: 1,
+    fontSize: fontSize.sm,
+  },
+  plusMenuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  plusMenuSheet: {
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing.lg,
+    paddingBottom: 34,
+    gap: spacing.sm,
+  },
+  plusMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+  },
+  plusMenuIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  plusMenuLabel: {
+    fontSize: fontSize.md,
+    fontWeight: '500',
+  },
+  // Search panel
+  searchPanel: {
+    flex: 1,
+  },
+  searchHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  searchTabBar: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    paddingHorizontal: spacing.md,
+  },
+  searchTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: -1,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  searchTabText: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+  },
+  searchInputRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    height: 40,
+    gap: spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: fontSize.md,
+    height: 40,
+  },
+  searchFilters: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  searchMemberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    marginBottom: 2,
+  },
+  searchResultCard: {
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    marginBottom: spacing.sm,
+  },
+  searchResultHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
 })

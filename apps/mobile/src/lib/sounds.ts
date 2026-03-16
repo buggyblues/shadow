@@ -1,8 +1,7 @@
-import type { Sound } from 'expo-av'
-import { Audio } from 'expo-av'
+import { type AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio'
 
-let sendSound: Sound | null = null
-let receiveSound: Sound | null = null
+let sendSound: AudioPlayer | null = null
+let receiveSound: AudioPlayer | null = null
 
 const SEND_FREQUENCY = 800 // Hz
 const RECEIVE_FREQUENCY = 600 // Hz
@@ -10,19 +9,12 @@ const RECEIVE_FREQUENCY = 600 // Hz
 async function ensureSounds() {
   if (!sendSound) {
     // Create a short "pop" sound for sending
-    const { sound } = await Audio.Sound.createAsync(
-      // Use a small embedded base64 WAV (tiny pop sound)
-      { uri: generateToneDataUri(SEND_FREQUENCY, 0.08) },
-      { volume: 0.3 },
-    )
-    sendSound = sound
+    sendSound = createAudioPlayer(generateToneDataUri(SEND_FREQUENCY, 0.08))
+    sendSound.volume = 0.3
   }
   if (!receiveSound) {
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: generateToneDataUri(RECEIVE_FREQUENCY, 0.12) },
-      { volume: 0.2 },
-    )
-    receiveSound = sound
+    receiveSound = createAudioPlayer(generateToneDataUri(RECEIVE_FREQUENCY, 0.12))
+    receiveSound.volume = 0.2
   }
 }
 
@@ -74,11 +66,11 @@ function generateToneDataUri(frequency: number, duration: number): string {
 
 export async function playSendSound() {
   try {
-    await Audio.setAudioModeAsync({ playsInSilentModeIOS: false })
+    await setAudioModeAsync({ playsInSilentMode: false })
     await ensureSounds()
     if (sendSound) {
-      await sendSound.setPositionAsync(0)
-      await sendSound.playAsync()
+      await sendSound.seekTo(0)
+      sendSound.play()
     }
   } catch {
     // Sound playback is non-critical
@@ -87,11 +79,11 @@ export async function playSendSound() {
 
 export async function playReceiveSound() {
   try {
-    await Audio.setAudioModeAsync({ playsInSilentModeIOS: false })
+    await setAudioModeAsync({ playsInSilentMode: false })
     await ensureSounds()
     if (receiveSound) {
-      await receiveSound.setPositionAsync(0)
-      await receiveSound.playAsync()
+      await receiveSound.seekTo(0)
+      receiveSound.play()
     }
   } catch {
     // Sound playback is non-critical

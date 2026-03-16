@@ -15,15 +15,7 @@ import {
 } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { fetchApi } from '../../src/lib/api'
 import { showToast } from '../../src/lib/toast'
 import { fontSize, radius, spacing, useColors } from '../../src/theme'
@@ -121,8 +113,15 @@ export default function MyRentalsScreen() {
         ? `${Math.round((new Date(c.expiresAt).getTime() - new Date(c.startsAt).getTime()) / 3600000)}h`
         : t('marketplace.unlimited', '不限时')
     return (
-      <TouchableOpacity
-        style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      <Pressable
+        style={({ pressed }) => [
+          styles.card,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            opacity: pressed ? 0.7 : 1,
+          },
+        ]}
         onPress={() => router.push(`/(main)/contract-detail/${c.id}` as never)}
       >
         <View style={styles.cardHeader}>
@@ -149,7 +148,7 @@ export default function MyRentalsScreen() {
             </Text>
           </View>
         </View>
-      </TouchableOpacity>
+      </Pressable>
     )
   }
 
@@ -185,29 +184,29 @@ export default function MyRentalsScreen() {
           </View>
           <View style={styles.actions}>
             {l.listingStatus === 'active' && (
-              <TouchableOpacity
+              <Pressable
                 onPress={() => toggleMutation.mutate({ id: l.id, listingStatus: 'paused' })}
-                style={styles.iconBtn}
+                style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.7 : 1 }]}
               >
                 <Pause size={16} color="#ca8a04" />
-              </TouchableOpacity>
+              </Pressable>
             )}
             {l.listingStatus === 'paused' && (
-              <TouchableOpacity
+              <Pressable
                 onPress={() => toggleMutation.mutate({ id: l.id, listingStatus: 'active' })}
-                style={styles.iconBtn}
+                style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.7 : 1 }]}
               >
                 <Play size={16} color="#16a34a" />
-              </TouchableOpacity>
+              </Pressable>
             )}
-            <TouchableOpacity
+            <Pressable
               onPress={() => router.push(`/(main)/create-listing/${l.id}` as never)}
-              style={styles.iconBtn}
+              style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.7 : 1 }]}
             >
               <Edit size={16} color={colors.textMuted} />
-            </TouchableOpacity>
+            </Pressable>
             {['draft', 'paused', 'closed'].includes(l.listingStatus) && (
-              <TouchableOpacity
+              <Pressable
                 onPress={() =>
                   Alert.alert(t('marketplace.confirmDelete', '确定删除此挂单？'), '', [
                     { text: t('common.cancel', '取消'), style: 'cancel' },
@@ -218,10 +217,10 @@ export default function MyRentalsScreen() {
                     },
                   ])
                 }
-                style={styles.iconBtn}
+                style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.7 : 1 }]}
               >
                 <Trash2 size={16} color="#ef4444" />
-              </TouchableOpacity>
+              </Pressable>
             )}
           </View>
         </View>
@@ -236,31 +235,38 @@ export default function MyRentalsScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable
+          onPress={() => router.back()}
+          style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.7 : 1 }]}
+        >
           <ChevronLeft size={20} color={colors.text} />
-        </TouchableOpacity>
+        </Pressable>
         <Text style={[styles.title, { color: colors.text }]}>
           {t('marketplace.myRentals', '我的租赁')}
         </Text>
-        <TouchableOpacity
-          style={[styles.createBtn, { backgroundColor: colors.primary }]}
+        <Pressable
+          style={({ pressed }) => [
+            styles.createBtn,
+            { backgroundColor: colors.primary, opacity: pressed ? 0.7 : 1 },
+          ]}
           onPress={() => router.push('/(main)/create-listing' as never)}
         >
           <Plus size={16} color="#fff" />
           <Text style={styles.createBtnText}>{t('marketplace.createListing', '创建挂单')}</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       {/* Main Tabs */}
       <View style={styles.tabRow}>
         {(['renting', 'renting-out'] as const).map((tab) => (
-          <TouchableOpacity
+          <Pressable
             key={tab}
-            style={[
+            style={({ pressed }) => [
               styles.tab,
               {
                 backgroundColor: mainTab === tab ? colors.surface : 'transparent',
                 borderColor: mainTab === tab ? colors.primary : 'transparent',
+                opacity: pressed ? 0.7 : 1,
               },
             ]}
             onPress={() => setMainTab(tab)}
@@ -275,7 +281,7 @@ export default function MyRentalsScreen() {
                 ? t('marketplace.renting', '我的租入')
                 : t('marketplace.rentingOut', '我的出租')}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         ))}
       </View>
 
@@ -283,11 +289,14 @@ export default function MyRentalsScreen() {
       {mainTab === 'renting-out' && (
         <View style={[styles.tabRow, { paddingTop: 0 }]}>
           {(['contracts', 'listings'] as const).map((st) => (
-            <TouchableOpacity
+            <Pressable
               key={st}
-              style={[
+              style={({ pressed }) => [
                 styles.subTab,
-                { backgroundColor: subTab === st ? colors.primaryLight : 'transparent' },
+                {
+                  backgroundColor: subTab === st ? colors.primaryLight : 'transparent',
+                  opacity: pressed ? 0.7 : 1,
+                },
               ]}
               onPress={() => setSubTab(st)}
             >
@@ -301,7 +310,7 @@ export default function MyRentalsScreen() {
                   ? t('marketplace.outContracts', '租赁合同')
                   : t('marketplace.myListings', '我的挂单')}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           ))}
         </View>
       )}
@@ -344,8 +353,8 @@ export default function MyRentalsScreen() {
             contentContainerStyle={styles.list}
             ListFooterComponent={
               offlineListings.length > 0 ? (
-                <TouchableOpacity
-                  style={styles.offlineToggle}
+                <Pressable
+                  style={({ pressed }) => [styles.offlineToggle, { opacity: pressed ? 0.7 : 1 }]}
                   onPress={() => setShowOffline(!showOffline)}
                 >
                   <ChevronDown
@@ -356,7 +365,7 @@ export default function MyRentalsScreen() {
                   <Text style={[styles.meta, { color: colors.textMuted }]}>
                     {t('marketplace.offlineListings', '离线 Buddy')} ({offlineListings.length})
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ) : null
             }
           />

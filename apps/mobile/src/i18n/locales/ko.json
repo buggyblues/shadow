@@ -41,7 +41,9 @@
     "docs": "문서",
     "login": "로그인",
     "launch": "시작!",
-    "servers": "서버"
+    "servers": "서버",
+    "community": "커뮤니티",
+    "me": "나"
   },
   "home": {
     "heroBadge": "v1.0 출시 냥!",

@@ -97,7 +97,7 @@ export default function MainLayout() {
       <HeaderButton
         icon={ChevronLeft}
         onPress={() => router.back()}
-        color={colors.primary}
+        color={colors.text}
         size={22}
       />
     </HeaderButtonGroup>
@@ -111,6 +111,8 @@ export default function MainLayout() {
         headerTintColor: colors.text,
         headerTitleStyle: { fontWeight: '700' },
         headerBackVisible: false,
+        headerBackTitle: '',
+        headerLeft,
       }}
     >
       <Stack.Screen name="(tabs)" />
@@ -140,6 +142,10 @@ export default function MainLayout() {
       />
       <Stack.Screen name="media-preview" options={{ headerShown: true, title: '', headerLeft }} />
       <Stack.Screen name="discover" options={{ headerShown: true, title: '', headerLeft }} />
+      <Stack.Screen
+        name="notifications"
+        options={{ headerShown: true, title: '通知', headerLeft }}
+      />
     </Stack>
   )
 }

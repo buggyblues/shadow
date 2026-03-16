@@ -18,7 +18,7 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.shadowob.mobile',
-    associatedDomains: ['applinks:shadow.example.com'],
+    associatedDomains: ['applinks:shadowob.shadowob.com'],
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
       NSSpeechRecognitionUsageDescription:
@@ -36,7 +36,7 @@ const config: ExpoConfig = {
       {
         action: 'VIEW',
         autoVerify: true,
-        data: [{ scheme: 'shadow' }, { scheme: 'https', host: 'shadow.example.com' }],
+        data: [{ scheme: 'shadow' }, { scheme: 'https', host: 'shadowob.shadowob.com' }],
         category: ['BROWSABLE', 'DEFAULT'],
       },
     ],
@@ -47,13 +47,6 @@ const config: ExpoConfig = {
     'expo-secure-store',
     'expo-image-picker',
     'expo-speech-recognition',
-    [
-      'expo-notifications',
-      {
-        icon: './assets/notification-icon.png',
-        color: '#00C8D6',
-      },
-    ],
   ],
   extra: {
     eas: {

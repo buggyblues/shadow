@@ -323,7 +323,7 @@ describe('File CRUD', () => {
         ext: '.md',
         mime: 'text/markdown',
         sizeBytes: 1024,
-        contentRef: 'https://storage.example.com/abc123',
+        contentRef: 'https://storage.shadowob.com/abc123',
       },
     })
     expect(res.status).toBe(201)
@@ -343,7 +343,7 @@ describe('File CRUD', () => {
     expect(file.ext).toBe('.md')
     expect(file.mime).toBe('text/markdown')
     expect(file.sizeBytes).toBe(1024)
-    expect(file.contentRef).toBe('https://storage.example.com/abc123')
+    expect(file.contentRef).toBe('https://storage.shadowob.com/abc123')
     fileId1 = file.id
   })
 
@@ -423,13 +423,13 @@ describe('File CRUD', () => {
     const res = await req('PATCH', `/api/servers/${serverId}/workspace/files/${fileId1}`, {
       token: userToken,
       body: {
-        contentRef: 'https://storage.example.com/updated-ref',
+        contentRef: 'https://storage.shadowob.com/updated-ref',
         sizeBytes: 2048,
       },
     })
     expect(res.status).toBe(200)
     const file = await json<{ contentRef: string; sizeBytes: number }>(res)
-    expect(file.contentRef).toBe('https://storage.example.com/updated-ref')
+    expect(file.contentRef).toBe('https://storage.shadowob.com/updated-ref')
     expect(file.sizeBytes).toBe(2048)
   })
 

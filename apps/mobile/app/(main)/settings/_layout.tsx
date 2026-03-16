@@ -1,7 +1,7 @@
 import { Stack, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { useTranslation } from 'react-i18next'
-import { Pressable } from 'react-native'
+import { HeaderButton, HeaderButtonGroup } from '../../../src/components/common/header-button'
 import { useColors } from '../../../src/theme'
 
 export default function SettingsLayout() {
@@ -10,9 +10,14 @@ export default function SettingsLayout() {
   const router = useRouter()
 
   const headerLeft = () => (
-    <Pressable onPress={() => router.back()} hitSlop={8} style={{ marginRight: 4 }}>
-      <ChevronLeft size={24} color={colors.text} />
-    </Pressable>
+    <HeaderButtonGroup>
+      <HeaderButton
+        icon={ChevronLeft}
+        onPress={() => router.back()}
+        color={colors.text}
+        size={22}
+      />
+    </HeaderButtonGroup>
   )
 
   return (
@@ -21,6 +26,8 @@ export default function SettingsLayout() {
         headerStyle: { backgroundColor: colors.surface },
         headerTintColor: colors.text,
         headerTitleStyle: { fontWeight: '700' },
+        headerBackVisible: false,
+        headerBackTitle: '',
         headerLeft,
       }}
     >

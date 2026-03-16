@@ -41,7 +41,9 @@
     "docs": "文档",
     "login": "登录",
     "launch": "启动！",
-    "servers": "服务器"
+    "servers": "服务器",
+    "community": "社区",
+    "me": "我"
   },
   "home": {
     "heroBadge": "v1.0 全新上线喵！",
@@ -230,7 +232,7 @@
     "publicStatus": "公开状态",
     "publicServer": "公开服务器",
     "publicServerDesc": "任何人都可以搜索并加入",
-    "shop": "商店",
+    "shop": "店铺",
     "workspace": "工作区",
     "membersOnline": "位成员在线",
     "searchChannels": "搜索频道...",

@@ -3,10 +3,12 @@ import { formatDistanceToNow } from 'date-fns'
 import * as Clipboard from 'expo-clipboard'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
+import * as Sharing from 'expo-sharing'
 import {
   Check,
   Copy,
   Download,
+  ExternalLink,
   FileArchive,
   FileCode,
   FileText,
@@ -14,22 +16,14 @@ import {
   Music,
   Pencil,
   Reply,
+  Save,
+  Share2,
   Trash2,
   X,
 } from 'lucide-react-native'
-import type React from 'react'
-import { useMemo, useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  Alert,
-  Linking,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { Alert, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import type { EmojiType } from 'rn-emoji-keyboard'
 import RNEmojiPicker from 'rn-emoji-keyboard'
 import { fetchApi, getImageUrl } from '../../lib/api'
@@ -37,6 +31,7 @@ import { useAuthStore } from '../../stores/auth.store'
 import { fontSize, radius, spacing, useColors } from '../../theme'
 import type { Attachment, Message } from '../../types/message'
 import { Avatar } from '../common/avatar'
+import { MarkdownRenderer } from './markdown-renderer'
 
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '🎉', '🤔', '👀']
 
@@ -48,10 +43,10 @@ interface MessageBubbleProps {
   isGrouped?: boolean
 }
 
-export function MessageBubble({
+function MessageBubbleInner({
   message,
   onReply,
-  channelId,
+  channelId: _channelId,
   allMessages = [],
   isGrouped = false,
 }: MessageBubbleProps) {
@@ -64,7 +59,45 @@ export function MessageBubble({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editText, setEditText] = useState(message.content)
+  const [attachmentAction, setAttachmentAction] = useState<{
+    url: string
+    filename: string
+  } | null>(null)
   const isOwn = currentUser?.id === message.authorId
+
+  // Attachment long-press actions
+  const handleAttachmentSave = useCallback(async () => {
+    if (!attachmentAction) return
+    const resolved = getImageUrl(attachmentAction.url) ?? attachmentAction.url
+    try {
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(resolved)
+      }
+    } catch {
+      Alert.alert(t('common.error', 'Error'), t('chat.saveFailed', 'Failed to save file'))
+    }
+    setAttachmentAction(null)
+  }, [attachmentAction, t])
+
+  const handleAttachmentShare = useCallback(async () => {
+    if (!attachmentAction) return
+    const resolved = getImageUrl(attachmentAction.url) ?? attachmentAction.url
+    try {
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(resolved)
+      }
+    } catch {
+      Alert.alert(t('common.error', 'Error'), t('chat.shareFailed', 'Failed to share file'))
+    }
+    setAttachmentAction(null)
+  }, [attachmentAction, t])
+
+  const handleAttachmentCopyUrl = useCallback(async () => {
+    if (!attachmentAction) return
+    const resolved = getImageUrl(attachmentAction.url) ?? attachmentAction.url
+    await Clipboard.setStringAsync(resolved)
+    setAttachmentAction(null)
+  }, [attachmentAction])
 
   // Resolve reply reference
   const replyTarget = useMemo(() => {
@@ -209,275 +242,16 @@ export function MessageBubble({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
-  // Markdown rendering with code blocks, inline code, bold, italic, links, strikethrough, tables, @mentions
-  const renderContent = (text: string) => {
-    if (!text || text === '\u200B') return null
-
-    const parts: React.ReactNode[] = []
-    const codeBlockRegex = /```(\w+)?\n?([\s\S]*?)```|`([^`\n]+)`/g
-    let lastIndex = 0
-    let match: RegExpExecArray | null
-
-    const processInline = (segment: string, key: string) => {
-      const inlineParts: React.ReactNode[] = []
-      const inlineRegex =
-        /(\*\*(.+?)\*\*)|(\*(.+?)\*)|(\[([^\]]+)\]\(([^)]+)\))|(https?:\/\/[^\s]+)|(~~(.+?)~~)|(@(\w+))/g
-      let iLastIndex = 0
-      let iMatch: RegExpExecArray | null
-
-      // biome-ignore lint/suspicious/noAssignInExpressions: regex exec loop pattern
-      while ((iMatch = inlineRegex.exec(segment)) !== null) {
-        if (iMatch.index > iLastIndex) {
-          inlineParts.push(segment.slice(iLastIndex, iMatch.index))
-        }
-        if (iMatch[2]) {
-          inlineParts.push(
-            <Text key={`${key}-b-${iMatch.index}`} style={{ fontWeight: '700' }}>
-              {iMatch[2]}
-            </Text>,
-          )
-        } else if (iMatch[4]) {
-          inlineParts.push(
-            <Text key={`${key}-i-${iMatch.index}`} style={{ fontStyle: 'italic' }}>
-              {iMatch[4]}
-            </Text>,
-          )
-        } else if (iMatch[6] && iMatch[7]) {
-          inlineParts.push(
-            <Text
-              key={`${key}-l-${iMatch.index}`}
-              style={{ color: colors.primary, textDecorationLine: 'underline' }}
-              onPress={() => Linking.openURL(iMatch![7])}
-            >
-              {iMatch[6]}
-            </Text>,
-          )
-        } else if (iMatch[0].startsWith('http')) {
-          inlineParts.push(
-            <Text
-              key={`${key}-u-${iMatch.index}`}
-              style={{ color: colors.primary, textDecorationLine: 'underline' }}
-              onPress={() => Linking.openURL(iMatch![0])}
-            >
-              {iMatch[0]}
-            </Text>,
-          )
-        } else if (iMatch[10]) {
-          inlineParts.push(
-            <Text
-              key={`${key}-s-${iMatch.index}`}
-              style={{ textDecorationLine: 'line-through', color: colors.textMuted }}
-            >
-              {iMatch[10]}
-            </Text>,
-          )
-        } else if (iMatch[12]) {
-          // @mention — tappable link to user profile
-          const mentionUsername = iMatch[12]
-          inlineParts.push(
-            <Text
-              key={`${key}-m-${iMatch.index}`}
-              style={{ color: colors.primary, fontWeight: '600' }}
-              onPress={() => {
-                const member = allMessages
-                  .map((m) => m.author)
-                  .find((a) => a?.username === mentionUsername)
-                if (member) router.push(`/(main)/profile/${member.id}` as any)
-              }}
-            >
-              @{mentionUsername}
-            </Text>,
-          )
-        }
-        iLastIndex = iMatch.index + iMatch[0].length
-      }
-      if (iLastIndex < segment.length) {
-        inlineParts.push(segment.slice(iLastIndex))
-      }
-      return inlineParts.length > 0 ? inlineParts : [segment]
-    }
-
-    // Parse markdown table block
-    const renderTable = (tableText: string, tableKey: string) => {
-      const lines = tableText
-        .trim()
-        .split('\n')
-        .filter((l) => l.trim())
-      if (lines.length < 2) return null
-      const parseRow = (line: string) =>
-        line
-          .split('|')
-          .map((c) => c.trim())
-          .filter((c) => c.length > 0)
-      const headers = parseRow(lines[0]!)
-      // lines[1] is the separator (---|---)
-      const bodyRows = lines.slice(2).map(parseRow)
-      return (
-        <View key={tableKey} style={[styles.table, { borderColor: colors.border }]}>
-          <View
-            style={[
-              styles.tableRow,
-              styles.tableHeaderRow,
-              { backgroundColor: colors.inputBackground },
-            ]}
-          >
-            {headers.map((h, i) => (
-              <View
-                key={`${tableKey}-h-${i}`}
-                style={[
-                  styles.tableCell,
-                  i > 0 && {
-                    borderLeftWidth: StyleSheet.hairlineWidth,
-                    borderLeftColor: colors.border,
-                  },
-                ]}
-              >
-                <Text style={[styles.tableHeaderText, { color: colors.text }]}>{h}</Text>
-              </View>
-            ))}
-          </View>
-          {bodyRows.map((row, ri) => (
-            <View
-              key={`${tableKey}-r-${ri}`}
-              style={[
-                styles.tableRow,
-                { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
-              ]}
-            >
-              {headers.map((_, ci) => (
-                <View
-                  key={`${tableKey}-r-${ri}-c-${ci}`}
-                  style={[
-                    styles.tableCell,
-                    ci > 0 && {
-                      borderLeftWidth: StyleSheet.hairlineWidth,
-                      borderLeftColor: colors.border,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.tableCellText, { color: colors.text }]}>
-                    {row[ci] ?? ''}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          ))}
-        </View>
-      )
-    }
-
-    // Pre-process: extract table blocks before code block processing
-    const tableBlockRegex = /(?:^|\n)(\|.+\|\n\|[\s:|-]+\|\n(?:\|.+\|\n?)+)/g
-    const tableBlocks: { start: number; end: number; content: string }[] = []
-    let tMatch: RegExpExecArray | null
-    // biome-ignore lint/suspicious/noAssignInExpressions: regex exec loop pattern
-    while ((tMatch = tableBlockRegex.exec(text)) !== null) {
-      const offset = tMatch[0].startsWith('\n') ? 1 : 0
-      tableBlocks.push({
-        start: tMatch.index + offset,
-        end: tMatch.index + tMatch[0].length,
-        content: tMatch[1]!,
-      })
-    }
-
-    // biome-ignore lint/suspicious/noAssignInExpressions: regex exec loop pattern
-    while ((match = codeBlockRegex.exec(text)) !== null) {
-      if (match.index > lastIndex) {
-        const segment = text.slice(lastIndex, match.index)
-        // Check if this segment contains a table
-        const segTable = tableBlocks.find((tb) => tb.start >= lastIndex && tb.end <= match!.index)
-        if (segTable) {
-          const before = text.slice(lastIndex, segTable.start)
-          if (before.trim()) {
-            parts.push(
-              <Text key={`t-${lastIndex}`} style={[styles.content, { color: colors.text }]}>
-                {processInline(before, `t-${lastIndex}`)}
-              </Text>,
-            )
-          }
-          parts.push(renderTable(segTable.content, `tbl-${segTable.start}`))
-          const after = text.slice(segTable.end, match.index)
-          if (after.trim()) {
-            parts.push(
-              <Text key={`t-${segTable.end}`} style={[styles.content, { color: colors.text }]}>
-                {processInline(after, `t-${segTable.end}`)}
-              </Text>,
-            )
-          }
-        } else {
-          parts.push(
-            <Text key={`t-${lastIndex}`} style={[styles.content, { color: colors.text }]}>
-              {processInline(segment, `t-${lastIndex}`)}
-            </Text>,
-          )
-        }
-      }
-      if (match[3]) {
-        // Inline code
-        parts.push(
-          <Text
-            key={`ic-${match.index}`}
-            style={[
-              styles.inlineCode,
-              { backgroundColor: colors.inputBackground, color: colors.text },
-            ]}
-          >
-            {match[3]}
-          </Text>,
-        )
-      } else {
-        // Block code with optional language label
-        const lang = match[1] || ''
-        const code = match[2]?.replace(/\n$/, '') || ''
-        parts.push(
-          <View
-            key={`c-${match.index}`}
-            style={[styles.codeBlock, { backgroundColor: colors.inputBackground }]}
-          >
-            {lang ? (
-              <View style={[styles.codeLangRow, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.codeLangLabel, { color: colors.textMuted }]}>{lang}</Text>
-              </View>
-            ) : null}
-            <Text style={[styles.codeText, { color: colors.text }]}>{code}</Text>
-          </View>,
-        )
-      }
-      lastIndex = match.index + match[0].length
-    }
-    if (lastIndex < text.length) {
-      const remaining = text.slice(lastIndex)
-      // Check for tables in the remaining text
-      const remainingTable = tableBlocks.find((tb) => tb.start >= lastIndex)
-      if (remainingTable) {
-        const before = text.slice(lastIndex, remainingTable.start)
-        if (before.trim()) {
-          parts.push(
-            <Text key={`t-${lastIndex}`} style={[styles.content, { color: colors.text }]}>
-              {processInline(before, `t-${lastIndex}`)}
-            </Text>,
-          )
-        }
-        parts.push(renderTable(remainingTable.content, `tbl-${remainingTable.start}`))
-        const after = text.slice(remainingTable.end)
-        if (after.trim()) {
-          parts.push(
-            <Text key={`t-${remainingTable.end}`} style={[styles.content, { color: colors.text }]}>
-              {processInline(after, `t-${remainingTable.end}`)}
-            </Text>,
-          )
-        }
-      } else {
-        parts.push(
-          <Text key={`t-${lastIndex}`} style={[styles.content, { color: colors.text }]}>
-            {processInline(remaining, `t-${lastIndex}`)}
-          </Text>,
-        )
+  // @mention map for markdown renderer
+  const mentionMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const m of allMessages) {
+      if (m.author?.username) {
+        map.set(m.author.username, m.author.id ?? m.authorId)
       }
     }
-
-    return parts
-  }
+    return map
+  }, [allMessages])
 
   return (
     <Pressable
@@ -505,7 +279,7 @@ export function MessageBubble({
         {isGrouped ? (
           <View style={styles.groupedGutter} />
         ) : (
-          <Pressable onPress={() => router.push(`/(main)/profile/${message.authorId}` as any)}>
+          <Pressable onPress={() => router.push(`/(main)/profile/${message.authorId}` as never)}>
             <Avatar
               uri={message.author?.avatarUrl}
               name={displayName}
@@ -517,7 +291,9 @@ export function MessageBubble({
         <View style={styles.bubble}>
           {!isGrouped && (
             <View style={styles.header}>
-              <Pressable onPress={() => router.push(`/(main)/profile/${message.authorId}` as any)}>
+              <Pressable
+                onPress={() => router.push(`/(main)/profile/${message.authorId}` as never)}
+              >
                 <Text style={[styles.username, { color: colors.text }]}>{displayName}</Text>
               </Pressable>
               {isBot && (
@@ -561,7 +337,7 @@ export function MessageBubble({
               </View>
             </View>
           ) : (
-            <View>{renderContent(message.content)}</View>
+            <MarkdownRenderer content={message.content} mentionMap={mentionMap} />
           )}
 
           {/* Attachments */}
@@ -582,6 +358,7 @@ export function MessageBubble({
                       },
                     })
                   }}
+                  onLongPress={() => setAttachmentAction({ url: att.url, filename: att.filename })}
                 >
                   <Image
                     source={{ uri: getImageUrl(att.url) ?? att.url }}
@@ -612,6 +389,7 @@ export function MessageBubble({
                     },
                   })
                 }}
+                onLongPress={() => setAttachmentAction({ url: att.url, filename: att.filename })}
               >
                 <View style={[styles.fileIconWrap, { backgroundColor: `${accentColor}18` }]}>
                   <FileIcon size={20} color={accentColor} />
@@ -756,9 +534,72 @@ export function MessageBubble({
         enableRecentlyUsed
         categoryPosition="top"
       />
+
+      {/* Attachment long-press action sheet */}
+      <Modal
+        visible={!!attachmentAction}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAttachmentAction(null)}
+      >
+        <Pressable style={styles.actionSheetOverlay} onPress={() => setAttachmentAction(null)}>
+          <View style={[styles.actionSheet, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.actionSheetTitle, { color: colors.text }]} numberOfLines={1}>
+              {attachmentAction?.filename}
+            </Text>
+            <Pressable
+              style={({ pressed }) => [styles.actionSheetItem, { opacity: pressed ? 0.7 : 1 }]}
+              onPress={handleAttachmentSave}
+            >
+              <Save size={18} color={colors.text} />
+              <Text style={[styles.actionSheetLabel, { color: colors.text }]}>
+                {t('chat.saveFile', '保存文件')}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.actionSheetItem, { opacity: pressed ? 0.7 : 1 }]}
+              onPress={handleAttachmentShare}
+            >
+              <Share2 size={18} color={colors.text} />
+              <Text style={[styles.actionSheetLabel, { color: colors.text }]}>
+                {t('common.share', '分享')}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.actionSheetItem, { opacity: pressed ? 0.7 : 1 }]}
+              onPress={handleAttachmentCopyUrl}
+            >
+              <ExternalLink size={18} color={colors.text} />
+              <Text style={[styles.actionSheetLabel, { color: colors.text }]}>
+                {t('chat.copyLink', '复制链接')}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.actionSheetCancel,
+                { backgroundColor: colors.background, opacity: pressed ? 0.7 : 1 },
+              ]}
+              onPress={() => setAttachmentAction(null)}
+            >
+              <Text style={[styles.actionSheetLabel, { color: colors.textMuted }]}>
+                {t('common.cancel', '取消')}
+              </Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </Pressable>
   )
 }
+
+export const MessageBubble = memo(MessageBubbleInner, (prev, next) => {
+  return (
+    prev.message === next.message &&
+    prev.channelId === next.channelId &&
+    prev.isGrouped === next.isGrouped &&
+    prev.allMessages === next.allMessages
+  )
+})
 
 const styles = StyleSheet.create({
   container: {
@@ -830,37 +671,6 @@ const styles = StyleSheet.create({
   content: {
     fontSize: fontSize.md,
     lineHeight: 22,
-  },
-  // Code blocks
-  codeBlock: {
-    borderRadius: radius.md,
-    overflow: 'hidden',
-    marginVertical: spacing.xs,
-  },
-  codeLangRow: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  codeLangLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  codeText: {
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    fontSize: fontSize.xs,
-    padding: spacing.sm,
-    lineHeight: 18,
-  },
-  inlineCode: {
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    fontSize: fontSize.xs,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 4,
-    overflow: 'hidden',
   },
   // Editing
   editContainer: {
@@ -1010,27 +820,40 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
   },
-  // Table styles
-  table: {
-    borderWidth: 1,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-    marginVertical: spacing.xs,
-  },
-  tableRow: {
-    flexDirection: 'row',
-  },
-  tableHeaderRow: {},
-  tableCell: {
+  actionSheetOverlay: {
     flex: 1,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
   },
-  tableHeaderText: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
+  actionSheet: {
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing.md,
+    paddingBottom: 34,
+    gap: 4,
   },
-  tableCellText: {
-    fontSize: fontSize.xs,
+  actionSheetTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingVertical: spacing.sm,
+  },
+  actionSheetItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+  },
+  actionSheetLabel: {
+    fontSize: fontSize.md,
+    fontWeight: '500',
+  },
+  actionSheetCancel: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: radius.md,
+    marginTop: spacing.sm,
   },
 })

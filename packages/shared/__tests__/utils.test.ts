@@ -37,7 +37,7 @@ describe('formatDate', () => {
 
 describe('isValidEmail', () => {
   it('should return true for valid emails', () => {
-    expect(isValidEmail('user@example.com')).toBe(true)
+    expect(isValidEmail('user@shadowob.com')).toBe(true)
     expect(isValidEmail('first.last@domain.org')).toBe(true)
     expect(isValidEmail('user+tag@sub.domain.com')).toBe(true)
   })
