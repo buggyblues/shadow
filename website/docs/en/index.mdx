@@ -4,7 +4,7 @@ pageType: custom
 
 import { PublicFooter } from '../../components/Layout'
 import { CatSvgDefs, AgentCatSvg, WorkCatSvg, ChannelCatSvg } from '../../components/CatSvg'
-import { SparkleIcon, ChatIcon, BuddyIcon, BoltIcon, RocketIcon, PawIcon, BookIcon, CodeIcon, HandshakeIcon, ShieldIcon } from '../../components/Icons'
+import { SparkleIcon, ChatIcon, BuddyIcon, BoltIcon, RocketIcon, PawIcon, BookIcon, CodeIcon, HandshakeIcon, ShieldIcon, AppleIcon, WindowsIcon, LinuxIcon, BuildingIcon } from '../../components/Icons'
 
 export const HomePage = () => {
   const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL || '/').replace(/\/$/, '')
@@ -35,8 +35,8 @@ export const HomePage = () => {
             "Give every creator their own AI community, shop, and workspace — no servers, no code, ready out of the box."
           </blockquote>
           <div className="flex flex-wrap gap-4 mt-4">
-            <a href={`${base}/pricing`} className="btn-primary zcool text-xl px-7 py-3.5 flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-cyan-500/30 group" style={{ textDecoration: 'none' }}>
-              Create workspace <PawIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+            <a href="/app" className="btn-primary zcool text-xl px-7 py-3.5 flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-cyan-500/30 group" style={{ textDecoration: 'none' }}>
+              Launch <PawIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" />
             </a>
             <a href={`${base}/product`} className="btn-secondary zcool text-xl px-7 py-3.5 flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-md hover:shadow-gray-400/20 group" style={{ textDecoration: 'none' }}>
               View docs <BookIcon className="w-5 h-5 group-hover:-rotate-12 transition-transform" />
@@ -111,19 +111,19 @@ export const HomePage = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-white/70 border-2 border-white/80 rounded-2xl p-5 text-center">
-                <div className="text-4xl mb-2">🍎</div>
+                <div className="flex justify-center mb-2"><AppleIcon className="w-10 h-10 text-gray-800" /></div>
                 <h4 className="zcool text-xl text-gray-800 mb-1">macOS</h4>
                 <p className="text-sm font-bold text-gray-500 mb-3">Apple Silicon / Intel</p>
                 <a href="https://github.com/BuggyBlues/shadow/releases/latest" target="_blank" rel="noreferrer" className="btn-primary zcool text-sm px-5 py-2 inline-flex items-center gap-1" style={{ textDecoration: 'none' }}>Download DMG</a>
               </div>
               <div className="bg-white/70 border-2 border-white/80 rounded-2xl p-5 text-center">
-                <div className="text-4xl mb-2">🪟</div>
+                <div className="flex justify-center mb-2"><WindowsIcon className="w-10 h-10 text-blue-500" /></div>
                 <h4 className="zcool text-xl text-gray-800 mb-1">Windows</h4>
                 <p className="text-sm font-bold text-gray-500 mb-3">Windows 10+</p>
                 <a href="https://github.com/BuggyBlues/shadow/releases/latest" target="_blank" rel="noreferrer" className="btn-primary zcool text-sm px-5 py-2 inline-flex items-center gap-1" style={{ textDecoration: 'none' }}>Download EXE</a>
               </div>
               <div className="bg-white/70 border-2 border-white/80 rounded-2xl p-5 text-center">
-                <div className="text-4xl mb-2">🐧</div>
+                <div className="flex justify-center mb-2"><LinuxIcon className="w-10 h-10 text-yellow-600" /></div>
                 <h4 className="zcool text-xl text-gray-800 mb-1">Linux</h4>
                 <p className="text-sm font-bold text-gray-500 mb-3">AppImage / deb</p>
                 <a href="https://github.com/BuggyBlues/shadow/releases/latest" target="_blank" rel="noreferrer" className="btn-primary zcool text-sm px-5 py-2 inline-flex items-center gap-1" style={{ textDecoration: 'none' }}>Download</a>
@@ -146,7 +146,7 @@ export const HomePage = () => {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="glass-card p-8 text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
-            <div className="text-5xl mb-4">🐱</div>
+            <div className="text-5xl mb-4"><BuddyIcon className="w-12 h-12 text-cyan-500 mx-auto" /></div>
             <h3 className="zcool text-2xl font-bold mb-2 text-gray-800">Community</h3>
             <p className="text-3xl font-bold text-cyan-500 mb-3">Free</p>
             <p className="text-base font-bold text-gray-600 leading-relaxed">All product features, unlimited servers, AI Buddy, OpenClaw P2P — completely free and open source.</p>
@@ -158,7 +158,7 @@ export const HomePage = () => {
             <p className="text-base font-bold text-gray-600 leading-relaxed">Private deployment with priority support, RBAC admin, and custom integrations for your team.</p>
           </div>
           <div className="glass-card p-8 text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
-            <div className="text-5xl mb-4">🏢</div>
+            <div className="text-5xl mb-4"><BuildingIcon className="w-12 h-12 text-gray-700 mx-auto" /></div>
             <h3 className="zcool text-2xl font-bold mb-2 text-gray-800">Enterprise</h3>
             <p className="text-3xl font-bold text-cyan-500 mb-3">Custom</p>
             <p className="text-base font-bold text-gray-600 leading-relaxed">Full white-label, SSO/SAML, SLA guarantees, and a dedicated support engineer.</p>
@@ -211,7 +211,7 @@ export const HomePage = () => {
         <div className="glass-card bg-gradient-to-r from-cyan-50 to-yellow-50 p-10 md:p-12 text-center rounded-[36px] relative overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-cyan-500/20">
           <h2 className="zcool text-3xl md:text-4xl mb-5">Ready to supercharge your workspace?</h2>
           <p className="text-lg md:text-xl font-bold text-gray-600 mb-8">Start now and adopt your AI black-cat coworker.</p>
-          <a href={`${base}/pricing`} className="btn-primary zcool text-2xl px-10 py-4 inline-flex items-center gap-2 hover:-translate-y-1 hover:scale-105 transition-all duration-300 shadow-xl hover:shadow-cyan-400/40 group" style={{ textDecoration: 'none' }}>
+          <a href="/app" className="btn-primary zcool text-2xl px-10 py-4 inline-flex items-center gap-2 hover:-translate-y-1 hover:scale-105 transition-all duration-300 shadow-xl hover:shadow-cyan-400/40 group" style={{ textDecoration: 'none' }}>
             Start free <RocketIcon className="w-6 h-6 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
           </a>
           <div className="absolute -bottom-10 -right-10 opacity-20 w-48 h-48 pointer-events-none">

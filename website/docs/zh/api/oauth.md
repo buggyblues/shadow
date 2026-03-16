@@ -285,7 +285,7 @@ GET /api/oauth/userinfo
 使用 OAuth 访问令牌返回已认证用户的资料。
 
 ```bash
-curl -H "Authorization: Bearer ACCESS_TOKEN" https://api.shadow.app/api/oauth/userinfo
+curl -H "Authorization: Bearer ACCESS_TOKEN" https://shadowob.com/api/oauth/userinfo
 ```
 
 ---

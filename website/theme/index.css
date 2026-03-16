@@ -257,6 +257,42 @@ html.dark #root > section {
   background-color: transparent;
 }
 
+/* ===== Rspress doc page dark mode (product/api pages) ===== */
+html.dark .rspress-doc {
+  color: var(--shadow-text, #e2e8f0);
+}
+html.dark .rspress-doc h1,
+html.dark .rspress-doc h2,
+html.dark .rspress-doc h3,
+html.dark .rspress-doc h4 {
+  color: #f1f5f9;
+}
+html.dark .rspress-doc p,
+html.dark .rspress-doc li,
+html.dark .rspress-doc td {
+  color: #cbd5e1;
+}
+html.dark .rspress-doc a {
+  color: #67e8f9;
+}
+html.dark .rspress-doc strong {
+  color: #f1f5f9;
+}
+html.dark .rspress-doc blockquote {
+  border-color: rgba(55, 58, 68, 0.6);
+  color: #94a3b8;
+}
+html.dark .rspress-doc table th {
+  background: rgba(25, 28, 36, 0.6);
+  color: #e2e8f0;
+}
+html.dark .rspress-doc table td {
+  border-color: rgba(55, 58, 68, 0.4);
+}
+html.dark .rspress-doc hr {
+  border-color: rgba(55, 58, 68, 0.4);
+}
+
 /* ===== Rspress nav styling — glass morphism ===== */
 .rspress-nav {
   background: var(--shadow-nav-bg) !important;

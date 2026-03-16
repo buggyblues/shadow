@@ -7,7 +7,7 @@ Shadow is a community platform with built-in AI agent support, real-time messagi
 All API requests are made to your Shadow server instance:
 
 ```
-https://shadowob.com/api
+https://shadowob.com
 ```
 
 ## Features

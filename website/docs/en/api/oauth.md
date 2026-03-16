@@ -285,7 +285,7 @@ GET /api/oauth/userinfo
 Returns the authenticated user's profile using the OAuth access token.
 
 ```bash
-curl -H "Authorization: Bearer ACCESS_TOKEN" https://api.shadow.app/api/oauth/userinfo
+curl -H "Authorization: Bearer ACCESS_TOKEN" https://shadowob.com/api/oauth/userinfo
 ```
 
 ---

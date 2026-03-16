@@ -54,9 +54,23 @@ export function createApp(container: AppContainer) {
   // Public endpoint for homepage / Buddy Market (no auth required)
   app.get('/api/public/marketplace', async (c) => {
     const rentalService = container.resolve('rentalService')
+    const sortBy = c.req.query('sortBy') || 'popular'
+    const keyword = c.req.query('keyword') || undefined
+    const deviceTier = c.req.query('deviceTier') || undefined
+    const limit = Math.min(Number(c.req.query('limit')) || 20, 50)
+    const offset = Math.max(Number(c.req.query('offset')) || 0, 0)
+    const allowedSort = ['popular', 'newest', 'price-asc', 'price-desc'] as const
     const result = await rentalService.browseListings({
-      sortBy: 'popular',
-      limit: 20,
+      sortBy: allowedSort.includes(sortBy as (typeof allowedSort)[number])
+        ? (sortBy as (typeof allowedSort)[number])
+        : 'popular',
+      keyword,
+      deviceTier:
+        deviceTier && ['high_end', 'mid_range', 'low_end'].includes(deviceTier)
+          ? deviceTier
+          : undefined,
+      limit,
+      offset,
     })
     return c.json(result)
   })

@@ -3,48 +3,79 @@ pageType: custom
 ---
 
 import { PublicFooter } from '../../components/Layout'
-import { MessageSquareIcon, LayersIcon, ShieldIcon, ZapIcon, HandshakeIcon } from '../../components/Icons'
+import { MessageSquareIcon, LayersIcon, ShieldIcon, ZapIcon, HandshakeIcon, BookIcon } from '../../components/Icons'
 
 export const FeaturesPage = () => {
   const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL || '/').replace(/\/$/, '')
+  const sidebarItems = [
+    { text: 'Getting Started', link: `${base}/product/` },
+    { text: 'Communities & Servers', link: `${base}/product/communities` },
+    { text: 'Channels & Messages', link: `${base}/product/channels` },
+    { text: 'AI Assistants', link: `${base}/product/ai-assistants` },
+    { text: 'Community Shop', link: `${base}/product/shop` },
+    { text: 'Buddy Rental', link: `${base}/product/buddy-rental` },
+    { text: 'Shared Workspace', link: `${base}/product/workspace` },
+    { text: 'OpenClaw Plugin', link: `${base}/product/openclaw` },
+    { text: 'FAQ', link: `${base}/product/faq` },
+  ]
   const features = [
-    { icon: <MessageSquareIcon className="w-7 h-7 text-cyan-500" />, bg: 'bg-cyan-50', title: 'Channel Communication', desc: 'Powerful channel system supporting text, voice, and video channels with unlimited hierarchy.' },
-    { icon: <img src={`${base}/Logo.svg`} alt="Buddy" className="w-7 h-7" />, bg: 'bg-yellow-50', title: 'Multi-Buddy Collaboration', desc: 'Summon AI Buddies to join channel discussions. Write code, review proposals, generate reports — 24/7 non-stop.' },
-    { icon: <LayersIcon className="w-7 h-7 text-pink-500" />, bg: 'bg-pink-50', title: 'Unified Workspace', desc: 'Integrates task boards, whiteboards, doc collaboration, and file management. All work on one platform.' },
-    { icon: <ShieldIcon className="w-7 h-7 text-green-500" />, bg: 'bg-green-50', title: 'Roles & Permissions', desc: 'Granular role-based access control at channel and message level, ensuring information security.' },
-    { icon: <ZapIcon className="w-7 h-7 text-orange-500" />, bg: 'bg-orange-50', title: 'Real-time Collaboration', desc: 'WebSocket-powered real-time engine with instant messaging, live presence, and typing indicators.' },
-    { icon: <HandshakeIcon className="w-7 h-7 text-amber-500" />, bg: 'bg-amber-50', title: 'P2P Claw Rental', desc: 'List your idle OpenClaw on the marketplace, sign smart contracts, pay-per-hour billing, and share computing power to earn shrimp coins.' },
+    { icon: <MessageSquareIcon className="w-7 h-7 text-cyan-500" />, bg: 'bg-cyan-50', title: 'Channel Communication', desc: 'Powerful channel system supporting text, voice, and video channels with unlimited hierarchy.', link: `${base}/product/channels` },
+    { icon: <img src={`${base}/Logo.svg`} alt="Buddy" className="w-7 h-7" />, bg: 'bg-yellow-50', title: 'Multi-Buddy Collaboration', desc: 'Summon AI Buddies to join channel discussions. Write code, review proposals, generate reports — 24/7 non-stop.', link: `${base}/product/ai-assistants` },
+    { icon: <LayersIcon className="w-7 h-7 text-pink-500" />, bg: 'bg-pink-50', title: 'Unified Workspace', desc: 'Integrates task boards, whiteboards, doc collaboration, and file management. All work on one platform.', link: `${base}/product/workspace` },
+    { icon: <ShieldIcon className="w-7 h-7 text-green-500" />, bg: 'bg-green-50', title: 'Roles & Permissions', desc: 'Granular role-based access control at channel and message level, ensuring information security.', link: `${base}/product/communities` },
+    { icon: <ZapIcon className="w-7 h-7 text-orange-500" />, bg: 'bg-orange-50', title: 'Real-time Collaboration', desc: 'WebSocket-powered real-time engine with instant messaging, live presence, and typing indicators.', link: `${base}/product/channels` },
+    { icon: <HandshakeIcon className="w-7 h-7 text-amber-500" />, bg: 'bg-amber-50', title: 'P2P Claw Rental', desc: 'List your idle OpenClaw on the marketplace, sign smart contracts, pay-per-hour billing, and share computing power to earn shrimp coins.', link: `${base}/product/buddy-rental` },
   ]
 
   return (
     <div className="shadow-page" style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}>
+      <div className="max-w-7xl mx-auto flex">
+        {/* Sidebar */}
+        <aside className="hidden lg:block w-64 shrink-0 pt-10 pl-8 pr-4">
+          <div className="sticky top-20">
+            <h4 className="zcool text-sm font-bold mb-4 uppercase tracking-wider" style={{ color: 'var(--shadow-text-dim)' }}>Product Docs</h4>
+            <nav className="flex flex-col gap-1">
+              {sidebarItems.map((item) => (
+                <a key={item.link} href={item.link} className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold hover:bg-white/60 transition-colors" style={{ color: 'var(--shadow-text-muted)', textDecoration: 'none' }}>
+                  <BookIcon className="w-3.5 h-3.5" />
+                  {item.text}
+                </a>
+              ))}
+            </nav>
+          </div>
+        </aside>
 
-      <section className="pt-10 pb-16 px-8 md:px-16 max-w-6xl mx-auto text-center">
-        <h1 className="zcool text-4xl md:text-6xl mb-6 leading-tight">All the Collaboration Features You Need</h1>
-        <p className="text-lg md:text-xl text-gray-600 font-bold max-w-2xl mx-auto">
-          From channel communication to AI collaboration, from task management to document editing — Shadow is your all-in-one workspace.
-        </p>
-      </section>
+        {/* Main content */}
+        <div className="flex-1 min-w-0">
+          <section className="pt-10 pb-16 px-8 md:px-16 max-w-5xl mx-auto text-center">
+            <h1 className="zcool text-4xl md:text-6xl mb-6 leading-tight">All the Collaboration Features You Need</h1>
+            <p className="text-lg md:text-xl text-gray-600 font-bold max-w-2xl mx-auto">
+              From channel communication to AI collaboration, from task management to document editing — Shadow is your all-in-one workspace.
+            </p>
+          </section>
 
-      <section className="max-w-6xl mx-auto px-8 md:px-16 pb-24">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {features.map((f) => (
-            <div key={f.title} className="bg-white/70 backdrop-blur-lg border-2 border-white/90 rounded-3xl p-8 hover:-translate-y-2 hover:shadow-xl transition-all group">
-              <div className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl ${f.bg} mb-5`}>{f.icon}</div>
-              <h3 className="zcool text-2xl font-bold mb-3">{f.title}</h3>
-              <p className="text-gray-600 font-medium leading-relaxed">{f.desc}</p>
+          <section className="max-w-5xl mx-auto px-8 md:px-16 pb-24">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {features.map((f) => (
+                <a key={f.title} href={f.link} className="bg-white/70 backdrop-blur-lg border-2 border-white/90 rounded-3xl p-8 hover:-translate-y-2 hover:shadow-xl transition-all group block" style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <div className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl ${f.bg} mb-5`}>{f.icon}</div>
+                  <h3 className="zcool text-2xl font-bold mb-3 group-hover:text-cyan-600 transition-colors">{f.title}</h3>
+                  <p className="text-gray-600 font-medium leading-relaxed">{f.desc}</p>
+                  <span className="inline-flex items-center gap-1 mt-4 text-sm font-bold text-cyan-500 group-hover:translate-x-1 transition-transform">Learn more →</span>
+                </a>
+              ))}
             </div>
-          ))}
-        </div>
-      </section>
+          </section>
 
-      <section className="max-w-4xl mx-auto px-8 md:px-16 pb-20">
-        <div className="bg-gradient-to-r from-cyan-50 to-yellow-50 border-2 border-white/90 rounded-3xl p-10 md:p-14 text-center">
-          <h2 className="zcool text-3xl md:text-4xl mb-4">Want to try it yourself?</h2>
-          <p className="text-lg text-gray-600 font-bold mb-8">Sign up now and start your collaboration playground!</p>
-          <a href={`${base}/pricing`} className="btn-primary zcool text-xl px-10 py-4 hover:scale-105 transition-transform" style={{ textDecoration: 'none' }}>Get Started Free</a>
+          <section className="max-w-4xl mx-auto px-8 md:px-16 pb-20">
+            <div className="bg-gradient-to-r from-cyan-50 to-yellow-50 border-2 border-white/90 rounded-3xl p-10 md:p-14 text-center">
+              <h2 className="zcool text-3xl md:text-4xl mb-4">Want to try it yourself?</h2>
+              <p className="text-lg text-gray-600 font-bold mb-8">Sign up now and start your collaboration playground!</p>
+              <a href="/app" className="btn-primary zcool text-xl px-10 py-4 hover:scale-105 transition-transform" style={{ textDecoration: 'none' }}>Get Started Free</a>
+            </div>
+          </section>
         </div>
-      </section>
+      </div>
 
       <PublicFooter lang="en" />
     </div>

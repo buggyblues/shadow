@@ -4,7 +4,7 @@ pageType: custom
 
 import { PublicFooter } from '../../components/Layout'
 import { CatSvgDefs, AgentCatSvg, WorkCatSvg, ChannelCatSvg } from '../../components/CatSvg'
-import { SparkleIcon, ChatIcon, BuddyIcon, BoltIcon, RocketIcon, PawIcon, BookIcon, CodeIcon, HandshakeIcon, ShieldIcon } from '../../components/Icons'
+import { SparkleIcon, ChatIcon, BuddyIcon, BoltIcon, RocketIcon, PawIcon, BookIcon, CodeIcon, HandshakeIcon, ShieldIcon, AppleIcon, WindowsIcon, LinuxIcon, BuildingIcon } from '../../components/Icons'
 
 export const HomePage = () => {
   const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL || '/').replace(/\/$/, '')
@@ -37,8 +37,8 @@ export const HomePage = () => {
             "让每一个创作者都拥有自己的 AI 社区、店铺和工作区——无需服务器，无需代码，开箱即用。"
           </blockquote>
           <div className="flex flex-wrap gap-4 mt-4">
-            <a href={`${base}/zh/pricing`} className="btn-primary zcool text-xl px-7 py-3.5 flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-cyan-500/30 group" style={{ textDecoration: 'none' }}>
-              创建工作区喵 <PawIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+            <a href="/app" className="btn-primary zcool text-xl px-7 py-3.5 flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-cyan-500/30 group" style={{ textDecoration: 'none' }}>
+              启动 <PawIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" />
             </a>
             <a href={`${base}/zh/product`} className="btn-secondary zcool text-xl px-7 py-3.5 flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-md hover:shadow-gray-400/20 group" style={{ textDecoration: 'none' }}>
               看看文档 <BookIcon className="w-5 h-5 group-hover:-rotate-12 transition-transform" />
@@ -112,24 +112,30 @@ export const HomePage = () => {
           <div className="flex flex-col gap-6">
             <div>
               <h3 className="zcool text-3xl md:text-4xl font-bold mb-3 text-gray-800">桌面端下载</h3>
-              <p className="text-base md:text-lg font-bold text-gray-600">macOS（Intel/Apple Silicon）已签名并公证，发布后可直接下载安装。</p>
+              <p className="text-base md:text-lg font-bold text-gray-600">支持 macOS、Windows 和 Linux。macOS 版本已签名并公证。</p>
             </div>
-            <div className="flex flex-wrap gap-4">
-              <a href="https://github.com/BuggyBlues/shadow/releases/latest" target="_blank" rel="noreferrer" className="btn-primary zcool text-lg px-7 py-3 inline-flex items-center gap-2" style={{ textDecoration: 'none' }}>
-                下载最新版（Latest Release）
-              </a>
-              <a href="https://github.com/BuggyBlues/shadow/releases" target="_blank" rel="noreferrer" className="btn-secondary zcool text-lg px-7 py-3 inline-flex items-center gap-2" style={{ textDecoration: 'none' }}>
-                所有版本（All Releases）
-              </a>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white/70 border-2 border-white/80 rounded-2xl p-5 text-center">
+                <div className="flex justify-center mb-2"><AppleIcon className="w-10 h-10 text-gray-800" /></div>
+                <h4 className="zcool text-xl text-gray-800 mb-1">macOS</h4>
+                <p className="text-sm font-bold text-gray-500 mb-3">Apple Silicon / Intel</p>
+                <a href="https://github.com/BuggyBlues/shadow/releases/latest" target="_blank" rel="noreferrer" className="btn-primary zcool text-sm px-5 py-2 inline-flex items-center gap-1" style={{ textDecoration: 'none' }}>下载 DMG</a>
+              </div>
+              <div className="bg-white/70 border-2 border-white/80 rounded-2xl p-5 text-center">
+                <div className="flex justify-center mb-2"><WindowsIcon className="w-10 h-10 text-blue-500" /></div>
+                <h4 className="zcool text-xl text-gray-800 mb-1">Windows</h4>
+                <p className="text-sm font-bold text-gray-500 mb-3">Windows 10+</p>
+                <a href="https://github.com/BuggyBlues/shadow/releases/latest" target="_blank" rel="noreferrer" className="btn-primary zcool text-sm px-5 py-2 inline-flex items-center gap-1" style={{ textDecoration: 'none' }}>下载 EXE</a>
+              </div>
+              <div className="bg-white/70 border-2 border-white/80 rounded-2xl p-5 text-center">
+                <div className="flex justify-center mb-2"><LinuxIcon className="w-10 h-10 text-yellow-600" /></div>
+                <h4 className="zcool text-xl text-gray-800 mb-1">Linux</h4>
+                <p className="text-sm font-bold text-gray-500 mb-3">AppImage / deb</p>
+                <a href="https://github.com/BuggyBlues/shadow/releases/latest" target="_blank" rel="noreferrer" className="btn-primary zcool text-sm px-5 py-2 inline-flex items-center gap-1" style={{ textDecoration: 'none' }}>下载</a>
+              </div>
             </div>
-            <div className="bg-white/70 border border-white/80 rounded-2xl p-5">
-              <h4 className="zcool text-2xl text-gray-800 mb-3">安装教程</h4>
-              <ol className="list-decimal pl-5 space-y-2 text-gray-700 font-bold">
-                <li>打开 Latest Release 页面并下载对应系统安装包。</li>
-                <li>macOS 选择对应架构：Apple Silicon 设备下载 arm64，Intel 设备下载 x64。</li>
-                <li>打开 DMG，把 Shadow 拖到 Applications 文件夹。</li>
-                <li>首次启动若出现系统提示，右键应用选择"打开"即可。</li>
-              </ol>
+            <div className="text-center">
+              <a href="https://github.com/BuggyBlues/shadow/releases" target="_blank" rel="noreferrer" className="btn-secondary zcool text-base px-6 py-2 inline-flex items-center gap-2" style={{ textDecoration: 'none' }}>所有版本</a>
             </div>
           </div>
         </div>
@@ -145,7 +151,7 @@ export const HomePage = () => {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="glass-card p-8 text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
-            <div className="text-5xl mb-4">🐱</div>
+            <div className="text-5xl mb-4"><BuddyIcon className="w-12 h-12 text-cyan-500 mx-auto" /></div>
             <h3 className="zcool text-2xl font-bold mb-2 text-gray-800">社区版</h3>
             <p className="text-3xl font-bold text-cyan-500 mb-3">免费</p>
             <p className="text-base font-bold text-gray-600 leading-relaxed">全部产品功能、无限服务器、AI Buddy、OpenClaw P2P——完全免费开源。</p>
@@ -157,7 +163,7 @@ export const HomePage = () => {
             <p className="text-base font-bold text-gray-600 leading-relaxed">私有化部署、优先技术支持、RBAC 管理和自定义集成。</p>
           </div>
           <div className="glass-card p-8 text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
-            <div className="text-5xl mb-4">🏢</div>
+            <div className="text-5xl mb-4"><BuildingIcon className="w-12 h-12 text-gray-700 mx-auto" /></div>
             <h3 className="zcool text-2xl font-bold mb-2 text-gray-800">企业版</h3>
             <p className="text-3xl font-bold text-cyan-500 mb-3">定制</p>
             <p className="text-base font-bold text-gray-600 leading-relaxed">全面白标、SSO/SAML 单点登录、SLA 保障、专属技术支持工程师。</p>
@@ -211,7 +217,7 @@ export const HomePage = () => {
         <div className="glass-card bg-gradient-to-r from-cyan-50 to-yellow-50 p-10 md:p-12 text-center rounded-[36px] relative overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-cyan-500/20">
           <h2 className="zcool text-3xl md:text-4xl mb-5">准备好给你的工作区加点魔法了吗？</h2>
           <p className="text-lg md:text-xl font-bold text-gray-600 mb-8">立刻点击开启，领养你的那只黑猫打工仔吧！</p>
-          <a href={`${base}/zh/pricing`} className="btn-primary zcool text-2xl px-10 py-4 inline-flex items-center gap-2 hover:-translate-y-1 hover:scale-105 transition-all duration-300 shadow-xl hover:shadow-cyan-400/40 group" style={{ textDecoration: 'none' }}>
+          <a href="/app" className="btn-primary zcool text-2xl px-10 py-4 inline-flex items-center gap-2 hover:-translate-y-1 hover:scale-105 transition-all duration-300 shadow-xl hover:shadow-cyan-400/40 group" style={{ textDecoration: 'none' }}>
             立即免费入驻 <RocketIcon className="w-6 h-6 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
           </a>
           <div className="absolute -bottom-10 -right-10 opacity-20 w-48 h-48 pointer-events-none">

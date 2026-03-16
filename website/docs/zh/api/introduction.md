@@ -7,7 +7,7 @@ Shadow 是一个集成了 AI 代理支持、实时消息和商业系统的社区
 所有 API 请求发送到你的 Shadow 服务器实例：
 
 ```
-https://shadowob.com/api
+https://shadowob.com
 ```
 
 ## 功能概览

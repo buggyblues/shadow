@@ -4,12 +4,27 @@ pageType: custom
 
 import { useState, useEffect } from 'react'
 import { PublicFooter } from '../../components/Layout'
+import { SearchIcon } from '../../components/Icons'
 
 export const DEVICE_TIERS = {
   high_end: { label: 'High', icon: '🔥', color: 'from-amber-400 to-orange-500' },
   mid_range: { label: 'Mid', icon: '⚡', color: 'from-blue-400 to-cyan-500' },
   low_end: { label: 'Low', icon: '💡', color: 'from-gray-400 to-gray-500' },
 }
+
+export const SORT_OPTIONS = [
+  { value: 'popular', label: 'Most Popular' },
+  { value: 'newest', label: 'Newest' },
+  { value: 'price-asc', label: 'Price: Low → High' },
+  { value: 'price-desc', label: 'Price: High → Low' },
+]
+
+export const TIER_FILTERS = [
+  { value: '', label: 'All Tiers' },
+  { value: 'high_end', label: '🔥 High-end' },
+  { value: 'mid_range', label: '⚡ Mid-range' },
+  { value: 'low_end', label: '💡 Low-end' },
+]
 
 export function formatOnline(seconds) {
   if (!seconds || seconds < 0) return '0h'
@@ -25,19 +40,32 @@ export const BuddiesPage = () => {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [keyword, setKeyword] = useState('')
+  const [sortBy, setSortBy] = useState('popular')
+  const [deviceTier, setDeviceTier] = useState('')
 
-  const fetchListings = () => {
+  const fetchListings = (params) => {
     setLoading(true)
     setError(null)
     const apiBase = typeof window !== 'undefined' && window.location.origin || ''
-    fetch(`${apiBase}/api/public/marketplace`)
+    const p = params || { keyword, sortBy, deviceTier }
+    const qs = new URLSearchParams()
+    if (p.keyword) qs.set('keyword', p.keyword)
+    if (p.sortBy) qs.set('sortBy', p.sortBy)
+    if (p.deviceTier) qs.set('deviceTier', p.deviceTier)
+    fetch(`${apiBase}/api/public/marketplace?${qs.toString()}`)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then(data => { setListings(data.listings || []); setTotal(data.total || 0) })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { fetchListings() }, [])
+  useEffect(() => { fetchListings({ keyword, sortBy, deviceTier }) }, [sortBy, deviceTier])
+
+  const handleSearch = (e) => {
+    e.preventDefault()
+    fetchListings({ keyword, sortBy, deviceTier })
+  }
 
   return (
     <div className="shadow-page" style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}>
@@ -50,6 +78,25 @@ export const BuddiesPage = () => {
         <p className="text-lg md:text-xl font-bold max-w-2xl mx-auto mb-8" style={{ color: 'var(--shadow-text-muted)' }}>
           Browse the Shadow Buddy Market and pick the perfect AI assistant for your team — or build your own!
         </p>
+        <form onSubmit={handleSearch} className="max-w-xl mx-auto flex gap-2">
+          <div className="flex-1 relative">
+            <SearchIcon className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2" style={{ color: 'var(--shadow-text-dim)' }} />
+            <input type="text" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="Search Buddies..." className="w-full pl-12 pr-4 py-3 rounded-2xl border-2 border-white/90 bg-white/70 backdrop-blur-lg text-base font-bold outline-none focus:border-cyan-400 transition-colors" style={{ color: 'var(--shadow-text)' }} />
+          </div>
+          <button type="submit" className="btn-primary zcool text-base px-6 py-3">Search</button>
+        </form>
+      </section>
+
+      {/* Filters */}
+      <section className="max-w-7xl mx-auto px-8 md:px-16 pb-2">
+        <div className="flex items-center gap-3 flex-wrap">
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="px-4 py-2 rounded-xl border-2 border-white/90 bg-white/70 backdrop-blur-lg text-sm font-bold outline-none focus:border-cyan-400 transition-colors cursor-pointer" style={{ color: 'var(--shadow-text)' }}>
+            {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <select value={deviceTier} onChange={(e) => setDeviceTier(e.target.value)} className="px-4 py-2 rounded-xl border-2 border-white/90 bg-white/70 backdrop-blur-lg text-sm font-bold outline-none focus:border-cyan-400 transition-colors cursor-pointer" style={{ color: 'var(--shadow-text)' }}>
+            {TIER_FILTERS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
       </section>
 
       {/* Toolbar */}
@@ -140,8 +187,8 @@ export const BuddiesPage = () => {
       <section className="max-w-4xl mx-auto px-8 md:px-16 pb-20">
         <div className="glass-card p-10 md:p-14 text-center">
           <h2 className="zcool text-3xl md:text-4xl mb-4">Want to build your own Buddy?</h2>
-          <p className="text-lg font-bold mb-8" style={{ color: 'var(--shadow-text-muted)' }}>Use the AgentHub SDK and MCP adapters to connect your AI model in minutes.</p>
-          <a href={`${base}/api/introduction`} className="btn-secondary zcool text-xl px-10 py-4 hover:scale-105 transition-transform" style={{ textDecoration: 'none' }}>View Developer Docs</a>
+          <p className="text-lg font-bold mb-8" style={{ color: 'var(--shadow-text-muted)' }}>Connect your AI model with a Buddy Token and the OpenClaw plugin — up and running in minutes.</p>
+          <a href={`${base}/product/openclaw`} className="btn-secondary zcool text-xl px-10 py-4 hover:scale-105 transition-transform" style={{ textDecoration: 'none' }}>OpenClaw Plugin Docs</a>
         </div>
       </section>
 

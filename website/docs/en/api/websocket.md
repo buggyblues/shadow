@@ -9,7 +9,7 @@ Shadow uses Socket.IO for real-time communication. Connect to the server's Socke
 ```ts [TypeScript]
 import { ShadowSocket } from '@anthropics/shadow-sdk'
 
-const socket = new ShadowSocket('https://api.shadow.app', 'your-token')
+const socket = new ShadowSocket('https://shadowob.com', 'your-token')
 socket.connect()
 
 socket.on('message:new', (message) => {
@@ -20,7 +20,7 @@ socket.on('message:new', (message) => {
 ```python [Python]
 from shadowob_sdk import ShadowSocket
 
-socket = ShadowSocket("https://api.shadow.app", "your-token")
+socket = ShadowSocket("https://shadowob.com", "your-token")
 socket.connect()
 
 @socket.on("message:new")
