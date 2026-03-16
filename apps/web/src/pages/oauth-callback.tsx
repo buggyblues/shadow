@@ -16,7 +16,7 @@ export function OAuthCallbackPage() {
     const params = new URLSearchParams(hash)
     const accessToken = params.get('access_token')
     const refreshToken = params.get('refresh_token')
-    const redirect = params.get('redirect') ?? '/app/'
+    const redirect = params.get('redirect') ?? '/app/settings'
 
     if (!accessToken || !refreshToken) {
       navigate({ to: '/login' })

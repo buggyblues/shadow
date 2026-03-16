@@ -13,24 +13,18 @@ import { AppLayout } from './components/layout/app-layout'
 import { RootLayout } from './components/layout/root-layout'
 import { queryClient } from './lib/query-client'
 import { AppPageRoute } from './pages/apps'
-import { BuddyMarketPage } from './pages/buddies'
-import { BuddyContractPage } from './pages/buddy-contract'
 import { BuddyManagementPage } from './pages/buddy-management'
 import { ChannelView } from './pages/channel-view'
 import { ContractDetailPage } from './pages/contract-detail'
 import { CreateListingPage } from './pages/create-listing'
 import { DiscoverPage } from './pages/discover'
 import { DmChatPage } from './pages/dm-chat'
-import { DocsPage } from './pages/docs'
-import { FeaturesPage } from './pages/features'
-import { HomePage } from './pages/home'
 import { InvitePage } from './pages/invite'
 import { LoginPage } from './pages/login'
 import { MarketplaceDetailPage } from './pages/marketplace-detail'
 import { MyRentalsPage } from './pages/my-rentals'
 import { OAuthAuthorizePage } from './pages/oauth-authorize'
 import { OAuthCallbackPage } from './pages/oauth-callback'
-import { PricingPage } from './pages/pricing'
 import { RegisterPage } from './pages/register'
 import { ServerLayout } from './pages/server'
 import { ServerHomePage } from './pages/server-home'
@@ -51,14 +45,12 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: HomePage,
-  validateSearch: (search: Record<string, unknown>) => ({
-    forceHome: search.forceHome === true || search.forceHome === 'true',
-  }),
-  beforeLoad: ({ search }) => {
-    if (useAuthStore.getState().isAuthenticated && !search.forceHome) {
+  component: () => null,
+  beforeLoad: () => {
+    if (useAuthStore.getState().isAuthenticated) {
       throw redirect({ to: '/settings' })
     }
+    throw redirect({ to: '/login' })
   },
 })
 
@@ -84,50 +76,12 @@ const registerRoute = createRoute({
   },
 })
 
-const featuresRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/features',
-  component: FeaturesPage,
-})
-
-const buddiesRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/buddies',
-  component: BuddyMarketPage,
-})
-
-const buddyContractRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/buddies/$buddyId/contract',
-  component: BuddyContractPage,
-})
-
-const pricingRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/pricing',
-  component: PricingPage,
-})
-
-const docsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/docs',
-  component: DocsPage,
-})
-
 const inviteRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/invite/$code',
   component: InvitePage,
 })
 
-const marketplaceRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/marketplace',
-  beforeLoad: () => {
-    throw redirect({ to: '/buddies' })
-  },
-  component: () => null,
-})
 const oauthCallbackRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/oauth-callback',
@@ -280,13 +234,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
   registerRoute,
-  featuresRoute,
-  buddiesRoute,
-  buddyContractRoute,
-  pricingRoute,
-  docsRoute,
   inviteRoute,
-  marketplaceRoute,
   oauthCallbackRoute,
   oauthAuthorizeRoute,
   serverHomeRoute,

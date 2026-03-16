@@ -72,6 +72,9 @@ export function createAuthHandler(container: AppContainer) {
     const userDao = container.resolve('userDao')
     const agentDao = container.resolve('agentDao')
     const id = c.req.param('id')
+    if (!id) {
+      return c.json({ error: 'Missing user id' }, 400)
+    }
     const user = await userDao.findById(id)
     if (!user) return c.json({ error: 'User not found' }, 404)
 
@@ -187,17 +190,17 @@ export function createAuthHandler(container: AppContainer) {
     const state = c.req.query('state')
 
     if (!code) {
-      return c.redirect('/login?error=oauth_failed')
+      return c.redirect('/app/login?error=oauth_failed')
     }
 
     try {
       const result = await externalOAuthService.handleCallback(provider, code, state)
       // Redirect to frontend callback page with tokens in hash
-      const callbackUrl = `/oauth-callback#access_token=${encodeURIComponent(result.accessToken)}&refresh_token=${encodeURIComponent(result.refreshToken)}&redirect=${encodeURIComponent(result.redirect)}`
+      const callbackUrl = `/app/oauth-callback#access_token=${encodeURIComponent(result.accessToken)}&refresh_token=${encodeURIComponent(result.refreshToken)}&redirect=${encodeURIComponent(result.redirect)}`
       return c.redirect(callbackUrl)
     } catch (error) {
       logger.warn({ err: error, provider }, 'External OAuth callback failed')
-      return c.redirect('/login?error=oauth_failed')
+      return c.redirect('/app/login?error=oauth_failed')
     }
   })
 

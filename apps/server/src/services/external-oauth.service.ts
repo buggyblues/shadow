@@ -132,7 +132,7 @@ export class ExternalOAuthService {
     const refreshToken = signRefreshToken(jwtPayload)
 
     // Parse redirect from state
-    let redirect = '/app'
+    let redirect = '/app/settings'
     if (state) {
       try {
         const parsed = JSON.parse(Buffer.from(state, 'base64url').toString()) as {

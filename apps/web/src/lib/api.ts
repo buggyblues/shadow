@@ -13,10 +13,10 @@ function clearAuthState() {
   queryClient.clear()
   // Redirect to login page if not already there (full reload clears all in-memory state)
   if (
-    !window.location.pathname.startsWith('/login') &&
-    !window.location.pathname.startsWith('/register')
+    !window.location.pathname.startsWith('/app/login') &&
+    !window.location.pathname.startsWith('/app/register')
   ) {
-    window.location.href = '/login'
+    window.location.href = '/app/login'
   }
 }
 
@@ -54,8 +54,12 @@ export async function fetchApi<T>(path: string, options?: RequestInit): Promise<
     headers,
   })
 
-  // Auto-refresh on 401
-  if (response.status === 401 && !path.includes('/auth/')) {
+  // Auto-refresh on 401 (skip for login/register endpoints only)
+  if (
+    response.status === 401 &&
+    !path.endsWith('/auth/login') &&
+    !path.endsWith('/auth/register')
+  ) {
     if (!isRefreshing) {
       isRefreshing = true
       refreshPromise = refreshAccessToken().finally(() => {

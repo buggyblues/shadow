@@ -76,7 +76,7 @@ export function RegisterPage() {
       if (redirectTo && redirectTo.startsWith('/')) {
         navigate({ to: redirectTo })
       } else {
-        navigate({ to: '/' })
+        navigate({ to: '/settings' })
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : t('auth.registerFailed'))
@@ -188,7 +188,7 @@ export function RegisterPage() {
         {/* OAuth login buttons */}
         <div className="flex flex-col gap-2">
           <a
-            href={`${import.meta.env.VITE_API_BASE ?? ''}/api/auth/oauth/google?redirect=${encodeURIComponent(searchParams.redirect ?? '/app')}`}
+            href={`${import.meta.env.VITE_API_BASE ?? ''}/api/auth/oauth/google?redirect=${encodeURIComponent(searchParams.redirect ?? '/app/settings')}`}
             className="flex items-center justify-center gap-2 w-full bg-white hover:bg-gray-100 text-gray-800 font-medium py-2.5 rounded-[3px] transition text-[14px]"
           >
             <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" role="img" aria-label="Google">
@@ -213,7 +213,7 @@ export function RegisterPage() {
             {t('auth.continueWithGoogle', 'Continue with Google')}
           </a>
           <a
-            href={`${import.meta.env.VITE_API_BASE ?? ''}/api/auth/oauth/github?redirect=${encodeURIComponent(searchParams.redirect ?? '/app')}`}
+            href={`${import.meta.env.VITE_API_BASE ?? ''}/api/auth/oauth/github?redirect=${encodeURIComponent(searchParams.redirect ?? '/app/settings')}`}
             className="flex items-center justify-center gap-2 w-full bg-[#24292f] hover:bg-[#32383f] text-white font-medium py-2.5 rounded-[3px] transition text-[14px]"
           >
             <svg
