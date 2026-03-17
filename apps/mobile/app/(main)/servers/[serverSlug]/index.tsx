@@ -3,18 +3,14 @@ import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import {
-  AppWindow,
   ChevronDown,
   ChevronLeft,
-  FolderOpen,
   Hash,
   Lock,
   Megaphone,
   Plus,
   Search,
   Settings,
-  ShoppingBag,
-  Users,
   Volume2,
   X,
 } from 'lucide-react-native'
@@ -32,8 +28,12 @@ import {
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Avatar } from '../../../../src/components/common/avatar'
-import { AgentCatSvg, ChannelCatSvg, WorkCatSvg } from '../../../../src/components/common/cat-svg'
+import {
+  AgentCatSvg,
+  ChannelCatSvg,
+  ShopCatSvg,
+  WorkCatSvg,
+} from '../../../../src/components/common/cat-svg'
 import { DottedBackground } from '../../../../src/components/common/dotted-background'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
 import { fetchApi, getImageUrl } from '../../../../src/lib/api'
@@ -151,7 +151,7 @@ export default function ServerHomeScreen() {
   const onlineCount = members.filter(
     (m) => m.user && ((m as { user: { status?: string } }).user.status ?? 'offline') !== 'offline',
   ).length
-  const totalMemberCount = server?.memberCount ?? members.length
+  const _totalMemberCount = server?.memberCount ?? members.length
   const isOwner = currentUser?.id === server?.ownerId
 
   // Set navigation header
@@ -297,35 +297,26 @@ export default function ServerHomeScreen() {
           />
         }
       >
-        {/* ── Cute Server Hero Card ─────────────────────── */}
-        <View style={[styles.cuteHeroCard, glassCardStyle, { marginHorizontal: spacing.md }]}>
-          {server?.bannerUrl ? (
-            <Image
-              source={{ uri: getImageUrl(server.bannerUrl)! }}
-              style={styles.cuteBannerImage}
-              contentFit="cover"
-            />
-          ) : (
-            <LinearGradient
-              colors={['#00f3ff', '#ff7da5', '#f8e71c']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.cuteBannerImage}
-            />
-          )}
-
-          <View style={styles.cuteHeroContent}>
-            <View style={[styles.cuteServerIconWrap, { borderColor: colors.background }]}>
+        {/* ── Compact Server Header Card ─────────────────────── */}
+        <View style={[styles.compactHeroCard, glassCardStyle, { marginHorizontal: spacing.md }]}>
+          <LinearGradient
+            colors={['#00f3ff20', '#ff7da520', '#f8e71c20']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={styles.compactHeroContent}>
+            <View style={[styles.compactServerIconWrap, { borderColor: colors.background }]}>
               {server?.iconUrl ? (
                 <Image
                   source={{ uri: getImageUrl(server.iconUrl)! }}
-                  style={styles.cuteServerIcon}
+                  style={styles.compactServerIcon}
                   contentFit="cover"
                 />
               ) : (
                 <View
                   style={[
-                    styles.cuteServerIcon,
+                    styles.compactServerIcon,
                     {
                       backgroundColor: colors.primary,
                       justifyContent: 'center',
@@ -333,126 +324,86 @@ export default function ServerHomeScreen() {
                     },
                   ]}
                 >
-                  <Text style={styles.serverIconText}>{server?.name?.[0] ?? '?'}</Text>
+                  <Text style={styles.compactServerIconText}>{server?.name?.[0] ?? '?'}</Text>
                 </View>
               )}
             </View>
 
-            <Text style={[styles.cuteServerName, { color: colors.text }]}>{server?.name}</Text>
-
-            <View style={styles.neonPillsRow}>
-              <View
-                style={[styles.neonPill, { borderColor: '#34D399', backgroundColor: '#34D39915' }]}
-              >
+            <View style={styles.compactHeroTextCol}>
+              <Text style={[styles.compactServerName, { color: colors.text }]} numberOfLines={1}>
+                {server?.name}
+              </Text>
+              <View style={styles.neonPillsRow}>
                 <View
-                  style={[styles.neonDot, { backgroundColor: '#34D399', shadowColor: '#34D399' }]}
-                />
-                <Text style={[styles.neonText, { color: '#34D399' }]}>
-                  {onlineCount} {t('server.membersOnline')}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.neonPill,
-                  { borderColor: colors.border, backgroundColor: colors.surfaceHover },
-                ]}
-              >
-                <Text style={[styles.neonText, { color: colors.textSecondary }]}>
-                  {totalMemberCount} {t('server.membersTotal', '成员')}
-                </Text>
+                  style={[
+                    styles.neonPill,
+                    { borderColor: '#34D399', backgroundColor: '#34D39915' },
+                  ]}
+                >
+                  <View
+                    style={[styles.neonDot, { backgroundColor: '#34D399', shadowColor: '#34D399' }]}
+                  />
+                  <Text style={[styles.neonText, { color: '#34D399' }]}>
+                    {onlineCount} {t('server.membersOnline')}
+                  </Text>
+                </View>
               </View>
             </View>
-
-            {server?.description && (
-              <Text
-                style={[styles.cuteServerDesc, { color: colors.textSecondary }]}
-                numberOfLines={2}
-              >
-                {server.description}
-              </Text>
-            )}
           </View>
         </View>
 
-        {/* ── Redesigned Squishy Actions ────────────────────── */}
-        <View style={styles.squishyGrid}>
+        {/* ── Horizontal 1x4 Actions ────────────────────── */}
+        <View style={styles.actionRow}>
           {/* Workspace */}
           <SquishyCard
-            style={styles.squishyCardWrap}
+            style={styles.actionItem}
             onPress={() => router.push(`/(main)/servers/${serverSlug}/workspace` as any)}
           >
-            <LinearGradient colors={['#3B82F6', '#60A5FA']} style={styles.squishyGradient}>
-              <View style={styles.squishyCatWrap}>
-                <AgentCatSvg width={70} height={70} />
-              </View>
-              <View style={styles.squishyLabelWrap}>
-                <FolderOpen size={20} color="#fff" strokeWidth={2.5} />
-                <Text style={styles.squishyLabel}>{t('server.workspace')}</Text>
-              </View>
+            <LinearGradient colors={['#3B82F6', '#60A5FA']} style={styles.actionBubbleGlow}>
+              <WorkCatSvg width={40} height={40} />
             </LinearGradient>
+            <Text style={[styles.actionLabel, { color: colors.textSecondary }]}>
+              {t('server.workspace')}
+            </Text>
           </SquishyCard>
 
           {/* Shop */}
           <SquishyCard
-            style={styles.squishyCardWrap}
+            style={styles.actionItem}
             onPress={() => router.push(`/(main)/servers/${serverSlug}/shop` as any)}
           >
-            <LinearGradient colors={['#F59E0B', '#FBBF24']} style={styles.squishyGradient}>
-              <View style={styles.squishyCatWrap}>
-                <WorkCatSvg width={70} height={70} />
-              </View>
-              <View style={styles.squishyLabelWrap}>
-                <ShoppingBag size={20} color="#fff" strokeWidth={2.5} />
-                <Text style={styles.squishyLabel}>{t('server.shop')}</Text>
-              </View>
+            <LinearGradient colors={['#F59E0B', '#FBBF24']} style={styles.actionBubbleGlow}>
+              <ShopCatSvg width={40} height={40} />
             </LinearGradient>
+            <Text style={[styles.actionLabel, { color: colors.textSecondary }]}>
+              {t('server.shop')}
+            </Text>
           </SquishyCard>
 
           {/* Apps */}
           <SquishyCard
-            style={styles.squishyCardWrap}
+            style={styles.actionItem}
             onPress={() => router.push(`/(main)/servers/${serverSlug}/apps` as any)}
           >
-            <LinearGradient colors={['#10B981', '#34D399']} style={styles.squishyGradient}>
-              <View style={[styles.squishyCatWrap, { opacity: 0.9, transform: [{ scale: 0.9 }] }]}>
-                <ChannelCatSvg width={75} height={75} />
-              </View>
-              <View style={styles.squishyLabelWrap}>
-                <AppWindow size={20} color="#fff" strokeWidth={2.5} />
-                <Text style={styles.squishyLabel}>{t('server.apps')}</Text>
-              </View>
+            <LinearGradient colors={['#10B981', '#34D399']} style={styles.actionBubbleGlow}>
+              <ChannelCatSvg width={40} height={40} style={{ transform: [{ scale: 1.1 }] }} />
             </LinearGradient>
+            <Text style={[styles.actionLabel, { color: colors.textSecondary }]}>
+              {t('server.apps')}
+            </Text>
           </SquishyCard>
 
           {/* Members */}
           <SquishyCard
-            style={styles.squishyCardWrap}
+            style={styles.actionItem}
             onPress={() => router.push(`/(main)/servers/${serverSlug}/members` as any)}
           >
-            <LinearGradient colors={['#EF4444', '#F87171']} style={styles.squishyGradient}>
-              <View style={styles.squishyMembersWrap}>
-                {members.slice(0, 3).map((m, i) => (
-                  <View
-                    key={m.user.id}
-                    style={[
-                      styles.squishyAvatarOverlap,
-                      { marginLeft: i > 0 ? -12 : 0, zIndex: 10 - i },
-                    ]}
-                  >
-                    <Avatar
-                      uri={m.user.avatarUrl}
-                      name={m.user.username}
-                      size={36}
-                      userId={m.user.id}
-                    />
-                  </View>
-                ))}
-              </View>
-              <View style={styles.squishyLabelWrap}>
-                <Users size={20} color="#fff" strokeWidth={2.5} />
-                <Text style={styles.squishyLabel}>{t('server.members')}</Text>
-              </View>
+            <LinearGradient colors={['#EF4444', '#F87171']} style={styles.actionBubbleGlow}>
+              <AgentCatSvg width={40} height={40} />
             </LinearGradient>
+            <Text style={[styles.actionLabel, { color: colors.textSecondary }]}>
+              {t('server.members')}
+            </Text>
           </SquishyCard>
         </View>
 
@@ -767,135 +718,102 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
 
-  // Cute Hero
-  cuteHeroCard: {
+  // Compact Hero
+  compactHeroCard: {
     overflow: 'hidden',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 8,
-  },
-  cuteBannerImage: {
-    width: '100%',
-    height: 120,
-  },
-  cuteHeroContent: {
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.lg,
-    paddingTop: 40,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 6,
     position: 'relative',
   },
-  cuteServerIconWrap: {
-    position: 'absolute',
-    top: -46,
-    borderWidth: 4,
-    borderRadius: 46,
+  compactHeroContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  compactServerIconWrap: {
+    borderWidth: 3,
+    borderRadius: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+    marginRight: spacing.md,
+  },
+  compactServerIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+  },
+  compactServerIconText: { color: '#fff', fontSize: 24, fontWeight: '900' },
+  compactHeroTextCol: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  compactServerName: {
+    fontSize: 20,
+    fontWeight: '900',
+    marginBottom: 4,
+  },
+  neonPillsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  neonPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 16,
+    borderWidth: 2,
+    gap: 6,
+  },
+  neonDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+  },
+  neonText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  // Horizontal 1x4 Actions
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.xl,
+  },
+  actionItem: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionBubbleGlow: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.4)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 5,
   },
-  cuteServerIcon: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-  },
-  serverIconText: { color: '#fff', fontSize: 36, fontWeight: '900' },
-  cuteServerName: {
-    fontSize: 26,
-    fontWeight: '900',
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  neonPillsRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    justifyContent: 'center',
-  },
-  neonPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 2,
-    gap: 6,
-  },
-  neonDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
-  },
-  neonText: {
+  actionLabel: {
     fontSize: 12,
     fontWeight: '800',
-  },
-  cuteServerDesc: {
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginTop: spacing.md,
-    lineHeight: 20,
-  },
-
-  // Squishy Grid (Actions)
-  squishyGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: spacing.md,
-    gap: spacing.md,
-    marginBottom: spacing.xl,
-  },
-  squishyCardWrap: {
-    width: '47.5%',
-    aspectRatio: 1, // square cards
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  squishyGradient: {
-    flex: 1,
-    borderRadius: 32,
-    padding: spacing.md,
-    justifyContent: 'space-between',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.2)',
-    overflow: 'hidden',
-  },
-  squishyCatWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-  },
-  squishyMembersWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-  },
-  squishyAvatarOverlap: {
-    borderWidth: 2,
-    borderColor: '#fff',
-    borderRadius: 20,
-  },
-  squishyLabelWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  squishyLabel: {
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 16,
   },
 
   // Channels Controls

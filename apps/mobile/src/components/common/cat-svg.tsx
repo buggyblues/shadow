@@ -39,6 +39,7 @@ export function AgentCatSvg({
 }: {
   width?: number
   height?: number
+  // biome-ignore lint/suspicious/noExplicitAny: Any prop
   style?: any
 }) {
   return (
@@ -134,6 +135,7 @@ export function WorkCatSvg({
 }: {
   width?: number
   height?: number
+  // biome-ignore lint/suspicious/noExplicitAny: Any prop
   style?: any
 }) {
   return (
@@ -213,6 +215,7 @@ export function ChannelCatSvg({
 }: {
   width?: number
   height?: number
+  // biome-ignore lint/suspicious/noExplicitAny: Any prop
   style?: any
 }) {
   return (
@@ -293,6 +296,89 @@ export function ChannelCatSvg({
           !!
         </SvgText>
       </G>
+    </Svg>
+  )
+}
+
+export function ShopCatSvg({
+  width = 100,
+  height = 100,
+  style,
+}: {
+  width?: number
+  height?: number
+  // biome-ignore lint/suspicious/noExplicitAny: Any prop
+  style?: any
+}) {
+  return (
+    <Svg viewBox="0 0 100 100" width={width} height={height} style={style}>
+      <CatSvgDefs />
+      <Path
+        d="M 28,40 Q 22,20 32,20 Q 38,20 42,32"
+        fill="url(#catBody)"
+        stroke="#1a1a1c"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M 72,40 Q 78,20 68,20 Q 62,20 58,32"
+        fill="url(#catBody)"
+        stroke="#1a1a1c"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Ellipse
+        cx="50"
+        cy="50"
+        rx="35"
+        ry="24"
+        fill="url(#catBody)"
+        stroke="#1a1a1c"
+        strokeWidth="2.5"
+      />
+      <Circle cx="34" cy="45" r="6" fill="url(#eyeYellow)" stroke="#1a1a1c" strokeWidth="1.5" />
+      <Circle cx="32" cy="43" r="2" fill="#ffffff" />
+      <Circle cx="66" cy="45" r="6" fill="url(#eyeCyan)" stroke="#1a1a1c" strokeWidth="1.5" />
+      <Circle cx="64" cy="43" r="2" fill="#ffffff" />
+      <Path
+        d="M 32,60 Q 32,48 40,48 Q 45,48 45,55"
+        fill="url(#catBody)"
+        stroke="#1a1a1c"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <Path
+        d="M 68,60 Q 68,48 60,48 Q 55,48 55,55"
+        fill="url(#catBody)"
+        stroke="#1a1a1c"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+
+      {/* Shopping Bag instead of laptop */}
+      <Path
+        d="M 35,70 L 65,70 L 70,95 L 30,95 Z"
+        fill="#F59E0B"
+        stroke="#1a1a1c"
+        strokeWidth="2.5"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M 42,70 Q 50,55 58,70"
+        fill="none"
+        stroke="#1a1a1c"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      {/* Little star on bag */}
+      <Path
+        d="M 50,78 L 52,82 L 56,82 L 53,85 L 54,89 L 50,86 L 46,89 L 47,85 L 44,82 L 48,82 Z"
+        fill="#f8e71c"
+        stroke="#1a1a1c"
+        strokeWidth="1.5"
+      />
     </Svg>
   )
 }

@@ -425,7 +425,7 @@ export function EmojiPicker({ visible, onSelect, onClose }: EmojiPickerProps) {
               style={[
                 styles.categoryBtn,
                 activeCategory === cat.key && {
-                  backgroundColor: colors.primary + '20',
+                  backgroundColor: `${colors.primary}20`,
                   borderBottomColor: colors.primary,
                   borderBottomWidth: 2,
                 },
