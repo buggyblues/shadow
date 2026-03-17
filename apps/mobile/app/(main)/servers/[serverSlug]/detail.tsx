@@ -3,13 +3,13 @@ import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import { ChevronLeft, Share, Users } from 'lucide-react-native'
-import React, { useEffect } from 'react'
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
 import { fetchApi, getImageUrl } from '../../../../src/lib/api'
-import { fontSize, radius, spacing, useColors } from '../../../../src/theme'
+import { radius, spacing, useColors } from '../../../../src/theme'
 
 export default function ServerDetailScreen() {
   const { serverSlug } = useLocalSearchParams<{ serverSlug: string }>()
