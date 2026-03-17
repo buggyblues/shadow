@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       bump:
-        description: 'Version bump type'
+        description: Version bump type
         required: true
         type: choice
         options:
@@ -12,46 +12,67 @@ on:
           - minor
           - major
       publish_npm:
-        description: 'Publish npm packages (@shadowob/sdk, @shadowob/shared)'
+        description: Publish @shadowob/sdk to npm
         type: boolean
         default: true
       publish_pypi:
-        description: 'Publish Python SDK to PyPI (shadowob-sdk)'
+        description: Publish shadowob-sdk to PyPI
+        type: boolean
+        default: true
+      create_release:
+        description: Create GitHub Release after publishing
+        type: boolean
+        default: true
+      dry_run:
+        description: Dry run only (skip publish / tag / release)
         type: boolean
         default: true
 
 permissions:
   contents: write
 
+concurrency:
+  group: publish-sdk
+  cancel-in-progress: false
+
 jobs:
-  publish:
-    name: Publish packages
+  release-sdk:
+    name: Publish SDK packages
     runs-on: ubuntu-latest
+    environment: ShadowOB SDK
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         if: inputs.publish_pypi
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # ── Compute new version ──────────────────────────────────────
+      - name: Verify SDK versions before bump
+        run: pnpm check:sdk-versions
+
       - name: Compute new version
         id: version
+        shell: bash
         run: |
-          CURRENT=$(node -e "console.log(require('./packages/sdk/package.json').version)")
+          CURRENT=$(node -p "require('./packages/sdk/package.json').version")
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
           case "${{ inputs.bump }}" in
             major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
@@ -60,56 +81,69 @@ jobs:
           esac
           NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
           echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-          echo "New version: $NEW_VERSION"
+          echo "SDK_VERSION=$NEW_VERSION" >> "$GITHUB_ENV"
+          echo "Release version: $NEW_VERSION"
 
-      # ── Bump all SDK versions consistently ───────────────────────
-      - name: Bump versions
+      - name: Bump SDK versions
+        shell: bash
         run: |
           VERSION="${{ steps.version.outputs.version }}"
 
-          # npm packages
-          cd packages/sdk
-          npm version "$VERSION" --no-git-tag-version
-          cd ../shared
-          npm version "$VERSION" --no-git-tag-version
-          cd ../..
+          npm --prefix packages/sdk version "$VERSION" --no-git-tag-version
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" packages/sdk-python/pyproject.toml
 
-          # Python SDK
-          sed -i "s/^version = .*/version = \"$VERSION\"/" packages/sdk-python/pyproject.toml
+          pnpm check:sdk-versions
 
-          echo "All SDK versions bumped to $VERSION"
+      - name: Build Python distribution
+        if: inputs.publish_pypi
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel --sdist packages/sdk-python
 
-      # ── Publish npm ──────────────────────────────────────────────
-      - name: Publish npm packages
-        if: inputs.publish_npm
+      - name: Publish @shadowob/sdk to npm
+        if: inputs.publish_npm && !inputs.dry_run
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          cd packages/shared
-          pnpm publish --no-git-checks --access public
-          cd ../sdk
-          pnpm publish --no-git-checks --access public
+          pnpm --filter @shadowob/sdk publish --no-git-checks --access public
 
-      # ── Publish PyPI ─────────────────────────────────────────────
-      - name: Build and publish to PyPI
-        if: inputs.publish_pypi
+      - name: Publish shadowob-sdk to PyPI
+        if: inputs.publish_pypi && !inputs.dry_run
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
         run: |
-          pip install build twine
-          cd packages/sdk-python
-          python -m build
-          twine upload dist/*
+          python -m pip install --upgrade twine
+          python -m twine upload packages/sdk-python/dist/*
 
-      # ── Commit & Tag ─────────────────────────────────────────────
-      - name: Commit version bump and tag
+      - name: Dry run summary
+        if: inputs.dry_run
+        run: |
+          echo "dry_run=true, publish/tag/release steps were skipped."
+          echo "built SDK artifacts and verified version consistency only."
+
+      - name: Commit and tag release
+        if: ${{ !inputs.dry_run }}
+        shell: bash
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "chore: release SDK v${VERSION}"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/sdk/package.json packages/sdk-python/pyproject.toml
+          git commit -m "chore(release): sdk v${VERSION}"
           git tag "sdk-v${VERSION}"
           git push
           git push --tags
+
+      - name: Create GitHub Release
+        if: inputs.create_release && !inputs.dry_run
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: sdk-v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          body: |
+            SDK release version: `${{ steps.version.outputs.version }}`
+
+            Published packages:
+            - npm: `@shadowob/sdk@${{ steps.version.outputs.version }}`
+            - PyPI: `shadowob-sdk==${{ steps.version.outputs.version }}`
