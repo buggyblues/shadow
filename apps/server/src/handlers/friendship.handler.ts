@@ -46,7 +46,7 @@ export function createFriendshipHandler(container: AppContainer) {
     const user = c.get('user')
     const id = c.req.param('id')
     await friendshipService.removeFriend(user.userId, id)
-    return c.json({ ok: true })
+    return c.json({ success: true })
   })
 
   // GET /api/friends — List all friends

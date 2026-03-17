@@ -17,10 +17,10 @@ import type {
 export function parseTarget(to: string): { channelId?: string; threadId?: string } {
   // "shadowob:channel:<id>" or "shadowob:thread:<id>"
   const parts = to.split(':')
-  if (parts[0] === 'shadowob' && parts[1] === 'channel' && parts[2]) {
+  if ((parts[0] === 'shadowob' || parts[0] === 'shadow') && parts[1] === 'channel' && parts[2]) {
     return { channelId: parts[2] }
   }
-  if (parts[0] === 'shadowob' && parts[1] === 'thread' && parts[2]) {
+  if ((parts[0] === 'shadowob' || parts[0] === 'shadow') && parts[1] === 'thread' && parts[2]) {
     return { threadId: parts[2] }
   }
   // Fallback: treat as channel ID

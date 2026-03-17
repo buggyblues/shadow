@@ -3,31 +3,9 @@ import type { AppContainer } from '../container'
 import { logger } from '../lib/logger'
 
 export function setupChatGateway(io: SocketIOServer, container: AppContainer): void {
-  io.on('connection', async (socket: Socket) => {
+  io.on('connection', (socket: Socket) => {
     const userId = socket.data.userId as string | undefined
     logger.info({ socketId: socket.id, userId }, 'Client connected')
-
-    // Auto-join bot users to their DM channel rooms (mirrors channel:join pattern)
-    if (userId) {
-      try {
-        const userDao = container.resolve('userDao')
-        const currentUser = await userDao.findById(userId)
-        if (currentUser?.isBot) {
-          const dmService = container.resolve('dmService')
-          const dmChs = await dmService.getUserChannels(userId)
-          for (const ch of dmChs) {
-            await socket.join(`dm:${ch.id}`)
-            logger.info(
-              { userId, dmChannelId: ch.id, socketId: socket.id },
-              'Bot auto-joined DM room',
-            )
-          }
-          logger.info({ userId, count: dmChs.length }, 'Bot auto-joined all DM rooms')
-        }
-      } catch (err) {
-        logger.error({ err, userId }, 'Failed to auto-join bot DM rooms')
-      }
-    }
 
     // channel:join
     socket.on(
@@ -297,5 +275,29 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
     socket.on('disconnect', (reason) => {
       logger.info({ socketId: socket.id, userId, reason }, 'Client disconnected')
     })
+
+    // Auto-join bot users to their DM channel rooms (after all handlers registered)
+    if (userId) {
+      ;(async () => {
+        try {
+          const userDao = container.resolve('userDao')
+          const currentUser = await userDao.findById(userId)
+          if (currentUser?.isBot) {
+            const dmService = container.resolve('dmService')
+            const dmChs = await dmService.getUserChannels(userId)
+            for (const ch of dmChs) {
+              await socket.join(`dm:${ch.id}`)
+              logger.info(
+                { userId, dmChannelId: ch.id, socketId: socket.id },
+                'Bot auto-joined DM room',
+              )
+            }
+            logger.info({ userId, count: dmChs.length }, 'Bot auto-joined all DM rooms')
+          }
+        } catch (err) {
+          logger.error({ err, userId }, 'Failed to auto-join bot DM rooms')
+        }
+      })()
+    }
   })
 }

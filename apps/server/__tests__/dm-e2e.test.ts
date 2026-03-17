@@ -231,12 +231,15 @@ describe('DM Chat E2E', () => {
     await new Promise((r) => setTimeout(r, 200))
 
     const received = waitForRawEvent<{ content: string; dmChannelId: string }>(ws2, 'dm:message')
+    // ws1 also receives the broadcast — drain it so it doesn't pollute the next test
+    const drain = waitForRawEvent(ws1, 'dm:message')
 
     ws1.raw.emit('dm:send', { dmChannelId, content: 'Hello via WS' })
 
     const msg = await received
     expect(msg.content).toBe('Hello via WS')
     expect(msg.dmChannelId).toBe(dmChannelId)
+    await drain
   })
 
   it('user1 also receives own dm:message (io.to broadcasts to all in DM room)', async () => {

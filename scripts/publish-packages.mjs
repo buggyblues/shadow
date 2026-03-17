@@ -6,7 +6,6 @@ import os from 'node:os'
 import path from 'node:path'
 import readline from 'node:readline'
 
-
 const ROOT = path.resolve(import.meta.dirname, '..')
 const PACKAGES_DIR = path.join(ROOT, 'packages')
 
@@ -44,9 +43,9 @@ function fail(msg) {
 // ─── Package Discovery ────────────────────────────────────────────
 
 function getPublishablePackages() {
-  const dirs = fs.readdirSync(PACKAGES_DIR).filter((d) =>
-    fs.statSync(path.join(PACKAGES_DIR, d)).isDirectory(),
-  )
+  const dirs = fs
+    .readdirSync(PACKAGES_DIR)
+    .filter((d) => fs.statSync(path.join(PACKAGES_DIR, d)).isDirectory())
 
   const packages = []
   for (const dir of dirs) {
@@ -67,9 +66,9 @@ function getPublishablePackages() {
 
 /** Build a name→version map of every workspace package (including private). */
 function getWorkspaceVersionMap() {
-  const dirs = fs.readdirSync(PACKAGES_DIR).filter((d) =>
-    fs.statSync(path.join(PACKAGES_DIR, d)).isDirectory(),
-  )
+  const dirs = fs
+    .readdirSync(PACKAGES_DIR)
+    .filter((d) => fs.statSync(path.join(PACKAGES_DIR, d)).isDirectory())
   const map = new Map()
   for (const dir of dirs) {
     const p = path.join(PACKAGES_DIR, dir, 'package.json')
@@ -99,9 +98,7 @@ function checkPrivateWorkspaceDeps(pkgJsonPath, wsMap) {
       if (typeof ver !== 'string' || !ver.startsWith('workspace:')) continue
       const ws = wsMap.get(name)
       if (ws?.private) {
-        issues.push(
-          `  ${field} → ${name} is a private workspace package (not published to npm)`,
-        )
+        issues.push(`  ${field} → ${name} is a private workspace package (not published to npm)`)
       }
     }
   }
@@ -117,9 +114,7 @@ function verifyTarball(tarballPath, tmpDir) {
     encoding: 'utf8',
   })
 
-  const packed = JSON.parse(
-    fs.readFileSync(path.join(tmpDir, 'package', 'package.json'), 'utf8'),
-  )
+  const packed = JSON.parse(fs.readFileSync(path.join(tmpDir, 'package', 'package.json'), 'utf8'))
 
   const issues = []
   for (const field of DEP_FIELDS) {
@@ -158,9 +153,7 @@ async function main() {
   })
 
   // 3. Select packages
-  const selection = await ask(
-    `\nWhich packages to publish? (comma-separated numbers, or "all"): `,
-  )
+  const selection = await ask(`\nWhich packages to publish? (comma-separated numbers, or "all"): `)
 
   let selected
   if (selection === 'all') {
@@ -175,9 +168,7 @@ async function main() {
   }
 
   // 4. Select bump type
-  const bumpInput = await ask(
-    `Version bump type? (1=patch, 2=minor, 3=major) [default: 1]: `,
-  )
+  const bumpInput = await ask(`Version bump type? (1=patch, 2=minor, 3=major) [default: 1]: `)
   const bumpIndex = bumpInput ? Number.parseInt(bumpInput, 10) - 1 : 0
   if (bumpIndex < 0 || bumpIndex > 2) {
     fail('Invalid bump type.')
@@ -308,10 +299,9 @@ async function main() {
   log('Committing version bumps…')
   run('git add -A', { cwd: ROOT })
   const releaseLines = selected.map((p) => `- ${p.name}@${p.newVersion}`).join('\n')
-  run(
-    `git commit -m "chore(release): publish packages" -m ${JSON.stringify(releaseLines)}`,
-    { cwd: ROOT },
-  )
+  run(`git commit -m "chore(release): publish packages" -m ${JSON.stringify(releaseLines)}`, {
+    cwd: ROOT,
+  })
 
   for (const pkg of selected) {
     const tag = `${pkg.name}@${pkg.newVersion}`

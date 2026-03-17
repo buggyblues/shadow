@@ -179,7 +179,24 @@ export function ProductDetail({
     addToCart.mutate({ productId: product.id, skuId: selectedSkuId ?? undefined, quantity })
   }
 
-  const handleBuyNow = () => {
+  const handleBuyNow = async () => {
+    if ((!hasSpecs || !!selectedSkuId) && quantity === 1) {
+      try {
+        await fetchApi<{ id: string }>(`/api/servers/${serverId}/shop/orders`, {
+          method: 'POST',
+          body: JSON.stringify({
+            items: [{ productId: product.id, skuId: selectedSkuId ?? undefined, quantity }],
+          }),
+        })
+        showToast('购买成功！', 'success')
+        queryClient.invalidateQueries({ queryKey: ['shop-orders', serverId] })
+        queryClient.invalidateQueries({ queryKey: ['wallet'] })
+        queryClient.invalidateQueries({ queryKey: ['shop-cart', serverId] })
+      } catch (err) {
+        showToast((err as Error)?.message || '购买失败，请检查余额或库存', 'error')
+      }
+      return
+    }
     setShowOrderConfirm(true)
   }
 

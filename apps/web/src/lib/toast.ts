@@ -5,6 +5,8 @@
 
 type ToastType = 'error' | 'success' | 'info'
 
+type ToastHook = (message: string, type?: ToastType) => void
+
 const TOAST_DURATION = 3500
 const TOAST_CONTAINER_ID = '__shadow_toast_container'
 
@@ -27,6 +29,12 @@ const COLORS: Record<ToastType, { bg: string; border: string; text: string }> = 
 }
 
 export function showToast(message: string, type: ToastType = 'info') {
+  const testToastHook = (globalThis as { __SHADOW_SHOW_TOAST_MOCK__?: ToastHook })
+    .__SHADOW_SHOW_TOAST_MOCK__
+  if (testToastHook) {
+    testToastHook(message, type)
+    return
+  }
   const container = getOrCreateContainer()
   const colors = COLORS[type]
 

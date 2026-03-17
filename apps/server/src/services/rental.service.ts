@@ -158,7 +158,7 @@ export class RentalService {
           avatarUrl: ownerUser.avatarUrl,
         }
       : null
-    return { ...listing, totalOnlineSeconds, owner }
+    return { ...listing, viewCount: (listing.viewCount ?? 0) + 1, totalOnlineSeconds, owner }
   }
 
   async getMyListings(ownerId: string, opts?: { limit?: number; offset?: number }) {

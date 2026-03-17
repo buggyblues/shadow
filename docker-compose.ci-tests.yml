@@ -1,0 +1,64 @@
+name: shadow-ci-tests
+
+services:
+  postgres:
+    extends:
+      file: ./docker-compose.yml
+      service: postgres
+    ports: []
+
+  redis:
+    extends:
+      file: ./docker-compose.yml
+      service: redis
+    ports: []
+
+  minio:
+    extends:
+      file: ./docker-compose.yml
+      service: minio
+    ports: []
+
+  ci-tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    working_dir: /workspace
+    init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://shadow:shadow@postgres:5432/shadow
+      REDIS_URL: redis://redis:6379
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_USE_SSL: false
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: shadow
+      JWT_SECRET: shadow-dev-secret
+      OAUTH_BASE_URL: http://localhost:3000
+      CORS_ORIGIN: http://localhost:3000
+      ADMIN_EMAIL: admin@shadowob.app
+      ADMIN_PASSWORD: admin123456
+      ADMIN_USERNAME: admin
+      NODE_ENV: test
+    command: >-
+      bash -lc '
+        set -euo pipefail
+        pnpm exec biome lint . --diagnostic-level=error
+        pnpm check:sdk-versions
+        pnpm --filter @shadowob/server db:migrate
+        pnpm -r --filter "@shadowob/*" exec vitest run --passWithNoTests
+        pnpm exec vitest run --passWithNoTests
+      '
+
+volumes:
+  pg_data:
+  redis_data:
+  minio_data:

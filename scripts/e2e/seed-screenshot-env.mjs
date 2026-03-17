@@ -110,7 +110,9 @@ async function waitForAppReady() {
     await new Promise((resolve) => setTimeout(resolve, 2_000))
   }
 
-  throw new Error(`Timed out waiting for ${origin}: ${lastError instanceof Error ? lastError.message : String(lastError)}`)
+  throw new Error(
+    `Timed out waiting for ${origin}: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
+  )
 }
 
 async function requestJson(url, { method = 'GET', token, body } = {}) {
@@ -197,24 +199,33 @@ async function ensureServer(token) {
   }
 
   const serverDetail = await requestJson(`/api/servers/${server.slug ?? server.id}`, { token })
-  const channels = await requestJson(`/api/servers/${serverDetail.slug ?? serverDetail.id}/channels`, { token })
+  const channels = await requestJson(
+    `/api/servers/${serverDetail.slug ?? serverDetail.id}/channels`,
+    { token },
+  )
 
   let announcements = channels.find((channel) => channel.name === scenario.announcementChannelName)
   if (!announcements) {
-    announcements = await requestJson(`/api/servers/${serverDetail.slug ?? serverDetail.id}/channels`, {
-      method: 'POST',
-      token,
-      body: {
-        name: scenario.announcementChannelName,
-        type: 'announcement',
-        topic: 'E2E updates and release notes.',
+    announcements = await requestJson(
+      `/api/servers/${serverDetail.slug ?? serverDetail.id}/channels`,
+      {
+        method: 'POST',
+        token,
+        body: {
+          name: scenario.announcementChannelName,
+          type: 'announcement',
+          topic: 'E2E updates and release notes.',
+        },
       },
-    })
+    )
   }
 
-  const refreshedChannels = await requestJson(`/api/servers/${serverDetail.slug ?? serverDetail.id}/channels`, {
-    token,
-  })
+  const refreshedChannels = await requestJson(
+    `/api/servers/${serverDetail.slug ?? serverDetail.id}/channels`,
+    {
+      token,
+    },
+  )
   const general = refreshedChannels.find((channel) => channel.name === 'general')
 
   if (!general) {

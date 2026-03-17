@@ -30,7 +30,7 @@ export function setupNotificationHandler(): void {
 
   ipcMain.handle('desktop:setBadgeCount', (_event, count: number) => {
     if (process.platform === 'darwin') {
-      app.dock.setBadge(count > 0 ? String(count) : '')
+      app.dock?.setBadge(count > 0 ? String(count) : '')
     }
     // Windows badge is handled via taskbar overlay (requires icon)
   })

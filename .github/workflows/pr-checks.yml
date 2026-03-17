@@ -1,0 +1,115 @@
+name: pr-checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Unit/Integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run unit/integration tests in docker-compose
+        shell: bash
+        run: |
+          docker compose -f docker-compose.ci-tests.yml up --build --abort-on-container-exit --exit-code-from ci-tests ci-tests
+
+      - name: Cleanup Docker
+        if: always()
+        run: docker compose -f docker-compose.ci-tests.yml down -v --remove-orphans
+
+  e2e:
+    name: E2E via docker-compose
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run E2E stack
+        shell: bash
+        run: |
+          docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from e2e-runner e2e-runner
+
+      - name: Upload E2E screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: docs/e2e/screenshots
+          if-no-files-found: warn
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-playwright-report
+          path: |
+            apps/desktop/playwright-report-web
+            apps/desktop/test-results
+          if-no-files-found: warn
+
+      - name: Cleanup Docker
+        if: always()
+        run: docker compose -f docker-compose.e2e.yml down -v --remove-orphans
+
+  report:
+    name: PR report comment
+    needs: [tests, e2e]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download screenshots artifact
+        if: needs.e2e.result != 'skipped'
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: e2e-screenshots
+
+      - name: Build comment body
+        id: comment
+        shell: bash
+        run: |
+          {
+            echo "## CI 检查结果"
+            echo ""
+            echo "- Tests: **${{ needs.tests.result }}**"
+            echo "- E2E: **${{ needs.e2e.result }}**"
+            echo ""
+            echo "🔎 详情与产物："
+            echo "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo ""
+            echo "### E2E 截图清单"
+            if [ -d e2e-screenshots ]; then
+              find e2e-screenshots -type f \( -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' \) | sort | sed 's#^#- #' || true
+            else
+              echo "- (无截图产物)"
+            fi
+            echo ""
+            echo "> 注：截图文件已作为 workflow artifact 上传，可在本次 run 页面直接下载查看。"
+          } > pr-comment.md
+
+      - name: Upsert PR comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: pr-checks-report
+          recreate: true
+          path: pr-comment.md

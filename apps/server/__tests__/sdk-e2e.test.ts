@@ -138,11 +138,18 @@ beforeAll(async () => {
   await serverDao.addMember(serverId, user2Id, 'member')
 
   // Create a text channel
-  const ch = await channelService.create(serverId, {
-    name: 'sdk-test-channel',
-    type: 'text',
-  })
+  const ch = await channelService.create(
+    serverId,
+    {
+      name: 'sdk-test-channel',
+      type: 'text',
+    },
+    userId,
+  )
   channelId = ch.id
+
+  // user2 must also be a channel member
+  await channelService.addMember(channelId, user2Id)
 
   // Initialize SDK clients
   client = new ShadowClient(baseUrl, userToken)
@@ -260,7 +267,7 @@ describe('ShadowClient REST API', () => {
     const agentService = container.resolve('agentService')
     const agent = await agentService.create({
       name: 'SDK Test Bot',
-      username: 'sdktestbot',
+      username: `sdktestbot_${Date.now().toString(36)}`,
       kernelType: 'openclaw',
       config: {},
       ownerId: userId,
@@ -453,7 +460,7 @@ describe('ShadowClient Friendships', () => {
   it('listPendingFriendRequests() shows pending for recipient', async () => {
     const pending = await client2.listPendingFriendRequests()
     expect(pending.length).toBeGreaterThanOrEqual(1)
-    friendRequestId = pending[0].id
+    friendRequestId = pending[0].friendshipId
   })
 
   it('acceptFriendRequest() accepts', async () => {
@@ -469,7 +476,7 @@ describe('ShadowClient Friendships', () => {
   it('removeFriend() removes the friend', async () => {
     const friends = await client.listFriends()
     const f = friends[0]
-    const result = await client.removeFriend(f.id)
+    const result = await client.removeFriend(f.friendshipId)
     expect(result.success).toBe(true)
   })
 })
@@ -612,11 +619,11 @@ describe('ShadowClient Pins & Reactions', () => {
     const msg = await client.sendMessage(channelId, 'Pin me!')
     msgId = msg.id
 
-    await client.pinMessage(msgId)
+    await client.pinMessage(msgId, channelId)
     const pinned = await client.getPinnedMessages(channelId)
     expect(pinned.some((m: { id: string }) => m.id === msgId)).toBe(true)
 
-    await client.unpinMessage(msgId)
+    await client.unpinMessage(msgId, channelId)
     const pinned2 = await client.getPinnedMessages(channelId)
     expect(pinned2.some((m: { id: string }) => m.id === msgId)).toBe(false)
   })

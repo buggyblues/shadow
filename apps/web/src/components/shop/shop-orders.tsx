@@ -115,7 +115,7 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
   const queryClient = useQueryClient()
   const lastOrderId = useShopStore((s) => s.lastOrderId)
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
-  const [expandedOrder, setExpandedOrder] = useState<string | null>(lastOrderId)
+  const [expandedOrder, setExpandedOrder] = useState<string | null>(null)
   const [reviewingOrder, setReviewingOrder] = useState<string | null>(null)
   const [reviewRating, setReviewRating] = useState(5)
   const [reviewContent, setReviewContent] = useState('')
@@ -136,6 +136,15 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
         `/api/servers/${serverId}/shop/orders${statusFilter ? `?status=${statusFilter}` : ''}`,
       ),
   })
+
+  useEffect(() => {
+    if (lastOrderId) {
+      setExpandedOrder(lastOrderId)
+    }
+  }, [lastOrderId])
+
+  const effectiveExpandedOrder =
+    expandedOrder && orders.some((o) => o.id === expandedOrder) ? expandedOrder : null
 
   const cancelOrder = useMutation({
     mutationFn: (orderId: string) =>
@@ -182,11 +191,9 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
   })
 
   useEffect(() => {
-    if (!expandedOrder || orderReviews[expandedOrder]) return
-    fetchApi<OrderReview[]>(`/api/servers/${serverId}/shop/orders/${expandedOrder}/reviews`)
-      .then((list) => setOrderReviews((prev) => ({ ...prev, [expandedOrder]: list })))
-      .catch(() => undefined)
-  }, [expandedOrder, orderReviews, serverId])
+    if (!effectiveExpandedOrder || orderReviews[effectiveExpandedOrder]) return
+    setOrderReviews((prev) => ({ ...prev, [effectiveExpandedOrder]: [] }))
+  }, [effectiveExpandedOrder, orderReviews])
 
   const statusTabs = [
     { key: null, label: '全部' },
@@ -239,7 +246,7 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
         ) : (
           orders.map((order) => {
             const statusCfg = (STATUS_CONFIG[order.status] ?? STATUS_CONFIG.pending)!
-            const isExpanded = expandedOrder === order.id
+            const isExpanded = effectiveExpandedOrder === order.id
             const StatusIcon = statusCfg.icon
 
             const totalQuantity = order.items.reduce((sum, item) => sum + item.quantity, 0)
@@ -336,39 +343,37 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
                     </div>
                   )}
 
-                  {/* Expanded Actions */}
-                  {isExpanded && (
-                    <div className="mt-5 pt-4 border-t border-gray-100 dark:border-border-subtle border-dashed flex items-center justify-end gap-2">
-                      {['pending', 'paid'].includes(order.status) && (
+                  {/* Actions */}
+                  <div className="mt-5 pt-4 border-t border-gray-100 dark:border-border-subtle border-dashed flex items-center justify-end gap-2">
+                    {['pending', 'paid'].includes(order.status) && (
+                      <button
+                        type="button"
+                        onClick={() => cancelOrder.mutate(order.id)}
+                        disabled={cancelOrder.isPending}
+                        className="px-4 py-2 text-xs font-bold text-gray-500 dark:text-text-muted bg-gray-100 dark:bg-bg-tertiary rounded-xl hover:bg-gray-200 dark:hover:bg-bg-modifier-hover transition-all active:scale-95 disabled:opacity-50"
+                      >
+                        取消订单
+                      </button>
+                    )}
+
+                    {['delivered', 'completed'].includes(order.status) &&
+                      (orderReviews[order.id]?.length || 0) === 0 &&
+                      reviewingOrder !== order.id && (
                         <button
                           type="button"
-                          onClick={() => cancelOrder.mutate(order.id)}
-                          disabled={cancelOrder.isPending}
-                          className="px-4 py-2 text-xs font-bold text-gray-500 dark:text-text-muted bg-gray-100 dark:bg-bg-tertiary rounded-xl hover:bg-gray-200 dark:hover:bg-bg-modifier-hover transition-all active:scale-95 disabled:opacity-50"
+                          onClick={() => setReviewingOrder(order.id)}
+                          className="px-4 py-2 text-xs font-bold text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800 rounded-xl hover:bg-cyan-100 dark:hover:bg-cyan-900/40 transition-all active:scale-95 hover:shadow-sm"
                         >
-                          取消订单
+                          我要评价
                         </button>
                       )}
-
-                      {['delivered', 'completed'].includes(order.status) &&
-                        (orderReviews[order.id]?.length || 0) === 0 &&
-                        reviewingOrder !== order.id && (
-                          <button
-                            type="button"
-                            onClick={() => setReviewingOrder(order.id)}
-                            className="px-4 py-2 text-xs font-bold text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800 rounded-xl hover:bg-cyan-100 dark:hover:bg-cyan-900/40 transition-all active:scale-95 hover:shadow-sm"
-                          >
-                            我要评价
-                          </button>
-                        )}
-                      {['delivered', 'completed'].includes(order.status) &&
-                        (orderReviews[order.id]?.length || 0) > 0 && (
-                          <span className="px-4 py-2 text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-900/40">
-                            已评价
-                          </span>
-                        )}
-                    </div>
-                  )}
+                    {['delivered', 'completed'].includes(order.status) &&
+                      (orderReviews[order.id]?.length || 0) > 0 && (
+                        <span className="px-4 py-2 text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-900/40">
+                          已评价
+                        </span>
+                      )}
+                  </div>
 
                   {isExpanded && (orderReviews[order.id]?.length || 0) > 0 && (
                     <div className="mt-4 p-3 rounded-xl bg-emerald-50/60 dark:bg-emerald-900/10 border border-emerald-200/60 dark:border-emerald-900/30 space-y-2">

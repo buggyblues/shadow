@@ -410,6 +410,7 @@ describe('P2P Rental E2E', () => {
       body: {
         listingId,
         durationHours: 24,
+        agreedToTerms: true,
       },
     })
 
@@ -510,8 +511,8 @@ describe('P2P Rental E2E', () => {
       body: {
         startedAt: oneHourAgo.toISOString(),
         endedAt: now.toISOString(),
-        tokensUsed: 5000,
-        notes: 'Automated test session',
+        durationMinutes: 60,
+        tokensConsumed: 5000,
       },
     })
 
@@ -545,14 +546,14 @@ describe('P2P Rental E2E', () => {
     const res = await req('POST', `/api/marketplace/contracts/${contractId}/violate`, {
       token: ownerToken,
       body: {
-        type: 'misuse',
+        violationType: 'terms_violation',
         description: 'E2E test violation',
       },
     })
 
     expect(res.status).toBe(201)
-    const data = await json<{ id: string; type: string }>(res)
-    expect(data.type).toBe('misuse')
+    const data = await json<{ id: string; violationType: string }>(res)
+    expect(data.violationType).toBe('terms_violation')
   })
 
   /* ─────── 12. Terminate Contract ─────── */

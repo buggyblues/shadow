@@ -15,7 +15,8 @@
     "declarationMap": true,
     "sourceMap": true,
     "noUncheckedIndexedAccess": true,
-    "noEmit": true
+    "noEmit": true,
+    "ignoreDeprecations": "5.0"
   },
   "exclude": ["node_modules", "dist", "build", ".turbo"]
 }

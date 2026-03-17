@@ -223,7 +223,7 @@ test.describe
 
       await ownerPage.goto('buddies')
       await ownerPage.waitForURL(/\/app\/buddies/)
-      await expect(ownerPage.locator('input[type="text"]').first()).toBeVisible()
+      await expect(ownerPage.locator('img[alt="Buddy"]').first()).toBeVisible()
       await screenshot(ownerPage, '08-buddy-marketplace.png')
 
       await viewerPage.goto(`servers/${session.server.slug}/shop`)

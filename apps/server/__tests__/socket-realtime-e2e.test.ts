@@ -155,6 +155,8 @@ beforeAll(async () => {
 afterAll(async () => {
   ws1?.disconnect()
   ws2?.disconnect()
+  // Give presence gateway time to process disconnect before closing
+  await new Promise((r) => setTimeout(r, 500))
   io?.close()
   httpServer?.close()
   await sql?.end()
@@ -186,11 +188,14 @@ describe('Socket.IO Real-time (mobile pattern)', () => {
 
   it('user1 also receives own message:new (io.to broadcasts to all in room)', async () => {
     const received = waitForRawEvent<{ content: string }>(ws1, 'message:new')
+    // ws2 also receives the broadcast — drain it so it doesn't pollute the next test
+    const drain = waitForRawEvent(ws2, 'message:new')
 
     ws1.sendMessage({ channelId, content: 'Self-receive test' })
 
     const msg = await received
     expect(msg.content).toBe('Self-receive test')
+    await drain
   })
 
   it('user2 receives message:new when user1 sends via REST', async () => {

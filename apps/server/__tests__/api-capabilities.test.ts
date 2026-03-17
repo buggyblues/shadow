@@ -14,6 +14,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { ChannelService } from '../src/services/channel.service'
 import { MessageService } from '../src/services/message.service'
 import { ServerService } from '../src/services/server.service'
+import { channelPositionsSchema } from '../src/validators/channel.schema'
+import { createThreadSchema, updateThreadSchema } from '../src/validators/message.schema'
+import { updateMemberSchema } from '../src/validators/server.schema'
 
 // ─── Mock factories ────────────────────────────────────────────
 
@@ -722,7 +725,6 @@ describe('Invite Regeneration API', () => {
 describe('Handler E2E: Thread endpoints', () => {
   it('should validate createThreadSchema', () => {
     // Schema test: createThread requires name + parentMessageId
-    const { createThreadSchema } = require('../src/validators/message.schema')
     expect(
       createThreadSchema.safeParse({
         name: 'Thread',
@@ -736,7 +738,6 @@ describe('Handler E2E: Thread endpoints', () => {
   })
 
   it('should validate updateThreadSchema', () => {
-    const { updateThreadSchema } = require('../src/validators/message.schema')
     expect(updateThreadSchema.safeParse({ name: 'New Name' }).success).toBe(true)
     expect(updateThreadSchema.safeParse({ isArchived: true }).success).toBe(true)
     expect(updateThreadSchema.safeParse({ name: 'N', isArchived: false }).success).toBe(true)
@@ -748,7 +749,6 @@ describe('Handler E2E: Thread endpoints', () => {
 
 describe('Handler E2E: Member management validators', () => {
   it('should validate updateMemberSchema', () => {
-    const { updateMemberSchema } = require('../src/validators/server.schema')
     expect(updateMemberSchema.safeParse({ role: 'admin' }).success).toBe(true)
     expect(updateMemberSchema.safeParse({ nickname: 'Nick' }).success).toBe(true)
     expect(updateMemberSchema.safeParse({ role: 'invalid' }).success).toBe(false)
@@ -758,7 +758,6 @@ describe('Handler E2E: Member management validators', () => {
 
 describe('Handler E2E: Channel positions validator', () => {
   it('should validate channelPositionsSchema', () => {
-    const { channelPositionsSchema } = require('../src/validators/channel.schema')
     const valid = {
       positions: [
         { id: '550e8400-e29b-41d4-a716-446655440000', position: 0 },

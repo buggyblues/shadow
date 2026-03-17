@@ -18,7 +18,7 @@ export const DEFAULT_ACCOUNT_ID = 'default'
 
 /** Extract the raw shadowob config block from OpenClaw config. */
 function getShadowBlock(cfg: OpenClawConfig): Record<string, unknown> | undefined {
-  return cfg.channels?.shadowob as Record<string, unknown> | undefined
+  return (cfg.channels?.shadowob ?? cfg.channels?.shadow) as Record<string, unknown> | undefined
 }
 
 /** Get a single account config by ID. */

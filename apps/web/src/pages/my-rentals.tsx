@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
+import type { TFunction } from 'i18next'
 import {
   ChevronDown,
   ChevronLeft,
@@ -332,7 +333,7 @@ function ListingsSection({
 }: {
   myListings: { listings: MyListing[] } | undefined
   isLoadingListings: boolean
-  t: (key: string, fallback?: string) => string
+  t: TFunction
   toggleMutation: { mutate: (p: { id: string; listingStatus: string }) => void }
   delistMutation: { mutate: (id: string) => void }
   deleteMutation: { mutate: (id: string) => void }
@@ -416,7 +417,7 @@ function ListingCard({
   deleteMutation,
 }: {
   listing: MyListing
-  t: (key: string, fallback?: string) => string
+  t: TFunction
   toggleMutation: { mutate: (p: { id: string; listingStatus: string }) => void }
   delistMutation: { mutate: (id: string) => void }
   deleteMutation: { mutate: (id: string) => void }

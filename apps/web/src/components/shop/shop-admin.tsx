@@ -414,7 +414,13 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
 
   useEffect(() => {
     if (!isEditing || !product) return
-    const source = editingProductDetail || product
+    const source =
+      editingProductDetail &&
+      typeof editingProductDetail === 'object' &&
+      'id' in editingProductDetail &&
+      (editingProductDetail as Product).id
+        ? (editingProductDetail as Product)
+        : product
     setName(source.name || '')
     setSlug(source.slug || '')
     setType(source.type || 'physical')
@@ -1327,7 +1333,7 @@ function ShopSettings({ serverId }: { serverId: string }) {
   const [bannerUrl, setBannerUrl] = useState(shop?.bannerUrl || '')
   const [supportBuddyUserId, setSupportBuddyUserId] = useState('')
 
-  const { data: members = [] } = useQuery({
+  const { data: membersData } = useQuery({
     queryKey: ['server-members', serverId],
     queryFn: () =>
       fetchApi<
@@ -1338,6 +1344,7 @@ function ShopSettings({ serverId }: { serverId: string }) {
         }>
       >(`/api/servers/${serverId}/members`),
   })
+  const members = Array.isArray(membersData) ? membersData : []
 
   useEffect(() => {
     if (shop) {

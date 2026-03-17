@@ -147,20 +147,20 @@ export async function startShadowServer(): Promise<ChildProcess> {
       ...process.env,
       PORT: String(SHADOW_PORT),
       NODE_ENV: 'test',
-      // Use the standard dev database
-      DATABASE_URL: 'postgresql://shadow:shadow@localhost:5432/shadow',
+      // Use externally provided infra endpoints in containerized CI, fallback to local dev.
+      DATABASE_URL: process.env.DATABASE_URL ?? 'postgresql://shadow:shadow@localhost:5432/shadow',
       JWT_SECRET: 'shadow-e2e-test-secret',
       // Seed an admin user for invite code generation
       ADMIN_EMAIL: 'e2e-admin@shadowob.test',
       ADMIN_PASSWORD: 'AdminPass123!',
       ADMIN_USERNAME: 'e2e-admin',
       // MinIO config for media service init
-      MINIO_ENDPOINT: 'localhost',
-      MINIO_PORT: '9000',
-      MINIO_USE_SSL: 'false',
-      MINIO_ACCESS_KEY: 'minioadmin',
-      MINIO_SECRET_KEY: 'minioadmin',
-      MINIO_BUCKET: 'shadow-e2e',
+      MINIO_ENDPOINT: process.env.MINIO_ENDPOINT ?? 'localhost',
+      MINIO_PORT: process.env.MINIO_PORT ?? '9000',
+      MINIO_USE_SSL: process.env.MINIO_USE_SSL ?? 'false',
+      MINIO_ACCESS_KEY: process.env.MINIO_ACCESS_KEY ?? 'minioadmin',
+      MINIO_SECRET_KEY: process.env.MINIO_SECRET_KEY ?? 'minioadmin',
+      MINIO_BUCKET: process.env.MINIO_BUCKET ?? 'shadow-e2e',
     },
     stdio: ['pipe', 'pipe', 'pipe'],
   })
@@ -260,8 +260,10 @@ export async function startOpenClawGateway(): Promise<ChildProcess> {
     {
       env: {
         ...process.env,
+        NODE_OPTIONS: '--max-old-space-size=1024',
         OPENCLAW_CONFIG_PATH: OPENCLAW_TEST_CONFIG,
         OPENCLAW_HOME: OPENCLAW_TEST_HOME,
+        OPENCLAW_DISABLE_UPDATE_CHECK: '1',
         NODE_ENV: 'test',
       },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -326,14 +328,30 @@ async function shadowApi<T = unknown>(
     ...(init.headers as Record<string, string>),
   }
 
-  const res = await fetch(`${SHADOW_URL}${path}`, { ...init, headers })
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(`${SHADOW_URL}${path}`, { ...init, headers })
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(`Shadow API ${init.method ?? 'GET'} ${path} failed (${res.status}): ${body}`)
+      if (!res.ok) {
+        const body = await res.text().catch(() => '')
+        throw new Error(
+          `Shadow API ${init.method ?? 'GET'} ${path} failed (${res.status}): ${body}`,
+        )
+      }
+
+      return res.json() as Promise<T>
+    } catch (err: unknown) {
+      const isRetryable =
+        err instanceof TypeError ||
+        (err instanceof Error && /ECONNRESET|ECONNREFUSED|fetch failed/i.test(err.message))
+      if (isRetryable && attempt < 2) {
+        await sleep(1000 * (attempt + 1))
+        continue
+      }
+      throw err
+    }
   }
-
-  return res.json() as Promise<T>
+  throw new Error('unreachable')
 }
 
 export type SeedData = {
@@ -426,6 +444,7 @@ export async function seedTestData(): Promise<SeedData> {
     token: userToken,
     body: JSON.stringify({
       name: `E2E Bot ${timestamp}`,
+      username: `e2e-bot-${timestamp}`,
       description: 'E2E test bot',
     }),
   })
@@ -444,6 +463,13 @@ export async function seedTestData(): Promise<SeedData> {
     method: 'POST',
     token: userToken,
     body: JSON.stringify({ agentIds: [agent.id] }),
+  })
+
+  // 9. Add bot to the general channel as a member
+  await shadowApi(`/api/channels/${channel.id}/members`, {
+    method: 'POST',
+    token: tokenRes.token,
+    body: JSON.stringify({}),
   })
 
   console.log('[e2e] Seed data created:', {

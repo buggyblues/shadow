@@ -62,6 +62,9 @@
       "!**/build",
       "!**/.next",
       "!**/coverage",
+      "!apps/desktop/playwright-report-web",
+      "!apps/desktop/test-results",
+      "!docs/e2e/screenshots",
       "!**/*.min.js",
       "!**/drizzle"
     ]

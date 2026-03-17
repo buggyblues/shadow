@@ -9,10 +9,18 @@ const env = { ...process.env, NODE_ENV: 'development' }
 
 // 1. Build main and preload (one-shot)
 console.log('[dev] Building main process...')
-execSync('npx rspack build -c rspack.main.config.mjs --mode development', { cwd: root, stdio: 'inherit', env })
+execSync('npx rspack build -c rspack.main.config.mjs --mode development', {
+  cwd: root,
+  stdio: 'inherit',
+  env,
+})
 
 console.log('[dev] Building preload...')
-execSync('npx rspack build -c rspack.preload.config.mjs --mode development', { cwd: root, stdio: 'inherit', env })
+execSync('npx rspack build -c rspack.preload.config.mjs --mode development', {
+  cwd: root,
+  stdio: 'inherit',
+  env,
+})
 
 // 2. Start rsbuild dev server for renderer with HMR
 console.log('[dev] Starting renderer dev server (HMR on :3100)...')
@@ -30,7 +38,13 @@ await new Promise((resolve, reject) => {
   devServer.stdout.on('data', (data) => {
     const text = data.toString()
     process.stdout.write(text)
-    if (!started && (text.includes('compiled') || text.includes('Loopback:') || text.includes('Local:') || text.includes('ready'))) {
+    if (
+      !started &&
+      (text.includes('compiled') ||
+        text.includes('Loopback:') ||
+        text.includes('Local:') ||
+        text.includes('ready'))
+    ) {
       started = true
       clearTimeout(timeout)
       // Small delay to ensure server is fully accepting connections

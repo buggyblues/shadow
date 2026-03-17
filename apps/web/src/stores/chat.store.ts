@@ -17,8 +17,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setActiveServer: (serverId) => {
     const current = get()
     if (current.activeServerId === serverId) return
-    // Don't reset activeChannelId here — route components manage it via useLayoutEffect
-    set({ activeServerId: serverId, activeThreadId: null })
+    set({ activeServerId: serverId, activeChannelId: null, activeThreadId: null })
   },
 
   setActiveChannel: (channelId) => set({ activeChannelId: channelId, activeThreadId: null }),

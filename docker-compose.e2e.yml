@@ -14,6 +14,8 @@ x-e2e-node: &e2e-node
     E2E_SESSION_PATH: /workspace/docs/e2e/session.json
     E2E_SCREENSHOT_DIR: /workspace/docs/e2e/screenshots
     PLAYWRIGHT_WEB_BASE_URL: http://web:3000/app/
+    NO_PROXY: localhost,127.0.0.1,postgres,redis,minio,server,web
+    no_proxy: localhost,127.0.0.1,postgres,redis,minio,server,web
   volumes:
     - ./docs/e2e:/workspace/docs/e2e
     - ./apps/desktop/playwright-report-web:/workspace/apps/desktop/playwright-report-web
@@ -61,6 +63,8 @@ services:
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       OAUTH_BASE_URL: ${OAUTH_BASE_URL:-http://web:3000}
       CORS_ORIGIN: http://web:3000
+      NO_PROXY: localhost,127.0.0.1,postgres,redis,minio,server,web
+      no_proxy: localhost,127.0.0.1,postgres,redis,minio,server,web
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
@@ -74,18 +78,13 @@ services:
     depends_on:
       - server
 
-  e2e-seed:
-    <<: *e2e-node
-    depends_on:
-      - web
-    command: node scripts/e2e/seed-screenshot-env.mjs
-
   e2e-runner:
     <<: *e2e-node
     depends_on:
-      e2e-seed:
-        condition: service_completed_successfully
-    command: pnpm --filter @shadowob/desktop exec playwright test -c apps/desktop/playwright.web.config.ts
+      - web
+    command: >-
+      sh -c "node scripts/e2e/seed-screenshot-env.mjs &&
+             pnpm --filter @shadowob/desktop exec playwright test -c playwright.web.config.ts"
 
 volumes:
   pg_data:

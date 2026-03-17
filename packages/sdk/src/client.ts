@@ -345,14 +345,18 @@ export class ShadowClient {
     serverId: string,
     data: { name: string; type?: string; description?: string },
   ): Promise<ShadowChannel> {
-    return this.request(`/api/servers/${serverId}/channels`, {
+    const { description, ...rest } = data
+    const body = { ...rest, ...(description !== undefined ? { topic: description } : {}) }
+    const ch = await this.request<Record<string, unknown>>(`/api/servers/${serverId}/channels`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(body),
     })
+    return { ...ch, description: ch.topic } as unknown as ShadowChannel
   }
 
   async getChannel(channelId: string): Promise<ShadowChannel> {
-    return this.request(`/api/channels/${channelId}`)
+    const ch = await this.request<Record<string, unknown>>(`/api/channels/${channelId}`)
+    return { ...ch, description: ch.topic } as unknown as ShadowChannel
   }
 
   async getChannelMembers(channelId: string): Promise<ShadowMember[]> {
@@ -363,10 +367,13 @@ export class ShadowClient {
     channelId: string,
     data: { name?: string; description?: string | null },
   ): Promise<ShadowChannel> {
-    return this.request(`/api/channels/${channelId}`, {
+    const { description, ...rest } = data
+    const body = { ...rest, ...(description !== undefined ? { topic: description } : {}) }
+    const ch = await this.request<Record<string, unknown>>(`/api/channels/${channelId}`, {
       method: 'PATCH',
-      body: JSON.stringify(data),
+      body: JSON.stringify(body),
     })
+    return { ...ch, description: ch.topic } as unknown as ShadowChannel
   }
 
   async deleteChannel(channelId: string): Promise<{ success: boolean }> {
@@ -457,11 +464,17 @@ export class ShadowClient {
 
   // ── Pins ──────────────────────────────────────────────────────────────
 
-  async pinMessage(messageId: string): Promise<{ success: boolean }> {
+  async pinMessage(messageId: string, channelId?: string): Promise<{ success: boolean }> {
+    if (channelId) {
+      return this.request(`/api/channels/${channelId}/pins/${messageId}`, { method: 'PUT' })
+    }
     return this.request(`/api/messages/${messageId}/pin`, { method: 'POST' })
   }
 
-  async unpinMessage(messageId: string): Promise<{ success: boolean }> {
+  async unpinMessage(messageId: string, channelId?: string): Promise<{ success: boolean }> {
+    if (channelId) {
+      return this.request(`/api/channels/${channelId}/pins/${messageId}`, { method: 'DELETE' })
+    }
     return this.request(`/api/messages/${messageId}/pin`, { method: 'DELETE' })
   }
 
@@ -573,7 +586,7 @@ export class ShadowClient {
   }
 
   async markAllNotificationsRead(): Promise<{ success: boolean }> {
-    return this.request('/api/notifications/read-all', { method: 'PATCH' })
+    return this.request('/api/notifications/read-all', { method: 'POST' })
   }
 
   async getUnreadCount(): Promise<{ count: number }> {
@@ -590,34 +603,40 @@ export class ShadowClient {
     limit?: number
     offset?: number
   }): Promise<{ messages: ShadowMessage[]; total: number }> {
-    const params = new URLSearchParams({ q: query.q })
+    const params = new URLSearchParams({ query: query.q })
     if (query.serverId) params.set('serverId', query.serverId)
     if (query.channelId) params.set('channelId', query.channelId)
-    if (query.authorId) params.set('authorId', query.authorId)
+    if (query.authorId) params.set('from', query.authorId)
     if (query.limit) params.set('limit', String(query.limit))
     if (query.offset) params.set('offset', String(query.offset))
-    return this.request(`/api/search/messages?${params}`)
+    const result = await this.request<
+      ShadowMessage[] | { messages: ShadowMessage[]; total: number }
+    >(`/api/search/messages?${params}`)
+    if (Array.isArray(result)) {
+      return { messages: result, total: result.length }
+    }
+    return result
   }
 
   // ── Invites ───────────────────────────────────────────────────────────
 
   async listInvites(): Promise<ShadowInviteCode[]> {
-    return this.request('/api/invites')
+    return this.request('/api/invite-codes')
   }
 
   async createInvites(count: number, note?: string): Promise<ShadowInviteCode[]> {
-    return this.request('/api/invites', {
+    return this.request('/api/invite-codes', {
       method: 'POST',
       body: JSON.stringify({ count, ...(note ? { note } : {}) }),
     })
   }
 
   async deactivateInvite(inviteId: string): Promise<ShadowInviteCode> {
-    return this.request(`/api/invites/${inviteId}/deactivate`, { method: 'PATCH' })
+    return this.request(`/api/invite-codes/${inviteId}/deactivate`, { method: 'PATCH' })
   }
 
   async deleteInvite(inviteId: string): Promise<{ success: boolean }> {
-    return this.request(`/api/invites/${inviteId}`, { method: 'DELETE' })
+    return this.request(`/api/invite-codes/${inviteId}`, { method: 'DELETE' })
   }
 
   // ── Media ─────────────────────────────────────────────────────────────

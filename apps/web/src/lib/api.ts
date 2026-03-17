@@ -2,6 +2,27 @@ import { queryClient } from './query-client'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? ''
 
+function getApiUrl(path: string): string {
+  if (/^https?:\/\//.test(path)) return path
+  if (API_BASE) return `${API_BASE}${path}`
+
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return new URL(path, window.location.origin).toString()
+  }
+
+  return path
+}
+
+function getTestFetchApiMock():
+  | ((path: string, options?: RequestInit) => Promise<unknown> | unknown)
+  | null {
+  const candidate = (globalThis as { __SHADOW_FETCH_API_MOCK__?: unknown })
+    .__SHADOW_FETCH_API_MOCK__
+  return typeof candidate === 'function'
+    ? (candidate as (path: string, options?: RequestInit) => Promise<unknown> | unknown)
+    : null
+}
+
 let isRefreshing = false
 let refreshPromise: Promise<string | null> | null = null
 
@@ -41,6 +62,11 @@ async function refreshAccessToken(): Promise<string | null> {
 
 // Generic fetch helper
 export async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
+  const testMock = getTestFetchApiMock()
+  if (testMock) {
+    return (await testMock(path, options)) as T
+  }
+
   const token = localStorage.getItem('accessToken')
   const isFormData = options?.body instanceof FormData
   const headers: Record<string, string> = {
@@ -49,7 +75,7 @@ export async function fetchApi<T>(path: string, options?: RequestInit): Promise<
     ...((options?.headers as Record<string, string>) ?? {}),
   }
 
-  let response = await fetch(`${API_BASE}${path}`, {
+  let response = await fetch(getApiUrl(path), {
     ...options,
     headers,
   })
@@ -70,7 +96,7 @@ export async function fetchApi<T>(path: string, options?: RequestInit): Promise<
     const newToken = await refreshPromise
     if (newToken) {
       headers.Authorization = `Bearer ${newToken}`
-      response = await fetch(`${API_BASE}${path}`, {
+      response = await fetch(getApiUrl(path), {
         ...options,
         headers,
       })

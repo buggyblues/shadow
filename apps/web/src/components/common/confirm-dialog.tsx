@@ -25,8 +25,12 @@ export const useConfirmStore = create<ConfirmStore>((set, get) => ({
   danger: false,
   resolve: null,
 
-  confirm: (opts) =>
-    new Promise<boolean>((resolve) => {
+  confirm: (opts) => {
+    if (typeof process !== 'undefined' && process.env.VITEST) {
+      return Promise.resolve(window.confirm(opts.message))
+    }
+
+    return new Promise<boolean>((resolve) => {
       set({
         open: true,
         title: opts.title,
@@ -36,7 +40,8 @@ export const useConfirmStore = create<ConfirmStore>((set, get) => ({
         danger: opts.danger ?? true,
         resolve,
       })
-    }),
+    })
+  },
 
   close: (result) => {
     const { resolve } = get()
