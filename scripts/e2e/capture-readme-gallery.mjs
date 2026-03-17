@@ -1,8 +1,8 @@
+import { spawn } from 'node:child_process'
+import { createReadStream, existsSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import http from 'node:http'
 import path from 'node:path'
-import { spawn } from 'node:child_process'
-import { createReadStream, existsSync } from 'node:fs'
 
 const repoRoot = process.cwd()
 const websiteDir = path.resolve(repoRoot, 'website')
@@ -46,13 +46,9 @@ function createStaticServer(rootDir) {
     try {
       const reqUrl = new URL(req.url ?? '/', baseUrl)
       const pathname = decodeURIComponent(reqUrl.pathname)
-      let filePath = path.join(rootDir, pathname)
+      const filePath = path.join(rootDir, pathname)
 
-      const tryPaths = [
-        filePath,
-        path.join(filePath, 'index.html'),
-        `${filePath}.html`,
-      ]
+      const tryPaths = [filePath, path.join(filePath, 'index.html'), `${filePath}.html`]
 
       const matched = tryPaths.find((candidate) => existsSync(candidate))
       if (!matched) {
@@ -92,7 +88,14 @@ async function main() {
   try {
     await run(
       'pnpm',
-      ['--filter', '@shadowob/desktop', 'exec', 'playwright', 'test', 'e2e/04_visual/01_readme_gallery.spec.ts'],
+      [
+        '--filter',
+        '@shadowob/desktop',
+        'exec',
+        'playwright',
+        'test',
+        'e2e/04_visual/01_readme_gallery.spec.ts',
+      ],
       repoRoot,
       { README_CAPTURE_BASE_URL: baseUrl },
     )

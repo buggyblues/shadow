@@ -85,7 +85,7 @@ services:
     depends_on:
       e2e-seed:
         condition: service_completed_successfully
-    command: pnpm --filter @shadowob/desktop exec playwright test -c apps/desktop/playwright.web.config.ts
+    command: pnpm --filter @shadowob/desktop exec playwright test -c playwright.web.config.ts
 
 volumes:
   pg_data:

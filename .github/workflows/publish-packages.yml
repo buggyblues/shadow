@@ -89,7 +89,7 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
 
-          npm --prefix packages/sdk version "$VERSION" --no-git-tag-version
+          pnpm --dir packages/sdk version "$VERSION" --no-git-tag-version
           sed -i "s/^version = \".*\"/version = \"$VERSION\"/" packages/sdk-python/pyproject.toml
 
           pnpm check:sdk-versions

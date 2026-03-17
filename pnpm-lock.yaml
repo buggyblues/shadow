@@ -148,6 +148,12 @@ importers:
       '@types/node':
         specifier: ^22.15.0
         version: 22.19.15
+      '@types/react':
+        specifier: ^19.1.17
+        version: 19.1.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.1.17)
       css-loader:
         specifier: ^7.1.2
         version: 7.1.4(@rspack/core@1.7.7(@swc/helpers@0.5.19))(webpack@5.105.4)
@@ -13720,7 +13726,6 @@ snapshots:
   '@types/react-dom@19.2.3(@types/react@19.1.17)':
     dependencies:
       '@types/react': 19.1.17
-    optional: true
 
   '@types/react-dom@19.2.3(@types/react@19.2.14)':
     dependencies:

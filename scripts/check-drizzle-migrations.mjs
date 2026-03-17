@@ -88,7 +88,8 @@ function main() {
   )
 
   const stagedMigrationSql = staged.filter(
-    (f) => f.startsWith(migrationsDir) && /^apps\/server\/src\/db\/migrations\/\d{4}_.+\.sql$/.test(f),
+    (f) =>
+      f.startsWith(migrationsDir) && /^apps\/server\/src\/db\/migrations\/\d{4}_.+\.sql$/.test(f),
   )
   const journalChanged = staged.includes(journalFile)
 
