@@ -9,9 +9,9 @@ import {
   Search,
   SlidersHorizontal,
   Users,
+  X,
 } from 'lucide-react-native'
 import { useCallback, useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import {
   FlatList,
   Modal,
@@ -60,10 +60,10 @@ interface Listing {
   owner: ListingOwner | null
 }
 
-const DEVICE_TIER_INFO: Record<string, { labelKey: string; color: string }> = {
-  high_end: { labelKey: 'marketplace.deviceHighEnd', color: '#F59E0B' },
-  mid_range: { labelKey: 'marketplace.deviceMidRange', color: '#06B6D4' },
-  low_end: { labelKey: 'marketplace.deviceLowEnd', color: '#9CA3AF' },
+const DEVICE_TIER_INFO: Record<string, { label: string; color: string }> = {
+  high_end: { label: '高端', color: '#F59E0B' },
+  mid_range: { label: '中端', color: '#06B6D4' },
+  low_end: { label: '入门', color: '#9CA3AF' },
 }
 
 const OS_LABELS: Record<string, string> = {
@@ -73,16 +73,15 @@ const OS_LABELS: Record<string, string> = {
 }
 
 const SORT_OPTIONS = [
-  { value: 'popular', labelKey: 'marketplace.popular' },
-  { value: 'newest', labelKey: 'marketplace.newest' },
-  { value: 'price-asc', labelKey: 'marketplace.priceAsc' },
-  { value: 'price-desc', labelKey: 'marketplace.priceDesc' },
+  { value: 'popular', label: '热门' },
+  { value: 'newest', label: '最新' },
+  { value: 'price-asc', label: '价格从低到高' },
+  { value: 'price-desc', label: '价格从高到低' },
 ] as const
 
 type SortValue = (typeof SORT_OPTIONS)[number]['value']
 
 export default function BuddiesScreen() {
-  const { t } = useTranslation()
   const colors = useColors()
   const router = useRouter()
   const [search, setSearch] = useState('')
@@ -117,16 +116,16 @@ export default function BuddiesScreen() {
   }, [refetch])
 
   const currentSortLabel = useMemo(
-    () => t(SORT_OPTIONS.find((o) => o.value === sortBy)?.labelKey ?? 'marketplace.popular'),
-    [sortBy, t],
+    () => SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? '热门',
+    [sortBy],
   )
 
   const formatOnlineTime = useCallback((seconds: number) => {
-    if (seconds < 3600) return `${Math.round(seconds / 60)}m`
+    if (seconds < 3600) return `${Math.round(seconds / 60)}分钟`
     const hours = Math.floor(seconds / 3600)
-    if (hours < 24) return `${hours}h`
+    if (hours < 24) return `${hours}小时`
     const days = Math.floor(hours / 24)
-    return `${days}d ${hours % 24}h`
+    return `${days}天${hours % 24}小时`
   }, [])
 
   const renderItem = useCallback(
@@ -138,77 +137,86 @@ export default function BuddiesScreen() {
         <Pressable
           style={({ pressed }) => [
             styles.card,
-            { backgroundColor: colors.surface, opacity: pressed ? 0.85 : 1 },
+            {
+              backgroundColor: pressed ? colors.surfaceHover : colors.surface,
+              borderColor: colors.border,
+            },
           ]}
           onPress={() => router.push(`/(main)/buddy-detail/${item.id}` as never)}
         >
-          {/* Owner row */}
-          <View style={styles.ownerRow}>
+          {/* Top row: Avatar + title + tier badge */}
+          <View style={styles.cardTopRow}>
             <Avatar
               uri={item.owner?.avatarUrl}
               name={ownerName}
-              size={28}
+              size={40}
               userId={item.owner?.id || item.ownerId}
             />
-            <Text style={[styles.ownerName, { color: colors.textSecondary }]} numberOfLines={1}>
-              {ownerName}
-            </Text>
-            <View style={[styles.tierBadge, { backgroundColor: tierInfo.color }]}>
-              <Text style={styles.tierBadgeText}>{t(tierInfo.labelKey)}</Text>
+            <View style={styles.cardTitleCol}>
+              <View style={styles.titleRow}>
+                <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
+                  {item.title}
+                </Text>
+                <View style={[styles.tierBadge, { backgroundColor: `${tierInfo.color}20` }]}>
+                  <Text style={[styles.tierBadgeText, { color: tierInfo.color }]}>
+                    {tierInfo.label}
+                  </Text>
+                </View>
+              </View>
+              <Text style={[styles.ownerName, { color: colors.textMuted }]} numberOfLines={1}>
+                {ownerName} · {OS_LABELS[item.osType] ?? item.osType}
+              </Text>
             </View>
           </View>
 
-          {/* Title */}
-          <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
-            {item.title}
-          </Text>
-
           {/* Description */}
-          <Text style={[styles.cardDesc, { color: colors.textSecondary }]} numberOfLines={2}>
-            {item.description ?? t('marketplace.noDescription', 'No description')}
-          </Text>
+          {item.description && (
+            <Text style={[styles.cardDesc, { color: colors.textSecondary }]} numberOfLines={2}>
+              {item.description}
+            </Text>
+          )}
 
           {/* Skills */}
           {item.skills.length > 0 && (
             <View style={styles.skills}>
-              {item.skills.slice(0, 3).map((skill) => (
+              {item.skills.slice(0, 4).map((skill) => (
                 <View
                   key={skill}
-                  style={[styles.skillTag, { backgroundColor: `${colors.primary}18` }]}
+                  style={[styles.skillTag, { backgroundColor: `${colors.primary}12` }]}
                 >
                   <Text style={[styles.skillText, { color: colors.primary }]}>{skill}</Text>
                 </View>
               ))}
-              {item.skills.length > 3 && (
+              {item.skills.length > 4 && (
                 <Text style={[styles.skillMore, { color: colors.textMuted }]}>
-                  +{item.skills.length - 3}
+                  +{item.skills.length - 4}
                 </Text>
               )}
             </View>
           )}
 
-          {/* Price + Stats */}
+          {/* Footer: Price + Stats */}
           <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
             <View style={styles.priceRow}>
-              <Text style={[styles.priceValue, { color: '#D97706' }]}>{item.hourlyRate}</Text>
-              <Text style={[styles.priceUnit, { color: colors.textMuted }]}>/h</Text>
+              <Text style={[styles.priceValue, { color: '#D97706' }]}>¥{item.hourlyRate}</Text>
+              <Text style={[styles.priceUnit, { color: colors.textMuted }]}>/小时</Text>
             </View>
             <View style={styles.statsRow}>
-              <Clock size={12} color={colors.textMuted} />
+              <OnlineRank totalSeconds={item.totalOnlineSeconds} />
+              <Clock size={11} color={colors.textMuted} />
               <Text style={[styles.statText, { color: colors.textMuted }]}>
                 {formatOnlineTime(item.totalOnlineSeconds)}
               </Text>
-              <OnlineRank totalSeconds={item.totalOnlineSeconds} />
-              <Eye size={12} color={colors.textMuted} />
+              <Eye size={11} color={colors.textMuted} />
               <Text style={[styles.statText, { color: colors.textMuted }]}>{item.viewCount}</Text>
-              <Users size={12} color={colors.textMuted} />
+              <Users size={11} color={colors.textMuted} />
               <Text style={[styles.statText, { color: colors.textMuted }]}>{item.rentalCount}</Text>
             </View>
           </View>
         </Pressable>
       )
     },
-    [colors, router, t, formatOnlineTime],
+    [colors, router, formatOnlineTime],
   )
 
   if (isLoading && !refreshing) return <LoadingScreen />
@@ -223,14 +231,20 @@ export default function BuddiesScreen() {
             style={[styles.searchInput, { color: colors.text }]}
             value={search}
             onChangeText={setSearch}
-            placeholder={t('buddies.searchPlaceholder')}
+            placeholder="搜索 Buddy..."
             placeholderTextColor={colors.textMuted}
             returnKeyType="search"
           />
+          {search.length > 0 && (
+            <Pressable onPress={() => setSearch('')} hitSlop={8}>
+              <X size={14} color={colors.textMuted} />
+            </Pressable>
+          )}
+          <View style={[styles.filterDivider, { backgroundColor: colors.border }]} />
           <Pressable
             onPress={() => setShowFilters(!showFilters)}
             hitSlop={8}
-            style={[styles.filterToggle, showFilters && { backgroundColor: `${colors.primary}20` }]}
+            style={[styles.filterToggle, showFilters && { backgroundColor: `${colors.primary}15` }]}
           >
             <SlidersHorizontal size={16} color={showFilters ? colors.primary : colors.textMuted} />
           </Pressable>
@@ -239,12 +253,9 @@ export default function BuddiesScreen() {
         {/* Filters panel */}
         {showFilters && (
           <View style={styles.filtersPanel}>
-            {/* Device tier */}
-            <Text style={[styles.filterLabel, { color: colors.textMuted }]}>
-              {t('marketplace.deviceTier', 'Device Tier')}
-            </Text>
+            <Text style={[styles.filterLabel, { color: colors.textMuted }]}>设备等级</Text>
             <View style={styles.filterChips}>
-              {Object.entries(DEVICE_TIER_INFO).map(([key, { labelKey, color }]) => (
+              {Object.entries(DEVICE_TIER_INFO).map(([key, { label, color }]) => (
                 <Pressable
                   key={key}
                   onPress={() => setDeviceTier(deviceTier === key ? null : key)}
@@ -252,7 +263,7 @@ export default function BuddiesScreen() {
                     styles.chip,
                     {
                       borderColor: deviceTier === key ? color : colors.border,
-                      backgroundColor: deviceTier === key ? `${color}15` : 'transparent',
+                      backgroundColor: deviceTier === key ? `${color}12` : 'transparent',
                     },
                   ]}
                 >
@@ -262,14 +273,13 @@ export default function BuddiesScreen() {
                       { color: deviceTier === key ? color : colors.textSecondary },
                     ]}
                   >
-                    {t(labelKey)}
+                    {label}
                   </Text>
                 </Pressable>
               ))}
             </View>
-            {/* OS type */}
             <Text style={[styles.filterLabel, { color: colors.textMuted, marginTop: spacing.md }]}>
-              {t('marketplace.osType', 'OS')}
+              操作系统
             </Text>
             <View style={styles.filterChips}>
               {Object.entries(OS_LABELS).map(([key, label]) => (
@@ -280,7 +290,7 @@ export default function BuddiesScreen() {
                     styles.chip,
                     {
                       borderColor: osType === key ? colors.primary : colors.border,
-                      backgroundColor: osType === key ? `${colors.primary}15` : 'transparent',
+                      backgroundColor: osType === key ? `${colors.primary}12` : 'transparent',
                     },
                   ]}
                 >
@@ -301,9 +311,7 @@ export default function BuddiesScreen() {
 
       {/* Toolbar: total count + sort */}
       <View style={styles.toolbar}>
-        <Text style={[styles.resultCount, { color: colors.textMuted }]}>
-          {t('marketplace.resultCount', { count: total })}
-        </Text>
+        <Text style={[styles.resultCount, { color: colors.textMuted }]}>共 {total} 个 Buddy</Text>
         <Pressable
           style={[styles.sortBtn, { borderColor: colors.border }]}
           onPress={() => setShowSort(true)}
@@ -347,7 +355,7 @@ export default function BuddiesScreen() {
                     { color: sortBy === opt.value ? colors.primary : colors.text },
                   ]}
                 >
-                  {t(opt.labelKey)}
+                  {opt.label}
                 </Text>
               </Pressable>
             ))}
@@ -355,17 +363,15 @@ export default function BuddiesScreen() {
         </Pressable>
       </Modal>
 
-      {/* Listing grid */}
+      {/* Listing list */}
       {listings.length === 0 && !isLoading ? (
-        <EmptyState icon="search" title={t('buddies.noListings')} />
+        <EmptyState icon="🔍" title="暂无 Buddy 列表" />
       ) : (
         <FlatList
           data={listings}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          numColumns={2}
-          columnWrapperStyle={styles.gridRow}
-          contentContainerStyle={styles.grid}
+          contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -384,7 +390,7 @@ const styles = StyleSheet.create({
 
   // Search
   searchSection: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
   },
   searchBox: {
@@ -399,6 +405,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: fontSize.sm,
     paddingVertical: 0,
+  },
+  filterDivider: {
+    width: 1,
+    height: 20,
+    marginHorizontal: 4,
   },
   filterToggle: {
     padding: 4,
@@ -435,7 +446,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
   },
   resultCount: {
@@ -477,60 +488,54 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Grid
-  grid: {
-    padding: spacing.sm,
-  },
-  gridRow: {
-    gap: spacing.sm,
+  // List
+  listContent: {
+    padding: spacing.lg,
+    gap: spacing.md,
+    paddingBottom: 100,
   },
 
   // Card
   card: {
-    flex: 1,
     borderRadius: radius.xl,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
+    borderWidth: 1,
+    padding: spacing.lg,
   },
-  cardHeader: {
+  cardTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: spacing.md,
     marginBottom: spacing.sm,
   },
-  ownerRow: {
+  cardTitleCol: {
+    flex: 1,
+    gap: 2,
+  },
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  ownerName: {
-    flex: 1,
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-  },
-  tierBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radius.full,
-  },
-  tierBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  osLabel: {
-    fontSize: 10,
-    fontWeight: '600',
   },
   cardTitle: {
     fontSize: fontSize.md,
     fontWeight: '700',
-    marginBottom: 2,
+    flex: 1,
+  },
+  tierBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+  },
+  tierBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  ownerName: {
+    fontSize: fontSize.xs,
   },
   cardDesc: {
-    fontSize: fontSize.xs,
-    lineHeight: 16,
+    fontSize: fontSize.sm,
+    lineHeight: 18,
     marginBottom: spacing.sm,
   },
   skills: {
@@ -540,7 +545,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   skillTag: {
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: radius.full,
   },

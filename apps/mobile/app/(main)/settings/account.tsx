@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { SettingsHeader } from '../../../src/components/common/settings-header'
 import { useAuthStore } from '../../../src/stores/auth.store'
 import { fontSize, radius, spacing, useColors } from '../../../src/theme'
 
@@ -11,36 +12,36 @@ export default function AccountSettingsScreen() {
   if (!user) return null
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.content}
-    >
-      <Text style={[styles.groupTitle, { color: colors.textMuted }]}>
-        {t('settings.tabAccount').toUpperCase()}
-      </Text>
-      <View style={[styles.card, { backgroundColor: colors.surface }]}>
-        <View style={[styles.row, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.label, { color: colors.textMuted }]}>
-            {t('settings.emailLabel')}
-          </Text>
-          <Text style={{ color: colors.text, fontSize: fontSize.sm }}>{user.email}</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SettingsHeader title={t('settings.tabAccount')} />
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+        <Text style={[styles.groupTitle, { color: colors.textMuted }]}>
+          {t('settings.tabAccount').toUpperCase()}
+        </Text>
+        <View style={[styles.card, { backgroundColor: colors.surface }]}>
+          <View style={[styles.row, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.label, { color: colors.textMuted }]}>
+              {t('settings.emailLabel')}
+            </Text>
+            <Text style={{ color: colors.text, fontSize: fontSize.sm }}>{user.email}</Text>
+          </View>
+          <View style={[styles.row, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.label, { color: colors.textMuted }]}>
+              {t('settings.usernameLabel')}
+            </Text>
+            <Text style={{ color: colors.text, fontSize: fontSize.sm }}>@{user.username}</Text>
+          </View>
+          <View style={[styles.row, { borderBottomWidth: 0 }]}>
+            <Text style={[styles.label, { color: colors.textMuted }]}>
+              {t('settings.userIdLabel')}
+            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: 10, fontFamily: 'monospace' }}>
+              {user.id}
+            </Text>
+          </View>
         </View>
-        <View style={[styles.row, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.label, { color: colors.textMuted }]}>
-            {t('settings.usernameLabel')}
-          </Text>
-          <Text style={{ color: colors.text, fontSize: fontSize.sm }}>@{user.username}</Text>
-        </View>
-        <View style={[styles.row, { borderBottomWidth: 0 }]}>
-          <Text style={[styles.label, { color: colors.textMuted }]}>
-            {t('settings.userIdLabel')}
-          </Text>
-          <Text style={{ color: colors.textMuted, fontSize: 10, fontFamily: 'monospace' }}>
-            {user.id}
-          </Text>
-        </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   )
 }
 

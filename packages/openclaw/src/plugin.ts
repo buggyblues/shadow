@@ -516,11 +516,7 @@ export const shadowPlugin: ChannelPlugin<ShadowAccountConfig> = {
 
   /** Streaming defaults */
   streaming: {
-    // Lower minChars and idleMs for Shadow channels to improve responsiveness.
-    // Unlike Discord/Slack where message density matters, Shadow users expect
-    // near-real-time message delivery. High minChars (1500) causes messages
-    // to be buffered and delayed, creating a poor user experience.
-    blockStreamingCoalesceDefaults: { minChars: 100, idleMs: 100 },
+    blockStreamingCoalesceDefaults: { minChars: 1500, idleMs: 1000 },
   },
 
   /** Target normalization */

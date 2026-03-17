@@ -2,6 +2,7 @@ import { generateInviteCode } from '@shadowob/shared'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import { members, servers, users } from '../db/schema'
+import { channels } from '../db/schema/channels'
 
 export class ServerDao {
   constructor(private deps: { db: Database }) {}
@@ -30,11 +31,49 @@ export class ServerDao {
   }
 
   async findByUserId(userId: string) {
-    return this.db
+    const rows = await this.db
       .select({ server: servers, member: members })
       .from(members)
       .innerJoin(servers, eq(members.serverId, servers.id))
       .where(eq(members.userId, userId))
+
+    if (rows.length === 0) return []
+
+    const serverIds = rows.map((r) => r.server.id)
+
+    // Get member counts per server
+    const memberCounts = await this.db
+      .select({
+        serverId: members.serverId,
+        count: sql<number>`count(*)::int`.as('count'),
+      })
+      .from(members)
+      .where(inArray(members.serverId, serverIds))
+      .groupBy(members.serverId)
+
+    // Get channel counts per server
+    const channelCounts = await this.db
+      .select({
+        serverId: channels.serverId,
+        count: sql<number>`count(*)::int`.as('count'),
+      })
+      .from(channels)
+      .where(inArray(channels.serverId, serverIds))
+      .groupBy(channels.serverId)
+
+    const mcMap: Record<string, number> = {}
+    for (const r of memberCounts) mcMap[r.serverId] = r.count
+    const ccMap: Record<string, number> = {}
+    for (const r of channelCounts) ccMap[r.serverId] = r.count
+
+    return rows.map((r) => ({
+      server: {
+        ...r.server,
+        memberCount: mcMap[r.server.id] ?? 0,
+        channelCount: ccMap[r.server.id] ?? 0,
+      },
+      member: r.member,
+    }))
   }
 
   async create(data: {

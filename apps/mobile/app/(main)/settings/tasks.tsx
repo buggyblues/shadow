@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check } from 'lucide-react-native'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
+import { SettingsHeader } from '../../../src/components/common/settings-header'
 import { fetchApi } from '../../../src/lib/api'
 import { fontSize, radius, spacing, useColors } from '../../../src/theme'
 
@@ -36,79 +37,79 @@ export default function TaskCenterScreen() {
   if (isLoading) return <LoadingScreen />
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.content}
-    >
-      {/* Stats */}
-      <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>总数</Text>
-          <Text style={{ color: colors.text, fontSize: fontSize.lg, fontWeight: '800' }}>
-            {data?.summary.totalTasks ?? 0}
-          </Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>可领</Text>
-          <Text style={{ color: '#23a559', fontSize: fontSize.lg, fontWeight: '800' }}>
-            {data?.summary.claimableTasks ?? 0}
-          </Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>已完成</Text>
-          <Text style={{ color: colors.primary, fontSize: fontSize.lg, fontWeight: '800' }}>
-            {data?.summary.completedTasks ?? 0}
-          </Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-          <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>虾币</Text>
-          <Text style={{ color: '#f0b132', fontSize: fontSize.lg, fontWeight: '800' }}>
-            🦐 {data?.wallet.balance ?? 0}
-          </Text>
-        </View>
-      </View>
-
-      {/* Task list */}
-      <View style={[styles.card, { backgroundColor: colors.surface }]}>
-        {data?.tasks.map((task, idx) => (
-          <View
-            key={task.key}
-            style={[
-              styles.taskRow,
-              { borderBottomColor: colors.border },
-              idx === (data?.tasks.length ?? 0) - 1 && { borderBottomWidth: 0 },
-            ]}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.text, fontWeight: '700', fontSize: fontSize.sm }}>
-                {task.title}
-              </Text>
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 2 }}>
-                {task.description}
-              </Text>
-              <Text style={{ color: '#23a559', fontSize: fontSize.xs, marginTop: 4 }}>
-                +🦐 {task.reward}
-              </Text>
-            </View>
-            {task.claimable ? (
-              <Pressable
-                style={[styles.claimBtn, { backgroundColor: colors.primary }]}
-                onPress={() => claimMutation.mutate(task.key)}
-                disabled={claimMutation.isPending}
-              >
-                <Text style={{ color: '#fff', fontSize: fontSize.xs, fontWeight: '700' }}>
-                  领取
-                </Text>
-              </Pressable>
-            ) : task.completed ? (
-              <Check size={16} color="#23a559" />
-            ) : (
-              <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>未完成</Text>
-            )}
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SettingsHeader title="任务中心" />
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+        {/* Stats */}
+        <View style={styles.statsRow}>
+          <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+            <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>总数</Text>
+            <Text style={{ color: colors.text, fontSize: fontSize.lg, fontWeight: '800' }}>
+              {data?.summary.totalTasks ?? 0}
+            </Text>
           </View>
-        ))}
-      </View>
-    </ScrollView>
+          <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+            <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>可领</Text>
+            <Text style={{ color: '#23a559', fontSize: fontSize.lg, fontWeight: '800' }}>
+              {data?.summary.claimableTasks ?? 0}
+            </Text>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+            <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>已完成</Text>
+            <Text style={{ color: colors.primary, fontSize: fontSize.lg, fontWeight: '800' }}>
+              {data?.summary.completedTasks ?? 0}
+            </Text>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+            <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>虾币</Text>
+            <Text style={{ color: '#f0b132', fontSize: fontSize.lg, fontWeight: '800' }}>
+              🦐 {data?.wallet.balance ?? 0}
+            </Text>
+          </View>
+        </View>
+
+        {/* Task list */}
+        <View style={[styles.card, { backgroundColor: colors.surface }]}>
+          {data?.tasks.map((task, idx) => (
+            <View
+              key={task.key}
+              style={[
+                styles.taskRow,
+                { borderBottomColor: colors.border },
+                idx === (data?.tasks.length ?? 0) - 1 && { borderBottomWidth: 0 },
+              ]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.text, fontWeight: '700', fontSize: fontSize.sm }}>
+                  {task.title}
+                </Text>
+                <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 2 }}>
+                  {task.description}
+                </Text>
+                <Text style={{ color: '#23a559', fontSize: fontSize.xs, marginTop: 4 }}>
+                  +🦐 {task.reward}
+                </Text>
+              </View>
+              {task.claimable ? (
+                <Pressable
+                  style={[styles.claimBtn, { backgroundColor: colors.primary }]}
+                  onPress={() => claimMutation.mutate(task.key)}
+                  disabled={claimMutation.isPending}
+                >
+                  <Text style={{ color: '#fff', fontSize: fontSize.xs, fontWeight: '700' }}>
+                    领取
+                  </Text>
+                </Pressable>
+              ) : task.completed ? (
+                <Check size={16} color="#23a559" />
+              ) : (
+                <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>未完成</Text>
+              )}
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </View>
   )
 }
 

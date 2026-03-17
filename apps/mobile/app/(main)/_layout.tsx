@@ -118,6 +118,7 @@ export default function MainLayout() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="servers/[serverSlug]" />
       <Stack.Screen name="settings" options={{ headerShown: false }} />
+      <Stack.Screen name="dashboard" options={{ headerShown: false }} />
       <Stack.Screen name="create-server" options={{ headerShown: true, title: '', headerLeft }} />
       <Stack.Screen name="my-rentals" options={{ headerShown: true, title: '', headerLeft }} />
       <Stack.Screen

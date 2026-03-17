@@ -17,6 +17,7 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Avatar } from '../../../src/components/common/avatar'
+import { DottedBackground } from '../../../src/components/common/dotted-background'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { fetchApi } from '../../../src/lib/api'
 import { disconnectSocket } from '../../../src/lib/socket'
@@ -118,10 +119,23 @@ export default function SettingsScreen() {
     },
   ]
 
+  const glassCardStyle = {
+    backgroundColor: `${colors.surface}E6`,
+    borderColor: colors.border,
+    borderWidth: 2,
+    borderRadius: 24,
+  }
+
   const renderGroup = (title: string, items: SectionItem[]) => (
     <>
       <Text style={[styles.groupTitle, { color: colors.textMuted }]}>{title}</Text>
-      <View style={[styles.sectionGroup, { backgroundColor: colors.surface }]}>
+      <View
+        style={[
+          styles.sectionGroup,
+          glassCardStyle,
+          { backgroundColor: colors.surface, overflow: 'hidden', paddingVertical: 4 },
+        ]}
+      >
         {items.map((item, idx) => {
           const Icon = item.icon
           const isLast = idx === items.length - 1
@@ -144,115 +158,154 @@ export default function SettingsScreen() {
   )
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* ── User profile card ─────────────────────── */}
-        <Pressable
-          style={[styles.profileCard, { backgroundColor: colors.surface }]}
-          // biome-ignore lint/suspicious/noExplicitAny: Expo Router route typing
-          onPress={() => router.push('/(main)/settings/profile' as any)}
+    <DottedBackground>
+      <View style={[styles.container]}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
         >
-          <View style={[styles.profileBanner, { backgroundColor: `${colors.primary}30` }]} />
-          <View style={styles.profileBody}>
-            <View style={styles.profileAvatarRow}>
-              <Avatar
-                uri={user.avatarUrl}
-                name={user.displayName || user.username}
-                size={64}
-                userId={user.id}
-              />
-              <View style={[styles.editProfileBtn, { borderColor: colors.border }]}>
-                <Text style={{ color: colors.primary, fontWeight: '700', fontSize: fontSize.xs }}>
-                  {t('settings.tabProfile')}
-                </Text>
-                <ChevronRight size={12} color={colors.primary} />
+          {/* ── User profile card ─────────────────────── */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.profileCard,
+              glassCardStyle,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                transform: [{ scale: pressed ? 0.98 : 1 }],
+              },
+            ]}
+            // biome-ignore lint/suspicious/noExplicitAny: Expo Router route typing
+            onPress={() => router.push('/(main)/settings/profile' as any)}
+          >
+            <View style={[styles.profileBanner, { backgroundColor: `${colors.primary}30` }]} />
+            <View style={styles.profileBody}>
+              <View style={styles.profileAvatarRow}>
+                <Avatar
+                  uri={user.avatarUrl}
+                  name={user.displayName || user.username}
+                  size={64}
+                  userId={user.id}
+                />
+                <View style={[styles.editProfileBtn, { borderColor: colors.border }]}>
+                  <Text style={{ color: colors.primary, fontWeight: '700', fontSize: fontSize.xs }}>
+                    {t('settings.tabProfile')}
+                  </Text>
+                  <ChevronRight size={12} color={colors.primary} />
+                </View>
               </View>
-            </View>
-            <Text style={[styles.profileName, { color: colors.text }]}>
-              {user.displayName || user.username}
-            </Text>
-            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>@{user.username}</Text>
+              <Text style={[styles.profileName, { color: colors.text }]}>
+                {user.displayName || user.username}
+              </Text>
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>
+                @{user.username}
+              </Text>
 
-            {/* Wallet + Stats */}
-            <View style={styles.profileStatsRow}>
-              {wallet && (
-                <View style={[styles.profileStat, { backgroundColor: `${colors.primary}10` }]}>
-                  <Text style={{ fontSize: 14 }}>🦐</Text>
-                  <Text style={{ color: colors.primary, fontWeight: '800', fontSize: fontSize.sm }}>
-                    {wallet.balance}
+              {/* Wallet + Stats */}
+              <View style={styles.profileStatsRow}>
+                {wallet && (
+                  <View style={[styles.profileStat, { backgroundColor: `${colors.primary}10` }]}>
+                    <Text style={{ fontSize: 14 }}>🦐</Text>
+                    <Text
+                      style={{ color: colors.primary, fontWeight: '800', fontSize: fontSize.sm }}
+                    >
+                      {wallet.balance}
+                    </Text>
+                  </View>
+                )}
+                <View style={[styles.profileStat, { backgroundColor: `${colors.text}08` }]}>
+                  <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
+                    {user.email}
                   </Text>
                 </View>
-              )}
-              <View style={[styles.profileStat, { backgroundColor: `${colors.text}08` }]}>
-                <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>{user.email}</Text>
               </View>
             </View>
-          </View>
-        </Pressable>
+          </Pressable>
 
-        {/* ── Quick actions ─────────────────────────── */}
-        <View style={styles.quickActionRow}>
+          {/* ── Quick actions ─────────────────────────── */}
+          <View style={styles.quickActionRow}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.quickAction,
+                glassCardStyle,
+                { backgroundColor: colors.surface, transform: [{ scale: pressed ? 0.98 : 1 }] },
+              ]}
+              onPress={() => router.push('/(main)/discover')}
+            >
+              <View style={[styles.quickIconCircle, { backgroundColor: '#5865f220' }]}>
+                <Compass size={18} color="#5865f2" />
+              </View>
+              <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>
+                {t('guide.discoverTitle')}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.quickAction,
+                glassCardStyle,
+                { backgroundColor: colors.surface, transform: [{ scale: pressed ? 0.98 : 1 }] },
+              ]}
+              onPress={() => router.push('/(main)/buddies')}
+            >
+              <View style={[styles.quickIconCircle, { backgroundColor: '#00c8d620' }]}>
+                <Bot size={18} color="#00c8d6" />
+              </View>
+              <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>Buddy</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.quickAction,
+                glassCardStyle,
+                { backgroundColor: colors.surface, transform: [{ scale: pressed ? 0.98 : 1 }] },
+              ]}
+              // biome-ignore lint/suspicious/noExplicitAny: Expo Router route typing
+              onPress={() => router.push('/(main)/settings/tasks' as any)}
+            >
+              <View style={[styles.quickIconCircle, { backgroundColor: '#ed424520' }]}>
+                <Target size={18} color="#ed4245" />
+              </View>
+              <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>任务</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.quickAction,
+                glassCardStyle,
+                { backgroundColor: colors.surface, transform: [{ scale: pressed ? 0.98 : 1 }] },
+              ]}
+              // biome-ignore lint/suspicious/noExplicitAny: Expo Router route typing
+              onPress={() => router.push('/(main)/settings/invite' as any)}
+            >
+              <View style={[styles.quickIconCircle, { backgroundColor: '#23a55920' }]}>
+                <Heart size={18} color="#23a559" />
+              </View>
+              <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>邀请</Text>
+            </Pressable>
+          </View>
+
+          {/* ── Section groups ──────────────────────── */}
+          {renderGroup(t('settings.tabProfile').toUpperCase(), userSettings)}
+          {renderGroup('任务 & BUDDY', activitySettings)}
+          {renderGroup(t('settings.tabAccount').toUpperCase(), accountSettings)}
+
+          {/* ── Logout ────────────────────────────────── */}
           <Pressable
-            style={[styles.quickAction, { backgroundColor: colors.surface }]}
-            onPress={() => router.push('/(main)/discover')}
+            style={({ pressed }) => [
+              styles.logoutCard,
+              glassCardStyle,
+              { backgroundColor: colors.surface, transform: [{ scale: pressed ? 0.98 : 1 }] },
+            ]}
+            onPress={handleLogout}
           >
-            <View style={[styles.quickIconCircle, { backgroundColor: '#5865f220' }]}>
-              <Compass size={18} color="#5865f2" />
-            </View>
-            <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>
-              {t('guide.discoverTitle')}
+            <LogOut size={18} color="#f23f43" />
+            <Text style={{ color: '#f23f43', fontWeight: '700', fontSize: fontSize.md }}>
+              {t('settings.logout')}
             </Text>
           </Pressable>
-          <Pressable
-            style={[styles.quickAction, { backgroundColor: colors.surface }]}
-            onPress={() => router.push('/(main)/buddies')}
-          >
-            <View style={[styles.quickIconCircle, { backgroundColor: '#00c8d620' }]}>
-              <Bot size={18} color="#00c8d6" />
-            </View>
-            <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>Buddy</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.quickAction, { backgroundColor: colors.surface }]}
-            // biome-ignore lint/suspicious/noExplicitAny: Expo Router route typing
-            onPress={() => router.push('/(main)/settings/tasks' as any)}
-          >
-            <View style={[styles.quickIconCircle, { backgroundColor: '#ed424520' }]}>
-              <Target size={18} color="#ed4245" />
-            </View>
-            <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>任务</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.quickAction, { backgroundColor: colors.surface }]}
-            // biome-ignore lint/suspicious/noExplicitAny: Expo Router route typing
-            onPress={() => router.push('/(main)/settings/invite' as any)}
-          >
-            <View style={[styles.quickIconCircle, { backgroundColor: '#23a55920' }]}>
-              <Heart size={18} color="#23a559" />
-            </View>
-            <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>邀请</Text>
-          </Pressable>
-        </View>
 
-        {/* ── Section groups ──────────────────────── */}
-        {renderGroup(t('settings.tabProfile').toUpperCase(), userSettings)}
-        {renderGroup('任务 & BUDDY', activitySettings)}
-        {renderGroup(t('settings.tabAccount').toUpperCase(), accountSettings)}
-
-        {/* ── Logout ────────────────────────────────── */}
-        <Pressable
-          style={[styles.logoutCard, { backgroundColor: colors.surface }]}
-          onPress={handleLogout}
-        >
-          <LogOut size={18} color="#f23f43" />
-          <Text style={{ color: '#f23f43', fontWeight: '700', fontSize: fontSize.md }}>
-            {t('settings.logout')}
-          </Text>
-        </Pressable>
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
-    </View>
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </View>
+    </DottedBackground>
   )
 }
 

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
+import { SettingsHeader } from '../../../src/components/common/settings-header'
 import { fetchApi } from '../../../src/lib/api'
 import { fontSize, radius, spacing, useColors } from '../../../src/theme'
 
@@ -71,151 +72,155 @@ export default function InviteSettingsScreen() {
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.content}
-    >
-      {/* Referral stats */}
-      <View style={[styles.referralBanner, { backgroundColor: `${colors.primary}08` }]}>
-        <Text style={{ color: colors.text, fontWeight: '700', fontSize: fontSize.sm }}>
-          {referralSummary?.campaignText ?? '邀请好友完成注册登录，你和好友均可获得 500 虾币'}
-        </Text>
-        <View style={styles.referralStatsRow}>
-          <View style={styles.referralStat}>
-            <Text style={{ color: colors.primary, fontSize: fontSize.lg, fontWeight: '800' }}>
-              {referralSummary?.successfulInvites ?? 0}
-            </Text>
-            <Text style={{ color: colors.textMuted, fontSize: 10 }}>已邀请</Text>
-          </View>
-          <View style={styles.referralStat}>
-            <Text style={{ color: '#f0b132', fontSize: fontSize.lg, fontWeight: '800' }}>
-              🦐 {referralSummary?.totalInviteRewards ?? 0}
-            </Text>
-            <Text style={{ color: colors.textMuted, fontSize: 10 }}>已获得</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Actions */}
-      <Pressable
-        style={[styles.createBtn, { backgroundColor: colors.primary }]}
-        onPress={() => setShowForm(!showForm)}
-      >
-        {showForm ? <X size={14} color="#fff" /> : <Plus size={14} color="#fff" />}
-        <Text style={{ color: '#fff', fontWeight: '700', fontSize: fontSize.sm }}>
-          {showForm ? t('common.cancel') : t('settings.inviteCreate')}
-        </Text>
-      </Pressable>
-
-      {showForm && (
-        <View style={[styles.formCard, { backgroundColor: colors.surface }]}>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.inputBackground,
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
-            value={note}
-            onChangeText={setNote}
-            placeholder={t('settings.inviteNotePlaceholder')}
-            placeholderTextColor={colors.textMuted}
-          />
-          <Pressable
-            style={[
-              styles.generateBtn,
-              { backgroundColor: colors.primary, opacity: creating ? 0.6 : 1 },
-            ]}
-            onPress={handleCreate}
-            disabled={creating}
-          >
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: fontSize.sm }}>
-              {creating ? t('common.loading') : t('settings.inviteGenerate')}
-            </Text>
-          </Pressable>
-        </View>
-      )}
-
-      {/* Code list */}
-      {loading ? (
-        <LoadingScreen />
-      ) : codes.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Link2 size={40} color={colors.textMuted} />
-          <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginTop: spacing.sm }}>
-            {t('settings.inviteEmpty')}
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SettingsHeader title={t('settings.tabInvite')} />
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+        {/* Referral stats */}
+        <View style={[styles.referralBanner, { backgroundColor: `${colors.primary}08` }]}>
+          <Text style={{ color: colors.text, fontWeight: '700', fontSize: fontSize.sm }}>
+            {referralSummary?.campaignText ?? '邀请好友完成注册登录，你和好友均可获得 500 虾币'}
           </Text>
+          <View style={styles.referralStatsRow}>
+            <View style={styles.referralStat}>
+              <Text style={{ color: colors.primary, fontSize: fontSize.lg, fontWeight: '800' }}>
+                {referralSummary?.successfulInvites ?? 0}
+              </Text>
+              <Text style={{ color: colors.textMuted, fontSize: 10 }}>已邀请</Text>
+            </View>
+            <View style={styles.referralStat}>
+              <Text style={{ color: '#f0b132', fontSize: fontSize.lg, fontWeight: '800' }}>
+                🦐 {referralSummary?.totalInviteRewards ?? 0}
+              </Text>
+              <Text style={{ color: colors.textMuted, fontSize: 10 }}>已获得</Text>
+            </View>
+          </View>
         </View>
-      ) : (
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          {codes.map((code, idx) => {
-            const isUsed = !!code.usedBy
-            const isActive = code.isActive && !isUsed
-            return (
-              <View
-                key={code.id}
-                style={[
-                  styles.codeRow,
-                  { borderBottomColor: colors.border, opacity: isActive ? 1 : 0.5 },
-                  idx === codes.length - 1 && { borderBottomWidth: 0 },
-                ]}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontFamily: 'monospace',
-                      fontWeight: '700',
-                      color: colors.text,
-                      letterSpacing: 1.5,
-                      fontSize: fontSize.sm,
-                    }}
-                  >
-                    {code.code}
-                  </Text>
-                  {code.note && (
-                    <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>
-                      {code.note}
-                    </Text>
-                  )}
-                  {isUsed && code.usedByUser && (
-                    <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>
-                      {t('settings.inviteUsedBy')}:{' '}
-                      {code.usedByUser.displayName || code.usedByUser.username}
-                    </Text>
-                  )}
-                </View>
-                <View style={{ flexDirection: 'row', gap: 4 }}>
-                  {isActive && (
-                    <Pressable
-                      onPress={() => handleCopy(code.code, code.id)}
-                      style={styles.iconBtn}
+
+        {/* Actions */}
+        <Pressable
+          style={[styles.createBtn, { backgroundColor: colors.primary }]}
+          onPress={() => setShowForm(!showForm)}
+        >
+          {showForm ? <X size={14} color="#fff" /> : <Plus size={14} color="#fff" />}
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: fontSize.sm }}>
+            {showForm ? t('common.cancel') : t('settings.inviteCreate')}
+          </Text>
+        </Pressable>
+
+        {showForm && (
+          <View style={[styles.formCard, { backgroundColor: colors.surface }]}>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBackground,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
+              value={note}
+              onChangeText={setNote}
+              placeholder={t('settings.inviteNotePlaceholder')}
+              placeholderTextColor={colors.textMuted}
+            />
+            <Pressable
+              style={[
+                styles.generateBtn,
+                { backgroundColor: colors.primary, opacity: creating ? 0.6 : 1 },
+              ]}
+              onPress={handleCreate}
+              disabled={creating}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: fontSize.sm }}>
+                {creating ? t('common.loading') : t('settings.inviteGenerate')}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* Code list */}
+        {loading ? (
+          <LoadingScreen />
+        ) : codes.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Link2 size={40} color={colors.textMuted} />
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginTop: spacing.sm }}>
+              {t('settings.inviteEmpty')}
+            </Text>
+          </View>
+        ) : (
+          <View style={[styles.card, { backgroundColor: colors.surface }]}>
+            {codes.map((code, idx) => {
+              const isUsed = !!code.usedBy
+              const isActive = code.isActive && !isUsed
+              return (
+                <View
+                  key={code.id}
+                  style={[
+                    styles.codeRow,
+                    { borderBottomColor: colors.border, opacity: isActive ? 1 : 0.5 },
+                    idx === codes.length - 1 && { borderBottomWidth: 0 },
+                  ]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        fontFamily: 'monospace',
+                        fontWeight: '700',
+                        color: colors.text,
+                        letterSpacing: 1.5,
+                        fontSize: fontSize.sm,
+                      }}
                     >
-                      {copiedId === code.id ? (
-                        <Check size={14} color="#23a559" />
-                      ) : (
-                        <Copy size={14} color={colors.textMuted} />
-                      )}
-                    </Pressable>
-                  )}
-                  {isActive && (
-                    <Pressable onPress={() => handleDeactivate(code.id)} style={styles.iconBtn}>
-                      <X size={14} color={colors.textMuted} />
-                    </Pressable>
-                  )}
-                  {!isActive && (
-                    <Pressable onPress={() => handleDelete(code.id)} style={styles.iconBtn}>
-                      <Trash2 size={14} color="#f23f43" />
-                    </Pressable>
-                  )}
+                      {code.code}
+                    </Text>
+                    {code.note && (
+                      <Text
+                        style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}
+                      >
+                        {code.note}
+                      </Text>
+                    )}
+                    {isUsed && code.usedByUser && (
+                      <Text
+                        style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}
+                      >
+                        {t('settings.inviteUsedBy')}:{' '}
+                        {code.usedByUser.displayName || code.usedByUser.username}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 4 }}>
+                    {isActive && (
+                      <Pressable
+                        onPress={() => handleCopy(code.code, code.id)}
+                        style={styles.iconBtn}
+                      >
+                        {copiedId === code.id ? (
+                          <Check size={14} color="#23a559" />
+                        ) : (
+                          <Copy size={14} color={colors.textMuted} />
+                        )}
+                      </Pressable>
+                    )}
+                    {isActive && (
+                      <Pressable onPress={() => handleDeactivate(code.id)} style={styles.iconBtn}>
+                        <X size={14} color={colors.textMuted} />
+                      </Pressable>
+                    )}
+                    {!isActive && (
+                      <Pressable onPress={() => handleDelete(code.id)} style={styles.iconBtn}>
+                        <Trash2 size={14} color="#f23f43" />
+                      </Pressable>
+                    )}
+                  </View>
                 </View>
-              </View>
-            )
-          })}
-        </View>
-      )}
-    </ScrollView>
+              )
+            })}
+          </View>
+        )}
+      </ScrollView>
+    </View>
   )
 }
 

@@ -154,6 +154,52 @@ export function createAuthHandler(container: AppContainer) {
     })
   })
 
+  // GET /api/auth/dashboard — aggregated user stats for dashboard page
+  authHandler.get('/dashboard', authMiddleware, async (c) => {
+    const user = c.get('user') as { userId: string }
+    const userId = user.userId
+    const serverDao = container.resolve('serverDao')
+    const agentDao = container.resolve('agentDao')
+    const walletService = container.resolve('walletService')
+    const taskCenterService = container.resolve('taskCenterService')
+    const userDao = container.resolve('userDao')
+
+    // Parallel queries for performance
+    const [userServers, agents, wallet, taskCenter, referral, userInfo] = await Promise.all([
+      serverDao.findByUserId(userId),
+      agentDao.findByOwnerId(userId),
+      walletService.getOrCreateWallet(userId).catch(() => ({ balance: 0 })),
+      taskCenterService
+        .getTaskCenter(userId)
+        .catch(() => ({ summary: { totalTasks: 0, claimableTasks: 0, completedTasks: 0 } })),
+      taskCenterService
+        .getReferralSummary(userId)
+        .catch(() => ({ successfulInvites: 0, totalInviteRewards: 0 })),
+      userDao.findById(userId),
+    ])
+
+    const serversOwned = userServers.filter(
+      (s: { member: { role: string } }) => s.member.role === 'owner',
+    ).length
+    const serversJoined = userServers.length
+
+    // Buddy total online time
+    const totalBuddyOnlineSeconds = agents.reduce((sum, a) => sum + (a.totalOnlineSeconds ?? 0), 0)
+
+    return c.json({
+      serversOwned,
+      serversJoined,
+      buddyCount: agents.length,
+      buddyOnlineHours: Math.round(totalBuddyOnlineSeconds / 3600),
+      walletBalance: wallet.balance ?? 0,
+      tasksCompleted: taskCenter.summary?.completedTasks ?? 0,
+      tasksTotal: taskCenter.summary?.totalTasks ?? 0,
+      referralCount: referral.successfulInvites ?? 0,
+      referralRewards: referral.totalInviteRewards ?? 0,
+      memberSince: userInfo?.createdAt ?? null,
+    })
+  })
+
   // POST /api/auth/disconnect — beacon-based disconnect on page close
   authHandler.post('/disconnect', async (c) => {
     try {

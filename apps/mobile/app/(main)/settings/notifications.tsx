@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, Check, Target, X } from 'lucide-react-native'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { SettingsHeader } from '../../../src/components/common/settings-header'
 import { fetchApi } from '../../../src/lib/api'
 import { fontSize, radius, spacing, useColors } from '../../../src/theme'
 
@@ -34,53 +35,53 @@ export default function NotificationSettingsScreen() {
   ] as const
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.content}
-    >
-      <Text style={[styles.groupTitle, { color: colors.textMuted }]}>通知策略</Text>
-      <View style={[styles.card, { backgroundColor: colors.surface }]}>
-        {strategies.map((s, idx) => {
-          const active = (pref?.strategy ?? 'all') === s.value
-          const Icon = s.icon
-          return (
-            <Pressable
-              key={s.value}
-              style={[
-                styles.row,
-                { borderBottomColor: colors.border },
-                idx === strategies.length - 1 && { borderBottomWidth: 0 },
-              ]}
-              onPress={() => updatePref.mutate({ strategy: s.value })}
-            >
-              <View
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SettingsHeader title="通知" />
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+        <Text style={[styles.groupTitle, { color: colors.textMuted }]}>通知策略</Text>
+        <View style={[styles.card, { backgroundColor: colors.surface }]}>
+          {strategies.map((s, idx) => {
+            const active = (pref?.strategy ?? 'all') === s.value
+            const Icon = s.icon
+            return (
+              <Pressable
+                key={s.value}
                 style={[
-                  styles.iconCircle,
-                  { backgroundColor: active ? `${colors.primary}15` : colors.inputBackground },
+                  styles.row,
+                  { borderBottomColor: colors.border },
+                  idx === strategies.length - 1 && { borderBottomWidth: 0 },
                 ]}
+                onPress={() => updatePref.mutate({ strategy: s.value })}
               >
-                <Icon size={16} color={active ? colors.primary : colors.textMuted} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={{
-                    color: active ? colors.primary : colors.text,
-                    fontWeight: '700',
-                    fontSize: fontSize.sm,
-                  }}
+                <View
+                  style={[
+                    styles.iconCircle,
+                    { backgroundColor: active ? `${colors.primary}15` : colors.inputBackground },
+                  ]}
                 >
-                  {s.title}
-                </Text>
-                <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>
-                  {s.desc}
-                </Text>
-              </View>
-              {active && <Check size={16} color={colors.primary} />}
-            </Pressable>
-          )
-        })}
-      </View>
-    </ScrollView>
+                  <Icon size={16} color={active ? colors.primary : colors.textMuted} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: active ? colors.primary : colors.text,
+                      fontWeight: '700',
+                      fontSize: fontSize.sm,
+                    }}
+                  >
+                    {s.title}
+                  </Text>
+                  <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 }}>
+                    {s.desc}
+                  </Text>
+                </View>
+                {active && <Check size={16} color={colors.primary} />}
+              </Pressable>
+            )
+          })}
+        </View>
+      </ScrollView>
+    </View>
   )
 }
 

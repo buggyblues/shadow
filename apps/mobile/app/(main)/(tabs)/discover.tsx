@@ -1,10 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
+import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
-import { Search, Shield } from 'lucide-react-native'
+import { Globe, Search, Users, X } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import {
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native'
+import Reanimated, { FadeInDown } from 'react-native-reanimated'
+import { Avatar } from '../../../src/components/common/avatar'
 import { EmptyState } from '../../../src/components/common/empty-state'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { fetchApi, getImageUrl } from '../../../src/lib/api'
@@ -44,8 +55,13 @@ export default function DiscoverScreen() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
 
-  const { data: servers = [], isLoading } = useQuery({
+  const {
+    data: servers = [],
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ['discover-servers'],
     queryFn: () => fetchApi<DiscoverServer[]>('/api/servers/discover'),
   })
@@ -84,116 +100,145 @@ export default function DiscoverScreen() {
       s.description?.toLowerCase().includes(search.toLowerCase()),
   )
 
-  if (isLoading) return <LoadingScreen />
+  if (isLoading && !refreshing) return <LoadingScreen />
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Search */}
-      <View
-        style={[
-          styles.searchContainer,
-          { backgroundColor: colors.surface, borderBottomColor: colors.border },
-        ]}
-      >
+      <View style={[styles.searchSection, { backgroundColor: colors.surface }]}>
         <View style={[styles.searchBox, { backgroundColor: colors.inputBackground }]}>
-          <Search size={18} color={colors.textMuted} />
+          <Search size={16} color={colors.textMuted} />
           <TextInput
             style={[styles.searchInput, { color: colors.text }]}
             value={search}
             onChangeText={setSearch}
-            placeholder={t('discover.searchPlaceholder')}
+            placeholder="搜索公开服务器..."
             placeholderTextColor={colors.textMuted}
           />
+          {search.length > 0 && (
+            <Pressable onPress={() => setSearch('')} hitSlop={8}>
+              <X size={14} color={colors.textMuted} />
+            </Pressable>
+          )}
+        </View>
+      </View>
+
+      {/* Stats bar */}
+      <View style={styles.statsBar}>
+        <View style={styles.statItem}>
+          <Globe size={14} color={colors.textMuted} />
+          <Text style={[styles.statText, { color: colors.textMuted }]}>
+            {filtered.length} 个公开服务器
+          </Text>
         </View>
       </View>
 
       {filtered.length === 0 ? (
-        <EmptyState icon="🔍" title={t('discover.noServers')} />
+        <EmptyState icon="🔍" title="没有找到服务器" />
       ) : (
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
-          renderItem={({ item }) => {
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={async () => {
+                setRefreshing(true)
+                await refetch()
+                setRefreshing(false)
+              }}
+              tintColor={colors.textMuted}
+            />
+          }
+          renderItem={({ item, index }) => {
             const isJoined = joinedServerIds.has(item.id)
             return (
-              <Pressable
-                style={[styles.card, { backgroundColor: colors.surface }]}
-                onPress={() => {
-                  if (isJoined) {
-                    router.push(`/(main)/servers/${item.slug ?? item.id}`)
-                  }
-                }}
-              >
-                {/* Banner */}
-                <View style={[styles.banner, { backgroundColor: `${colors.primary}20` }]}>
-                  {item.bannerUrl && (
-                    <Image
-                      source={{ uri: getImageUrl(item.bannerUrl)! }}
-                      style={StyleSheet.absoluteFill}
-                      contentFit="cover"
-                    />
-                  )}
-                  {item.isPublic && (
-                    <View style={styles.publicBadge}>
-                      <Shield size={10} color="#fff" />
-                      <Text style={styles.publicText}>{t('discover.public')}</Text>
-                    </View>
-                  )}
-                </View>
-
-                {/* Icon overlay */}
-                <View style={[styles.iconWrap, { backgroundColor: colors.surface }]}>
-                  {item.iconUrl ? (
-                    <Image
-                      source={{ uri: getImageUrl(item.iconUrl)! }}
-                      style={styles.icon}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <Text style={styles.iconFallback}>{item.name.charAt(0)}</Text>
-                  )}
-                </View>
-
-                <View style={styles.cardBody}>
-                  <Text style={[styles.serverName, { color: colors.text }]} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  <Text style={[styles.desc, { color: colors.textSecondary }]} numberOfLines={2}>
-                    {item.description ?? t('discover.noDescription')}
-                  </Text>
-
-                  <View style={styles.cardFooter}>
-                    <View style={styles.memberInfo}>
-                      <View style={[styles.onlineDot, { backgroundColor: '#23a559' }]} />
-                      <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                        {item.memberCount} {t('discover.members')}
-                      </Text>
-                    </View>
-
-                    {isJoined ? (
-                      <Pressable
-                        style={[styles.joinBtn, { backgroundColor: '#23a559' }]}
-                        onPress={() => router.push(`/(main)/servers/${item.slug ?? item.id}`)}
-                      >
-                        <Text style={styles.joinBtnText}>{t('discover.enterButton')}</Text>
-                      </Pressable>
+              <Reanimated.View entering={FadeInDown.delay(index * 60).springify()}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.card,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                      opacity: pressed ? 0.9 : 1,
+                    },
+                  ]}
+                  onPress={() => {
+                    if (isJoined) {
+                      router.push(`/(main)/servers/${item.slug ?? item.id}`)
+                    }
+                  }}
+                >
+                  {/* Banner — fixed height always */}
+                  <View style={styles.banner}>
+                    {item.bannerUrl ? (
+                      <Image
+                        source={{ uri: getImageUrl(item.bannerUrl)! }}
+                        style={StyleSheet.absoluteFill}
+                        contentFit="cover"
+                      />
                     ) : (
-                      <Pressable
-                        style={[styles.joinBtn, { backgroundColor: colors.primary }]}
-                        onPress={() => {
-                          if (item.inviteCode) {
-                            joinMutation.mutate({ inviteCode: item.inviteCode, serverId: item.id })
-                          }
-                        }}
-                        disabled={joinMutation.isPending}
-                      >
-                        <Text style={styles.joinBtnText}>{t('discover.joinButton')}</Text>
-                      </Pressable>
+                      <LinearGradient
+                        colors={[`${colors.primary}25`, `${colors.primary}08`]}
+                        style={StyleSheet.absoluteFill}
+                      />
                     )}
                   </View>
-                </View>
-              </Pressable>
+
+                  <View style={styles.cardBody}>
+                    {/* Server info row */}
+                    <View style={styles.serverRow}>
+                      <Avatar uri={item.iconUrl} name={item.name} size={44} userId={item.id} />
+                      <View style={styles.serverInfo}>
+                        <Text style={[styles.serverName, { color: colors.text }]} numberOfLines={1}>
+                          {item.name}
+                        </Text>
+                        <View style={styles.memberRow}>
+                          <Users size={12} color={colors.textMuted} />
+                          <Text style={[styles.memberCount, { color: colors.textMuted }]}>
+                            {item.memberCount} 位成员
+                          </Text>
+                        </View>
+                      </View>
+
+                      {isJoined ? (
+                        <Pressable
+                          style={[styles.joinBtn, { backgroundColor: colors.surfaceHover }]}
+                          onPress={() => router.push(`/(main)/servers/${item.slug ?? item.id}`)}
+                        >
+                          <Text style={[styles.joinBtnText, { color: colors.text }]}>进入</Text>
+                        </Pressable>
+                      ) : (
+                        <Pressable
+                          style={[styles.joinBtn, { backgroundColor: colors.primary }]}
+                          onPress={() => {
+                            if (item.inviteCode) {
+                              joinMutation.mutate({
+                                inviteCode: item.inviteCode,
+                                serverId: item.id,
+                              })
+                            }
+                          }}
+                          disabled={joinMutation.isPending}
+                        >
+                          <Text style={[styles.joinBtnText, { color: '#fff' }]}>加入</Text>
+                        </Pressable>
+                      )}
+                    </View>
+
+                    {/* Description */}
+                    {item.description && (
+                      <Text
+                        style={[styles.desc, { color: colors.textSecondary }]}
+                        numberOfLines={2}
+                      >
+                        {item.description}
+                      </Text>
+                    )}
+                  </View>
+                </Pressable>
+              </Reanimated.View>
             )
           }}
         />
@@ -204,115 +249,94 @@ export default function DiscoverScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  searchContainer: {
-    padding: spacing.md,
-    borderBottomWidth: 1,
+
+  // Search
+  searchSection: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
   },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     borderRadius: radius.lg,
-    height: 44,
-    gap: spacing.sm,
+    height: 38,
+    gap: spacing.xs,
   },
   searchInput: {
     flex: 1,
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
+    paddingVertical: 0,
   },
+
+  // Stats
+  statsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  statText: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+  },
+
+  // List
   list: {
-    padding: spacing.md,
+    padding: spacing.lg,
     gap: spacing.md,
+    paddingBottom: 100,
   },
+
+  // Card
   card: {
     borderRadius: radius.xl,
+    borderWidth: 1,
     overflow: 'hidden',
   },
   banner: {
-    height: 100,
+    height: 80,
   },
-  publicBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
+  cardBody: {
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  serverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  serverInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  serverName: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+  },
+  memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 99,
   },
-  publicText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  iconWrap: {
-    position: 'absolute',
-    top: 74,
-    left: 12,
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    padding: 3,
-    zIndex: 10,
-  },
-  icon: {
-    width: 46,
-    height: 46,
-    borderRadius: 11,
-  },
-  iconFallback: {
-    width: 46,
-    height: 46,
-    borderRadius: 11,
-    textAlign: 'center',
-    lineHeight: 46,
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-    backgroundColor: '#5865F2',
-    overflow: 'hidden',
-  },
-  cardBody: {
-    paddingTop: 32,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-  },
-  serverName: {
-    fontSize: fontSize.lg,
-    fontWeight: '800',
-    marginBottom: 4,
+  memberCount: {
+    fontSize: fontSize.xs,
   },
   desc: {
     fontSize: fontSize.sm,
-    marginBottom: spacing.md,
-    minHeight: 36,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  memberInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  onlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    lineHeight: 18,
   },
   joinBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
   },
   joinBtnText: {
-    color: '#fff',
     fontSize: fontSize.sm,
     fontWeight: '700',
   },

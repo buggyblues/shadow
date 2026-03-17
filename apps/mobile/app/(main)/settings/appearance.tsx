@@ -1,6 +1,7 @@
 import { Check, Monitor, Moon, Sun } from 'lucide-react-native'
 import { useTranslation } from 'react-i18next'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { SettingsHeader } from '../../../src/components/common/settings-header'
 import { type ThemeMode, useUIStore } from '../../../src/stores/ui.store'
 import { fontSize, radius, spacing, useColors } from '../../../src/theme'
 
@@ -16,43 +17,43 @@ export default function AppearanceSettingsScreen() {
   ]
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.content}
-    >
-      <Text style={[styles.groupTitle, { color: colors.textMuted }]}>
-        {t('settings.tabAppearance').toUpperCase()}
-      </Text>
-      <View style={[styles.card, { backgroundColor: colors.surface }]}>
-        {themes.map(({ key, icon: Icon, label }) => {
-          const active = theme === key
-          return (
-            <Pressable
-              key={key}
-              style={[
-                styles.themeRow,
-                { borderBottomColor: colors.border },
-                key === 'system' && { borderBottomWidth: 0 },
-              ]}
-              onPress={() => setTheme(key)}
-            >
-              <View
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SettingsHeader title={t('settings.tabAppearance')} />
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+        <Text style={[styles.groupTitle, { color: colors.textMuted }]}>
+          {t('settings.tabAppearance').toUpperCase()}
+        </Text>
+        <View style={[styles.card, { backgroundColor: colors.surface }]}>
+          {themes.map(({ key, icon: Icon, label }) => {
+            const active = theme === key
+            return (
+              <Pressable
+                key={key}
                 style={[
-                  styles.iconCircle,
-                  { backgroundColor: active ? `${colors.primary}15` : colors.inputBackground },
+                  styles.themeRow,
+                  { borderBottomColor: colors.border },
+                  key === 'system' && { borderBottomWidth: 0 },
                 ]}
+                onPress={() => setTheme(key)}
               >
-                <Icon size={18} color={active ? colors.primary : colors.textMuted} />
-              </View>
-              <Text style={[styles.label, { color: active ? colors.primary : colors.text }]}>
-                {label}
-              </Text>
-              {active && <Check size={18} color={colors.primary} />}
-            </Pressable>
-          )
-        })}
-      </View>
-    </ScrollView>
+                <View
+                  style={[
+                    styles.iconCircle,
+                    { backgroundColor: active ? `${colors.primary}15` : colors.inputBackground },
+                  ]}
+                >
+                  <Icon size={18} color={active ? colors.primary : colors.textMuted} />
+                </View>
+                <Text style={[styles.label, { color: active ? colors.primary : colors.text }]}>
+                  {label}
+                </Text>
+                {active && <Check size={18} color={colors.primary} />}
+              </Pressable>
+            )
+          })}
+        </View>
+      </ScrollView>
+    </View>
   )
 }
 

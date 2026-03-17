@@ -416,7 +416,9 @@ export default function WorkspaceScreen() {
           <Pressable
             onPress={() => {
               const prev = folderPath[folderPath.length - 2]
-              navigateToFolder(prev.id, prev.name)
+              if (prev) {
+                navigateToFolder(prev.id, prev.name)
+              }
             }}
             style={styles.toolBtn}
           >

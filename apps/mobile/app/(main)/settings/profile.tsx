@@ -1,6 +1,5 @@
-import { useNavigation } from 'expo-router'
 import { Save } from 'lucide-react-native'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ActivityIndicator,
@@ -14,6 +13,7 @@ import {
 import { Avatar } from '../../../src/components/common/avatar'
 import { AvatarEditor } from '../../../src/components/common/avatar-editor'
 import { LanguageSwitcher } from '../../../src/components/common/language-switcher'
+import { SettingsHeader } from '../../../src/components/common/settings-header'
 import { fetchApi } from '../../../src/lib/api'
 import { useAuthStore } from '../../../src/stores/auth.store'
 import { fontSize, radius, spacing, useColors } from '../../../src/theme'
@@ -21,7 +21,6 @@ import { fontSize, radius, spacing, useColors } from '../../../src/theme'
 export default function ProfileSettingsScreen() {
   const { t } = useTranslation()
   const colors = useColors()
-  const navigation = useNavigation()
   const { user, setUser } = useAuthStore()
   const [displayName, setDisplayName] = useState(user?.displayName ?? '')
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl ?? '')
@@ -54,93 +53,91 @@ export default function ProfileSettingsScreen() {
     }
   }
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: handleSave reads state directly
-  useEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <Pressable onPress={handleSave} disabled={saving} hitSlop={8}>
-          {saving ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : (
-            <Save size={22} color={colors.primary} />
-          )}
-        </Pressable>
-      ),
-    })
-  }, [navigation, saving, colors.primary, displayName, avatarUrl])
-
   if (!user) return null
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.content}
-    >
-      {/* Avatar */}
-      <View style={[styles.card, { backgroundColor: colors.surface }]}>
-        <Text style={[styles.label, { color: colors.textSecondary }]}>
-          {t('settings.avatarLabel')}
-        </Text>
-        <View style={styles.avatarRow}>
-          <Avatar
-            uri={avatarUrl || user.avatarUrl}
-            name={user.displayName || user.username}
-            size={72}
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SettingsHeader
+        title={t('settings.tabProfile')}
+        right={
+          <Pressable onPress={handleSave} disabled={saving} hitSlop={8}>
+            {saving ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Save size={22} color={colors.primary} />
+            )}
+          </Pressable>
+        }
+      />
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+        {/* Avatar */}
+        <View style={[styles.card, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>
+            {t('settings.avatarLabel')}
+          </Text>
+          <View style={styles.avatarRow}>
+            <Avatar
+              uri={avatarUrl || user.avatarUrl}
+              name={user.displayName || user.username}
+              size={72}
+              userId={user.id}
+            />
+          </View>
+          <AvatarEditor
+            value={avatarUrl || user.avatarUrl}
             userId={user.id}
+            onChange={setAvatarUrl}
           />
         </View>
-        <AvatarEditor
-          value={avatarUrl || user.avatarUrl}
-          userId={user.id}
-          onChange={setAvatarUrl}
-        />
-      </View>
 
-      {/* Display name */}
-      <View style={[styles.card, { backgroundColor: colors.surface }]}>
-        <Text style={[styles.label, { color: colors.textSecondary }]}>
-          {t('settings.displayNameLabel')}
-        </Text>
-        <TextInput
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.inputBackground,
-              color: colors.text,
-              borderColor: colors.border,
-            },
-          ]}
-          value={displayName}
-          onChangeText={setDisplayName}
-          placeholder={user.username}
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
+        {/* Display name */}
+        <View style={[styles.card, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>
+            {t('settings.displayNameLabel')}
+          </Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.inputBackground,
+                color: colors.text,
+                borderColor: colors.border,
+              },
+            ]}
+            value={displayName}
+            onChangeText={setDisplayName}
+            placeholder={user.username}
+            placeholderTextColor={colors.textMuted}
+          />
+        </View>
 
-      {/* Language */}
-      <View style={[styles.card, { backgroundColor: colors.surface }]}>
-        <Text style={[styles.label, { color: colors.textSecondary }]}>
-          {t('settings.languageLabel')}
-        </Text>
-        <LanguageSwitcher />
-      </View>
+        {/* Language */}
+        <View style={[styles.card, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>
+            {t('settings.languageLabel')}
+          </Text>
+          <LanguageSwitcher />
+        </View>
 
-      {message ? (
-        <Text
-          style={{
-            color:
-              message.includes('成功') || message.includes('success') || message.includes('Success')
-                ? '#23a559'
-                : '#f23f43',
-            fontSize: fontSize.sm,
-            marginTop: spacing.sm,
-            textAlign: 'center',
-          }}
-        >
-          {message}
-        </Text>
-      ) : null}
-    </ScrollView>
+        {message ? (
+          <Text
+            style={{
+              color:
+                message.includes('成功') ||
+                message.includes('success') ||
+                message.includes('Success')
+                  ? '#23a559'
+                  : '#f23f43',
+              fontSize: fontSize.sm,
+              marginTop: spacing.sm,
+              textAlign: 'center',
+            }}
+          >
+            {message}
+          </Text>
+        ) : null}
+      </ScrollView>
+    </View>
   )
 }
 
