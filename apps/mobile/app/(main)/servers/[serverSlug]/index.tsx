@@ -18,7 +18,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Animated,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -27,6 +29,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import Reanimated, { FadeIn, FadeInDown, Layout, ZoomIn } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   AgentCatSvg,
@@ -335,56 +338,64 @@ export default function ServerHomeScreen() {
         {/* ── Horizontal 1x4 Actions ────────────────────── */}
         <View style={styles.actionRow}>
           {/* Workspace */}
-          <SquishyCard
-            style={styles.actionItem}
-            onPress={() => router.push(`/(main)/servers/${serverSlug}/workspace` as any)}
-          >
-            <LinearGradient colors={['#3B82F6', '#60A5FA']} style={styles.actionBubbleGlow}>
-              <WorkCatSvg width={40} height={40} />
-            </LinearGradient>
-            <Text style={[styles.actionLabel, { color: colors.textSecondary }]}>
-              {t('server.workspace')}
-            </Text>
-          </SquishyCard>
+          <Reanimated.View entering={FadeInDown.delay(100).springify()}>
+            <SquishyCard
+              style={styles.actionItem}
+              onPress={() => router.push(`/(main)/servers/${serverSlug}/workspace` as any)}
+            >
+              <LinearGradient colors={['#3B82F6', '#60A5FA']} style={styles.actionBubbleGlow}>
+                <WorkCatSvg width={40} height={40} />
+              </LinearGradient>
+              <Text style={[styles.actionLabel, { color: colors.textSecondary }]}>
+                {t('server.workspace')}
+              </Text>
+            </SquishyCard>
+          </Reanimated.View>
 
           {/* Shop */}
-          <SquishyCard
-            style={styles.actionItem}
-            onPress={() => router.push(`/(main)/servers/${serverSlug}/shop` as any)}
-          >
-            <LinearGradient colors={['#F59E0B', '#FBBF24']} style={styles.actionBubbleGlow}>
-              <ShopCatSvg width={40} height={40} />
-            </LinearGradient>
-            <Text style={[styles.actionLabel, { color: colors.textSecondary }]}>
-              {t('server.shop')}
-            </Text>
-          </SquishyCard>
+          <Reanimated.View entering={FadeInDown.delay(200).springify()}>
+            <SquishyCard
+              style={styles.actionItem}
+              onPress={() => router.push(`/(main)/servers/${serverSlug}/shop` as any)}
+            >
+              <LinearGradient colors={['#F59E0B', '#FBBF24']} style={styles.actionBubbleGlow}>
+                <ShopCatSvg width={40} height={40} />
+              </LinearGradient>
+              <Text style={[styles.actionLabel, { color: colors.textSecondary }]}>
+                {t('server.shop')}
+              </Text>
+            </SquishyCard>
+          </Reanimated.View>
 
           {/* Apps */}
-          <SquishyCard
-            style={styles.actionItem}
-            onPress={() => router.push(`/(main)/servers/${serverSlug}/apps` as any)}
-          >
-            <LinearGradient colors={['#10B981', '#34D399']} style={styles.actionBubbleGlow}>
-              <ChannelCatSvg width={40} height={40} style={{ transform: [{ scale: 1.1 }] }} />
-            </LinearGradient>
-            <Text style={[styles.actionLabel, { color: colors.textSecondary }]}>
-              {t('server.apps')}
-            </Text>
-          </SquishyCard>
+          <Reanimated.View entering={FadeInDown.delay(300).springify()}>
+            <SquishyCard
+              style={styles.actionItem}
+              onPress={() => router.push(`/(main)/servers/${serverSlug}/apps` as any)}
+            >
+              <LinearGradient colors={['#10B981', '#34D399']} style={styles.actionBubbleGlow}>
+                <ChannelCatSvg width={40} height={40} style={{ transform: [{ scale: 1.1 }] }} />
+              </LinearGradient>
+              <Text style={[styles.actionLabel, { color: colors.textSecondary }]}>
+                {t('server.apps')}
+              </Text>
+            </SquishyCard>
+          </Reanimated.View>
 
           {/* Members */}
-          <SquishyCard
-            style={styles.actionItem}
-            onPress={() => router.push(`/(main)/servers/${serverSlug}/members` as any)}
-          >
-            <LinearGradient colors={['#EF4444', '#F87171']} style={styles.actionBubbleGlow}>
-              <AgentCatSvg width={40} height={40} />
-            </LinearGradient>
-            <Text style={[styles.actionLabel, { color: colors.textSecondary }]}>
-              {t('server.members')}
-            </Text>
-          </SquishyCard>
+          <Reanimated.View entering={FadeInDown.delay(400).springify()}>
+            <SquishyCard
+              style={styles.actionItem}
+              onPress={() => router.push(`/(main)/servers/${serverSlug}/members` as any)}
+            >
+              <LinearGradient colors={['#EF4444', '#F87171']} style={styles.actionBubbleGlow}>
+                <AgentCatSvg width={40} height={40} />
+              </LinearGradient>
+              <Text style={[styles.actionLabel, { color: colors.textSecondary }]}>
+                {t('server.members')}
+              </Text>
+            </SquishyCard>
+          </Reanimated.View>
         </View>
 
         {/* ── Channels Header ─────────────────────────── */}
@@ -444,9 +455,10 @@ export default function ServerHomeScreen() {
 
         {/* ── Channel Bubbles ─────────────────────────── */}
         <View style={styles.channelsList}>
-          {filteredGroups.map((group) => (
-            <View
+          {filteredGroups.map((group, groupIndex) => (
+            <Reanimated.View
               key={group.category?.id ?? 'uncategorized'}
+              entering={FadeInDown.delay(500 + groupIndex * 100).springify()}
               style={[styles.categoryBubble, glassCardStyle]}
             >
               {group.category && (
@@ -502,11 +514,14 @@ export default function ServerHomeScreen() {
                   ))}
                 </View>
               )}
-            </View>
+            </Reanimated.View>
           ))}
 
           {channels.length === 0 && (
-            <View style={[styles.emptyChannels, glassCardStyle]}>
+            <Reanimated.View
+              entering={FadeInDown.delay(500).springify()}
+              style={[styles.emptyChannels, glassCardStyle]}
+            >
               <ChannelCatSvg width={80} height={80} />
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                 {t('server.noChannels')}
@@ -519,14 +534,17 @@ export default function ServerHomeScreen() {
                   </LinearGradient>
                 </SquishyCard>
               )}
-            </View>
+            </Reanimated.View>
           )}
         </View>
       </ScrollView>
 
       {/* ── Create Channel Modal ──────────────────── */}
       <Modal visible={showCreateChannel} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
           <View
             style={[
               styles.modalContent,
@@ -666,7 +684,7 @@ export default function ServerHomeScreen() {
               </LinearGradient>
             </SquishyCard>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </DottedBackground>
   )

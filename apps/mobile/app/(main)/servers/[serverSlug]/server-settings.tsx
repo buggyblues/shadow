@@ -17,6 +17,7 @@ import {
   View,
 } from 'react-native'
 import { Avatar } from '../../../../src/components/common/avatar'
+import { DottedBackground } from '../../../../src/components/common/dotted-background'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
 import { fetchApi, getImageUrl } from '../../../../src/lib/api'
 import { showToast } from '../../../../src/lib/toast'
@@ -175,167 +176,177 @@ export default function ServerSettingsScreen() {
 
   if (isLoading || !server) return <LoadingScreen />
 
+  const glassCardStyle = {
+    backgroundColor: `${colors.surface}E6`,
+    borderColor: colors.border,
+    borderWidth: 2,
+    borderRadius: 24,
+  }
+
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.content}
-    >
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('server.settings')}</Text>
+    <DottedBackground>
+      <ScrollView style={[styles.container]} contentContainerStyle={styles.content}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('server.settings')}</Text>
 
-      {/* Banner */}
-      {isOwner && (
-        <View style={styles.bannerSection}>
-          <Pressable
-            onPress={() => pickAndUploadImage([3, 1], setUploadingBanner, setBannerUrl)}
-            style={[styles.bannerWrap, { backgroundColor: colors.inputBackground }]}
-          >
-            {bannerUrl ? (
-              <Image
-                source={{ uri: getImageUrl(bannerUrl) ?? undefined }}
-                style={styles.bannerImage}
-                contentFit="cover"
-              />
-            ) : null}
-            <View style={styles.bannerOverlay}>
-              {uploadingBanner ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Camera size={20} color="#fff" />
-                  <Text style={styles.bannerOverlayText}>
-                    {bannerUrl ? t('server.changeBanner') : t('server.addBanner')}
-                  </Text>
-                </>
-              )}
-            </View>
-          </Pressable>
-        </View>
-      )}
+        {/* Banner */}
+        {isOwner && (
+          <View style={[styles.bannerSection, glassCardStyle, { overflow: 'hidden', padding: 0 }]}>
+            <Pressable
+              onPress={() => pickAndUploadImage([3, 1], setUploadingBanner, setBannerUrl)}
+              style={[styles.bannerWrap, { backgroundColor: colors.inputBackground }]}
+            >
+              {bannerUrl ? (
+                <Image
+                  source={{ uri: getImageUrl(bannerUrl) ?? undefined }}
+                  style={styles.bannerImage}
+                  contentFit="cover"
+                />
+              ) : null}
+              <View style={styles.bannerOverlay}>
+                {uploadingBanner ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Camera size={20} color="#fff" />
+                    <Text style={styles.bannerOverlayText}>
+                      {bannerUrl ? t('server.changeBanner') : t('server.addBanner')}
+                    </Text>
+                  </>
+                )}
+              </View>
+            </Pressable>
+          </View>
+        )}
 
-      {/* Icon */}
-      {isOwner && (
-        <View style={styles.iconSection}>
-          <Pressable
-            onPress={() => pickAndUploadImage([1, 1], setUploadingIcon, setIconUrl)}
-            style={styles.iconWrap}
-          >
-            <Avatar uri={iconUrl} name={name} size={72} userId={server.id} />
-            <View style={styles.iconOverlay}>
-              {uploadingIcon ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Camera size={16} color="#fff" />
-              )}
-            </View>
-          </Pressable>
-          <Text style={[styles.iconHint, { color: colors.textMuted }]}>
-            {t('server.changeIcon')}
-          </Text>
-        </View>
-      )}
+        {/* Icon */}
+        {isOwner && (
+          <View style={styles.iconSection}>
+            <Pressable
+              onPress={() => pickAndUploadImage([1, 1], setUploadingIcon, setIconUrl)}
+              style={styles.iconWrap}
+            >
+              <Avatar uri={iconUrl} name={name} size={72} userId={server.id} />
+              <View style={styles.iconOverlay}>
+                {uploadingIcon ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Camera size={16} color="#fff" />
+                )}
+              </View>
+            </Pressable>
+            <Text style={[styles.iconHint, { color: colors.textMuted }]}>
+              {t('server.changeIcon')}
+            </Text>
+          </View>
+        )}
 
-      <Text style={[styles.label, { color: colors.textSecondary }]}>{t('server.nameLabel')}</Text>
-      <TextInput
-        style={[
-          styles.input,
-          {
-            backgroundColor: colors.inputBackground,
-            color: colors.text,
-            borderColor: colors.border,
-          },
-        ]}
-        value={name}
-        onChangeText={setName}
-        editable={isOwner}
-      />
+        <Text style={[styles.label, { color: colors.textSecondary }]}>{t('server.nameLabel')}</Text>
+        <TextInput
+          style={[
+            styles.input,
+            glassCardStyle,
+            {
+              backgroundColor: colors.inputBackground,
+              color: colors.text,
+              borderColor: colors.border,
+            },
+          ]}
+          value={name}
+          onChangeText={setName}
+          editable={isOwner}
+        />
 
-      <Text style={[styles.label, { color: colors.textSecondary }]}>
-        {t('server.descriptionLabel')}
-      </Text>
-      <TextInput
-        style={[
-          styles.input,
-          styles.textArea,
-          {
-            backgroundColor: colors.inputBackground,
-            color: colors.text,
-            borderColor: colors.border,
-          },
-        ]}
-        value={description}
-        onChangeText={setDescription}
-        multiline
-        numberOfLines={4}
-        editable={isOwner}
-        placeholder={t('server.descriptionPlaceholder')}
-        placeholderTextColor={colors.textMuted}
-      />
+        <Text style={[styles.label, { color: colors.textSecondary }]}>
+          {t('server.descriptionLabel')}
+        </Text>
+        <TextInput
+          style={[
+            styles.input,
+            styles.textArea,
+            glassCardStyle,
+            {
+              backgroundColor: colors.inputBackground,
+              color: colors.text,
+              borderColor: colors.border,
+            },
+          ]}
+          value={description}
+          onChangeText={setDescription}
+          multiline
+          numberOfLines={4}
+          editable={isOwner}
+          placeholder={t('server.descriptionPlaceholder')}
+          placeholderTextColor={colors.textMuted}
+        />
 
-      {/* Server info */}
-      <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
-        <View style={styles.infoRow}>
-          <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
-            {t('server.idLabel')}
-          </Text>
-          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontFamily: 'monospace' }}>
-            {server.id}
-          </Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
-            {t('server.slugLabel')}
-          </Text>
-          <Text style={{ color: colors.text }}>{server.slug ?? '-'}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
-            {t('server.publicStatus')}
-          </Text>
-          <Text style={{ color: colors.text }}>
-            {server.isPublic ? t('common.yes') : t('common.no')}
-          </Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
-            {t('server.inviteCode')}
-          </Text>
-          <Pressable
-            style={styles.inviteCodeRow}
-            onPress={() => {
-              Clipboard.setStringAsync(server.inviteCode)
-              showToast(t('common.copied'), 'success')
-            }}
-          >
+        {/* Server info */}
+        <View style={[styles.infoCard, glassCardStyle, { backgroundColor: colors.surface }]}>
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
+              {t('server.idLabel')}
+            </Text>
             <Text
-              style={{
-                color: colors.text,
-                fontSize: fontSize.sm,
-                fontFamily: 'monospace',
-                fontWeight: '600',
+              style={{ color: colors.textMuted, fontSize: fontSize.xs, fontFamily: 'monospace' }}
+            >
+              {server.id}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
+              {t('server.slugLabel')}
+            </Text>
+            <Text style={{ color: colors.text }}>{server.slug ?? '-'}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
+              {t('server.publicStatus')}
+            </Text>
+            <Text style={{ color: colors.text }}>
+              {server.isPublic ? t('common.yes') : t('common.no')}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
+              {t('server.inviteCode')}
+            </Text>
+            <Pressable
+              style={styles.inviteCodeRow}
+              onPress={() => {
+                Clipboard.setStringAsync(server.inviteCode)
+                showToast(t('common.copied'), 'success')
               }}
             >
-              {server.inviteCode}
-            </Text>
-            <Copy size={14} color={colors.textMuted} />
-          </Pressable>
+              <Text
+                style={{
+                  color: colors.text,
+                  fontSize: fontSize.sm,
+                  fontFamily: 'monospace',
+                  fontWeight: '600',
+                }}
+              >
+                {server.inviteCode}
+              </Text>
+              <Copy size={14} color={colors.textMuted} />
+            </Pressable>
+          </View>
         </View>
-      </View>
 
-      {/* Danger zone */}
-      <View style={[styles.dangerZone, { borderColor: '#f23f43' + '30' }]}>
-        {!isOwner && (
-          <Pressable style={styles.dangerBtn} onPress={handleLeave}>
-            <Text style={{ color: '#f23f43', fontWeight: '700' }}>{t('server.leave')}</Text>
-          </Pressable>
-        )}
-        {isOwner && (
-          <Pressable style={styles.dangerBtn} onPress={handleDeleteServer}>
-            <Trash2 size={16} color="#f23f43" />
-            <Text style={{ color: '#f23f43', fontWeight: '700' }}>{t('server.delete')}</Text>
-          </Pressable>
-        )}
-      </View>
-    </ScrollView>
+        {/* Danger zone */}
+        <View style={[styles.dangerZone, { borderColor: '#f23f43' + '30' }]}>
+          {!isOwner && (
+            <Pressable style={styles.dangerBtn} onPress={handleLeave}>
+              <Text style={{ color: '#f23f43', fontWeight: '700' }}>{t('server.leave')}</Text>
+            </Pressable>
+          )}
+          {isOwner && (
+            <Pressable style={styles.dangerBtn} onPress={handleDeleteServer}>
+              <Trash2 size={16} color="#f23f43" />
+              <Text style={{ color: '#f23f43', fontWeight: '700' }}>{t('server.delete')}</Text>
+            </Pressable>
+          )}
+        </View>
+      </ScrollView>
+    </DottedBackground>
   )
 }
 

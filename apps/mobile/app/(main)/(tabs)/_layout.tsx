@@ -1,14 +1,18 @@
+import { Image } from 'expo-image'
 import { Tabs, useRouter } from 'expo-router'
 import { Bot, Compass, MessageSquare, Plus, User } from 'lucide-react-native'
 import { useTranslation } from 'react-i18next'
 import { HeaderButton, HeaderButtonGroup } from '../../../src/components/common/header-button'
 import { NotificationBell } from '../../../src/components/notification/notification-bell'
+import { getImageUrl } from '../../../src/lib/api'
+import { useAuthStore } from '../../../src/stores/auth.store'
 import { useColors } from '../../../src/theme'
 
 export default function TabsLayout() {
   const { t } = useTranslation()
   const colors = useColors()
   const router = useRouter()
+  const currentUser = useAuthStore((s) => s.user)
 
   return (
     <Tabs
@@ -37,7 +41,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: t('nav.community', '社区'),
+          title: '主页',
           tabBarIcon: ({ color }) => <MessageSquare size={24} color={color} />,
           headerLeft: () => (
             <HeaderButtonGroup>
@@ -54,22 +58,39 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="buddies"
         options={{
-          title: 'Buddy',
+          title: 'Buddy 市集',
           tabBarIcon: ({ color }) => <Bot size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="discover"
         options={{
-          title: t('discover.title', '发现'),
+          title: '发现',
           tabBarIcon: ({ color }) => <Compass size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
-          title: t('nav.me', '我'),
-          tabBarIcon: ({ color }) => <User size={24} color={color} />,
+          title: '你',
+          tabBarIcon: ({ color }) => {
+            if (currentUser?.avatarUrl) {
+              return (
+                <Image
+                  source={{ uri: getImageUrl(currentUser.avatarUrl) }}
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: color,
+                  }}
+                  contentFit="cover"
+                />
+              )
+            }
+            return <User size={24} color={color} />
+          },
         }}
       />
     </Tabs>

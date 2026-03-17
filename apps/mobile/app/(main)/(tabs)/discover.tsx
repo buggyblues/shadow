@@ -5,6 +5,8 @@ import { Search, Shield } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import Reanimated, { FadeInDown } from 'react-native-reanimated'
+import { DottedBackground } from '../../../src/components/common/dotted-background'
 import { EmptyState } from '../../../src/components/common/empty-state'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { fetchApi, getImageUrl } from '../../../src/lib/api'
@@ -86,119 +88,138 @@ export default function DiscoverScreen() {
 
   if (isLoading) return <LoadingScreen />
 
+  const glassCardStyle = {
+    backgroundColor: `${colors.surface}E6`,
+    borderColor: colors.border,
+    borderWidth: 2,
+    borderRadius: 24,
+  }
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Search */}
-      <View
-        style={[
-          styles.searchContainer,
-          { backgroundColor: colors.surface, borderBottomColor: colors.border },
-        ]}
-      >
-        <View style={[styles.searchBox, { backgroundColor: colors.inputBackground }]}>
-          <Search size={18} color={colors.textMuted} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
-            value={search}
-            onChangeText={setSearch}
-            placeholder={t('discover.searchPlaceholder')}
-            placeholderTextColor={colors.textMuted}
-          />
+    <DottedBackground>
+      <View style={[styles.container]}>
+        {/* Search */}
+        <View style={[styles.searchContainer]}>
+          <View style={[styles.searchBox, glassCardStyle, { backgroundColor: colors.surface }]}>
+            <Search size={18} color={colors.textMuted} />
+            <TextInput
+              style={[styles.searchInput, { color: colors.text }]}
+              value={search}
+              onChangeText={setSearch}
+              placeholder={t('discover.searchPlaceholder')}
+              placeholderTextColor={colors.textMuted}
+            />
+          </View>
         </View>
-      </View>
 
-      {filtered.length === 0 ? (
-        <EmptyState icon="🔍" title={t('discover.noServers')} />
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => {
-            const isJoined = joinedServerIds.has(item.id)
-            return (
-              <Pressable
-                style={[styles.card, { backgroundColor: colors.surface }]}
-                onPress={() => {
-                  if (isJoined) {
-                    router.push(`/(main)/servers/${item.slug ?? item.id}`)
-                  }
-                }}
-              >
-                {/* Banner */}
-                <View style={[styles.banner, { backgroundColor: `${colors.primary}20` }]}>
-                  {item.bannerUrl && (
-                    <Image
-                      source={{ uri: getImageUrl(item.bannerUrl)! }}
-                      style={StyleSheet.absoluteFill}
-                      contentFit="cover"
-                    />
-                  )}
-                  {item.isPublic && (
-                    <View style={styles.publicBadge}>
-                      <Shield size={10} color="#fff" />
-                      <Text style={styles.publicText}>{t('discover.public')}</Text>
+        {filtered.length === 0 ? (
+          <EmptyState icon="🔍" title={t('discover.noServers')} />
+        ) : (
+          <FlatList
+            data={filtered}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.list}
+            renderItem={({ item, index }) => {
+              const isJoined = joinedServerIds.has(item.id)
+              return (
+                <Reanimated.View entering={FadeInDown.delay(index * 100).springify()}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.card,
+                      glassCardStyle,
+                      {
+                        backgroundColor: colors.surface,
+                        transform: [{ scale: pressed ? 0.96 : 1 }],
+                      },
+                    ]}
+                    onPress={() => {
+                      if (isJoined) {
+                        router.push(`/(main)/servers/${item.slug ?? item.id}`)
+                      }
+                    }}
+                  >
+                    {/* Banner */}
+                    <View style={[styles.banner, { backgroundColor: `${colors.primary}20` }]}>
+                      {item.bannerUrl && (
+                        <Image
+                          source={{ uri: getImageUrl(item.bannerUrl)! }}
+                          style={StyleSheet.absoluteFill}
+                          contentFit="cover"
+                        />
+                      )}
+                      {item.isPublic && (
+                        <View style={styles.publicBadge}>
+                          <Shield size={10} color="#fff" />
+                          <Text style={styles.publicText}>{t('discover.public')}</Text>
+                        </View>
+                      )}
                     </View>
-                  )}
-                </View>
 
-                {/* Icon overlay */}
-                <View style={[styles.iconWrap, { backgroundColor: colors.surface }]}>
-                  {item.iconUrl ? (
-                    <Image
-                      source={{ uri: getImageUrl(item.iconUrl)! }}
-                      style={styles.icon}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <Text style={styles.iconFallback}>{item.name.charAt(0)}</Text>
-                  )}
-                </View>
+                    {/* Icon overlay */}
+                    <View style={[styles.iconWrap, { backgroundColor: colors.surface }]}>
+                      {item.iconUrl ? (
+                        <Image
+                          source={{ uri: getImageUrl(item.iconUrl)! }}
+                          style={styles.icon}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <Text style={styles.iconFallback}>{item.name.charAt(0)}</Text>
+                      )}
+                    </View>
 
-                <View style={styles.cardBody}>
-                  <Text style={[styles.serverName, { color: colors.text }]} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  <Text style={[styles.desc, { color: colors.textSecondary }]} numberOfLines={2}>
-                    {item.description ?? t('discover.noDescription')}
-                  </Text>
-
-                  <View style={styles.cardFooter}>
-                    <View style={styles.memberInfo}>
-                      <View style={[styles.onlineDot, { backgroundColor: '#23a559' }]} />
-                      <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                        {item.memberCount} {t('discover.members')}
+                    <View style={styles.cardBody}>
+                      <Text style={[styles.serverName, { color: colors.text }]} numberOfLines={1}>
+                        {item.name}
                       </Text>
-                    </View>
+                      <Text
+                        style={[styles.desc, { color: colors.textSecondary }]}
+                        numberOfLines={2}
+                      >
+                        {item.description ?? t('discover.noDescription')}
+                      </Text>
 
-                    {isJoined ? (
-                      <Pressable
-                        style={[styles.joinBtn, { backgroundColor: '#23a559' }]}
-                        onPress={() => router.push(`/(main)/servers/${item.slug ?? item.id}`)}
-                      >
-                        <Text style={styles.joinBtnText}>{t('discover.enterButton')}</Text>
-                      </Pressable>
-                    ) : (
-                      <Pressable
-                        style={[styles.joinBtn, { backgroundColor: colors.primary }]}
-                        onPress={() => {
-                          if (item.inviteCode) {
-                            joinMutation.mutate({ inviteCode: item.inviteCode, serverId: item.id })
-                          }
-                        }}
-                        disabled={joinMutation.isPending}
-                      >
-                        <Text style={styles.joinBtnText}>{t('discover.joinButton')}</Text>
-                      </Pressable>
-                    )}
-                  </View>
-                </View>
-              </Pressable>
-            )
-          }}
-        />
-      )}
-    </View>
+                      <View style={styles.cardFooter}>
+                        <View style={styles.memberInfo}>
+                          <View style={[styles.onlineDot, { backgroundColor: '#23a559' }]} />
+                          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
+                            {item.memberCount} {t('discover.members')}
+                          </Text>
+                        </View>
+
+                        {isJoined ? (
+                          <Pressable
+                            style={[styles.joinBtn, { backgroundColor: '#23a559' }]}
+                            onPress={() => router.push(`/(main)/servers/${item.slug ?? item.id}`)}
+                          >
+                            <Text style={styles.joinBtnText}>{t('discover.enterButton')}</Text>
+                          </Pressable>
+                        ) : (
+                          <Pressable
+                            style={[styles.joinBtn, { backgroundColor: colors.primary }]}
+                            onPress={() => {
+                              if (item.inviteCode) {
+                                joinMutation.mutate({
+                                  inviteCode: item.inviteCode,
+                                  serverId: item.id,
+                                })
+                              }
+                            }}
+                            disabled={joinMutation.isPending}
+                          >
+                            <Text style={styles.joinBtnText}>{t('discover.joinButton')}</Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    </View>
+                  </Pressable>
+                </Reanimated.View>
+              )
+            }}
+          />
+        )}
+      </View>
+    </DottedBackground>
   )
 }
 
