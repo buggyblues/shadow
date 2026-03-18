@@ -63,6 +63,18 @@ export default function UserProfileScreen() {
     enabled: !!userId,
   })
 
+  const { data: myFriends = [] } = useQuery({
+    queryKey: ['friends'],
+    queryFn: () => fetchApi<Array<{ user: { id: string } }>>('/api/friends'),
+    enabled: !!currentUser,
+  })
+
+  const { data: sentRequests = [] } = useQuery({
+    queryKey: ['friends-sent'],
+    queryFn: () => fetchApi<Array<{ user: { id: string } }>>('/api/friends/sent'),
+    enabled: !!currentUser,
+  })
+
   const sendFriendRequest = useMutation({
     mutationFn: () =>
       fetchApi('/api/friends/request', {
@@ -81,6 +93,9 @@ export default function UserProfileScreen() {
   if (isLoading || !profile) return <LoadingScreen />
 
   const isSelf = Boolean(currentUser?.id && profile.id === currentUser.id)
+  const isFriend = myFriends.some((item) => item.user.id === profile.id)
+  const isRequestSent = sentRequests.some((item) => item.user.id === profile.id)
+  const addFriendDisabled = sendFriendRequest.isPending || isFriend || isRequestSent
 
   const statusColors: Record<string, string> = {
     online: '#22c55e',
@@ -127,15 +142,32 @@ export default function UserProfileScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.addFriendBtn,
-              { backgroundColor: pressed ? `${colors.primary}DD` : colors.primary },
+              {
+                backgroundColor:
+                  isFriend || isRequestSent
+                    ? colors.inputBackground
+                    : pressed
+                      ? `${colors.primary}DD`
+                      : colors.primary,
+              },
+              (isFriend || isRequestSent) && { borderWidth: 1, borderColor: colors.border },
             ]}
-            disabled={sendFriendRequest.isPending}
+            disabled={addFriendDisabled}
             onPress={() => sendFriendRequest.mutate()}
           >
-            <Text style={styles.addFriendText}>
+            <Text
+              style={[
+                styles.addFriendText,
+                (isFriend || isRequestSent) && { color: colors.textSecondary },
+              ]}
+            >
               {sendFriendRequest.isPending
                 ? t('common.saving', '处理中...')
-                : t('friends.addFriend', '添加好友')}
+                : isFriend
+                  ? t('friends.alreadyFriend', '已是好友')
+                  : isRequestSent
+                    ? t('friends.requestPending', '等待对方接受')
+                    : t('friends.addFriend', '添加好友')}
             </Text>
           </Pressable>
         )}

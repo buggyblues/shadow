@@ -38,6 +38,9 @@ import { Avatar } from '../../../src/components/common/avatar'
 import {
   AgentCatSvg,
   ChannelCatSvg,
+  HelpBuddySvg,
+  HelpProductSvg,
+  HelpStartSvg,
   TabHomeSvg,
   WorkCatSvg,
 } from '../../../src/components/common/cat-svg'
@@ -540,7 +543,7 @@ export default function ServersScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Comic Tutorial Modal */}
+      {/* Product Tutorial Modal */}
       <Modal
         visible={showHelpTutorial}
         animationType="fade"
@@ -575,28 +578,30 @@ export default function ServersScreen() {
               }}
             >
               <View style={[styles.tutorialPage, { width: tutorialWidth - spacing.xl * 2 }]}>
-                <TabHomeSvg size={80} color={colors.primary} />
+                <HelpProductSvg size={88} color={colors.primary} />
                 <Text style={[styles.tutorialPageTitle, { color: colors.text }]}>
-                  欢迎来到 Shadow
+                  超萌可爱的界面下
                 </Text>
                 <Text style={[styles.tutorialPageDesc, { color: colors.textMuted }]}>
-                  在这里你可以建立专属猫猫频道，或者寻找志同道合的好友圈！
+                  隐藏着硬核的生产力工具！在这里你可以拥有自己的 AI 社区、店铺和工作区。
                 </Text>
               </View>
               <View style={[styles.tutorialPage, { width: tutorialWidth - spacing.xl * 2 }]}>
-                <AgentCatSvg width={80} height={80} />
-                <Text style={[styles.tutorialPageTitle, { color: colors.text }]}>强大的 Buddy</Text>
+                <HelpBuddySvg size={88} color="#f59e0b" />
+                <Text style={[styles.tutorialPageTitle, { color: colors.text }]}>
+                  黑猫打工仔 Buddy
+                </Text>
                 <Text style={[styles.tutorialPageDesc, { color: colors.textMuted }]}>
-                  去发掘丰富的服务器和神奇的喵星应用，让聊天更有趣！
+                  多 Agent 小助手 24 小时在线协作，写代码、审方案、查资料，持续输出生产力。
                 </Text>
               </View>
               <View style={[styles.tutorialPage, { width: tutorialWidth - spacing.xl * 2 }]}>
-                <ChannelCatSvg width={80} height={80} />
+                <HelpStartSvg size={88} color="#3b82f6" />
                 <Text style={[styles.tutorialPageTitle, { color: colors.text }]}>
-                  开始奇妙之旅吧
+                  超级个体就玩超级社区
                 </Text>
                 <Text style={[styles.tutorialPageDesc, { color: colors.textMuted }]}>
-                  点击右上角的加号创建一个服务器，现在就邀请小伙伴鸭！
+                  点击右上角 + 创建服务器，开始搭建你的频道、工作流与社群协作空间。
                 </Text>
               </View>
             </ScrollView>

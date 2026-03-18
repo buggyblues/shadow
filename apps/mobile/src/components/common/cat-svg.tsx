@@ -299,7 +299,6 @@ export function TabBellSvg({
   focused?: boolean
 }) {
   const rotate = useSharedValue(0)
-  const dotScale = useSharedValue(focused ? 1 : 0)
 
   useEffect(() => {
     if (focused) {
@@ -310,19 +309,13 @@ export function TabBellSvg({
         withTiming(6, { duration: 80 }),
         withTiming(0, { duration: 70 }),
       )
-      dotScale.value = withSpring(1, { damping: 10, stiffness: 180 })
       return
     }
     rotate.value = withTiming(0, { duration: 150 })
-    dotScale.value = withTiming(0, { duration: 120 })
-  }, [focused, rotate, dotScale])
+  }, [focused, rotate])
 
   const bellAnimatedProps = useAnimatedProps(() => ({
     transform: `rotate(${rotate.value} 12 12)`,
-  }))
-
-  const dotAnimatedProps = useAnimatedProps(() => ({
-    r: 2.6 * dotScale.value,
   }))
 
   return (
@@ -343,7 +336,108 @@ export function TabBellSvg({
         strokeWidth="1.8"
         strokeLinecap="round"
       />
-      <AnimatedCircle animatedProps={dotAnimatedProps} cx="17.5" cy="6" fill="#ef4444" />
+    </Svg>
+  )
+}
+
+export function HelpProductSvg({
+  size = 96,
+  color = '#22d3ee',
+}: {
+  size?: number
+  color?: string
+}) {
+  return (
+    <Svg viewBox="0 0 120 120" width={size} height={size}>
+      <Rect
+        x="10"
+        y="22"
+        width="100"
+        height="70"
+        rx="18"
+        fill="none"
+        stroke={color}
+        strokeWidth="4"
+      />
+      <Path d="M42 22L33 8 52 18" fill={color} fillOpacity="0.9" />
+      <Path d="M78 22L87 8 68 18" fill={color} fillOpacity="0.9" />
+      <Circle cx="46" cy="52" r="5" fill={color} />
+      <Circle cx="74" cy="52" r="5" fill={color} />
+      <Ellipse cx="60" cy="62" rx="5" ry="3.5" fill={color} />
+      <Path
+        d="M48 72Q60 82 72 72"
+        fill="none"
+        stroke={color}
+        strokeWidth="4"
+        strokeLinecap="round"
+      />
+      <Path
+        d="M48 94L60 106 72 94"
+        fill="none"
+        stroke={color}
+        strokeWidth="4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}
+
+export function HelpBuddySvg({ size = 96, color = '#f59e0b' }: { size?: number; color?: string }) {
+  return (
+    <Svg viewBox="0 0 120 120" width={size} height={size}>
+      <Rect
+        x="14"
+        y="38"
+        width="92"
+        height="64"
+        rx="16"
+        fill="none"
+        stroke={color}
+        strokeWidth="4"
+      />
+      <Path
+        d="M10 38L20 18h80l10 20"
+        fill="none"
+        stroke={color}
+        strokeWidth="4"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M10 38Q25 50 40 38Q55 50 70 38Q85 50 100 38"
+        fill="none"
+        stroke={color}
+        strokeWidth="3"
+      />
+      <Rect
+        x="52"
+        y="66"
+        width="16"
+        height="36"
+        rx="5"
+        fill="none"
+        stroke={color}
+        strokeWidth="4"
+      />
+      <Circle cx="58" cy="77" r="2.4" fill={color} />
+      <Circle cx="63.5" cy="77" r="2.4" fill={color} />
+    </Svg>
+  )
+}
+
+export function HelpStartSvg({ size = 96, color = '#3b82f6' }: { size?: number; color?: string }) {
+  return (
+    <Svg viewBox="0 0 120 120" width={size} height={size}>
+      <Circle cx="60" cy="60" r="44" fill="none" stroke={color} strokeWidth="4" />
+      <Path d="M60 22L64 34L76 38L64 42L60 54L56 42L44 38L56 34Z" fill={color} fillOpacity="0.85" />
+      <Path
+        d="M42 70L42 94L60 82L78 94L78 70"
+        fill="none"
+        stroke={color}
+        strokeWidth="4"
+        strokeLinejoin="round"
+      />
+      <Circle cx="60" cy="66" r="7" fill={color} />
     </Svg>
   )
 }

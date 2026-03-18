@@ -1,13 +1,14 @@
 import { BlurView } from 'expo-blur'
 import { Image } from 'expo-image'
 import { Tabs } from 'expo-router'
-import { StyleSheet, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import {
   TabBellSvg,
   TabBuddySvg,
   TabHomeSvg,
   TabMeSvg,
 } from '../../../src/components/common/cat-svg'
+import { useUnreadCount } from '../../../src/hooks/use-unread-count'
 import { getImageUrl } from '../../../src/lib/api'
 import { useAuthStore } from '../../../src/stores/auth.store'
 import { useUIStore } from '../../../src/stores/ui.store'
@@ -17,6 +18,7 @@ export default function TabsLayout() {
   const colors = useColors()
   const currentUser = useAuthStore((s) => s.user)
   const theme = useUIStore((s) => s.effectiveTheme)
+  const unreadCount = useUnreadCount()
 
   return (
     <Tabs
@@ -33,25 +35,26 @@ export default function TabsLayout() {
         },
         tabBarStyle: {
           position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 64,
+          bottom: 8,
+          left: 10,
+          right: 10,
+          height: 66,
           backgroundColor: theme === 'light' ? 'rgba(255,255,255,0.85)' : `${colors.surface}EE`,
           borderTopWidth: StyleSheet.hairlineWidth,
-          borderWidth: 0,
+          borderWidth: StyleSheet.hairlineWidth,
           borderColor: colors.border,
+          borderRadius: 22,
           elevation: 0,
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: theme === 'light' ? 0.05 : 0.2,
-          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: theme === 'light' ? 0.08 : 0.16,
+          shadowRadius: 10,
           paddingBottom: 6,
           paddingTop: 8,
           paddingHorizontal: 0,
         },
         tabBarBackground: () => (
-          <View style={StyleSheet.absoluteFill}>
+          <View style={[StyleSheet.absoluteFill, { borderRadius: 22, overflow: 'hidden' }]}>
             <BlurView
               tint={theme === 'light' ? 'light' : 'dark'}
               intensity={80}
@@ -89,9 +92,38 @@ export default function TabsLayout() {
         name="notifications"
         options={{
           title: '通知',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBellSvg size={26} color={color} focused={focused} />
-          ),
+          tabBarIcon: ({ color, focused }) => {
+            const hasUnread = unreadCount > 0
+            return (
+              <View
+                style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <TabBellSvg size={26} color={color} focused={focused} />
+                {hasUnread && (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: -4,
+                      right: -8,
+                      minWidth: 16,
+                      height: 16,
+                      borderRadius: 8,
+                      paddingHorizontal: 4,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: '#ef4444',
+                      borderWidth: 1,
+                      borderColor: theme === 'light' ? '#fff' : colors.surface,
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )
+          },
         }}
       />
       <Tabs.Screen
