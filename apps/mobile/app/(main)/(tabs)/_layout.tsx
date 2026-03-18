@@ -4,23 +4,47 @@ import { Tabs } from 'expo-router'
 import { Bell } from 'lucide-react-native'
 import { useEffect } from 'react'
 import { Platform, StyleSheet, View } from 'react-native'
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated'
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated'
 import { TabBuddySvg, TabHomeSvg, TabMeSvg } from '../../../src/components/common/cat-svg'
 import { getImageUrl } from '../../../src/lib/api'
 import { useAuthStore } from '../../../src/stores/auth.store'
+import { useUIStore } from '../../../src/stores/ui.store'
 import { useColors } from '../../../src/theme'
 
 function AnimatedTabIcon({ focused, children }: { focused: boolean; children: React.ReactNode }) {
   const scale = useSharedValue(1)
   const translateY = useSharedValue(0)
+  const rotate = useSharedValue(0)
 
   useEffect(() => {
-    scale.value = withSpring(focused ? 1.18 : 1, { damping: 12, stiffness: 200 })
-    translateY.value = withSpring(focused ? -2 : 0, { damping: 12, stiffness: 200 })
-  }, [focused, scale, translateY])
+    if (focused) {
+      scale.value = withSpring(1.15, { damping: 10, stiffness: 250 })
+      translateY.value = withSpring(-4, { damping: 10, stiffness: 250 })
+      rotate.value = withSequence(
+        withTiming(-0.15, { duration: 80, easing: Easing.out(Easing.ease) }),
+        withTiming(0.15, { duration: 120, easing: Easing.linear }),
+        withTiming(0, { duration: 80, easing: Easing.in(Easing.ease) }),
+      )
+    } else {
+      scale.value = withSpring(1, { damping: 12, stiffness: 200 })
+      translateY.value = withSpring(0, { damping: 12, stiffness: 200 })
+      rotate.value = withTiming(0)
+    }
+  }, [focused, scale, translateY, rotate])
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }, { translateY: translateY.value }],
+    transform: [
+      { scale: scale.value },
+      { translateY: translateY.value },
+      { rotate: `${rotate.value}rad` },
+    ],
   }))
 
   return <Animated.View style={animatedStyle}>{children}</Animated.View>
@@ -54,6 +78,7 @@ function TabIconShell({
 export default function TabsLayout() {
   const colors = useColors()
   const currentUser = useAuthStore((s) => s.user)
+  const theme = useUIStore((s) => s.effectiveTheme)
 
   return (
     <Tabs
@@ -65,30 +90,35 @@ export default function TabsLayout() {
         tabBarShowLabel: true,
         tabBarLabelStyle: {
           fontSize: 10,
-          fontWeight: '600',
+          fontWeight: '700',
+          marginTop: -4,
         },
         tabBarStyle: {
           position: 'absolute',
           bottom: Platform.OS === 'ios' ? 28 : 20,
           left: 20,
           right: 20,
-          height: 74,
-          backgroundColor: `${colors.surface}DD`, // slightly more transparent for blur
-          borderTopWidth: 2, // thicker borders
+          height: 72,
+          backgroundColor: theme === 'light' ? 'rgba(255,255,255,0.7)' : `${colors.surface}DD`,
+          borderTopWidth: 2,
           borderWidth: 2,
           borderColor: colors.border,
-          borderRadius: 37, // half of 74
+          borderRadius: 36,
           elevation: 0,
-          shadowColor: colors.primary, // cute glow effect
-          shadowOffset: { width: 0, height: 6 },
-          shadowOpacity: 0.15,
+          shadowColor: theme === 'light' ? colors.border : colors.primary,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: theme === 'light' ? 0.3 : 0.15,
           shadowRadius: 16,
           paddingBottom: 0,
           paddingHorizontal: 12,
         },
         tabBarBackground: () => (
-          <View style={[StyleSheet.absoluteFill, { overflow: 'hidden', borderRadius: 37 }]}>
-            <BlurView tint="default" intensity={80} style={StyleSheet.absoluteFill} />
+          <View style={[StyleSheet.absoluteFill, { overflow: 'hidden', borderRadius: 36 }]}>
+            <BlurView
+              tint={theme === 'light' ? 'light' : 'dark'}
+              intensity={80}
+              style={StyleSheet.absoluteFill}
+            />
           </View>
         ),
         tabBarItemStyle: {

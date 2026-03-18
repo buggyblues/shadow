@@ -1,13 +1,46 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
-import { CheckCheck } from 'lucide-react-native'
-import { useCallback } from 'react'
+import { AtSign, Bell, CheckCheck, MessageCircle, User } from 'lucide-react-native'
+import { useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
+import {
+  Animated,
+  FlatList,
+  Pressable,
+  type StyleProp,
+  StyleSheet,
+  Text,
+  View,
+  type ViewStyle,
+} from 'react-native'
+import Reanimated, { FadeInUp } from 'react-native-reanimated'
+import { DottedBackground } from '../../src/components/common/dotted-background'
+import { EmptyState } from '../../src/components/common/empty-state'
 import { LoadingScreen } from '../../src/components/common/loading-screen'
 import { useSocketEvent } from '../../src/hooks/use-socket'
 import { fetchApi } from '../../src/lib/api'
 import { fontSize, spacing, useColors } from '../../src/theme'
+
+function SquishyCard({
+  children,
+  onPress,
+  style,
+}: {
+  children: React.ReactNode
+  onPress: () => void
+  style?: StyleProp<ViewStyle>
+}) {
+  const scale = useRef(new Animated.Value(1)).current
+  return (
+    <Pressable
+      onPressIn={() => Animated.spring(scale, { toValue: 0.95, useNativeDriver: true }).start()}
+      onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()}
+      onPress={onPress}
+    >
+      <Animated.View style={[style, { transform: [{ scale }] }]}>{children}</Animated.View>
+    </Pressable>
+  )
+}
 
 interface Notification {
   id: string
@@ -100,71 +133,108 @@ export default function NotificationsScreen() {
 
   if (isLoading) return <LoadingScreen />
 
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Mark all read header */}
-      {unreadCount > 0 && (
-        <Pressable
-          style={[styles.markAllBtn, { borderBottomColor: colors.border }]}
-          onPress={() => markAllRead.mutate()}
-        >
-          <CheckCheck size={16} color={colors.primary} />
-          <Text style={{ color: colors.primary, fontSize: fontSize.sm, fontWeight: '600' }}>
-            {t('notification.markAllRead', '全部标为已读')}
-          </Text>
-        </Pressable>
-      )}
+  const getNotifIcon = (type: string, color: string) => {
+    switch (type) {
+      case 'mention':
+        return <AtSign size={22} color={color} strokeWidth={2.5} />
+      case 'reply':
+        return <MessageCircle size={22} color={color} strokeWidth={2.5} />
+      case 'dm':
+        return <User size={22} color={color} strokeWidth={2.5} />
+      default:
+        return <Bell size={22} color={color} strokeWidth={2.5} />
+    }
+  }
 
-      <FlatList
-        data={notifications}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={{ color: colors.textMuted, fontSize: fontSize.md }}>
-              {t('notification.empty', '暂无通知')}
-            </Text>
-          </View>
-        }
-        renderItem={({ item }) => (
+  return (
+    <DottedBackground>
+      <View style={[styles.container]}>
+        {/* Mark all read header */}
+        {unreadCount > 0 && (
           <Pressable
             style={[
-              styles.notifRow,
-              {
-                backgroundColor: item.isRead ? colors.background : `${colors.primary}08`,
-                borderBottomColor: colors.border,
-              },
+              styles.markAllBtn,
+              { backgroundColor: `${colors.primary}15`, borderColor: colors.primary },
             ]}
-            onPress={() => handlePress(item)}
+            onPress={() => markAllRead.mutate()}
           >
-            <View style={styles.notifContent}>
-              {!item.isRead && (
-                <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
-              )}
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={[
-                    styles.notifTitle,
-                    { color: colors.text, fontWeight: item.isRead ? '500' : '700' },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {item.title}
-                </Text>
-                {item.body && (
-                  <Text style={[styles.notifBody, { color: colors.textMuted }]} numberOfLines={2}>
-                    {item.body}
-                  </Text>
-                )}
-                <Text style={[styles.notifTime, { color: colors.textMuted }]}>
-                  {formatTimeAgo(item.createdAt, t)}
-                </Text>
-              </View>
-            </View>
+            <CheckCheck size={18} color={colors.primary} strokeWidth={2.5} />
+            <Text style={{ color: colors.primary, fontSize: fontSize.md, fontWeight: '800' }}>
+              {t('notification.markAllRead', '全部标为已读')}
+            </Text>
           </Pressable>
         )}
-      />
-    </View>
+
+        <FlatList
+          data={notifications}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          ListEmptyComponent={
+            <EmptyState
+              icon="📭"
+              title={t('notification.empty', '暂无通知')}
+              description="还没有收到任何新消息哦~"
+            />
+          }
+          renderItem={({ item, index }) => (
+            <Reanimated.View entering={FadeInUp.delay(index * 40).springify()}>
+              <SquishyCard
+                style={[
+                  styles.notifCard,
+                  {
+                    backgroundColor: item.isRead ? `${colors.surface}E6` : `${colors.primary}12`,
+                    borderColor: item.isRead ? colors.border : colors.primary,
+                  },
+                ]}
+                onPress={() => handlePress(item)}
+              >
+                <View style={styles.notifContent}>
+                  <View
+                    style={[
+                      styles.iconBubble,
+                      {
+                        backgroundColor: item.isRead
+                          ? colors.inputBackground
+                          : `${colors.primary}20`,
+                      },
+                    ]}
+                  >
+                    {getNotifIcon(item.type, item.isRead ? colors.textMuted : colors.primary)}
+                  </View>
+
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        styles.notifTitle,
+                        { color: colors.text, fontWeight: item.isRead ? '600' : '800' },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {item.title}
+                    </Text>
+                    {item.body && (
+                      <Text
+                        style={[styles.notifBody, { color: colors.textSecondary }]}
+                        numberOfLines={2}
+                      >
+                        {item.body}
+                      </Text>
+                    )}
+                    <Text style={[styles.notifTime, { color: colors.textMuted }]}>
+                      {formatTimeAgo(item.createdAt, t)}
+                    </Text>
+                  </View>
+
+                  {!item.isRead && (
+                    <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
+                  )}
+                </View>
+              </SquishyCard>
+            </Reanimated.View>
+          )}
+        />
+      </View>
+    </DottedBackground>
   )
 }
 
@@ -181,47 +251,54 @@ function formatTimeAgo(dateStr: string, t: (key: string, fallback: string) => st
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  list: { paddingBottom: spacing.xl },
+  list: { paddingBottom: 120, paddingTop: spacing.md },
   markAllBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    borderRadius: 24,
+    borderWidth: 2,
   },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 120,
-  },
-  notifRow: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+  notifCard: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: 24,
+    borderWidth: 2,
   },
   notifContent: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.sm,
+    gap: spacing.md,
+  },
+  iconBubble: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginTop: 5,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginTop: 8,
   },
   notifTitle: {
     fontSize: fontSize.md,
   },
   notifBody: {
     fontSize: fontSize.sm,
-    marginTop: 2,
-    lineHeight: 18,
+    marginTop: 4,
+    lineHeight: 20,
   },
   notifTime: {
     fontSize: fontSize.xs,
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
+    fontWeight: '600',
   },
 })

@@ -1,17 +1,28 @@
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Asset } from 'expo-asset'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
-import { ChevronRight, Compass, Hash, Plus, Search, Users, X } from 'lucide-react-native'
-import { useMemo, useRef, useState } from 'react'
+import {
+  ChevronRight,
+  Compass,
+  Hash,
+  HelpCircle,
+  Plus,
+  Search,
+  Users,
+  X,
+} from 'lucide-react-native'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
+  Dimensions,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   SectionList,
   type StyleProp,
   StyleSheet,
@@ -24,11 +35,15 @@ import {
 import Reanimated, { FadeIn, FadeInDown, FadeInRight } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Avatar } from '../../../src/components/common/avatar'
-import { AgentCatSvg, WorkCatSvg } from '../../../src/components/common/cat-svg'
+import {
+  AgentCatSvg,
+  ChannelCatSvg,
+  TabHomeSvg,
+  WorkCatSvg,
+} from '../../../src/components/common/cat-svg'
 import { DottedBackground } from '../../../src/components/common/dotted-background'
 import { EmptyState } from '../../../src/components/common/empty-state'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
-import { NotificationBell } from '../../../src/components/notification/notification-bell'
 import { fetchApi } from '../../../src/lib/api'
 import { useAuthStore } from '../../../src/stores/auth.store'
 import { fontSize, radius, spacing, useColors } from '../../../src/theme'
@@ -86,6 +101,26 @@ export default function ServersScreen() {
   const insets = useSafeAreaInsets()
   const user = useAuthStore((s) => s.user)
   const [search, setSearch] = useState('')
+
+  const [showHelpTutorial, setShowHelpTutorial] = useState(false)
+  const [hideHelpIcon, setHideHelpIcon] = useState(false)
+  const [dontShowAgain, setDontShowAgain] = useState(false)
+
+  useEffect(() => {
+    AsyncStorage.getItem('hideHomeHelpIcon').then((val) => {
+      if (val === 'true') {
+        setHideHelpIcon(true)
+      }
+    })
+  }, [])
+
+  const handleCloseTutorial = async () => {
+    if (dontShowAgain) {
+      await AsyncStorage.setItem('hideHomeHelpIcon', 'true')
+      setHideHelpIcon(true)
+    }
+    setShowHelpTutorial(false)
+  }
 
   const {
     data: servers = [],
@@ -175,6 +210,9 @@ export default function ServersScreen() {
 
   if (isLoading) return <LoadingScreen />
 
+  const { width: screenWidth } = Dimensions.get('window')
+  const tutorialWidth = screenWidth * 0.85
+
   return (
     <DottedBackground>
       {/* Navigation bar */}
@@ -196,7 +234,15 @@ export default function ServersScreen() {
           />
         </Pressable>
         <View style={styles.navActions}>
-          <NotificationBell onPress={() => router.push('/(main)/notifications' as never)} />
+          {!hideHelpIcon && (
+            <Pressable
+              onPress={() => setShowHelpTutorial(true)}
+              hitSlop={8}
+              style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.5 }]}
+            >
+              <HelpCircle size={22} color={colors.text} strokeWidth={2} />
+            </Pressable>
+          )}
           <SquishyRow onPress={() => setShowCreateServer(true)}>
             <View
               style={[styles.navPlusBubble, { backgroundColor: '#00f3ff', borderColor: '#00c3cc' }]}
@@ -493,6 +539,91 @@ export default function ServersScreen() {
           </Reanimated.View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Comic Tutorial Modal */}
+      <Modal
+        visible={showHelpTutorial}
+        animationType="fade"
+        transparent
+        onRequestClose={handleCloseTutorial}
+      >
+        <View style={styles.modalOverlay}>
+          <Reanimated.View
+            entering={FadeInDown.duration(250)}
+            style={[
+              styles.tutorialContent,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <View style={styles.tutorialHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>新手帮助指南</Text>
+              <Pressable onPress={handleCloseTutorial} hitSlop={8}>
+                <X size={22} color={colors.textMuted} />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              style={{
+                width: tutorialWidth - spacing.xl * 2,
+                height: tutorialWidth - spacing.xl * 2,
+                maxHeight: 280,
+                borderRadius: 24,
+                backgroundColor: colors.background,
+              }}
+            >
+              <View style={[styles.tutorialPage, { width: tutorialWidth - spacing.xl * 2 }]}>
+                <TabHomeSvg size={80} color={colors.primary} />
+                <Text style={[styles.tutorialPageTitle, { color: colors.text }]}>
+                  欢迎来到 Shadow
+                </Text>
+                <Text style={[styles.tutorialPageDesc, { color: colors.textMuted }]}>
+                  在这里你可以建立专属猫猫频道，或者寻找志同道合的好友圈！
+                </Text>
+              </View>
+              <View style={[styles.tutorialPage, { width: tutorialWidth - spacing.xl * 2 }]}>
+                <AgentCatSvg width={80} height={80} />
+                <Text style={[styles.tutorialPageTitle, { color: colors.text }]}>强大的 Buddy</Text>
+                <Text style={[styles.tutorialPageDesc, { color: colors.textMuted }]}>
+                  去发掘丰富的服务器和神奇的喵星应用，让聊天更有趣！
+                </Text>
+              </View>
+              <View style={[styles.tutorialPage, { width: tutorialWidth - spacing.xl * 2 }]}>
+                <ChannelCatSvg width={80} height={80} />
+                <Text style={[styles.tutorialPageTitle, { color: colors.text }]}>
+                  开始奇妙之旅吧
+                </Text>
+                <Text style={[styles.tutorialPageDesc, { color: colors.textMuted }]}>
+                  点击右上角的加号创建一个服务器，现在就邀请小伙伴鸭！
+                </Text>
+              </View>
+            </ScrollView>
+
+            <Pressable style={styles.switchRow} onPress={() => setDontShowAgain(!dontShowAgain)}>
+              <Text style={[styles.switchLabel, { color: colors.text, fontSize: fontSize.sm }]}>
+                不再显示
+              </Text>
+              <Switch
+                value={dontShowAgain}
+                onValueChange={setDontShowAgain}
+                trackColor={{ false: colors.border, true: colors.primary }}
+                thumbColor="#fff"
+              />
+            </Pressable>
+
+            <Pressable
+              style={[styles.createBtn, { backgroundColor: colors.primary }]}
+              onPress={handleCloseTutorial}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: fontSize.md }}>
+                我明白啦
+              </Text>
+            </Pressable>
+          </Reanimated.View>
+        </View>
+      </Modal>
     </DottedBackground>
   )
 }
@@ -724,5 +855,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: spacing.md,
+  },
+  tutorialContent: {
+    width: '85%',
+    borderRadius: 32,
+    padding: spacing.xl,
+    paddingBottom: spacing.lg,
+    borderWidth: 2,
+    gap: spacing.sm,
+  },
+  tutorialHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  tutorialPage: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  tutorialPageTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '800',
+    marginTop: spacing.sm,
+  },
+  tutorialPageDesc: {
+    fontSize: fontSize.sm,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 })
