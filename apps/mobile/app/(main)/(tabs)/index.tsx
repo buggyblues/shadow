@@ -46,6 +46,7 @@ import {
 import { DottedBackground } from '../../../src/components/common/dotted-background'
 import { EmptyState } from '../../../src/components/common/empty-state'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
+import { OnboardingModal } from '../../../src/components/common/onboarding-modal'
 import { fetchApi } from '../../../src/lib/api'
 import { useAuthStore } from '../../../src/stores/auth.store'
 import { fontSize, radius, spacing, useColors } from '../../../src/theme'
@@ -108,11 +109,21 @@ export default function ServersScreen() {
   const [hideHelpIcon, setHideHelpIcon] = useState(false)
   const [dontShowAgain, setDontShowAgain] = useState(false)
   const [tutorialPageIndex, setTutorialPageIndex] = useState(0)
+  
+  // Onboarding state
+  const [showOnboarding, setShowOnboarding] = useState(false)
 
   useEffect(() => {
     AsyncStorage.getItem('hideHomeHelpIcon').then((val) => {
       if (val === 'true') {
         setHideHelpIcon(true)
+      }
+    })
+    
+    // Check if user has seen onboarding
+    AsyncStorage.getItem('hasSeenOnboarding').then((value) => {
+      if (!value) {
+        setShowOnboarding(true)
       }
     })
   }, [])
@@ -321,8 +332,25 @@ export default function ServersScreen() {
       {filtered.length === 0 && matchedPublicServers.length === 0 ? (
         <EmptyState
           icon="💬"
-          title={search ? '没有找到匹配的服务器' : '暂无服务器'}
-          description={search ? undefined : '点击右上角 + 创建或加入一个服务器'}
+          title={search ? '没有找到匹配的服务器' : '还没有服务器'}
+          description={search ? undefined : '创建你的第一个服务器，或者探索公开社区'}
+          actions={
+            search
+              ? undefined
+              : [
+                  {
+                    icon: Plus,
+                    label: '创建服务器',
+                    onPress: () => setShowCreateServer(true),
+                    primary: true,
+                  },
+                  {
+                    icon: Compass,
+                    label: '探索社区',
+                    onPress: () => router.push('/(main)/(tabs)/discover'),
+                  },
+                ]
+          }
         />
       ) : (
         <SectionList
@@ -973,3 +1001,176 @@ const styles = StyleSheet.create({
     borderRadius: 99,
   },
 })
+
+// Onboarding Modal Component
+function OnboardingModal({
+  visible,
+  onClose,
+  onCreateServer,
+}: {
+  visible: boolean
+  onClose: () => void
+  onCreateServer?: () => void
+}) {
+  const colors = useColors()
+  const router = useRouter()
+  const insets = useSafeAreaInsets()
+  const [currentStep, setCurrentStep] = useState(0)
+  const slideAnim = useRef(new Animated.Value(0)).current
+
+  const steps = [
+    {
+      id: 'welcome',
+      icon: Server,
+      title: '欢迎来到虾豆',
+      description: '虾豆是一个 AI 驱动的社区协作平台。在这里，你可以创建社区、召唤 AI Buddy、开设店铺，让 AI 帮你打工！',
+    },
+    {
+      id: 'buddy',
+      icon: Bot,
+      title: '什么是 Buddy？',
+      description: 'Buddy 是你的 AI 助手。它们可以加入频道参与对话、写代码、审方案、生成内容。每个 Buddy 都有自己的专长领域。',
+      action: {
+        label: '创建我的第一个 Buddy',
+        route: '/(main)/settings/buddy',
+      },
+    },
+    {
+      id: 'server',
+      icon: Server,
+      title: '创建你的社区',
+      description: '创建一个服务器，邀请朋友加入，建立属于你们的社区。你可以创建多个频道来组织不同的话题。',
+      action: {
+        label: '创建服务器',
+      },
+    },
+    {
+      id: 'discover',
+      icon: Compass,
+      title: '探索发现',
+      description: '浏览公开服务器，发现感兴趣的社区。加入其他社区，与更多人交流协作。',
+      action: {
+        label: '去探索',
+        route: '/(main)/(tabs)/discover',
+      },
+    },
+  ]
+
+  const step = steps[currentStep]
+  const Icon = step.icon
+  const isLastStep = currentStep === steps.length - 1
+  const isFirstStep = currentStep === 0
+
+  useEffect(() => {
+    if (visible) {
+      slideAnim.setValue(0)
+    }
+  }, [visible, currentStep])
+
+  const handleNext = () => {
+    if (isLastStep) {
+      handleComplete()
+    } else {
+      setCurrentStep((prev) => prev + 1)
+    }
+  }
+
+  const handleComplete = async () => {
+    await AsyncStorage.setItem('hasSeenOnboarding', 'true')
+    onClose()
+  }
+
+  const handleSkip = async () => {
+    await AsyncStorage.setItem('hasSeenOnboarding', 'true')
+    onClose()
+  }
+
+  const handleAction = () => {
+    if (step.action?.route) {
+      handleComplete().then(() => {
+        router.push(step.action!.route as never)
+      })
+    } else if (step.action && step.id === 'server' && onCreateServer) {
+      handleComplete().then(() => {
+        onCreateServer()
+      })
+    } else {
+      handleNext()
+    }
+  }
+
+  return (
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={handleSkip}>
+      <View style={[styles.overlay, { backgroundColor: `${colors.background}F2` }]}>
+        <Pressable style={[styles.closeBtn, { top: insets.top + spacing.md }]} onPress={handleSkip}>
+          <X size={24} color={colors.textMuted} />
+        </Pressable>
+
+        {currentStep < steps.length - 1 && (
+          <Pressable style={[styles.skipBtn, { top: insets.top + spacing.md }]} onPress={handleSkip}>
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>跳过</Text>
+          </Pressable>
+        )}
+
+        <Animated.View style={{ alignItems: 'center', paddingHorizontal: spacing.lg }}>
+          <View style={[styles.iconContainer, { backgroundColor: `${colors.primary}15` }]}>
+            <Icon size={48} color={colors.primary} />
+          </View>
+
+          <Text style={{ color: colors.text, fontSize: fontSize['2xl'], fontWeight: '800', marginBottom: spacing.md }}>
+            {step.title}
+          </Text>
+
+          <Text style={{ color: colors.textSecondary, fontSize: fontSize.md, textAlign: 'center', marginBottom: spacing.lg }}>
+            {step.description}
+          </Text>
+
+          {step.action && (
+            <Pressable
+              style={{ backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderRadius: radius.xl, gap: spacing.xs }}
+              onPress={handleAction}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700' }}>{step.action.label}</Text>
+              <ChevronRight size={18} color="#fff" />
+            </Pressable>
+          )}
+        </Animated.View>
+
+        <View style={{ position: 'absolute', bottom: insets.bottom + spacing.xl, left: 0, right: 0, paddingHorizontal: spacing.lg }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: spacing.lg }}>
+            {steps.map((_, index) => (
+              <View
+                key={index}
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: index === currentStep ? colors.primary : `${colors.textMuted}30`,
+                }}
+              />
+            ))}
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: spacing.md }}>
+            {!isFirstStep && (
+              <Pressable
+                style={{ flex: 1, borderWidth: 2, borderColor: colors.border, borderRadius: radius.xl, paddingVertical: spacing.md, alignItems: 'center' }}
+                onPress={() => setCurrentStep((prev) => prev - 1)}
+              >
+                <Text style={{ color: colors.text, fontWeight: '700' }}>上一步</Text>
+              </Pressable>
+            )}
+
+            <Pressable
+              style={{ flex: isFirstStep ? 1 : 1, backgroundColor: colors.primary, borderRadius: radius.xl, paddingVertical: spacing.md, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: spacing.xs }}
+              onPress={handleNext}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700' }}>{isLastStep ? '开始使用' : '下一步'}</Text>
+              {!isLastStep && <ChevronRight size={18} color="#fff" />}
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
+}

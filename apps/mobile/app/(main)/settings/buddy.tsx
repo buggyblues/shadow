@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
-import { Bot, ChevronRight } from 'lucide-react-native'
+import { Bot, ChevronRight, Sparkles } from 'lucide-react-native'
 import { useTranslation } from 'react-i18next'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Avatar } from '../../../src/components/common/avatar'
@@ -57,10 +57,20 @@ export default function BuddySettingsScreen() {
 
         {agents.length === 0 ? (
           <View style={styles.emptyState}>
-            <Bot size={40} color={colors.textMuted} />
-            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginTop: spacing.sm }}>
-              暂无 Buddy
+            <Bot size={48} color={colors.textMuted} />
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>
+              还没有 Buddy
             </Text>
+            <Text style={[styles.emptyDesc, { color: colors.textMuted }]}>
+              创建你的第一个 AI 助手，让它帮你打工！
+            </Text>
+            <Pressable
+              style={[styles.createFirstBtn, { backgroundColor: colors.primary }]}
+              onPress={() => router.push('/(main)/buddy-management')}
+            >
+              <Sparkles size={18} color="#fff" />
+              <Text style={styles.createFirstBtnText}>创建我的第一个 Buddy</Text>
+            </Pressable>
           </View>
         ) : (
           <View style={[styles.card, { backgroundColor: colors.surface }]}>
@@ -133,6 +143,31 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
   },
   emptyState: { alignItems: 'center', paddingVertical: spacing.xl * 2 },
+  emptyTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    marginTop: spacing.md,
+  },
+  emptyDesc: {
+    fontSize: fontSize.sm,
+    marginTop: spacing.xs,
+    marginBottom: spacing.lg,
+    textAlign: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  createFirstBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.xl,
+  },
+  createFirstBtnText: {
+    color: '#fff',
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+  },
   card: { borderRadius: radius.xl, overflow: 'hidden' },
   row: {
     flexDirection: 'row',
