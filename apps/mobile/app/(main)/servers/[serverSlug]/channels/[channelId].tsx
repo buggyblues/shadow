@@ -100,7 +100,7 @@ export default function ChannelViewScreen() {
 
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const typingUsersTimeout = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
-  const { isRecording, voiceTranscript, toggleVoiceInput, speechSupported } = useChatVoiceInput({
+  const { isRecording, voiceTranscript, toggleVoiceInput } = useChatVoiceInput({
     speechLang: t('chat.speechLang'),
     onPermissionDenied: () => Alert.alert(t('common.error'), t('chat.micPermissionDenied')),
     onUnavailable: () => Alert.alert(t('common.error'), t('chat.voiceInputUnavailable')),
@@ -1362,7 +1362,6 @@ export default function ChannelViewScreen() {
         voiceTranscript={voiceTranscript}
         keyboardVisible={keyboardVisible}
         insetsBottom={insets.bottom}
-        canUseVoice={speechSupported}
         onToggleVoice={toggleVoiceInput}
         showAtButton
         onPressAt={() => {

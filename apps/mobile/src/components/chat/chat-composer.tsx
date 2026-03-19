@@ -21,7 +21,6 @@ interface ChatComposerProps {
   voiceTranscript: string
   keyboardVisible?: boolean
   insetsBottom: number
-  canUseVoice: boolean
   onToggleVoice: () => void
   showAtButton?: boolean
   onPressAt?: () => void
@@ -48,7 +47,6 @@ export const ChatComposer = memo(function ChatComposer({
   voiceTranscript,
   keyboardVisible = false,
   insetsBottom,
-  canUseVoice,
   onToggleVoice,
   showAtButton = false,
   onPressAt,
@@ -184,14 +182,12 @@ export const ChatComposer = memo(function ChatComposer({
             returnKeyType="send"
             keyboardAppearance="dark"
           />
-          {canUseVoice && (
-            <Pressable
-              style={[styles.inputMicBtn, isRecording && { backgroundColor: colors.primary }]}
-              onPress={onToggleVoice}
-            >
-              <Mic size={18} color={isRecording ? '#fff' : colors.textMuted} />
-            </Pressable>
-          )}
+          <Pressable
+            style={[styles.inputMicBtn, isRecording && { backgroundColor: colors.primary }]}
+            onPress={onToggleVoice}
+          >
+            <Mic size={18} color={isRecording ? '#fff' : colors.textMuted} />
+          </Pressable>
         </View>
 
         <Pressable

@@ -77,7 +77,7 @@ export default function DmChatScreen() {
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const typingUsersTimeout = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
-  const { isRecording, voiceTranscript, toggleVoiceInput, speechSupported } = useChatVoiceInput({
+  const { isRecording, voiceTranscript, toggleVoiceInput } = useChatVoiceInput({
     speechLang: t('chat.speechLang'),
     onPermissionDenied: () => Alert.alert(t('chat.micPermission', '需要麦克风权限')),
     onUnavailable: () => Alert.alert(t('chat.voiceNotSupported', '语音输入不可用')),
@@ -681,7 +681,6 @@ export default function DmChatScreen() {
         voiceTranscript={voiceTranscript}
         keyboardVisible={keyboardVisible}
         insetsBottom={insets.bottom}
-        canUseVoice={speechSupported}
         onToggleVoice={toggleVoiceInput}
         showAtButton={false}
         showEmojiPicker={showInputEmojiPicker}
