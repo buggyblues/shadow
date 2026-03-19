@@ -4,6 +4,7 @@ import { app, BrowserWindow, ipcMain, net, protocol } from 'electron'
 import { setupAutoUpdater } from './auto-updater'
 import { createAppMenu } from './menu'
 import { setupNotificationHandler } from './notifications'
+import { cleanupOpenClaw, initOpenClaw } from './openclaw'
 import { killAllAgents, setupProcessManager } from './process-manager'
 import { registerGlobalShortcuts, unregisterAllShortcuts } from './shortcuts'
 import { createTray } from './tray'
@@ -56,6 +57,7 @@ app.on('ready', () => {
   setupNotificationHandler()
   setupProcessManager()
   setupAutoUpdater()
+  initOpenClaw()
 
   ipcMain.handle('desktop:minimizeToTray', () => {
     const win = getMainWindow()
@@ -83,4 +85,5 @@ app.on('activate', () => {
 app.on('will-quit', () => {
   unregisterAllShortcuts()
   killAllAgents()
+  cleanupOpenClaw()
 })

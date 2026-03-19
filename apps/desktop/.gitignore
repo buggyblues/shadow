@@ -2,6 +2,10 @@
 out/
 dist/
 
+# Bundled OpenClaw (created by scripts/bundle-openclaw.mjs during build)
+build/
+/openclaw/
+
 # Generated icons (regenerate with: pnpm generate-icons)
 assets/*.png
 assets/*.ico
@@ -10,3 +14,4 @@ assets/*.icns
 # Test artifacts
 test-results/
 playwright-report/
+playwright-report-web/

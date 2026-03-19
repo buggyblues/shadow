@@ -41,6 +41,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { useDesktopNotifications } from './hooks/use-desktop-notifications'
 import { DesktopSettingsPage } from './pages/desktop-settings'
+import { OpenClawPage } from './pages/openclaw'
 
 // --- Desktop-specific enhancements ---
 
@@ -58,7 +59,7 @@ function setupDesktopIntegration() {
   }
 
   api.onNavigateToChannel?.((channelId: string) => {
-    router.navigate({ to: '/app/servers/default/channels/$channelId', params: { channelId } })
+    router.navigate({ to: '/servers/default/channels/$channelId', params: { channelId } })
   })
 }
 
@@ -92,9 +93,9 @@ const indexRoute = createRoute({
   path: '/',
   component: () => null,
   beforeLoad: () => {
-    // Desktop: always go to /app (authenticated) or /login (unauthenticated)
+    // Desktop: always go to /settings (authenticated) or /login (unauthenticated)
     if (useAuthStore.getState().isAuthenticated) {
-      throw redirect({ to: '/app' })
+      throw redirect({ to: '/settings' })
     }
     throw redirect({ to: '/login' })
   },
@@ -106,7 +107,7 @@ const loginRoute = createRoute({
   component: LoginPage,
   beforeLoad: () => {
     if (useAuthStore.getState().isAuthenticated) {
-      throw redirect({ to: '/app' })
+      throw redirect({ to: '/settings' })
     }
   },
 })
@@ -117,7 +118,7 @@ const registerRoute = createRoute({
   component: RegisterPage,
   beforeLoad: () => {
     if (useAuthStore.getState().isAuthenticated) {
-      throw redirect({ to: '/app' })
+      throw redirect({ to: '/settings' })
     }
   },
 })
@@ -158,7 +159,7 @@ const oauthAuthorizeRoute = createRoute({
 
 const appRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/app',
+  id: 'authenticated',
   component: DesktopAppRoute,
   beforeLoad: () => {
     if (!useAuthStore.getState().isAuthenticated) {
@@ -171,7 +172,7 @@ const appIndexRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/',
   beforeLoad: () => {
-    throw redirect({ to: '/app/settings' })
+    throw redirect({ to: '/settings' })
   },
   component: () => null,
 })
@@ -240,8 +241,14 @@ const desktopSettingsRoute = createRoute({
   path: '/desktop-settings',
   component: () => {
     const navigate = router.navigate
-    return <DesktopSettingsPage onBack={() => navigate({ to: '/app/settings' })} />
+    return <DesktopSettingsPage onBack={() => navigate({ to: '/settings' })} />
   },
+})
+
+const openclawRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/openclaw',
+  component: OpenClawPage,
 })
 
 const buddyMgmtRoute = createRoute({
@@ -313,6 +320,7 @@ const routeTree = rootRoute.addChildren([
     ]),
     settingsRoute,
     desktopSettingsRoute,
+    openclawRoute,
     buddyMgmtRoute,
     discoverRoute,
     myRentalsRoute,
@@ -326,7 +334,7 @@ const routeTree = rootRoute.addChildren([
 
 // Use hash-based routing for Electron (file:// protocol doesn't support browser history)
 const hashHistory = createHashHistory()
-const router = createRouter({ routeTree, history: hashHistory })
+const router = createRouter({ routeTree, history: hashHistory, basepath: '/app' })
 
 // Initialize desktop integration
 setupDesktopIntegration()

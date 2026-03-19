@@ -16,6 +16,7 @@
 
 import type { ShadowChannelPolicy, ShadowMessage, ShadowRemoteConfig } from '@shadowob/sdk'
 import { ShadowClient, ShadowSocket } from '@shadowob/sdk'
+import { resolveLocalAgentId } from './config.js'
 import { getShadowRuntime } from './runtime.js'
 import type {
   CreateTypingCallbacksParams,
@@ -226,6 +227,12 @@ async function processShadowMessage(params: {
       id: peerId,
     },
   })
+
+  // Override with account-level local agent binding (multi-buddy → multi-agent routing)
+  const localAgent = resolveLocalAgentId(cfg, accountId)
+  if (localAgent) {
+    route.agentId = localAgent
+  }
 
   // 2. Build envelope
   const body = core.channel.reply.formatAgentEnvelope({
@@ -653,6 +660,12 @@ async function processShadowDmMessage(params: {
       id: peerId,
     },
   })
+
+  // Override with account-level local agent binding (multi-buddy → multi-agent routing)
+  const localAgent = resolveLocalAgentId(cfg, accountId)
+  if (localAgent) {
+    route.agentId = localAgent
+  }
 
   // 2. Build envelope
   const body = core.channel.reply.formatAgentEnvelope({

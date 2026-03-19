@@ -1,7 +1,7 @@
-/* Desktop globals: import web styles and tell Tailwind v4 where to find source */
-@import "../../../../web/src/styles/globals.css";
+/* Desktop globals: own Tailwind instance with desktop + web source scanning */
+@import "tailwindcss";
+@import "../../../../web/src/styles/shared.css";
 @source "../../../../web/src";
-@source "../../..";
 
 /* ===== Desktop Window Chrome ===== */
 

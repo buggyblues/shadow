@@ -32,8 +32,8 @@ test('router resolves to a valid page (not 404)', async () => {
 
 test('unauthenticated user is redirected to login', async () => {
   const hash = await page.evaluate(() => window.location.hash)
-  // Desktop defaults to /app, which redirects unauthenticated users to /login
-  expect(hash).toContain('#/login')
+  // Desktop uses basepath '/app', so login is at /app/login
+  expect(hash).toContain('#/app/login')
 
   // Page should render the login form
   const bodyText = await page.evaluate(() => document.body.innerText)
@@ -42,14 +42,14 @@ test('unauthenticated user is redirected to login', async () => {
 })
 
 test('hash navigation works for login route', async () => {
-  // Navigate to login page via hash
+  // Navigate to login page via hash (basepath is /app)
   await page.evaluate(() => {
-    window.location.hash = '#/login'
+    window.location.hash = '#/app/login'
   })
   await page.waitForTimeout(1500)
 
   const hash = await page.evaluate(() => window.location.hash)
-  expect(hash).toContain('#/login')
+  expect(hash).toContain('#/app/login')
 
   // Page should render the login page
   const bodyText = await page.evaluate(() => document.body.innerText)

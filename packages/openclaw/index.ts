@@ -13,7 +13,7 @@ const plugin: OpenClawPluginDefinition = {
   description: manifest.description,
   configSchema: {
     safeParse: (v: unknown) => ({ success: true as const, data: v }),
-    jsonSchema: { type: 'object', additionalProperties: false, properties: {} },
+    jsonSchema: manifest.configSchema,
   },
   register(api: OpenClawPluginApi) {
     setShadowRuntime(api.runtime)

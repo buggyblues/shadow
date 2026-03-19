@@ -272,6 +272,90 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
         >
           <Compass size={24} className="opacity-90" />
         </button>
+
+        {/* OpenClaw — desktop only */}
+        {'desktopAPI' in window && (
+          <button
+            onClick={() => navigate({ to: '/openclaw' })}
+            className="w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-bg-primary hover:bg-[#E8403E]/10 transition-all duration-200 flex items-center justify-center hover:scale-105"
+            title="OpenClaw"
+          >
+            <svg
+              width={24}
+              height={24}
+              viewBox="0 0 100 100"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <defs>
+                <radialGradient
+                  id="sb_oc_body"
+                  cx="0"
+                  cy="0"
+                  r="1"
+                  gradientUnits="userSpaceOnUse"
+                  gradientTransform="translate(50 48) rotate(90) scale(42)"
+                >
+                  <stop stopColor="#FF5E69" />
+                  <stop offset="1" stopColor="#E53945" />
+                </radialGradient>
+                <linearGradient
+                  id="sb_oc_claw"
+                  x1="10"
+                  y1="50"
+                  x2="30"
+                  y2="70"
+                  gradientUnits="userSpaceOnUse"
+                >
+                  <stop stopColor="#FF5E69" />
+                  <stop offset="1" stopColor="#D93540" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M40 15C35 5 25 5 20 10"
+                stroke="#E53945"
+                strokeWidth="4"
+                strokeLinecap="round"
+              />
+              <path
+                d="M60 15C65 5 75 5 80 10"
+                stroke="#E53945"
+                strokeWidth="4"
+                strokeLinecap="round"
+              />
+              <path
+                d="M35 85C35 88 32 92 28 92C24 92 22 88 24 85"
+                stroke="#B3242E"
+                strokeWidth="6"
+                strokeLinecap="round"
+              />
+              <path
+                d="M65 85C65 88 68 92 72 92C76 92 78 88 76 85"
+                stroke="#B3242E"
+                strokeWidth="6"
+                strokeLinecap="round"
+              />
+              <circle cx="15" cy="55" r="12" fill="url(#sb_oc_claw)" />
+              <circle cx="85" cy="55" r="12" fill="url(#sb_oc_claw)" />
+              <circle cx="50" cy="50" r="40" fill="url(#sb_oc_body)" />
+              <circle cx="35" cy="42" r="9" fill="white" />
+              <circle cx="65" cy="42" r="9" fill="white" />
+              <circle cx="37" cy="41" r="5" fill="#1a1a2e" />
+              <circle cx="67" cy="41" r="5" fill="#1a1a2e" />
+              <circle cx="38" cy="39" r="2" fill="white" />
+              <circle cx="68" cy="39" r="2" fill="white" />
+              <circle cx="24" cy="55" r="5" fill="#FFC1C7" opacity="0.5" />
+              <circle cx="76" cy="55" r="5" fill="#FFC1C7" opacity="0.5" />
+              <path
+                d="M42 60C45 64 55 64 58 60"
+                stroke="#8B1A24"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                fill="none"
+              />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Simple create dialog */}

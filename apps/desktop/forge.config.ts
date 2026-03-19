@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { MakerDMG } from '@electron-forge/maker-dmg'
 import { MakerSquirrel } from '@electron-forge/maker-squirrel'
 import { MakerZIP } from '@electron-forge/maker-zip'
@@ -8,6 +9,12 @@ const isMac = process.platform === 'darwin'
 const hasNotaryApiKey =
   !!process.env.APPLE_API_KEY && !!process.env.APPLE_API_KEY_ID && !!process.env.APPLE_API_ISSUER
 const shouldSignAndNotarize = isMac && hasNotaryApiKey
+
+// Collect extraResource entries for OpenClaw bundles (created by scripts/bundle-openclaw.mjs)
+const extraResource: string[] = []
+if (existsSync('./build/openclaw')) extraResource.push('./build/openclaw')
+if (existsSync('./build/shadowob-plugin')) extraResource.push('./build/shadowob-plugin')
+if (existsSync('./build/openclaw-config')) extraResource.push('./build/openclaw-config')
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -45,6 +52,7 @@ const config: ForgeConfig = {
         schemes: ['shadow'],
       },
     ],
+    extraResource,
     ignore: [
       // Only include dist/, assets/, and package.json in the asar archive
       /^\/(?!dist|assets|package\.json)/,

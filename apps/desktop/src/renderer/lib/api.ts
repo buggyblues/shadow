@@ -37,7 +37,22 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 }
 
+function getTestFetchApiMock():
+  | ((path: string, options?: RequestInit) => Promise<unknown> | unknown)
+  | null {
+  const candidate = (globalThis as { __SHADOW_FETCH_API_MOCK__?: unknown })
+    .__SHADOW_FETCH_API_MOCK__
+  return typeof candidate === 'function'
+    ? (candidate as (path: string, options?: RequestInit) => Promise<unknown> | unknown)
+    : null
+}
+
 export async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
+  const testMock = getTestFetchApiMock()
+  if (testMock) {
+    return (await testMock(path, options)) as T
+  }
+
   const token = localStorage.getItem('accessToken')
   const isFormData = options?.body instanceof FormData
   const headers: Record<string, string> = {

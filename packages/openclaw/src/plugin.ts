@@ -35,6 +35,7 @@ const SHADOW_ACTIONS = [
   'unpin',
   'update-homepage',
   'get-server',
+  'get-connection-status',
 ] as const
 
 export const shadowPlugin: ChannelPlugin<ShadowAccountConfig> = {
@@ -477,6 +478,53 @@ export const shadowPlugin: ChannelPlugin<ShadowAccountConfig> = {
         }
       }
 
+      // get-connection-status — probe all configured accounts and report connection health
+      if (action === 'get-connection-status') {
+        const accountIds = listAccountIds(ctx.cfg)
+        const results = await Promise.all(
+          accountIds.map(async (id) => {
+            const acc = getAccountConfig(ctx.cfg, id)
+            if (!acc)
+              return { accountId: id, configured: false, ok: false, error: 'not configured' }
+            if (!acc.token?.trim())
+              return { accountId: id, configured: false, ok: false, error: 'no token' }
+            try {
+              const client = new ShadowClient(acc.serverUrl, acc.token)
+              const me = await client.getMe()
+              return {
+                accountId: id,
+                configured: true,
+                enabled: acc.enabled !== false,
+                ok: true,
+                serverUrl: acc.serverUrl,
+                user: me,
+              }
+            } catch (err) {
+              return {
+                accountId: id,
+                configured: true,
+                enabled: acc.enabled !== false,
+                ok: false,
+                serverUrl: acc.serverUrl,
+                error: err instanceof Error ? err.message : String(err),
+              }
+            }
+          }),
+        )
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({
+                ok: true,
+                action: 'get-connection-status',
+                accounts: results,
+              }),
+            },
+          ],
+        }
+      }
+
       // Default: unsupported action
       return {
         content: [
@@ -496,6 +544,7 @@ export const shadowPlugin: ChannelPlugin<ShadowAccountConfig> = {
       '- Shadow homepage decoration: use `action: "update-homepage"` with `serverId` (slug or UUID) and `html` (full HTML string) to update the server\'s homepage. Set `html` to null to reset to default.',
       '- The server slug or ID is provided in the message context as ServerSlug/ServerId when the message originates from a Shadow channel.',
       '- When a user asks to customize/decorate the server homepage, first use `get-server` to see current state, then generate beautiful HTML and use `update-homepage` to apply it.',
+      '- Connection diagnostics: use `action: "get-connection-status"` (no params) to probe all configured Shadow accounts and report connection health.',
     ],
   },
 
