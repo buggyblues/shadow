@@ -242,6 +242,14 @@
     "addBanner": "Add Banner",
     "changeIcon": "Tap to change icon"
   },
+  "sort": {
+    "title": "Sort by",
+    "byPosition": "Default",
+    "byCreatedAt": "Created",
+    "byUpdatedAt": "Updated",
+    "byLastMessage": "Last Message",
+    "byLastAccessed": "Last Accessed"
+  },
   "channel": {
     "serverSettings": "Server Settings",
     "announcement": "Announcements",

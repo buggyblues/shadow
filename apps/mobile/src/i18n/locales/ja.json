@@ -237,6 +237,20 @@
     "membersOnline": "人がオンライン",
     "searchChannels": "チャンネルを検索...",
     "channelCategory": "カテゴリ",
+    "noCategory": "未分類",
+    "changeBanner": "バナーを変更",
+    "addBanner": "バナーを追加",
+    "changeIcon": "アイコンを変更"
+  },
+  "sort": {
+    "title": "並び替え",
+    "byPosition": "デフォルト",
+    "byCreatedAt": "作成日時",
+    "byUpdatedAt": "更新日時",
+    "byLastMessage": "最新メッセージ",
+    "byLastAccessed": "アクセス日時"
+  },
+  "channel": {
     "noCategory": "未分類"
   },
   "channel": {

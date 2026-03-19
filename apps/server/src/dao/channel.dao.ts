@@ -1,4 +1,4 @@
-import { and, eq, like } from 'drizzle-orm'
+import { and, desc, eq, like } from 'drizzle-orm'
 import type { Database } from '../db'
 import { channels } from '../db/schema'
 
@@ -20,6 +20,16 @@ export class ChannelDao {
       .from(channels)
       .where(eq(channels.serverId, serverId))
       .orderBy(channels.position)
+  }
+
+  /** Update the last message timestamp for a channel */
+  async updateLastMessageAt(id: string) {
+    const result = await this.db
+      .update(channels)
+      .set({ lastMessageAt: new Date() })
+      .where(eq(channels.id, id))
+      .returning()
+    return result[0] ?? null
   }
 
   /** Find channels in a server whose name starts with the given prefix (for dedup). */

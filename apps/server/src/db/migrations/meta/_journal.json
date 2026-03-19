@@ -183,6 +183,13 @@
       "when": 1774591200000,
       "tag": "0025_add_notification_sender",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1774591300000,
+      "tag": "0026_add_channel_last_message_at",
+      "breakpoints": true
     }
   ]
 }

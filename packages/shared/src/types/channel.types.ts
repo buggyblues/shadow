@@ -9,6 +9,8 @@ export interface Channel {
   position: number
   createdAt: string
   updatedAt: string
+  /** Last message timestamp for sorting by activity */
+  lastMessageAt?: string | null
 }
 
 export interface CreateChannelRequest {
@@ -21,4 +23,14 @@ export interface UpdateChannelRequest {
   name?: string
   topic?: string
   position?: number
+}
+
+/** Channel sorting options */
+export type ChannelSortBy = 'createdAt' | 'updatedAt' | 'lastMessageAt' | 'lastAccessedAt'
+
+export type ChannelSortDirection = 'asc' | 'desc'
+
+export interface ChannelSortOptions {
+  by: ChannelSortBy
+  direction: ChannelSortDirection
 }

@@ -237,6 +237,20 @@
     "membersOnline": "位成員在線",
     "searchChannels": "搜尋頻道...",
     "channelCategory": "分類",
+    "noCategory": "無分類",
+    "changeBanner": "更換橫幅",
+    "addBanner": "添加橫幅",
+    "changeIcon": "點擊更換圖示"
+  },
+  "sort": {
+    "title": "排序方式",
+    "byPosition": "預設順序",
+    "byCreatedAt": "建立時間",
+    "byUpdatedAt": "更新時間",
+    "byLastMessage": "最新訊息",
+    "byLastAccessed": "存取時間"
+  },
+  "channel": {
     "noCategory": "未分類"
   },
   "channel": {
