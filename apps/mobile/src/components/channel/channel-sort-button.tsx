@@ -1,11 +1,11 @@
 import {
+  ArrowUpDown,
   ArrowDown,
   ArrowUp,
   Calendar,
   Check,
   Clock,
   MessageSquare,
-  MoreHorizontal,
 } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -17,7 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
-import type { ChannelSortBy, ChannelSortDirection } from '@shadow/shared'
+import type { ChannelSortBy } from '@shadow/shared'
 import { useChannelSort } from '../../hooks/use-channel-sort'
 import { fontSize, radius, spacing, useColors } from '../../theme'
 
@@ -27,18 +27,22 @@ interface SortOption {
   icon: typeof Calendar
 }
 
-export function ChannelSortButton() {
+interface ChannelSortButtonProps {
+  serverId: string
+}
+
+export function ChannelSortButton({ serverId }: ChannelSortButtonProps) {
   const { t } = useTranslation()
   const colors = useColors()
   const [modalVisible, setModalVisible] = useState(false)
-  const { sortBy, sortDirection, setSortBy, toggleSortDirection } = useChannelSort()
+  const { sortBy, sortDirection, setSortBy, toggleSortDirection } = useChannelSort(serverId)
 
   const sortOptions: SortOption[] = [
-    { value: 'position', label: t('sort.byPosition', { defaultValue: '默认顺序' }), icon: MoreHorizontal },
-    { value: 'createdAt', label: t('sort.byCreatedAt', { defaultValue: '创建时间' }), icon: Calendar },
-    { value: 'updatedAt', label: t('sort.byUpdatedAt', { defaultValue: '更新时间' }), icon: Clock },
+    { value: 'position', label: t('sort.byPosition', { defaultValue: '默认顺序' }), icon: ArrowUpDown },
     { value: 'lastMessageAt', label: t('sort.byLastMessage', { defaultValue: '最新消息' }), icon: MessageSquare },
     { value: 'lastAccessedAt', label: t('sort.byLastAccessed', { defaultValue: '访问时间' }), icon: Clock },
+    { value: 'createdAt', label: t('sort.byCreatedAt', { defaultValue: '创建时间' }), icon: Calendar },
+    { value: 'updatedAt', label: t('sort.byUpdatedAt', { defaultValue: '更新时间' }), icon: Clock },
   ]
 
   const currentOption = sortOptions.find((opt) => opt.value === sortBy) || sortOptions[0]!

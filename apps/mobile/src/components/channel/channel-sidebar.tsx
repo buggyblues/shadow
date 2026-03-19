@@ -1,3 +1,4 @@
+import type { Channel } from '@shadow/shared'
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import {
@@ -11,11 +12,10 @@ import {
 } from 'lucide-react-native'
 import { useTranslation } from 'react-i18next'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import type { Channel } from '@shadow/shared'
+import { useChannelSort } from '../../hooks/use-channel-sort'
 import { fetchApi } from '../../lib/api'
 import { useChatStore } from '../../stores/chat.store'
 import { fontSize, radius, spacing, useColors } from '../../theme'
-import { useChannelSort } from '../../hooks/use-channel-sort'
 import { ChannelSortButton } from './channel-sort-button'
 
 interface ServerDetail {
@@ -40,7 +40,7 @@ export function ChannelSidebar({ serverId, serverSlug }: { serverId: string; ser
   const router = useRouter()
   const activeChannelId = useChatStore((s) => s.activeChannelId)
   const setActiveChannel = useChatStore((s) => s.setActiveChannel)
-  const { sortChannels, updateLastAccessed } = useChannelSort()
+  const { sortChannels, updateLastAccessed } = useChannelSort(serverId)
 
   const { data: server } = useQuery({
     queryKey: ['server', serverSlug],
@@ -106,7 +106,7 @@ export function ChannelSidebar({ serverId, serverSlug }: { serverId: string; ser
         <Text style={[styles.serverName, { color: colors.text }]} numberOfLines={1}>
           {server?.name ?? '...'}
         </Text>
-        <ChannelSortButton />
+        <ChannelSortButton serverId={serverId} />
       </View>
 
       <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>

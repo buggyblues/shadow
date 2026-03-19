@@ -17,7 +17,6 @@ import {
   LockOpen,
   Megaphone,
   MessageSquare,
-  MoreHorizontal,
   Plus,
   Search,
   Settings,
@@ -60,16 +59,12 @@ import { setLastChannel } from '../../../../src/lib/last-channel'
 import { showToast } from '../../../../src/lib/toast'
 import { useAuthStore } from '../../../../src/stores/auth.store'
 import { spacing, useColors } from '../../../../src/theme'
-import type { ChannelSortBy, ChannelSortDirection } from '@shadow/shared'
+import type { Channel, ChannelSortBy } from '@shadow/shared'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-interface Channel {
-  id: string
-  name: string
-  type: 'text' | 'voice' | 'announcement'
+interface ServerChannel extends Channel {
   categoryId: string | null
-  position: number
   isPrivate?: boolean
 }
 
@@ -137,13 +132,10 @@ export default function ServerHomeScreen() {
   const [newChannelCategoryId, setNewChannelCategoryId] = useState<string | null>(null)
   const [showSearch, setShowSearch] = useState(false)
   const [channelSearch, setChannelSearch] = useState('')
-  const [contextChannel, setContextChannel] = useState<Channel | null>(null)
-  const [editingChannel, setEditingChannel] = useState<Channel | null>(null)
+  const [contextChannel, setContextChannel] = useState<ServerChannel | null>(null)
+  const [editingChannel, setEditingChannel] = useState<ServerChannel | null>(null)
   const [editChannelName, setEditChannelName] = useState('')
   const [showSortModal, setShowSortModal] = useState(false)
-
-  // Channel sort
-  const { sortBy, sortDirection, setSortBy, toggleSortDirection, sortChannels, updateLastAccessed, hasCustomSort } = useChannelSort(server?.id)
 
   // ── Queries ─────────────────────────────────────
 
@@ -153,6 +145,17 @@ export default function ServerHomeScreen() {
     enabled: !!serverSlug,
   })
 
+  // Channel sort
+  const {
+    sortBy,
+    sortDirection,
+    setSortBy,
+    toggleSortDirection,
+    sortChannels,
+    updateLastAccessed,
+    hasCustomSort,
+  } = useChannelSort(server?.id)
+
   const {
     data: channels = [],
     isLoading,
@@ -160,7 +163,7 @@ export default function ServerHomeScreen() {
     isRefetching,
   } = useQuery({
     queryKey: ['channels', server?.id],
-    queryFn: () => fetchApi<Channel[]>(`/api/servers/${server!.id}/channels`),
+    queryFn: () => fetchApi<ServerChannel[]>(`/api/servers/${server!.id}/channels`),
     enabled: !!server?.id,
   })
 
@@ -569,6 +572,7 @@ export default function ServerHomeScreen() {
                       key={channel.id}
                       style={[styles.channelPill, { backgroundColor: colors.inputBackground }]}
                       onPress={() => {
+                        updateLastAccessed(channel.id)
                         if (server) setLastChannel(server.id, channel.id)
                         router.push(`/(main)/servers/${serverSlug}/channels/${channel.id}` as any)
                       }}
@@ -934,11 +938,11 @@ export default function ServerHomeScreen() {
             </Text>
             <View style={styles.sortOptionsContainer}>
               {[
-                { value: 'position' as ChannelSortBy, label: t('sort.byPosition', '默认顺序'), icon: MoreHorizontal },
-                { value: 'createdAt' as ChannelSortBy, label: t('sort.byCreatedAt', '创建时间'), icon: Calendar },
-                { value: 'updatedAt' as ChannelSortBy, label: t('sort.byUpdatedAt', '更新时间'), icon: Clock },
+                { value: 'position' as ChannelSortBy, label: t('sort.byPosition', '默认顺序'), icon: ArrowUpDown },
                 { value: 'lastMessageAt' as ChannelSortBy, label: t('sort.byLastMessage', '最新消息'), icon: MessageSquare },
                 { value: 'lastAccessedAt' as ChannelSortBy, label: t('sort.byLastAccessed', '访问时间'), icon: Clock },
+                { value: 'createdAt' as ChannelSortBy, label: t('sort.byCreatedAt', '创建时间'), icon: Calendar },
+                { value: 'updatedAt' as ChannelSortBy, label: t('sort.byUpdatedAt', '更新时间'), icon: Clock },
               ].map((option) => {
                 const Icon = option.icon
                 const isSelected = sortBy === option.value

@@ -1,105 +1,105 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
 import type { ChannelSortBy, ChannelSortDirection } from '@shadow/shared'
+import { create } from 'zustand'
+import { createJSONStorage, persist } from 'zustand/middleware'
 
-interface ServerSortConfig {
+export interface ServerSortConfig {
   sortBy: ChannelSortBy
   sortDirection: ChannelSortDirection
 }
 
-interface ChannelSortState {
-  /** Sort config per server */
+export interface ChannelSortState {
+  /** Sort config per server: serverId -> config */
   serverSortConfigs: Record<string, ServerSortConfig>
-  /** Current server ID */
-  currentServerId: string | null
-  /** Last accessed timestamps for channels (for lastAccessedAt sorting) */
+  /** Last accessed timestamps for channels: channelId -> timestamp */
   lastAccessedAt: Record<string, string>
-  /** Set current server */
-  setCurrentServer: (serverId: string | null) => void
-  /** Get sort config for current server */
-  getCurrentSortConfig: () => ServerSortConfig
-  /** Set sort criteria for current server */
-  setSortBy: (by: ChannelSortBy) => void
-  /** Set sort direction for current server */
-  setSortDirection: (direction: ChannelSortDirection) => void
-  /** Toggle sort direction for current server */
-  toggleSortDirection: () => void
-  /** Check if current server has custom sorting */
-  hasCustomSort: () => boolean
+  /** Set sort criteria for a server */
+  setSortBy: (serverId: string, by: ChannelSortBy) => void
+  /** Set sort direction for a server */
+  setSortDirection: (serverId: string, direction: ChannelSortDirection) => void
+  /** Toggle sort direction for a server */
+  toggleSortDirection: (serverId: string) => void
+  /** Get sort config for a server */
+  getSortConfig: (serverId: string) => ServerSortConfig
+  /** Check if server has custom sorting (not default position) */
+  hasCustomSort: (serverId: string) => boolean
   /** Update last accessed timestamp for a channel */
   updateLastAccessed: (channelId: string) => void
   /** Get last accessed timestamp for a channel */
   getLastAccessed: (channelId: string) => string | undefined
 }
 
-const DEFAULT_SORT: ServerSortConfig = {
+export const DEFAULT_SORT: ServerSortConfig = {
   sortBy: 'position',
   sortDirection: 'asc',
+}
+
+function isTimeSort(by: ChannelSortBy): boolean {
+  return by !== 'position'
 }
 
 export const useChannelSortStore = create<ChannelSortState>()(
   persist(
     (set, get) => ({
       serverSortConfigs: {},
-      currentServerId: null,
       lastAccessedAt: {},
 
-      setCurrentServer: (serverId) => set({ currentServerId: serverId }),
+      setSortBy: (serverId, by) => {
+        const currentConfig = get().serverSortConfigs[serverId] ?? DEFAULT_SORT
+        const nextDirection: ChannelSortDirection =
+          by === 'position'
+            ? 'asc'
+            : by !== currentConfig.sortBy && isTimeSort(by)
+              ? 'desc'
+              : currentConfig.sortDirection
 
-      getCurrentSortConfig: () => {
-        const { currentServerId, serverSortConfigs } = get()
-        if (!currentServerId) return DEFAULT_SORT
-        return serverSortConfigs[currentServerId] ?? DEFAULT_SORT
-      },
-
-      setSortBy: (by) => {
-        const { currentServerId } = get()
-        if (!currentServerId) return
         set((state) => ({
           serverSortConfigs: {
             ...state.serverSortConfigs,
-            [currentServerId]: {
-              ...state.serverSortConfigs[currentServerId],
+            [serverId]: {
+              ...DEFAULT_SORT,
+              ...state.serverSortConfigs[serverId],
               sortBy: by,
+              sortDirection: nextDirection,
             },
           },
         }))
       },
 
-      setSortDirection: (direction) => {
-        const { currentServerId } = get()
-        if (!currentServerId) return
+      setSortDirection: (serverId, direction) => {
         set((state) => ({
           serverSortConfigs: {
             ...state.serverSortConfigs,
-            [currentServerId]: {
-              ...state.serverSortConfigs[currentServerId],
+            [serverId]: {
+              ...DEFAULT_SORT,
+              ...state.serverSortConfigs[serverId],
               sortDirection: direction,
             },
           },
         }))
       },
 
-      toggleSortDirection: () => {
-        const { currentServerId, serverSortConfigs } = get()
-        if (!currentServerId) return
-        const current = serverSortConfigs[currentServerId]?.sortDirection ?? 'asc'
+      toggleSortDirection: (serverId) => {
+        const currentConfig = get().serverSortConfigs[serverId] ?? DEFAULT_SORT
+        const current = currentConfig.sortDirection
         set((state) => ({
           serverSortConfigs: {
             ...state.serverSortConfigs,
-            [currentServerId]: {
-              ...state.serverSortConfigs[currentServerId],
+            [serverId]: {
+              ...DEFAULT_SORT,
+              ...state.serverSortConfigs[serverId],
               sortDirection: current === 'asc' ? 'desc' : 'asc',
             },
           },
         }))
       },
 
-      hasCustomSort: () => {
-        const { currentServerId, serverSortConfigs } = get()
-        if (!currentServerId) return false
-        const config = serverSortConfigs[currentServerId]
+      getSortConfig: (serverId) => {
+        return get().serverSortConfigs[serverId] ?? DEFAULT_SORT
+      },
+
+      hasCustomSort: (serverId) => {
+        const config = get().serverSortConfigs[serverId]
         return config ? config.sortBy !== 'position' : false
       },
 
@@ -123,6 +123,6 @@ export const useChannelSortStore = create<ChannelSortState>()(
         serverSortConfigs: state.serverSortConfigs,
         lastAccessedAt: state.lastAccessedAt,
       }),
-    }
-  )
+    },
+  ),
 )
