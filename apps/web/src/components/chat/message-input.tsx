@@ -2,6 +2,7 @@ import { type InfiniteData, useQuery, useQueryClient } from '@tanstack/react-que
 import { FileText, FolderOpen, Image as ImageIcon, Plus, Send, Smile, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useDraftStorage } from '../../hooks/use-draft-storage'
 import { fetchApi } from '../../lib/api'
 import { matchPinyin } from '../../lib/pinyin'
 import { getSocket, sendTyping, sendWsMessage } from '../../lib/socket'
@@ -11,6 +12,7 @@ import { useChatStore } from '../../stores/chat.store'
 import { UserAvatar } from '../common/avatar'
 import { EmojiPicker } from '../common/emoji-picker'
 import { type PickerResult, WorkspaceFilePicker } from '../workspace'
+import { ImageViewer } from './image-viewer'
 
 interface MessageInputProps {
   channelId: string
@@ -62,9 +64,23 @@ export function MessageInput({
   const [uploading, setUploading] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false)
+  const [viewingImage, setViewingImage] = useState<PendingFile | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Draft storage for persistent input
+  const { scheduleSave, clear: clearDraft } = useDraftStorage(channelId, (savedText) => {
+    setContent(savedText)
+    // Auto-resize textarea after restoring content
+    requestAnimationFrame(() => {
+      const el = textareaRef.current
+      if (el) {
+        el.style.height = 'auto'
+        el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+      }
+    })
+  })
 
   // Mention autocomplete state
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
@@ -217,19 +233,16 @@ export function MessageInput({
         sendStatus: 'sending' as const,
       }
 
-      queryClient.setQueryData<InfiniteData<MessagesPage>>(
-        ['messages', channelId],
-        (old) => {
-          if (!old || old.pages.length === 0) return old
-          const pages = [...old.pages]
-          const firstPage = pages[0]!
-          pages[0] = {
-            ...firstPage,
-            messages: [...firstPage.messages, optimisticMsg],
-          }
-          return { ...old, pages }
-        },
-      )
+      queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', channelId], (old) => {
+        if (!old || old.pages.length === 0) return old
+        const pages = [...old.pages]
+        const firstPage = pages[0]!
+        pages[0] = {
+          ...firstPage,
+          messages: [...firstPage.messages, optimisticMsg],
+        }
+        return { ...old, pages }
+      })
     }
 
     // Clear input immediately for responsiveness
@@ -239,6 +252,9 @@ export function MessageInput({
     setContent('')
     setPendingFiles([])
     onClearReply?.()
+
+    // Clear draft after successful send
+    clearDraft()
 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
@@ -298,33 +314,28 @@ export function MessageInput({
           // WS: message:new will replace the temp message via dedup in chat-area
           // Set timeout to mark as failed if no confirmation
           setTimeout(() => {
-            queryClient.setQueryData<InfiniteData<MessagesPage>>(
-              ['messages', channelId],
-              (old) => {
-                if (!old) return old
-                const stillPending = old.pages.some((p) =>
-                  p.messages.some(
-                    (m) =>
-                      (m as { id: string; sendStatus?: string }).id === tempId &&
-                      (m as { sendStatus?: string }).sendStatus === 'sending',
-                  ),
-                )
-                if (stillPending) {
-                  return {
-                    ...old,
-                    pages: old.pages.map((page) => ({
-                      ...page,
-                      messages: page.messages.map((m) =>
-                        (m as { id: string }).id === tempId
-                          ? { ...m, sendStatus: 'failed' }
-                          : m,
-                      ),
-                    })),
-                  }
+            queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', channelId], (old) => {
+              if (!old) return old
+              const stillPending = old.pages.some((p) =>
+                p.messages.some(
+                  (m) =>
+                    (m as { id: string; sendStatus?: string }).id === tempId &&
+                    (m as { sendStatus?: string }).sendStatus === 'sending',
+                ),
+              )
+              if (stillPending) {
+                return {
+                  ...old,
+                  pages: old.pages.map((page) => ({
+                    ...page,
+                    messages: page.messages.map((m) =>
+                      (m as { id: string }).id === tempId ? { ...m, sendStatus: 'failed' } : m,
+                    ),
+                  })),
                 }
-                return old
-              },
-            )
+              }
+              return old
+            })
           }, 10000)
         } else {
           // Socket not connected — use REST fallback
@@ -340,25 +351,22 @@ export function MessageInput({
     } catch (err) {
       console.error('Failed to send message:', err)
       // Mark optimistic message as failed
-      queryClient.setQueryData<InfiniteData<MessagesPage>>(
-        ['messages', channelId],
-        (old) => {
-          if (!old) return old
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              messages: page.messages.map((m) =>
-                (m as { id: string }).id === tempId ? { ...m, sendStatus: 'failed' } : m,
-              ),
-            })),
-          }
-        },
-      )
+      queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', channelId], (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            messages: page.messages.map((m) =>
+              (m as { id: string }).id === tempId ? { ...m, sendStatus: 'failed' } : m,
+            ),
+          })),
+        }
+      })
     } finally {
       setUploading(false)
     }
-  }, [channelId, content, pendingFiles, replyToId, onClearReply, queryClient])
+  }, [channelId, content, pendingFiles, replyToId, onClearReply, queryClient, clearDraft])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Handle mention autocomplete navigation
@@ -423,6 +431,9 @@ export function MessageInput({
         typingTimerRef.current = null
       }, 2000)
     }
+
+    // Auto-save draft (debounced)
+    scheduleSave(value)
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -566,9 +577,13 @@ export function MessageInput({
           {pendingFiles.map((pf, i) => (
             <div key={i} className="relative group/file">
               {pf.preview ? (
-                <div className="w-20 h-20 rounded-lg overflow-hidden border border-border-dim">
+                <button
+                  type="button"
+                  onClick={() => setViewingImage(pf)}
+                  className="w-20 h-20 rounded-lg overflow-hidden border border-border-dim hover:border-primary transition cursor-pointer"
+                >
                   <img src={pf.preview} alt="" className="w-full h-full object-cover" />
-                </div>
+                </button>
               ) : (
                 <div className="w-20 h-20 rounded-lg border border-border-dim bg-bg-tertiary flex flex-col items-center justify-center gap-1">
                   <FileText size={20} className="text-text-muted" />
@@ -681,6 +696,16 @@ export function MessageInput({
           title="选择工作区文件发送"
           onConfirm={handleWorkspaceFileSelect}
           onClose={() => setShowWorkspacePicker(false)}
+        />
+      )}
+
+      {/* Image viewer for pending files */}
+      {viewingImage && (
+        <ImageViewer
+          src={viewingImage.preview || viewingImage.workspaceUrl || ''}
+          filename={viewingImage.workspaceName ?? viewingImage.file.name}
+          size={viewingImage.workspaceSize ?? viewingImage.file.size}
+          onClose={() => setViewingImage(null)}
         />
       )}
     </div>
