@@ -1,3 +1,4 @@
+import type { ChannelDao } from '../dao/channel.dao'
 import type { MessageDao } from '../dao/message.dao'
 import type { UserDao } from '../dao/user.dao'
 import type {
@@ -9,7 +10,7 @@ import type {
 } from '../validators/message.schema'
 
 export class MessageService {
-  constructor(private deps: { messageDao: MessageDao; userDao: UserDao }) {}
+  constructor(private deps: { messageDao: MessageDao; userDao: UserDao; channelDao: ChannelDao }) {}
 
   async getByChannelId(channelId: string, limit?: number, cursor?: string) {
     return this.deps.messageDao.findByChannelId(channelId, limit, cursor)
@@ -29,6 +30,13 @@ export class MessageService {
     })
     if (!message) {
       throw Object.assign(new Error('Failed to create message'), { status: 500 })
+    }
+
+    // Update channel's lastMessageAt for sorting
+    try {
+      await this.deps.channelDao.updateLastMessageAt(channelId)
+    } catch {
+      // Non-critical: don't fail message creation if this fails
     }
 
     // Create attachment records if provided (pre-uploaded files)

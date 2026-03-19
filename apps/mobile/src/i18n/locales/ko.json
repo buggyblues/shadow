@@ -237,6 +237,20 @@
     "membersOnline": "명 온라인",
     "searchChannels": "채널 검색...",
     "channelCategory": "카테고리",
+    "noCategory": "미분류",
+    "changeBanner": "배너 변경",
+    "addBanner": "배너 추가",
+    "changeIcon": "아이콘 변경"
+  },
+  "sort": {
+    "title": "정렬",
+    "byPosition": "기본 순서",
+    "byCreatedAt": "생성 시간",
+    "byUpdatedAt": "업데이트 시간",
+    "byLastMessage": "최근 메시지",
+    "byLastAccessed": "접근 시간"
+  },
+  "channel": {
     "noCategory": "미분류"
   },
   "channel": {

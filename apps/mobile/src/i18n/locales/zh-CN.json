@@ -242,6 +242,14 @@
     "addBanner": "添加横幅",
     "changeIcon": "点击更换图标"
   },
+  "sort": {
+    "title": "排序方式",
+    "byPosition": "默认顺序",
+    "byCreatedAt": "创建时间",
+    "byUpdatedAt": "更新时间",
+    "byLastMessage": "最新消息",
+    "byLastAccessed": "访问时间"
+  },
   "channel": {
     "serverSettings": "服务器设置",
     "announcement": "公告频道",

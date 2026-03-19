@@ -11,16 +11,12 @@ import {
 } from 'lucide-react-native'
 import { useTranslation } from 'react-i18next'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import type { Channel } from '@shadow/shared'
 import { fetchApi } from '../../lib/api'
 import { useChatStore } from '../../stores/chat.store'
 import { fontSize, radius, spacing, useColors } from '../../theme'
-
-interface Channel {
-  id: string
-  name: string
-  type: 'text' | 'voice' | 'announcement'
-  serverId: string
-}
+import { useChannelSort } from '../../hooks/use-channel-sort'
+import { ChannelSortButton } from './channel-sort-button'
 
 interface ServerDetail {
   id: string
@@ -44,21 +40,31 @@ export function ChannelSidebar({ serverId, serverSlug }: { serverId: string; ser
   const router = useRouter()
   const activeChannelId = useChatStore((s) => s.activeChannelId)
   const setActiveChannel = useChatStore((s) => s.setActiveChannel)
+  const { sortChannels, updateLastAccessed } = useChannelSort()
 
   const { data: server } = useQuery({
     queryKey: ['server', serverSlug],
     queryFn: () => fetchApi<ServerDetail>(`/api/servers/${serverSlug}`),
   })
 
-  const { data: channels = [] } = useQuery({
+  const { data: rawChannels = [] } = useQuery<Channel[]>({
     queryKey: ['server-channels', serverId],
     queryFn: () => fetchApi<Channel[]>(`/api/channels?serverId=${serverId}`),
     enabled: !!serverId,
   })
 
+  // Apply sorting to channels
+  const channels = sortChannels(rawChannels)
+
   const announcementChannels = channels.filter((c) => c.type === 'announcement')
   const textChannels = channels.filter((c) => c.type === 'text')
   const voiceChannels = channels.filter((c) => c.type === 'voice')
+
+  const handleChannelPress = (channel: Channel) => {
+    updateLastAccessed(channel.id)
+    setActiveChannel(channel.id)
+    router.push(`/(main)/servers/${serverSlug}/channels/${channel.id}`)
+  }
 
   const renderChannelGroup = (groupLabel: string, chans: Channel[]) => {
     if (chans.length === 0) return null
@@ -74,10 +80,7 @@ export function ChannelSidebar({ serverId, serverSlug }: { serverId: string; ser
             <Pressable
               key={ch.id}
               style={[styles.channelItem, isActive && { backgroundColor: `${colors.primary}20` }]}
-              onPress={() => {
-                setActiveChannel(ch.id)
-                router.push(`/(main)/servers/${serverSlug}/channels/${ch.id}`)
-              }}
+              onPress={() => handleChannelPress(ch)}
             >
               <Icon size={18} color={isActive ? colors.primary : colors.textMuted} />
               <Text
@@ -99,11 +102,12 @@ export function ChannelSidebar({ serverId, serverSlug }: { serverId: string; ser
   return (
     <View style={[styles.container, { backgroundColor: colors.channelSidebar }]}>
       {/* Server header */}
-      <Pressable style={[styles.header, { borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <Text style={[styles.serverName, { color: colors.text }]} numberOfLines={1}>
           {server?.name ?? '...'}
         </Text>
-      </Pressable>
+        <ChannelSortButton />
+      </View>
 
       <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
         {/* Server Home */}
@@ -163,7 +167,9 @@ const styles = StyleSheet.create({
   },
   header: {
     height: 52,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     borderBottomWidth: 1,
   },

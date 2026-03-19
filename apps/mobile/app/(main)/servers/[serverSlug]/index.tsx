@@ -3,14 +3,21 @@ import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import {
+  ArrowDown,
+  ArrowUp,
+  Calendar,
+  Check,
   ChevronDown,
   ChevronLeft,
+  Clock,
   Copy,
   Edit3,
   Hash,
   Lock,
   LockOpen,
   Megaphone,
+  MessageSquare,
+  MoreHorizontal,
   Plus,
   Search,
   Settings,
@@ -18,6 +25,7 @@ import {
   UserPlus,
   Volume2,
   X,
+  ArrowUpDown,
 } from 'lucide-react-native'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -33,6 +41,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native'
 import Reanimated, { FadeIn, FadeInDown, Layout, ZoomIn } from 'react-native-reanimated'
@@ -45,11 +54,13 @@ import {
 } from '../../../../src/components/common/cat-svg'
 import { DottedBackground } from '../../../../src/components/common/dotted-background'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
+import { useChannelSort } from '../../../../src/hooks/use-channel-sort'
 import { fetchApi, getImageUrl } from '../../../../src/lib/api'
 import { setLastChannel } from '../../../../src/lib/last-channel'
 import { showToast } from '../../../../src/lib/toast'
 import { useAuthStore } from '../../../../src/stores/auth.store'
 import { spacing, useColors } from '../../../../src/theme'
+import type { ChannelSortBy, ChannelSortDirection } from '@shadow/shared'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -129,6 +140,10 @@ export default function ServerHomeScreen() {
   const [contextChannel, setContextChannel] = useState<Channel | null>(null)
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null)
   const [editChannelName, setEditChannelName] = useState('')
+  const [showSortModal, setShowSortModal] = useState(false)
+
+  // Channel sort
+  const { sortBy, sortDirection, setSortBy, toggleSortDirection, sortChannels, updateLastAccessed, hasCustomSort } = useChannelSort(server?.id)
 
   // ── Queries ─────────────────────────────────────
 
@@ -226,6 +241,11 @@ export default function ServerHomeScreen() {
 
   // ── Channel grouping ──────────────────────────
 
+  // Sort channels before grouping
+  const sortedChannels = useMemo(() => {
+    return sortChannels(channels)
+  }, [channels, sortChannels])
+
   const channelIcon = (type: string, color: string, size = 18) => {
     switch (type) {
       case 'voice':
@@ -250,23 +270,19 @@ export default function ServerHomeScreen() {
     const sorted = [...categories].sort((a, b) => a.position - b.position)
     const groups: { category: Category | null; channels: Channel[] }[] = []
 
-    const uncategorized = channels
-      .filter((c) => !c.categoryId)
-      .sort((a, b) => a.position - b.position)
+    const uncategorized = sortedChannels.filter((c) => !c.categoryId)
     if (uncategorized.length > 0) {
       groups.push({ category: null, channels: uncategorized })
     }
 
     for (const cat of sorted) {
-      const catChannels = channels
-        .filter((c) => c.categoryId === cat.id)
-        .sort((a, b) => a.position - b.position)
+      const catChannels = sortedChannels.filter((c) => c.categoryId === cat.id)
       if (catChannels.length > 0) {
         groups.push({ category: cat, channels: catChannels })
       }
     }
     return groups
-  }, [channels, categories])
+  }, [sortedChannels, categories])
 
   const filteredGroups = useMemo(() => {
     if (!channelSearch) return grouped
@@ -444,6 +460,22 @@ export default function ServerHomeScreen() {
             {t('server.channels')}
           </Text>
           <View style={styles.channelsActions}>
+            {/* Sort Button */}
+            <SquishyCard onPress={() => setShowSortModal(true)}>
+              <View
+                style={[
+                  styles.actionBubble,
+                  hasCustomSort
+                    ? { backgroundColor: colors.primary, borderColor: colors.primary }
+                    : { backgroundColor: glassCardStyle.backgroundColor, borderColor: colors.border },
+                ]}
+              >
+                <ArrowUpDown size={18} color={hasCustomSort ? '#fff' : colors.text} strokeWidth={2.5} />
+                {hasCustomSort && (
+                  <View style={[styles.sortBadge, { backgroundColor: '#fff' }]} />
+                )}
+              </View>
+            </SquishyCard>
             <SquishyCard onPress={() => setShowSearch(!showSearch)}>
               <View
                 style={[
@@ -884,6 +916,75 @@ export default function ServerHomeScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Sort Modal - Bottom Sheet Style */}
+      <Modal visible={showSortModal} transparent animationType="slide" onRequestClose={() => setShowSortModal(false)}>
+        <TouchableOpacity
+          style={[styles.sortOverlay, { backgroundColor: colors.overlay }]}
+          activeOpacity={1}
+          onPress={() => setShowSortModal(false)}
+        >
+          <View style={[styles.sortSheet, { backgroundColor: colors.surface }]}>
+            {/* Handle bar */}
+            <View style={styles.sortHandleBar}>
+              <View style={[styles.sortHandle, { backgroundColor: colors.textMuted }]} />
+            </View>
+            <Text style={[styles.sortTitle, { color: colors.text }]}>
+              {t('sort.title', '排序方式')}
+            </Text>
+            <View style={styles.sortOptionsContainer}>
+              {[
+                { value: 'position' as ChannelSortBy, label: t('sort.byPosition', '默认顺序'), icon: MoreHorizontal },
+                { value: 'createdAt' as ChannelSortBy, label: t('sort.byCreatedAt', '创建时间'), icon: Calendar },
+                { value: 'updatedAt' as ChannelSortBy, label: t('sort.byUpdatedAt', '更新时间'), icon: Clock },
+                { value: 'lastMessageAt' as ChannelSortBy, label: t('sort.byLastMessage', '最新消息'), icon: MessageSquare },
+                { value: 'lastAccessedAt' as ChannelSortBy, label: t('sort.byLastAccessed', '访问时间'), icon: Clock },
+              ].map((option) => {
+                const Icon = option.icon
+                const isSelected = sortBy === option.value
+                const DirectionIcon = sortDirection === 'asc' ? ArrowUp : ArrowDown
+                return (
+                  <Pressable
+                    key={option.value}
+                    style={[
+                      styles.sortOption,
+                      isSelected && { backgroundColor: `${colors.primary}15` },
+                    ]}
+                    onPress={() => {
+                      if (isSelected) {
+                        toggleSortDirection()
+                      } else {
+                        setSortBy(option.value)
+                      }
+                      setShowSortModal(false)
+                    }}
+                  >
+                    <View style={[styles.sortOptionIcon, { backgroundColor: isSelected ? `${colors.primary}25` : colors.inputBackground }]}>
+                      <Icon size={20} color={isSelected ? colors.primary : colors.textSecondary} />
+                    </View>
+                    <Text style={[styles.sortOptionText, { color: isSelected ? colors.primary : colors.text }]}>
+                      {option.label}
+                    </Text>
+                    {isSelected && (
+                      <View style={styles.sortCheck}>
+                        <DirectionIcon size={16} color={colors.primary} />
+                      </View>
+                    )}
+                  </Pressable>
+                )
+              })}
+            </View>
+            <Pressable
+              style={[styles.sortCloseBtn, { backgroundColor: colors.inputBackground }]}
+              onPress={() => setShowSortModal(false)}
+            >
+              <Text style={[styles.sortCloseText, { color: colors.text }]}>
+                {t('common.close', '关闭')}
+              </Text>
+            </Pressable>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </DottedBackground>
   )
 }
@@ -1239,5 +1340,87 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderRadius: 10,
+  },
+
+  // Sort modal - Bottom Sheet
+  sortOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  sortSheet: {
+    width: '100%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: 40,
+    paddingTop: spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  sortHandleBar: {
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+  },
+  sortHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+  },
+  sortTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: spacing.lg,
+    textAlign: 'center',
+  },
+  sortOptionsContainer: {
+    gap: spacing.sm,
+  },
+  sortOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    borderRadius: 16,
+  },
+  sortOptionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sortOptionText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  sortCheck: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sortCloseBtn: {
+    marginTop: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  sortCloseText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  sortBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
 })

@@ -1,0 +1,49 @@
+{
+  "branch": "feature/channel-sorting",
+  "worktree": ".research/channel-sorting",
+  "tasks": [
+    {
+      "id": "1",
+      "title": "后端：扩展 Channel 类型和 API 支持排序字段",
+      "status": "completed",
+      "description": "在 shared types 和 server API 中添加 lastMessageAt 字段，用于按更新时间排序"
+    },
+    {
+      "id": "2",
+      "title": "后端：实现频道排序查询支持",
+      "status": "completed",
+      "description": "修改 channel.service.ts 和 channel.dao.ts，支持按创建时间/更新时间/访问时间排序"
+    },
+    {
+      "id": "3",
+      "title": "移动端：创建频道排序组件 ChannelSortButton",
+      "status": "completed",
+      "description": "创建排序按钮组件，支持选择排序方式和方向"
+    },
+    {
+      "id": "4",
+      "title": "移动端：创建排序状态管理和 hooks",
+      "status": "completed",
+      "description": "创建 useChannelSort hook 和排序状态存储"
+    },
+    {
+      "id": "5",
+      "title": "移动端：集成排序功能到 ChannelSidebar",
+      "status": "completed",
+      "description": "在频道侧边栏添加排序按钮，并应用排序逻辑"
+    },
+    {
+      "id": "6",
+      "title": "本地化：添加排序相关的翻译",
+      "status": "completed",
+      "description": "在 i18n 文件中添加排序选项的翻译"
+    },
+    {
+      "id": "7",
+      "title": "测试和提交 PR",
+      "status": "completed",
+      "description": "测试功能并提交 GitHub PR"
+    }
+  ],
+  "currentTask": null
+}
