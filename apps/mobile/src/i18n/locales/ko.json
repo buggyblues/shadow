@@ -251,9 +251,7 @@
     "byLastAccessed": "접근 시간"
   },
   "channel": {
-    "noCategory": "미분류"
-  },
-  "channel": {
+    "noCategory": "미분류",
     "serverSettings": "서버 설정",
     "announcement": "공지 채널",
     "text": "텍스트 채널",
