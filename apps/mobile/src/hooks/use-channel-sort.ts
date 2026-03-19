@@ -1,12 +1,6 @@
 import type { Channel, ChannelSortBy, ChannelSortDirection } from '@shadow/shared'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { DEFAULT_SORT, useChannelSortStore } from '../stores/channel-sort.store'
-
-function getSafeTime(value?: string | null): number {
-  if (!value) return 0
-  const timestamp = new Date(value).getTime()
-  return Number.isFinite(timestamp) ? timestamp : 0
-}
 
 export interface SortedChannel extends Channel {
   lastAccessedAt?: string
@@ -17,12 +11,12 @@ export interface UseChannelSortReturn {
   sortBy: ChannelSortBy
   /** Current sort direction */
   sortDirection: ChannelSortDirection
-  /** Set sort criteria */
-  setSortBy: (by: ChannelSortBy) => void
-  /** Set sort direction */
-  setSortDirection: (direction: ChannelSortDirection) => void
-  /** Toggle sort direction */
-  toggleSortDirection: () => void
+  /** Set sort criteria for a server */
+  setSortBy: (serverId: string, by: ChannelSortBy) => void
+  /** Set sort direction for a server */
+  setSortDirection: (serverId: string, direction: ChannelSortDirection) => void
+  /** Toggle sort direction for a server */
+  toggleSortDirection: (serverId: string) => void
   /** Check if has custom sort */
   hasCustomSort: boolean
   /** Sort channels based on current settings */
@@ -33,60 +27,30 @@ export interface UseChannelSortReturn {
 
 /**
  * Hook for channel sorting functionality
- * @param serverId - Server ID to get/set sort config
+ * @param serverId - Optional server ID to set context automatically
  */
 export function useChannelSort(serverId?: string): UseChannelSortReturn {
-  // Subscribe to store state directly - this will trigger re-render when config changes
-  const serverSortConfigs = useChannelSortStore((s) => s.serverSortConfigs)
+  const getSortConfig = useChannelSortStore((s) => s.getSortConfig)
+  const setSortByStore = useChannelSortStore((s) => s.setSortBy)
+  const setSortDirectionStore = useChannelSortStore((s) => s.setSortDirection)
+  const toggleSortDirectionStore = useChannelSortStore((s) => s.toggleSortDirection)
+  const hasCustomSortStore = useChannelSortStore((s) => s.hasCustomSort)
   const updateLastAccessed = useChannelSortStore((s) => s.updateLastAccessed)
   const getLastAccessed = useChannelSortStore((s) => s.getLastAccessed)
-  const storeSetSortBy = useChannelSortStore((s) => s.setSortBy)
-  const storeSetSortDirection = useChannelSortStore((s) => s.setSortDirection)
-  const storeToggleSortDirection = useChannelSortStore((s) => s.toggleSortDirection)
 
-  // Get current sort config for this server
-  const currentConfig = useMemo(() => {
+  // Get current sort config
+  const { sortBy, sortDirection } = useMemo(() => {
     if (!serverId) return DEFAULT_SORT
-    return serverSortConfigs[serverId] ?? DEFAULT_SORT
-  }, [serverSortConfigs, serverId])
+    return getSortConfig(serverId)
+  }, [serverId, getSortConfig])
 
-  const { sortBy, sortDirection } = currentConfig
-
-  // Check if has custom sort
   const hasCustomSort = useMemo(() => {
     if (!serverId) return false
-    return sortBy !== 'position'
-  }, [sortBy, serverId])
+    return hasCustomSortStore(serverId)
+  }, [serverId, hasCustomSortStore])
 
-  // Wrapper functions that include serverId
-  const setSortBy = useCallback(
-    (by: ChannelSortBy) => {
-      if (!serverId) return
-      storeSetSortBy(serverId, by)
-    },
-    [serverId, storeSetSortBy],
-  )
-
-  const setSortDirection = useCallback(
-    (direction: ChannelSortDirection) => {
-      if (!serverId) return
-      storeSetSortDirection(serverId, direction)
-    },
-    [serverId, storeSetSortDirection],
-  )
-
-  const toggleSortDirection = useCallback(() => {
-    if (!serverId) return
-    storeToggleSortDirection(serverId)
-  }, [serverId, storeToggleSortDirection])
-
-  // Stable sort function that uses current sort config from closure
   const sortChannels = useCallback(
     (channels: Channel[]): SortedChannel[] => {
-      const config = serverId ? (serverSortConfigs[serverId] ?? DEFAULT_SORT) : DEFAULT_SORT
-      const currentSortBy = config.sortBy ?? DEFAULT_SORT.sortBy
-      const currentSortDirection = config.sortDirection ?? DEFAULT_SORT.sortDirection
-
       const sorted = [...channels].map((ch) => ({
         ...ch,
         lastAccessedAt: getLastAccessed(ch.id),
@@ -95,40 +59,61 @@ export function useChannelSort(serverId?: string): UseChannelSortReturn {
       sorted.sort((a, b) => {
         let comparison = 0
 
-        switch (currentSortBy) {
+        switch (sortBy) {
           case 'createdAt':
-            comparison = getSafeTime(a.createdAt) - getSafeTime(b.createdAt)
+            comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
             break
           case 'updatedAt':
-            comparison = getSafeTime(a.updatedAt) - getSafeTime(b.updatedAt)
+            comparison = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
             break
           case 'lastMessageAt': {
-            comparison = getSafeTime(a.lastMessageAt) - getSafeTime(b.lastMessageAt)
+            const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0
+            const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0
+            comparison = aTime - bTime
             break
           }
           case 'lastAccessedAt': {
-            comparison = getSafeTime(a.lastAccessedAt) - getSafeTime(b.lastAccessedAt)
+            const aTime = a.lastAccessedAt ? new Date(a.lastAccessedAt).getTime() : 0
+            const bTime = b.lastAccessedAt ? new Date(b.lastAccessedAt).getTime() : 0
+            comparison = aTime - bTime
             break
           }
           default:
-            comparison = (a.position ?? 0) - (b.position ?? 0)
+            comparison = a.position - b.position
             break
         }
 
-        if (comparison === 0) {
-          comparison = (a.position ?? 0) - (b.position ?? 0)
-        }
-
-        if (comparison === 0) {
-          comparison = a.id.localeCompare(b.id)
-        }
-
-        return currentSortDirection === 'asc' ? comparison : -comparison
+        return sortDirection === 'asc' ? comparison : -comparison
       })
 
       return sorted
     },
-    [serverId, serverSortConfigs, getLastAccessed],
+    [sortBy, sortDirection, getLastAccessed],
+  )
+
+  // Wrapped functions that include serverId
+  const setSortBy = useCallback(
+    (by: ChannelSortBy) => {
+      if (!serverId) return
+      setSortByStore(serverId, by)
+    },
+    [serverId, setSortByStore],
+  )
+
+  const setSortDirection = useCallback(
+    (direction: ChannelSortDirection) => {
+      if (!serverId) return
+      setSortDirectionStore(serverId, direction)
+    },
+    [serverId, setSortDirectionStore],
+  )
+
+  const toggleSortDirection = useCallback(
+    () => {
+      if (!serverId) return
+      toggleSortDirectionStore(serverId)
+    },
+    [serverId, toggleSortDirectionStore],
   )
 
   return useMemo(

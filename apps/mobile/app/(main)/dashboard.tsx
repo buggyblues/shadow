@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigation, useRouter } from 'expo-router'
+import type { LucideIcon } from 'lucide-react-native'
 import {
   Bot,
   Calendar,
@@ -11,13 +12,11 @@ import {
   Globe,
   Heart,
   Home,
-  ListChecks,
   Star,
   Target,
   Wallet,
 } from 'lucide-react-native'
 import { useEffect } from 'react'
-import type { LucideIcon } from 'lucide-react-native'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -64,12 +63,29 @@ export default function DashboardScreen() {
     ? Math.floor((Date.now() - new Date(data.memberSince).getTime()) / 86400000)
     : 0
 
-  const stats: { label: string; value: string | number; Icon: LucideIcon; color: string; isShrimpCoin?: boolean }[] = [
+  const stats: {
+    label: string
+    value: string | number
+    Icon: LucideIcon
+    color: string
+    isShrimpCoin?: boolean
+  }[] = [
     { label: '创建服务器', value: data?.serversOwned ?? 0, Icon: Home, color: '#5865F2' },
     { label: '加入服务器', value: data?.serversJoined ?? 0, Icon: Globe, color: '#3B82F6' },
     { label: 'Buddy 数量', value: data?.buddyCount ?? 0, Icon: Bot, color: '#00C8D6' },
-    { label: 'Buddy 在线', value: `${data?.buddyOnlineHours ?? 0}h`, Icon: Clock, color: '#10B981' },
-    { label: '虾币余额', value: data?.walletBalance ?? 0, Icon: Coins, color: '#F43F5E', isShrimpCoin: true },
+    {
+      label: 'Buddy 在线',
+      value: `${data?.buddyOnlineHours ?? 0}h`,
+      Icon: Clock,
+      color: '#10B981',
+    },
+    {
+      label: '虾币余额',
+      value: data?.walletBalance ?? 0,
+      Icon: Coins,
+      color: '#F43F5E',
+      isShrimpCoin: true,
+    },
     {
       label: '任务完成',
       value: `${data?.tasksCompleted ?? 0}/${data?.tasksTotal ?? 0}`,
@@ -189,10 +205,30 @@ export default function DashboardScreen() {
             <Text style={[styles.sectionTitle, { color: colors.text }]}>快捷入口</Text>
             {(
               [
-                { label: '任务中心', Icon: Target, color: '#ED4245', route: '/(main)/settings/tasks' },
-                { label: '邀请好友', Icon: Heart, color: '#EB459E', route: '/(main)/settings/invite' },
-                { label: 'Buddy 管理', Icon: Bot, color: '#00C8D6', route: '/(main)/settings/buddy' },
-                { label: '钱包明细', Icon: Wallet, color: '#F0B132', route: '/(main)/settings/tasks' },
+                {
+                  label: '任务中心',
+                  Icon: Target,
+                  color: '#ED4245',
+                  route: '/(main)/settings/tasks',
+                },
+                {
+                  label: '邀请好友',
+                  Icon: Heart,
+                  color: '#EB459E',
+                  route: '/(main)/settings/invite',
+                },
+                {
+                  label: 'Buddy 管理',
+                  Icon: Bot,
+                  color: '#00C8D6',
+                  route: '/(main)/settings/buddy',
+                },
+                {
+                  label: '钱包明细',
+                  Icon: Wallet,
+                  color: '#F0B132',
+                  route: '/(main)/settings/tasks',
+                },
               ] as const
             ).map((link, idx) => (
               <Pressable

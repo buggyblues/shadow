@@ -139,11 +139,15 @@ export default function MyRentalsScreen() {
             <View style={styles.row}>
               <Clock size={12} color={colors.textMuted} />
               <Text style={[styles.meta, { color: colors.textMuted }]}>{duration}</Text>
-              <Text style={[styles.meta, { color: colors.textMuted }]}><PriceCompact amount={c.hourlyRate} size={12} /></Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>
+                <PriceCompact amount={c.hourlyRate} size={12} />
+              </Text>
             </View>
           </View>
           <View style={styles.cardRight}>
-            <Text style={[styles.totalCost, { color: colors.primary }]}><PriceCompact amount={c.totalCost} size={14} /></Text>
+            <Text style={[styles.totalCost, { color: colors.primary }]}>
+              <PriceCompact amount={c.totalCost} size={14} />
+            </Text>
             <Text style={[styles.meta, { color: colors.textMuted }]}>
               {new Date(c.createdAt).toLocaleDateString()}
             </Text>
@@ -176,7 +180,9 @@ export default function MyRentalsScreen() {
             </View>
             <Text style={[styles.cardTitle, { color: colors.text }]}>{l.title}</Text>
             <View style={styles.row}>
-              <Text style={[styles.meta, { color: colors.textMuted }]}><PriceCompact amount={l.hourlyRate} size={12} /></Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>
+                <PriceCompact amount={l.hourlyRate} size={12} />
+              </Text>
               <Eye size={12} color={colors.textMuted} />
               <Text style={[styles.meta, { color: colors.textMuted }]}>{l.viewCount}</Text>
               <Users size={12} color={colors.textMuted} />

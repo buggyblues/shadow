@@ -1,3 +1,4 @@
+import type { ChannelSortBy } from '@shadow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -5,6 +6,7 @@ import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import {
   ArrowDown,
   ArrowUp,
+  ArrowUpDown,
   Calendar,
   ChevronDown,
   ChevronLeft,
@@ -16,6 +18,7 @@ import {
   LockOpen,
   Megaphone,
   MessageSquare,
+  MoreHorizontal,
   Plus,
   Search,
   Settings,
@@ -23,13 +26,13 @@ import {
   UserPlus,
   Volume2,
   X,
-  ArrowUpDown,
 } from 'lucide-react-native'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Alert,
   Animated,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -43,7 +46,6 @@ import {
 } from 'react-native'
 import Reanimated, { FadeInDown } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-
 import {
   AgentCatSvg,
   ChannelCatSvg,
@@ -57,13 +59,16 @@ import { fetchApi, getImageUrl } from '../../../../src/lib/api'
 import { setLastChannel } from '../../../../src/lib/last-channel'
 import { showToast } from '../../../../src/lib/toast'
 import { useAuthStore } from '../../../../src/stores/auth.store'
-import { fontSize, radius, spacing, useColors } from '../../../../src/theme'
-import type { Channel, ChannelSortBy } from '@shadow/shared'
+import { spacing, useColors } from '../../../../src/theme'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-interface ServerChannel extends Channel {
+interface Channel {
+  id: string
+  name: string
+  type: 'text' | 'voice' | 'announcement'
   categoryId: string | null
+  position: number
   isPrivate?: boolean
 }
 
@@ -90,21 +95,8 @@ interface Member {
     username: string
     displayName: string | null
     avatarUrl: string | null
-    isBot?: boolean
   }
   role: string
-}
-
-interface BuddyAgent {
-  id: string
-  ownerId: string
-  userId: string
-  botUser?: {
-    id: string
-    username: string
-    displayName?: string | null
-    avatarUrl?: string | null
-  } | null
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -138,13 +130,18 @@ export default function ServerHomeScreen() {
 
   // State
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set())
+  const [showCreateChannel, setShowCreateChannel] = useState(false)
+  const [newChannelName, setNewChannelName] = useState('')
+  const [newChannelType, setNewChannelType] = useState<'text' | 'voice' | 'announcement'>('text')
+  const [newChannelCategoryId, setNewChannelCategoryId] = useState<string | null>(null)
   const [showSearch, setShowSearch] = useState(false)
   const [channelSearch, setChannelSearch] = useState('')
-  const [contextChannel, setContextChannel] = useState<ServerChannel | null>(null)
-  const [editingChannel, setEditingChannel] = useState<ServerChannel | null>(null)
+  const [contextChannel, setContextChannel] = useState<Channel | null>(null)
+  const [editingChannel, setEditingChannel] = useState<Channel | null>(null)
   const [editChannelName, setEditChannelName] = useState('')
   const [showSortModal, setShowSortModal] = useState(false)
 
+  // Channel sort
   // ── Queries ─────────────────────────────────────
 
   const { data: server, isLoading: isServerLoading } = useQuery({
@@ -153,7 +150,6 @@ export default function ServerHomeScreen() {
     enabled: !!serverSlug,
   })
 
-  // Channel sort
   const {
     sortBy,
     sortDirection,
@@ -171,7 +167,7 @@ export default function ServerHomeScreen() {
     isRefetching,
   } = useQuery({
     queryKey: ['channels', server?.id],
-    queryFn: () => fetchApi<ServerChannel[]>(`/api/servers/${server!.id}/channels`),
+    queryFn: () => fetchApi<Channel[]>(`/api/servers/${server!.id}/channels`),
     enabled: !!server?.id,
   })
 
@@ -188,7 +184,6 @@ export default function ServerHomeScreen() {
   })
 
   const members = memberData ?? []
-
   const onlineCount = members.filter(
     (m) => m.user && ((m as { user: { status?: string } }).user.status ?? 'offline') !== 'offline',
   ).length
@@ -201,6 +196,30 @@ export default function ServerHomeScreen() {
       headerShown: false,
     })
   }, [navigation])
+
+  // ── Create Channel ─────────────────────────────
+
+  const createChannelMutation = useMutation({
+    mutationFn: () =>
+      fetchApi<{ id: string }>(`/api/servers/${server!.id}/channels`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: newChannelName,
+          type: newChannelType,
+          categoryId: newChannelCategoryId,
+        }),
+      }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['channels', server?.id] })
+      setShowCreateChannel(false)
+      setNewChannelName('')
+      // Navigate to channel members screen with auto-invite
+      router.push(
+        `/(main)/servers/${serverSlug}/channel-members?channelId=${data.id}&autoInvite=1` as never,
+      )
+    },
+    onError: (err: any) => showToast(err?.message || t('common.error'), 'error'),
+  })
 
   // ── Channel actions ────────────────────────────
 
@@ -454,13 +473,18 @@ export default function ServerHomeScreen() {
                   styles.actionBubble,
                   hasCustomSort
                     ? { backgroundColor: colors.primary, borderColor: colors.primary }
-                    : { backgroundColor: glassCardStyle.backgroundColor, borderColor: colors.border },
+                    : {
+                        backgroundColor: glassCardStyle.backgroundColor,
+                        borderColor: colors.border,
+                      },
                 ]}
               >
-                <ArrowUpDown size={18} color={hasCustomSort ? '#fff' : colors.text} strokeWidth={2.5} />
-                {hasCustomSort && (
-                  <View style={[styles.sortBadge, { backgroundColor: '#fff' }]} />
-                )}
+                <ArrowUpDown
+                  size={18}
+                  color={hasCustomSort ? '#fff' : colors.text}
+                  strokeWidth={2.5}
+                />
+                {hasCustomSort && <View style={[styles.sortBadge, { backgroundColor: '#fff' }]} />}
               </View>
             </SquishyCard>
             <SquishyCard onPress={() => setShowSearch(!showSearch)}>
@@ -474,9 +498,7 @@ export default function ServerHomeScreen() {
               </View>
             </SquishyCard>
             {isOwner && (
-              <SquishyCard
-                onPress={() => router.push(`/(main)/servers/${serverSlug}/create-channel` as never)}
-              >
+              <SquishyCard onPress={() => setShowCreateChannel(true)}>
                 <View
                   style={[
                     styles.actionBubble,
@@ -558,7 +580,6 @@ export default function ServerHomeScreen() {
                       key={channel.id}
                       style={[styles.channelPill, { backgroundColor: colors.inputBackground }]}
                       onPress={() => {
-                        updateLastAccessed(channel.id)
                         if (server) setLastChannel(server.id, channel.id)
                         router.push(`/(main)/servers/${serverSlug}/channels/${channel.id}` as any)
                       }}
@@ -590,11 +611,7 @@ export default function ServerHomeScreen() {
                 {t('server.noChannels')}
               </Text>
               {isOwner && (
-                <SquishyCard
-                  onPress={() =>
-                    router.push(`/(main)/servers/${serverSlug}/create-channel` as never)
-                  }
-                >
+                <SquishyCard onPress={() => setShowCreateChannel(true)}>
                   <LinearGradient colors={['#00f3ff', '#00a2ff']} style={styles.cuteCreateBtn}>
                     <Plus size={18} color="#1a1a1c" strokeWidth={3} />
                     <Text style={styles.cuteCreateBtnText}>{t('server.createChannel')}</Text>
@@ -605,6 +622,154 @@ export default function ServerHomeScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* ── Create Channel Modal ──────────────────── */}
+      <Modal visible={showCreateChannel} transparent animationType="fade">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                {t('server.createChannel')}
+              </Text>
+              <Pressable onPress={() => setShowCreateChannel(false)} hitSlop={8}>
+                <X size={24} color={colors.textMuted} strokeWidth={2.5} />
+              </Pressable>
+            </View>
+
+            <Text style={[styles.cuteLabel, { color: colors.text }]}>
+              {t('server.channelName')}
+            </Text>
+            <TextInput
+              style={[
+                styles.cuteInput,
+                {
+                  backgroundColor: colors.inputBackground,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
+              value={newChannelName}
+              onChangeText={setNewChannelName}
+              placeholder={t('server.channelNamePlaceholder')}
+              placeholderTextColor={colors.textMuted}
+              autoFocus
+            />
+
+            <Text style={[styles.cuteLabel, { color: colors.text, marginTop: spacing.lg }]}>
+              {t('server.channelType')}
+            </Text>
+            <View style={styles.typeRow}>
+              {(['text', 'voice', 'announcement'] as const).map((type) => (
+                <Pressable
+                  key={type}
+                  style={[
+                    styles.cuteTypeBtn,
+                    {
+                      backgroundColor:
+                        newChannelType === type ? '#00f3ff20' : colors.inputBackground,
+                      borderColor: newChannelType === type ? '#00f3ff' : colors.border,
+                    },
+                  ]}
+                  onPress={() => setNewChannelType(type)}
+                >
+                  {channelIcon(type, newChannelType === type ? '#00c3cc' : colors.textMuted, 24)}
+                  <Text
+                    style={[
+                      styles.typeBtnText,
+                      { color: newChannelType === type ? '#00c3cc' : colors.text },
+                    ]}
+                  >
+                    {channelTypeLabel(type)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {categories.length > 0 && (
+              <>
+                <Text style={[styles.cuteLabel, { color: colors.text, marginTop: spacing.lg }]}>
+                  {t('server.channelCategory')}
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={{ flexGrow: 0 }}
+                  contentContainerStyle={{ gap: spacing.sm }}
+                >
+                  <Pressable
+                    style={[
+                      styles.cuteCatChip,
+                      {
+                        backgroundColor: !newChannelCategoryId
+                          ? '#ff7da520'
+                          : colors.inputBackground,
+                        borderColor: !newChannelCategoryId ? '#ff7da5' : colors.border,
+                      },
+                    ]}
+                    onPress={() => setNewChannelCategoryId(null)}
+                  >
+                    <Text
+                      style={[
+                        styles.catChipText,
+                        { color: !newChannelCategoryId ? '#e85b85' : colors.text },
+                      ]}
+                    >
+                      {t('server.noCategory')}
+                    </Text>
+                  </Pressable>
+                  {categories.map((cat) => (
+                    <Pressable
+                      key={cat.id}
+                      style={[
+                        styles.cuteCatChip,
+                        {
+                          backgroundColor:
+                            newChannelCategoryId === cat.id ? '#f8e71c20' : colors.inputBackground,
+                          borderColor: newChannelCategoryId === cat.id ? '#f8e71c' : colors.border,
+                        },
+                      ]}
+                      onPress={() => setNewChannelCategoryId(cat.id)}
+                    >
+                      <Text
+                        style={[
+                          styles.catChipText,
+                          { color: newChannelCategoryId === cat.id ? '#b3a100' : colors.text },
+                        ]}
+                      >
+                        {cat.name}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </>
+            )}
+
+            <SquishyCard
+              onPress={() => createChannelMutation.mutate()}
+              disabled={!newChannelName.trim() || createChannelMutation.isPending}
+              style={{ marginTop: spacing.xl }}
+            >
+              <LinearGradient
+                colors={['#00f3ff', '#00a2ff']}
+                style={[
+                  styles.cuteModalBtn,
+                  { opacity: !newChannelName.trim() || createChannelMutation.isPending ? 0.5 : 1 },
+                ]}
+              >
+                <Text style={styles.cuteModalBtnText}>{t('common.create')}</Text>
+              </LinearGradient>
+            </SquishyCard>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* Channel context menu */}
       <Modal
@@ -791,7 +956,12 @@ export default function ServerHomeScreen() {
       </Modal>
 
       {/* Sort Modal - Bottom Sheet Style */}
-      <Modal visible={showSortModal} transparent animationType="slide" onRequestClose={() => setShowSortModal(false)}>
+      <Modal
+        visible={showSortModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowSortModal(false)}
+      >
         <TouchableOpacity
           style={[styles.sortOverlay, { backgroundColor: colors.overlay }]}
           activeOpacity={1}
@@ -807,11 +977,31 @@ export default function ServerHomeScreen() {
             </Text>
             <View style={styles.sortOptionsContainer}>
               {[
-                { value: 'position' as ChannelSortBy, label: t('sort.byPosition', '默认顺序'), icon: ArrowUpDown },
-                { value: 'lastMessageAt' as ChannelSortBy, label: t('sort.byLastMessage', '最新消息'), icon: MessageSquare },
-                { value: 'lastAccessedAt' as ChannelSortBy, label: t('sort.byLastAccessed', '访问时间'), icon: Clock },
-                { value: 'createdAt' as ChannelSortBy, label: t('sort.byCreatedAt', '创建时间'), icon: Calendar },
-                { value: 'updatedAt' as ChannelSortBy, label: t('sort.byUpdatedAt', '更新时间'), icon: Clock },
+                {
+                  value: 'position' as ChannelSortBy,
+                  label: t('sort.byPosition', '默认顺序'),
+                  icon: MoreHorizontal,
+                },
+                {
+                  value: 'createdAt' as ChannelSortBy,
+                  label: t('sort.byCreatedAt', '创建时间'),
+                  icon: Calendar,
+                },
+                {
+                  value: 'updatedAt' as ChannelSortBy,
+                  label: t('sort.byUpdatedAt', '更新时间'),
+                  icon: Clock,
+                },
+                {
+                  value: 'lastMessageAt' as ChannelSortBy,
+                  label: t('sort.byLastMessage', '最新消息'),
+                  icon: MessageSquare,
+                },
+                {
+                  value: 'lastAccessedAt' as ChannelSortBy,
+                  label: t('sort.byLastAccessed', '访问时间'),
+                  icon: Clock,
+                },
               ].map((option) => {
                 const Icon = option.icon
                 const isSelected = sortBy === option.value
@@ -832,10 +1022,24 @@ export default function ServerHomeScreen() {
                       setShowSortModal(false)
                     }}
                   >
-                    <View style={[styles.sortOptionIcon, { backgroundColor: isSelected ? `${colors.primary}25` : colors.inputBackground }]}>
+                    <View
+                      style={[
+                        styles.sortOptionIcon,
+                        {
+                          backgroundColor: isSelected
+                            ? `${colors.primary}25`
+                            : colors.inputBackground,
+                        },
+                      ]}
+                    >
                       <Icon size={20} color={isSelected ? colors.primary : colors.textSecondary} />
                     </View>
-                    <Text style={[styles.sortOptionText, { color: isSelected ? colors.primary : colors.text }]}>
+                    <Text
+                      style={[
+                        styles.sortOptionText,
+                        { color: isSelected ? colors.primary : colors.text },
+                      ]}
+                    >
                       {option.label}
                     </Text>
                     {isSelected && (
@@ -1150,6 +1354,12 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 24,
   },
+  cuteModalBtnText: {
+    color: '#1a1a1c',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+
   // Context menu
   ctxOverlay: {
     flex: 1,
