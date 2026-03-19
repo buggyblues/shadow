@@ -24,7 +24,7 @@ export class ClawListingDao {
   }
 
   /** Helper: get IDs of listings currently actively rented */
-  private async getActivelyRentedListingIds(): Promise<string[]> {
+  async getActivelyRentedListingIds(): Promise<string[]> {
     const rows = await this.db
       .select({ listingId: rentalContracts.listingId })
       .from(rentalContracts)

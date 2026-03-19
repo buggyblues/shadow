@@ -165,7 +165,7 @@ export function MyRentalsPage() {
         body: JSON.stringify({ userId: agentUserId }),
       }),
     onSuccess: (data) => {
-      navigate({ to: '/dm/$dmChannelId', params: { dmChannelId: data.id } })
+      navigate({ to: '/settings', search: { tab: 'chat', dm: data.id } })
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })
@@ -183,13 +183,13 @@ export function MyRentalsPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <Link
-              to="/buddies"
+            <a
+              href="/buddies"
               className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-800 transition-colors font-bold mb-2"
             >
               <ChevronLeft className="w-5 h-5" />
               {t('marketplace.backToMarket', '返回集市')}
-            </Link>
+            </a>
             <h1 style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }} className="text-3xl font-bold">
               {t('marketplace.myRentals', '我的租赁')}
             </h1>

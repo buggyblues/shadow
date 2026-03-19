@@ -173,6 +173,10 @@ const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/settings',
   component: SettingsPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: (search.tab as string) || undefined,
+    dm: (search.dm as string) || undefined,
+  }),
 })
 
 const buddyMgmtRoute = createRoute({
