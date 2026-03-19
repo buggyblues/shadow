@@ -19,6 +19,7 @@ import { createSearchHandler } from './handlers/search.handler'
 import { createServerHandler } from './handlers/server.handler'
 import { createShopHandler } from './handlers/shop.handler'
 import { createTaskCenterHandler } from './handlers/task-center.handler'
+import voiceEnhanceHandler from './handlers/voice-enhance.handler'
 import { createWorkspaceHandler } from './handlers/workspace.handler'
 import { logger } from './lib/logger'
 import { loggerMiddleware } from './middleware/logger.middleware'
@@ -97,6 +98,7 @@ export function createApp(container: AppContainer) {
   app.route('/api', createTaskCenterHandler(container))
   app.route('/api', createShopHandler(container))
   app.route('/api', createRentalHandler(container))
+  app.route('/api/voice', voiceEnhanceHandler)
 
   // 404 handler
   app.notFound((c) => c.json({ error: 'Not Found' }, 404))

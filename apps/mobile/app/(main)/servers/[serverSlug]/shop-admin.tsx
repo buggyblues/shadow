@@ -95,7 +95,9 @@ export default function ShopAdminScreen() {
             <View style={[styles.card, { backgroundColor: colors.surface }]}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.name, { color: colors.text }]}>{item.name}</Text>
-                <Text style={{ color: colors.primary, fontWeight: '700' }}><PriceCompact amount={item.price} size={14} /></Text>
+                <Text style={{ color: colors.primary, fontWeight: '700' }}>
+                  <PriceCompact amount={item.price} size={14} />
+                </Text>
                 <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
                   {item.status} · {item.stock != null ? `${t('shop.stock')}: ${item.stock}` : '∞'}
                 </Text>

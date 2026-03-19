@@ -54,6 +54,7 @@ import { SearchService } from './services/search.service'
 import { ServerService } from './services/server.service'
 import { ShopService } from './services/shop.service'
 import { TaskCenterService } from './services/task-center.service'
+import { VoiceEnhanceService } from './services/voice-enhance.service'
 import { WalletService } from './services/wallet.service'
 import { WorkspaceService } from './services/workspace.service'
 
@@ -129,6 +130,7 @@ export interface Cradle {
   workspaceService: WorkspaceService
   rentalService: RentalService
   taskCenterService: TaskCenterService
+  voiceEnhanceService: VoiceEnhanceService
 }
 
 export type AppContainer = AwilixContainer<Cradle>
@@ -210,6 +212,7 @@ export function createAppContainer(db: Database): AppContainer {
     workspaceService: asClass(WorkspaceService).singleton(),
     rentalService: asClass(RentalService).singleton(),
     taskCenterService: asClass(TaskCenterService).singleton(),
+    voiceEnhanceService: asClass(VoiceEnhanceService).singleton(),
   })
 
   return container

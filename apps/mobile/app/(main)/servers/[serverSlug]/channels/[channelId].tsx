@@ -34,8 +34,8 @@ import { ChatComposer } from '../../../../../src/components/chat/chat-composer'
 import { MessageBubble } from '../../../../../src/components/chat/message-bubble'
 import { Avatar } from '../../../../../src/components/common/avatar'
 import { StatusBadge } from '../../../../../src/components/common/status-badge'
-import { useChatVoiceInput } from '../../../../../src/hooks/use-chat-voice-input'
 import { useSocketEvent } from '../../../../../src/hooks/use-socket'
+import { useVoiceInput } from '../../../../../src/hooks/use-voice-input'
 import { fetchApi } from '../../../../../src/lib/api'
 import { setLastChannel } from '../../../../../src/lib/last-channel'
 import { getSocket, leaveChannel, sendTyping, sendWsMessage } from '../../../../../src/lib/socket'
@@ -100,13 +100,20 @@ export default function ChannelViewScreen() {
 
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const typingUsersTimeout = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
-  const { isRecording, voiceTranscript, toggleVoiceInput } = useChatVoiceInput({
+  const {
+    isRecording,
+    isHolding,
+    onPressIn: onVoicePressIn,
+    onPressOut: onVoicePressOut,
+    speechSupported,
+  } = useVoiceInput({
     speechLang: t('chat.speechLang'),
     onPermissionDenied: () => Alert.alert(t('common.error'), t('chat.micPermissionDenied')),
     onUnavailable: () => Alert.alert(t('common.error'), t('chat.voiceInputUnavailable')),
-    onCommitTranscript: (transcript) => {
-      setInputText((prev) => (prev ? `${prev} ${transcript}` : transcript))
+    onTranscriptChange: (transcript) => {
+      setInputText(transcript)
     },
+    getCurrentText: () => inputText,
   })
 
   // ---------- Channel info ----------
@@ -1359,10 +1366,12 @@ export default function ChannelViewScreen() {
         onClearReply={() => setReplyTo(null)}
         typingUsers={typingUsers}
         isRecording={isRecording}
-        voiceTranscript={voiceTranscript}
+        isHolding={isHolding}
         keyboardVisible={keyboardVisible}
         insetsBottom={insets.bottom}
-        onToggleVoice={toggleVoiceInput}
+        canUseVoice={speechSupported}
+        onVoicePressIn={onVoicePressIn}
+        onVoicePressOut={onVoicePressOut}
         showAtButton
         onPressAt={() => {
           setInputText((prev) => `${prev}@`)

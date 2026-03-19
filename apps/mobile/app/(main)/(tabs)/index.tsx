@@ -1,18 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
-import {
-  ChevronRight,
-  Compass,
-  Hash,
-  HelpCircle,
-  Plus,
-  Search,
-  Users,
-  X,
-} from 'lucide-react-native'
+import { ChevronRight, Hash, HelpCircle, Plus, Search, Users, X } from 'lucide-react-native'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,

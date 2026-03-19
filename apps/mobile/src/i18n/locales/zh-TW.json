@@ -251,9 +251,6 @@
     "byLastAccessed": "存取時間"
   },
   "channel": {
-    "noCategory": "未分類"
-  },
-  "channel": {
     "serverSettings": "伺服器設定",
     "announcement": "公告頻道",
     "text": "文字頻道",

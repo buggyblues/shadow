@@ -4,14 +4,13 @@ import Animated, {
   useAnimatedProps,
   useSharedValue,
   withSequence,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated'
 import Svg, { Circle, Ellipse, Line, Path, Rect } from 'react-native-svg'
 
 const AnimatedPath = Animated.createAnimatedComponent(Path)
 const AnimatedRect = Animated.createAnimatedComponent(Rect)
-const AnimatedCircle = Animated.createAnimatedComponent(Circle)
+const _AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
 // Members: Abstract people group icon
 export function AgentCatSvg({

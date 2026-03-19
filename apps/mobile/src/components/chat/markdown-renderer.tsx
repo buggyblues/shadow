@@ -1,6 +1,6 @@
+import * as Clipboard from 'expo-clipboard'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
-import * as Clipboard from 'expo-clipboard'
 import { Check, Copy } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
@@ -194,14 +194,7 @@ export function MarkdownRenderer({ content, mentionMap }: MarkdownRendererProps)
       },
       fence: (node, _children, _parent, styles) => {
         const code = node.content || ''
-        return (
-          <CodeBlockWithCopy
-            key={node.key}
-            code={code}
-            style={styles.fence}
-            colors={colors}
-          />
-        )
+        return <CodeBlockWithCopy key={node.key} code={code} style={styles.fence} colors={colors} />
       },
     }),
     [colors],

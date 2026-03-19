@@ -1,23 +1,16 @@
+import type { ChannelSortBy } from '@shadow/shared'
 import {
-  ArrowUpDown,
   ArrowDown,
   ArrowUp,
   Calendar,
   Check,
   Clock,
   MessageSquare,
+  MoreHorizontal,
 } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
-import type { ChannelSortBy } from '@shadow/shared'
+import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useChannelSort } from '../../hooks/use-channel-sort'
 import { fontSize, radius, spacing, useColors } from '../../theme'
 
@@ -27,22 +20,34 @@ interface SortOption {
   icon: typeof Calendar
 }
 
-interface ChannelSortButtonProps {
-  serverId: string
-}
-
-export function ChannelSortButton({ serverId }: ChannelSortButtonProps) {
+export function ChannelSortButton() {
   const { t } = useTranslation()
   const colors = useColors()
   const [modalVisible, setModalVisible] = useState(false)
-  const { sortBy, sortDirection, setSortBy, toggleSortDirection } = useChannelSort(serverId)
+  const { sortBy, sortDirection, setSortBy, toggleSortDirection } = useChannelSort()
 
   const sortOptions: SortOption[] = [
-    { value: 'position', label: t('sort.byPosition', { defaultValue: '默认顺序' }), icon: ArrowUpDown },
-    { value: 'lastMessageAt', label: t('sort.byLastMessage', { defaultValue: '最新消息' }), icon: MessageSquare },
-    { value: 'lastAccessedAt', label: t('sort.byLastAccessed', { defaultValue: '访问时间' }), icon: Clock },
-    { value: 'createdAt', label: t('sort.byCreatedAt', { defaultValue: '创建时间' }), icon: Calendar },
+    {
+      value: 'position',
+      label: t('sort.byPosition', { defaultValue: '默认顺序' }),
+      icon: MoreHorizontal,
+    },
+    {
+      value: 'createdAt',
+      label: t('sort.byCreatedAt', { defaultValue: '创建时间' }),
+      icon: Calendar,
+    },
     { value: 'updatedAt', label: t('sort.byUpdatedAt', { defaultValue: '更新时间' }), icon: Clock },
+    {
+      value: 'lastMessageAt',
+      label: t('sort.byLastMessage', { defaultValue: '最新消息' }),
+      icon: MessageSquare,
+    },
+    {
+      value: 'lastAccessedAt',
+      label: t('sort.byLastAccessed', { defaultValue: '访问时间' }),
+      icon: Clock,
+    },
   ]
 
   const currentOption = sortOptions.find((opt) => opt.value === sortBy) || sortOptions[0]!
@@ -81,7 +86,12 @@ export function ChannelSortButton({ serverId }: ChannelSortButtonProps) {
           activeOpacity={1}
           onPress={() => setModalVisible(false)}
         >
-          <View style={[styles.modalContent, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <Text style={[styles.modalTitle, { color: colors.text }]}>
               {t('sort.title', { defaultValue: '排序方式' })}
             </Text>
@@ -91,16 +101,10 @@ export function ChannelSortButton({ serverId }: ChannelSortButtonProps) {
               return (
                 <Pressable
                   key={option.value}
-                  style={[
-                    styles.option,
-                    isSelected && { backgroundColor: `${colors.primary}15` },
-                  ]}
+                  style={[styles.option, isSelected && { backgroundColor: `${colors.primary}15` }]}
                   onPress={() => handleSelectSort(option.value)}
                 >
-                  <Icon
-                    size={18}
-                    color={isSelected ? colors.primary : colors.textSecondary}
-                  />
+                  <Icon size={18} color={isSelected ? colors.primary : colors.textSecondary} />
                   <Text
                     style={[
                       styles.optionText,

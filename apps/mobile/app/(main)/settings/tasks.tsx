@@ -2,8 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check } from 'lucide-react-native'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
-import { SettingsHeader } from '../../../src/components/common/settings-header'
 import { PriceCompact } from '../../../src/components/common/price-display'
+import { SettingsHeader } from '../../../src/components/common/settings-header'
 import { ShrimpCoinIcon } from '../../../src/components/common/shrimp-coin'
 import { fetchApi } from '../../../src/lib/api'
 import { fontSize, radius, spacing, useColors } from '../../../src/theme'
@@ -89,9 +89,7 @@ export default function TaskCenterScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 4 }}>
                   <Text style={{ color: '#23a559', fontSize: fontSize.xs }}>+</Text>
                   <ShrimpCoinIcon size={12} color="#23a559" />
-                  <Text style={{ color: '#23a559', fontSize: fontSize.xs }}>
-                    {task.reward}
-                  </Text>
+                  <Text style={{ color: '#23a559', fontSize: fontSize.xs }}>{task.reward}</Text>
                 </View>
               </View>
               {task.claimable ? (

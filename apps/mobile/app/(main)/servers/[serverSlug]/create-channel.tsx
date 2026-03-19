@@ -30,7 +30,7 @@ import { LoadingScreen } from '../../../../src/components/common/loading-screen'
 import { fetchApi } from '../../../../src/lib/api'
 import { showToast } from '../../../../src/lib/toast'
 import { useAuthStore } from '../../../../src/stores/auth.store'
-import { fontSize, radius, spacing, useColors } from '../../../../src/theme'
+import { fontSize, spacing, useColors } from '../../../../src/theme'
 
 interface Category {
   id: string
@@ -76,7 +76,7 @@ export default function CreateChannelScreen() {
   const router = useRouter()
   const navigation = useNavigation()
   const queryClient = useQueryClient()
-  const currentUser = useAuthStore((s) => s.user)
+  const _currentUser = useAuthStore((s) => s.user)
   const insets = useSafeAreaInsets()
 
   useEffect(() => {
