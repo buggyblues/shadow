@@ -1,0 +1,248 @@
+{
+  "worktree": ".research/product-v1",
+  "branch": "feature/coldstart-v1",
+  "createdAt": "2026-03-19T10:30:00+08:00",
+  "status": "in_progress",
+  "tasks": [
+    {
+      "id": "task-001",
+      "title": "完成产品方案文档",
+      "status": "completed",
+      "priority": "P0",
+      "assignee": "crawler",
+      "createdAt": "2026-03-19T10:30:00+08:00",
+      "completedAt": "2026-03-19T11:00:00+08:00",
+      "files": [
+        "docs/product-v1-coldstart.md",
+        "docs/database-migrations.md",
+        "docs/api-design.md"
+      ]
+    },
+    {
+      "id": "task-002",
+      "title": "数据库Schema实现 - 钱包表",
+      "status": "pending",
+      "priority": "P0",
+      "assignee": null,
+      "dependencies": [],
+      "files": [
+        "apps/server/src/db/schema/wallets.ts"
+      ]
+    },
+    {
+      "id": "task-003",
+      "title": "数据库Schema实现 - Buddy需求表",
+      "status": "pending",
+      "priority": "P0",
+      "assignee": null,
+      "dependencies": [],
+      "files": [
+        "apps/server/src/db/schema/buddy-demands.ts"
+      ]
+    },
+    {
+      "id": "task-004",
+      "title": "数据库Schema实现 - Claw归属权表",
+      "status": "pending",
+      "priority": "P0",
+      "assignee": null,
+      "dependencies": [],
+      "files": [
+        "apps/server/src/db/schema/claw-ownerships.ts"
+      ]
+    },
+    {
+      "id": "task-005",
+      "title": "虾币充值API实现",
+      "status": "pending",
+      "priority": "P0",
+      "assignee": null,
+      "dependencies": ["task-002"],
+      "files": [
+        "apps/server/src/handlers/wallet.handler.ts",
+        "apps/server/src/services/wallet.service.ts",
+        "apps/server/src/dao/wallet.dao.ts"
+      ]
+    },
+    {
+      "id": "task-006",
+      "title": "租赁支付与结算API",
+      "status": "pending",
+      "priority": "P0",
+      "assignee": null,
+      "dependencies": ["task-002", "task-004"],
+      "files": [
+        "apps/server/src/handlers/rental.handler.ts",
+        "apps/server/src/services/rental.service.ts"
+      ]
+    },
+    {
+      "id": "task-007",
+      "title": "Buddy需求发布API",
+      "status": "pending",
+      "priority": "P0",
+      "assignee": null,
+      "dependencies": ["task-003"],
+      "files": [
+        "apps/server/src/handlers/buddy.handler.ts",
+        "apps/server/src/services/buddy.service.ts",
+        "apps/server/src/dao/buddy-demand.dao.ts"
+      ]
+    },
+    {
+      "id": "task-008",
+      "title": "Buddy接单竞标API",
+      "status": "pending",
+      "priority": "P0",
+      "assignee": null,
+      "dependencies": ["task-003", "task-007"],
+      "files": [
+        "apps/server/src/handlers/buddy-bid.handler.ts",
+        "apps/server/src/dao/buddy-bid.dao.ts"
+      ]
+    },
+    {
+      "id": "task-009",
+      "title": "Claw归属权切换机制",
+      "status": "pending",
+      "priority": "P0",
+      "assignee": null,
+      "dependencies": ["task-004"],
+      "files": [
+        "apps/server/src/services/claw-ownership.service.ts",
+        "apps/server/src/middleware/claw-access.middleware.ts"
+      ]
+    },
+    {
+      "id": "task-010",
+      "title": "Claw私聊通信通道",
+      "status": "pending",
+      "priority": "P0",
+      "assignee": null,
+      "dependencies": ["task-009"],
+      "files": [
+        "apps/server/src/ws/claw-chat.gateway.ts"
+      ]
+    },
+    {
+      "id": "task-011",
+      "title": "Web端钱包页面",
+      "status": "pending",
+      "priority": "P1",
+      "assignee": null,
+      "dependencies": ["task-005"],
+      "files": [
+        "apps/web/src/pages/wallet.tsx",
+        "apps/web/src/components/wallet/balance-card.tsx",
+        "apps/web/src/components/wallet/transaction-list.tsx"
+      ]
+    },
+    {
+      "id": "task-012",
+      "title": "Web端租赁使用界面",
+      "status": "pending",
+      "priority": "P1",
+      "assignee": null,
+      "dependencies": ["task-006", "task-010"],
+      "files": [
+        "apps/web/src/pages/rental-use.tsx",
+        "apps/web/src/components/claw/claw-chat.tsx"
+      ]
+    },
+    {
+      "id": "task-013",
+      "title": "Web端Buddy需求广场",
+      "status": "pending",
+      "priority": "P1",
+      "assignee": null,
+      "dependencies": ["task-007"],
+      "files": [
+        "apps/web/src/pages/buddy-market.tsx",
+        "apps/web/src/components/buddy/demand-card.tsx",
+        "apps/web/src/components/buddy/demand-filter.tsx"
+      ]
+    },
+    {
+      "id": "task-014",
+      "title": "Web端发布需求页面",
+      "status": "pending",
+      "priority": "P1",
+      "assignee": null,
+      "dependencies": ["task-007"],
+      "files": [
+        "apps/web/src/pages/buddy-publish.tsx"
+      ]
+    },
+    {
+      "id": "task-015",
+      "title": "Desktop端Claw连接功能",
+      "status": "pending",
+      "priority": "P1",
+      "assignee": null,
+      "dependencies": ["task-006", "task-010"],
+      "files": [
+        "apps/desktop/src/main/claw/rental-connector.ts"
+      ]
+    },
+    {
+      "id": "task-016",
+      "title": "官方Claw - Excel助手",
+      "status": "pending",
+      "priority": "P2",
+      "assignee": null,
+      "dependencies": [],
+      "files": [
+        "packages/official-claws/excel-assistant/"
+      ]
+    },
+    {
+      "id": "task-017",
+      "title": "官方Claw - 文案生成器",
+      "status": "pending",
+      "priority": "P2",
+      "assignee": null,
+      "dependencies": [],
+      "files": [
+        "packages/official-claws/content-generator/"
+      ]
+    },
+    {
+      "id": "task-018",
+      "title": "官方Claw - 代码小助手",
+      "status": "pending",
+      "priority": "P2",
+      "assignee": null,
+      "dependencies": [],
+      "files": [
+        "packages/official-claws/code-assistant/"
+      ]
+    }
+  ],
+  "milestones": [
+    {
+      "name": "M1: 虾币体系 + 租赁链路",
+      "targetDate": "2026-04-02",
+      "tasks": ["task-002", "task-004", "task-005", "task-006", "task-009"]
+    },
+    {
+      "name": "M2: Claw私聊 + 安全隔离",
+      "targetDate": "2026-04-16",
+      "tasks": ["task-010"]
+    },
+    {
+      "name": "M3: Buddy需求发布",
+      "targetDate": "2026-04-30",
+      "tasks": ["task-003", "task-007", "task-008"]
+    },
+    {
+      "name": "M4: 官方Claw冷启动",
+      "targetDate": "2026-05-14",
+      "tasks": ["task-016", "task-017", "task-018"]
+    },
+    {
+      "name": "M5: 多端适配 + 测试",
+      "targetDate": "2026-05-28",
+      "tasks": ["task-011", "task-012", "task-013", "task-014", "task-015"]
+    }
+  ]
+}
