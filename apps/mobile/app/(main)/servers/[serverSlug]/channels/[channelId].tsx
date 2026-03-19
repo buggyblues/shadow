@@ -35,6 +35,7 @@ import { MessageBubble } from '../../../../../src/components/chat/message-bubble
 import { Avatar } from '../../../../../src/components/common/avatar'
 import { StatusBadge } from '../../../../../src/components/common/status-badge'
 import { useChatVoiceInput } from '../../../../../src/hooks/use-chat-voice-input'
+import { useDraftStorage } from '../../../../../src/hooks/use-draft-storage'
 import { useSocketEvent } from '../../../../../src/hooks/use-socket'
 import { fetchApi } from '../../../../../src/lib/api'
 import { setLastChannel } from '../../../../../src/lib/last-channel'
@@ -97,6 +98,11 @@ export default function ChannelViewScreen() {
   const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null)
   const searchInputRef = useRef<TextInput>(null)
   const inputRef = useRef<TextInput>(null)
+
+  // Draft storage for persistent input
+  const { scheduleSave, clear: clearDraft } = useDraftStorage(channelId || null, (savedText) => {
+    setInputText(savedText)
+  })
 
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const typingUsersTimeout = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
@@ -928,6 +934,10 @@ export default function ChannelViewScreen() {
     setInputText('')
     setReplyTo(null)
     setPendingFiles([])
+
+    // Clear draft after successful send
+    clearDraft()
+
     playSendSound()
 
     try {
@@ -1080,8 +1090,10 @@ export default function ChannelViewScreen() {
       // Detect @mention query
       const match = text.match(/(?:^|\s)@([^\s@]{0,32})$/u)
       setMentionQuery(match ? match[1]! : null)
+      // Auto-save draft (debounced)
+      scheduleSave(text)
     },
-    [handleTyping],
+    [handleTyping, scheduleSave],
   )
 
   // Insert @mention into input

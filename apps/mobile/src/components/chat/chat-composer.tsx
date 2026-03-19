@@ -1,7 +1,18 @@
+import { Image } from 'expo-image'
 import { AtSign, Camera, File, Image as ImageIcon, Mic, Plus, Smile, X } from 'lucide-react-native'
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import {
+  Dimensions,
+  Keyboard,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native'
 import type { EmojiType } from 'rn-emoji-keyboard'
 import EmojiPicker from 'rn-emoji-keyboard'
 import { fontSize, radius, spacing, useColors } from '../../theme'
@@ -34,6 +45,60 @@ interface ChatComposerProps {
   onTakePhoto?: () => void
 }
 
+// Image viewer component for pending files
+function ImageViewerModal({
+  uri,
+  visible,
+  onClose,
+}: {
+  uri: string
+  visible: boolean
+  onClose: () => void
+}) {
+  const colors = useColors()
+  const { t } = useTranslation()
+  const screenWidth = Dimensions.get('window').width
+  const screenHeight = Dimensions.get('window').height
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <View style={[styles.imageViewerOverlay, { backgroundColor: 'rgba(0,0,0,0.95)' }]}>
+        {/* Header */}
+        <View style={styles.imageViewerHeader}>
+          <Pressable onPress={onClose} hitSlop={8} style={styles.imageViewerCloseBtn}>
+            <X size={24} color="#fff" />
+          </Pressable>
+          <Text style={styles.imageViewerTitle}>{t('chat.imagePreview', '图片预览')}</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        {/* Image */}
+        <Pressable style={styles.imageViewerContent} onPress={onClose}>
+          <Image
+            source={{ uri }}
+            style={{ width: screenWidth, height: screenHeight * 0.7 }}
+            contentFit="contain"
+            transition={200}
+          />
+        </Pressable>
+
+        {/* Hint */}
+        <View style={styles.imageViewerHint}>
+          <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: fontSize.sm }}>
+            {t('chat.tapToClose', '点击关闭')}
+          </Text>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
 export const ChatComposer = memo(function ChatComposer({
   inputText,
   onInputChange,
@@ -62,6 +127,7 @@ export const ChatComposer = memo(function ChatComposer({
 }: ChatComposerProps) {
   const colors = useColors()
   const { t } = useTranslation()
+  const [viewingImageUri, setViewingImageUri] = useState<string | null>(null)
 
   return (
     <>
@@ -82,23 +148,50 @@ export const ChatComposer = memo(function ChatComposer({
           ]}
         >
           {pendingFiles.map((file, idx) => (
-            <View
-              key={`${file.uri}-${idx}`}
-              style={[styles.pendingFileChip, { backgroundColor: colors.inputBackground }]}
-            >
-              <Text
-                style={[styles.pendingFileName, { color: colors.textSecondary }]}
-                numberOfLines={1}
-              >
-                {file.type.startsWith('image/') ? '🖼 ' : '📎 '}
-                {file.name}
-              </Text>
-              <Pressable onPress={() => onRemovePendingFile(idx)} hitSlop={8}>
-                <X size={14} color={colors.textMuted} />
-              </Pressable>
+            <View key={`${file.uri}-${idx}`}>
+              {file.type.startsWith('image/') ? (
+                <Pressable
+                  onPress={() => setViewingImageUri(file.uri)}
+                  style={[styles.pendingImageChip, { backgroundColor: colors.inputBackground }]}
+                >
+                  <Image
+                    source={{ uri: file.uri }}
+                    style={styles.pendingImageThumb}
+                    contentFit="cover"
+                  />
+                  <Pressable
+                    onPress={() => onRemovePendingFile(idx)}
+                    hitSlop={8}
+                    style={styles.pendingImageRemoveBtn}
+                  >
+                    <X size={14} color="#fff" />
+                  </Pressable>
+                </Pressable>
+              ) : (
+                <View style={[styles.pendingFileChip, { backgroundColor: colors.inputBackground }]}>
+                  <Text
+                    style={[styles.pendingFileName, { color: colors.textSecondary }]}
+                    numberOfLines={1}
+                  >
+                    📎 {file.name}
+                  </Text>
+                  <Pressable onPress={() => onRemovePendingFile(idx)} hitSlop={8}>
+                    <X size={14} color={colors.textMuted} />
+                  </Pressable>
+                </View>
+              )}
             </View>
           ))}
         </View>
+      )}
+
+      {/* Image viewer modal */}
+      {viewingImageUri && (
+        <ImageViewerModal
+          uri={viewingImageUri}
+          visible={!!viewingImageUri}
+          onClose={() => setViewingImageUri(null)}
+        />
       )}
 
       {replyTo && (
@@ -345,6 +438,63 @@ const styles = StyleSheet.create({
   pendingFileName: {
     fontSize: fontSize.xs,
     flexShrink: 1,
+  },
+  pendingImageChip: {
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  pendingImageThumb: {
+    width: 80,
+    height: 80,
+    borderRadius: radius.md,
+  },
+  pendingImageRemoveBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Image viewer styles
+  imageViewerOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingTop: Platform.OS === 'ios' ? 50 : spacing.xl,
+    paddingBottom: spacing.md,
+    width: '100%',
+  },
+  imageViewerCloseBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageViewerTitle: {
+    color: '#fff',
+    fontSize: fontSize.md,
+    fontWeight: '600',
+  },
+  imageViewerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
+  imageViewerHint: {
+    paddingBottom: spacing.xl,
+    alignItems: 'center',
   },
   replyBar: {
     flexDirection: 'row',
