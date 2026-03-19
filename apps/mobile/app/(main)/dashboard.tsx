@@ -23,6 +23,8 @@ import Reanimated, { FadeIn, FadeInDown } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Avatar } from '../../src/components/common/avatar'
 import { LoadingScreen } from '../../src/components/common/loading-screen'
+import { PriceCompact } from '../../src/components/common/price-display'
+import { ShrimpCoinIcon } from '../../src/components/common/shrimp-coin'
 import { fetchApi } from '../../src/lib/api'
 import { useAuthStore } from '../../src/stores/auth.store'
 import { fontSize, radius, spacing, useColors } from '../../src/theme'
@@ -62,12 +64,12 @@ export default function DashboardScreen() {
     ? Math.floor((Date.now() - new Date(data.memberSince).getTime()) / 86400000)
     : 0
 
-  const stats: { label: string; value: string | number; Icon: LucideIcon; color: string }[] = [
+  const stats: { label: string; value: string | number; Icon: LucideIcon; color: string; isShrimpCoin?: boolean }[] = [
     { label: '创建服务器', value: data?.serversOwned ?? 0, Icon: Home, color: '#5865F2' },
     { label: '加入服务器', value: data?.serversJoined ?? 0, Icon: Globe, color: '#3B82F6' },
     { label: 'Buddy 数量', value: data?.buddyCount ?? 0, Icon: Bot, color: '#00C8D6' },
     { label: 'Buddy 在线', value: `${data?.buddyOnlineHours ?? 0}h`, Icon: Clock, color: '#10B981' },
-    { label: '虾币余额', value: data?.walletBalance ?? 0, Icon: Coins, color: '#F0B132' },
+    { label: '虾币余额', value: data?.walletBalance ?? 0, Icon: Coins, color: '#F43F5E', isShrimpCoin: true },
     {
       label: '任务完成',
       value: `${data?.tasksCompleted ?? 0}/${data?.tasksTotal ?? 0}`,
@@ -131,9 +133,19 @@ export default function DashboardScreen() {
             >
               <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
                 <View style={[styles.statIconWrap, { backgroundColor: `${stat.color}15` }]}>
-                  <stat.Icon size={22} color={stat.color} />
+                  {stat.isShrimpCoin ? (
+                    <ShrimpCoinIcon size={22} color={stat.color} />
+                  ) : (
+                    <stat.Icon size={22} color={stat.color} />
+                  )}
                 </View>
-                <Text style={[styles.statValue, { color: colors.text }]}>{stat.value}</Text>
+                {stat.isShrimpCoin ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                    <PriceCompact amount={Number(stat.value)} size={fontSize.lg} />
+                  </View>
+                ) : (
+                  <Text style={[styles.statValue, { color: colors.text }]}>{stat.value}</Text>
+                )}
                 <Text style={[styles.statLabel, { color: colors.textMuted }]}>{stat.label}</Text>
               </View>
             </Reanimated.View>

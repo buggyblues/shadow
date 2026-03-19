@@ -188,12 +188,14 @@ export function createChannelHandler(container: AppContainer) {
         if (!targetUser.isBot) {
           try {
             const notificationService = container.resolve('notificationService')
+            const inviter = c.get('user')
             const notification = await notificationService.create({
               userId: targetUserId,
               type: 'system',
               title: `You have been added to channel #${channel.name}`,
               referenceId: id,
               referenceType: 'channel_invite',
+              senderId: inviter.userId,
             })
             io.to(`user:${targetUserId}`).emit('notification:new', notification)
           } catch {

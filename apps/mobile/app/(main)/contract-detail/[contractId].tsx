@@ -12,6 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import { PriceCompact } from '../../../src/components/common/price-display'
 import { fetchApi } from '../../../src/lib/api'
 import { showToast } from '../../../src/lib/toast'
 import { useAuthStore } from '../../../src/stores/auth.store'
@@ -146,7 +147,7 @@ export default function ContractDetailScreen() {
           </View>
           <View style={styles.costCol}>
             <Text style={[styles.totalCost, { color: colors.primary }]}>
-              {contract.totalCost} 🦐
+              <PriceCompact amount={contract.totalCost} size={14} />
             </Text>
             <Text style={[styles.costLabel, { color: colors.textMuted }]}>
               {t('marketplace.totalSpent', '累计费用')}
@@ -173,7 +174,7 @@ export default function ContractDetailScreen() {
               </Text>
             </View>
             <Text style={[styles.gridValue, { color: colors.text }]}>
-              {contract.hourlyRate} 🦐/h
+              <PriceCompact amount={contract.hourlyRate} size={14} />
             </Text>
           </View>
           <View style={[styles.gridItem, { backgroundColor: colors.background }]}>
@@ -184,7 +185,7 @@ export default function ContractDetailScreen() {
               </Text>
             </View>
             <Text style={[styles.gridValue, { color: colors.text }]}>
-              {contract.depositAmount} 🦐
+              <PriceCompact amount={contract.depositAmount} size={14} />
             </Text>
           </View>
           <View style={[styles.gridItem, { backgroundColor: colors.background }]}>
@@ -218,7 +219,7 @@ export default function ContractDetailScreen() {
                   → {new Date(r.sessionEnd).toLocaleString()}
                 </Text>
               </View>
-              <Text style={[styles.usageCost, { color: colors.primary }]}>{r.totalCost} 🦐</Text>
+              <Text style={[styles.usageCost, { color: colors.primary }]}><PriceCompact amount={r.totalCost} size={12} /></Text>
             </View>
           ))
         )}

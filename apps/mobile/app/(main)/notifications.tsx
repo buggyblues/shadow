@@ -14,6 +14,7 @@ import {
   type ViewStyle,
 } from 'react-native'
 import Reanimated, { FadeInUp } from 'react-native-reanimated'
+import { Avatar } from '../../src/components/common/avatar'
 import { DottedBackground } from '../../src/components/common/dotted-background'
 import { EmptyState } from '../../src/components/common/empty-state'
 import { LoadingScreen } from '../../src/components/common/loading-screen'
@@ -50,6 +51,8 @@ interface Notification {
   body: string | null
   referenceId: string | null
   referenceType: string | null
+  senderId: string | null
+  senderAvatarUrl: string | null
   isRead: boolean
   createdAt: string
 }
@@ -195,18 +198,27 @@ export default function NotificationsScreen() {
                 onPress={() => handlePress(item)}
               >
                 <View style={styles.notifContent}>
-                  <View
-                    style={[
-                      styles.iconBubble,
-                      {
-                        backgroundColor: item.isRead
-                          ? colors.inputBackground
-                          : `${colors.primary}20`,
-                      },
-                    ]}
-                  >
-                    {getNotifIcon(item.type, item.isRead ? colors.textMuted : colors.primary)}
-                  </View>
+                  {item.senderAvatarUrl ? (
+                    <Avatar
+                      uri={item.senderAvatarUrl}
+                      name={item.title}
+                      size={44}
+                      userId={item.senderId ?? ''}
+                    />
+                  ) : (
+                    <View
+                      style={[
+                        styles.iconBubble,
+                        {
+                          backgroundColor: item.isRead
+                            ? colors.inputBackground
+                            : `${colors.primary}20`,
+                        },
+                      ]}
+                    >
+                      {getNotifIcon(item.type, item.isRead ? colors.textMuted : colors.primary)}
+                    </View>
+                  )}
 
                   <View style={{ flex: 1 }}>
                     <Text

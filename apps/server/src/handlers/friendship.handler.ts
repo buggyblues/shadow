@@ -40,6 +40,7 @@ export function createFriendshipHandler(container: AppContainer) {
               title: `${senderName} sent you a friend request`,
               referenceId: result.id,
               referenceType: 'friendship',
+              senderId: user.userId,
             })
             io.to(`user:${targetUser.id}`).emit('notification:new', notification)
           }

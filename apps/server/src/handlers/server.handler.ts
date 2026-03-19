@@ -136,6 +136,7 @@ export function createServerHandler(container: AppContainer) {
               title: `${displayName} joined your server "${server.name}"`,
               referenceId: server.id,
               referenceType: 'server_join',
+              senderId: user.userId,
             })
             io.to(`user:${server.ownerId}`).emit('notification:new', notification)
           } catch {

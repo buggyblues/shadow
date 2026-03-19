@@ -33,6 +33,8 @@ import {
 } from 'react-native'
 import { EmptyState } from '../../../../src/components/common/empty-state'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
+import { PriceCompact } from '../../../../src/components/common/price-display'
+import { ShrimpCoinIcon } from '../../../../src/components/common/shrimp-coin'
 import { fetchApi, getImageUrl } from '../../../../src/lib/api'
 import { showToast } from '../../../../src/lib/toast'
 import { useAuthStore } from '../../../../src/stores/auth.store'
@@ -432,7 +434,7 @@ export default function ShopScreen() {
         {/* Wallet */}
         <View style={styles.walletChip}>
           <Text style={[styles.walletText, { color: colors.primary }]}>
-            🦐 {wallet?.balance ?? 0}
+            <PriceCompact amount={wallet?.balance ?? 0} size={14} />
           </Text>
         </View>
         {/* View tabs */}
@@ -685,7 +687,7 @@ export default function ShopScreen() {
                         </View>
                       )}
                       <Text style={[styles.productPrice, { color: colors.primary }]}>
-                        🦐 {item.basePrice}
+                        <PriceCompact amount={item.basePrice} size={12} />
                       </Text>
                     </View>
                   </Pressable>
@@ -763,7 +765,7 @@ export default function ShopScreen() {
                     <Text
                       style={{ color: colors.primary, fontWeight: '700', fontSize: fontSize.sm }}
                     >
-                      🦐 {item.price}
+                      <PriceCompact amount={item.price} size={14} />
                     </Text>
                     <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
                       ×{item.quantity}
@@ -773,7 +775,7 @@ export default function ShopScreen() {
               ))}
               <View style={styles.orderFooter}>
                 <Text style={{ color: colors.text, fontWeight: '800' }}>
-                  {t('shop.total')}: 🦐 {order.totalAmount}
+                  {t('shop.total')}: <PriceCompact amount={order.totalAmount} size={14} />
                 </Text>
                 <View style={{ flexDirection: 'row', gap: spacing.sm }}>
                   {(order.status === 'pending' || order.status === 'paid') && (
@@ -848,13 +850,15 @@ export default function ShopScreen() {
                 <View style={styles.detailBody}>
                   {/* Price + favorite */}
                   <View style={styles.detailPriceRow}>
-                    <Text style={[styles.detailPrice, { color: colors.primary }]}>
-                      🦐{' '}
-                      {selectedSkuId
-                        ? ((productDetail?.skus ?? []).find((s) => s.id === selectedSkuId)?.price ??
-                          selectedProduct.basePrice)
-                        : selectedProduct.basePrice}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <ShrimpCoinIcon size={20} color={colors.shrimpCoin} />
+                      <Text style={[styles.detailPrice, { color: colors.shrimpCoin, marginLeft: 4 }]}>
+                        {selectedSkuId
+                          ? ((productDetail?.skus ?? []).find((s) => s.id === selectedSkuId)?.price ??
+                            selectedProduct.basePrice)
+                          : selectedProduct.basePrice}
+                      </Text>
+                    </View>
                     <Pressable onPress={() => toggleFavorite(selectedProduct.id)}>
                       <Heart
                         size={24}
@@ -961,7 +965,7 @@ export default function ShopScreen() {
                                   {sku.specValues.join(' ')}
                                 </Text>
                                 <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                                  🦐{sku.price} · {t('shop.stock')} {sku.stock}
+                                  <PriceCompact amount={sku.price} size={12} /> · {t('shop.stock')} {sku.stock}
                                 </Text>
                               </Pressable>
                             ))}
@@ -1103,7 +1107,7 @@ export default function ShopScreen() {
                           marginTop: 2,
                         }}
                       >
-                        🦐 {item.unitPrice}
+                        <PriceCompact amount={item.unitPrice} size={12} />
                       </Text>
                     </View>
                     <View style={styles.qtyRow}>
@@ -1155,7 +1159,7 @@ export default function ShopScreen() {
                       {t('shop.total')}
                     </Text>
                     <Text style={{ color: colors.text, fontWeight: '800', fontSize: fontSize.xl }}>
-                      🦐 {cartTotal}
+                      <PriceCompact amount={cartTotal} size={14} />
                     </Text>
                   </View>
                   <Pressable

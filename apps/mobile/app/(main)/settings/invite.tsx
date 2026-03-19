@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { SettingsHeader } from '../../../src/components/common/settings-header'
+import { PriceCompact } from '../../../src/components/common/price-display'
 import { fetchApi } from '../../../src/lib/api'
 import { fontSize, radius, spacing, useColors } from '../../../src/theme'
 
@@ -89,7 +90,7 @@ export default function InviteSettingsScreen() {
             </View>
             <View style={styles.referralStat}>
               <Text style={{ color: '#f0b132', fontSize: fontSize.lg, fontWeight: '800' }}>
-                🦐 {referralSummary?.totalInviteRewards ?? 0}
+                <PriceCompact amount={referralSummary?.totalInviteRewards ?? 0} size={17} />
               </Text>
               <Text style={{ color: colors.textMuted, fontSize: 10 }}>已获得</Text>
             </View>

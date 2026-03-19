@@ -119,6 +119,7 @@ export class NotificationService {
     body?: string
     referenceId?: string
     referenceType?: string
+    senderId?: string
   }) {
     return this.deps.notificationDao.create(data)
   }

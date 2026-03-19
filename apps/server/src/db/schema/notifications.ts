@@ -24,6 +24,7 @@ export const notifications = pgTable('notifications', {
   body: text('body'),
   referenceId: uuid('reference_id'),
   referenceType: varchar('reference_type', { length: 50 }),
+  senderId: uuid('sender_id').references(() => users.id, { onDelete: 'set null' }),
   isRead: boolean('is_read').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
