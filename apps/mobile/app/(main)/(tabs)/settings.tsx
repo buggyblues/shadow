@@ -19,8 +19,9 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Avatar } from '../../../src/components/common/avatar'
 import { DottedBackground } from '../../../src/components/common/dotted-background'
+import { PriceCompact } from '../../../src/components/common/price-display'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
-import { ShrimpCoin } from '../../../src/components/common/shrimp-coin'
+import { ShrimpCoinIcon } from '../../../src/components/common/shrimp-coin'
 import { fetchApi } from '../../../src/lib/api'
 import { disconnectSocket } from '../../../src/lib/socket'
 import { useAuthStore } from '../../../src/stores/auth.store'
@@ -207,10 +208,10 @@ export default function SettingsScreen() {
               {/* Wallet + Stats */}
               <View style={styles.profileStatsRow}>
                 {wallet && (
-                  <View style={[styles.profileStat, { backgroundColor: `${colors.primary}10` }]}>
-                    <ShrimpCoin size={16} color={colors.primary} />
+                  <View style={[styles.profileStat, { backgroundColor: `${colors.shrimpCoin}15` }]}>
+                    <ShrimpCoinIcon size={16} color={colors.shrimpCoin} />
                     <Text
-                      style={{ color: colors.primary, fontWeight: '800', fontSize: fontSize.sm }}
+                      style={{ color: colors.shrimpCoin, fontWeight: '800', fontSize: fontSize.sm }}
                     >
                       {wallet.balance}
                     </Text>

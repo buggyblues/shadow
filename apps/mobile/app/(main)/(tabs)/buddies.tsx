@@ -26,6 +26,7 @@ import { Avatar } from '../../../src/components/common/avatar'
 import { EmptyState } from '../../../src/components/common/empty-state'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { OnlineRank } from '../../../src/components/common/online-rank'
+import { PriceCompact } from '../../../src/components/common/price-display'
 import { fetchApi } from '../../../src/lib/api'
 import { fontSize, radius, spacing, useColors } from '../../../src/theme'
 
@@ -198,7 +199,7 @@ export default function BuddiesScreen() {
           {/* Footer: Price + Stats */}
           <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
             <View style={styles.priceRow}>
-              <Text style={[styles.priceValue, { color: '#D97706' }]}>¥{item.hourlyRate}</Text>
+              <PriceCompact amount={item.hourlyRate} size={15} />
               <Text style={[styles.priceUnit, { color: colors.textMuted }]}>/小时</Text>
             </View>
             <View style={styles.statsRow}>
@@ -567,7 +568,7 @@ const styles = StyleSheet.create({
   },
   priceRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
   },
   priceValue: {
     fontSize: fontSize.lg,

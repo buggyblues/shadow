@@ -57,6 +57,7 @@ export const lightColors = {
   statusIdle: '#F0B132',
   statusDnd: '#F23F43',
   statusOffline: '#80848E',
+  shrimpCoin: '#F43F5E',
 }
 
 export const darkColors = {
@@ -87,6 +88,7 @@ export const darkColors = {
   statusIdle: '#F0B132',
   statusDnd: '#F23F43',
   statusOffline: '#80848E',
+  shrimpCoin: '#FB7185',
 }
 
 export type ColorTokens = typeof darkColors

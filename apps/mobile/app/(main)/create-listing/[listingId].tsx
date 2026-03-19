@@ -414,7 +414,7 @@ export default function CreateListingScreen() {
         <View style={styles.fieldRow}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.label, { color: colors.textMuted }]}>
-              {t('marketplace.hourlyRate', '时租')} (🦐/h) *
+              {t('marketplace.hourlyRate', '时租')} (虾币/小时) *
             </Text>
             <TextInput
               style={inputStyle}
@@ -425,7 +425,7 @@ export default function CreateListingScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.label, { color: colors.textMuted }]}>
-              {t('marketplace.dailyRate', '日租')} (🦐/d)
+              {t('marketplace.dailyRate', '日租')} (虾币/天)
             </Text>
             <TextInput
               style={inputStyle}
@@ -436,7 +436,7 @@ export default function CreateListingScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.label, { color: colors.textMuted }]}>
-              {t('marketplace.monthlyRate', '月租')} (🦐/m)
+              {t('marketplace.monthlyRate', '月租')} (虾币/月)
             </Text>
             <TextInput
               style={inputStyle}
@@ -461,7 +461,7 @@ export default function CreateListingScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.label, { color: colors.textMuted }]}>
-              {t('marketplace.deposit', '押金')} (🦐)
+              {t('marketplace.deposit', '押金')} (虾币)
             </Text>
             <TextInput
               style={inputStyle}

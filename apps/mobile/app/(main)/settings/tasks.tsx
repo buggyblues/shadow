@@ -3,7 +3,8 @@ import { Check } from 'lucide-react-native'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { SettingsHeader } from '../../../src/components/common/settings-header'
-import { ShrimpCoin } from '../../../src/components/common/shrimp-coin'
+import { PriceCompact } from '../../../src/components/common/price-display'
+import { ShrimpCoinIcon } from '../../../src/components/common/shrimp-coin'
 import { fetchApi } from '../../../src/lib/api'
 import { fontSize, radius, spacing, useColors } from '../../../src/theme'
 
@@ -63,12 +64,7 @@ export default function TaskCenterScreen() {
           </View>
           <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
             <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>虾币</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <ShrimpCoin size={16} color="#f0b132" />
-              <Text style={{ color: '#f0b132', fontSize: fontSize.lg, fontWeight: '800' }}>
-                {data?.wallet.balance ?? 0}
-              </Text>
-            </View>
+            <PriceCompact amount={data?.wallet.balance ?? 0} size={fontSize.lg} />
           </View>
         </View>
 
@@ -92,7 +88,7 @@ export default function TaskCenterScreen() {
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 4 }}>
                   <Text style={{ color: '#23a559', fontSize: fontSize.xs }}>+</Text>
-                  <ShrimpCoin size={12} color="#23a559" />
+                  <ShrimpCoinIcon size={12} color="#23a559" />
                   <Text style={{ color: '#23a559', fontSize: fontSize.xs }}>
                     {task.reward}
                   </Text>

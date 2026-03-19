@@ -16,6 +16,7 @@ import {
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
+import { PriceCompact } from '../../src/components/common/price-display'
 import { fetchApi } from '../../src/lib/api'
 import { showToast } from '../../src/lib/toast'
 import { fontSize, radius, spacing, useColors } from '../../src/theme'
@@ -138,11 +139,11 @@ export default function MyRentalsScreen() {
             <View style={styles.row}>
               <Clock size={12} color={colors.textMuted} />
               <Text style={[styles.meta, { color: colors.textMuted }]}>{duration}</Text>
-              <Text style={[styles.meta, { color: colors.textMuted }]}>{c.hourlyRate} 🦐/h</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}><PriceCompact amount={c.hourlyRate} size={12} /></Text>
             </View>
           </View>
           <View style={styles.cardRight}>
-            <Text style={[styles.totalCost, { color: colors.primary }]}>{c.totalCost} 🦐</Text>
+            <Text style={[styles.totalCost, { color: colors.primary }]}><PriceCompact amount={c.totalCost} size={14} /></Text>
             <Text style={[styles.meta, { color: colors.textMuted }]}>
               {new Date(c.createdAt).toLocaleDateString()}
             </Text>
@@ -175,7 +176,7 @@ export default function MyRentalsScreen() {
             </View>
             <Text style={[styles.cardTitle, { color: colors.text }]}>{l.title}</Text>
             <View style={styles.row}>
-              <Text style={[styles.meta, { color: colors.textMuted }]}>{l.hourlyRate} 🦐/h</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}><PriceCompact amount={l.hourlyRate} size={12} /></Text>
               <Eye size={12} color={colors.textMuted} />
               <Text style={[styles.meta, { color: colors.textMuted }]}>{l.viewCount}</Text>
               <Users size={12} color={colors.textMuted} />

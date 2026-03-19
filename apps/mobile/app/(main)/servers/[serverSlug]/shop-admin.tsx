@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { EmptyState } from '../../../../src/components/common/empty-state'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
+import { PriceCompact } from '../../../../src/components/common/price-display'
 import { fetchApi } from '../../../../src/lib/api'
 import { showToast } from '../../../../src/lib/toast'
 import { fontSize, radius, spacing, useColors } from '../../../../src/theme'
@@ -94,7 +95,7 @@ export default function ShopAdminScreen() {
             <View style={[styles.card, { backgroundColor: colors.surface }]}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.name, { color: colors.text }]}>{item.name}</Text>
-                <Text style={{ color: colors.primary, fontWeight: '700' }}>🦐 {item.price}</Text>
+                <Text style={{ color: colors.primary, fontWeight: '700' }}><PriceCompact amount={item.price} size={14} /></Text>
                 <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
                   {item.status} · {item.stock != null ? `${t('shop.stock')}: ${item.stock}` : '∞'}
                 </Text>

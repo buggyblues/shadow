@@ -1,4 +1,4 @@
-import { AtSign, File, Image as ImageIcon, Mic, Plus, Smile, X } from 'lucide-react-native'
+import { AtSign, Camera, File, Image as ImageIcon, Mic, Plus, Smile, X } from 'lucide-react-native'
 import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
@@ -31,6 +31,7 @@ interface ChatComposerProps {
   setShowPlusMenu: (value: boolean) => void
   onPickImage: () => void
   onPickFile: () => void
+  onTakePhoto?: () => void
 }
 
 export const ChatComposer = memo(function ChatComposer({
@@ -57,6 +58,7 @@ export const ChatComposer = memo(function ChatComposer({
   setShowPlusMenu,
   onPickImage,
   onPickFile,
+  onTakePhoto,
 }: ChatComposerProps) {
   const colors = useColors()
   const { t } = useTranslation()
@@ -267,6 +269,22 @@ export const ChatComposer = memo(function ChatComposer({
           ]}
         >
           <View style={styles.plusPanelGrid}>
+            {onTakePhoto && (
+              <Pressable
+                style={({ pressed }) => [styles.plusPanelItem, pressed && { opacity: 0.6 }]}
+                onPress={() => {
+                  setShowPlusMenu(false)
+                  onTakePhoto()
+                }}
+              >
+                <View style={[styles.plusPanelIcon, { backgroundColor: '#10b98115' }]}>
+                  <Camera size={24} color="#10b981" />
+                </View>
+                <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
+                  {t('chat.takePhoto', '拍摄')}
+                </Text>
+              </Pressable>
+            )}
             <Pressable
               style={({ pressed }) => [styles.plusPanelItem, pressed && { opacity: 0.6 }]}
               onPress={() => {
@@ -278,7 +296,7 @@ export const ChatComposer = memo(function ChatComposer({
                 <ImageIcon size={24} color={colors.primary} />
               </View>
               <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
-                {t('chat.pickImage', '图片')}
+                {t('chat.pickImage', '相册')}
               </Text>
             </Pressable>
             <Pressable
