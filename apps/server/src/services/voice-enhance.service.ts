@@ -291,7 +291,6 @@ Respond in JSON format:
 
     try {
       let response: Response
-      let result: unknown
 
       switch (provider) {
         case 'openai':
@@ -376,7 +375,7 @@ Respond in JSON format:
       }
 
       const data = (await response.json()) as unknown
-      result = this.extractResult(data, provider)
+      const result = this.extractResult(data, provider)
 
       // Parse the JSON response
       const parsed = typeof result === 'string' ? JSON.parse(result) : result

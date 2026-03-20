@@ -91,6 +91,7 @@ export function MarketplaceDetailPage() {
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [showContract, setShowContract] = useState(false)
   const [signed, setSigned] = useState(false)
+  const [isAlreadyRented, setIsAlreadyRented] = useState(false)
 
   // Fetch listing detail
   const { data: listing, isLoading } = useQuery({
@@ -148,7 +149,17 @@ export function MarketplaceDetailPage() {
       )
     },
     onError: (err: Error) => {
-      showToast(err.message, 'error')
+      // Handle "already rented" error gracefully
+      if (err.message.includes('currently rented')) {
+        setIsAlreadyRented(true)
+        setShowContract(false)
+        showToast(
+          t('marketplace.alreadyRented', '该 Claw 已被其他用户租赁，请稍后再试或选择其他 Claw'),
+          'error',
+        )
+      } else {
+        showToast(err.message, 'error')
+      }
     },
   })
 
@@ -200,13 +211,13 @@ export function MarketplaceDetailPage() {
     >
       <div className="max-w-5xl mx-auto px-6 py-8">
         {/* Back */}
-        <Link
-          to="/buddies"
+        <a
+          href="/buddies"
           className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-800 transition-colors font-bold mb-6"
         >
           <ChevronLeft className="w-5 h-5" />
           {t('marketplace.backToMarket', '返回集市')}
-        </Link>
+        </a>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left: Listing Detail */}
@@ -509,6 +520,23 @@ export function MarketplaceDetailPage() {
                   </button>
                   <p className="text-xs text-gray-400 text-center mt-3 font-medium">
                     {t('marketplace.delistHint', '下架后此 Claw 将不再展示在集市中')}
+                  </p>
+                </>
+              ) : isAlreadyRented ? (
+                <>
+                  <button
+                    type="button"
+                    disabled
+                    className="w-full py-3 rounded-xl bg-gray-200 text-gray-400 font-bold text-base cursor-not-allowed"
+                    style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
+                  >
+                    {t('marketplace.alreadyRentedButton', '已被租赁')}
+                  </button>
+                  <p className="text-xs text-amber-500 text-center mt-3 font-medium">
+                    {t(
+                      'marketplace.alreadyRentedHint',
+                      '该 Claw 当前正在被其他用户使用，暂时无法租赁。请稍后再来看看吧~',
+                    )}
                   </p>
                 </>
               ) : (

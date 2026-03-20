@@ -53,8 +53,7 @@ export async function relayDmToBot(
     replyToId: message.replyToId ?? null,
     attachments: message.attachments ?? [],
   }
-  io.to(`dm:${dmChannelId}`).emit('dm:message:new', dmPayload)
-  io.to(`user:${otherUserId}`).emit('dm:message:new', dmPayload)
+  io.to(`dm:${dmChannelId}`).to(`user:${otherUserId}`).emit('dm:message:new', dmPayload)
 }
 
 export function createDmHandler(container: AppContainer) {

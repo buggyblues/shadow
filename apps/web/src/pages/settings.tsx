@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import {
   Bell,
   BookOpen,
@@ -51,6 +51,7 @@ export function SettingsPage() {
     variant: 'workspace',
   })
   const navigate = useNavigate()
+  const searchParams = useSearch({ strict: false }) as { tab?: string; dm?: string }
   const { user, setUser, logout } = useAuthStore()
   const [displayName, setDisplayName] = useState(user?.displayName ?? '')
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null)
@@ -68,9 +69,9 @@ export function SettingsPage() {
     | 'notification'
     | 'friends'
     | 'chat'
-  >('quickstart')
+  >((searchParams.tab as 'chat') || 'quickstart')
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
-  const [activeDmChannelId, setActiveDmChannelId] = useState<string | null>(null)
+  const [activeDmChannelId, setActiveDmChannelId] = useState<string | null>(searchParams.dm || null)
   const { data: wallet } = useQuery({
     queryKey: ['wallet'],
     queryFn: () => fetchApi<{ balance: number }>('/api/wallet'),
@@ -422,9 +423,8 @@ export function SettingsPage() {
                     <h3 className="font-bold text-text-primary text-[15px] mb-1">Buddy 管理</h3>
                     <p className="text-text-muted text-[13px]">创建、配置并管理你的 Buddy</p>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => navigate({ to: '/buddies' })}
+                  <a
+                    href="/buddies"
                     className="bg-bg-secondary hover:bg-bg-tertiary border border-border-subtle rounded-xl p-5 text-left transition group"
                   >
                     <Bot
@@ -437,7 +437,7 @@ export function SettingsPage() {
                     <p className="text-text-muted text-[13px]">
                       {t('settings.goBuddyMarketDesc', '浏览和租赁 AI Buddy')}
                     </p>
-                  </button>
+                  </a>
                 </div>
 
                 {/* Getting Started Steps */}
@@ -1371,7 +1371,7 @@ function TaskCenter({
                               onSwitchTab('buddy')
                               break
                             case 'rent_buddy':
-                              navigate({ to: '/buddies' })
+                              window.location.href = '/buddies'
                               break
                             case 'list_product': {
                               const shopSlug = servers[0]?.server?.slug

@@ -1249,9 +1249,9 @@ export default function ShopScreen() {
                     )}
                     {review.images && review.images.length > 0 && (
                       <ScrollView horizontal style={{ marginTop: spacing.sm }}>
-                        {review.images.map((img, i) => (
+                        {review.images.map((img) => (
                           <Image
-                            key={i}
+                            key={img}
                             source={{ uri: getImageUrl(img)! }}
                             style={styles.reviewImage}
                             contentFit="cover"

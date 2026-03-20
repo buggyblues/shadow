@@ -239,7 +239,7 @@ export default function DashboardScreen() {
                   idx === 3 && { borderBottomWidth: 0 },
                   pressed && { opacity: 0.6 },
                 ]}
-                onPress={() => router.push(link.route as any)}
+                onPress={() => router.push(link.route as never)}
               >
                 <link.Icon size={16} color={link.color} />
                 <Text style={[styles.linkLabel, { color: colors.text }]}>{link.label}</Text>

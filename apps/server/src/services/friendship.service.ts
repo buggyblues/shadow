@@ -96,6 +96,7 @@ export class FriendshipService {
         isBot: boolean
       }
       clawStatus?: 'available' | 'listed' | 'rented_out'
+      rentalExpiresAt?: Date | null
       createdAt: Date
     }> = []
 
@@ -183,6 +184,7 @@ export class FriendshipService {
         results.push({
           friendshipId: `claw:rented:${contract.id}`,
           source: 'rented_claw',
+          rentalExpiresAt: contract.expiresAt,
           user: {
             id: botUser.id,
             username: botUser.username,

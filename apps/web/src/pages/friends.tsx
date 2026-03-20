@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { Check, MessageCircle, Search, Trash2, UserPlus, Users, X } from 'lucide-react'
-import { useState } from 'react'
+import { Check, Clock, MessageCircle, Search, Trash2, UserPlus, Users, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { UserAvatar } from '../components/common/avatar'
 import { useSocketEvent } from '../hooks/use-socket'
@@ -22,6 +22,7 @@ interface FriendEntry {
   source: 'friend' | 'owned_claw' | 'rented_claw'
   user: FriendUser
   clawStatus?: 'available' | 'listed' | 'rented_out'
+  rentalExpiresAt?: string | null
   createdAt: string
 }
 
@@ -273,6 +274,9 @@ export function FriendsContent({ onStartChat }: { onStartChat?: (userId: string)
                               {t('friends.rentedClaw', '租赁中')}
                             </span>
                           )}
+                          {f.source === 'rented_claw' && f.rentalExpiresAt && (
+                            <FriendRentalCountdown expiresAt={f.rentalExpiresAt} />
+                          )}
                         </div>
                         <span className="text-text-muted text-xs">@{f.user.username}</span>
                       </div>
@@ -484,5 +488,44 @@ export function FriendsContent({ onStartChat }: { onStartChat?: (userId: string)
         )}
       </div>
     </div>
+  )
+}
+
+/* ──────────────── Friend Rental Countdown ──────────────── */
+
+function FriendRentalCountdown({ expiresAt }: { expiresAt: string }) {
+  const [remaining, setRemaining] = useState(() =>
+    Math.max(0, new Date(expiresAt).getTime() - Date.now()),
+  )
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setRemaining(Math.max(0, new Date(expiresAt).getTime() - Date.now()))
+    }, 60_000) // Update every minute for friend list (less critical)
+    return () => clearInterval(timer)
+  }, [expiresAt])
+
+  if (remaining <= 0) {
+    return (
+      <span className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 text-[10px] font-bold">
+        已到期
+      </span>
+    )
+  }
+
+  const totalMin = Math.floor(remaining / 60000)
+  const d = Math.floor(totalMin / 1440)
+  const h = Math.floor((totalMin % 1440) / 60)
+  const m = totalMin % 60
+  let text = ''
+  if (d > 0) text = `${d}天${h}时`
+  else if (h > 0) text = `${h}时${m}分`
+  else text = `${m}分`
+
+  return (
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-600 text-[10px] font-bold">
+      <Clock className="w-2.5 h-2.5" />
+      {text}
+    </span>
   )
 }

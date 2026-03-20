@@ -101,7 +101,17 @@ interface Member {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function SquishyCard({ children, onPress, onLongPress, style }: any) {
+function SquishyCard({
+  children,
+  onPress,
+  onLongPress,
+  style,
+}: {
+  children: React.ReactNode
+  onPress?: () => void
+  onLongPress?: () => void
+  style?: object | object[]
+}) {
   const scale = useRef(new Animated.Value(1)).current
   return (
     <Pressable
@@ -150,15 +160,8 @@ export default function ServerHomeScreen() {
     enabled: !!serverSlug,
   })
 
-  const {
-    sortBy,
-    sortDirection,
-    setSortBy,
-    toggleSortDirection,
-    sortChannels,
-    updateLastAccessed,
-    hasCustomSort,
-  } = useChannelSort(server?.id)
+  const { sortBy, sortDirection, setSortBy, toggleSortDirection, sortChannels, hasCustomSort } =
+    useChannelSort(server?.id)
 
   const {
     data: channels = [],
@@ -218,7 +221,7 @@ export default function ServerHomeScreen() {
         `/(main)/servers/${serverSlug}/channel-members?channelId=${data.id}&autoInvite=1` as never,
       )
     },
-    onError: (err: any) => showToast(err?.message || t('common.error'), 'error'),
+    onError: (err: Error) => showToast(err?.message || t('common.error'), 'error'),
   })
 
   // ── Channel actions ────────────────────────────
@@ -228,7 +231,7 @@ export default function ServerHomeScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['channels', server?.id] })
     },
-    onError: (err: any) => showToast(err?.message || t('common.error'), 'error'),
+    onError: (err: Error) => showToast(err?.message || t('common.error'), 'error'),
   })
 
   const updateChannelMutation = useMutation({
@@ -242,7 +245,7 @@ export default function ServerHomeScreen() {
       setEditingChannel(null)
       setEditChannelName('')
     },
-    onError: (err: any) => showToast(err?.message || t('common.error'), 'error'),
+    onError: (err: Error) => showToast(err?.message || t('common.error'), 'error'),
   })
 
   // ── Channel grouping ──────────────────────────
@@ -339,7 +342,7 @@ export default function ServerHomeScreen() {
         </Pressable>
 
         <Pressable
-          onPress={() => router.push(`/(main)/servers/${serverSlug}/detail` as any)}
+          onPress={() => router.push(`/(main)/servers/${serverSlug}/detail` as never)}
           style={styles.headerTitleRow}
         >
           {server?.iconUrl ? (
@@ -376,7 +379,7 @@ export default function ServerHomeScreen() {
         <View style={styles.headerRight}>
           {isOwner && (
             <Pressable
-              onPress={() => router.push(`/(main)/servers/${serverSlug}/server-settings` as any)}
+              onPress={() => router.push(`/(main)/servers/${serverSlug}/server-settings` as never)}
               hitSlop={8}
               style={({ pressed }) => [styles.headerIconBtn, pressed && { opacity: 0.5 }]}
             >
@@ -403,7 +406,7 @@ export default function ServerHomeScreen() {
           <Reanimated.View entering={FadeInDown.delay(100).springify()}>
             <SquishyCard
               style={styles.actionItem}
-              onPress={() => router.push(`/(main)/servers/${serverSlug}/workspace` as any)}
+              onPress={() => router.push(`/(main)/servers/${serverSlug}/workspace` as never)}
             >
               <LinearGradient colors={['#3B82F6', '#60A5FA']} style={styles.actionBubbleGlow}>
                 <WorkCatSvg width={40} height={40} />
@@ -418,7 +421,7 @@ export default function ServerHomeScreen() {
           <Reanimated.View entering={FadeInDown.delay(200).springify()}>
             <SquishyCard
               style={styles.actionItem}
-              onPress={() => router.push(`/(main)/servers/${serverSlug}/shop` as any)}
+              onPress={() => router.push(`/(main)/servers/${serverSlug}/shop` as never)}
             >
               <LinearGradient colors={['#F59E0B', '#FBBF24']} style={styles.actionBubbleGlow}>
                 <ShopCatSvg width={40} height={40} />
@@ -433,7 +436,7 @@ export default function ServerHomeScreen() {
           <Reanimated.View entering={FadeInDown.delay(300).springify()}>
             <SquishyCard
               style={styles.actionItem}
-              onPress={() => router.push(`/(main)/servers/${serverSlug}/apps` as any)}
+              onPress={() => router.push(`/(main)/servers/${serverSlug}/apps` as never)}
             >
               <LinearGradient colors={['#10B981', '#34D399']} style={styles.actionBubbleGlow}>
                 <ChannelCatSvg width={40} height={40} style={{ transform: [{ scale: 1.1 }] }} />
@@ -448,7 +451,7 @@ export default function ServerHomeScreen() {
           <Reanimated.View entering={FadeInDown.delay(400).springify()}>
             <SquishyCard
               style={styles.actionItem}
-              onPress={() => router.push(`/(main)/servers/${serverSlug}/members` as any)}
+              onPress={() => router.push(`/(main)/servers/${serverSlug}/members` as never)}
             >
               <LinearGradient colors={['#EF4444', '#F87171']} style={styles.actionBubbleGlow}>
                 <AgentCatSvg width={40} height={40} />
@@ -581,7 +584,7 @@ export default function ServerHomeScreen() {
                       style={[styles.channelPill, { backgroundColor: colors.inputBackground }]}
                       onPress={() => {
                         if (server) setLastChannel(server.id, channel.id)
-                        router.push(`/(main)/servers/${serverSlug}/channels/${channel.id}` as any)
+                        router.push(`/(main)/servers/${serverSlug}/channels/${channel.id}` as never)
                       }}
                       onLongPress={() => setContextChannel(channel)}
                     >

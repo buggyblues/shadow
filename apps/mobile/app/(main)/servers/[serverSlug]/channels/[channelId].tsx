@@ -305,35 +305,34 @@ export default function ChannelViewScreen() {
   }, [channelId])
 
   // ---------- Infinite scroll messages ----------
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, refetch } =
-    useInfiniteQuery({
-      queryKey: ['messages', channelId],
-      queryFn: async ({ pageParam }) => {
-        const params = new URLSearchParams({ limit: String(PAGE_SIZE) })
-        if (pageParam) params.set('cursor', pageParam as string)
-        const result = await fetchApi<MessagesPage | Message[]>(
-          `/api/channels/${channelId}/messages?${params}`,
-        )
-        if (Array.isArray(result)) {
-          return {
-            messages: result.map((m) => normalizeMessage(m as unknown as Record<string, unknown>)),
-            hasMore: result.length >= PAGE_SIZE,
-          }
-        }
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteQuery({
+    queryKey: ['messages', channelId],
+    queryFn: async ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE) })
+      if (pageParam) params.set('cursor', pageParam as string)
+      const result = await fetchApi<MessagesPage | Message[]>(
+        `/api/channels/${channelId}/messages?${params}`,
+      )
+      if (Array.isArray(result)) {
         return {
-          messages: result.messages.map((m) =>
-            normalizeMessage(m as unknown as Record<string, unknown>),
-          ),
-          hasMore: result.hasMore,
+          messages: result.map((m) => normalizeMessage(m as unknown as Record<string, unknown>)),
+          hasMore: result.length >= PAGE_SIZE,
         }
-      },
-      initialPageParam: null as string | null,
-      getNextPageParam: (lastPage) => {
-        if (!lastPage.hasMore || lastPage.messages.length === 0) return undefined
-        return lastPage.messages[0]?.createdAt
-      },
-      enabled: !!channelId,
-    })
+      }
+      return {
+        messages: result.messages.map((m) =>
+          normalizeMessage(m as unknown as Record<string, unknown>),
+        ),
+        hasMore: result.hasMore,
+      }
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.hasMore || lastPage.messages.length === 0) return undefined
+      return lastPage.messages[0]?.createdAt
+    },
+    enabled: !!channelId,
+  })
 
   const messages = useMemo(() => {
     if (!data) return []

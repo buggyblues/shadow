@@ -29,31 +29,10 @@ export const TypelessMicButton = memo(function TypelessMicButton({
 }: TypelessMicButtonProps) {
   const colors = useColors()
 
-  // Animation values - wrapped in try-catch for safety
-  let scale: ReturnType<typeof useSharedValue<number>>
-  let pulseScale: ReturnType<typeof useSharedValue<number>>
-  let pulseOpacity: ReturnType<typeof useSharedValue<number>>
-
-  try {
-    scale = useSharedValue(1)
-    pulseScale = useSharedValue(1)
-    pulseOpacity = useSharedValue(0)
-  } catch (error) {
-    // Fallback if reanimated is not properly initialized
-    console.warn('[TypelessMicButton] Reanimated not initialized, using fallback')
-    return (
-      <Pressable
-        style={[
-          styles.button,
-          { backgroundColor: isHolding ? colors.error : colors.inputBackground },
-        ]}
-        onPressIn={onPressIn}
-        onPressOut={onPressOut}
-      >
-        <Mic size={22} color={isHolding ? '#fff' : colors.textMuted} />
-      </Pressable>
-    )
-  }
+  // Animation values
+  const scale = useSharedValue(1)
+  const pulseScale = useSharedValue(1)
+  const pulseOpacity = useSharedValue(0)
 
   // Update animations based on recording state
   if (isHolding) {

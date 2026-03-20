@@ -100,6 +100,17 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
   const dmChannel = dmChannels.find((c) => c.id === dmChannelId)
   const otherUser = dmChannel?.otherUser
 
+  // Check if chat is disabled for this bot agent (listed or rented out)
+  const { data: agentChatStatus } = useQuery({
+    queryKey: ['agent-chat-status', otherUser?.id],
+    queryFn: () =>
+      fetchApi<{ chatDisabled: boolean; reason?: string }>(
+        `/api/marketplace/agent-chat-status/${otherUser!.id}`,
+      ),
+    enabled: !!otherUser?.isBot && !!otherUser?.id,
+  })
+  const chatDisabled = agentChatStatus?.chatDisabled === true
+
   // Fetch messages
   const {
     data: messagesData,
@@ -441,142 +452,156 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
 
       {/* Message input */}
       <div className="px-4 pb-4 pt-1 shrink-0">
-        {/* Reply preview */}
-        {replyToId &&
-          (() => {
-            const replyMsg = allMessages.find((m) => m.id === replyToId)
-            return (
-              <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-bg-secondary border border-border-subtle rounded-lg text-xs">
-                <Reply size={14} className="text-primary shrink-0" />
-                <span className="text-text-muted">{t('chat.replyingTo', '回复')}</span>
-                <span className="font-medium text-text-primary truncate">
-                  {replyMsg?.author?.displayName ??
-                    replyMsg?.author?.username ??
-                    t('common.unknownUser')}
-                </span>
-                <span className="text-text-muted truncate max-w-[200px]">{replyMsg?.content}</span>
-                <button
-                  type="button"
-                  onClick={() => setReplyToId(null)}
-                  className="ml-auto p-0.5 text-text-muted hover:text-text-primary transition shrink-0"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            )
-          })()}
-        {/* Pending file previews */}
-        {pendingFiles.length > 0 && (
-          <div className="flex gap-2 mb-2 flex-wrap">
-            {pendingFiles.map((file, i) => (
-              <div
-                key={i}
-                className="relative group bg-bg-secondary border border-border-subtle rounded-lg p-2 flex items-center gap-2 text-xs text-text-secondary"
-              >
-                {file.type.startsWith('image/') ? (
-                  <img
-                    src={URL.createObjectURL(file)}
-                    alt={file.name}
-                    className="w-12 h-12 object-cover rounded"
-                  />
-                ) : (
-                  <div className="w-12 h-12 bg-bg-modifier-hover rounded flex items-center justify-center text-text-muted">
-                    <Paperclip size={16} />
-                  </div>
-                )}
-                <span className="max-w-[120px] truncate">{file.name}</span>
-                <button
-                  onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-danger text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            ))}
+        {chatDisabled ? (
+          <div className="flex items-center justify-center gap-2 px-4 py-3 bg-bg-secondary rounded-lg border border-border-subtle text-text-muted text-sm">
+            <span>
+              {agentChatStatus?.reason === 'rented_out'
+                ? t('dm.chatDisabledRentedOut', '该 Buddy 已出租给其他用户，暂时无法聊天')
+                : t('dm.chatDisabledListed', '该 Buddy 已在集市挂单中，暂时无法聊天')}
+            </span>
           </div>
-        )}
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) {
-              setPendingFiles((prev) => [...prev, ...Array.from(e.target.files!)])
-              e.target.value = ''
-            }
-          }}
-        />
-        <div className="flex items-end gap-2 bg-bg-secondary rounded-lg border border-border-subtle">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="w-8 h-8 ml-2 mb-2 rounded hover:bg-bg-modifier-hover flex items-center justify-center text-text-muted hover:text-text-primary transition shrink-0"
-          >
-            <Paperclip size={18} />
-          </button>
-          <textarea
-            ref={inputRef}
-            value={messageText}
-            onChange={(e) => {
-              setMessageText(e.target.value)
-              handleTyping()
-            }}
-            onKeyDown={(e) => {
-              if (
-                e.key === 'Enter' &&
-                !e.shiftKey &&
-                !e.nativeEvent.isComposing &&
-                e.keyCode !== 229
-              ) {
-                e.preventDefault()
-                handleSend()
-              }
-            }}
-            placeholder={
-              otherUser
-                ? t(
-                    'dm.inputPlaceholder',
-                    `给 @${otherUser.displayName ?? otherUser.username} 发送消息`,
-                  )
-                : t('dm.inputPlaceholderDefault', '发送消息')
-            }
-            rows={1}
-            className="flex-1 bg-transparent text-text-primary text-sm px-4 py-3 outline-none resize-none max-h-[160px]"
-            style={{ minHeight: '44px' }}
-          />
-          <div className="flex items-center gap-1 px-2 pb-2">
-            <div className="relative">
+        ) : (
+          <>
+            {/* Reply preview */}
+            {replyToId &&
+              (() => {
+                const replyMsg = allMessages.find((m) => m.id === replyToId)
+                return (
+                  <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-bg-secondary border border-border-subtle rounded-lg text-xs">
+                    <Reply size={14} className="text-primary shrink-0" />
+                    <span className="text-text-muted">{t('chat.replyingTo', '回复')}</span>
+                    <span className="font-medium text-text-primary truncate">
+                      {replyMsg?.author?.displayName ??
+                        replyMsg?.author?.username ??
+                        t('common.unknownUser')}
+                    </span>
+                    <span className="text-text-muted truncate max-w-[200px]">
+                      {replyMsg?.content}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setReplyToId(null)}
+                      className="ml-auto p-0.5 text-text-muted hover:text-text-primary transition shrink-0"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )
+              })()}
+            {/* Pending file previews */}
+            {pendingFiles.length > 0 && (
+              <div className="flex gap-2 mb-2 flex-wrap">
+                {pendingFiles.map((file, i) => (
+                  <div
+                    key={i}
+                    className="relative group bg-bg-secondary border border-border-subtle rounded-lg p-2 flex items-center gap-2 text-xs text-text-secondary"
+                  >
+                    {file.type.startsWith('image/') ? (
+                      <img
+                        src={URL.createObjectURL(file)}
+                        alt={file.name}
+                        className="w-12 h-12 object-cover rounded"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 bg-bg-modifier-hover rounded flex items-center justify-center text-text-muted">
+                        <Paperclip size={16} />
+                      </div>
+                    )}
+                    <span className="max-w-[120px] truncate">{file.name}</span>
+                    <button
+                      onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-danger text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) {
+                  setPendingFiles((prev) => [...prev, ...Array.from(e.target.files!)])
+                  e.target.value = ''
+                }
+              }}
+            />
+            <div className="flex items-end gap-2 bg-bg-secondary rounded-lg border border-border-subtle">
               <button
-                onClick={() => setShowEmoji(!showEmoji)}
-                className="w-8 h-8 rounded hover:bg-bg-modifier-hover flex items-center justify-center text-text-muted hover:text-text-primary transition"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-8 h-8 ml-2 mb-2 rounded hover:bg-bg-modifier-hover flex items-center justify-center text-text-muted hover:text-text-primary transition shrink-0"
               >
-                <Smile size={18} />
+                <Paperclip size={18} />
               </button>
-              {showEmoji && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowEmoji(false)} />
-                  <div className="absolute bottom-10 right-0 z-50">
-                    <EmojiPicker
-                      onSelect={(emoji) => {
-                        setMessageText((prev) => prev + emoji)
-                        setShowEmoji(false)
-                        inputRef.current?.focus()
-                      }}
-                      onClose={() => setShowEmoji(false)}
-                    />
-                  </div>
-                </>
-              )}
+              <textarea
+                ref={inputRef}
+                value={messageText}
+                onChange={(e) => {
+                  setMessageText(e.target.value)
+                  handleTyping()
+                }}
+                onKeyDown={(e) => {
+                  if (
+                    e.key === 'Enter' &&
+                    !e.shiftKey &&
+                    !e.nativeEvent.isComposing &&
+                    e.keyCode !== 229
+                  ) {
+                    e.preventDefault()
+                    handleSend()
+                  }
+                }}
+                placeholder={
+                  otherUser
+                    ? t(
+                        'dm.inputPlaceholder',
+                        `给 @${otherUser.displayName ?? otherUser.username} 发送消息`,
+                      )
+                    : t('dm.inputPlaceholderDefault', '发送消息')
+                }
+                rows={1}
+                className="flex-1 bg-transparent text-text-primary text-sm px-4 py-3 outline-none resize-none max-h-[160px]"
+                style={{ minHeight: '44px' }}
+              />
+              <div className="flex items-center gap-1 px-2 pb-2">
+                <div className="relative">
+                  <button
+                    onClick={() => setShowEmoji(!showEmoji)}
+                    className="w-8 h-8 rounded hover:bg-bg-modifier-hover flex items-center justify-center text-text-muted hover:text-text-primary transition"
+                  >
+                    <Smile size={18} />
+                  </button>
+                  {showEmoji && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowEmoji(false)} />
+                      <div className="absolute bottom-10 right-0 z-50">
+                        <EmojiPicker
+                          onSelect={(emoji) => {
+                            setMessageText((prev) => prev + emoji)
+                            setShowEmoji(false)
+                            inputRef.current?.focus()
+                          }}
+                          onClose={() => setShowEmoji(false)}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+                <button
+                  onClick={handleSend}
+                  disabled={!messageText.trim() && pendingFiles.length === 0}
+                  className="w-8 h-8 rounded hover:bg-primary/10 flex items-center justify-center text-primary disabled:text-text-muted disabled:hover:bg-transparent transition"
+                >
+                  <Send size={18} />
+                </button>
+              </div>
             </div>
-            <button
-              onClick={handleSend}
-              disabled={!messageText.trim() && pendingFiles.length === 0}
-              className="w-8 h-8 rounded hover:bg-primary/10 flex items-center justify-center text-primary disabled:text-text-muted disabled:hover:bg-transparent transition"
-            >
-              <Send size={18} />
-            </button>
-          </div>
-        </div>
+          </>
+        )}
       </div>
     </div>
   )

@@ -47,6 +47,7 @@ export class WorkspaceService {
         serverId,
         name: '工作区',
       }))!
+      await this.bootstrapWorkspace(workspace.id)
     }
     return workspace!
   }

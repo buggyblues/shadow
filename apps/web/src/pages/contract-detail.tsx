@@ -1,17 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useParams } from '@tanstack/react-router'
+import { Link, useNavigate, useParams } from '@tanstack/react-router'
+import type { TFunction } from 'i18next'
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   Clock,
   DollarSign,
   FileText,
+  MessageCircle,
   Shield,
   XCircle,
   Zap,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../lib/api'
 import { showToast } from '../lib/toast'
@@ -28,24 +31,18 @@ interface ContractDetail {
   expiresAt: string | null
   terminatedAt: string | null
   hourlyRate: number
+  dailyRate?: number
+  monthlyRate?: number
+  platformFeeRate?: number
   depositAmount: number
   totalCost: number
   listingSnapshot: Record<string, unknown>
   ownerTerms: string | null
   platformTerms: string | null
+  terminationReason?: string | null
   listing?: { title: string; deviceTier: string; osType: string } | null
+  agentUserId?: string | null
   createdAt: string
-}
-
-interface UsageRecord {
-  id: string
-  sessionStart: string
-  sessionEnd: string
-  tokenCost: number
-  electricityCost: number
-  rentalCost: number
-  platformFee: number
-  totalCost: number
 }
 
 const STATUS_STYLES: Record<
@@ -92,6 +89,7 @@ const STATUS_STYLES: Record<
 
 export function ContractDetailPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const { contractId } = useParams({ strict: false }) as { contractId: string }
   const queryClient = useQueryClient()
   const userId = useAuthStore((s) => s.user?.id)
@@ -103,14 +101,6 @@ export function ContractDetailPage() {
   const { data: contract, isLoading } = useQuery({
     queryKey: ['marketplace', 'contract', contractId],
     queryFn: () => fetchApi<ContractDetail>(`/api/marketplace/contracts/${contractId}`),
-    enabled: !!contractId,
-  })
-
-  // Fetch usage records
-  const { data: usageData } = useQuery({
-    queryKey: ['marketplace', 'contract', contractId, 'usage'],
-    queryFn: () =>
-      fetchApi<{ records: UsageRecord[] }>(`/api/marketplace/contracts/${contractId}/usage`),
     enabled: !!contractId,
   })
 
@@ -130,6 +120,19 @@ export function ContractDetailPage() {
     onError: (err: Error) => showToast(err.message, 'error'),
   })
 
+  // Start chat with rented claw
+  const startChatMutation = useMutation({
+    mutationFn: (agentUserId: string) =>
+      fetchApi<{ id: string }>('/api/dm/channels', {
+        method: 'POST',
+        body: JSON.stringify({ userId: agentUserId }),
+      }),
+    onSuccess: (data) => {
+      navigate({ to: '/settings', search: { tab: 'chat', dm: data.id } })
+    },
+    onError: (err: Error) => showToast(err.message, 'error'),
+  })
+
   if (isLoading || !contract) {
     return (
       <div className="min-h-screen bg-[#f2f7fc] flex items-center justify-center">
@@ -145,7 +148,6 @@ export function ContractDetailPage() {
   const isTenant = userId === contract.tenantId
   const canTerminate =
     (contract.status === 'active' || contract.status === 'pending') && (isOwner || isTenant)
-  const usageRecords = usageData?.records || []
 
   return (
     <div
@@ -155,7 +157,7 @@ export function ContractDetailPage() {
       <div className="max-w-4xl mx-auto px-6 py-8">
         {/* Back */}
         <Link
-          to="/app/marketplace/my-rentals"
+          to="/marketplace/my-rentals"
           className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-800 transition-colors font-bold mb-6"
         >
           <ChevronLeft className="w-5 h-5" />
@@ -224,72 +226,38 @@ export function ContractDetailPage() {
           </div>
         </div>
 
-        {/* Usage Records */}
-        <div className="bg-white/80 backdrop-blur rounded-2xl border-2 border-white/90 shadow-lg p-8 mb-6">
-          <h2
-            style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
-            className="text-lg font-bold mb-4 flex items-center gap-2"
-          >
-            <FileText className="w-5 h-5 text-cyan-500" />
-            {t('marketplace.usageRecords', '使用记录')}
-          </h2>
-
-          {usageRecords.length === 0 ? (
-            <p className="text-gray-400 text-sm font-medium py-6 text-center">
-              {t('marketplace.noUsage', '暂无使用记录')}
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b-2 border-gray-100">
-                    <th className="text-left py-2 px-3 text-gray-400 font-bold">
-                      {t('marketplace.session', '会话')}
-                    </th>
-                    <th className="text-right py-2 px-3 text-gray-400 font-bold">
-                      {t('marketplace.tokenCost', 'Token')}
-                    </th>
-                    <th className="text-right py-2 px-3 text-gray-400 font-bold">
-                      {t('marketplace.electricity', '电费')}
-                    </th>
-                    <th className="text-right py-2 px-3 text-gray-400 font-bold">
-                      {t('marketplace.rental', '租金')}
-                    </th>
-                    <th className="text-right py-2 px-3 text-gray-400 font-bold">
-                      {t('marketplace.fee', '手续费')}
-                    </th>
-                    <th className="text-right py-2 px-3 text-gray-400 font-bold">
-                      {t('marketplace.total', '合计')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {usageRecords.map((r) => (
-                    <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                      <td className="py-2.5 px-3">
-                        <div className="font-medium">
-                          {new Date(r.sessionStart).toLocaleString()}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          → {new Date(r.sessionEnd).toLocaleString()}
-                        </div>
-                      </td>
-                      <td className="text-right py-2.5 px-3 font-mono">{r.tokenCost}</td>
-                      <td className="text-right py-2.5 px-3 font-mono">{r.electricityCost}</td>
-                      <td className="text-right py-2.5 px-3 font-mono">{r.rentalCost}</td>
-                      <td className="text-right py-2.5 px-3 font-mono text-gray-400">
-                        {r.platformFee}
-                      </td>
-                      <td className="text-right py-2.5 px-3 font-bold text-amber-600">
-                        {r.totalCost} 🦐
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {/* Use Claw & Countdown */}
+        {isTenant && contract.status === 'active' && (
+          <div className="bg-white/80 backdrop-blur rounded-2xl border-2 border-white/90 shadow-lg p-8 mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                {contract.expiresAt && <CountdownTimer expiresAt={contract.expiresAt} t={t} />}
+                {!contract.expiresAt && (
+                  <p className="text-sm text-gray-500 font-medium">
+                    {t('marketplace.unlimitedUsage', '不限时使用')}
+                  </p>
+                )}
+              </div>
+              {contract.agentUserId && (
+                <button
+                  type="button"
+                  onClick={() => startChatMutation.mutate(contract.agentUserId!)}
+                  disabled={startChatMutation.isPending}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-400 to-cyan-500 text-white font-bold hover:from-cyan-500 hover:to-cyan-600 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50"
+                  style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  {startChatMutation.isPending
+                    ? t('common.loading', '处理中...')
+                    : t('marketplace.useClaw', '开始使用')}
+                </button>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Contract Info */}
+        <ContractInfoSection contract={contract} t={t} />
 
         {/* Actions */}
         {canTerminate && (
@@ -351,4 +319,299 @@ export function ContractDetailPage() {
       </div>
     </div>
   )
+}
+
+/* ──────────────── Contract Info Section ──────────────── */
+
+const DEVICE_TIERS: Record<string, string> = {
+  high_end: '🔥 高端',
+  mid_range: '⚡ 中端',
+  low_end: '💡 入门',
+}
+
+function ContractInfoSection({ contract, t }: { contract: ContractDetail; t: TFunction }) {
+  const [expanded, setExpanded] = useState(false)
+  const snapshot = contract.listingSnapshot as Record<string, unknown> | null
+
+  return (
+    <div className="bg-white/80 backdrop-blur rounded-2xl border-2 border-white/90 shadow-lg p-8 mb-6">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between"
+      >
+        <h2
+          style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
+          className="text-lg font-bold flex items-center gap-2"
+        >
+          <FileText className="w-5 h-5 text-cyan-500" />
+          {t('marketplace.contractInfo', '合同信息')}
+        </h2>
+        <ChevronDown
+          className={`w-5 h-5 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {/* Summary (always visible) */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4">
+        <div className="bg-gray-50 rounded-xl p-3">
+          <div className="text-xs text-gray-400 font-bold mb-1">
+            {t('marketplace.contractNo', '合同编号')}
+          </div>
+          <div className="font-mono font-bold text-sm">#{contract.contractNo}</div>
+        </div>
+        <div className="bg-gray-50 rounded-xl p-3">
+          <div className="text-xs text-gray-400 font-bold mb-1">
+            {t('marketplace.rate', '费率')}
+          </div>
+          <div className="font-bold text-sm">{contract.hourlyRate} 🦐/h</div>
+        </div>
+        <div className="bg-gray-50 rounded-xl p-3">
+          <div className="text-xs text-gray-400 font-bold mb-1">
+            {t('marketplace.deposit', '押金')}
+          </div>
+          <div className="font-bold text-sm">{contract.depositAmount} 🦐</div>
+        </div>
+        <div className="bg-gray-50 rounded-xl p-3">
+          <div className="text-xs text-gray-400 font-bold mb-1">
+            {t('marketplace.signDate', '签约日期')}
+          </div>
+          <div className="font-bold text-sm">
+            {new Date(contract.createdAt).toLocaleDateString()}
+          </div>
+        </div>
+        <div className="bg-gray-50 rounded-xl p-3">
+          <div className="text-xs text-gray-400 font-bold mb-1">
+            {t('marketplace.startDate', '开始日期')}
+          </div>
+          <div className="font-bold text-sm">
+            {contract.startsAt ? new Date(contract.startsAt).toLocaleDateString() : '-'}
+          </div>
+        </div>
+        <div className="bg-gray-50 rounded-xl p-3">
+          <div className="text-xs text-gray-400 font-bold mb-1">
+            {t('marketplace.endDate', '到期日期')}
+          </div>
+          <div className="font-bold text-sm">
+            {contract.expiresAt
+              ? new Date(contract.expiresAt).toLocaleDateString()
+              : t('marketplace.unlimited', '不限时')}
+          </div>
+        </div>
+      </div>
+
+      {/* Expanded details */}
+      {expanded && (
+        <div className="mt-6 space-y-5 animate-in slide-in-from-top-2 duration-200">
+          {/* Pricing details */}
+          {(contract.dailyRate || contract.monthlyRate || contract.platformFeeRate) && (
+            <div>
+              <h3 className="text-sm font-bold text-gray-600 mb-2 flex items-center gap-1.5">
+                <DollarSign className="w-4 h-4" /> {t('marketplace.pricingDetail', '费率详情')}
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-gray-50 rounded-lg p-2.5">
+                  <div className="text-xs text-gray-400">{t('marketplace.hourlyRate', '时租')}</div>
+                  <div className="font-bold text-sm">{contract.hourlyRate} 🦐</div>
+                </div>
+                {contract.dailyRate ? (
+                  <div className="bg-gray-50 rounded-lg p-2.5">
+                    <div className="text-xs text-gray-400">
+                      {t('marketplace.dailyRate', '日租')}
+                    </div>
+                    <div className="font-bold text-sm">{contract.dailyRate} 🦐</div>
+                  </div>
+                ) : null}
+                {contract.monthlyRate ? (
+                  <div className="bg-gray-50 rounded-lg p-2.5">
+                    <div className="text-xs text-gray-400">
+                      {t('marketplace.monthlyRate', '月租')}
+                    </div>
+                    <div className="font-bold text-sm">{contract.monthlyRate} 🦐</div>
+                  </div>
+                ) : null}
+                {contract.platformFeeRate ? (
+                  <div className="bg-gray-50 rounded-lg p-2.5">
+                    <div className="text-xs text-gray-400">
+                      {t('marketplace.platformFee', '平台费率')}
+                    </div>
+                    <div className="font-bold text-sm">
+                      {(contract.platformFeeRate / 100).toFixed(1)}%
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          )}
+
+          {/* Listing snapshot */}
+          {snapshot && (
+            <div>
+              <h3 className="text-sm font-bold text-gray-600 mb-2 flex items-center gap-1.5">
+                <Shield className="w-4 h-4" /> {t('marketplace.listingSnapshot', '挂单快照')}
+              </h3>
+              <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
+                {snapshot.title && (
+                  <div>
+                    <span className="text-gray-400 font-bold">
+                      {t('marketplace.title', '标题')}：
+                    </span>
+                    <span className="text-gray-700">{String(snapshot.title)}</span>
+                  </div>
+                )}
+                {snapshot.description && (
+                  <div>
+                    <span className="text-gray-400 font-bold">
+                      {t('marketplace.description', '描述')}：
+                    </span>
+                    <span className="text-gray-700">{String(snapshot.description)}</span>
+                  </div>
+                )}
+                {snapshot.deviceTier && (
+                  <div>
+                    <span className="text-gray-400 font-bold">
+                      {t('marketplace.deviceTier', '设备等级')}：
+                    </span>
+                    <span className="text-gray-700">
+                      {DEVICE_TIERS[String(snapshot.deviceTier)] || String(snapshot.deviceTier)}
+                    </span>
+                  </div>
+                )}
+                {snapshot.osType && (
+                  <div>
+                    <span className="text-gray-400 font-bold">
+                      {t('marketplace.os', '操作系统')}：
+                    </span>
+                    <span className="text-gray-700">{String(snapshot.osType)}</span>
+                  </div>
+                )}
+                {Array.isArray(snapshot.skills) && snapshot.skills.length > 0 && (
+                  <div>
+                    <span className="text-gray-400 font-bold">
+                      {t('marketplace.skills', '技能')}：
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {(snapshot.skills as string[]).map((s) => (
+                        <span
+                          key={s}
+                          className="px-2 py-0.5 bg-cyan-50 text-cyan-700 text-xs rounded-full font-bold"
+                        >
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {snapshot.guidelines && (
+                  <div>
+                    <span className="text-gray-400 font-bold">
+                      {t('marketplace.guidelines', '使用须知')}：
+                    </span>
+                    <p className="text-gray-700 whitespace-pre-wrap mt-1">
+                      {String(snapshot.guidelines)}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Terms */}
+          {(contract.ownerTerms || contract.platformTerms) && (
+            <div>
+              <h3 className="text-sm font-bold text-gray-600 mb-2 flex items-center gap-1.5">
+                <FileText className="w-4 h-4" /> {t('marketplace.terms', '合同条款')}
+              </h3>
+              <div className="space-y-3">
+                {contract.ownerTerms && (
+                  <div className="bg-amber-50 rounded-xl p-4">
+                    <div className="text-xs font-bold text-amber-600 mb-1">
+                      {t('marketplace.ownerTerms', '出租方条款')}
+                    </div>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                      {contract.ownerTerms}
+                    </p>
+                  </div>
+                )}
+                {contract.platformTerms && (
+                  <div className="bg-blue-50 rounded-xl p-4">
+                    <div className="text-xs font-bold text-blue-600 mb-1">
+                      {t('marketplace.platformTerms', '平台条款')}
+                    </div>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                      {contract.platformTerms}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Termination info */}
+          {contract.terminatedAt && (
+            <div className="bg-red-50 rounded-xl p-4">
+              <div className="text-xs font-bold text-red-600 mb-1">
+                {t('marketplace.terminationInfo', '终止信息')}
+              </div>
+              <div className="text-sm text-gray-700">
+                <div>
+                  {t('marketplace.terminatedAt', '终止时间')}：
+                  {new Date(contract.terminatedAt).toLocaleString()}
+                </div>
+                {contract.terminationReason && (
+                  <div className="mt-1">
+                    {t('marketplace.terminateReason', '终止原因')}：{contract.terminationReason}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ──────────────── Countdown Timer ──────────────── */
+
+function CountdownTimer({ expiresAt, t }: { expiresAt: string; t: TFunction }) {
+  const [remaining, setRemaining] = useState(() => calcRemaining(expiresAt))
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setRemaining(calcRemaining(expiresAt))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [expiresAt])
+
+  if (remaining <= 0) {
+    return (
+      <div className="text-sm font-bold text-red-500">{t('marketplace.expired', '租赁已到期')}</div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <Clock className="w-4 h-4 text-cyan-500" />
+      <span className="text-sm font-bold text-gray-600">
+        {t('marketplace.remainingTime', '剩余时间')}
+      </span>
+      <span className="font-mono font-bold text-cyan-700">{formatCountdown(remaining)}</span>
+    </div>
+  )
+}
+
+function calcRemaining(expiresAt: string): number {
+  return Math.max(0, new Date(expiresAt).getTime() - Date.now())
+}
+
+function formatCountdown(ms: number): string {
+  const totalSec = Math.floor(ms / 1000)
+  const d = Math.floor(totalSec / 86400)
+  const h = Math.floor((totalSec % 86400) / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  const s = totalSec % 60
+  if (d > 0) return `${d}天 ${h}时 ${m}分`
+  if (h > 0) return `${h}时 ${m}分 ${s}秒`
+  return `${m}分 ${s}秒`
 }

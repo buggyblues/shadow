@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, ilike, inArray, lte, or, sql } from 'drizzle-orm'
 import type { Database } from '../db'
-import { clawListings } from '../db/schema'
+import { clawListings, rentalContracts } from '../db/schema'
 
 export class ClawListingDao {
   constructor(private deps: { db: Database }) {}
@@ -23,6 +23,15 @@ export class ClawListingDao {
       .offset(opts?.offset ?? 0)
   }
 
+  /** Helper: get IDs of listings currently actively rented */
+  async getActivelyRentedListingIds(): Promise<string[]> {
+    const rows = await this.db
+      .select({ listingId: rentalContracts.listingId })
+      .from(rentalContracts)
+      .where(eq(rentalContracts.status, 'active'))
+    return rows.map((r) => r.listingId)
+  }
+
   /** Browse active listings on marketplace with search, sort, and filter */
   async browse(opts?: {
     keyword?: string
@@ -40,6 +49,17 @@ export class ClawListingDao {
       or(lte(clawListings.availableFrom, now), sql`${clawListings.availableFrom} IS NULL`),
       or(gte(clawListings.availableUntil, now), sql`${clawListings.availableUntil} IS NULL`),
     ]
+
+    // Exclude listings that are currently being rented
+    const rentedIds = await this.getActivelyRentedListingIds()
+    if (rentedIds.length > 0) {
+      conditions.push(
+        sql`${clawListings.id} NOT IN (${sql.join(
+          rentedIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})`,
+      )
+    }
 
     if (opts?.keyword) {
       conditions.push(
@@ -105,6 +125,17 @@ export class ClawListingDao {
       or(lte(clawListings.availableFrom, now), sql`${clawListings.availableFrom} IS NULL`),
       or(gte(clawListings.availableUntil, now), sql`${clawListings.availableUntil} IS NULL`),
     ]
+
+    // Exclude listings that are currently being rented
+    const rentedIds = await this.getActivelyRentedListingIds()
+    if (rentedIds.length > 0) {
+      conditions.push(
+        sql`${clawListings.id} NOT IN (${sql.join(
+          rentedIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})`,
+      )
+    }
 
     if (opts?.keyword) {
       conditions.push(

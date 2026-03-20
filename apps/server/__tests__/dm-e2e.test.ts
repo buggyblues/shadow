@@ -807,6 +807,9 @@ describe('Bot DM Relay', () => {
   })
 
   it('bot receives dm:message:new with replyToId when user quotes', async () => {
+    // Set up drain listener BEFORE sending so the event isn't lost
+    const drainPromise = waitForRawEvent(wsBotClient, 'dm:message:new')
+
     // Send an original message first
     const originalRes = await fetch(`${baseUrl}/api/dm/channels/${dmChannelId}/messages`, {
       method: 'POST',
@@ -819,7 +822,7 @@ describe('Bot DM Relay', () => {
     const original = (await originalRes.json()) as { id: string }
 
     // Drain the dm:message:new from the original message
-    await waitForRawEvent(wsBotClient, 'dm:message:new')
+    await drainPromise
 
     const botReceived = waitForRawEvent<{
       content: string

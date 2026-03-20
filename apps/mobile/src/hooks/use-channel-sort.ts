@@ -1,5 +1,5 @@
 import type { Channel, ChannelSortBy, ChannelSortDirection } from '@shadow/shared'
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { DEFAULT_SORT, useChannelSortStore } from '../stores/channel-sort.store'
 
 export interface SortedChannel extends Channel {
@@ -108,13 +108,10 @@ export function useChannelSort(serverId?: string): UseChannelSortReturn {
     [serverId, setSortDirectionStore],
   )
 
-  const toggleSortDirection = useCallback(
-    () => {
-      if (!serverId) return
-      toggleSortDirectionStore(serverId)
-    },
-    [serverId, toggleSortDirectionStore],
-  )
+  const toggleSortDirection = useCallback(() => {
+    if (!serverId) return
+    toggleSortDirectionStore(serverId)
+  }, [serverId, toggleSortDirectionStore])
 
   return useMemo(
     () => ({

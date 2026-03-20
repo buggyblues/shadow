@@ -222,7 +222,7 @@ export function CreateListingPage() {
       <div className="max-w-3xl mx-auto px-6 py-8 pb-24">
         {/* Header */}
         <Link
-          to="/app/marketplace/my-rentals"
+          to="/marketplace/my-rentals"
           className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-800 transition-colors font-bold mb-6"
         >
           <ChevronLeft className="w-5 h-5" />

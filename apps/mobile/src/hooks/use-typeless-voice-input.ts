@@ -213,7 +213,7 @@ export function useTypelessVoiceInput({
 
     // Capture current text before recording starts
     textBeforeRecordingRef.current = getCurrentText?.() ?? ''
-    
+
     // Reset state for new recording session
     accumulatedRef.current = ''
     lastFinalRef.current = ''
@@ -227,7 +227,14 @@ export function useTypelessVoiceInput({
     })
     setIsRecording(true)
     onRecordingStateChange?.(true)
-  }, [speechLang, onPermissionDenied, onUnavailable, onRecordingStateChange, enableCloudEnhance])
+  }, [
+    speechLang,
+    onPermissionDenied,
+    onUnavailable,
+    onRecordingStateChange,
+    enableCloudEnhance,
+    getCurrentText,
+  ])
 
   const stopRecording = useCallback(() => {
     if (!speechModule) return

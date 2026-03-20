@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import type { TFunction } from 'i18next'
 import {
   ChevronDown,
@@ -7,6 +7,7 @@ import {
   Clock,
   Edit,
   Eye,
+  MessageCircle,
   PackageMinus,
   Pause,
   Play,
@@ -14,7 +15,7 @@ import {
   Trash2,
   Users,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../lib/api'
 import { showToast } from '../lib/toast'
@@ -34,6 +35,7 @@ interface Contract {
   depositAmount: number
   totalCost: number
   listing?: { title: string; deviceTier: string; osType: string } | null
+  agentUserId?: string | null
   createdAt: string
 }
 
@@ -93,6 +95,7 @@ function formatOnlineDuration(seconds: number): string {
 
 export function MyRentalsPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { rentalsTab, setRentalsTab, rentalsSubTab, setRentalsSubTab } = useMarketplaceStore()
 
@@ -154,6 +157,19 @@ export function MyRentalsPage() {
     onError: (err: Error) => showToast(err.message, 'error'),
   })
 
+  // Start chat with rented claw
+  const startChatMutation = useMutation({
+    mutationFn: (agentUserId: string) =>
+      fetchApi<{ id: string }>('/api/dm/channels', {
+        method: 'POST',
+        body: JSON.stringify({ userId: agentUserId }),
+      }),
+    onSuccess: (data) => {
+      navigate({ to: '/settings', search: { tab: 'chat', dm: data.id } })
+    },
+    onError: (err: Error) => showToast(err.message, 'error'),
+  })
+
   const contracts =
     rentalsTab === 'renting' ? rentingContracts?.contracts : rentingOutContracts?.contracts
   const isLoadingContracts = rentalsTab === 'renting' ? isLoadingRenting : isLoadingOut
@@ -167,19 +183,19 @@ export function MyRentalsPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <Link
-              to="/buddies"
+            <a
+              href="/buddies"
               className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-800 transition-colors font-bold mb-2"
             >
               <ChevronLeft className="w-5 h-5" />
               {t('marketplace.backToMarket', '返回集市')}
-            </Link>
+            </a>
             <h1 style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }} className="text-3xl font-bold">
               {t('marketplace.myRentals', '我的租赁')}
             </h1>
           </div>
           <Link
-            to="/app/marketplace/create"
+            to="/marketplace/create"
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-gray-900 font-bold hover:from-amber-500 hover:to-amber-600 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
             style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
           >
@@ -262,43 +278,74 @@ export function MyRentalsPage() {
             ) : (
               contracts.map((c) => {
                 const st = STATUS_STYLES[c.status] ?? STATUS_STYLES.pending!
+                const isActive = c.status === 'active'
+                const isTenantView = rentalsTab === 'renting'
                 return (
-                  <Link
+                  <div
                     key={c.id}
-                    to={`/app/marketplace/contracts/${c.id}`}
-                    className="block bg-white/80 backdrop-blur rounded-2xl border-2 border-white/90 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all p-6"
+                    className="bg-white/80 backdrop-blur rounded-2xl border-2 border-white/90 shadow-md hover:shadow-lg transition-all p-6"
                   >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="flex items-center gap-3 mb-2">
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-xs font-bold ${st.bg} ${st.text}`}
+                    <Link to={`/marketplace/contracts/${c.id}`} className="block">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-3 mb-2">
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-xs font-bold ${st.bg} ${st.text}`}
+                            >
+                              {t(st.labelKey)}
+                            </span>
+                            <span className="text-xs text-gray-400 font-mono">#{c.contractNo}</span>
+                          </div>
+                          <h3 className="font-bold text-lg">
+                            {c.listing?.title || t('marketplace.unknownListing', '未知挂单')}
+                          </h3>
+                          <div className="flex items-center gap-4 text-sm text-gray-500 font-medium mt-1">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" />
+                              {c.startsAt && c.expiresAt
+                                ? `${Math.round((new Date(c.expiresAt).getTime() - new Date(c.startsAt).getTime()) / 3600000)}h`
+                                : t('marketplace.unlimited', '不限时')}
+                            </span>
+                            <span>{c.hourlyRate} 🦐/h</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-bold text-amber-600">{c.totalCost} 🦐</div>
+                          <div className="text-xs text-gray-400 font-medium">
+                            {new Date(c.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                    </Link>
+                    {/* Countdown + Use button for active tenant contracts */}
+                    {isActive && (
+                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
+                        <div>
+                          {c.expiresAt ? (
+                            <RentalCountdown expiresAt={c.expiresAt} />
+                          ) : (
+                            <span className="text-xs text-gray-400 font-medium">
+                              {t('marketplace.unlimitedUsage', '不限时使用')}
+                            </span>
+                          )}
+                        </div>
+                        {isTenantView && c.agentUserId && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              startChatMutation.mutate(c.agentUserId!)
+                            }}
+                            disabled={startChatMutation.isPending}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-400 to-cyan-500 text-white text-sm font-bold hover:from-cyan-500 hover:to-cyan-600 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
                           >
-                            {t(st.labelKey)}
-                          </span>
-                          <span className="text-xs text-gray-400 font-mono">#{c.contractNo}</span>
-                        </div>
-                        <h3 className="font-bold text-lg">
-                          {c.listing?.title || t('marketplace.unknownListing', '未知挂单')}
-                        </h3>
-                        <div className="flex items-center gap-4 text-sm text-gray-500 font-medium mt-1">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5" />
-                            {c.startsAt && c.expiresAt
-                              ? `${Math.round((new Date(c.expiresAt).getTime() - new Date(c.startsAt).getTime()) / 3600000)}h`
-                              : t('marketplace.unlimited', '不限时')}
-                          </span>
-                          <span>{c.hourlyRate} 🦐/h</span>
-                        </div>
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            {t('marketplace.useClaw', '开始使用')}
+                          </button>
+                        )}
                       </div>
-                      <div className="text-right">
-                        <div className="text-lg font-bold text-amber-600">{c.totalCost} 🦐</div>
-                        <div className="text-xs text-gray-400 font-medium">
-                          {new Date(c.createdAt).toLocaleDateString()}
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
+                    )}
+                  </div>
                 )
               })
             )}
@@ -503,7 +550,7 @@ function ListingCard({
             </button>
           )}
           <Link
-            to={`/app/marketplace/edit/${l.id}`}
+            to={`/marketplace/edit/${l.id}`}
             className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
             title={t('marketplace.edit', '编辑')}
           >
@@ -529,4 +576,43 @@ function ListingCard({
       </div>
     </div>
   )
+}
+
+/* ──────────────── Rental Countdown ──────────────── */
+
+function RentalCountdown({ expiresAt }: { expiresAt: string }) {
+  const [remaining, setRemaining] = useState(() => calcRemaining(expiresAt))
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setRemaining(calcRemaining(expiresAt))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [expiresAt])
+
+  if (remaining <= 0) {
+    return <span className="text-xs font-bold text-red-500">已到期</span>
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-cyan-700">
+      <Clock className="w-3 h-3" />
+      {formatCountdown(remaining)}
+    </span>
+  )
+}
+
+function calcRemaining(expiresAt: string): number {
+  return Math.max(0, new Date(expiresAt).getTime() - Date.now())
+}
+
+function formatCountdown(ms: number): string {
+  const totalSec = Math.floor(ms / 1000)
+  const d = Math.floor(totalSec / 86400)
+  const h = Math.floor((totalSec % 86400) / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  const s = totalSec % 60
+  if (d > 0) return `${d}天 ${h}时 ${m}分`
+  if (h > 0) return `${h}时 ${m}分 ${s}秒`
+  return `${m}分 ${s}秒`
 }

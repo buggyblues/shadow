@@ -27,7 +27,7 @@ import { signAccessToken } from '../src/lib/jwt'
    Setup
    ══════════════════════════════════════════════════════════ */
 
-const TEST_DB_URL = process.env.DATABASE_URL ?? 'postgresql://shadow:shadow@localhost:5432/shadow'
+const TEST_DB_URL = process.env.DATABASE_URL ?? 'postgresql://shadow:shadow@127.0.0.1:5432/shadow'
 
 let sql: ReturnType<typeof postgres>
 let db: Database
@@ -500,6 +500,82 @@ describe('P2P Rental E2E', () => {
     await db.delete(users).where(eq(users.id, third!.id))
   })
 
+  /* ─────── 8b. Browse excludes actively-rented listings ─────── */
+
+  it('should exclude actively-rented listings from browse results', async () => {
+    // The listing was rented in test 7 (sign contract), so it should NOT appear in browse
+    const res = await req('GET', '/api/marketplace/listings', {
+      query: { limit: '100' },
+    })
+    expect(res.status).toBe(200)
+    const data = await json<{ listings: { id: string }[] }>(res)
+    const found = data.listings.find((l) => l.id === listingId)
+    expect(found).toBeUndefined()
+  })
+
+  /* ─────── 8c. Duplicate rental prevention (409) ─────── */
+
+  it('should reject signing a contract for an already-rented listing', async () => {
+    // Create a second tenant to try renting the same listing
+    const userDao = container.resolve('userDao')
+    const ts = Date.now()
+    const secondTenant = await userDao.create({
+      email: `rental-tenant2-${ts}@test.local`,
+      username: `rentaltenant2${ts}`,
+      passwordHash: 'not-used',
+    })
+    const secondTenantToken = signAccessToken({
+      userId: secondTenant!.id,
+      email: secondTenant!.email,
+      username: secondTenant!.username,
+    })
+
+    // Give the second tenant balance
+    const walletService = container.resolve('walletService')
+    await walletService.topUp(secondTenant!.id, 10000, 'Test balance for duplicate rental')
+
+    const res = await req('POST', '/api/marketplace/contracts', {
+      token: secondTenantToken,
+      body: {
+        listingId,
+        durationHours: 10,
+        agreedToTerms: true,
+      },
+    })
+    expect(res.status).toBe(409)
+
+    // Cleanup
+    const { users, wallets } = schema
+    const { eq } = await import('drizzle-orm')
+    await db.delete(wallets).where(eq(wallets.userId, secondTenant!.id))
+    await db.delete(users).where(eq(users.id, secondTenant!.id))
+  })
+
+  /* ─────── 8d. Contract APIs include agentUserId ─────── */
+
+  it('should include agentUserId in contract list response', async () => {
+    const res = await req('GET', '/api/marketplace/contracts', {
+      token: tenantToken,
+      query: { role: 'tenant' },
+    })
+    expect(res.status).toBe(200)
+    const data = await json<{ contracts: { id: string; agentUserId: string | null }[] }>(res)
+    const contract = data.contracts.find((c) => c.id === contractId)
+    expect(contract).toBeDefined()
+    // agentUserId may be null if listing has no agentId, but the field must be present
+    expect(contract).toHaveProperty('agentUserId')
+  })
+
+  it('should include agentUserId in contract detail response', async () => {
+    const res = await req('GET', `/api/marketplace/contracts/${contractId}`, {
+      token: tenantToken,
+    })
+    expect(res.status).toBe(200)
+    const data = await json<{ id: string; agentUserId: string | null }>(res)
+    expect(data.id).toBe(contractId)
+    expect(data).toHaveProperty('agentUserId')
+  })
+
   /* ─────── 9. Record Usage ─────── */
 
   it('should record a usage session', async () => {
@@ -529,15 +605,20 @@ describe('P2P Rental E2E', () => {
 
   /* ─────── 10. My Listings ─────── */
 
-  it('should get my listings as owner', async () => {
+  it('should get my listings as owner (filters out rented & unlisted)', async () => {
     const res = await req('GET', '/api/marketplace/my-listings', {
       token: ownerToken,
     })
 
     expect(res.status).toBe(200)
-    const data = await json<{ listings?: unknown[]; length?: number }>(res)
+    const data = await json<{ listings?: { id: string }[]; length?: number }>(res)
     const listings = Array.isArray(data) ? data : (data.listings ?? [])
-    expect(listings.length).toBeGreaterThanOrEqual(2)
+    // Active listing is rented (active contract) → filtered out
+    // Draft listing is not active/listed → filtered out
+    const rentedListing = listings.find((l) => l.id === listingId)
+    expect(rentedListing).toBeUndefined()
+    const draftListing = listings.find((l) => l.id === draftListingId)
+    expect(draftListing).toBeUndefined()
   })
 
   /* ─────── 11. Report Violation ─────── */

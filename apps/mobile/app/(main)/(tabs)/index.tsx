@@ -406,7 +406,7 @@ export default function ServersScreen() {
               </Text>
             </View>
           )}
-          renderItem={({ item, index, section }) => {
+          renderItem={({ item, index }) => {
             const isPublicResult = item.member.role === '_public'
             const desc = isPublicResult
               ? item.server.description || '公开服务器'
