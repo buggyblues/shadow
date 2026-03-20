@@ -95,14 +95,14 @@ export default function FriendsScreen() {
       (dm) => dm.otherUser?.id === userId || dm.userAId === userId || dm.userBId === userId,
     )
     if (existed) {
-      router.push(`/(main)/dm/${existed.id}` as never)
+      showToast(t('friends.dmUnavailable', '私信页面正在升级中，请稍后再试'), 'info')
       return
     }
 
     try {
       const data = await startChat.mutateAsync(userId)
       if (data?.id) {
-        router.push(`/(main)/dm/${data.id}` as never)
+        showToast(t('friends.dmUnavailable', '私信页面正在升级中，请稍后再试'), 'info')
       }
     } catch {
       showToast(t('common.error', '操作失败'), 'error')

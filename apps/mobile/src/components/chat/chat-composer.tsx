@@ -1,12 +1,268 @@
+import { Image } from 'expo-image'
 import { AtSign, Camera, File, Image as ImageIcon, Mic, Plus, Smile, X } from 'lucide-react-native'
-import { memo } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import type { EmojiType } from 'rn-emoji-keyboard'
-import EmojiPicker from 'rn-emoji-keyboard'
+import {
+  Animated,
+  Dimensions,
+  Easing,
+  FlatList,
+  Keyboard,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native'
 import { fontSize, radius, spacing, useColors } from '../../theme'
 import type { Message } from '../../types/message'
 import { TypelessMicButton } from './typeless-mic-button'
+
+// Common emoji list for inline picker
+const COMMON_EMOJIS = [
+  '😀',
+  '😃',
+  '😄',
+  '😁',
+  '😆',
+  '😅',
+  '🤣',
+  '😂',
+  '🙂',
+  '🙃',
+  '😉',
+  '😊',
+  '😇',
+  '🥰',
+  '😍',
+  '🤩',
+  '😘',
+  '😗',
+  '😚',
+  '😙',
+  '😋',
+  '😛',
+  '😜',
+  '🤪',
+  '😝',
+  '🤑',
+  '🤗',
+  '🤭',
+  '🤫',
+  '🤔',
+  '🤐',
+  '🤨',
+  '😐',
+  '😑',
+  '😶',
+  '😏',
+  '😒',
+  '🙄',
+  '😬',
+  '🤥',
+  '😌',
+  '😔',
+  '😪',
+  '🤤',
+  '😴',
+  '😷',
+  '🤒',
+  '🤕',
+  '🤢',
+  '🤮',
+  '🤧',
+  '🥵',
+  '🥶',
+  '🥴',
+  '😵',
+  '🤯',
+  '🤠',
+  '🥳',
+  '😎',
+  '🤓',
+  '🧐',
+  '😕',
+  '😟',
+  '🙁',
+  '☹️',
+  '😮',
+  '😯',
+  '😲',
+  '😳',
+  '🥺',
+  '😦',
+  '😧',
+  '😨',
+  '😰',
+  '😥',
+  '😢',
+  '😭',
+  '😱',
+  '😖',
+  '😣',
+  '😞',
+  '😓',
+  '😩',
+  '😫',
+  '🥱',
+  '😤',
+  '😡',
+  '😠',
+  '🤬',
+  '😈',
+  '👿',
+  '💀',
+  '☠️',
+  '💩',
+  '🤡',
+  '👹',
+  '👺',
+  '👻',
+  '👽',
+  '👾',
+  '🤖',
+  '😺',
+  '😸',
+  '😹',
+  '😻',
+  '😼',
+  '😽',
+  '🙀',
+  '😿',
+  '😾',
+  '❤️',
+  '🧡',
+  '💛',
+  '💚',
+  '💙',
+  '💜',
+  '🖤',
+  '🤍',
+  '🤎',
+  '💔',
+  '❣️',
+  '💕',
+  '💞',
+  '💓',
+  '💗',
+  '💖',
+  '💘',
+  '💝',
+  '💟',
+  '☮️',
+  '✝️',
+  '☪️',
+  '🕉',
+  '☸️',
+  '✡️',
+  '🔯',
+  '🕎',
+  '☯️',
+  '☦️',
+  '🛐',
+  '⛎',
+  '♈',
+  '♉',
+  '♊',
+  '♋',
+  '♌',
+  '♍',
+  '♎',
+  '♏',
+  '♐',
+  '♑',
+  '♒',
+  '♓',
+  '🆔',
+  '⚛️',
+  '🉑',
+  '☢️',
+  '☣️',
+  '📴',
+  '📳',
+  '🈶',
+  '🈚',
+  '🈸',
+  '🈺',
+  '🈷',
+  '✴️',
+  '🆚',
+  '💮',
+  '🉐',
+  '㊙️',
+  '㊗️',
+  '🈴',
+  '🈵',
+  '🈹',
+  '🈲',
+  '🅰️',
+  '🅱️',
+  '🆎',
+  '🆑',
+  '🅾️',
+  '🆘',
+  '❌',
+  '⭕',
+  '🛑',
+  '⛔',
+  '📛',
+  '🚫',
+  '💯',
+  '💢',
+  '♨️',
+  '🚷',
+  '🚯',
+  '🚳',
+  '🚱',
+  '🔞',
+  '📵',
+  '🚭',
+  '❗',
+  '❕',
+  '❓',
+  '❔',
+  '‼️',
+  '⁉️',
+  '🔅',
+  '🔆',
+  '〽️',
+  '⚠️',
+  '🚸',
+  '🔱',
+  '⚜️',
+  '🔰',
+  '♻️',
+  '✅',
+  '🈯',
+  '💹',
+  '❇️',
+  '✳️',
+  '❎',
+  '🌐',
+  '💠',
+  'Ⓜ️',
+  '🌀',
+  '💤',
+  '🏧',
+  '🚾',
+  '♿',
+  '🅿️',
+  '🈳',
+  '🈂',
+  '🛂',
+  '🛃',
+  '🛄',
+  '🛅',
+  '🛗',
+  '🟰',
+  '🌝',
+  '🌚',
+  '🌕',
+  '🌖',
+  '🌗',
+]
 
 interface ChatComposerProps {
   inputText: string
@@ -23,6 +279,7 @@ interface ChatComposerProps {
   voiceTranscript?: string
   keyboardVisible?: boolean
   insetsBottom: number
+  panelHeight?: number
   canUseVoice: boolean
   onToggleVoice?: () => void
   onVoicePressIn?: () => void
@@ -38,6 +295,53 @@ interface ChatComposerProps {
   onTakePhoto?: () => void
 }
 
+function ImageViewerModal({
+  uri,
+  visible,
+  onClose,
+}: {
+  uri: string
+  visible: boolean
+  onClose: () => void
+}) {
+  const { t } = useTranslation()
+  const screenWidth = Dimensions.get('window').width
+  const screenHeight = Dimensions.get('window').height
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <View style={[styles.imageViewerOverlay, { backgroundColor: 'rgba(0,0,0,0.95)' }]}>
+        <View style={styles.imageViewerHeader}>
+          <Pressable onPress={onClose} hitSlop={8} style={styles.imageViewerCloseBtn}>
+            <X size={24} color="#fff" />
+          </Pressable>
+          <Text style={styles.imageViewerTitle}>{t('chat.imagePreview', '图片预览')}</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <Pressable style={styles.imageViewerContent} onPress={onClose}>
+          <Image
+            source={{ uri }}
+            style={{ width: screenWidth, height: screenHeight * 0.7 }}
+            contentFit="contain"
+            transition={200}
+          />
+        </Pressable>
+        <View style={styles.imageViewerHint}>
+          <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: fontSize.sm }}>
+            {t('chat.tapToClose', '点击关闭')}
+          </Text>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
 export const ChatComposer = memo(function ChatComposer({
   inputText,
   onInputChange,
@@ -50,8 +354,9 @@ export const ChatComposer = memo(function ChatComposer({
   typingUsers,
   isRecording = false,
   isHolding = false,
-  keyboardVisible = false,
+  keyboardVisible: _keyboardVisible = false,
   insetsBottom,
+  panelHeight = 320,
   canUseVoice,
   onToggleVoice,
   onVoicePressIn,
@@ -68,6 +373,93 @@ export const ChatComposer = memo(function ChatComposer({
 }: ChatComposerProps) {
   const colors = useColors()
   const { t } = useTranslation()
+  const [viewingImageUri, setViewingImageUri] = useState<string | null>(null)
+
+  // ── Bottom-slot state machine ──
+  // A single always-rendered Animated.View at the bottom whose height
+  // smoothly tracks whichever occupant is active:
+  //   idle    → insetsBottom  (safe-area only)
+  //   keyboard → keyboard height  (system keyboard visible)
+  //   panel   → panelHeight   (plus-menu / emoji picker)
+  const panelIntentRef = useRef(false)
+  const keyboardUpRef = useRef(false)
+  const bottomHeightAnim = useRef(new Animated.Value(insetsBottom)).current
+  const lastTargetRef = useRef(insetsBottom)
+  const panelRequested = showPlusMenu || showEmojiPicker
+
+  const animateBottomTo = useCallback(
+    (toValue: number, duration: number) => {
+      if (Math.abs(lastTargetRef.current - toValue) < 1) return
+      lastTargetRef.current = toValue
+      Animated.timing(bottomHeightAnim, {
+        toValue,
+        duration,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start()
+    },
+    [bottomHeightAnim],
+  )
+
+  // Keyboard listeners — drive the bottom-slot height in lockstep with iOS keyboard animation
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      keyboardUpRef.current = true
+      panelIntentRef.current = false
+      const height = e.endCoordinates.height
+      const duration = e.duration ?? 250
+      // Close panels — keyboard takes over the bottom slot
+      setShowPlusMenu(false)
+      setShowEmojiPicker(false)
+      animateBottomTo(height, duration)
+    })
+
+    const hideSub = Keyboard.addListener(hideEvent, (e) => {
+      keyboardUpRef.current = false
+      const duration = e.duration ?? 250
+      if (panelIntentRef.current) {
+        // Keyboard → panel: keep slot at panel height so input bar stays put
+        panelIntentRef.current = false
+        animateBottomTo(panelHeight, duration)
+      } else {
+        // Keyboard → idle
+        animateBottomTo(insetsBottom, duration)
+      }
+    })
+
+    return () => {
+      showSub.remove()
+      hideSub.remove()
+    }
+  }, [panelHeight, insetsBottom, animateBottomTo, setShowPlusMenu, setShowEmojiPicker])
+
+  // Non-keyboard transitions (idle ↔ panel)
+  useEffect(() => {
+    if (panelIntentRef.current || keyboardUpRef.current) return
+    if (panelRequested) {
+      animateBottomTo(panelHeight, 250)
+    } else {
+      animateBottomTo(insetsBottom, 200)
+    }
+  }, [panelRequested, panelHeight, insetsBottom, animateBottomTo])
+
+  // Plus-button rotation animation
+  const rotateAnim = useRef(new Animated.Value(0)).current
+  useEffect(() => {
+    Animated.timing(rotateAnim, {
+      toValue: panelRequested ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start()
+  }, [panelRequested, rotateAnim])
+
+  const rotateInterpolate = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '45deg'],
+  })
 
   return (
     <>
@@ -87,27 +479,50 @@ export const ChatComposer = memo(function ChatComposer({
             { backgroundColor: colors.surface, borderTopColor: colors.border },
           ]}
         >
-          {pendingFiles.map((file) => (
-            <View
-              key={file.uri}
-              style={[styles.pendingFileChip, { backgroundColor: colors.inputBackground }]}
-            >
-              <Text
-                style={[styles.pendingFileName, { color: colors.textSecondary }]}
-                numberOfLines={1}
-              >
-                {file.type.startsWith('image/') ? '🖼 ' : '📎 '}
-                {file.name}
-              </Text>
-              <Pressable
-                onPress={() => onRemovePendingFile(pendingFiles.indexOf(file))}
-                hitSlop={8}
-              >
-                <X size={14} color={colors.textMuted} />
-              </Pressable>
+          {pendingFiles.map((file, idx) => (
+            <View key={file.uri}>
+              {file.type.startsWith('image/') ? (
+                <Pressable
+                  onPress={() => setViewingImageUri(file.uri)}
+                  style={[styles.pendingImageChip, { backgroundColor: colors.inputBackground }]}
+                >
+                  <Image
+                    source={{ uri: file.uri }}
+                    style={styles.pendingImageThumb}
+                    contentFit="cover"
+                  />
+                  <Pressable
+                    onPress={() => onRemovePendingFile(idx)}
+                    hitSlop={8}
+                    style={styles.pendingImageRemoveBtn}
+                  >
+                    <X size={14} color="#fff" />
+                  </Pressable>
+                </Pressable>
+              ) : (
+                <View style={[styles.pendingFileChip, { backgroundColor: colors.inputBackground }]}>
+                  <Text
+                    style={[styles.pendingFileName, { color: colors.textSecondary }]}
+                    numberOfLines={1}
+                  >
+                    📎 {file.name}
+                  </Text>
+                  <Pressable onPress={() => onRemovePendingFile(idx)} hitSlop={8}>
+                    <X size={14} color={colors.textMuted} />
+                  </Pressable>
+                </View>
+              )}
             </View>
           ))}
         </View>
+      )}
+
+      {viewingImageUri && (
+        <ImageViewerModal
+          uri={viewingImageUri}
+          visible={!!viewingImageUri}
+          onClose={() => setViewingImageUri(null)}
+        />
       )}
 
       {replyTo && (
@@ -138,7 +553,7 @@ export const ChatComposer = memo(function ChatComposer({
           {
             backgroundColor: colors.surface,
             borderTopColor: colors.border,
-            paddingBottom: keyboardVisible ? 6 : Math.max(6, insetsBottom + 2),
+            paddingBottom: 8,
           },
         ]}
       >
@@ -185,136 +600,146 @@ export const ChatComposer = memo(function ChatComposer({
         </View>
 
         <Pressable
-          style={styles.actionBtn}
-          onPress={() => {
-            setShowPlusMenu(false)
-            setShowEmojiPicker(true)
-          }}
-        >
-          <Smile size={24} color={showEmojiPicker ? colors.primary : colors.textMuted} />
-        </Pressable>
-
-        <Pressable
           style={[
             styles.actionBtn,
             { borderColor: colors.border, borderWidth: 1.5, borderRadius: 23 },
           ]}
           onPress={() => {
-            if (showPlusMenu) {
-              setShowPlusMenu(false)
+            if (panelRequested) {
+              // Panel → keyboard: focus input, keyboardWillShow handles the rest
               inputRef.current?.focus()
-            } else {
+            } else if (keyboardUpRef.current) {
+              // Keyboard → panel: tell hide-handler to keep slot height
+              panelIntentRef.current = true
+              setShowEmojiPicker(false)
+              setShowPlusMenu(true)
               Keyboard.dismiss()
+            } else {
+              // Idle → panel
               setShowEmojiPicker(false)
               setShowPlusMenu(true)
             }
           }}
         >
-          <Plus size={22} color={showPlusMenu ? colors.primary : colors.textMuted} />
+          <Animated.View style={{ transform: [{ rotate: rotateInterpolate }] }}>
+            <Plus size={22} color={panelRequested ? colors.primary : colors.textMuted} />
+          </Animated.View>
         </Pressable>
       </View>
 
-      {showEmojiPicker && (
-        <EmojiPicker
-          open={showEmojiPicker}
-          onClose={() => setShowEmojiPicker(false)}
-          onEmojiSelected={(emoji: EmojiType) => {
-            onInputChange(inputText + emoji.emoji)
-            setTimeout(() => inputRef.current?.focus(), 100)
-          }}
-          enableSearchBar
-          enableRecentlyUsed
-          categoryPosition="top"
-          theme={{
-            backdrop: 'rgba(0,0,0,0.3)',
-            knob: colors.textMuted,
-            container: colors.surface,
-            header: colors.text,
-            category: {
-              icon: colors.textMuted,
-              iconActive: colors.primary,
-              container: colors.surface,
-              containerActive: colors.surfaceHover,
-            },
-            search: {
-              background: colors.inputBackground,
-              text: colors.text,
-              placeholder: colors.textMuted,
-              icon: colors.textMuted,
-            },
-            emoji: { selected: colors.surfaceHover },
-          }}
-        />
-      )}
-
-      {showPlusMenu && (
-        <View
-          style={[
-            styles.plusPanel,
-            {
-              backgroundColor: colors.surface,
-              borderTopColor: colors.border,
-              paddingBottom: Math.max(insetsBottom, 16),
-            },
-          ]}
-        >
-          <View style={styles.plusPanelGrid}>
-            {onTakePhoto && (
-              <Pressable
-                style={({ pressed }) => [styles.plusPanelItem, pressed && { opacity: 0.6 }]}
-                onPress={() => {
-                  setShowPlusMenu(false)
-                  onTakePhoto()
-                }}
-              >
-                <View style={[styles.plusPanelIcon, { backgroundColor: '#10b98115' }]}>
-                  <Camera size={24} color="#10b981" />
+      {/* Bottom slot — always rendered; height tracks keyboard / panel / idle */}
+      <Animated.View
+        style={{
+          height: bottomHeightAnim,
+          overflow: 'hidden',
+          backgroundColor: colors.surface,
+        }}
+      >
+        {panelRequested && (
+          <View style={[styles.plusPanel, { borderTopColor: colors.border, height: panelHeight }]}>
+            {showEmojiPicker ? (
+              <View style={styles.emojiPanelContainer}>
+                <View style={styles.emojiPanelHeader}>
+                  <Text style={[styles.emojiPanelTitle, { color: colors.text }]}>
+                    {t('chat.emoji', '表情')}
+                  </Text>
+                  <Pressable
+                    onPress={() => setShowEmojiPicker(false)}
+                    style={styles.emojiPanelClose}
+                  >
+                    <X size={20} color={colors.textMuted} />
+                  </Pressable>
                 </View>
-                <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
-                  {t('chat.takePhoto', '拍摄')}
-                </Text>
-              </Pressable>
+                <FlatList
+                  data={COMMON_EMOJIS}
+                  numColumns={8}
+                  keyExtractor={(item, index) => `${item}-${index}`}
+                  renderItem={({ item }) => (
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.emojiItem,
+                        pressed && { backgroundColor: colors.surfaceHover, borderRadius: 8 },
+                      ]}
+                      onPress={() => {
+                        onInputChange(inputText + item)
+                        inputRef.current?.focus()
+                      }}
+                      android_ripple={{ color: colors.surfaceHover }}
+                    >
+                      <Text style={styles.emojiText}>{item}</Text>
+                    </Pressable>
+                  )}
+                  contentContainerStyle={styles.emojiList}
+                />
+              </View>
+            ) : (
+              <View style={styles.plusPanelGrid}>
+                <Pressable
+                  style={({ pressed }) => [styles.plusPanelItem, pressed && { opacity: 0.6 }]}
+                  onPress={() => setShowEmojiPicker(true)}
+                >
+                  <View style={[styles.plusPanelIcon, { backgroundColor: '#fbbf2415' }]}>
+                    <Smile size={28} color="#fbbf24" />
+                  </View>
+                  <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
+                    {t('chat.emoji', '表情')}
+                  </Text>
+                </Pressable>
+                {onTakePhoto && (
+                  <Pressable
+                    style={({ pressed }) => [styles.plusPanelItem, pressed && { opacity: 0.6 }]}
+                    onPress={() => {
+                      setShowPlusMenu(false)
+                      onTakePhoto()
+                    }}
+                  >
+                    <View style={[styles.plusPanelIcon, { backgroundColor: '#10b98115' }]}>
+                      <Camera size={28} color="#10b981" />
+                    </View>
+                    <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
+                      {t('chat.takePhoto', '拍摄')}
+                    </Text>
+                  </Pressable>
+                )}
+                <Pressable
+                  style={({ pressed }) => [styles.plusPanelItem, pressed && { opacity: 0.6 }]}
+                  onPress={() => {
+                    setShowPlusMenu(false)
+                    onPickImage()
+                  }}
+                >
+                  <View style={[styles.plusPanelIcon, { backgroundColor: `${colors.primary}15` }]}>
+                    <ImageIcon size={28} color={colors.primary} />
+                  </View>
+                  <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
+                    {t('chat.pickImage', '相册')}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.plusPanelItem, pressed && { opacity: 0.6 }]}
+                  onPress={() => {
+                    setShowPlusMenu(false)
+                    onPickFile()
+                  }}
+                >
+                  <View style={[styles.plusPanelIcon, { backgroundColor: '#f59e0b15' }]}>
+                    <File size={28} color="#f59e0b" />
+                  </View>
+                  <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
+                    {t('chat.pickFile', '文件')}
+                  </Text>
+                </Pressable>
+              </View>
             )}
-            <Pressable
-              style={({ pressed }) => [styles.plusPanelItem, pressed && { opacity: 0.6 }]}
-              onPress={() => {
-                setShowPlusMenu(false)
-                onPickImage()
-              }}
-            >
-              <View style={[styles.plusPanelIcon, { backgroundColor: `${colors.primary}15` }]}>
-                <ImageIcon size={24} color={colors.primary} />
-              </View>
-              <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
-                {t('chat.pickImage', '相册')}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.plusPanelItem, pressed && { opacity: 0.6 }]}
-              onPress={() => {
-                setShowPlusMenu(false)
-                onPickFile()
-              }}
-            >
-              <View style={[styles.plusPanelIcon, { backgroundColor: '#f59e0b15' }]}>
-                <File size={24} color="#f59e0b" />
-              </View>
-              <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
-                {t('chat.pickFile', '文件')}
-              </Text>
-            </Pressable>
           </View>
-        </View>
-      )}
+        )}
+      </Animated.View>
     </>
   )
 })
 
 const styles = StyleSheet.create({
-  typingBar: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-  },
+  typingBar: { paddingHorizontal: spacing.md, paddingVertical: 6 },
   pendingFilesBar: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -332,9 +757,19 @@ const styles = StyleSheet.create({
     gap: 4,
     maxWidth: 180,
   },
-  pendingFileName: {
-    fontSize: fontSize.xs,
-    flexShrink: 1,
+  pendingFileName: { fontSize: fontSize.xs, flexShrink: 1 },
+  pendingImageChip: { borderRadius: radius.md, overflow: 'hidden', position: 'relative' },
+  pendingImageThumb: { width: 80, height: 80, borderRadius: radius.md },
+  pendingImageRemoveBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   replyBar: {
     flexDirection: 'row',
@@ -344,21 +779,21 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     gap: spacing.sm,
   },
-  replyBarAccent: {
-    width: 3,
-    height: '100%',
-    borderRadius: 2,
+  replyBarAccent: { width: 3, height: '100%', borderRadius: 2 },
+  replyBarContent: { flex: 1 },
+  replyBarLabel: { fontSize: fontSize.xs, fontWeight: '600' },
+  replyBarPreview: { fontSize: fontSize.xs },
+  voiceRecordingBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    gap: 8,
   },
-  replyBarContent: {
-    flex: 1,
-  },
-  replyBarLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-  },
-  replyBarPreview: {
-    fontSize: fontSize.xs,
-  },
+  voiceRecordingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444' },
+  voiceRecordingLabel: { fontSize: fontSize.xs, fontWeight: '600' },
+  voiceTranscript: { flex: 1, fontSize: fontSize.sm },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -403,27 +838,42 @@ const styles = StyleSheet.create({
     right: 4,
     bottom: 6,
   },
-  plusPanel: {
-    borderTopWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-  },
-  plusPanelGrid: {
-    flexDirection: 'row',
-    gap: spacing.xl,
-  },
-  plusPanelItem: {
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
+  plusPanel: { borderTopWidth: 1, paddingHorizontal: spacing.md, paddingTop: spacing.md },
+  plusPanelGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+  plusPanelItem: { alignItems: 'center', gap: spacing.xs, width: '22%', marginBottom: spacing.md },
   plusPanelIcon: {
-    width: 52,
-    height: 52,
+    width: 60,
+    height: 60,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  plusPanelLabel: {
-    fontSize: fontSize.xs,
+  plusPanelLabel: { fontSize: fontSize.sm, marginTop: 4 },
+  emojiPanelContainer: { flex: 1 },
+  emojiPanelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.sm,
+    paddingBottom: spacing.sm,
   },
+  emojiPanelTitle: { fontSize: fontSize.md, fontWeight: '600' },
+  emojiPanelClose: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  emojiList: { paddingHorizontal: spacing.sm },
+  emojiItem: { width: '12.5%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
+  emojiText: { fontSize: 24 },
+  imageViewerOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  imageViewerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingTop: Platform.OS === 'ios' ? 50 : spacing.xl,
+    paddingBottom: spacing.md,
+    width: '100%',
+  },
+  imageViewerCloseBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  imageViewerTitle: { color: '#fff', fontSize: fontSize.md, fontWeight: '600' },
+  imageViewerContent: { flex: 1, justifyContent: 'center', alignItems: 'center', width: '100%' },
+  imageViewerHint: { paddingBottom: spacing.xl, alignItems: 'center' },
 })

@@ -33,6 +33,19 @@ interface PendingFile {
   workspaceSize?: number
 }
 
+function getPendingFileKey(pf: PendingFile): string {
+  return [
+    pf.workspaceUrl,
+    pf.preview,
+    pf.file.name,
+    pf.file.type,
+    String(pf.file.size),
+    String(pf.file.lastModified),
+  ]
+    .filter(Boolean)
+    .join('::')
+}
+
 interface MemberUser {
   id: string
   username: string
@@ -509,8 +522,11 @@ export function MessageInput({
   }, [])
 
   return (
-    <div
+    <section
       className="px-4 pb-4 mobile-safe-bottom relative"
+      aria-label={t('chat.inputPlaceholder', {
+        channelName: channelName ?? t('chat.channelFallback'),
+      })}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
@@ -561,6 +577,7 @@ export function MessageInput({
             <span className="font-semibold text-text-muted">{t('chat.replyingTo')}</span>
           </div>
           <button
+            type="button"
             onClick={onClearReply}
             className="text-text-muted hover:text-text-primary transition p-1 hover:bg-bg-modifier-hover rounded-full"
           >
@@ -575,7 +592,7 @@ export function MessageInput({
           className={`flex flex-wrap gap-2 bg-bg-secondary ${replyToId ? '' : 'rounded-t-lg'} border-b border-black/10 px-4 py-3`}
         >
           {pendingFiles.map((pf, i) => (
-            <div key={i} className="relative group/file">
+            <div key={getPendingFileKey(pf)} className="relative group/file">
               {pf.preview ? (
                 <button
                   type="button"
@@ -598,6 +615,7 @@ export function MessageInput({
                 </span>
               )}
               <button
+                type="button"
                 onClick={() => removeFile(i)}
                 className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-danger rounded-full flex items-center justify-center text-white opacity-0 group-hover/file:opacity-100 transition"
               >
@@ -614,6 +632,7 @@ export function MessageInput({
         } px-3 py-1.5 shadow-sm`}
       >
         <button
+          type="button"
           onClick={() => fileInputRef.current?.click()}
           className="text-text-secondary hover:text-text-primary transition p-1.5 rounded-full hover:bg-bg-modifier-hover shrink-0 self-end mb-[3px]"
           title={t('chat.uploadFile')}
@@ -634,6 +653,7 @@ export function MessageInput({
         />
 
         <button
+          type="button"
           onClick={() => fileInputRef.current?.click()}
           className="text-text-secondary hover:text-text-primary transition p-1.5 rounded-full hover:bg-bg-modifier-hover shrink-0 self-end mb-[3px]"
           title={t('chat.uploadImage')}
@@ -643,6 +663,7 @@ export function MessageInput({
 
         {activeServerId && (
           <button
+            type="button"
             onClick={() => setShowWorkspacePicker(true)}
             className="text-text-secondary hover:text-text-primary transition p-1.5 rounded-full hover:bg-bg-modifier-hover shrink-0 self-end mb-[3px]"
             title="从工作区选择文件"
@@ -653,6 +674,7 @@ export function MessageInput({
 
         <div className="relative shrink-0 self-end mb-[3px]">
           <button
+            type="button"
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             className="text-text-secondary hover:text-text-primary transition p-1.5 rounded-full hover:bg-bg-modifier-hover"
             title={t('chat.addEmoji')}
@@ -672,6 +694,7 @@ export function MessageInput({
         </div>
 
         <button
+          type="button"
           onClick={handleSend}
           disabled={(!content.trim() && pendingFiles.length === 0) || uploading}
           className="text-text-muted hover:text-primary transition p-1.5 rounded-full hover:bg-bg-modifier-hover shrink-0 self-end mb-[3px] disabled:opacity-30 disabled:hover:bg-transparent"
@@ -708,6 +731,6 @@ export function MessageInput({
           onClose={() => setViewingImage(null)}
         />
       )}
-    </div>
+    </section>
   )
 }

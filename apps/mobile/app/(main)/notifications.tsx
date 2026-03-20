@@ -20,6 +20,7 @@ import { EmptyState } from '../../src/components/common/empty-state'
 import { LoadingScreen } from '../../src/components/common/loading-screen'
 import { useSocketEvent } from '../../src/hooks/use-socket'
 import { fetchApi } from '../../src/lib/api'
+import { showToast } from '../../src/lib/toast'
 import { fontSize, spacing, useColors } from '../../src/theme'
 
 function SquishyCard({
@@ -94,8 +95,7 @@ export default function NotificationsScreen() {
       if (!n.isRead) markRead.mutate(n.id)
 
       if (n.type === 'dm' && n.referenceId) {
-        // DM notification - navigate to DM chat
-        router.push(`/(main)/dm/${n.referenceId}` as never)
+        showToast(t('friends.dmUnavailable', '私信页面正在升级中，请稍后再试'), 'info')
         return
       }
 
@@ -135,7 +135,7 @@ export default function NotificationsScreen() {
         } catch {}
       }
     },
-    [router, markRead],
+    [router, markRead, t],
   )
 
   const unreadCount = notifications.filter((n) => !n.isRead).length

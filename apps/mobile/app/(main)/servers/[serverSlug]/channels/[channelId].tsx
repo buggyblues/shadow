@@ -20,7 +20,6 @@ import {
   Alert,
   FlatList,
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -30,6 +29,7 @@ import {
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useDraftStorage } from '@/hooks/use-draft-storage'
 import { ChatComposer } from '../../../../../src/components/chat/chat-composer'
 import { MessageBubble } from '../../../../../src/components/chat/message-bubble'
 import { Avatar } from '../../../../../src/components/common/avatar'
@@ -89,6 +89,7 @@ export default function ChannelViewScreen() {
   const [inviteSearch, setInviteSearch] = useState('')
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [keyboardVisible, setKeyboardVisible] = useState(false)
+  const [keyboardHeight, setKeyboardHeight] = useState(320)
   const [showSearchPanel, setShowSearchPanel] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchFromUser, setSearchFromUser] = useState<string | null>(null)
@@ -97,6 +98,27 @@ export default function ChannelViewScreen() {
   const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null)
   const searchInputRef = useRef<TextInput>(null)
   const inputRef = useRef<TextInput>(null)
+  const hasRestoredDraft = useRef(false)
+
+  // Draft storage for persistent input
+  const { restoredDraft, scheduleSave, clear: clearDraft } = useDraftStorage(channelId || null)
+
+  // Restore draft only once on mount
+  useEffect(() => {
+    if (restoredDraft && !hasRestoredDraft.current) {
+      setInputText(restoredDraft.text)
+      if (restoredDraft.pendingFiles?.length > 0) {
+        setPendingFiles(restoredDraft.pendingFiles)
+      }
+      hasRestoredDraft.current = true
+    }
+  }, [restoredDraft])
+
+  // Reset restore flag when channel changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional, we want to reset on channelId change
+  useEffect(() => {
+    hasRestoredDraft.current = false
+  }, [channelId])
 
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const typingUsersTimeout = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
@@ -288,16 +310,21 @@ export default function ChannelViewScreen() {
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
-    const showSub = Keyboard.addListener(showEvent, () => {
+    const showSub = Keyboard.addListener(showEvent, (e) => {
       setKeyboardVisible(true)
-      setShowPlusMenu(false)
+      const nextHeight = e?.endCoordinates?.height ?? 0
+      if (nextHeight > 0) {
+        setKeyboardHeight(nextHeight)
+      }
       // Auto-scroll to newest messages when keyboard appears if near bottom
       const offset = channelId ? (scrollOffsetRef.current[channelId] ?? 0) : 0
       if (offset < 200) {
         flatListRef.current?.scrollToOffset({ offset: 0, animated: true })
       }
     })
-    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false))
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardVisible(false)
+    })
     return () => {
       showSub.remove()
       hideSub.remove()
@@ -934,6 +961,10 @@ export default function ChannelViewScreen() {
     setInputText('')
     setReplyTo(null)
     setPendingFiles([])
+
+    // Clear draft after successful send
+    clearDraft()
+
     playSendSound()
 
     try {
@@ -1090,6 +1121,11 @@ export default function ChannelViewScreen() {
     [handleTyping],
   )
 
+  // Auto-save draft when text or pendingFiles change (debounced)
+  useEffect(() => {
+    scheduleSave(inputText, pendingFiles)
+  }, [inputText, pendingFiles, scheduleSave])
+
   // Insert @mention into input
   const insertMention = useCallback((username: string) => {
     setInputText((prev) => {
@@ -1183,11 +1219,7 @@ export default function ChannelViewScreen() {
   }, [])
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.chatBackground }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={0}
-    >
+    <View style={[styles.container, { backgroundColor: colors.chatBackground }]}>
       {/* Custom header bar — left-aligned like Discord */}
       <View
         style={[styles.customHeader, { backgroundColor: colors.surface, paddingTop: insets.top }]}
@@ -1381,6 +1413,7 @@ export default function ChannelViewScreen() {
         setShowEmojiPicker={setShowInputEmojiPicker}
         showPlusMenu={showPlusMenu}
         setShowPlusMenu={setShowPlusMenu}
+        panelHeight={keyboardHeight}
         onPickImage={handlePickImage}
         onPickFile={handlePickFile}
         onTakePhoto={handleTakePhoto}
@@ -1904,7 +1937,7 @@ export default function ChannelViewScreen() {
           )}
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   )
 }
 
