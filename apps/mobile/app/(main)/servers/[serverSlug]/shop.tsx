@@ -852,10 +852,12 @@ export default function ShopScreen() {
                   <View style={styles.detailPriceRow}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       <ShrimpCoinIcon size={20} color={colors.shrimpCoin} />
-                      <Text style={[styles.detailPrice, { color: colors.shrimpCoin, marginLeft: 4 }]}>
+                      <Text
+                        style={[styles.detailPrice, { color: colors.shrimpCoin, marginLeft: 4 }]}
+                      >
                         {selectedSkuId
-                          ? ((productDetail?.skus ?? []).find((s) => s.id === selectedSkuId)?.price ??
-                            selectedProduct.basePrice)
+                          ? ((productDetail?.skus ?? []).find((s) => s.id === selectedSkuId)
+                              ?.price ?? selectedProduct.basePrice)
                           : selectedProduct.basePrice}
                       </Text>
                     </View>
@@ -965,7 +967,8 @@ export default function ShopScreen() {
                                   {sku.specValues.join(' ')}
                                 </Text>
                                 <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                                  <PriceCompact amount={sku.price} size={12} /> · {t('shop.stock')} {sku.stock}
+                                  <PriceCompact amount={sku.price} size={12} /> · {t('shop.stock')}{' '}
+                                  {sku.stock}
                                 </Text>
                               </Pressable>
                             ))}
@@ -1246,9 +1249,9 @@ export default function ShopScreen() {
                     )}
                     {review.images && review.images.length > 0 && (
                       <ScrollView horizontal style={{ marginTop: spacing.sm }}>
-                        {review.images.map((img, i) => (
+                        {review.images.map((img) => (
                           <Image
-                            key={i}
+                            key={img}
                             source={{ uri: getImageUrl(img)! }}
                             style={styles.reviewImage}
                             contentFit="cover"

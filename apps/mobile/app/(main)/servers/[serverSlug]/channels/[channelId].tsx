@@ -34,8 +34,8 @@ import { ChatComposer } from '../../../../../src/components/chat/chat-composer'
 import { MessageBubble } from '../../../../../src/components/chat/message-bubble'
 import { Avatar } from '../../../../../src/components/common/avatar'
 import { StatusBadge } from '../../../../../src/components/common/status-badge'
-import { useChatVoiceInput } from '../../../../../src/hooks/use-chat-voice-input'
 import { useSocketEvent } from '../../../../../src/hooks/use-socket'
+import { useVoiceInput } from '../../../../../src/hooks/use-voice-input'
 import { fetchApi } from '../../../../../src/lib/api'
 import { setLastChannel } from '../../../../../src/lib/last-channel'
 import { getSocket, leaveChannel, sendTyping, sendWsMessage } from '../../../../../src/lib/socket'
@@ -100,13 +100,20 @@ export default function ChannelViewScreen() {
 
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const typingUsersTimeout = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
-  const { isRecording, voiceTranscript, toggleVoiceInput } = useChatVoiceInput({
+  const {
+    isRecording,
+    isHolding,
+    onPressIn: onVoicePressIn,
+    onPressOut: onVoicePressOut,
+    speechSupported,
+  } = useVoiceInput({
     speechLang: t('chat.speechLang'),
     onPermissionDenied: () => Alert.alert(t('common.error'), t('chat.micPermissionDenied')),
     onUnavailable: () => Alert.alert(t('common.error'), t('chat.voiceInputUnavailable')),
-    onCommitTranscript: (transcript) => {
-      setInputText((prev) => (prev ? `${prev} ${transcript}` : transcript))
+    onTranscriptChange: (transcript) => {
+      setInputText(transcript)
     },
+    getCurrentText: () => inputText,
   })
 
   // ---------- Channel info ----------
@@ -298,35 +305,34 @@ export default function ChannelViewScreen() {
   }, [channelId])
 
   // ---------- Infinite scroll messages ----------
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, refetch } =
-    useInfiniteQuery({
-      queryKey: ['messages', channelId],
-      queryFn: async ({ pageParam }) => {
-        const params = new URLSearchParams({ limit: String(PAGE_SIZE) })
-        if (pageParam) params.set('cursor', pageParam as string)
-        const result = await fetchApi<MessagesPage | Message[]>(
-          `/api/channels/${channelId}/messages?${params}`,
-        )
-        if (Array.isArray(result)) {
-          return {
-            messages: result.map((m) => normalizeMessage(m as unknown as Record<string, unknown>)),
-            hasMore: result.length >= PAGE_SIZE,
-          }
-        }
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteQuery({
+    queryKey: ['messages', channelId],
+    queryFn: async ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE) })
+      if (pageParam) params.set('cursor', pageParam as string)
+      const result = await fetchApi<MessagesPage | Message[]>(
+        `/api/channels/${channelId}/messages?${params}`,
+      )
+      if (Array.isArray(result)) {
         return {
-          messages: result.messages.map((m) =>
-            normalizeMessage(m as unknown as Record<string, unknown>),
-          ),
-          hasMore: result.hasMore,
+          messages: result.map((m) => normalizeMessage(m as unknown as Record<string, unknown>)),
+          hasMore: result.length >= PAGE_SIZE,
         }
-      },
-      initialPageParam: null as string | null,
-      getNextPageParam: (lastPage) => {
-        if (!lastPage.hasMore || lastPage.messages.length === 0) return undefined
-        return lastPage.messages[0]?.createdAt
-      },
-      enabled: !!channelId,
-    })
+      }
+      return {
+        messages: result.messages.map((m) =>
+          normalizeMessage(m as unknown as Record<string, unknown>),
+        ),
+        hasMore: result.hasMore,
+      }
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.hasMore || lastPage.messages.length === 0) return undefined
+      return lastPage.messages[0]?.createdAt
+    },
+    enabled: !!channelId,
+  })
 
   const messages = useMemo(() => {
     if (!data) return []
@@ -1359,10 +1365,12 @@ export default function ChannelViewScreen() {
         onClearReply={() => setReplyTo(null)}
         typingUsers={typingUsers}
         isRecording={isRecording}
-        voiceTranscript={voiceTranscript}
+        isHolding={isHolding}
         keyboardVisible={keyboardVisible}
         insetsBottom={insets.bottom}
-        onToggleVoice={toggleVoiceInput}
+        canUseVoice={speechSupported}
+        onVoicePressIn={onVoicePressIn}
+        onVoicePressOut={onVoicePressOut}
         showAtButton
         onPressAt={() => {
           setInputText((prev) => `${prev}@`)

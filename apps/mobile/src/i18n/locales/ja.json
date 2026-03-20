@@ -251,7 +251,6 @@
     "byLastAccessed": "アクセス日時"
   },
   "channel": {
-    "noCategory": "未分類",
     "serverSettings": "サーバー設定",
     "announcement": "お知らせ",
     "text": "テキストチャンネル",

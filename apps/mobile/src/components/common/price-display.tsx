@@ -1,7 +1,6 @@
-import React from 'react'
-import { Text, View, type TextStyle } from 'react-native'
+import { Text, type TextStyle, View } from 'react-native'
+import { fontSize, useColors } from '../../theme'
 import { ShrimpCoinIcon } from './shrimp-coin'
-import { useColors, fontSize } from '../../theme'
 
 interface PriceDisplayProps {
   amount: number
@@ -22,7 +21,7 @@ export function PriceDisplay({
 
   const sizeMap = {
     sm: { icon: 12, font: fontSize.sm, lineHeight: fontSize.sm * 1.2 },
-    md: { icon: 16, font: fontSize.base, lineHeight: fontSize.base * 1.2 },
+    md: { icon: 16, font: fontSize.md, lineHeight: fontSize.md * 1.2 },
     lg: { icon: 20, font: fontSize.lg, lineHeight: fontSize.lg * 1.2 },
   }
 

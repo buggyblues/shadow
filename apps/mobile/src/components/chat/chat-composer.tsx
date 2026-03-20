@@ -1,4 +1,4 @@
-import { AtSign, Camera, File, Image as ImageIcon, Mic, Plus, Smile, X } from 'lucide-react-native'
+import { AtSign, File, Image as ImageIcon, Mic, Plus, Smile, X } from 'lucide-react-native'
 import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
@@ -6,6 +6,7 @@ import type { EmojiType } from 'rn-emoji-keyboard'
 import EmojiPicker from 'rn-emoji-keyboard'
 import { fontSize, radius, spacing, useColors } from '../../theme'
 import type { Message } from '../../types/message'
+import { TypelessMicButton } from './typeless-mic-button'
 
 interface ChatComposerProps {
   inputText: string
@@ -17,11 +18,15 @@ interface ChatComposerProps {
   replyTo: Message | null
   onClearReply: () => void
   typingUsers: string[]
-  isRecording: boolean
-  voiceTranscript: string
+  isRecording?: boolean
+  isHolding?: boolean
+  voiceTranscript?: string
   keyboardVisible?: boolean
   insetsBottom: number
-  onToggleVoice: () => void
+  canUseVoice: boolean
+  onToggleVoice?: () => void
+  onVoicePressIn?: () => void
+  onVoicePressOut?: () => void
   showAtButton?: boolean
   onPressAt?: () => void
   showEmojiPicker: boolean
@@ -43,11 +48,14 @@ export const ChatComposer = memo(function ChatComposer({
   replyTo,
   onClearReply,
   typingUsers,
-  isRecording,
-  voiceTranscript,
+  isRecording = false,
+  isHolding = false,
   keyboardVisible = false,
   insetsBottom,
+  canUseVoice,
   onToggleVoice,
+  onVoicePressIn,
+  onVoicePressOut,
   showAtButton = false,
   onPressAt,
   showEmojiPicker,
@@ -56,7 +64,6 @@ export const ChatComposer = memo(function ChatComposer({
   setShowPlusMenu,
   onPickImage,
   onPickFile,
-  onTakePhoto,
 }: ChatComposerProps) {
   const colors = useColors()
   const { t } = useTranslation()
@@ -79,9 +86,9 @@ export const ChatComposer = memo(function ChatComposer({
             { backgroundColor: colors.surface, borderTopColor: colors.border },
           ]}
         >
-          {pendingFiles.map((file, idx) => (
+          {pendingFiles.map((file) => (
             <View
-              key={`${file.uri}-${idx}`}
+              key={file.uri}
               style={[styles.pendingFileChip, { backgroundColor: colors.inputBackground }]}
             >
               <Text
@@ -91,7 +98,10 @@ export const ChatComposer = memo(function ChatComposer({
                 {file.type.startsWith('image/') ? '🖼 ' : '📎 '}
                 {file.name}
               </Text>
-              <Pressable onPress={() => onRemovePendingFile(idx)} hitSlop={8}>
+              <Pressable
+                onPress={() => onRemovePendingFile(pendingFiles.indexOf(file))}
+                hitSlop={8}
+              >
                 <X size={14} color={colors.textMuted} />
               </Pressable>
             </View>
@@ -116,32 +126,6 @@ export const ChatComposer = memo(function ChatComposer({
             </Text>
           </View>
           <Pressable onPress={onClearReply} hitSlop={8}>
-            <X size={18} color={colors.textMuted} />
-          </Pressable>
-        </View>
-      )}
-
-      {isRecording && (
-        <View
-          style={[
-            styles.voiceRecordingBar,
-            { backgroundColor: colors.surface, borderTopColor: colors.border },
-          ]}
-        >
-          <View style={styles.voiceRecordingDot} />
-          <Text style={[styles.voiceRecordingLabel, { color: colors.error }]}>
-            {t('chat.recording', '正在录音...')}
-          </Text>
-          {voiceTranscript ? (
-            <Text style={[styles.voiceTranscript, { color: colors.text }]} numberOfLines={1}>
-              {voiceTranscript}
-            </Text>
-          ) : (
-            <Text style={[styles.voiceTranscript, { color: colors.textMuted }]}>
-              {t('chat.speakNow', '请说话...')}
-            </Text>
-          )}
-          <Pressable onPress={onToggleVoice} hitSlop={12}>
             <X size={18} color={colors.textMuted} />
           </Pressable>
         </View>
@@ -182,12 +166,21 @@ export const ChatComposer = memo(function ChatComposer({
             returnKeyType="send"
             keyboardAppearance="dark"
           />
-          <Pressable
-            style={[styles.inputMicBtn, isRecording && { backgroundColor: colors.primary }]}
-            onPress={onToggleVoice}
-          >
-            <Mic size={18} color={isRecording ? '#fff' : colors.textMuted} />
-          </Pressable>
+          {canUseVoice && onVoicePressIn && onVoicePressOut ? (
+            <TypelessMicButton
+              isRecording={isRecording}
+              isHolding={isHolding}
+              onPressIn={onVoicePressIn}
+              onPressOut={onVoicePressOut}
+            />
+          ) : canUseVoice && onToggleVoice ? (
+            <Pressable
+              style={[styles.inputMicBtn, isRecording && { backgroundColor: colors.primary }]}
+              onPress={onToggleVoice}
+            >
+              <Mic size={18} color={isRecording ? '#fff' : colors.textMuted} />
+            </Pressable>
+          ) : null}
         </View>
 
         <Pressable
@@ -265,22 +258,6 @@ export const ChatComposer = memo(function ChatComposer({
           ]}
         >
           <View style={styles.plusPanelGrid}>
-            {onTakePhoto && (
-              <Pressable
-                style={({ pressed }) => [styles.plusPanelItem, pressed && { opacity: 0.6 }]}
-                onPress={() => {
-                  setShowPlusMenu(false)
-                  onTakePhoto()
-                }}
-              >
-                <View style={[styles.plusPanelIcon, { backgroundColor: '#10b98115' }]}>
-                  <Camera size={24} color="#10b981" />
-                </View>
-                <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
-                  {t('chat.takePhoto', '拍摄')}
-                </Text>
-              </Pressable>
-            )}
             <Pressable
               style={({ pressed }) => [styles.plusPanelItem, pressed && { opacity: 0.6 }]}
               onPress={() => {
@@ -292,7 +269,7 @@ export const ChatComposer = memo(function ChatComposer({
                 <ImageIcon size={24} color={colors.primary} />
               </View>
               <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
-                {t('chat.pickImage', '相册')}
+                {t('chat.pickImage', '图片')}
               </Text>
             </Pressable>
             <Pressable
@@ -365,28 +342,6 @@ const styles = StyleSheet.create({
   replyBarPreview: {
     fontSize: fontSize.xs,
   },
-  voiceRecordingBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    gap: 8,
-  },
-  voiceRecordingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#ef4444',
-  },
-  voiceRecordingLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-  },
-  voiceTranscript: {
-    flex: 1,
-    fontSize: fontSize.sm,
-  },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -419,7 +374,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: Platform.OS === 'ios' ? 12 : spacing.md,
     fontSize: fontSize.md,
-    paddingRight: 28,
   },
   inputMicBtn: {
     width: 34,

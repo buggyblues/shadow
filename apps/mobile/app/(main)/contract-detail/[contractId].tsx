@@ -219,7 +219,9 @@ export default function ContractDetailScreen() {
                   → {new Date(r.sessionEnd).toLocaleString()}
                 </Text>
               </View>
-              <Text style={[styles.usageCost, { color: colors.primary }]}><PriceCompact amount={r.totalCost} size={12} /></Text>
+              <Text style={[styles.usageCost, { color: colors.primary }]}>
+                <PriceCompact amount={r.totalCost} size={12} />
+              </Text>
             </View>
           ))
         )}

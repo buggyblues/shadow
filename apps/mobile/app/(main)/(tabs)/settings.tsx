@@ -19,7 +19,6 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Avatar } from '../../../src/components/common/avatar'
 import { DottedBackground } from '../../../src/components/common/dotted-background'
-import { PriceCompact } from '../../../src/components/common/price-display'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { ShrimpCoinIcon } from '../../../src/components/common/shrimp-coin'
 import { fetchApi } from '../../../src/lib/api'
