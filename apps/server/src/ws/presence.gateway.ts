@@ -14,9 +14,6 @@ export function setupPresenceGateway(io: SocketIOServer, container: AppContainer
     const userId = socket.data.userId as string | undefined
     if (!userId) return
 
-    // Join personal user room for targeted messaging (e.g. DM relay)
-    socket.join(`user:${userId}`)
-
     // Track online user
     if (!onlineUsers.has(userId)) {
       onlineUsers.set(userId, new Set())
