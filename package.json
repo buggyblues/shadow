@@ -14,7 +14,10 @@
       "fs-xattr",
       "macos-alias",
       "sharp"
-    ]
+    ],
+    "overrides": {
+      "isbinaryfile": "^5.0.7"
+    }
   },
   "scripts": {
     "dev": "pnpm -r --parallel dev",
