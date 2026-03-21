@@ -1,7 +1,7 @@
 {
   "name": "@shadowob/desktop",
   "productName": "Shadow",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Shadow Desktop - Native desktop client",
   "author": "ShadowOB Team",

@@ -118,6 +118,9 @@ jobs:
           security import certificate.p12 -k build.keychain -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "build" build.keychain
 
+      - name: Generate icons
+        run: pnpm --dir ./apps/desktop generate-icons
+
       - name: Build notarized DMG/ZIP
         run: pnpm --dir ./apps/desktop release:mac:${{ matrix.arch }}
 
@@ -166,6 +169,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm i --frozen-lockfile
+
+      - name: Generate icons
+        run: pnpm --dir ./apps/desktop generate-icons
 
       - name: Build release artifacts
         run: pnpm --dir ./apps/desktop ${{ matrix.make_script }}

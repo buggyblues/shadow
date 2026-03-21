@@ -11,6 +11,37 @@ const assetsDir = join(__dirname, '..', 'assets')
 const iconSvg = readFileSync(join(assetsDir, 'icon.svg'))
 const traySvg = readFileSync(join(assetsDir, 'trayTemplate.svg'))
 
+// Apple HIG: macOS icon content should occupy ~80% of the canvas.
+// At 1024×1024 the visible shape is 824×824, centered with 100px padding.
+const MACOS_CONTENT_RATIO = 824 / 1024
+
+/**
+ * Render the icon SVG at the given target size with macOS-style transparent
+ * padding so the background squircle doesn't fill the full icon grid.
+ */
+async function renderMacOSIcon(targetSize) {
+  const contentSize = Math.round(targetSize * MACOS_CONTENT_RATIO)
+  const padding = Math.round((targetSize - contentSize) / 2)
+
+  const content = await sharp(iconSvg).resize(contentSize, contentSize).png().toBuffer()
+
+  return sharp({
+    create: {
+      width: targetSize,
+      height: targetSize,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([{ input: content, left: padding, top: padding }])
+    .png()
+}
+
+/** Render the icon SVG at the given size with no padding (Windows / generic). */
+function renderFullBleedIcon(targetSize) {
+  return sharp(iconSvg).resize(targetSize, targetSize).png()
+}
+
 // macOS .iconset sizes (filename → pixel size)
 const ICONSET_ENTRIES = [
   ['icon_16x16.png', 16],
@@ -26,9 +57,9 @@ const ICONSET_ENTRIES = [
 ]
 
 async function generateAppIcons() {
-  // 1024x1024 master PNG
-  await sharp(iconSvg).resize(1024, 1024).png().toFile(join(assetsDir, 'icon.png'))
-  console.log('✓ icon.png (1024x1024)')
+  // 1024×1024 master PNG with macOS padding
+  await (await renderMacOSIcon(1024)).toFile(join(assetsDir, 'icon.png'))
+  console.log('✓ icon.png (1024×1024, macOS padded)')
 
   // macOS .iconset → .icns
   if (process.platform === 'darwin') {
@@ -36,7 +67,7 @@ async function generateAppIcons() {
     mkdirSync(iconsetDir, { recursive: true })
 
     for (const [name, size] of ICONSET_ENTRIES) {
-      await sharp(iconSvg).resize(size, size).png().toFile(join(iconsetDir, name))
+      await (await renderMacOSIcon(size)).toFile(join(iconsetDir, name))
     }
 
     execSync(`iconutil -c icns -o "${join(assetsDir, 'icon.icns')}" "${iconsetDir}"`)
@@ -44,10 +75,10 @@ async function generateAppIcons() {
     console.log('✓ icon.icns (macOS)')
   }
 
-  // Windows .ico (multi-resolution PNG container)
+  // Windows .ico — full-bleed (no padding)
   const icoSizes = [16, 32, 48, 256]
   const pngBuffers = await Promise.all(
-    icoSizes.map((s) => sharp(iconSvg).resize(s, s).png().toBuffer()),
+    icoSizes.map((s) => renderFullBleedIcon(s).toBuffer()),
   )
   writeFileSync(join(assetsDir, 'icon.ico'), buildIco(pngBuffers, icoSizes))
   console.log('✓ icon.ico (Windows)')
