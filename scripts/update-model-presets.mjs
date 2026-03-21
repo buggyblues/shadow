@@ -26,10 +26,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
-const PRESETS_PATH = path.join(
-  ROOT,
-  'apps/desktop/src/renderer/pages/openclaw/model-presets.ts',
-)
+const PRESETS_PATH = path.join(ROOT, 'apps/desktop/src/renderer/pages/openclaw/model-presets.ts')
 const OUTPUT_DIR = path.join(ROOT, '.research')
 
 // ─── Provider Registry ───────────────────────────────────────────────────────
@@ -70,10 +67,7 @@ const PROVIDERS = {
     pricingUrl: 'https://ai.google.dev/pricing',
     filterModels: (models) =>
       models.filter(
-        (m) =>
-          m.id.startsWith('gemini-') &&
-          !m.id.includes('embedding') &&
-          !m.id.includes('aqa'),
+        (m) => m.id.startsWith('gemini-') && !m.id.includes('embedding') && !m.id.includes('aqa'),
       ),
   },
   deepseek: {
@@ -82,8 +76,7 @@ const PROVIDERS = {
     envKey: 'DEEPSEEK_API_KEY',
     docsUrl: 'https://api-docs.deepseek.com/',
     pricingUrl: 'https://api-docs.deepseek.com/quick_start/pricing',
-    filterModels: (models) =>
-      models.filter((m) => m.id.startsWith('deepseek-')),
+    filterModels: (models) => models.filter((m) => m.id.startsWith('deepseek-')),
   },
   xai: {
     name: 'xAI',
@@ -91,8 +84,7 @@ const PROVIDERS = {
     envKey: 'XAI_API_KEY',
     docsUrl: 'https://docs.x.ai/docs',
     pricingUrl: 'https://docs.x.ai/docs/pricing',
-    filterModels: (models) =>
-      models.filter((m) => m.id.startsWith('grok-')),
+    filterModels: (models) => models.filter((m) => m.id.startsWith('grok-')),
   },
   mistral: {
     name: 'Mistral AI',
@@ -116,12 +108,10 @@ const PROVIDERS = {
   },
   bailian: {
     name: '阿里云百炼 (ModelStudio)',
-    apiModelsUrl:
-      'https://dashscope.aliyuncs.com/compatible-mode/v1/models',
+    apiModelsUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/models',
     envKey: 'MODELSTUDIO_API_KEY',
     docsUrl: 'https://docs.openclaw.ai/providers/modelstudio',
-    pricingUrl:
-      'https://help.aliyun.com/zh/model-studio/billing-for-model-studio',
+    pricingUrl: 'https://help.aliyun.com/zh/model-studio/billing-for-model-studio',
   },
   minimax: {
     name: 'MiniMax',
@@ -150,8 +140,6 @@ function parseCurrentPresets() {
   const result = {}
 
   // Find all const *_MODELS arrays and extract their model IDs
-  const modelArrayRegex =
-    /const\s+(\w+)_MODELS:\s*ModelPreset\[\]\s*=\s*\[([\s\S]*?)(?=\n\]\s*$|\n\]\s*\n)/gm
   // More robust: find the array from `const X_MODELS` to the closing `]`
   const lines = content.split('\n')
   let currentArray = null
@@ -159,9 +147,7 @@ function parseCurrentPresets() {
   const arrays = {}
 
   for (const line of lines) {
-    const arrayStart = line.match(
-      /^const\s+(\w+_MODELS):\s*ModelPreset\[\]\s*=\s*\[/,
-    )
+    const arrayStart = line.match(/^const\s+(\w+_MODELS):\s*ModelPreset\[\]\s*=\s*\[/)
     if (arrayStart) {
       currentArray = arrayStart[1]
       arrays[currentArray] = { ids: [], deprecated: [], recommended: [] }
@@ -178,19 +164,11 @@ function parseCurrentPresets() {
         arrays[currentArray]._lastId = idMatch[1]
         arrays[currentArray].ids.push(idMatch[1])
       }
-      if (
-        line.includes('deprecated: true') &&
-        arrays[currentArray]._lastId
-      ) {
+      if (line.includes('deprecated: true') && arrays[currentArray]._lastId) {
         arrays[currentArray].deprecated.push(arrays[currentArray]._lastId)
       }
-      if (
-        line.includes('recommended: true') &&
-        arrays[currentArray]._lastId
-      ) {
-        arrays[currentArray].recommended.push(
-          arrays[currentArray]._lastId,
-        )
+      if (line.includes('recommended: true') && arrays[currentArray]._lastId) {
+        arrays[currentArray].recommended.push(arrays[currentArray]._lastId)
       }
       if (depth <= 0) {
         delete arrays[currentArray]._lastId
@@ -228,15 +206,13 @@ function parseCurrentPresets() {
   }
 
   // Also extract codingPlan info
-  const codingPlanRegex =
-    /codingPlan:\s*\{[\s\S]*?models:\s*\[([\s\S]*?)\]/g
+  const codingPlanRegex = /codingPlan:\s*\{[\s\S]*?models:\s*\[([\s\S]*?)\]/g
   const codingPlans = []
-  let match
-  while ((match = codingPlanRegex.exec(content)) !== null) {
-    const models = match[1]
-      .match(/'([^']+)'/g)
-      ?.map((s) => s.replace(/'/g, ''))
+  let match = codingPlanRegex.exec(content)
+  while (match !== null) {
+    const models = match[1].match(/'([^']+)'/g)?.map((s) => s.replace(/'/g, ''))
     codingPlans.push(models || [])
+    match = codingPlanRegex.exec(content)
   }
 
   return { providers: result, codingPlans, raw: content }
@@ -292,9 +268,7 @@ async function fetchLiveModels(providerId, config) {
       models = (data.data || data.models || []).map((m) => ({
         id: m.id,
         ownedBy: m.owned_by,
-        created: m.created
-          ? new Date(m.created * 1000).toISOString().slice(0, 10)
-          : undefined,
+        created: m.created ? new Date(m.created * 1000).toISOString().slice(0, 10) : undefined,
       }))
     }
 
@@ -346,9 +320,7 @@ function generateReport(currentPresets, liveData) {
       provider.liveModels = live.models
       provider.liveCount = liveIds.length
       provider.newInApi = liveIds.filter((id) => !currentSet.has(id))
-      provider.missingFromApi = current.ids.filter(
-        (id) => !liveSet.has(id),
-      )
+      provider.missingFromApi = current.ids.filter((id) => !liveSet.has(id))
 
       report.summary.withApi++
       report.summary.newModels += provider.newInApi.length
@@ -370,13 +342,11 @@ function generateReport(currentPresets, liveData) {
 
 async function main() {
   const args = process.argv.slice(2)
-  const targetProvider = args.includes('--provider')
-    ? args[args.indexOf('--provider') + 1]
-    : null
+  const targetProvider = args.includes('--provider') ? args[args.indexOf('--provider') + 1] : null
   const useApi = args.includes('--api')
 
   console.log('🔍 Shadow Model Presets Audit')
-  console.log('═'.repeat(50) + '\n')
+  console.log(`${'═'.repeat(50)}\n`)
 
   // 1. Parse current presets
   console.log('📄 Parsing current model-presets.ts...')
@@ -491,12 +461,8 @@ async function main() {
     }
   }
 
-  console.log(
-    '\n💡 Run with --api to discover new models from live provider APIs.',
-  )
-  console.log(
-    '   Set API key env vars (OPENAI_API_KEY, etc.) for each provider.\n',
-  )
+  console.log('\n💡 Run with --api to discover new models from live provider APIs.')
+  console.log('   Set API key env vars (OPENAI_API_KEY, etc.) for each provider.\n')
 }
 
 main().catch((err) => {
