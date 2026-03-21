@@ -5,7 +5,7 @@
  * Commands are run via the bundled openclaw entry point with full environment isolation.
  */
 
-import { Loader2, Play, Terminal, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Loader2, Play, Terminal, Trash2 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { openClawApi } from '../../lib/openclaw-api'
@@ -21,14 +21,74 @@ interface CommandResult {
   durationMs: number
 }
 
-const COMMAND_PRESETS = [
-  { label: 'version', args: '--version' },
-  { label: 'help', args: '--help' },
-  { label: 'gateway status', args: 'gateway --help' },
-  { label: 'config show', args: 'config show' },
-  { label: 'config validate', args: 'config validate' },
-  { label: 'skills list', args: 'skills list' },
-  { label: 'agents list', args: 'agents list' },
+interface CommandGroup {
+  label: string
+  commands: { label: string; args: string; desc?: string }[]
+}
+
+const COMMAND_GROUPS: CommandGroup[] = [
+  {
+    label: '基础信息',
+    commands: [
+      { label: '--version', args: '--version', desc: '查看版本' },
+      { label: '--help', args: '--help', desc: '帮助信息' },
+      { label: 'status', args: 'status', desc: '渠道健康与会话信息' },
+      { label: 'health', args: 'health', desc: '网关健康检查' },
+    ],
+  },
+  {
+    label: '配置管理',
+    commands: [
+      { label: 'config show', args: 'config show', desc: '显示当前配置' },
+      { label: 'config validate', args: 'config validate', desc: '验证配置合规性' },
+      { label: 'config file', args: 'config file', desc: '配置文件路径' },
+    ],
+  },
+  {
+    label: '智能体',
+    commands: [
+      { label: 'agents list', args: 'agents list', desc: '列出智能体' },
+      { label: 'agents bindings', args: 'agents bindings', desc: '路由绑定' },
+    ],
+  },
+  {
+    label: '模型',
+    commands: [
+      { label: 'models list', args: 'models list', desc: '列出已配置模型' },
+      { label: 'models scan', args: 'models scan', desc: '扫描可用模型' },
+    ],
+  },
+  {
+    label: '技能 & 插件',
+    commands: [
+      { label: 'skills list', args: 'skills list', desc: '列出已安装技能' },
+      { label: 'plugins list', args: 'plugins list', desc: '列出插件' },
+    ],
+  },
+  {
+    label: '频道 & 通讯',
+    commands: [
+      { label: 'channels list', args: 'channels list', desc: '列出频道' },
+      { label: 'sessions', args: 'sessions', desc: '会话列表' },
+    ],
+  },
+  {
+    label: '网关 & 系统',
+    commands: [
+      { label: 'gateway --help', args: 'gateway --help', desc: '网关命令帮助' },
+      { label: 'doctor', args: 'doctor', desc: '诊断检查' },
+      { label: 'doctor --fix', args: 'doctor --fix', desc: '自动修复' },
+      { label: 'cron list', args: 'cron list', desc: '定时任务列表' },
+    ],
+  },
+  {
+    label: '安全 & 维护',
+    commands: [
+      { label: 'security audit', args: 'security audit', desc: '安全审计' },
+      { label: 'backup create', args: 'backup create', desc: '创建备份' },
+      { label: 'update status', args: 'update status', desc: '更新状态' },
+    ],
+  },
 ]
 
 export function DebugPage() {
@@ -100,6 +160,8 @@ export function DebugPage() {
     [executeCommand],
   )
 
+  const [showPalette, setShowPalette] = useState(false)
+
   return (
     <div className="flex flex-col h-full p-6 pt-8 gap-4">
       {/* Header */}
@@ -117,30 +179,66 @@ export function DebugPage() {
             </p>
           </div>
         </div>
-        {history.length > 0 && (
-          <OpenClawButton variant="ghost" size="sm" onClick={() => setHistory([])}>
-            <Trash2 className="w-3.5 h-3.5" />
-            {t('openclaw.debug.clear', '清空')}
-          </OpenClawButton>
-        )}
+        <div className="flex items-center gap-2">
+          {history.length > 0 && (
+            <OpenClawButton variant="ghost" size="sm" onClick={() => setHistory([])}>
+              <Trash2 className="w-3.5 h-3.5" />
+              {t('openclaw.debug.clear', '清空')}
+            </OpenClawButton>
+          )}
+        </div>
       </div>
 
-      {/* Preset Commands */}
-      <div className="flex flex-wrap gap-1.5 shrink-0">
-        {COMMAND_PRESETS.map((preset) => (
-          <button
-            key={preset.label}
-            type="button"
-            onClick={() => executeCommand(preset.args)}
-            disabled={running}
-            className="px-2.5 py-1 rounded-lg text-[11px] font-mono font-medium
-              bg-bg-modifier-hover text-text-secondary hover:bg-bg-modifier-active
-              hover:text-text-primary transition-colors disabled:opacity-50"
-          >
-            {preset.label}
-          </button>
-        ))}
-      </div>
+      {/* Command Palette Toggle */}
+      <button
+        type="button"
+        onClick={() => setShowPalette(!showPalette)}
+        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-bg-secondary border border-bg-tertiary text-sm text-text-secondary hover:text-text-primary hover:border-primary/30 transition shrink-0"
+      >
+        {showPalette ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        常用指令集
+        <span className="text-[10px] text-text-muted">
+          {COMMAND_GROUPS.reduce((n, g) => n + g.commands.length, 0)} 条命令
+        </span>
+      </button>
+
+      {/* Expandable Palette */}
+      {showPalette && (
+        <div className="grid grid-cols-2 gap-3 shrink-0 max-h-[40vh] overflow-y-auto pr-1">
+          {COMMAND_GROUPS.map((group) => (
+            <div
+              key={group.label}
+              className="rounded-xl bg-bg-secondary border border-bg-tertiary p-3"
+            >
+              <h3 className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-2">
+                {group.label}
+              </h3>
+              <div className="space-y-1">
+                {group.commands.map((cmd) => (
+                  <button
+                    key={cmd.args}
+                    type="button"
+                    onClick={() => {
+                      executeCommand(cmd.args)
+                      setShowPalette(false)
+                    }}
+                    disabled={running}
+                    className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-left
+                      hover:bg-bg-modifier-hover transition-colors disabled:opacity-50 group"
+                  >
+                    <span className="text-[11px] font-mono text-primary group-hover:text-text-primary">
+                      {cmd.label}
+                    </span>
+                    {cmd.desc && (
+                      <span className="text-[10px] text-text-muted ml-2 truncate">{cmd.desc}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Output Area */}
       <div

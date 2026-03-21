@@ -5,17 +5,36 @@
  * Each agent has: id, name, model (provider/model), skills, identity, workspace.
  */
 
-import { Bot, FileText, FolderOpen, Loader2, Plus, Save, Trash2 } from 'lucide-react'
+import {
+  ArrowRight,
+  Bot,
+  Check,
+  Cloud,
+  CloudOff,
+  FileText,
+  FolderOpen,
+  Link,
+  Loader2,
+  Plus,
+  Save,
+  Trash2,
+  Unlink,
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useAutoSave } from '../../hooks/use-auto-save'
+import { fetchApi } from '../../lib/api'
 import type {
   AgentConfig,
   BootstrapFileInfo,
   BootstrapFileName,
+  BuddyConnection,
   ModelProviderEntry,
   SkillManifest,
 } from '../../lib/openclaw-api'
 import { openClawApi } from '../../lib/openclaw-api'
+import type { NavContext } from './index'
+import type { OpenClawPage } from './openclaw-layout'
 import { OpenClawButton, OpenClawSplitLayout } from './openclaw-ui'
 
 function getModelDisplay(model?: AgentConfig['model']): string {
@@ -24,11 +43,16 @@ function getModelDisplay(model?: AgentConfig['model']): string {
   return model.primary ?? ''
 }
 
-export function AgentsPage() {
+export function AgentsPage({
+  onNavigate,
+}: {
+  onNavigate: (page: OpenClawPage, ctx?: NavContext) => void
+}) {
   const { t } = useTranslation()
   const [agents, setAgents] = useState<AgentConfig[]>([])
   const [providers, setProviders] = useState<Record<string, ModelProviderEntry>>({})
   const [skills, setSkills] = useState<SkillManifest[]>([])
+  const [buddyConnections, setBuddyConnections] = useState<BuddyConnection[]>([])
   const [editAgent, setEditAgent] = useState<AgentConfig | null>(null)
   const [contextMenu, setContextMenu] = useState<{
     x: number
@@ -38,14 +62,16 @@ export function AgentsPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [ag, md, sk] = await Promise.all([
+      const [ag, md, sk, conns] = await Promise.all([
         openClawApi.listAgents(),
         openClawApi.listModels(),
         openClawApi.listSkills(),
+        openClawApi.listBuddyConnections().catch(() => [] as BuddyConnection[]),
       ])
       setAgents(ag)
       setProviders(md)
       setSkills(sk)
+      setBuddyConnections(conns)
     } catch {
       // Ignore
     }
@@ -70,7 +96,7 @@ export function AgentsPage() {
 
   const handleCreate = async () => {
     const id = `agent-${Date.now()}`
-    const newAgent: AgentConfig = { id, name: '新龙虾' }
+    const newAgent: AgentConfig = { id, name: '新龙虾', agentDir: id }
     await openClawApi.createAgent(newAgent)
     await loadData()
     // Select the newly created agent
@@ -88,6 +114,7 @@ export function AgentsPage() {
       ...agent,
       id,
       name: `${agent.name || agent.id} (${t('openclaw.agents.copy', '副本')})`,
+      agentDir: id,
     }
     await openClawApi.createAgent(dup)
     await loadData()
@@ -190,6 +217,8 @@ export function AgentsPage() {
               agent={editAgent}
               providers={providers}
               skills={skills}
+              buddyConnections={buddyConnections}
+              onNavigate={onNavigate}
               onSave={async () => {
                 await loadData()
               }}
@@ -229,11 +258,15 @@ function AgentEditor({
   agent,
   providers,
   skills,
+  buddyConnections,
+  onNavigate,
   onSave,
 }: {
   agent: AgentConfig
   providers: Record<string, ModelProviderEntry>
   skills: SkillManifest[]
+  buddyConnections: BuddyConnection[]
+  onNavigate: (page: OpenClawPage, ctx?: NavContext) => void
   onSave: () => void
 }) {
   const { t } = useTranslation()
@@ -259,6 +292,9 @@ function AgentEditor({
 
   // Tab state for editor sections
   const [editorTab, setEditorTab] = useState<'basic' | 'advanced'>('basic')
+
+  // Buddy connection for this agent
+  const buddyConn = buddyConnections.find((c) => c.agentId === agent.id)
 
   const modelOptions = useMemo(() => flattenModelOptions(providers), [providers])
 
@@ -332,11 +368,105 @@ function AgentEditor({
       }
       await openClawApi.updateAgent(agentId, data)
       await openClawApi.writeBootstrapFile(agentId, 'SOUL.md', persona.trim())
+      // Sync name/persona to cloud buddy (best-effort)
+      if (buddyConn?.remoteAgentId) {
+        fetchApi(`/api/agents/${buddyConn.remoteAgentId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            name: autoIdentityName,
+            ...(persona.trim() ? { description: persona.trim() } : {}),
+          }),
+        }).catch(() => {})
+      }
       onSave()
     } finally {
       setSaving(false)
     }
   }
+
+  // ── Auto-save: debounce agent config changes ──
+  const autoSaveFn = useCallback(async () => {
+    const autoIdentityName = (name || agent.name || agentId).trim() || agentId
+    const data: AgentConfig = {
+      id: agentId,
+      ...(name && { name }),
+      ...(workspace && { workspace }),
+      ...(model && { model: { primary: model } }),
+      ...(selectedSkills.length > 0 && { skills: selectedSkills }),
+      identity: { ...(agent.identity ?? {}), name: autoIdentityName },
+      ...(memoryEnabled && { memorySearch: agent.memorySearch ?? { enabled: true } }),
+      ...(!memoryEnabled && agent.memorySearch && { memorySearch: undefined }),
+      ...(heartbeatEnabled && {
+        heartbeat: agent.heartbeat ?? { enabled: true, intervalMs: 60000 },
+      }),
+      ...(!heartbeatEnabled && agent.heartbeat && { heartbeat: undefined }),
+    }
+    await openClawApi.updateAgent(agentId, data)
+    await openClawApi.writeBootstrapFile(agentId, 'SOUL.md', persona.trim())
+    // Sync name/persona to cloud buddy (best-effort)
+    if (buddyConn?.remoteAgentId) {
+      fetchApi(`/api/agents/${buddyConn.remoteAgentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: autoIdentityName,
+          ...(persona.trim() ? { description: persona.trim() } : {}),
+        }),
+      }).catch(() => {})
+    }
+    onSave()
+  }, [
+    agentId,
+    name,
+    workspace,
+    model,
+    selectedSkills,
+    persona,
+    memoryEnabled,
+    heartbeatEnabled,
+    agent,
+    buddyConn,
+    onSave,
+  ])
+  const { autoSaveStatus, scheduleAutoSave } = useAutoSave(autoSaveFn, 1500)
+
+  // Trigger auto-save on field changes (skip initial render)
+  const initialRender = useMemo(() => ({ current: true }), [])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional watch pattern – auto-save triggers on field changes
+  useEffect(() => {
+    if (initialRender.current) {
+      initialRender.current = false
+      return
+    }
+    scheduleAutoSave()
+  }, [
+    name,
+    workspace,
+    model,
+    selectedSkills,
+    persona,
+    memoryEnabled,
+    heartbeatEnabled,
+    scheduleAutoSave,
+  ])
+
+  // ── Auto-save: debounce bootstrap file changes ──
+  const autoSaveFileFn = useCallback(async () => {
+    if (!activeFile || !agent.id) return
+    await openClawApi.writeBootstrapFile(agent.id, activeFile, fileContent)
+    setFileDirty(false)
+    const files = await openClawApi.listBootstrapFiles(agent.id)
+    setBootstrapFiles(files)
+  }, [activeFile, agent.id, fileContent])
+  const { autoSaveStatus: fileAutoSaveStatus, scheduleAutoSave: scheduleFileAutoSave } =
+    useAutoSave(autoSaveFileFn, 1500)
+
+  // Trigger file auto-save when content changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional watch pattern – auto-save triggers on content changes
+  useEffect(() => {
+    if (fileDirty) {
+      scheduleFileAutoSave()
+    }
+  }, [fileDirty, fileContent, scheduleFileAutoSave])
 
   const BOOTSTRAP_LABELS: Record<BootstrapFileName, { label: string; desc: string }> = {
     'AGENTS.md': { label: 'AGENTS', desc: '智能体路由与多智能体配置' },
@@ -352,7 +482,22 @@ function AgentEditor({
     <div className="flex-1 overflow-y-auto">
       <div className="px-6 pt-5 pb-6 max-w-4xl">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-text-primary">编辑龙虾</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-bold text-text-primary">编辑龙虾</h2>
+            {autoSaveStatus === 'pending' && (
+              <span className="text-[10px] text-text-muted">未保存</span>
+            )}
+            {autoSaveStatus === 'saving' && (
+              <span className="text-[10px] text-text-muted flex items-center gap-1">
+                <Loader2 size={10} className="animate-spin" /> 保存中...
+              </span>
+            )}
+            {autoSaveStatus === 'saved' && (
+              <span className="text-[10px] text-green-400 flex items-center gap-1">
+                <Check size={10} /> 已自动保存
+              </span>
+            )}
+          </div>
           <OpenClawButton type="button" onClick={handleSave} disabled={saving}>
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             {t('common.save', '保存')}
@@ -461,6 +606,87 @@ function AgentEditor({
                         )
                       })}
                   </div>
+                )}
+              </div>
+            </section>
+
+            {/* Cloud Connection */}
+            <section>
+              <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
+                云端连接
+              </h3>
+              <div className="bg-bg-secondary rounded-xl border border-bg-tertiary p-4">
+                {buddyConn ? (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                          buddyConn.status === 'connected'
+                            ? 'bg-green-500/10 text-green-500'
+                            : buddyConn.status === 'error'
+                              ? 'bg-red-500/10 text-red-500'
+                              : 'bg-bg-tertiary text-text-muted'
+                        }`}
+                      >
+                        {buddyConn.status === 'connected' ? (
+                          <Cloud size={16} />
+                        ) : (
+                          <CloudOff size={16} />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-sm text-text-primary font-medium">{buddyConn.label}</p>
+                        <p className="text-[10px] text-text-muted">
+                          {buddyConn.status === 'connected'
+                            ? '已连接 · 名称与设定将自动同步'
+                            : buddyConn.status === 'error'
+                              ? `连接错误${buddyConn.error ? `: ${buddyConn.error}` : ''}`
+                              : '未连接'}
+                        </p>
+                      </div>
+                    </div>
+                    <OpenClawButton
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={async () => {
+                        await openClawApi.removeBuddyConnection(buddyConn.id)
+                        onSave()
+                      }}
+                    >
+                      <Unlink size={12} />
+                      解除关联
+                    </OpenClawButton>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="flex items-center justify-between w-full text-left cursor-pointer group"
+                    onClick={() =>
+                      onNavigate('buddy', {
+                        initialAgentId: agent.id,
+                        returnTo: 'agents',
+                      })
+                    }
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-bg-tertiary text-text-muted">
+                        <CloudOff size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-text-secondary group-hover:text-primary transition-colors">
+                          连接到云端
+                        </p>
+                        <p className="text-[10px] text-text-muted">
+                          创建 Buddy 连接，加入虾豆频道协作
+                        </p>
+                      </div>
+                    </div>
+                    <ArrowRight
+                      size={14}
+                      className="text-text-muted group-hover:text-primary transition-colors"
+                    />
+                  </button>
                 )}
               </div>
             </section>
@@ -576,19 +802,31 @@ function AgentEditor({
                       {BOOTSTRAP_LABELS[activeFile]?.desc}
                     </p>
                   </div>
-                  <OpenClawButton
-                    type="button"
-                    onClick={handleSaveFile}
-                    disabled={!fileDirty || fileSaving}
-                    size="sm"
-                  >
-                    {fileSaving ? (
-                      <Loader2 size={12} className="animate-spin" />
-                    ) : (
-                      <Save size={12} />
+                  <div className="flex items-center gap-2">
+                    {fileAutoSaveStatus === 'saving' && (
+                      <span className="text-[10px] text-text-muted flex items-center gap-1">
+                        <Loader2 size={10} className="animate-spin" /> 保存中
+                      </span>
                     )}
-                    {t('common.save', '保存')}
-                  </OpenClawButton>
+                    {fileAutoSaveStatus === 'saved' && (
+                      <span className="text-[10px] text-green-400 flex items-center gap-1">
+                        <Check size={10} /> 已保存
+                      </span>
+                    )}
+                    <OpenClawButton
+                      type="button"
+                      onClick={handleSaveFile}
+                      disabled={!fileDirty || fileSaving}
+                      size="sm"
+                    >
+                      {fileSaving ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <Save size={12} />
+                      )}
+                      {t('common.save', '保存')}
+                    </OpenClawButton>
+                  </div>
                 </div>
                 <textarea
                   value={fileContent}

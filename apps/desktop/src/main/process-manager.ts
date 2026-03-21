@@ -1,6 +1,7 @@
 import { type ChildProcess, fork } from 'node:child_process'
 import { resolve } from 'node:path'
 import { app, ipcMain } from 'electron'
+import { resolveElectronNodeBinary } from './openclaw/service/paths'
 
 interface ManagedProcess {
   process: ChildProcess
@@ -26,6 +27,8 @@ export function setupProcessManager(): void {
       const child = fork(resolvedPath, args.args ?? [], {
         stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
         silent: true,
+        execPath: resolveElectronNodeBinary(),
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', ELECTRON_NO_ATTACH_CONSOLE: '1' },
       })
 
       managedProcesses.set(id, {

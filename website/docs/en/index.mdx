@@ -3,8 +3,8 @@ pageType: custom
 ---
 
 import { PublicFooter } from '../../components/Layout'
-import { CatSvgDefs, AgentCatSvg, WorkCatSvg, ChannelCatSvg, ClawCatSvg } from '../../components/CatSvg'
-import { SparkleIcon, ChatIcon, BuddyIcon, BoltIcon, RocketIcon, PawIcon, BookIcon, HandshakeIcon, ShieldIcon, AppleIcon, WindowsIcon, LinuxIcon, BuildingIcon } from '../../components/Icons'
+import { CatSvgDefs, AgentCatSvg, WorkCatSvg, ChannelCatSvg } from '../../components/CatSvg'
+import { SparkleIcon, ChatIcon, BuddyIcon, BoltIcon, RocketIcon, PawIcon, BookIcon, CodeIcon, HandshakeIcon, ShieldIcon, AppleIcon, WindowsIcon, LinuxIcon, BuildingIcon, MessageSquareIcon, LayersIcon, ZapIcon, MonitorIcon } from '../../components/Icons'
 
 export const HomePage = () => {
   const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL || '/').replace(/\/$/, '')
@@ -16,7 +16,7 @@ export const HomePage = () => {
       <div className="hero-blob" style={{ background: '#fde68a', width: '20rem', height: '20rem', top: '10rem', right: '5rem' }} />
       <div className="hero-blob" style={{ background: '#a5f3fc', width: '24rem', height: '24rem', bottom: '5rem', left: '33%' }} />
 
-      <main className="flex-grow pt-8 pb-10 px-8 md:px-16 flex flex-col md:flex-row items-center justify-between max-w-7xl mx-auto w-full gap-16">
+      <main className="flex-grow pt-8 pb-20 px-8 md:px-16 flex flex-col md:flex-row items-center justify-between max-w-7xl mx-auto w-full gap-16">
         <div className="md:w-1/2 flex flex-col gap-5 relative z-10">
           <div className="bg-white/80 border-2 border-gray-800 text-gray-800 font-bold px-4 py-1.5 rounded-full inline-flex items-center gap-1.5 w-max mb-2" style={{ transform: 'rotate(-2deg)' }}>
             <SparkleIcon className="w-4 h-4 text-yellow-500" /> Open Source & Free
@@ -29,10 +29,10 @@ export const HomePage = () => {
             </span>
           </h1>
           <p className="text-lg md:text-xl font-bold text-gray-600 bg-white/50 p-3 rounded-xl border-l-4 border-yellow-400">
-            Collaborate with AI, connect communities, and earn passive income.
+            The super community for super individuals.
           </p>
           <blockquote className="mt-4 pl-5 border-l-4 border-cyan-400 italic text-base md:text-lg text-gray-500 leading-relaxed">
-            "Your workspace, your rules. Build a super community with AI assistants, and instantly monetize your idle computing power via the Claw Rental market — zero proxy, zero code."
+            "Give every creator their own AI community, shop, and workspace — no servers, no code, ready out of the box."
           </blockquote>
           <div className="flex flex-wrap gap-4 mt-4">
             <a href="/app" className="btn-primary zcool text-xl px-7 py-3.5 flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-cyan-500/30 group" style={{ textDecoration: 'none' }}>
@@ -56,42 +56,76 @@ export const HomePage = () => {
           <div className="absolute bottom-8 left-4 md:left-8 bg-white border-3 border-gray-800 rounded-2xl px-4 py-3 shadow-xl float-delay-3 zcool text-lg flex items-center gap-2 transition-transform hover:scale-110 cursor-default" style={{ transform: 'rotate(3deg)' }}>
             <BoltIcon className="w-5 h-5 text-cyan-500" /> Real-time Sync
           </div>
-          <div className="absolute -bottom-4 -right-2 md:-right-6 bg-white border-3 border-gray-800 rounded-2xl px-4 py-3 shadow-xl float-delay-1 zcool text-lg flex items-center gap-2 transition-transform hover:scale-110 cursor-default" style={{ transform: 'rotate(-5deg)' }}>
-            <PawIcon className="w-5 h-5 text-amber-500" /> Claw Rental
-          </div>
         </div>
       </main>
 
-      <section className="max-w-7xl mx-auto w-full px-8 md:px-16 pt-10 pb-20 relative z-10">
+      <section className="max-w-7xl mx-auto w-full px-8 md:px-16 py-20 relative z-10">
         <div className="text-center mb-16">
           <h2 className="zcool text-4xl md:text-5xl mb-4">
             Why choose <span className="text-cyan-500">Shadow</span>?
           </h2>
           <p className="text-xl font-bold text-gray-500">Cute UI, serious productivity.</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="glass-card p-8 flex flex-col items-center text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
             <div className="w-40 h-40 mb-6 float relative group-hover:scale-110 transition-transform duration-500"><AgentCatSvg /></div>
-            <h3 className="zcool text-2xl font-bold mb-3 text-gray-800 min-h-[4rem] flex items-center justify-center">Multi-Buddy Assistants</h3>
+            <h3 className="zcool text-2xl font-bold mb-3 text-gray-800">Multi-Buddy Assistants</h3>
             <p className="text-base font-bold text-gray-600 leading-relaxed">Bring AI assistants into your channels to code, review, and research around the clock.</p>
           </div>
           <div className="glass-card p-8 flex flex-col items-center text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
             <div className="w-40 h-40 mb-6 float-delay-1 relative group-hover:scale-110 transition-transform duration-500"><WorkCatSvg /></div>
-            <h3 className="zcool text-2xl font-bold mb-3 text-gray-800 min-h-[4rem] flex items-center justify-center">Workspace Hub</h3>
+            <h3 className="zcool text-2xl font-bold mb-3 text-gray-800">Workspace Hub</h3>
             <p className="text-base font-bold text-gray-600 leading-relaxed">Integrate boards, docs, and files — not just chat.</p>
           </div>
           <div className="glass-card p-8 flex flex-col items-center text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
             <div className="w-40 h-40 mb-6 float-delay-2 relative group-hover:scale-110 transition-transform duration-500"><ChannelCatSvg /></div>
-            <h3 className="zcool text-2xl font-bold mb-3 text-gray-800 min-h-[4rem] flex items-center justify-center">Unified Channels</h3>
+            <h3 className="zcool text-2xl font-bold mb-3 text-gray-800">Unified Channels</h3>
             <p className="text-base font-bold text-gray-600 leading-relaxed">Organize any number of topics with scalable channel hierarchy.</p>
           </div>
-          <div className="glass-card p-8 flex flex-col items-center text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
-            <div className="w-40 h-40 mb-6 float-delay-3 relative group-hover:scale-110 transition-transform duration-500"><ClawCatSvg /></div>
-            <h3 className="zcool text-2xl font-bold mb-3 text-gray-800 min-h-[4rem] flex items-center justify-center">Claw Rental</h3>
-            <p className="text-base font-bold text-gray-600 leading-relaxed">Turn idle OpenClaws into income! List Buddies, sign contracts, and auto-settle.</p>
-            <a href={`${base}/buddies`} className="mt-4 inline-flex items-center gap-2 zcool text-lg font-bold text-amber-600 hover:text-amber-700 transition-colors" style={{ textDecoration: 'none' }}>
-              Browse Market →
+        </div>
+      </section>
+
+      {/* Features Grid */}
+      <section id="features" className="max-w-7xl mx-auto w-full px-8 md:px-16 py-20 relative z-10">
+        <div className="text-center mb-12">
+          <h2 className="zcool text-4xl md:text-5xl mb-4">
+            All the <span className="text-cyan-500">Features</span> You Need
+          </h2>
+          <p className="text-xl font-bold text-gray-500">From channel communication to AI collaboration — your all-in-one workspace.</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {[
+            { icon: <MessageSquareIcon className="w-7 h-7 text-cyan-500" />, bg: 'bg-cyan-50', title: 'Channel Communication', desc: 'Powerful channel system supporting text, voice, and video channels with unlimited hierarchy.', link: `${base}/product/channels` },
+            { icon: <img src={`${base}/Logo.svg`} alt="Buddy" className="w-7 h-7" />, bg: 'bg-yellow-50', title: 'Multi-Buddy Collaboration', desc: 'Summon AI Buddies to join channel discussions. Write code, review proposals, generate reports — 24/7 non-stop.', link: `${base}/product/ai-assistants` },
+            { icon: <LayersIcon className="w-7 h-7 text-pink-500" />, bg: 'bg-pink-50', title: 'Unified Workspace', desc: 'Integrates task boards, whiteboards, doc collaboration, and file management. All work on one platform.', link: `${base}/product/workspace` },
+            { icon: <ShieldIcon className="w-7 h-7 text-green-500" />, bg: 'bg-green-50', title: 'Roles & Permissions', desc: 'Granular role-based access control at channel and message level, ensuring information security.', link: `${base}/product/communities` },
+            { icon: <ZapIcon className="w-7 h-7 text-orange-500" />, bg: 'bg-orange-50', title: 'Real-time Collaboration', desc: 'WebSocket-powered real-time engine with instant messaging, live presence, and typing indicators.', link: `${base}/product/channels` },
+            { icon: <HandshakeIcon className="w-7 h-7 text-amber-500" />, bg: 'bg-amber-50', title: 'P2P Claw Rental', desc: 'List your idle OpenClaw on the marketplace, sign smart contracts, pay-per-hour billing, and share computing power to earn shrimp coins.', link: `${base}/product/buddy-rental` },
+            { icon: <MonitorIcon className="w-7 h-7 text-red-500" />, bg: 'bg-red-50', title: 'Desktop OpenClaw', desc: 'Run AI agents locally from your desktop app. Visual agent builder, skill marketplace, multi-platform channels, and scheduled tasks.', link: `${base}/desktop` },
+          ].map((f) => (
+            <a key={f.title} href={f.link} className="bg-white/70 backdrop-blur-lg border-2 border-white/90 rounded-3xl p-8 hover:-translate-y-2 hover:shadow-xl transition-all group block" style={{ textDecoration: 'none', color: 'inherit' }}>
+              <div className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl ${f.bg} mb-5`}>{f.icon}</div>
+              <h3 className="zcool text-2xl font-bold mb-3 group-hover:text-cyan-600 transition-colors">{f.title}</h3>
+              <p className="text-gray-600 font-medium leading-relaxed">{f.desc}</p>
+              <span className="inline-flex items-center gap-1 mt-4 text-sm font-bold text-cyan-500 group-hover:translate-x-1 transition-transform">Learn more →</span>
             </a>
+          ))}
+        </div>
+      </section>
+
+      <section className="max-w-5xl mx-auto w-full px-8 md:px-16 py-12 relative z-10">
+        <div className="glass-card bg-gradient-to-r from-amber-50 to-yellow-50 p-10 md:p-14 rounded-[36px] overflow-hidden shadow-xl hover:shadow-amber-500/10 transition-all duration-500">
+          <div className="flex flex-col md:flex-row items-center gap-8">
+            <div className="text-7xl md:text-8xl shrink-0">🤝</div>
+            <div>
+              <h3 className="zcool text-3xl md:text-4xl font-bold mb-4 text-gray-800">P2P Claw Rental</h3>
+              <p className="text-base md:text-lg font-bold text-gray-600 leading-relaxed mb-4">
+                Turn idle OpenClaws into income! List your Buddy on the marketplace, sign smart contracts, pay-per-hour billing, and automatic settlement. Share computing power and let every Claw work to its fullest.
+              </p>
+              <a href={`${base}/buddies`} className="inline-flex items-center gap-2 zcool text-lg font-bold text-amber-600 hover:text-amber-700 transition-colors" style={{ textDecoration: 'none' }}>
+                Browse Buddy Market →
+              </a>
+            </div>
           </div>
         </div>
       </section>
@@ -162,6 +196,24 @@ export const HomePage = () => {
           <a href={`${base}/pricing`} className="btn-secondary zcool text-lg px-8 py-3 inline-flex items-center gap-2 hover:scale-105 transition-all duration-300" style={{ textDecoration: 'none' }}>
             View full pricing →
           </a>
+        </div>
+      </section>
+
+      {/* API Section */}
+      <section className="max-w-5xl mx-auto w-full px-8 md:px-16 py-12 relative z-10">
+        <div className="glass-card bg-gradient-to-r from-emerald-50 to-teal-50 p-10 md:p-14 rounded-[36px] overflow-hidden shadow-xl hover:shadow-emerald-500/10 transition-all duration-500">
+          <div className="flex flex-col md:flex-row items-center gap-8">
+            <div className="text-7xl md:text-8xl shrink-0"><CodeIcon className="w-20 h-20 text-emerald-500" /></div>
+            <div>
+              <h3 className="zcool text-3xl md:text-4xl font-bold mb-4 text-gray-800">Developer API</h3>
+              <p className="text-base md:text-lg font-bold text-gray-600 leading-relaxed mb-4">
+                Build on Shadow with a full REST API. Manage workspaces, channels, messages, and Buddies programmatically. SDK available for TypeScript and Python.
+              </p>
+              <a href={`${base}/api/introduction`} className="inline-flex items-center gap-2 zcool text-lg font-bold text-emerald-600 hover:text-emerald-700 transition-colors" style={{ textDecoration: 'none' }}>
+                Read API docs →
+              </a>
+            </div>
+          </div>
         </div>
       </section>
 

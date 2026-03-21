@@ -1,4 +1,122 @@
-import React from 'react'
+// Shared SVG props for consistency
+const svgBase = (className: string) =>
+  ({
+    viewBox: '0 0 24 24',
+    className: `inline-block ${className}`,
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: '2',
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+  }) as const
+
+export function BrainIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg {...svgBase(className)}>
+      <title>Brain</title>
+      <path d="M9.5 2a2.5 2.5 0 1 1 0 5" />
+      <path d="M14.5 2a2.5 2.5 0 1 0 0 5" />
+      <path d="M7 8.5A3.5 3.5 0 0 0 3.5 12c0 1 .4 1.9 1 2.6" />
+      <path d="M17 8.5A3.5 3.5 0 0 1 20.5 12c0 1-.4 1.9-1 2.6" />
+      <path d="M5.5 16a3 3 0 0 0 2.8 2h.2" />
+      <path d="M18.5 16a3 3 0 0 1-2.8 2h-.2" />
+      <path d="M12 2v20" />
+    </svg>
+  )
+}
+
+export function PlugIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg {...svgBase(className)}>
+      <title>Plug</title>
+      <path d="M12 22v-5" />
+      <path d="M9 8V2" />
+      <path d="M15 8V2" />
+      <path d="M18 8v4a6 6 0 0 1-12 0V8z" />
+    </svg>
+  )
+}
+
+export function PuzzleIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg {...svgBase(className)}>
+      <title>Puzzle</title>
+      <path d="M19.439 7.85c-.049.322.059.648.289.878l1.568 1.568c.47.47.706 1.087.706 1.704s-.235 1.233-.706 1.704l-1.611 1.611a.98.98 0 0 1-.837.276c-.47-.07-.802-.48-.968-.925a2.501 2.501 0 1 0-3.214 3.214c.446.166.855.497.925.968a.979.979 0 0 1-.276.837l-1.61 1.611a2.404 2.404 0 0 1-1.705.707 2.402 2.402 0 0 1-1.704-.706l-1.568-1.568a1.026 1.026 0 0 0-.878-.29c-.493.074-.84.504-1.02.968a2.5 2.5 0 1 1-3.237-3.237c.464-.18.894-.527.967-1.02a1.026 1.026 0 0 0-.289-.877l-1.568-1.568A2.404 2.404 0 0 1 1.998 12c0-.617.236-1.234.706-1.704L4.315 8.685a.98.98 0 0 1 .837-.276c.47.07.802.48.968.925a2.501 2.501 0 1 0 3.214-3.214c-.446-.166-.855-.497-.925-.968a.979.979 0 0 1 .276-.837l1.611-1.611a2.404 2.404 0 0 1 1.704-.706c.617 0 1.234.236 1.704.706l1.568 1.568c.23.23.556.338.878.29.493-.074.84-.504 1.02-.968a2.5 2.5 0 1 1 3.237 3.237c-.464.18-.894.527-.967 1.02z" />
+    </svg>
+  )
+}
+
+export function ClockIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg {...svgBase(className)}>
+      <title>Clock</title>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  )
+}
+
+export function FileEditIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg {...svgBase(className)}>
+      <title>File Edit</title>
+      <path d="M4 13.5V4a2 2 0 0 1 2-2h8.5L20 7.5V20a2 2 0 0 1-2 2h-5.5" />
+      <polyline points="14 2 14 8 20 8" />
+      <path d="M10.42 12.61a2.1 2.1 0 1 1 2.97 2.97L7.95 21 4 22l1-3.95z" />
+    </svg>
+  )
+}
+
+export function LockIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg {...svgBase(className)}>
+      <title>Lock</title>
+      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  )
+}
+
+export function CloudIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg {...svgBase(className)}>
+      <title>Cloud</title>
+      <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z" />
+    </svg>
+  )
+}
+
+export function StethoscopeIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg {...svgBase(className)}>
+      <title>Stethoscope</title>
+      <path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3" />
+      <path d="M8 15v1a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6v-4" />
+      <circle cx="20" cy="10" r="2" />
+    </svg>
+  )
+}
+
+export function UserIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg {...svgBase(className)}>
+      <title>User</title>
+      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  )
+}
+
+export function MonitorIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg {...svgBase(className)}>
+      <title>Monitor</title>
+      <rect width="20" height="14" x="2" y="3" rx="2" />
+      <line x1="8" x2="16" y1="21" y2="21" />
+      <line x1="12" x2="12" y1="17" y2="21" />
+    </svg>
+  )
+}
 
 export function SparkleIcon({ className = '' }: { className?: string }) {
   return (

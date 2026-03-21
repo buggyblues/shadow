@@ -48,6 +48,8 @@ export function ChannelsPage() {
   const grouped = useMemo(() => {
     const groups: Record<string, ChannelMeta[]> = {}
     for (const ch of channels) {
+      // Shadow channel is managed via Buddy connection, hide from IM channel list
+      if (ch.id === 'shadowob') continue
       const cat = ch.category || 'custom'
       if (!groups[cat]) groups[cat] = []
       groups[cat]!.push(ch)
@@ -243,7 +245,10 @@ function ChannelEditor({
     if (field.type === 'select' && field.options) {
       return (
         <div key={field.key}>
-          <label className="block text-sm font-medium text-text-primary mb-1.5">
+          <label
+            htmlFor={`ch-${field.key}`}
+            className="block text-sm font-medium text-text-primary mb-1.5"
+          >
             {field.label}
             {field.required && <span className="text-red-500 ml-0.5">*</span>}
           </label>
@@ -251,6 +256,7 @@ function ChannelEditor({
             <p className="text-xs text-text-muted mb-1.5">{field.description}</p>
           )}
           <select
+            id={`ch-${field.key}`}
             value={value}
             onChange={(e) => setFieldValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
             className="w-full px-3 py-2.5 rounded-lg bg-bg-secondary border border-bg-tertiary text-sm text-text-primary focus:outline-none focus:border-primary/50 transition"
@@ -270,7 +276,10 @@ function ChannelEditor({
     if (field.type === 'textarea') {
       return (
         <div key={field.key}>
-          <label className="block text-sm font-medium text-text-primary mb-1.5">
+          <label
+            htmlFor={`ch-${field.key}`}
+            className="block text-sm font-medium text-text-primary mb-1.5"
+          >
             {field.label}
             {field.required && <span className="text-red-500 ml-0.5">*</span>}
           </label>
@@ -278,6 +287,7 @@ function ChannelEditor({
             <p className="text-xs text-text-muted mb-1.5">{field.description}</p>
           )}
           <textarea
+            id={`ch-${field.key}`}
             value={value}
             onChange={(e) => setFieldValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
             placeholder={field.placeholder}
@@ -291,12 +301,16 @@ function ChannelEditor({
 
     return (
       <div key={field.key}>
-        <label className="block text-sm font-medium text-text-primary mb-1.5">
+        <label
+          htmlFor={`ch-${field.key}`}
+          className="block text-sm font-medium text-text-primary mb-1.5"
+        >
           {field.label}
           {field.required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
         {field.description && <p className="text-xs text-text-muted mb-1.5">{field.description}</p>}
         <input
+          id={`ch-${field.key}`}
           type={
             field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'
           }

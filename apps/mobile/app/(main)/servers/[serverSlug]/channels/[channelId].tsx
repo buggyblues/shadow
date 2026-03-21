@@ -1378,7 +1378,7 @@ export default function ChannelViewScreen() {
               </Text>
               {m.user.isBot && (
                 <View style={[styles.mentionBotBadge, { backgroundColor: `${colors.primary}20` }]}>
-                  <Text style={[styles.mentionBotText, { color: colors.primary }]}>BOT</Text>
+                  <Text style={[styles.mentionBotText, { color: colors.primary }]}>Buddy</Text>
                 </View>
               )}
             </Pressable>
@@ -1522,7 +1522,9 @@ export default function ChannelViewScreen() {
                       <View
                         style={[styles.memberRoleBadge, { backgroundColor: `${colors.primary}20` }]}
                       >
-                        <Text style={[styles.memberRoleText, { color: colors.primary }]}>BOT</Text>
+                        <Text style={[styles.memberRoleText, { color: colors.primary }]}>
+                          Buddy
+                        </Text>
                       </View>
                     )}
                   </Pressable>
@@ -1597,7 +1599,9 @@ export default function ChannelViewScreen() {
                       <View
                         style={[styles.memberRoleBadge, { backgroundColor: `${colors.primary}20` }]}
                       >
-                        <Text style={[styles.memberRoleText, { color: colors.primary }]}>BOT</Text>
+                        <Text style={[styles.memberRoleText, { color: colors.primary }]}>
+                          Buddy
+                        </Text>
                       </View>
                     )}
                     <Pressable
@@ -1927,7 +1931,9 @@ export default function ChannelViewScreen() {
                       <View
                         style={[styles.memberRoleBadge, { backgroundColor: `${colors.primary}20` }]}
                       >
-                        <Text style={[styles.memberRoleText, { color: colors.primary }]}>BOT</Text>
+                        <Text style={[styles.memberRoleText, { color: colors.primary }]}>
+                          Buddy
+                        </Text>
                       </View>
                     )}
                   </Pressable>

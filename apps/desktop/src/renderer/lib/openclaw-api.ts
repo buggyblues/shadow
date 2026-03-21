@@ -56,22 +56,38 @@ export interface AgentConfig {
   heartbeat?: Record<string, unknown>
 }
 
+/** Valid API format identifiers from OpenClaw ModelApiSchema */
+export type ModelApi =
+  | 'openai-completions'
+  | 'openai-responses'
+  | 'openai-codex-responses'
+  | 'anthropic-messages'
+  | 'google-generative-ai'
+  | 'github-copilot'
+  | 'bedrock-converse-stream'
+  | 'ollama'
+
 /** Model provider entry nested under models.providers.<id> */
 export interface ModelProviderEntry {
   baseUrl: string
   apiKey?: string
   auth?: 'api-key' | 'aws-sdk' | 'oauth' | 'token'
+  api?: ModelApi
   models: ModelDefinition[]
   headers?: Record<string, string>
-  api?: Record<string, unknown>
 }
 
 export interface ModelDefinition {
   id: string
   name?: string
-  maxTokens?: number
+  api?: string
+  reasoning?: boolean
+  input?: Array<'text' | 'image'>
+  cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number }
   contextWindow?: number
-  supportedFeatures?: string[]
+  maxTokens?: number
+  headers?: Record<string, string>
+  compat?: Record<string, unknown>
 }
 
 export interface ChannelMeta {
@@ -283,6 +299,8 @@ interface OpenClawBridge {
   listModels: () => Promise<Record<string, ModelProviderEntry>>
   saveModel: (id: string, provider: ModelProviderEntry) => Promise<{ success: boolean }>
   deleteModel: (id: string) => Promise<{ success: boolean }>
+  getDefaultModel: () => Promise<string | null>
+  setDefaultModel: (modelKey: string) => Promise<{ success: boolean }>
   getCronConfig: () => Promise<CronConfig>
   updateCronConfig: (updates: Partial<CronConfig>) => Promise<{ success: boolean }>
   listCronTasks: () => Promise<CronTask[]>
@@ -392,6 +410,8 @@ export const openClawApi = {
   saveModel: (id: string, provider: ModelProviderEntry) =>
     getOpenClawAPI()!.saveModel(id, provider),
   deleteModel: (id: string) => getOpenClawAPI()!.deleteModel(id),
+  getDefaultModel: () => getOpenClawAPI()!.getDefaultModel(),
+  setDefaultModel: (modelKey: string) => getOpenClawAPI()!.setDefaultModel(modelKey),
 
   // Cron
   getCronConfig: () => getOpenClawAPI()!.getCronConfig(),

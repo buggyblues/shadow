@@ -18,6 +18,8 @@ import {
   Power,
   Puzzle,
   RefreshCw,
+  Sparkles,
+  Stethoscope,
   Store,
   Terminal,
 } from 'lucide-react'
@@ -88,6 +90,13 @@ export function OpenClawDashboard({ onNavigate }: DashboardProps) {
       })
       .catch(() => {})
     const unsubStatus = openClawApi.onGatewayStatusChanged((s) => setStatus(s))
+    // Periodic status poll — keeps uptime fresh and catches missed broadcasts
+    const pollTimer = setInterval(() => {
+      openClawApi
+        .getGatewayStatus()
+        .then(setStatus)
+        .catch(() => {})
+    }, 5000)
     const unsubLog = openClawApi.onGatewayLog((entry) => {
       setLogs((prev: GatewayLogEntry[]) => {
         const next = [...prev, entry]
@@ -111,6 +120,7 @@ export function OpenClawDashboard({ onNavigate }: DashboardProps) {
     return () => {
       unsubStatus()
       unsubLog()
+      clearInterval(pollTimer)
     }
   }, [])
 
@@ -151,6 +161,28 @@ export function OpenClawDashboard({ onNavigate }: DashboardProps) {
       await openClawApi.installOpenClaw()
     } finally {
       setActionLoading(false)
+    }
+  }, [])
+
+  const [doctorLoading, setDoctorLoading] = useState(false)
+  const [doctorResult, setDoctorResult] = useState<{ success: boolean; output: string } | null>(
+    null,
+  )
+  const handleDoctorFix = useCallback(async () => {
+    setDoctorLoading(true)
+    setDoctorResult(null)
+    try {
+      const result = await openClawApi.execCli(['doctor', '--fix'])
+      const output = (result.stdout + result.stderr).trim()
+      setDoctorResult({ success: result.code === 0, output })
+      // If fix succeeded, try to start the gateway
+      if (result.code === 0) {
+        await openClawApi.startGateway()
+      }
+    } catch (err) {
+      setDoctorResult({ success: false, output: err instanceof Error ? err.message : '执行失败' })
+    } finally {
+      setDoctorLoading(false)
     }
   }, [])
 
@@ -310,19 +342,34 @@ export function OpenClawDashboard({ onNavigate }: DashboardProps) {
                 </>
               )}
               {state === 'error' && (
-                <OpenClawButton
-                  type="button"
-                  onClick={handleInstall}
-                  disabled={actionLoading}
-                  className="px-4 py-2.5 rounded-xl text-sm font-bold active:scale-95 transition-all"
-                >
-                  {actionLoading ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <Download size={16} />
-                  )}
-                  {t('openclaw.guard.install', '安装')}
-                </OpenClawButton>
+                <>
+                  <OpenClawButton
+                    type="button"
+                    onClick={handleDoctorFix}
+                    disabled={actionLoading || doctorLoading}
+                    className="px-4 py-2.5 rounded-xl text-sm font-bold active:scale-95 transition-all"
+                  >
+                    {doctorLoading ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Stethoscope size={16} />
+                    )}
+                    一键修复
+                  </OpenClawButton>
+                  <OpenClawButton
+                    type="button"
+                    onClick={handleInstall}
+                    disabled={actionLoading}
+                    className="px-4 py-2.5 rounded-xl text-sm font-bold active:scale-95 transition-all"
+                  >
+                    {actionLoading ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <RefreshCw size={16} />
+                    )}
+                    {t('openclaw.action.retry', '重试')}
+                  </OpenClawButton>
+                </>
               )}
             </div>
           </div>
@@ -331,19 +378,90 @@ export function OpenClawDashboard({ onNavigate }: DashboardProps) {
           <div className="mt-5 pt-5 border-t border-border-subtle flex items-center gap-6 flex-wrap">
             <MetricPill
               label={t('openclaw.dashboard.uptime', '运行时间')}
-              value={status?.uptime != null ? formatUptime(status.uptime) : '00m 00s'}
+              value={
+                isRunning && status?.uptime != null
+                  ? formatUptime(status.uptime)
+                  : isTransitioning
+                    ? '...'
+                    : '00m 00s'
+              }
             />
             <MetricPill
               label={t('openclaw.dashboard.port', '端口')}
-              value={String(status?.port ?? '—')}
+              value={status?.port ? String(status.port) : isTransitioning ? '...' : '—'}
             />
-            <MetricPill label="PID" value={String(status?.pid ?? '—')} />
+            <MetricPill
+              label="PID"
+              value={status?.pid ? String(status.pid) : isTransitioning ? '...' : '—'}
+            />
             <MetricPill
               label={t('openclaw.dashboard.version', '版本')}
               value={status?.version ? `v${status.version}` : '—'}
             />
           </div>
+
+          {/* Doctor result */}
+          {doctorResult && (
+            <div
+              className={`mt-4 rounded-xl border p-3 ${
+                doctorResult.success
+                  ? 'border-green-500/20 bg-green-500/5'
+                  : 'border-red-500/20 bg-red-500/5'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                {doctorResult.success ? (
+                  <CheckCircle2 size={14} className="text-green-400 shrink-0" />
+                ) : (
+                  <AlertCircle size={14} className="text-red-400 shrink-0" />
+                )}
+                <span
+                  className={`text-xs font-bold ${doctorResult.success ? 'text-green-400' : 'text-red-400'}`}
+                >
+                  {doctorResult.success ? '修复完成' : '修复失败'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDoctorResult(null)}
+                  className="ml-auto text-[10px] text-text-muted hover:text-text-primary"
+                >
+                  关闭
+                </button>
+              </div>
+              {doctorResult.output && (
+                <pre className="text-[10px] text-text-muted font-mono whitespace-pre-wrap max-h-32 overflow-y-auto mt-1">
+                  {doctorResult.output}
+                </pre>
+              )}
+            </div>
+          )}
         </section>
+
+        {/* ─── Onboarding Banner ─── */}
+        {modelCount === 0 && agentCount === 0 && (
+          <button
+            type="button"
+            onClick={() => onNavigate('onboard')}
+            className="w-full rounded-2xl border border-danger/20 bg-gradient-to-r from-danger/5 to-amber-500/5 p-5 text-left hover:border-danger/40 transition-all cursor-pointer group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-danger/10 flex items-center justify-center shrink-0">
+                <Sparkles size={24} className="text-danger" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-bold text-text-primary group-hover:text-danger transition-colors">
+                  {t('openclaw.dashboard.onboardTitle', '🦞 开始设置你的 AI 龙虾')}
+                </div>
+                <div className="text-xs text-text-muted mt-0.5">
+                  {t(
+                    'openclaw.dashboard.onboardDesc',
+                    '只需几步即可配置模型、创建智能体并开始对话。点击开始初始设置向导。',
+                  )}
+                </div>
+              </div>
+            </div>
+          </button>
+        )}
 
         {/* ─── Stats Grid ─── */}
         <div className="grid grid-cols-5 gap-3">
@@ -430,6 +548,7 @@ export function OpenClawDashboard({ onNavigate }: DashboardProps) {
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
@@ -548,10 +667,11 @@ function ToggleRow({
   )
 }
 
-function formatUptime(seconds: number) {
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = Math.floor(seconds % 60)
+function formatUptime(ms: number) {
+  const totalSeconds = Math.floor(ms / 1000)
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = Math.floor(totalSeconds % 60)
   return h > 0
     ? `${h}h ${m}m ${s}s`
     : `${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`
@@ -613,9 +733,9 @@ function VirtualLogList({
   return (
     <div className="relative font-mono text-xs" style={{ height: totalHeight }}>
       <div className="absolute left-0 right-0" style={{ top: startIdx * LOG_ROW_HEIGHT }}>
-        {logs.slice(startIdx, endIdx).map((log, i) => (
+        {logs.slice(startIdx, endIdx).map((log, _i) => (
           <div
-            key={startIdx + i}
+            key={`${log.timestamp}-${log.message.slice(0, 20)}`}
             className="flex gap-2 hover:bg-bg-modifier-hover px-3 py-0.5 leading-[18px] h-[22px] items-center"
             style={{ height: LOG_ROW_HEIGHT }}
           >

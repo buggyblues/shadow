@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="200" height="200">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <defs>
     <radialGradient id="catBody" cx="50%" cy="35%" r="70%">
       <stop offset="0%" stop-color="#5a5a5e" />
@@ -17,22 +17,51 @@
       <stop offset="35%" stop-color="#00f3ff" />
       <stop offset="100%" stop-color="#0099aa" />
     </radialGradient>
+
+    <!-- macOS squircle clip path (continuous-curvature rounded rectangle) -->
+    <clipPath id="macosSquircle">
+      <path d="
+        M 512,0
+        C 791,0 882,0 938,25
+        C 976,44 1000,80 1024,174
+        C 1024,174 1024,233 1024,512
+        C 1024,791 1024,882 999,938
+        C 980,976 944,1000 850,1024
+        C 850,1024 791,1024 512,1024
+        C 233,1024 142,1024 86,999
+        C 48,980 24,944 0,850
+        C 0,850 0,791 0,512
+        C 0,233 0,142 25,86
+        C 44,48 80,24 174,0
+        C 174,0 233,0 512,0
+        Z
+      "/>
+    </clipPath>
   </defs>
 
-  <g id="cat" transform="translate(0, -2)">
-    <path d="M 22,47 Q 15,24 28,24 Q 34,24 40,40" fill="url(#catBody)" stroke="#1a1a1c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M 78,47 Q 85,24 72,24 Q 66,24 60,40" fill="url(#catBody)" stroke="#1a1a1c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-    <ellipse cx="50" cy="62" rx="38" ry="26" fill="url(#catBody)" stroke="#1a1a1c" stroke-width="2.5" />
-    <ellipse cx="50" cy="61" rx="35" ry="23" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1.5" />
-    <circle cx="32" cy="57" r="6.5" fill="url(#eyeYellow)" stroke="#1a1a1c" stroke-width="1.5" />
-    <circle cx="30" cy="54.5" r="2.2" fill="#ffffff" />
-    <circle cx="34" cy="60" r="1.2" fill="#ffffff" opacity="0.6" />
-    <circle cx="68" cy="57" r="6.5" fill="url(#eyeCyan)" stroke="#1a1a1c" stroke-width="1.5" />
-    <circle cx="66" cy="54.5" r="2.2" fill="#ffffff" />
-    <circle cx="70" cy="60" r="1.2" fill="#ffffff" opacity="0.6" />
-    <ellipse cx="50" cy="64" rx="4" ry="2.5" fill="#3a2a26" />
-    <ellipse cx="49.5" cy="63.2" rx="1.5" ry="0.8" fill="#8c7772" />
-    <path d="M 40,69 Q 45,74.5 50,69" fill="none" stroke="#1a1a1c" stroke-width="2.5" stroke-linecap="round" />
-    <path d="M 50,69 Q 55,74.5 60,69" fill="none" stroke="#1a1a1c" stroke-width="2.5" stroke-linecap="round" />
+  <!-- White background with macOS squircle shape -->
+  <rect x="0" y="0" width="1024" height="1024" rx="228" ry="228" fill="white" />
+
+  <!-- Subtle border for definition against light backgrounds -->
+  <rect x="2" y="2" width="1020" height="1020" rx="227" ry="227" fill="none" stroke="rgba(0,0,0,0.06)" stroke-width="2" />
+
+  <!-- Cat mascot (scaled to fill ~75% of 1024x1024, matching mobile proportions) -->
+  <g transform="translate(2, 39) scale(10.2)">
+    <g id="cat" transform="translate(0, -2)">
+      <path d="M 22,47 Q 15,24 28,24 Q 34,24 40,40" fill="url(#catBody)" stroke="#1a1a1c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M 78,47 Q 85,24 72,24 Q 66,24 60,40" fill="url(#catBody)" stroke="#1a1a1c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+      <ellipse cx="50" cy="62" rx="38" ry="26" fill="url(#catBody)" stroke="#1a1a1c" stroke-width="2.5" />
+      <ellipse cx="50" cy="61" rx="35" ry="23" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1.5" />
+      <circle cx="32" cy="57" r="6.5" fill="url(#eyeYellow)" stroke="#1a1a1c" stroke-width="1.5" />
+      <circle cx="30" cy="54.5" r="2.2" fill="#ffffff" />
+      <circle cx="34" cy="60" r="1.2" fill="#ffffff" opacity="0.6" />
+      <circle cx="68" cy="57" r="6.5" fill="url(#eyeCyan)" stroke="#1a1a1c" stroke-width="1.5" />
+      <circle cx="66" cy="54.5" r="2.2" fill="#ffffff" />
+      <circle cx="70" cy="60" r="1.2" fill="#ffffff" opacity="0.6" />
+      <ellipse cx="50" cy="64" rx="4" ry="2.5" fill="#3a2a26" />
+      <ellipse cx="49.5" cy="63.2" rx="1.5" ry="0.8" fill="#8c7772" />
+      <path d="M 40,69 Q 45,74.5 50,69" fill="none" stroke="#1a1a1c" stroke-width="2.5" stroke-linecap="round" />
+      <path d="M 50,69 Q 55,74.5 60,69" fill="none" stroke="#1a1a1c" stroke-width="2.5" stroke-linecap="round" />
+    </g>
   </g>
 </svg>

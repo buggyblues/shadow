@@ -18,17 +18,29 @@ import { ChannelsPage } from './channels'
 import { CronPage } from './cron'
 import { OpenClawDashboard } from './dashboard'
 import { DebugPage } from './debug'
-import { GatewayGuard } from './gateway-guard'
 import { HelpPage } from './help'
 import { ModelsPage } from './models'
+import { OnboardPage } from './onboard'
 import { OpenClawLayout, type OpenClawPage as OpenClawPageId } from './openclaw-layout'
 import { SkillHubPage } from './skillhub'
 
 export type { OpenClawPageId }
 
+export interface NavContext {
+  initialAgentId?: string
+  returnTo?: OpenClawPageId
+}
+
 export function OpenClawPage() {
   const [activePage, setActivePage] = useState<OpenClawPageId>('dashboard')
+  const [navContext, setNavContext] = useState<NavContext | null>(null)
   const [gatewayStatus, setGatewayStatus] = useState<GatewayStatus | null>(null)
+  const [initialChecked, setInitialChecked] = useState(false)
+
+  const navigate = useCallback((page: OpenClawPageId, ctx?: NavContext) => {
+    setNavContext(ctx ?? null)
+    setActivePage(page)
+  }, [])
 
   const loadStatus = useCallback(async () => {
     if (!openClawApi.isAvailable) return
@@ -40,6 +52,21 @@ export function OpenClawPage() {
     }
   }, [])
 
+  // Check if onboarding is needed (no agents and no providers configured)
+  useEffect(() => {
+    if (!openClawApi.isAvailable || initialChecked) return
+    Promise.all([openClawApi.listAgents(), openClawApi.listModels()])
+      .then(([agents, models]) => {
+        const hasAgents = agents.length > 0
+        const hasProviders = Object.keys(models).length > 0
+        if (!hasAgents && !hasProviders) {
+          setActivePage('onboard')
+        }
+      })
+      .catch(() => {})
+      .finally(() => setInitialChecked(true))
+  }, [initialChecked])
+
   useEffect(() => {
     loadStatus()
     if (!openClawApi.isAvailable) return
@@ -47,17 +74,10 @@ export function OpenClawPage() {
     return unsub
   }, [loadStatus])
 
-  // Dashboard, Debug, and Help are always accessible
-  const isRunning = gatewayStatus?.state === 'running'
-  const needsGuard =
-    activePage !== 'dashboard' && activePage !== 'debug' && activePage !== 'help' && !isRunning
-
   return (
-    <OpenClawLayout activePage={activePage} onNavigate={setActivePage}>
-      {needsGuard ? (
-        <GatewayGuard status={gatewayStatus} onGoToDashboard={() => setActivePage('dashboard')} />
-      ) : activePage === 'dashboard' ? (
-        <OpenClawDashboard onNavigate={setActivePage} />
+    <OpenClawLayout activePage={activePage} onNavigate={navigate} gatewayStatus={gatewayStatus}>
+      {activePage === 'dashboard' ? (
+        <OpenClawDashboard onNavigate={navigate} />
       ) : activePage === 'skillhub' ? (
         <SkillHubPage />
       ) : activePage === 'channels' ? (
@@ -65,15 +85,17 @@ export function OpenClawPage() {
       ) : activePage === 'models' ? (
         <ModelsPage />
       ) : activePage === 'agents' ? (
-        <AgentsPage />
+        <AgentsPage onNavigate={navigate} />
       ) : activePage === 'cron' ? (
         <CronPage />
       ) : activePage === 'buddy' ? (
-        <BuddyPage />
+        <BuddyPage navContext={navContext} onNavigate={navigate} />
       ) : activePage === 'help' ? (
-        <HelpPage onNavigate={setActivePage} />
+        <HelpPage onNavigate={navigate} />
       ) : activePage === 'debug' ? (
         <DebugPage />
+      ) : activePage === 'onboard' ? (
+        <OnboardPage onNavigate={navigate} />
       ) : null}
     </OpenClawLayout>
   )

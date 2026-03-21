@@ -1,6 +1,14 @@
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, ipcMain, net, protocol } from 'electron'
+
+// Suppress EPIPE errors that occur when a child process dies while the main
+// process writes to its stdio pipe (e.g. gateway process exit).
+process.on('uncaughtException', (err) => {
+  if ((err as NodeJS.ErrnoException).code === 'EPIPE') return
+  throw err
+})
+
 import { setupAutoUpdater } from './auto-updater'
 import { createAppMenu } from './menu'
 import { setupNotificationHandler } from './notifications'

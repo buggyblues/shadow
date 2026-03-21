@@ -1,34 +1,42 @@
 {
-  "generatedAt": "2026-03-17T07:11:28.672Z",
-  "runId": "mmu9xhuh",
-  "origin": "http://web:3000",
-  "appBaseUrl": "http://web:3000/app/",
+  "generatedAt": "2026-03-21T13:36:50.994Z",
+  "runId": "mn0dgjje",
+  "origin": "http://127.0.0.1:3000",
+  "appBaseUrl": "http://127.0.0.1:3000/app/",
   "owner": {
     "email": "owner.e2e@shadowob.local",
     "password": "ShadowE2E123!",
     "displayName": "Ava Owner"
   },
   "viewer": {
-    "email": "viewer.mmu9xhuh@shadowob.local",
+    "email": "viewer.mn0dgjje@shadowob.local",
     "password": "ShadowE2E123!",
     "displayName": "Ben Viewer"
   },
   "server": {
-    "id": "09507c2a-6ed9-45a3-a496-53cb101c784b",
+    "id": "c97e5bdb-4341-4cea-bdb0-1d02594ff7f2",
     "slug": "e2e-studio",
     "name": "E2E Studio",
-    "inviteCode": "EreWwPnm"
+    "inviteCode": "kFOnwAs1"
   },
   "channels": {
-    "generalId": "d7e0a3d1-35f3-4f29-8b14-91a2f3bffc44",
-    "announcementsId": "d16a0178-4dcd-4e94-a098-d071f067ed71"
+    "generalId": "cf5c48c4-fd2d-4a36-9b31-021f4b166e74",
+    "announcementsId": "cb640d2e-a64d-4ae5-99b8-25665075f5be"
   },
   "shop": {
-    "categoryId": "902ad30c-121e-47aa-8086-6eb0a5641dc7",
+    "categoryId": "49154ad2-7cb0-433b-a092-f383cd2d03c5",
     "categoryName": "Studio Kits",
     "productNames": ["Focus Sprint Bundle", "Buddy Ops Pass"]
   },
   "apps": {
     "names": ["Launchpad", "Ops Console"]
+  },
+  "agents": {
+    "names": ["CodingCat", "DocuMeow", "GuardianCat"],
+    "ids": [
+      "03d4dc9a-4b90-4cf6-865f-82c87ca629b2",
+      "2246af6c-25f9-471b-8d64-a69c2118b103",
+      "bc00f204-3494-4f3e-9fd3-4fe13a33ba71"
+    ]
   }
 }

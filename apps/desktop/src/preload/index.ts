@@ -191,6 +191,9 @@ const desktopAPI = {
     saveModel: (id: string, provider: unknown) =>
       ipcRenderer.invoke('openclaw:models:save', id, provider),
     deleteModel: (id: string) => ipcRenderer.invoke('openclaw:models:delete', id),
+    getDefaultModel: () => ipcRenderer.invoke('openclaw:models:default'),
+    setDefaultModel: (modelKey: string) =>
+      ipcRenderer.invoke('openclaw:models:default:set', modelKey),
 
     // Cron Config
     getCronConfig: () => ipcRenderer.invoke('openclaw:cron:config'),

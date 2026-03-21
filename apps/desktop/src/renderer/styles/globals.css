@@ -54,3 +54,100 @@ html.desktop-darwin .w-\[72px\].bg-bg-tertiary::before {
   -webkit-app-region: drag;
   app-region: drag;
 }
+
+/* ===== OpenClaw Animations ===== */
+
+@keyframes sparkle-float {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translateY(0) scale(0.5);
+  }
+  25% {
+    opacity: 0.8;
+    transform: translateY(-8px) scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: translateY(-4px) scale(0.8);
+  }
+  75% {
+    opacity: 0.7;
+    transform: translateY(-12px) scale(1.1);
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes glow-pulse-slow {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes bounce-subtle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-sparkle-float {
+  animation: sparkle-float var(--duration, 3s) ease-in-out infinite;
+}
+.animate-glow-pulse {
+  animation: glow-pulse 2.5s ease-in-out infinite;
+}
+.animate-glow-pulse-slow {
+  animation: glow-pulse-slow 4s ease-in-out infinite;
+}
+.animate-bounce-subtle {
+  animation: bounce-subtle 3s ease-in-out infinite;
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.4s ease-out both;
+}
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(229, 57, 69, 0.06) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+}

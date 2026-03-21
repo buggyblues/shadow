@@ -1,12 +1,15 @@
 import type { ReactNode } from 'react'
+import { useMemo } from 'react'
 
 export function OpenClawIcon({
   size = 24,
   glow = false,
+  animated = false,
   className,
 }: {
   size?: number
   glow?: boolean
+  animated?: boolean
   className?: string
 }) {
   return (
@@ -16,8 +19,13 @@ export function OpenClawIcon({
       viewBox="0 0 100 100"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={className || ''}
-      style={{ filter: glow ? 'drop-shadow(0 4px 12px rgba(229,57,69,0.45))' : undefined }}
+      className={`${className || ''} ${animated ? 'animate-bounce-subtle' : ''}`}
+      style={{
+        filter: glow
+          ? 'drop-shadow(0 4px 14px rgba(229,57,69,0.5)) drop-shadow(0 0 30px rgba(229,57,69,0.15))'
+          : undefined,
+      }}
+      aria-hidden="true"
     >
       <defs>
         <radialGradient
@@ -104,6 +112,68 @@ export function OpenClawTopBar({
       <div className="flex items-center gap-2" data-no-drag>
         {right}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Floating sparkle / particle decoration for lively feel.
+ * Renders small animated dots around a section.
+ */
+export function SparkleField({ count = 12, className }: { count?: number; className?: string }) {
+  const particles = useMemo(() => {
+    return Array.from({ length: count }, (_, i) => ({
+      id: i,
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 100}%`,
+      size: 2 + Math.random() * 3,
+      delay: Math.random() * 4,
+      duration: 2 + Math.random() * 3,
+      color: ['#FF5E69', '#FFB3B8', '#FF8A94', '#E53945', '#FFC1C7'][Math.floor(Math.random() * 5)],
+    }))
+  }, [count])
+
+  return (
+    <div className={`absolute inset-0 pointer-events-none overflow-hidden ${className || ''}`}>
+      {particles.map((p) => (
+        <div
+          key={p.id}
+          className="absolute rounded-full animate-sparkle-float"
+          style={{
+            left: p.left,
+            top: p.top,
+            width: p.size,
+            height: p.size,
+            backgroundColor: p.color,
+            animationDelay: `${p.delay}s`,
+            animationDuration: `${p.duration}s`,
+            opacity: 0,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
+/**
+ * Pulsing glow ring effect. Place behind a logo or icon.
+ */
+export function GlowRing({ size = 64, className }: { size?: number; className?: string }) {
+  return (
+    <div className={`relative ${className || ''}`} style={{ width: size, height: size }}>
+      <div
+        className="absolute inset-0 rounded-full animate-glow-pulse"
+        style={{
+          background: 'radial-gradient(circle, rgba(229,57,69,0.3) 0%, rgba(229,57,69,0) 70%)',
+        }}
+      />
+      <div
+        className="absolute rounded-full animate-glow-pulse-slow"
+        style={{
+          inset: -size * 0.15,
+          background: 'radial-gradient(circle, rgba(229,57,69,0.12) 0%, rgba(229,57,69,0) 70%)',
+        }}
+      />
     </div>
   )
 }

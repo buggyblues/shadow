@@ -1,17 +1,19 @@
 /**
  * Buddy Connect Page
  *
- * Manage connections between local OpenClaw agents and remote Shadow Buddy
+ * Manage connections between local OpenClaw agents and remote ShadowOwnBuddy
  * instances. Users select from their existing Buddy list (fetched from the
- * Shadow server) and connections are auto-configured — no manual token entry.
+ * ShadowOwnBuddy server) and connections are auto-configured — no manual token entry.
  */
 
 import {
+  ArrowLeft,
   ArrowRight,
   Bot,
   Check,
   Cloud,
   CloudOff,
+  Edit3,
   Globe,
   Link,
   Loader2,
@@ -28,9 +30,11 @@ import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import type { AgentConfig, BuddyConnection } from '../../lib/openclaw-api'
 import { openClawApi } from '../../lib/openclaw-api'
+import type { NavContext } from './index'
+import type { OpenClawPage } from './openclaw-layout'
 import { OpenClawButton, OpenClawSplitLayout } from './openclaw-ui'
 
-/** Remote Buddy agent from the Shadow server */
+/** Remote Buddy agent from the ShadowOwnBuddy server */
 interface RemoteBuddy {
   id: string
   userId: string
@@ -57,12 +61,18 @@ interface TokenResponse {
   botUser: { id: string; username: string; displayName: string | null; avatarUrl: string | null }
 }
 
-export function BuddyPage() {
+export function BuddyPage({
+  navContext,
+  onNavigate,
+}: {
+  navContext?: NavContext | null
+  onNavigate?: (page: OpenClawPage, ctx?: NavContext) => void
+}) {
   const { t } = useTranslation()
   const [connections, setConnections] = useState<BuddyConnection[]>([])
   const [agents, setAgents] = useState<AgentConfig[]>([])
   const [selectedConn, setSelectedConn] = useState<BuddyConnection | null>(null)
-  const [isAdding, setIsAdding] = useState(false)
+  const [isAdding, setIsAdding] = useState(!!navContext?.initialAgentId)
   const [connecting, setConnecting] = useState<Set<string>>(new Set())
   const [disconnecting, setDisconnecting] = useState<Set<string>>(new Set())
   const [notice, setNotice] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
@@ -310,6 +320,10 @@ export function BuddyPage() {
           {isAdding ? (
             <AddConnectionView
               agents={agents}
+              initialAgentId={navContext?.initialAgentId}
+              onNavigateBack={
+                navContext?.returnTo ? () => onNavigate?.(navContext.returnTo!) : undefined
+              }
               onBack={() => {
                 setIsAdding(false)
                 if (connections.length > 0) setSelectedConn(connections[0]!)
@@ -362,26 +376,34 @@ export function BuddyPage() {
 
 // ─── Add Connection View (Buddy Picker) ─────────────────────────────────────
 
+type AddMode = 'create' | 'bind'
+
 function AddConnectionView({
-  agents: _agents,
+  agents,
+  initialAgentId,
+  onNavigateBack,
   onBack,
   onSave,
 }: {
   agents: AgentConfig[]
+  initialAgentId?: string
+  onNavigateBack?: () => void
   onBack: () => void
   onSave: () => void
 }) {
   const { t } = useTranslation()
+  const [mode, setMode] = useState<AddMode>('create')
   const [remoteBuddies, setRemoteBuddies] = useState<RemoteBuddy[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedBuddy, setSelectedBuddy] = useState<RemoteBuddy | null>(null)
-  const [agentId, setAgentId] = useState('')
+  const [agentId, setAgentId] = useState(initialAgentId ?? '')
   const [autoConnect, setAutoConnect] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // Fetch buddies from Shadow server
+  // Fetch remote buddies only when in "bind" mode
   useEffect(() => {
+    if (mode !== 'bind') return
     setLoading(true)
     setError(null)
     fetchApi<RemoteBuddy[]>('/api/agents')
@@ -397,29 +419,57 @@ function AddConnectionView({
         )
         setLoading(false)
       })
-  }, [t])
+  }, [mode, t])
 
   const handleSave = async () => {
-    if (!selectedBuddy) return
     setSaving(true)
+    setError(null)
     try {
-      // Auto-generate token for the selected buddy
-      const tokenResp = await fetchApi<TokenResponse>(`/api/agents/${selectedBuddy.id}/token`, {
-        method: 'POST',
-      })
-      const buddyName =
-        selectedBuddy.botUser?.displayName ?? selectedBuddy.botUser?.username ?? 'Buddy'
       const serverUrl = (import.meta.env.VITE_API_BASE as string) || window.location.origin
 
-      await openClawApi.addBuddyConnection({
-        id: crypto.randomUUID(),
-        label: buddyName,
-        serverUrl,
-        apiToken: tokenResp.token,
-        remoteAgentId: tokenResp.agent.id,
-        agentId,
-        autoConnect,
-      })
+      if (mode === 'create') {
+        // Create a new remote buddy with the same name as the local agent
+        const agent = agents.find((a) => a.id === agentId)
+        const buddyName = agent?.name || 'OpenClaw Buddy'
+        const username = `buddy-${Date.now()}`
+        const remoteBuddy = await fetchApi<{ id: string }>('/api/agents', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: buddyName,
+            username,
+            kernelType: 'openclaw',
+          }),
+        })
+        const tokenResp = await fetchApi<TokenResponse>(`/api/agents/${remoteBuddy.id}/token`, {
+          method: 'POST',
+        })
+        await openClawApi.addBuddyConnection({
+          id: crypto.randomUUID(),
+          label: buddyName,
+          serverUrl,
+          apiToken: tokenResp.token,
+          remoteAgentId: tokenResp.agent.id,
+          agentId,
+          autoConnect,
+        })
+      } else {
+        // Bind to existing remote buddy
+        if (!selectedBuddy) return
+        const tokenResp = await fetchApi<TokenResponse>(`/api/agents/${selectedBuddy.id}/token`, {
+          method: 'POST',
+        })
+        const buddyName =
+          selectedBuddy.botUser?.displayName ?? selectedBuddy.botUser?.username ?? 'Buddy'
+        await openClawApi.addBuddyConnection({
+          id: crypto.randomUUID(),
+          label: buddyName,
+          serverUrl,
+          apiToken: tokenResp.token,
+          remoteAgentId: tokenResp.agent.id,
+          agentId,
+          autoConnect,
+        })
+      }
       onSave()
     } catch (err) {
       setError(err instanceof Error ? err.message : t('openclaw.buddy.configError', '配置连接失败'))
@@ -428,22 +478,34 @@ function AddConnectionView({
     }
   }
 
+  const canSave = mode === 'create' ? !!agentId : !!selectedBuddy
+
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="px-6 pt-5 pb-6 max-w-2xl">
         <div className="flex items-center justify-between mb-4">
           <div>
+            {onNavigateBack && (
+              <button
+                type="button"
+                onClick={onNavigateBack}
+                className="flex items-center gap-1 text-xs text-text-muted hover:text-primary transition mb-2 cursor-pointer"
+              >
+                <ArrowLeft size={12} />
+                {t('openclaw.buddy.backToAgent', '返回智能体编辑')}
+              </button>
+            )}
             <h2 className="text-lg font-bold text-text-primary mb-1">
               {t('openclaw.buddy.addConnection', '添加 Buddy 连接')}
             </h2>
             <p className="text-sm text-text-muted">
-              {t('openclaw.buddy.addDesc', '从 Shadow 账户中选择一个 Buddy，自动配置连接')}
+              {t('openclaw.buddy.addDesc2', '创建新的 Buddy 或关联已有的 Buddy')}
             </p>
           </div>
           <OpenClawButton
             type="button"
             onClick={handleSave}
-            disabled={saving || !selectedBuddy}
+            disabled={saving || !canSave}
             className="shrink-0"
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Link size={14} />}
@@ -458,79 +520,124 @@ function AddConnectionView({
         )}
 
         <div className="space-y-6">
-          {/* ━━━ Select Buddy ━━━ */}
-          <section>
-            <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
-              {t('openclaw.buddy.selectBuddy', '选择 Buddy')}
-            </h3>
-            <div className="bg-bg-secondary rounded-xl border border-bg-tertiary p-4">
-              {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 size={20} className="animate-spin text-text-muted" />
-                  <span className="ml-2 text-sm text-text-muted">
-                    {t('openclaw.buddy.loadingBuddies', '正在加载 Buddy 列表...')}
-                  </span>
-                </div>
-              ) : remoteBuddies.length === 0 ? (
-                <div className="flex flex-col items-center py-8 text-center">
-                  <Users size={32} className="text-text-muted mb-2" />
-                  <p className="text-sm text-text-muted">
-                    {t(
-                      'openclaw.buddy.noBuddies',
-                      '未找到 Buddy。请先在 Shadow 账户中创建一个 Buddy。',
-                    )}
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {remoteBuddies.map((buddy) => {
-                    const isSelected = selectedBuddy?.id === buddy.id
-                    const isOnline =
-                      buddy.lastHeartbeat &&
-                      Date.now() - new Date(buddy.lastHeartbeat).getTime() < 90000
-                    const name = buddy.botUser?.displayName ?? buddy.botUser?.username ?? 'Buddy'
+          {/* ━━━ Mode Tabs ━━━ */}
+          <div className="flex gap-2 p-1 rounded-lg bg-bg-tertiary/50">
+            <button
+              type="button"
+              onClick={() => {
+                setMode('create')
+                setSelectedBuddy(null)
+              }}
+              className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition cursor-pointer ${
+                mode === 'create'
+                  ? 'bg-bg-secondary text-text-primary shadow-sm'
+                  : 'text-text-muted hover:text-text-primary'
+              }`}
+            >
+              {t('openclaw.buddy.modeCreate', '创建新 Buddy')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('bind')}
+              className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition cursor-pointer ${
+                mode === 'bind'
+                  ? 'bg-bg-secondary text-text-primary shadow-sm'
+                  : 'text-text-muted hover:text-text-primary'
+              }`}
+            >
+              {t('openclaw.buddy.modeBind', '关联已有 Buddy')}
+            </button>
+          </div>
 
-                    return (
-                      <button
-                        key={buddy.id}
-                        type="button"
-                        onClick={() => setSelectedBuddy(isSelected ? null : buddy)}
-                        className={`w-full flex items-center gap-3 p-3 rounded-lg transition text-left ${
-                          isSelected
-                            ? 'bg-primary/10 border-2 border-primary'
-                            : 'bg-bg-primary border-2 border-transparent hover:bg-bg-tertiary/50'
-                        }`}
-                      >
-                        {buddy.botUser?.avatarUrl ? (
-                          <img
-                            src={buddy.botUser.avatarUrl}
-                            alt={name}
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-bg-tertiary flex items-center justify-center">
-                            <Bot size={18} className="text-text-muted" />
+          {/* ━━━ Bind mode: Select existing Buddy ━━━ */}
+          {mode === 'bind' && (
+            <section>
+              <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
+                {t('openclaw.buddy.selectBuddy', '选择 Buddy')}
+              </h3>
+              <div className="bg-bg-secondary rounded-xl border border-bg-tertiary p-4">
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 size={20} className="animate-spin text-text-muted" />
+                    <span className="ml-2 text-sm text-text-muted">
+                      {t('openclaw.buddy.loadingBuddies', '正在加载 Buddy 列表...')}
+                    </span>
+                  </div>
+                ) : remoteBuddies.length === 0 ? (
+                  <div className="flex flex-col items-center py-8 text-center">
+                    <Users size={32} className="text-text-muted mb-2" />
+                    <p className="text-sm text-text-muted">
+                      {t(
+                        'openclaw.buddy.noBuddies',
+                        '未找到 Buddy。请先在虾豆账户中创建一个 Buddy。',
+                      )}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {remoteBuddies.map((buddy) => {
+                      const isSelected = selectedBuddy?.id === buddy.id
+                      const isOnline =
+                        buddy.lastHeartbeat &&
+                        Date.now() - new Date(buddy.lastHeartbeat).getTime() < 90000
+                      const name = buddy.botUser?.displayName ?? buddy.botUser?.username ?? 'Buddy'
+
+                      return (
+                        <button
+                          key={buddy.id}
+                          type="button"
+                          onClick={() => setSelectedBuddy(isSelected ? null : buddy)}
+                          className={`w-full flex items-center gap-3 p-3 rounded-lg transition text-left ${
+                            isSelected
+                              ? 'bg-primary/10 border-2 border-primary'
+                              : 'bg-bg-primary border-2 border-transparent hover:bg-bg-tertiary/50'
+                          }`}
+                        >
+                          {buddy.botUser?.avatarUrl ? (
+                            <img
+                              src={buddy.botUser.avatarUrl}
+                              alt={name}
+                              className="w-10 h-10 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-bg-tertiary flex items-center justify-center">
+                              <Bot size={18} className="text-text-muted" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-text-primary truncate">{name}</p>
+                            <p className="text-[10px] text-text-muted">
+                              @{buddy.botUser?.username ?? 'unknown'}
+                            </p>
                           </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-text-primary truncate">{name}</p>
-                          <p className="text-[10px] text-text-muted">
-                            @{buddy.botUser?.username ?? 'unknown'}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span
-                            className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-[#80848e]'}`}
-                          />
-                          {isSelected && <Check size={16} className="text-primary" />}
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          </section>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span
+                              className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-[#80848e]'}`}
+                            />
+                            {isSelected && <Check size={16} className="text-primary" />}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* ━━━ Create mode: info hint ━━━ */}
+          {mode === 'create' && (
+            <section>
+              <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
+                <p className="text-sm text-text-primary">
+                  {t(
+                    'openclaw.buddy.createHint',
+                    '将在云端创建一个与本地智能体同名的 Buddy，并自动关联。',
+                  )}
+                </p>
+              </div>
+            </section>
+          )}
 
           {/* ━━━ Agent Binding ━━━ */}
           <section>
@@ -595,7 +702,7 @@ function AddConnectionView({
           </section>
 
           {/* ━━━ Connection diagram ━━━ */}
-          {selectedBuddy && (
+          {(mode === 'bind' ? selectedBuddy : agentId) && (
             <section>
               <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
                 {t('openclaw.buddy.diagram', '连接流程')}
@@ -624,7 +731,7 @@ function AddConnectionView({
 
                   <div className="flex flex-col items-center gap-1.5">
                     <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center">
-                      {selectedBuddy.botUser?.avatarUrl ? (
+                      {mode === 'bind' && selectedBuddy?.botUser?.avatarUrl ? (
                         <img
                           src={selectedBuddy.botUser.avatarUrl}
                           alt=""
@@ -635,7 +742,9 @@ function AddConnectionView({
                       )}
                     </div>
                     <span className="text-[10px] text-text-primary font-medium">
-                      {selectedBuddy.botUser?.displayName ?? 'Buddy'}
+                      {mode === 'bind'
+                        ? (selectedBuddy?.botUser?.displayName ?? 'Buddy')
+                        : (agents.find((a) => a.id === agentId)?.name ?? 'Buddy')}
                     </span>
                   </div>
 
@@ -696,6 +805,27 @@ function ConnectionDetailView({
   const isConnected = connection.status === 'connected'
   const isError = connection.status === 'error'
 
+  const [editingAgent, setEditingAgent] = useState(false)
+  const [newAgentId, setNewAgentId] = useState(connection.agentId)
+  const [savingAgent, setSavingAgent] = useState(false)
+
+  const handleSaveAgent = async () => {
+    if (newAgentId === connection.agentId) {
+      setEditingAgent(false)
+      return
+    }
+    setSavingAgent(true)
+    try {
+      await openClawApi.updateBuddyConnection(connection.id, { agentId: newAgentId })
+      setEditingAgent(false)
+      onRefresh()
+    } catch {
+      // ignore
+    } finally {
+      setSavingAgent(false)
+    }
+  }
+
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="px-6 pt-5 pb-6 max-w-2xl">
@@ -737,11 +867,60 @@ function ConnectionDetailView({
               <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">
                 {t('openclaw.buddy.agentLabel', '智能体')}
               </p>
-              <p className="text-sm text-text-primary">
-                {agent
-                  ? `${agent.identity?.emoji ?? ''} ${agent.name || agent.id}`
-                  : t('openclaw.buddy.unassigned', '未分配')}
-              </p>
+              {editingAgent ? (
+                <div className="flex items-center gap-2">
+                  <select
+                    value={newAgentId}
+                    onChange={(e) => setNewAgentId(e.target.value)}
+                    className="flex-1 px-2 py-1 rounded-md bg-bg-primary border border-bg-tertiary text-sm text-text-primary focus:outline-none focus:border-primary/50 transition"
+                  >
+                    <option value="">{t('openclaw.buddy.selectAgent', '选择智能体...')}</option>
+                    {agents.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.identity?.emoji} {a.name || a.id}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={savingAgent}
+                    onClick={handleSaveAgent}
+                    className="text-xs text-primary hover:text-primary/80 font-medium cursor-pointer disabled:opacity-50"
+                  >
+                    {savingAgent ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      t('common.save', '保存')
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingAgent(false)
+                      setNewAgentId(connection.agentId)
+                    }}
+                    className="text-xs text-text-muted hover:text-text-primary cursor-pointer"
+                  >
+                    {t('common.cancel', '取消')}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm text-text-primary">
+                    {agent
+                      ? `${agent.identity?.emoji ?? ''} ${agent.name || agent.id}`
+                      : t('openclaw.buddy.unassigned', '未分配')}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setEditingAgent(true)}
+                    className="text-text-muted hover:text-primary transition cursor-pointer"
+                    title={t('openclaw.buddy.changeAgent', '更换智能体')}
+                  >
+                    <Edit3 size={12} />
+                  </button>
+                </div>
+              )}
             </div>
             <div>
               <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">

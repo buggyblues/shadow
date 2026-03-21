@@ -19,6 +19,7 @@ import { ChannelView } from '@web/pages/channel-view'
 import { ContractDetailPage } from '@web/pages/contract-detail'
 import { CreateListingPage } from '@web/pages/create-listing'
 import { DiscoverPage } from '@web/pages/discover'
+import { DmChatPage } from '@web/pages/dm-chat'
 
 import { InvitePage } from '@web/pages/invite'
 import { LoginPage } from '@web/pages/login'
@@ -251,6 +252,12 @@ const openclawRoute = createRoute({
   component: OpenClawPage,
 })
 
+const dmChatRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/dm/$dmChannelId',
+  component: DmChatPage,
+})
+
 const buddyMgmtRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/buddies',
@@ -321,6 +328,7 @@ const routeTree = rootRoute.addChildren([
     settingsRoute,
     desktopSettingsRoute,
     openclawRoute,
+    dmChatRoute,
     buddyMgmtRoute,
     discoverRoute,
     myRentalsRoute,

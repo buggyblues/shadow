@@ -521,7 +521,7 @@ describe('Monitor Subscription E2E', () => {
 
     await sleep(1_000)
 
-    // Send a message AS THE BOT (should be filtered with log)
+    // Send a message AS THE Buddy (should be filtered with log)
     const { ShadowClient } = await import('@shadowob/sdk')
     const client = new ShadowClient(SHADOW_URL, seed.agentToken)
     const botContent = `Bot own msg ${Date.now()}`

@@ -344,7 +344,7 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
           </h3>
           {otherUser?.isBot && (
             <span className="text-[10px] font-bold text-primary bg-primary/10 rounded px-1 py-0.5">
-              BOT
+              Buddy
             </span>
           )}
         </div>

@@ -80,15 +80,17 @@ export function clearDraft(channelId: string): void {
  */
 export function useDraftStorage(channelId: string, onRestore?: (text: string) => void) {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const onRestoreRef = useRef(onRestore)
+  onRestoreRef.current = onRestore
 
-  // Restore draft on mount
+  // Restore draft when channelId changes (not when callback ref changes)
   useEffect(() => {
     if (!channelId) return
     const draft = loadDraft(channelId)
-    if (draft && onRestore) {
-      onRestore(draft)
+    if (draft && onRestoreRef.current) {
+      onRestoreRef.current(draft)
     }
-  }, [channelId, onRestore])
+  }, [channelId])
 
   // Debounced save function
   const scheduleSave = useCallback(
