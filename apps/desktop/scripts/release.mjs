@@ -16,7 +16,9 @@ const mode = arg('mode', 'make') // make|package
 const notarize = hasFlag('notarize')
 
 function runForTarget(targetPlatform, targetArch) {
-  const cmd = `${base} --platform=${targetPlatform} --arch=${targetArch}`
+  // Call electron-forge directly to avoid pnpm arg-passing issues
+  // (pnpm run make -- --arch=x64 passes a literal "--" to forge, breaking flags)
+  const cmd = `pnpm exec electron-forge ${makeOrPackage} --platform=${targetPlatform} --arch=${targetArch}`
   console.log(`\n[release] ${cmd}`)
   execSync(cmd, { stdio: 'inherit', env: process.env })
 }
@@ -37,7 +39,10 @@ if (notarize && platform === 'darwin') {
 }
 
 const makeOrPackage = mode === 'package' ? 'package' : 'make'
-const base = `pnpm run ${makeOrPackage} --`
+
+// Run the web build first (separate from forge to avoid arg-passing issues)
+console.log('\n[release] pnpm build')
+execSync('pnpm build', { stdio: 'inherit', env: process.env })
 
 if (platform === 'all') {
   const targets = [
