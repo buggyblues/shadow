@@ -13,6 +13,7 @@ import { dialog, ipcMain, shell } from 'electron'
 import { getMainWindow } from '../window'
 import { createOpenClawService, getOpenClawService } from './service'
 import type { BootstrapFileName } from './service/config'
+import { resolveElectronNodeBinary } from './service/paths'
 import type { AgentConfig, BuddyConnection, ModelProviderEntry } from './types'
 
 export function setupOpenClawIPC(): void {
@@ -28,7 +29,9 @@ export function setupOpenClawIPC(): void {
 
   ipcMain.handle('openclaw:gateway:open-console', async () => {
     const status = svc.gateway.getStatus()
-    if (status.state !== 'running' || !status.port || !status.gatewayToken) return false
+    if (status.state !== 'running' || !status.port || !status.gatewayToken) {
+      throw new Error('Gateway is not running')
+    }
     const url = `http://127.0.0.1:${status.port}/#token=${status.gatewayToken}`
     await shell.openExternal(url)
     return true
@@ -151,6 +154,13 @@ export function setupOpenClawIPC(): void {
     return { success: true }
   })
 
+  ipcMain.handle('openclaw:models:default', () => svc.config.getDefaultModel())
+
+  ipcMain.handle('openclaw:models:default:set', (_event, modelKey: string) => {
+    svc.config.setDefaultModel(modelKey)
+    return { success: true }
+  })
+
   // ─── Cron Config (system-level) ─────────────────────────────────────
 
   ipcMain.handle('openclaw:cron:config', () => svc.config.getCronConfig())
@@ -254,7 +264,7 @@ export function setupOpenClawIPC(): void {
       return new Promise((resolve) => {
         let stdout = ''
         let stderr = ''
-        const proc = spawn(process.execPath, [entryPoint, ...args], {
+        const proc = spawn(resolveElectronNodeBinary(), [entryPoint, ...args], {
           cwd: svc.paths.root,
           env,
           stdio: ['pipe', 'pipe', 'pipe'],

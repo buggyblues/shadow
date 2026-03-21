@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { BrowserWindow, screen } from 'electron'
+import { BrowserWindow, screen, shell } from 'electron'
 import { getWindowState, saveWindowState } from './window-state'
 
 let mainWindow: BrowserWindow | null = null
@@ -53,6 +53,14 @@ export function createWindow(): BrowserWindow {
 
   // Load the renderer
   mainWindow.loadURL(getRendererURL())
+
+  // Open external links (target="_blank") in system browser
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      shell.openExternal(url)
+    }
+    return { action: 'deny' }
+  })
 
   // Open DevTools in development only
   if (isDev) {

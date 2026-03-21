@@ -359,7 +359,7 @@ console.log(`  Removed ${cleaned} files, ${formatSize(sizeBefore)} → ${formatS
 console.log('\n📦 Bundling @shadowob/openclaw channel plugin...')
 
 const PLUGIN_SRC = resolve(ROOT, '..', '..', 'packages', 'openclaw')
-const PLUGIN_OUTPUT = join(BUILD_DIR, 'shadowob-plugin')
+const PLUGIN_OUTPUT = join(BUILD_DIR, 'shadowob')
 
 if (existsSync(PLUGIN_OUTPUT)) rmSync(PLUGIN_OUTPUT, { recursive: true })
 mkdirSync(PLUGIN_OUTPUT, { recursive: true })
@@ -441,7 +441,7 @@ writeFileSync(
       description: srcPkg.description,
       type: 'module',
       main: './index.mjs',
-      openclaw: {
+      shadowob: {
         extensions: ['./index.mjs'],
       },
       dependencies: {

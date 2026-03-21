@@ -13,7 +13,7 @@ const shouldSignAndNotarize = isMac && hasNotaryApiKey
 // Collect extraResource entries for OpenClaw bundles (created by scripts/bundle-openclaw.mjs)
 const extraResource: string[] = []
 if (existsSync('./build/openclaw')) extraResource.push('./build/openclaw')
-if (existsSync('./build/shadowob-plugin')) extraResource.push('./build/shadowob-plugin')
+if (existsSync('./build/shadowob')) extraResource.push('./build/shadowob')
 if (existsSync('./build/openclaw-config')) extraResource.push('./build/openclaw-config')
 
 const config: ForgeConfig = {

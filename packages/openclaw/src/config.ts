@@ -61,21 +61,33 @@ export function getAccountConfig(
 }
 
 /**
- * Resolve the local agent ID for a shadow account from the plugin config.
+ * Resolve the local agent ID for a shadow account.
  * The desktop app stores the account→agent mapping in:
- *   plugins.entries.shadowob.config.accountAgentMap.<accountId>
+ *   channels.shadowob.accountAgentMap.<accountId>
+ *
+ * Falls back to plugins.entries.shadowob.config.accountAgentMap for compatibility.
  *
  * Returns null if no mapping exists (falls back to default agent routing).
  */
 export function resolveLocalAgentId(cfg: OpenClawConfig, accountId: string): string | null {
+  // Primary: read from channels.shadowob.accountAgentMap (always available in cfg)
+  const shadow = getShadowBlock(cfg)
+  if (shadow) {
+    const agentMap = shadow.accountAgentMap as Record<string, string> | undefined
+    if (agentMap?.[accountId]) return agentMap[accountId]
+  }
+
+  // Fallback: read from plugins.entries.shadowob.config (may be stripped by gateway)
   const entries = (cfg as Record<string, unknown>).plugins as
     | { entries?: Record<string, { config?: Record<string, unknown> }> }
     | undefined
   const pluginConfig = entries?.entries?.shadowob?.config
-  if (!pluginConfig) return null
+  if (pluginConfig) {
+    const accountAgentMap = pluginConfig.accountAgentMap as Record<string, string> | undefined
+    if (accountAgentMap?.[accountId]) return accountAgentMap[accountId]
+  }
 
-  const accountAgentMap = pluginConfig.accountAgentMap as Record<string, string> | undefined
-  return accountAgentMap?.[accountId] ?? null
+  return null
 }
 
 /** List all configured account IDs. */

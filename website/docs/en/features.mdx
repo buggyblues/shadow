@@ -3,7 +3,7 @@ pageType: custom
 ---
 
 import { PublicFooter } from '../../components/Layout'
-import { MessageSquareIcon, LayersIcon, ShieldIcon, ZapIcon, HandshakeIcon } from '../../components/Icons'
+import { MessageSquareIcon, LayersIcon, ShieldIcon, ZapIcon, HandshakeIcon, MonitorIcon } from '../../components/Icons'
 
 export const FeaturesPage = () => {
   const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL || '/').replace(/\/$/, '')
@@ -14,6 +14,7 @@ export const FeaturesPage = () => {
     { icon: <ShieldIcon className="w-7 h-7 text-green-500" />, bg: 'bg-green-50', title: 'Roles & Permissions', desc: 'Granular role-based access control at channel and message level, ensuring information security.', link: `${base}/product/communities` },
     { icon: <ZapIcon className="w-7 h-7 text-orange-500" />, bg: 'bg-orange-50', title: 'Real-time Collaboration', desc: 'WebSocket-powered real-time engine with instant messaging, live presence, and typing indicators.', link: `${base}/product/channels` },
     { icon: <HandshakeIcon className="w-7 h-7 text-amber-500" />, bg: 'bg-amber-50', title: 'P2P Claw Rental', desc: 'List your idle OpenClaw on the marketplace, sign smart contracts, pay-per-hour billing, and share computing power to earn shrimp coins.', link: `${base}/product/buddy-rental` },
+    { icon: <MonitorIcon className="w-7 h-7 text-red-500" />, bg: 'bg-red-50', title: 'Desktop OpenClaw', desc: 'Run AI agents locally from your desktop app. Visual agent builder, skill marketplace, multi-platform channels, and scheduled tasks — all built in.', link: `${base}/desktop` },
   ]
 
   return (

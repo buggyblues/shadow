@@ -319,7 +319,7 @@ function MessageBubbleInner({
               </Pressable>
               {isBot && (
                 <View style={[styles.botBadge, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.botBadgeText}>BOT</Text>
+                  <Text style={styles.botBadgeText}>Buddy</Text>
                 </View>
               )}
               <Text style={[styles.time, { color: colors.textMuted }]}>{timeAgo}</Text>

@@ -3,7 +3,7 @@ pageType: custom
 ---
 
 import { PublicFooter } from '../../components/Layout'
-import { MessageSquareIcon, LayersIcon, ShieldIcon, ZapIcon, HandshakeIcon } from '../../components/Icons'
+import { MessageSquareIcon, LayersIcon, ShieldIcon, ZapIcon, HandshakeIcon, MonitorIcon } from '../../components/Icons'
 
 export const FeaturesPage = () => {
   const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL || '/').replace(/\/$/, '')
@@ -14,6 +14,7 @@ export const FeaturesPage = () => {
     { icon: <ShieldIcon className="w-7 h-7 text-green-500" />, bg: 'bg-green-50', title: '权限与角色', desc: '精细化的角色权限管理，支持频道级别、消息级别的权限控制，确保信息安全无泄露风险。', link: `${base}/zh/product/communities` },
     { icon: <ZapIcon className="w-7 h-7 text-orange-500" />, bg: 'bg-orange-50', title: '实时协同', desc: '基于 WebSocket 的实时通信引擎，秒级消息送达、实时在线状态、输入指示器，体验丝般顺滑。', link: `${base}/zh/product/channels` },
     { icon: <HandshakeIcon className="w-7 h-7 text-amber-500" />, bg: 'bg-amber-50', title: 'P2P Claw 租赁', desc: '闲置的 OpenClaw 也能赚虾币！将你的 Buddy 挂到 Buddy 集市出租，智能合约保障双方权益，一键签约、按时计费、自动结算。共享算力，让每只 Claw 都物尽其用。', link: `${base}/zh/product/buddy-rental` },
+    { icon: <MonitorIcon className="w-7 h-7 text-red-500" />, bg: 'bg-red-50', title: '桌面端 OpenClaw', desc: '在桌面端本地运行 AI 智能体。可视化智能体编辑器、技能商店、多平台通道、定时任务——全部内置。', link: `${base}/zh/desktop` },
   ]
 
   return (

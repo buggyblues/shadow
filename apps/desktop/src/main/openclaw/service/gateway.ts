@@ -17,11 +17,11 @@
 
 import { type ChildProcess, spawn } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { app } from 'electron'
+import { join } from 'node:path'
 import type { GatewayLogEntry, GatewayState, GatewayStatus } from '../types'
 import type { ConfigService } from './config'
 import type { OpenClawPaths } from './paths'
+import { resolveElectronNodeBinary } from './paths'
 
 const HEALTH_CHECK_INTERVAL = 15_000
 const MAX_RESTART_ATTEMPTS = 5
@@ -45,6 +45,7 @@ export class GatewayService {
   private restartAttempts = 0
   private healthCheckTimer: ReturnType<typeof setInterval> | null = null
   private restartTimer: ReturnType<typeof setTimeout> | null = null
+  private reloadDebounceTimer: ReturnType<typeof setTimeout> | null = null
   private statusCallbacks = new Set<(status: GatewayStatus) => void>()
   private logCallbacks = new Set<(entry: GatewayLogEntry) => void>()
   private logBuffer: GatewayLogEntry[] = []
@@ -149,10 +150,17 @@ export class GatewayService {
   }
 
   async start(): Promise<boolean> {
-    if (this.currentState === 'running' || this.currentState === 'starting') {
+    if (
+      this.currentState === 'running' ||
+      this.currentState === 'starting' ||
+      this.currentState === 'bootstrapping'
+    ) {
       this.emitLog('info', 'Gateway is already running or starting')
       return this.currentState === 'running'
     }
+
+    // Clear any pending restart when starting explicitly
+    this.clearScheduledRestart()
 
     if (!this.isInstalled()) {
       const installed = await this.install()
@@ -199,6 +207,13 @@ export class GatewayService {
         )
       }
 
+      // Spawn gateway as a plain Node.js process using ELECTRON_RUN_AS_NODE.
+      // Using the Electron Helper binary avoids macOS Dock icons.
+      // NOTE: utilityProcess.fork() is NOT used because it initialises a full
+      // Chromium content layer which requires Helper (GPU/Plugin/Renderer) apps
+      // to be resolvable by name — this fails in dev (name mismatch) and in
+      // packaged builds (code-signature constraints), producing the FATAL
+      // "Unable to find helper app" crash.
       this.gatewayProcess = spawn(runner.command, runner.args, {
         cwd: this.paths.root,
         env: runner.env,
@@ -234,13 +249,14 @@ export class GatewayService {
           this.stopHealthCheck()
 
           if (this.currentState !== 'stopping') {
+            this.setState('offline')
             this.scheduleRestart()
           } else {
             this.setState('offline')
           }
         })
 
-        this.gatewayProcess!.on('error', (err) => {
+        this.gatewayProcess.on('error', (err: Error) => {
           this.emitLog('error', `Gateway error: ${err.message}`, 'gateway')
           this.setState('error', err.message)
           resolve(false)
@@ -282,7 +298,11 @@ export class GatewayService {
       }
 
       const timeout = setTimeout(() => {
-        this.gatewayProcess?.kill('SIGKILL')
+        try {
+          this.gatewayProcess?.kill('SIGKILL')
+        } catch {
+          /* already dead */
+        }
         this.gatewayProcess = null
         this.port = null
         this.token = null
@@ -301,7 +321,7 @@ export class GatewayService {
         resolve()
       })
 
-      this.gatewayProcess.kill('SIGTERM')
+      this.gatewayProcess.kill()
     })
   }
 
@@ -310,23 +330,31 @@ export class GatewayService {
     return this.start()
   }
 
-  /** Signal the running gateway to reload config */
+  /** Signal the running gateway to reload config (debounced to avoid rapid SIGHUP spam) */
   signalConfigReload(): void {
-    if (this.gatewayProcess && this.currentState === 'running') {
-      try {
-        this.gatewayProcess.kill('SIGHUP')
-        this.emitLog('info', 'Sent SIGHUP to gateway for config reload')
-      } catch {
-        this.emitLog('warn', 'Failed to signal config reload to gateway')
+    if (this.reloadDebounceTimer) clearTimeout(this.reloadDebounceTimer)
+    this.reloadDebounceTimer = setTimeout(() => {
+      this.reloadDebounceTimer = null
+      if (this.gatewayProcess && this.currentState === 'running') {
+        try {
+          this.gatewayProcess.kill('SIGHUP')
+          this.emitLog('info', 'Sent SIGHUP to gateway for config reload')
+        } catch {
+          this.emitLog('warn', 'Failed to signal config reload to gateway')
+        }
       }
-    }
+    }, 500)
   }
 
   cleanup(): void {
     this.stopHealthCheck()
     this.clearScheduledRestart()
+    if (this.reloadDebounceTimer) {
+      clearTimeout(this.reloadDebounceTimer)
+      this.reloadDebounceTimer = null
+    }
     if (this.gatewayProcess) {
-      this.gatewayProcess.kill('SIGTERM')
+      this.gatewayProcess.kill()
       this.gatewayProcess = null
     }
     this.token = null
@@ -368,51 +396,16 @@ export class GatewayService {
     baseEnv: Record<string, string>,
   ): GatewayRunner {
     const required = this.getRequiredNodeVersion()
-    const electronBinary = app.getPath('exe')
     const electronNodeVersion = process.versions.node
-
-    const electronRunAsNodeEnv: Record<string, string> = {
-      ...baseEnv,
-      ELECTRON_RUN_AS_NODE: '1',
-      ELECTRON_NO_ATTACH_CONSOLE: '1',
-    }
-    delete electronRunAsNodeEnv.DISPLAY
-    delete electronRunAsNodeEnv.WAYLAND_DISPLAY
-
-    let resolvedElectronBinary = electronBinary
-    if (process.platform === 'darwin') {
-      const contentsDir = dirname(dirname(electronBinary))
-      const helperCandidates = [
-        join(
-          contentsDir,
-          'Frameworks',
-          `${app.getName()} Helper.app`,
-          'Contents',
-          'MacOS',
-          `${app.getName()} Helper`,
-        ),
-        join(
-          contentsDir,
-          'Frameworks',
-          'Electron Helper.app',
-          'Contents',
-          'MacOS',
-          'Electron Helper',
-        ),
-      ]
-      for (const helper of helperCandidates) {
-        if (existsSync(helper)) {
-          resolvedElectronBinary = helper
-          break
-        }
-      }
-    }
+    const resolvedElectronBinary = resolveElectronNodeBinary()
 
     if (this.isVersionGte(electronNodeVersion, required)) {
+      // Use the Electron Helper binary with ELECTRON_RUN_AS_NODE — runs as plain
+      // Node.js, no Chromium layer, no Dock icon on macOS.
       return {
         command: resolvedElectronBinary,
         args: [entryPoint, 'gateway', '--port', String(port), '--token', token],
-        env: electronRunAsNodeEnv,
+        env: { ...baseEnv, ELECTRON_RUN_AS_NODE: '1' },
         mode: 'electron-run-as-node',
         nodeVersion: electronNodeVersion,
       }
@@ -442,7 +435,7 @@ export class GatewayService {
     return {
       command: resolvedElectronBinary,
       args: [entryPoint, 'gateway', '--port', String(port), '--token', token],
-      env: electronRunAsNodeEnv,
+      env: { ...baseEnv, ELECTRON_RUN_AS_NODE: '1' },
       mode: 'electron-run-as-node',
       nodeVersion: electronNodeVersion,
     }
@@ -468,7 +461,8 @@ export class GatewayService {
   private startHealthCheck(): void {
     this.stopHealthCheck()
     this.healthCheckTimer = setInterval(() => {
-      if (!this.gatewayProcess || this.gatewayProcess.killed) {
+      const proc = this.gatewayProcess
+      if (!proc || proc.killed || !proc.pid) {
         this.emitLog('warn', 'Gateway process is not alive, scheduling restart')
         this.stopHealthCheck()
         this.scheduleRestart()

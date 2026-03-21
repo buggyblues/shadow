@@ -16,7 +16,6 @@
 
 import type { ShadowChannelPolicy, ShadowMessage, ShadowRemoteConfig } from '@shadowob/sdk'
 import { ShadowClient, ShadowSocket } from '@shadowob/sdk'
-import { resolveLocalAgentId } from './config.js'
 import { getShadowRuntime } from './runtime.js'
 import type {
   CreateTypingCallbacksParams,
@@ -26,6 +25,20 @@ import type {
   ShadowAccountConfig,
   TypingCallbacks,
 } from './types.js'
+
+/**
+ * Resolve the OpenClaw data directory.
+ * Prefers OPENCLAW_DATA_DIR env var (set by desktop gateway), falls back to ~/.openclaw.
+ */
+async function getDataDir(): Promise<string> {
+  // @ts-expect-error node:os available at runtime
+  const nodeOs = await import('node:os')
+  // @ts-expect-error node:path available at runtime
+  const nodePath = await import('node:path')
+  // @ts-expect-error process.env available at runtime
+  const dataDir = process.env.OPENCLAW_DATA_DIR
+  return dataDir || nodePath.join(nodeOs.homedir(), '.openclaw')
+}
 
 export type ShadowMonitorOptions = {
   account: ShadowAccountConfig
@@ -228,11 +241,7 @@ async function processShadowMessage(params: {
     },
   })
 
-  // Override with account-level local agent binding (multi-buddy → multi-agent routing)
-  const localAgent = resolveLocalAgentId(cfg, accountId)
-  if (localAgent) {
-    route.agentId = localAgent
-  }
+  runtime.log?.(`[routing] Resolved agent: ${route.agentId} (account ${accountId})`)
 
   // 2. Build envelope
   const body = core.channel.reply.formatAgentEnvelope({
@@ -295,13 +304,11 @@ async function processShadowMessage(params: {
     const fsPromises = await import('node:fs/promises')
     // @ts-expect-error node:path available at runtime
     const nodePath = await import('node:path')
-    // @ts-expect-error node:os available at runtime
-    const nodeOs = await import('node:os')
     // @ts-expect-error node:crypto available at runtime
     const nodeCrypto = await import('node:crypto')
 
-    // Save to ~/.openclaw/media/inbound/ (matches OpenClaw convention)
-    const mediaDir = nodePath.join(nodeOs.homedir(), '.openclaw', 'media', 'inbound')
+    const dataDir = await getDataDir()
+    const mediaDir = nodePath.join(dataDir, 'media', 'inbound')
     await fsPromises.mkdir(mediaDir, { recursive: true })
 
     for (const rawUrl of allRawUrls) {
@@ -661,11 +668,7 @@ async function processShadowDmMessage(params: {
     },
   })
 
-  // Override with account-level local agent binding (multi-buddy → multi-agent routing)
-  const localAgent = resolveLocalAgentId(cfg, accountId)
-  if (localAgent) {
-    route.agentId = localAgent
-  }
+  runtime.log?.(`[routing] DM resolved agent: ${route.agentId} (account ${accountId})`)
 
   // 2. Build envelope
   const body = core.channel.reply.formatAgentEnvelope({
@@ -819,9 +822,8 @@ async function deliverShadowDmReply(params: {
 async function getSessionCachePath(accountId: string): Promise<string> {
   // @ts-expect-error node:path available at runtime
   const nodePath = await import('node:path')
-  // @ts-expect-error node:os available at runtime
-  const nodeOs = await import('node:os')
-  return nodePath.join(nodeOs.homedir(), '.openclaw', 'shadow', `session-cache-${accountId}.json`)
+  const dataDir = await getDataDir()
+  return nodePath.join(dataDir, 'shadow', `session-cache-${accountId}.json`)
 }
 
 async function saveSessionCache(

@@ -8,14 +8,6 @@
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {
-      "accountAgentMap": {
-        "type": "object",
-        "description": "Maps shadow account IDs to local agent IDs for multi-buddy routing",
-        "additionalProperties": {
-          "type": "string"
-        }
-      }
-    }
+    "properties": {}
   }
 }

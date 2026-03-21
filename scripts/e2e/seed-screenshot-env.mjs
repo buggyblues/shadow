@@ -70,6 +70,29 @@ const showcase = {
       skus: [{ specValues: ['Pro'], price: 29900, stock: 16, skuCode: 'BOP-PRO' }],
     },
   ],
+  agents: [
+    {
+      name: 'CodingCat',
+      username: 'coding-cat',
+      description:
+        'Expert code reviewer and pair-programming buddy. Speaks Python, TypeScript, Go, and Rust.',
+      kernelType: 'openclaw',
+    },
+    {
+      name: 'DocuMeow',
+      username: 'docu-meow',
+      description:
+        'Auto-generates documentation, meeting notes, and technical proposals from conversations.',
+      kernelType: 'openclaw',
+    },
+    {
+      name: 'GuardianCat',
+      username: 'guardian-cat',
+      description:
+        'Community moderator that monitors channels, enforces rules, and welcomes new members.',
+      kernelType: 'openclaw',
+    },
+  ],
   apps: [
     {
       name: 'Launchpad',
@@ -302,6 +325,38 @@ async function ensureAppShowcase(token, serverId) {
   return { apps: ensuredApps }
 }
 
+async function ensureAgentShowcase(token, serverId) {
+  const agents = await requestJson('/api/agents', { token })
+
+  const ensuredAgents = []
+  for (const agent of showcase.agents) {
+    let existing = agents.find((item) => item.botUser?.username === agent.username || item.botUser?.displayName === agent.name)
+    if (!existing) {
+      existing = await requestJson('/api/agents', {
+        method: 'POST',
+        token,
+        body: agent,
+      })
+    }
+    ensuredAgents.push(existing)
+  }
+
+  // Add agents to server as members
+  for (const agent of ensuredAgents) {
+    try {
+      await requestJson(`/api/servers/${serverId}/agents`, {
+        method: 'POST',
+        token,
+        body: { agentIds: [agent.id] },
+      })
+    } catch {
+      // Agent may already be a member
+    }
+  }
+
+  return { agents: ensuredAgents }
+}
+
 async function main() {
   await waitForAppReady()
 
@@ -309,6 +364,7 @@ async function main() {
   const { server, channels } = await ensureServer(ownerSession.accessToken)
   const shop = await ensureShopShowcase(ownerSession.accessToken, server.slug ?? server.id)
   const apps = await ensureAppShowcase(ownerSession.accessToken, server.slug ?? server.id)
+  const agentsShowcase = await ensureAgentShowcase(ownerSession.accessToken, server.slug ?? server.id)
 
   const session = {
     generatedAt: new Date().toISOString(),
@@ -342,6 +398,10 @@ async function main() {
     },
     apps: {
       names: apps.apps.map((item) => item.name),
+    },
+    agents: {
+      names: agentsShowcase.agents.map((item) => item.botUser?.displayName ?? item.name),
+      ids: agentsShowcase.agents.map((item) => item.id),
     },
   }
 

@@ -46,6 +46,8 @@ export interface OpenClawConfig {
     list: AgentConfig[]
     defaults: Record<string, unknown>
   }
+  /** Deterministic routing: bindings map (channel, accountId, peer) → agentId */
+  bindings?: AgentBinding[]
   channels: Record<string, unknown>
   plugins: {
     enabled?: boolean
@@ -88,6 +90,17 @@ export interface OpenClawConfig {
   [key: string]: unknown
 }
 
+/** OpenClaw binding — routes inbound messages to a specific agent */
+export interface AgentBinding {
+  agentId: string
+  match: {
+    channel: string
+    accountId?: string
+    peer?: { kind: string; id: string }
+    [key: string]: unknown
+  }
+}
+
 /** OpenClaw agent entry — valid fields per AgentEntrySchema.strict() */
 export interface AgentConfig {
   id: string
@@ -111,22 +124,38 @@ export interface AgentConfig {
   heartbeat?: Record<string, unknown>
 }
 
+/** Valid API format identifiers from OpenClaw ModelApiSchema */
+export type ModelApi =
+  | 'openai-completions'
+  | 'openai-responses'
+  | 'openai-codex-responses'
+  | 'anthropic-messages'
+  | 'google-generative-ai'
+  | 'github-copilot'
+  | 'bedrock-converse-stream'
+  | 'ollama'
+
 /** Model provider entry nested under models.providers.<id> */
 export interface ModelProviderEntry {
   baseUrl: string
   apiKey?: string
   auth?: 'api-key' | 'aws-sdk' | 'oauth' | 'token'
+  api?: ModelApi
   models: ModelDefinition[]
   headers?: Record<string, string>
-  api?: Record<string, unknown>
 }
 
 export interface ModelDefinition {
   id: string
   name?: string
-  maxTokens?: number
+  api?: string
+  reasoning?: boolean
+  input?: Array<'text' | 'image'>
+  cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number }
   contextWindow?: number
-  supportedFeatures?: string[]
+  maxTokens?: number
+  headers?: Record<string, string>
+  compat?: Record<string, unknown>
 }
 
 // ─── Desktop-Only Types (not in openclaw.json) ──────────────────────────────

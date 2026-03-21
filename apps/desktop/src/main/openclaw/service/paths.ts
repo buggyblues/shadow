@@ -9,10 +9,36 @@
  * This is the ONLY source of truth for path resolution.
  */
 
-import { chmodSync, existsSync, mkdirSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { app } from 'electron'
+
+/**
+ * On macOS, resolve the Electron Helper binary so child processes spawned with
+ * ELECTRON_RUN_AS_NODE do not create extra Dock icons.
+ * Falls back to process.execPath on non-macOS or when the Helper is not found.
+ */
+export function resolveElectronNodeBinary(): string {
+  if (process.platform !== 'darwin') return process.execPath
+
+  const contentsDir = dirname(dirname(app.getPath('exe')))
+  const candidates = [
+    join(
+      contentsDir,
+      'Frameworks',
+      `${app.getName()} Helper.app`,
+      'Contents',
+      'MacOS',
+      `${app.getName()} Helper`,
+    ),
+    join(contentsDir, 'Frameworks', 'Electron Helper.app', 'Contents', 'MacOS', 'Electron Helper'),
+  ]
+  for (const helper of candidates) {
+    if (existsSync(helper)) return helper
+  }
+  return process.execPath
+}
 
 /** Root data directory for the built-in OpenClaw instance */
 const OPENCLAW_DIR = join(homedir(), '.shadowob')
@@ -72,6 +98,12 @@ export class OpenClawPaths {
         }
       }
     }
+
+    // Create workspace/openclaw.json if missing — prevents ENOENT from gateway tools
+    const workspaceConfig = join(this.workspaceDir, 'openclaw.json')
+    if (!existsSync(workspaceConfig)) {
+      writeFileSync(workspaceConfig, '{}', { mode: 0o600 })
+    }
   }
 
   /** Agent workspace directory for a specific agent */
@@ -98,7 +130,7 @@ export class OpenClawPaths {
 
   /**
    * Resolve the local build directory (apps/desktop/build/).
-   * In dev mode, the bundle script produces build/openclaw and build/shadowob-plugin
+   * In dev mode, the bundle script produces build/openclaw and build/shadowob
    * BEFORE Electron starts. In packaged apps, process.resourcesPath takes precedence.
    */
   private get buildDir(): string {
@@ -137,20 +169,20 @@ export class OpenClawPaths {
    * Used for plugins.load.paths in openclaw.json.
    *
    * Search order:
-   *   1. Packaged app extraResources/shadowob-plugin (production)
-   *   2. Local build/shadowob-plugin (dev — produced by bundle-openclaw.mjs)
+   *   1. Packaged app extraResources/shadowob (production)
+   *   2. Local build/shadowob (dev — produced by bundle-openclaw.mjs)
    *
    * NEVER falls back to pnpm/node_modules or monorepo source.
    */
   resolveShadowPlugin(): string | null {
     // 1. Packaged app resources
     if (process.resourcesPath) {
-      const bundledDir = join(process.resourcesPath, 'shadowob-plugin')
+      const bundledDir = join(process.resourcesPath, 'shadowob')
       if (existsSync(bundledDir)) return bundledDir
     }
 
     // 2. Dev build directory
-    const devDir = join(this.buildDir, 'shadowob-plugin')
+    const devDir = join(this.buildDir, 'shadowob')
     if (existsSync(devDir)) return devDir
 
     return null
@@ -165,7 +197,11 @@ export class OpenClawPaths {
     if (process.resourcesPath) {
       const bundledBin = join(process.resourcesPath, 'clawhub', 'clawhub.mjs')
       if (existsSync(bundledBin)) {
-        return { command: process.execPath, prependArgs: [bundledBin], useNodeRunner: true }
+        return {
+          command: resolveElectronNodeBinary(),
+          prependArgs: [bundledBin],
+          useNodeRunner: true,
+        }
       }
     }
 
@@ -190,7 +226,11 @@ export class OpenClawPaths {
     if (process.resourcesPath) {
       const bundledBin = join(process.resourcesPath, 'skillhub', 'skillhub.mjs')
       if (existsSync(bundledBin)) {
-        return { command: process.execPath, prependArgs: [bundledBin], useNodeRunner: true }
+        return {
+          command: resolveElectronNodeBinary(),
+          prependArgs: [bundledBin],
+          useNodeRunner: true,
+        }
       }
     }
 

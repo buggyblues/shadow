@@ -97,7 +97,7 @@ export class BuddyService {
   remove(id: string): void {
     this.disconnect(id)
     this.config.removeShadowChannelAccount(id)
-    this.config.removeAccountAgentMapping(id)
+    this.config.removeAgentBindings({ channel: 'shadowob', accountId: id })
     this.connections = this.connections.filter((c) => c.id !== id)
     this.saveConnections()
     this.emitStatus()
@@ -146,8 +146,8 @@ export class BuddyService {
       enabled: true,
     })
 
-    // Step 3: Write account→agent mapping so the plugin routes messages to the correct local agent.
-    this.config.setAccountAgentMapping(id, conn.agentId)
+    // Step 3: Add binding so resolveAgentRoute() routes messages to the correct local agent.
+    this.config.addAgentBinding(conn.agentId, 'shadowob', id)
 
     // Mark as connected (the gateway will start monitoring asynchronously)
     this.updateStatus(id, 'connected')

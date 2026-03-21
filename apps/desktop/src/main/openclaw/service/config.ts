@@ -165,6 +165,10 @@ export class ConfigService {
     if (cfg.agents.list.some((a) => a.id === agent.id)) {
       throw new Error(`Agent '${agent.id}' already exists`)
     }
+    // Auto-set workspace for non-main agents so each agent has isolated files
+    if (agent.id !== 'main' && !agent.workspace) {
+      agent.workspace = join(this.paths.workspaceDir, agent.id)
+    }
     cfg.agents.list.push(agent)
     this.write(cfg)
   }
@@ -200,6 +204,36 @@ export class ConfigService {
     const cfg = this.read()
     if (cfg.models.providers) {
       delete cfg.models.providers[id]
+    }
+    this.write(cfg)
+  }
+
+  /** Get the default model as "providerId/modelId" */
+  getDefaultModel(): string | null {
+    const cfg = this.read()
+    const model = (cfg.agents as Record<string, unknown>)?.defaults as
+      | Record<string, unknown>
+      | undefined
+    const modelEntry = model?.model
+    if (typeof modelEntry === 'string') return modelEntry
+    if (modelEntry && typeof modelEntry === 'object') {
+      return (modelEntry as Record<string, unknown>).primary as string | null
+    }
+    return null
+  }
+
+  /** Set the default model as "providerId/modelId" */
+  setDefaultModel(modelKey: string): void {
+    const cfg = this.read()
+    if (!cfg.agents) (cfg as Record<string, unknown>).agents = { list: [], defaults: {} }
+    const agents = cfg.agents as Record<string, unknown>
+    if (!agents.defaults) agents.defaults = {}
+    const defaults = agents.defaults as Record<string, unknown>
+    const existing = defaults.model
+    if (existing && typeof existing === 'object') {
+      ;(existing as Record<string, unknown>).primary = modelKey
+    } else {
+      defaults.model = { primary: modelKey }
     }
     this.write(cfg)
   }
@@ -411,32 +445,43 @@ export class ConfigService {
     this.write(config)
   }
 
-  // ─── Account → Agent Mapping ──────────────────────────────────────────────
+  // ─── Bindings (multi-agent routing) ─────────────────────────────────────
 
   /**
-   * Store which local agent handles messages from a specific shadow account.
-   * Written to plugins.entries.openclaw.config.accountAgentMap so that the
-   * plugin's monitor can resolve the correct agent at message time.
+   * Add a binding that routes inbound messages from a (channel, accountId) pair
+   * to a specific local agent. Uses OpenClaw's native `bindings` array so that
+   * resolveAgentRoute() returns the correct agentId AND sessionKey.
    */
-  setAccountAgentMapping(accountId: string, agentId: string): void {
+  addAgentBinding(agentId: string, channel: string, accountId: string): void {
     const config = this.read()
-    if (!config.plugins.entries) config.plugins.entries = {}
-    if (!config.plugins.entries.openclaw) config.plugins.entries.openclaw = { enabled: true }
-    const entry = config.plugins.entries.openclaw
-    if (!entry.config) entry.config = {}
-    const agentMap = (entry.config.accountAgentMap ?? {}) as Record<string, string>
-    agentMap[accountId] = agentId
-    entry.config.accountAgentMap = agentMap
+    if (!config.bindings) config.bindings = []
+
+    // Avoid duplicates: remove any existing binding for the same (channel, accountId)
+    config.bindings = config.bindings.filter(
+      (b) => !(b.match.channel === channel && b.match.accountId === accountId),
+    )
+
+    config.bindings.push({
+      agentId,
+      match: { channel, accountId },
+    })
     this.write(config)
   }
 
-  removeAccountAgentMapping(accountId: string): void {
+  /**
+   * Remove all bindings matching the given channel and/or accountId.
+   * If only channel is specified, removes all bindings for that channel+agent.
+   */
+  removeAgentBindings(params: { agentId?: string; channel?: string; accountId?: string }): void {
     const config = this.read()
-    const agentMap = config.plugins.entries?.openclaw?.config?.accountAgentMap as
-      | Record<string, string>
-      | undefined
-    if (!agentMap) return
-    delete agentMap[accountId]
+    if (!config.bindings?.length) return
+
+    config.bindings = config.bindings.filter((b) => {
+      if (params.channel && b.match.channel !== params.channel) return true
+      if (params.accountId && b.match.accountId !== params.accountId) return true
+      if (params.agentId && b.agentId !== params.agentId) return true
+      return false
+    })
     this.write(config)
   }
 
@@ -474,7 +519,7 @@ export class ConfigService {
    * Migrate config to fix keys that OpenClaw's strict zod schema rejects.
    * Writes to disk on migration so the file stays clean.
    */
-  private migrateConfig(cfg: OpenClawConfig, defaults: OpenClawConfig): OpenClawConfig {
+  private migrateConfig(cfg: OpenClawConfig, _defaults: OpenClawConfig): OpenClawConfig {
     let dirty = false
 
     // 1. Remove invalid gateway keys (desktop-internal, not part of OpenClaw schema)
@@ -492,20 +537,6 @@ export class ConfigService {
     if (!cfg.gateway?.mode) {
       cfg.gateway = { ...cfg.gateway, mode: 'local' }
       dirty = true
-    }
-
-    // 3. (removed — plugins.allow is now managed by step 7)
-
-    // 4. Fix plugin entries key: old names → 'openclaw'
-    for (const oldKey of ['@shadowob/openclaw', 'shadowob']) {
-      if (cfg.plugins.entries?.[oldKey]) {
-        const entry = cfg.plugins.entries[oldKey]
-        delete cfg.plugins.entries[oldKey]
-        if (!cfg.plugins.entries.openclaw) {
-          cfg.plugins.entries.openclaw = entry
-        }
-        dirty = true
-      }
     }
 
     // 5. Ensure plugins.load.paths always points to the current build/bundled plugin
@@ -530,11 +561,51 @@ export class ConfigService {
       }
     }
 
-    // 7. Ensure plugins.allow includes 'openclaw' so the plugin isn't flagged as untrusted
     const allow = cfg.plugins.allow as string[] | undefined
-    if (!allow || !allow.includes('openclaw')) {
-      cfg.plugins.allow = ['openclaw']
+    if (!allow || !allow.includes('shadowob')) {
+      cfg.plugins.allow = ['shadowob']
       dirty = true
+    }
+
+    // 8.5 Migrate accountAgentMap → bindings (OpenClaw native multi-agent routing)
+    // Step A: collect all accountAgentMap entries from both old locations
+    const oldPluginMap = cfg.plugins.entries?.shadowob?.config?.accountAgentMap as
+      | Record<string, string>
+      | undefined
+    const sb = (cfg.channels?.shadowob ?? {}) as Record<string, unknown>
+    const channelMap = sb.accountAgentMap as Record<string, string> | undefined
+
+    const allMappings: Record<string, string> = { ...oldPluginMap, ...channelMap }
+
+    if (Object.keys(allMappings).length > 0) {
+      if (!cfg.bindings) cfg.bindings = []
+      for (const [accId, agId] of Object.entries(allMappings)) {
+        // Only add if no binding already exists for this (channel, accountId)
+        const exists = cfg.bindings.some(
+          (b) => b.match.channel === 'shadowob' && b.match.accountId === accId,
+        )
+        if (!exists) {
+          cfg.bindings.push({ agentId: agId, match: { channel: 'shadowob', accountId: accId } })
+        }
+      }
+
+      // Clean up old accountAgentMap from both locations
+      if (oldPluginMap) {
+        delete cfg.plugins.entries!.shadowob!.config!.accountAgentMap
+      }
+      if (channelMap) {
+        delete (sb as Record<string, unknown>).accountAgentMap
+        cfg.channels = { ...(cfg.channels ?? {}), shadowob: sb }
+      }
+      dirty = true
+    }
+
+    // 8.6 Ensure non-main agents have workspace set (multi-agent isolation)
+    for (const agent of cfg.agents.list) {
+      if (agent.id !== 'main' && !agent.workspace) {
+        agent.workspace = join(this.paths.workspaceDir, agent.id)
+        dirty = true
+      }
     }
 
     // 8. Ensure gateway.auth.token is set (persistent across restarts)
@@ -558,8 +629,6 @@ export class ConfigService {
   }
 
   private defaultConfig(): OpenClawConfig {
-    // Resolve plugin dir so OpenClaw can discover @shadowob/openclaw by path.
-    // This is the Shadow channel plugin, not the core OpenClaw package.
     const pluginDir = this.paths.resolveShadowPlugin()
     const pluginLoadPaths = pluginDir ? [pluginDir] : []
 
@@ -581,12 +650,12 @@ export class ConfigService {
       channels: {},
       plugins: {
         enabled: true,
-        allow: ['openclaw'],
+        allow: ['shadowob'],
         load: {
           paths: pluginLoadPaths,
         },
         entries: {
-          openclaw: { enabled: true },
+          shadowob: { enabled: true },
         },
       },
       skills: {

@@ -7,6 +7,7 @@
 
 import {
   Calendar,
+  Check,
   ChevronDown,
   ChevronRight,
   Clock,
@@ -18,8 +19,9 @@ import {
   Settings2,
   Trash2,
 } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useAutoSave } from '../../hooks/use-auto-save'
 import type { AgentConfig, CronConfig, CronSchedule, CronTask } from '../../lib/openclaw-api'
 import { openClawApi } from '../../lib/openclaw-api'
 import { OpenClawButton, OpenClawSplitLayout } from './openclaw-ui'
@@ -174,19 +176,11 @@ export function CronPage() {
                   <p className="text-sm font-medium text-text-primary truncate flex-1">
                     {task.name}
                   </p>
-                  <div
-                    role="button"
-                    tabIndex={0}
+                  <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation()
                       handleToggle(task)
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.stopPropagation()
-                        e.preventDefault()
-                        handleToggle(task)
-                      }
                     }}
                     className="opacity-0 group-hover:opacity-100 transition p-0.5 cursor-pointer"
                     title={task.enabled ? '暂停' : '恢复'}
@@ -196,7 +190,7 @@ export function CronPage() {
                     ) : (
                       <Play size={12} className="text-text-muted" />
                     )}
-                  </div>
+                  </button>
                 </div>
                 <p className="text-[11px] text-text-muted mt-1 truncate">
                   {formatScheduleLabel(task.schedule)}
@@ -278,10 +272,14 @@ export function CronPage() {
                 </div>
                 {/* Max Concurrent */}
                 <div>
-                  <label className="block text-xs text-text-muted mb-1">
+                  <label
+                    htmlFor="cron-max-concurrent"
+                    className="block text-xs text-text-muted mb-1"
+                  >
                     {t('openclaw.cron.maxConcurrent', '最大并发')}
                   </label>
                   <input
+                    id="cron-max-concurrent"
                     type="number"
                     min={1}
                     max={100}
@@ -298,10 +296,11 @@ export function CronPage() {
                 </div>
                 {/* Webhook */}
                 <div>
-                  <label className="block text-xs text-text-muted mb-1">
+                  <label htmlFor="cron-webhook" className="block text-xs text-text-muted mb-1">
                     {t('openclaw.cron.webhook', 'Webhook 地址')}
                   </label>
                   <input
+                    id="cron-webhook"
                     type="url"
                     value={config.webhook ?? ''}
                     onChange={(e) => setConfig({ ...config, webhook: e.target.value || undefined })}
@@ -315,10 +314,11 @@ export function CronPage() {
                   style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}
                 >
                   <div>
-                    <label className="block text-xs text-text-muted mb-1">
+                    <label htmlFor="cron-retry-max" className="block text-xs text-text-muted mb-1">
                       {t('openclaw.cron.retryMaxAttempts', '最大重试')}
                     </label>
                     <input
+                      id="cron-retry-max"
                       type="number"
                       min={0}
                       max={10}
@@ -337,10 +337,14 @@ export function CronPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-text-muted mb-1">
+                    <label
+                      htmlFor="cron-retry-delay"
+                      className="block text-xs text-text-muted mb-1"
+                    >
                       {t('openclaw.cron.retryDelay', '延迟 (ms)')}
                     </label>
                     <input
+                      id="cron-retry-delay"
                       type="number"
                       min={0}
                       value={(retryObj.delay as number) ?? ''}
@@ -360,10 +364,14 @@ export function CronPage() {
                 </div>
                 {/* Session Retention */}
                 <div>
-                  <label className="block text-xs text-text-muted mb-1">
+                  <label
+                    htmlFor="cron-session-retention"
+                    className="block text-xs text-text-muted mb-1"
+                  >
                     {t('openclaw.cron.sessionRetention', '会话保留')}
                   </label>
                   <input
+                    id="cron-session-retention"
                     type="text"
                     value={config.sessionRetention === false ? '' : (config.sessionRetention ?? '')}
                     onChange={(e) =>
@@ -487,29 +495,29 @@ function CronTaskEditor({
   )
   const [saving, setSaving] = useState(false)
 
+  const buildSchedule = useCallback((): CronSchedule => {
+    const [hour, minute] = timeOfDay.split(':').map((x) => Number(x))
+    if (repeatMode === 'once') return { kind: 'at', at: runAt }
+    if (repeatMode === 'daily') return { kind: 'cron', expr: `${minute} ${hour} * * *` }
+    if (repeatMode === 'weekly') {
+      return {
+        kind: 'cron',
+        expr: `${minute} ${hour} * * ${(weekdays.length ? weekdays : [1]).join(',')}`,
+      }
+    }
+    return { kind: 'cron', expr: (customCron ?? '').trim() || '0 9 * * *' }
+  }, [timeOfDay, repeatMode, runAt, weekdays, customCron])
+
   const handleSave = async () => {
     if (!name.trim()) return
     setSaving(true)
     try {
-      const [hour, minute] = timeOfDay.split(':').map((x) => Number(x))
-      const schedule: CronSchedule =
-        repeatMode === 'once'
-          ? { kind: 'at', at: runAt }
-          : repeatMode === 'daily'
-            ? { kind: 'cron', expr: `${minute} ${hour} * * *` }
-            : repeatMode === 'weekly'
-              ? {
-                  kind: 'cron',
-                  expr: `${minute} ${hour} * * ${(weekdays.length ? weekdays : [1]).join(',')}`,
-                }
-              : { kind: 'cron', expr: (customCron ?? '').trim() || '0 9 * * *' }
-
       await openClawApi.saveCronTask({
         id: task.id,
         name: name.trim(),
         enabled,
         ...(agentId && { agentId }),
-        schedule,
+        schedule: buildSchedule(),
         payload: { kind: 'agentTurn', message: note },
       })
       onSave()
@@ -518,10 +526,62 @@ function CronTaskEditor({
     }
   }
 
+  // ── Auto-save with debounce ──
+  const autoSaveFn = useCallback(async () => {
+    if (!name.trim()) return
+    await openClawApi.saveCronTask({
+      id: task.id,
+      name: name.trim(),
+      enabled,
+      ...(agentId && { agentId }),
+      schedule: buildSchedule(),
+      payload: { kind: 'agentTurn', message: note },
+    })
+    onSave()
+  }, [task.id, name, enabled, agentId, note, buildSchedule, onSave])
+  const { autoSaveStatus, scheduleAutoSave } = useAutoSave(autoSaveFn, 1500)
+
+  // Trigger auto-save on field changes (skip initial render)
+  const initialRender = useMemo(() => ({ current: true }), [])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional watch pattern – auto-save triggers on field changes
+  useEffect(() => {
+    if (initialRender.current) {
+      initialRender.current = false
+      return
+    }
+    if (name.trim()) scheduleAutoSave()
+  }, [
+    name,
+    enabled,
+    agentId,
+    note,
+    repeatMode,
+    timeOfDay,
+    runAt,
+    weekdays,
+    customCron,
+    scheduleAutoSave,
+  ])
+
   return (
     <div className="px-6 pt-5 pb-8 max-w-2xl">
       <div className="flex items-center justify-between mb-5">
-        <h2 className="text-lg font-bold text-text-primary">编辑任务</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-bold text-text-primary">编辑任务</h2>
+          {autoSaveStatus === 'pending' && (
+            <span className="text-[10px] text-text-muted">未保存</span>
+          )}
+          {autoSaveStatus === 'saving' && (
+            <span className="text-[10px] text-text-muted flex items-center gap-1">
+              <Loader2 size={10} className="animate-spin" /> 保存中...
+            </span>
+          )}
+          {autoSaveStatus === 'saved' && (
+            <span className="text-[10px] text-green-400 flex items-center gap-1">
+              <Check size={10} /> 已自动保存
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <OpenClawButton type="button" onClick={handleSave} disabled={saving || !name.trim()}>
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
@@ -542,8 +602,14 @@ function CronTaskEditor({
 
       <div className="space-y-6">
         <div>
-          <label className="block text-sm font-medium text-text-primary mb-1.5">任务名称</label>
+          <label
+            htmlFor="cron-task-name"
+            className="block text-sm font-medium text-text-primary mb-1.5"
+          >
+            任务名称
+          </label>
           <input
+            id="cron-task-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -553,8 +619,14 @@ function CronTaskEditor({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-text-primary mb-1.5">执行龙虾</label>
+          <label
+            htmlFor="cron-agent"
+            className="block text-sm font-medium text-text-primary mb-1.5"
+          >
+            执行龙虾
+          </label>
           <select
+            id="cron-agent"
             value={agentId}
             onChange={(e) => setAgentId(e.target.value)}
             className="w-full px-3 py-2.5 rounded-lg bg-bg-secondary border border-bg-tertiary text-sm text-text-primary focus:outline-none focus:border-primary/50 transition"
@@ -597,8 +669,11 @@ function CronTaskEditor({
 
           {repeatMode === 'once' && (
             <div>
-              <label className="block text-xs text-text-muted mb-1">执行时间</label>
+              <label htmlFor="cron-run-at" className="block text-xs text-text-muted mb-1">
+                执行时间
+              </label>
               <input
+                id="cron-run-at"
                 type="datetime-local"
                 value={runAt}
                 onChange={(e) => setRunAt(e.target.value)}
@@ -610,8 +685,11 @@ function CronTaskEditor({
 
           {(repeatMode === 'daily' || repeatMode === 'weekly') && (
             <div>
-              <label className="block text-xs text-text-muted mb-1">每天执行时间</label>
+              <label htmlFor="cron-time-of-day" className="block text-xs text-text-muted mb-1">
+                每天执行时间
+              </label>
               <input
+                id="cron-time-of-day"
                 type="time"
                 value={timeOfDay}
                 onChange={(e) => setTimeOfDay(e.target.value)}
@@ -623,7 +701,9 @@ function CronTaskEditor({
 
           {repeatMode === 'weekly' && (
             <div>
-              <label className="block text-xs text-text-muted mb-2">每周重复日</label>
+              <label htmlFor="cron-weekdays" className="block text-xs text-text-muted mb-2">
+                每周重复日
+              </label>
               <div className="flex gap-2 flex-wrap">
                 {['日', '一', '二', '三', '四', '五', '六'].map((label, idx) => {
                   const selected = weekdays.includes(idx)
@@ -650,8 +730,11 @@ function CronTaskEditor({
 
           {repeatMode === 'custom' && (
             <div>
-              <label className="block text-xs text-text-muted mb-1">高级 Cron（可选）</label>
+              <label htmlFor="cron-custom-expr" className="block text-xs text-text-muted mb-1">
+                高级 Cron（可选）
+              </label>
               <input
+                id="cron-custom-expr"
                 type="text"
                 value={customCron}
                 onChange={(e) => setCustomCron(e.target.value)}

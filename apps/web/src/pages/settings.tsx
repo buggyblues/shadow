@@ -1669,7 +1669,7 @@ function DmChannelList({
                     </span>
                     {ch.otherUser?.isBot && (
                       <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-bold">
-                        BOT
+                        Buddy
                       </span>
                     )}
                   </div>
