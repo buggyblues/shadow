@@ -64,25 +64,25 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Lint Dockerfiles with hadolint
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: Dockerfile.e2e
           failure-threshold: warning
 
       - name: Lint server Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: apps/server/Dockerfile
           failure-threshold: warning
 
       - name: Lint web Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: apps/web/Dockerfile
           failure-threshold: warning
 
       - name: Lint admin Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: apps/admin/Dockerfile
           failure-threshold: warning
