@@ -62,6 +62,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Normalize GitHub git URLs to HTTPS
+        shell: bash
+        run: |
+          git config --global url."https://github.com/".insteadOf git@github.com:
+          git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
