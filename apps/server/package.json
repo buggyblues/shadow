@@ -44,10 +44,10 @@
     "@types/jsonwebtoken": "^9.0.9",
     "@types/mime-types": "^2.1.4",
     "@types/ws": "^8.18.1",
-    "@vitest/coverage-v8": "^4.0.18",
-    "drizzle-kit": "^0.31.4",
+    "@vitest/coverage-v8": "^4.1.0",
+    "drizzle-kit": "^0.31.10",
     "tsup": "^8.5.0",
     "tsx": "^4.19.4",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.0"
   }
 }
