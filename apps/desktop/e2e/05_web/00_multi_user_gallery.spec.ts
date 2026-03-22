@@ -107,8 +107,8 @@ test.describe
       await ensureScreenshotDir()
       const session = await readSession()
 
-      const ownerContext = await browser.newContext()
-      const viewerContext = await browser.newContext()
+      const ownerContext = await browser.newContext({ colorScheme: 'dark' })
+      const viewerContext = await browser.newContext({ colorScheme: 'dark' })
       const ownerPage = await ownerContext.newPage()
       const viewerPage = await viewerContext.newPage()
 
@@ -185,6 +185,22 @@ test.describe
             'Joined successfully via invite. Real users, real flow, zero cardboard cut-outs.',
         },
       })
+      await ownerApi.post(`/api/channels/${session.channels.generalId}/messages`, {
+        data: {
+          content:
+            'CodingCat just shipped 3 new review templates. Check workspace for the write-up.',
+        },
+      })
+      await viewerApi.post(`/api/channels/${session.channels.generalId}/messages`, {
+        data: {
+          content: 'Saw that! Also the Focus Sprint Bundle went live in the shop — looks clean.',
+        },
+      })
+      await ownerApi.post(`/api/channels/${session.channels.generalId}/messages`, {
+        data: {
+          content: 'Pushing v2.4 release notes to announcements now. Everyone upgraded?',
+        },
+      })
       await ownerApi.post(`/api/channels/${session.channels.announcementsId}/messages`, {
         data: {
           content:
@@ -205,6 +221,12 @@ test.describe
           content:
             'Confirmed. Invite gate worked, server join worked, and the screenshots look delightfully lived-in.',
         },
+      })
+      await ownerApi.post(`/api/dm/channels/${dmChannel.id}/messages`, {
+        data: { content: 'Great. Ship schedule is updated. See you in standup.' },
+      })
+      await viewerApi.post(`/api/dm/channels/${dmChannel.id}/messages`, {
+        data: { content: 'Sounds good. Already reviewed the workspace docs 👍' },
       })
 
       await viewerPage.goto(`servers/${session.server.slug}/channels/${session.channels.generalId}`)
