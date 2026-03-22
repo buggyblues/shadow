@@ -13,7 +13,7 @@
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
     "@expo/vector-icons": "^15.1.1",
-    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-async-storage/async-storage": "3.0.1",
     "@react-navigation/native": "^7.1.6",
     "@shadowob/shared": "workspace:*",
     "@shopify/flash-list": "2.0.2",
