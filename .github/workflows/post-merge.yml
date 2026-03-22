@@ -1,0 +1,68 @@
+name: post-merge-validation
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: post-merge-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  full-test-suite:
+    name: Full test suite (post-merge)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run full test suite in container
+        run: |
+          docker compose -f docker-compose.ci-tests.yml up --build --abort-on-container-exit --exit-code-from ci-tests ci-tests
+
+      - name: Cleanup Docker
+        if: always()
+        run: docker compose -f docker-compose.ci-tests.yml down -v --remove-orphans
+
+  build-validation:
+    name: Build all apps (post-merge)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run build validation in container
+        run: |
+          docker compose -f docker-compose.ci-build.yml up --build --abort-on-container-exit --exit-code-from build-check build-check
+
+      - name: Cleanup Docker
+        if: always()
+        run: docker compose -f docker-compose.ci-build.yml down -v --remove-orphans
+
+  e2e-regression:
+    name: E2E regression (post-merge)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run E2E tests in container
+        run: |
+          docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from e2e-runner e2e-runner
+
+      - name: Cleanup Docker
+        if: always()
+        run: docker compose -f docker-compose.e2e.yml down -v --remove-orphans

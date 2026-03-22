@@ -1,0 +1,38 @@
+name: build-validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'tsconfig.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-packages:
+    name: Build packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run build check in container
+        run: |
+          docker compose -f docker-compose.ci-build.yml up --build --abort-on-container-exit --exit-code-from build-check build-check
+
+      - name: Cleanup Docker
+        if: always()
+        run: docker compose -f docker-compose.ci-build.yml down -v --remove-orphans
