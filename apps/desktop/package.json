@@ -39,7 +39,7 @@
     "@rspack/core": "^1.3.12",
     "@tailwindcss/postcss": "^4.2.1",
     "@tanstack/react-query": "^5.80.7",
-    "@tanstack/react-router": "^1.121.2",
+    "@tanstack/react-router": "^1.168.2",
     "@types/node": "^22.15.0",
     "@types/react": "^19.1.17",
     "@types/react-dom": "^19.2.3",
