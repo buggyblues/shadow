@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "shadowob-sdk"
-version = "0.2.2"
+version = "0.2.3"
 description = "Shadow SDK — Python client for Shadow server REST API and Socket.IO real-time events"
 readme = "README.md"
 license = "MIT"
