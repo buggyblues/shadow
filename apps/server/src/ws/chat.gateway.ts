@@ -79,7 +79,7 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
                   name: `Thread`,
                   parentMessageId: data.replyToId,
                 })
-                threadId = thread.id
+                threadId = thread?.id
               }
             }
           }
@@ -247,6 +247,14 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
             })
           } catch (err) {
             logger.error({ err, dmChannelId: data.dmChannelId }, 'Bot DM relay failed')
+          }
+
+          // Record rental message for billing v2 (fire-and-forget)
+          try {
+            const rentalService = container.resolve('rentalService')
+            await rentalService.recordRentalMessage(userId, otherUserId)
+          } catch {
+            /* non-critical */
           }
         } catch (error) {
           const msg = error instanceof Error ? error.message : 'Failed to send DM'

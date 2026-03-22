@@ -33,6 +33,9 @@ interface Listing {
   hourlyRate: number
   dailyRate: number
   monthlyRate: number
+  baseDailyRate?: number
+  messageFee?: number
+  pricingVersion?: number
   depositAmount: number
   tokenFeePassthrough: boolean
   viewCount: number
@@ -58,6 +61,12 @@ interface CostEstimate {
   totalPerHour: number
   totalEstimate: number
   note: string
+  // v2 fields
+  baseDailyRate?: number
+  dailyBaseCost?: number
+  estimatedMessageCost?: number
+  messageFee?: number
+  pricingVersion?: number
 }
 
 const DEVICE_TIER_INFO: Record<string, { labelKey: string; color: string; icon: string }> = {
@@ -393,29 +402,53 @@ export function MarketplaceDetailPage() {
 
               {/* Rates */}
               <div className="space-y-3 mb-6">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-500 flex items-center gap-1.5">
-                    <Clock className="w-4 h-4" /> {t('marketplace.hourlyRate', '时租')}
-                  </span>
-                  <span className="text-lg font-bold text-amber-600">
-                    {listing.hourlyRate} 🦐/h
-                  </span>
-                </div>
-                {listing.dailyRate > 0 && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-gray-500">
-                      {t('marketplace.dailyRate', '日租')}
-                    </span>
-                    <span className="font-bold text-amber-600">{listing.dailyRate} 🦐/d</span>
-                  </div>
-                )}
-                {listing.monthlyRate > 0 && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-gray-500">
-                      {t('marketplace.monthlyRate', '月租')}
-                    </span>
-                    <span className="font-bold text-amber-600">{listing.monthlyRate} 🦐/m</span>
-                  </div>
+                {listing.pricingVersion === 2 ? (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-500 flex items-center gap-1.5">
+                        <Clock className="w-4 h-4" />{' '}
+                        {t('marketplace.baseDailyRate', '基础每日费用')}
+                      </span>
+                      <span className="text-lg font-bold text-amber-600">
+                        {listing.baseDailyRate ?? 0} 🦐/d
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-500">
+                        {t('marketplace.messageFee', '每条消息费用')}
+                      </span>
+                      <span className="font-bold text-amber-600">
+                        {listing.messageFee ?? 0} 🦐/msg
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-500 flex items-center gap-1.5">
+                        <Clock className="w-4 h-4" /> {t('marketplace.hourlyRate', '时租')}
+                      </span>
+                      <span className="text-lg font-bold text-amber-600">
+                        {listing.hourlyRate} 🦐/h
+                      </span>
+                    </div>
+                    {listing.dailyRate > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-500">
+                          {t('marketplace.dailyRate', '日租')}
+                        </span>
+                        <span className="font-bold text-amber-600">{listing.dailyRate} 🦐/d</span>
+                      </div>
+                    )}
+                    {listing.monthlyRate > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-500">
+                          {t('marketplace.monthlyRate', '月租')}
+                        </span>
+                        <span className="font-bold text-amber-600">{listing.monthlyRate} 🦐/m</span>
+                      </div>
+                    )}
+                  </>
                 )}
                 {listing.depositAmount > 0 && (
                   <div className="flex justify-between items-center pt-2 border-t border-gray-100">
@@ -474,16 +507,37 @@ export function MarketplaceDetailPage() {
               {/* Cost Estimate */}
               {estimate && (
                 <div className="bg-gray-50 rounded-xl p-4 mb-6 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">{t('marketplace.rentalCost', '租赁费用')}</span>
-                    <span className="font-bold">{estimate.rentalCost} 🦐</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">
-                      {t('marketplace.electricityCost', '电费')}
-                    </span>
-                    <span className="font-bold">{estimate.electricityCost} 🦐</span>
-                  </div>
+                  {estimate.pricingVersion === 2 ? (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">
+                          {t('marketplace.dailyBaseCost', '基础日费')}
+                        </span>
+                        <span className="font-bold">{estimate.dailyBaseCost ?? 0} 🦐</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">
+                          {t('marketplace.estimatedMessageCost', '预估消息费')}
+                        </span>
+                        <span className="font-bold">{estimate.estimatedMessageCost ?? 0} 🦐</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">
+                          {t('marketplace.rentalCost', '租赁费用')}
+                        </span>
+                        <span className="font-bold">{estimate.rentalCost} 🦐</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">
+                          {t('marketplace.electricityCost', '电费')}
+                        </span>
+                        <span className="font-bold">{estimate.electricityCost} 🦐</span>
+                      </div>
+                    </>
+                  )}
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500">
                       {t('marketplace.platformFee', '平台手续费 (5%)')}

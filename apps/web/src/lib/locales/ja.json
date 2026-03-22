@@ -866,6 +866,15 @@
     "tokenPassthrough": "トークン費用はテナント負担",
     "pricingNote": "料金説明：",
     "pricingExplain": "合計 = 基本レンタル + 電気代 (2🦐/h) + トークン使用量(有効時) + 5%プラットフォーム手数料。日額/月額は自動適用される割引です。",
+    "pricingExplainNew": "合計 = 基本日額 + メッセージ料金 + トークン使用量(有効時) + 5%プラットフォーム手数料。基本料金は毎日自動請求、メッセージ料金は定期精算。",
+    "baseDailyRate": "基本日額",
+    "baseDailyRateHint": "使用有無に関わらず毎日自動請求",
+    "messageFee": "メッセージ単価",
+    "messageFeeHint": "ユーザーが1通送信ごとに請求",
+    "messageCount": "メッセージ数",
+    "dailyBaseCost": "基本日額",
+    "estimatedMessageCost": "推定メッセージ料金",
+    "pricingDetail": "料金詳細",
     "availability": "利用可能時間",
     "availableFrom": "開始日時",
     "availableUntil": "終了日時",
@@ -945,7 +954,10 @@
     "welcomeMessage": "会話の始まりです。",
     "noMessages": "まだメッセージがありません。最初のメッセージを送りましょう！",
     "inputPlaceholder": "メッセージを送信",
-    "inputPlaceholderDefault": "メッセージを送信"
+    "inputPlaceholderDefault": "メッセージを送信",
+    "chatDisabledRentedOut": "このBuddyは他のユーザーに貸し出されており、一時的に利用できません",
+    "chatDisabledListed": "このBuddyはマーケットに出品中で、一時的に利用できません",
+    "rentalCostTip": "🦐 本日の費用リマインダー：基本日額 {{baseDailyRate}}🦐 + メッセージ料金 {{messageFee}}🦐/通、累計 {{totalCost}}🦐、{{messageCount}}通送信済み"
   },
   "openclaw": {
     "nav": {

@@ -866,6 +866,15 @@
     "tokenPassthrough": "Token 費用由使用方承擔",
     "pricingNote": "定價說明：",
     "pricingExplain": "最終費用 = 基礎租金 + 電費 (2🦐/h) + Token消耗 (如開啟代付) + 5% 平台手續費。日租/月租為優惠價，系統會自動選擇最優方案。",
+    "pricingExplainNew": "總費用 = 基礎每日費用 + 訊息次數費 + Token消耗(如開啟代付) + 5% 平台手續費。基礎費用每日自動收取，訊息費按使用次數定期結算。",
+    "baseDailyRate": "基礎每日費用",
+    "baseDailyRateHint": "不管是否使用，每天自動收取",
+    "messageFee": "每條訊息費用",
+    "messageFeeHint": "用戶每發送一條訊息收取的費用",
+    "messageCount": "訊息次數",
+    "dailyBaseCost": "基礎日費",
+    "estimatedMessageCost": "預估訊息費",
+    "pricingDetail": "費率詳情",
     "availability": "可用時間",
     "availableFrom": "開始時間",
     "availableUntil": "結束時間",
@@ -945,7 +954,10 @@
     "welcomeMessage": "這是你們的聊天記錄的開始。",
     "noMessages": "還沒有訊息，發送第一條訊息開始聊天吧！",
     "inputPlaceholder": "發送訊息",
-    "inputPlaceholderDefault": "發送訊息"
+    "inputPlaceholderDefault": "發送訊息",
+    "chatDisabledRentedOut": "該 Buddy 已出租給其他用戶，暫時無法聊天",
+    "chatDisabledListed": "該 Buddy 已在集市掛單中，暫時無法聊天",
+    "rentalCostTip": "🦐 今日費用提醒：基礎日費 {{baseDailyRate}}🦐 + 訊息費 {{messageFee}}🦐/條，累計花費 {{totalCost}}🦐，已發送 {{messageCount}} 條訊息"
   },
   "openclaw": {
     "nav": {

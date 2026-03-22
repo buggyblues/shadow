@@ -866,6 +866,15 @@
     "tokenPassthrough": "토큰 비용은 임차인 부담",
     "pricingNote": "요금 안내:",
     "pricingExplain": "합계 = 기본 대여료 + 전기요금 (2🦐/h) + 토큰 사용량(활성화 시) + 5% 플랫폼 수수료. 일간/월간 요금은 자동 적용 할인입니다.",
+    "pricingExplainNew": "합계 = 기본 일액 + 메시지 요금 + 토큰 사용량(활성화 시) + 5% 플랫폼 수수료. 기본 요금은 매일 자동 청구, 메시지 요금은 정기 정산됩니다.",
+    "baseDailyRate": "기본 일액",
+    "baseDailyRateHint": "사용 여부와 관계없이 매일 자동 청구",
+    "messageFee": "메시지 단가",
+    "messageFeeHint": "사용자가 1건 전송 시마다 청구",
+    "messageCount": "메시지 수",
+    "dailyBaseCost": "기본 일액",
+    "estimatedMessageCost": "예상 메시지 요금",
+    "pricingDetail": "요금 상세",
     "availability": "이용 가능 시간",
     "availableFrom": "시작 시간",
     "availableUntil": "종료 시간",
@@ -945,7 +954,10 @@
     "welcomeMessage": "대화의 시작입니다.",
     "noMessages": "아직 메시지가 없습니다. 첫 번째 메시지를 보내보세요!",
     "inputPlaceholder": "메시지 보내기",
-    "inputPlaceholderDefault": "메시지 보내기"
+    "inputPlaceholderDefault": "메시지 보내기",
+    "chatDisabledRentedOut": "이 Buddy는 다른 사용자에게 대여되어 일시적으로 사용할 수 없습니다",
+    "chatDisabledListed": "이 Buddy는 마켓플레이스에 등록되어 일시적으로 사용할 수 없습니다",
+    "rentalCostTip": "🦐 오늘의 비용 알림: 기본 일액 {{baseDailyRate}}🦐 + 메시지 요금 {{messageFee}}🦐/건, 누적 {{totalCost}}🦐, {{messageCount}}건 전송"
   },
   "openclaw": {
     "nav": {

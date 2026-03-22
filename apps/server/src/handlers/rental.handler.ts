@@ -232,11 +232,13 @@ export function createRentalHandler(container: AppContainer) {
      Usage & Billing
      ══════════════════════════════════════════ */
 
-  /** Check if chat is disabled for an agent bot user (listed or rented-out) */
+  /** Check if chat is disabled for an agent bot user (listed or rented-out).
+   *  Also returns rental info when the requesting user is the active tenant. */
   h.get('/marketplace/agent-chat-status/:agentUserId', async (c) => {
     const agentDao = container.resolve('agentDao')
     const clawListingDao = container.resolve('clawListingDao')
     const rentalContractDao = container.resolve('rentalContractDao')
+    const user = c.get('user')
     const agentUserId = c.req.param('agentUserId')
 
     // Find agent by userId
@@ -255,6 +257,21 @@ export function createRentalHandler(container: AppContainer) {
     const isListed = agentListing.isListed && agentListing.listingStatus === 'active'
     const activeContract = await rentalContractDao.findActiveByListingId(agentListing.id)
     const isRentedOut = !!activeContract
+
+    // If the requesting user is the active tenant, chat is ENABLED + return rental info
+    if (activeContract && activeContract.tenantId === user.userId) {
+      return c.json({
+        chatDisabled: false,
+        rental: {
+          contractId: activeContract.id,
+          baseDailyRate: activeContract.baseDailyRate ?? 0,
+          messageFee: activeContract.messageFee ?? 0,
+          totalCost: activeContract.totalCost ?? 0,
+          messageCount: activeContract.messageCount ?? 0,
+          pricingVersion: activeContract.pricingVersion ?? 1,
+        },
+      })
+    }
 
     // Chat is disabled if the claw is currently listed or rented out
     const chatDisabled = isListed || isRentedOut

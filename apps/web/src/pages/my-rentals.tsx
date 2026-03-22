@@ -32,6 +32,10 @@ interface Contract {
   expiresAt: string | null
   terminatedAt: string | null
   hourlyRate: number
+  baseDailyRate?: number
+  messageFee?: number
+  pricingVersion?: number
+  messageCount?: number
   depositAmount: number
   totalCost: number
   listing?: { title: string; deviceTier: string; osType: string } | null
@@ -47,6 +51,9 @@ interface MyListing {
   deviceTier: string
   osType: string
   hourlyRate: number
+  baseDailyRate?: number
+  messageFee?: number
+  pricingVersion?: number
   viewCount: number
   rentalCount: number
   createdAt: string
@@ -306,7 +313,11 @@ export function MyRentalsPage() {
                                 ? `${Math.round((new Date(c.expiresAt).getTime() - new Date(c.startsAt).getTime()) / 3600000)}h`
                                 : t('marketplace.unlimited', '不限时')}
                             </span>
-                            <span>{c.hourlyRate} 🦐/h</span>
+                            <span>
+                              {c.pricingVersion === 2
+                                ? `${c.baseDailyRate ?? 0} 🦐/d`
+                                : `${c.hourlyRate} 🦐/h`}
+                            </span>
                           </div>
                         </div>
                         <div className="text-right">
@@ -504,7 +515,9 @@ function ListingCard({
           </div>
           <h3 className="font-bold text-lg">{l.title}</h3>
           <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-            <span>{l.hourlyRate} 🦐/h</span>
+            <span>
+              {l.pricingVersion === 2 ? `${l.baseDailyRate ?? 0} 🦐/d` : `${l.hourlyRate} 🦐/h`}
+            </span>
             <span className="flex items-center gap-1">
               <Eye className="w-3.5 h-3.5" /> {l.viewCount}
             </span>

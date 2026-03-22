@@ -85,6 +85,14 @@ export const clawListings = pgTable('claw_listings', {
   /** Deposit/penalty amount the renter must agree to (违约金) */
   depositAmount: integer('deposit_amount').default(0).notNull(),
 
+  /* ── Billing v2 Pricing ── */
+  /** Base daily fee in 虾币 (charged daily regardless of usage) */
+  baseDailyRate: integer('base_daily_rate').default(0).notNull(),
+  /** Per-message fee in 虾币 (charged per tenant message) */
+  messageFee: integer('message_fee').default(0).notNull(),
+  /** Pricing version: 1 = legacy (hourly+electricity), 2 = new (daily+message) */
+  pricingVersion: integer('pricing_version').default(1).notNull(),
+
   /* ── Availability ── */
   listingStatus: listingStatusEnum('listing_status').default('draft').notNull(),
   /** Manual on/off switch — owner can delist anytime */
@@ -157,8 +165,22 @@ export const rentalContracts = pgTable('rental_contracts', {
 
   /* ── Running Cost ── */
   totalCost: integer('total_cost').default(0).notNull(),
-  /** Agent's totalOnlineSeconds snapshot at last auto-billing */
+  /** Agent's totalOnlineSeconds snapshot at last auto-billing (v1 only) */
   lastBilledOnlineSeconds: integer('last_billed_online_seconds').default(0).notNull(),
+
+  /* ── Billing v2 Fields ── */
+  /** Base daily fee frozen at sign time */
+  baseDailyRate: integer('base_daily_rate').default(0).notNull(),
+  /** Per-message fee frozen at sign time */
+  messageFee: integer('message_fee').default(0).notNull(),
+  /** Pricing version: 1 = legacy, 2 = new */
+  pricingVersion: integer('pricing_version').default(1).notNull(),
+  /** Timestamp of last daily base fee billing */
+  lastBilledDailyAt: timestamp('last_billed_daily_at', { withTimezone: true }),
+  /** Running count of tenant messages sent */
+  messageCount: integer('message_count').default(0).notNull(),
+  /** Message count at last billing settlement */
+  lastBilledMessageCount: integer('last_billed_message_count').default(0).notNull(),
 
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -190,6 +212,14 @@ export const rentalUsageRecords = pgTable('rental_usage_records', {
   platformFee: integer('platform_fee').default(0).notNull(),
   /** Total = rentalCost + tokenCost + electricityCost + platformFee */
   totalCost: integer('total_cost').default(0).notNull(),
+
+  /* ── Billing v2 Cost Breakdown ── */
+  /** Number of messages billed in this record */
+  usageMessageCount: integer('message_count').default(0).notNull(),
+  /** Cost for messages in this billing period */
+  messageCost: integer('message_cost').default(0).notNull(),
+  /** Base daily rental cost in this billing period */
+  baseRentalCost: integer('base_rental_cost').default(0).notNull(),
 
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })

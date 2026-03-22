@@ -865,6 +865,15 @@
     "tokenPassthrough": "Token costs paid by tenant",
     "pricingNote": "Pricing Info:",
     "pricingExplain": "Total = Base rental + Electricity (2🦐/h) + Token usage (if enabled) + 5% platform fee. Daily/monthly rates are discounts applied automatically.",
+    "pricingExplainNew": "Total = Base daily fee + Message fee + Token usage (if enabled) + 5% platform fee. Base fee is charged daily, message fee is settled periodically.",
+    "baseDailyRate": "Base Daily Fee",
+    "baseDailyRateHint": "Charged daily regardless of usage",
+    "messageFee": "Per-Message Fee",
+    "messageFeeHint": "Charged per message sent by user",
+    "messageCount": "Messages",
+    "dailyBaseCost": "Daily Base Cost",
+    "estimatedMessageCost": "Est. Message Cost",
+    "pricingDetail": "Pricing Details",
     "availability": "Availability",
     "availableFrom": "Available From",
     "availableUntil": "Available Until",
@@ -945,7 +954,10 @@
     "welcomeMessage": "This is the beginning of your conversation.",
     "noMessages": "No messages yet — send the first one!",
     "inputPlaceholder": "Send a message",
-    "inputPlaceholderDefault": "Send a message"
+    "inputPlaceholderDefault": "Send a message",
+    "chatDisabledRentedOut": "This Buddy is rented by another user and temporarily unavailable",
+    "chatDisabledListed": "This Buddy is listed on the marketplace and temporarily unavailable",
+    "rentalCostTip": "🦐 Daily cost reminder: Base fee {{baseDailyRate}}🦐 + Message fee {{messageFee}}🦐/msg, total spent {{totalCost}}🦐, {{messageCount}} messages sent"
   },
   "openclaw": {
     "nav": {

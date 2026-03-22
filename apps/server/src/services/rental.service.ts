@@ -26,10 +26,11 @@ const PLATFORM_TERMS = `虾豆平台 OpenClaw 租赁服务条款
 1. 平台收取 5% 的服务手续费。
 2. 出租方在租赁期间不得自行使用已出租的 OpenClaw，违者需支付合同约定的违约金。
 3. 使用方应遵守出租方设定的使用准则，不得滥用或用于非法用途。
-4. Token 消耗费用和电费由使用方承担。
-5. 任一方可提前终止租约，已产生的费用不予退还。
-6. 发生争议时，平台有权介入调解。
-7. 平台保留对违规行为进行处罚的权利。`
+4. Token 消耗费用由使用方承担。
+5. 基础租赁费每日收取，消息费按使用次数计费。
+6. 任一方可提前终止租约，已产生的费用不予退还。
+7. 发生争议时，平台有权介入调解。
+8. 平台保留对违规行为进行处罚的权利。`
 
 /* ──────────────── Rental Contract State Machine ──────────────── */
 
@@ -73,7 +74,7 @@ export class RentalService {
       osType?: 'macos' | 'windows' | 'linux'
       deviceInfo?: Record<string, string>
       softwareTools?: string[]
-      hourlyRate: number
+      hourlyRate?: number
       dailyRate?: number
       monthlyRate?: number
       tokenFeePassthrough?: boolean
@@ -82,6 +83,10 @@ export class RentalService {
       availableFrom?: string
       availableUntil?: string | null
       tags?: string[]
+      /* Billing v2 */
+      baseDailyRate?: number
+      messageFee?: number
+      pricingVersion?: number
     },
   ) {
     return this.deps.clawListingDao.create({
@@ -290,6 +295,11 @@ export class RentalService {
       tenantAgreedAt: now,
       startsAt,
       expiresAt,
+      /* Billing v2 fields */
+      baseDailyRate: listing.baseDailyRate ?? 0,
+      messageFee: listing.messageFee ?? 0,
+      pricingVersion: listing.pricingVersion ?? 1,
+      lastBilledDailyAt: startsAt,
     })
 
     if (!contract) throw new Error('Failed to create contract')
@@ -303,6 +313,49 @@ export class RentalService {
         'rental_deposit',
         `租赁押金 - 合同 ${contractNo}`,
       )
+    }
+
+    // For v2 pricing, charge the first day's base daily fee immediately
+    const isV2 = (listing.pricingVersion ?? 1) >= 2
+    if (isV2 && (listing.baseDailyRate ?? 0) > 0) {
+      const firstDayCost = listing.baseDailyRate!
+      const firstDayPlatformFee = Math.ceil((firstDayCost * DEFAULT_PLATFORM_FEE_BPS) / 10000)
+      const firstDayTotal = firstDayCost + firstDayPlatformFee
+
+      await this.deps.walletService.debit(
+        tenantId,
+        firstDayTotal,
+        contract.id,
+        'rental_usage',
+        `OpenClaw 基础租赁费（首日）- 合同 ${contractNo}`,
+      )
+
+      const ownerPayout = firstDayCost // platform fee is NOT paid to owner
+      await this.deps.walletService.settle(
+        listing.ownerId,
+        ownerPayout,
+        contract.id,
+        'rental_usage',
+        `OpenClaw 出租收入（首日）- 合同 ${contractNo}`,
+      )
+
+      await this.deps.rentalUsageDao.create({
+        contractId: contract.id,
+        startedAt: startsAt,
+        endedAt: startsAt,
+        durationMinutes: 0,
+        tokensConsumed: 0,
+        tokenCost: 0,
+        electricityCost: 0,
+        rentalCost: 0,
+        platformFee: firstDayPlatformFee,
+        totalCost: firstDayTotal,
+        baseRentalCost: firstDayCost,
+        usageMessageCount: 0,
+        messageCost: 0,
+      })
+
+      await this.deps.rentalContractDao.addCost(contract.id, firstDayTotal)
     }
 
     // Initialize lastBilledOnlineSeconds with agent's current totalOnlineSeconds
@@ -510,11 +563,42 @@ export class RentalService {
 
   /**
    * Estimates rental cost for a given duration (for frontend display).
+   * Returns different format based on listing's pricingVersion.
    */
   async estimateCost(listingId: string, durationHours: number) {
     const listing = await this.deps.clawListingDao.findById(listingId)
     if (!listing) throw Object.assign(new Error('Listing not found'), { status: 404 })
 
+    const isV2 = (listing.pricingVersion ?? 1) >= 2
+
+    if (isV2) {
+      // V2: daily base fee + per-message fee (estimate assumes 10 msgs/day)
+      const durationDays = Math.ceil(durationHours / 24)
+      const baseDailyRate = listing.baseDailyRate ?? 0
+      const messageFee = listing.messageFee ?? 0
+      const dailyBaseCost = baseDailyRate * durationDays
+      const estimatedMessageCost = messageFee * 10 * durationDays // assume 10 msgs/day
+      const subtotal = dailyBaseCost + estimatedMessageCost
+      const platformFee = Math.ceil((subtotal * DEFAULT_PLATFORM_FEE_BPS) / 10000)
+      const totalEstimate = subtotal + platformFee
+
+      return {
+        baseDailyRate,
+        messageFee,
+        dailyBaseCost,
+        estimatedMessageCost,
+        platformFee,
+        deposit: listing.depositAmount,
+        totalPerDay: baseDailyRate + Math.ceil((baseDailyRate * DEFAULT_PLATFORM_FEE_BPS) / 10000),
+        totalEstimate,
+        pricingVersion: 2,
+        note: listing.tokenFeePassthrough
+          ? 'Token 消耗费用按实际使用量额外计费'
+          : 'Token 费用已包含在租赁费用中',
+      }
+    }
+
+    // V1: legacy hourly billing
     const rentalCost = Math.ceil(listing.hourlyRate * durationHours)
     const electricityCost = Math.ceil(durationHours * PLATFORM_ELECTRICITY_RATE)
     const subtotal = rentalCost + electricityCost
@@ -528,6 +612,7 @@ export class RentalService {
       deposit: listing.depositAmount,
       totalPerHour: Math.ceil(totalCost / durationHours),
       totalEstimate: totalCost,
+      pricingVersion: 1,
       note: listing.tokenFeePassthrough
         ? 'Token 消耗费用按实际使用量额外计费'
         : 'Token 费用已包含在租赁费用中',
@@ -577,9 +662,9 @@ export class RentalService {
   }
 
   /**
-   * Auto-bill active contracts based on agent online time.
-   * Compares agent's totalOnlineSeconds with contract's lastBilledOnlineSeconds
-   * to compute incremental billable seconds and charges the tenant.
+   * Auto-bill active contracts. Handles two pricing models:
+   * - V1 (legacy): hourly rate + electricity based on agent online time
+   * - V2 (new): daily base fee + per-message fee + platform fee
    */
   async billActiveContracts() {
     const contracts = await this.deps.rentalContractDao.findAllActive()
@@ -588,89 +673,17 @@ export class RentalService {
 
     for (const contract of contracts) {
       try {
-        // Get the listing to find the agentId
-        const listing = await this.deps.clawListingDao.findById(contract.listingId)
-        if (!listing?.agentId) {
-          results.push({ contractId: contract.id, billed: 0, success: true })
-          continue
+        const isV2 = (contract.pricingVersion ?? 1) >= 2
+
+        if (isV2) {
+          // ═══ V2 Billing: daily base + message fees ═══
+          const billed = await this.billContractV2(contract)
+          results.push({ contractId: contract.id, billed, success: true })
+        } else {
+          // ═══ V1 Billing: hourly rate + electricity ═══
+          const billed = await this.billContractV1(contract)
+          results.push({ contractId: contract.id, billed, success: true })
         }
-
-        // Get agent to check online time
-        const agent = await this.deps.agentDao.findById(listing.agentId)
-        if (!agent) {
-          results.push({ contractId: contract.id, billed: 0, success: true })
-          continue
-        }
-
-        const currentOnlineSeconds = agent.totalOnlineSeconds ?? 0
-        const lastBilled = contract.lastBilledOnlineSeconds ?? 0
-        const billableSeconds = currentOnlineSeconds - lastBilled
-
-        // Only bill if at least 60 seconds of new online time
-        if (billableSeconds < 60) {
-          results.push({ contractId: contract.id, billed: 0, success: true })
-          continue
-        }
-
-        const billableMinutes = Math.floor(billableSeconds / 60)
-        const durationHours = billableMinutes / 60
-
-        // Calculate cost (same formula as recordUsage, without token cost)
-        const rentalCost = Math.ceil(contract.hourlyRate * durationHours)
-        const electricityCost = Math.ceil(durationHours * PLATFORM_ELECTRICITY_RATE)
-        const subtotal = rentalCost + electricityCost
-        const platformFee = Math.ceil((subtotal * contract.platformFeeRate) / 10000)
-        const totalCost = subtotal + platformFee
-
-        if (totalCost <= 0) {
-          results.push({ contractId: contract.id, billed: 0, success: true })
-          continue
-        }
-
-        const now = new Date()
-
-        // Create usage record
-        const usage = await this.deps.rentalUsageDao.create({
-          contractId: contract.id,
-          startedAt: new Date(now.getTime() - billableMinutes * 60 * 1000),
-          endedAt: now,
-          durationMinutes: billableMinutes,
-          tokensConsumed: 0,
-          tokenCost: 0,
-          electricityCost,
-          rentalCost,
-          platformFee,
-          totalCost,
-        })
-
-        // Debit tenant
-        await this.deps.walletService.debit(
-          contract.tenantId,
-          totalCost,
-          contract.id,
-          'rental_usage',
-          `OpenClaw 使用费（自动结算）- 合同 ${contract.contractNo}`,
-        )
-
-        // Credit owner (minus platform fee)
-        const ownerPayout = totalCost - platformFee
-        if (ownerPayout > 0 && usage) {
-          await this.deps.walletService.settle(
-            contract.ownerId,
-            ownerPayout,
-            usage.id,
-            'rental_usage',
-            `OpenClaw 出租收入（自动结算）- 合同 ${contract.contractNo}`,
-          )
-        }
-
-        // Update running total and last billed snapshot
-        await this.deps.rentalContractDao.addCost(contract.id, totalCost)
-        await this.deps.rentalContractDao.update(contract.id, {
-          lastBilledOnlineSeconds: currentOnlineSeconds,
-        })
-
-        results.push({ contractId: contract.id, billed: totalCost, success: true })
       } catch (err) {
         results.push({
           contractId: contract.id,
@@ -682,5 +695,196 @@ export class RentalService {
     }
 
     return results
+  }
+
+  /** V1 billing: hourly + electricity (legacy, unchanged) */
+  private async billContractV1(contract: {
+    id: string
+    listingId: string
+    tenantId: string
+    ownerId: string
+    contractNo: string
+    hourlyRate: number
+    platformFeeRate: number
+    lastBilledOnlineSeconds: number
+  }) {
+    const listing = await this.deps.clawListingDao.findById(contract.listingId)
+    if (!listing?.agentId) return 0
+
+    const agent = await this.deps.agentDao.findById(listing.agentId)
+    if (!agent) return 0
+
+    const currentOnlineSeconds = agent.totalOnlineSeconds ?? 0
+    const lastBilled = contract.lastBilledOnlineSeconds ?? 0
+    const billableSeconds = currentOnlineSeconds - lastBilled
+
+    if (billableSeconds < 60) return 0
+
+    const billableMinutes = Math.floor(billableSeconds / 60)
+    const durationHours = billableMinutes / 60
+
+    const rentalCost = Math.ceil(contract.hourlyRate * durationHours)
+    const electricityCost = Math.ceil(durationHours * PLATFORM_ELECTRICITY_RATE)
+    const subtotal = rentalCost + electricityCost
+    const platformFee = Math.ceil((subtotal * contract.platformFeeRate) / 10000)
+    const totalCost = subtotal + platformFee
+
+    if (totalCost <= 0) return 0
+
+    const now = new Date()
+    const usage = await this.deps.rentalUsageDao.create({
+      contractId: contract.id,
+      startedAt: new Date(now.getTime() - billableMinutes * 60 * 1000),
+      endedAt: now,
+      durationMinutes: billableMinutes,
+      tokensConsumed: 0,
+      tokenCost: 0,
+      electricityCost,
+      rentalCost,
+      platformFee,
+      totalCost,
+    })
+
+    await this.deps.walletService.debit(
+      contract.tenantId,
+      totalCost,
+      contract.id,
+      'rental_usage',
+      `OpenClaw 使用费（自动结算）- 合同 ${contract.contractNo}`,
+    )
+
+    const ownerPayout = totalCost - platformFee
+    if (ownerPayout > 0 && usage) {
+      await this.deps.walletService.settle(
+        contract.ownerId,
+        ownerPayout,
+        usage.id,
+        'rental_usage',
+        `OpenClaw 出租收入（自动结算）- 合同 ${contract.contractNo}`,
+      )
+    }
+
+    await this.deps.rentalContractDao.addCost(contract.id, totalCost)
+    await this.deps.rentalContractDao.update(contract.id, {
+      lastBilledOnlineSeconds: currentOnlineSeconds,
+    })
+
+    return totalCost
+  }
+
+  /** V2 billing: daily base fee + per-message fee + platform fee */
+  private async billContractV2(contract: {
+    id: string
+    listingId: string
+    tenantId: string
+    ownerId: string
+    contractNo: string
+    baseDailyRate: number
+    messageFee: number
+    platformFeeRate: number
+    lastBilledDailyAt: Date | null
+    messageCount: number
+    lastBilledMessageCount: number
+    startsAt: Date
+  }) {
+    const now = new Date()
+
+    // Calculate daily base cost
+    const lastBilledDaily = contract.lastBilledDailyAt
+      ? new Date(contract.lastBilledDailyAt)
+      : new Date(contract.startsAt)
+    const msSinceLastBilled = now.getTime() - lastBilledDaily.getTime()
+    const daysSinceLastBilled = Math.floor(msSinceLastBilled / (24 * 3600 * 1000))
+
+    const baseRentalCost =
+      daysSinceLastBilled > 0 ? contract.baseDailyRate * daysSinceLastBilled : 0
+
+    // Calculate message cost
+    const unbilledMessages = (contract.messageCount ?? 0) - (contract.lastBilledMessageCount ?? 0)
+    const messageCost = unbilledMessages > 0 ? unbilledMessages * contract.messageFee : 0
+
+    // Nothing to bill
+    if (baseRentalCost <= 0 && messageCost <= 0) return 0
+
+    const subtotal = baseRentalCost + messageCost
+    const platformFee = Math.ceil((subtotal * contract.platformFeeRate) / 10000)
+    const totalCost = subtotal + platformFee
+
+    if (totalCost <= 0) return 0
+
+    // Create usage record
+    const usage = await this.deps.rentalUsageDao.create({
+      contractId: contract.id,
+      startedAt: lastBilledDaily,
+      endedAt: now,
+      durationMinutes: daysSinceLastBilled * 24 * 60,
+      tokensConsumed: 0,
+      tokenCost: 0,
+      electricityCost: 0,
+      rentalCost: 0,
+      platformFee,
+      totalCost,
+      baseRentalCost,
+      usageMessageCount: unbilledMessages > 0 ? unbilledMessages : 0,
+      messageCost,
+    })
+
+    // Debit tenant
+    await this.deps.walletService.debit(
+      contract.tenantId,
+      totalCost,
+      contract.id,
+      'rental_usage',
+      `OpenClaw 使用费（自动结算）- 合同 ${contract.contractNo}`,
+    )
+
+    // Credit owner (minus platform fee)
+    const ownerPayout = totalCost - platformFee
+    if (ownerPayout > 0 && usage) {
+      await this.deps.walletService.settle(
+        contract.ownerId,
+        ownerPayout,
+        usage.id,
+        'rental_usage',
+        `OpenClaw 出租收入（自动结算）- 合同 ${contract.contractNo}`,
+      )
+    }
+
+    // Update running total and billing checkpoints
+    await this.deps.rentalContractDao.addCost(contract.id, totalCost)
+    const updateData: Record<string, unknown> = {}
+    if (daysSinceLastBilled > 0) {
+      updateData.lastBilledDailyAt = new Date(
+        lastBilledDaily.getTime() + daysSinceLastBilled * 24 * 3600 * 1000,
+      )
+    }
+    if (unbilledMessages > 0) {
+      updateData.lastBilledMessageCount = contract.messageCount
+    }
+    if (Object.keys(updateData).length > 0) {
+      await this.deps.rentalContractDao.update(
+        contract.id,
+        updateData as Parameters<typeof this.deps.rentalContractDao.update>[1],
+      )
+    }
+
+    return totalCost
+  }
+
+  /* ═══════════════ Message Counting (Billing v2) ═══════════════ */
+
+  /**
+   * Records a rental message for billing purposes.
+   * Called when a tenant sends a DM to a rented BuddyClaw bot.
+   * Only increments the counter; actual billing happens in the scheduled job.
+   */
+  async recordRentalMessage(senderId: string, botUserId: string) {
+    const contract = await this.deps.rentalContractDao.findActiveByTenantAndBotUserId(
+      senderId,
+      botUserId,
+    )
+    if (!contract) return null
+    if ((contract.pricingVersion ?? 1) < 2) return null
+    return this.deps.rentalContractDao.incrementMessageCount(contract.id)
   }
 }
