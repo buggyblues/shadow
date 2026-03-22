@@ -55,35 +55,48 @@ export function createRentalHandler(container: AppContainer) {
      Listings — Owner Management
      ══════════════════════════════════════════ */
 
-  /** Get my listings (as owner) — excludes rented-out and delisted listings */
+  /** Get my listings (as owner) — returns all listings with enrichment */
   h.get('/marketplace/my-listings', async (c) => {
     const user = c.get('user')
     const rentalService = container.resolve('rentalService')
     const agentDao = container.resolve('agentDao')
     const clawListingDao = container.resolve('clawListingDao')
+    const rentalContractDao = container.resolve('rentalContractDao')
     const limit = Number(c.req.query('limit') || '50')
     const offset = Number(c.req.query('offset') || '0')
     const listings = await rentalService.getMyListings(user.userId, { limit, offset })
 
-    // Filter out listings that are actively rented or not listed
+    // Get actively rented listing IDs for status enrichment
     const rentedIds = new Set(await clawListingDao.getActivelyRentedListingIds())
-    const activeListings = listings.filter(
-      (l) => !rentedIds.has(l.id) && l.isListed && l.listingStatus === 'active',
-    )
 
-    // Enrich listings with agent online status
+    // Enrich listings with agent online status and rented status
     const enriched = await Promise.all(
-      activeListings.map(async (l) => {
-        if (!l.agentId) return { ...l, agent: null }
-        const agent = await agentDao.findById(l.agentId)
-        if (!agent) return { ...l, agent: null }
+      listings.map(async (l) => {
+        const isRented = rentedIds.has(l.id)
+        let activeContract: { tenantId: string } | null = null
+        if (isRented) {
+          activeContract = await rentalContractDao.findActiveByListingId(l.id)
+        }
+        let agent: {
+          status: string
+          lastHeartbeat: Date | null
+          totalOnlineSeconds: number
+        } | null = null
+        if (l.agentId) {
+          const agentData = await agentDao.findById(l.agentId)
+          if (agentData) {
+            agent = {
+              status: agentData.status,
+              lastHeartbeat: agentData.lastHeartbeat,
+              totalOnlineSeconds: agentData.totalOnlineSeconds,
+            }
+          }
+        }
         return {
           ...l,
-          agent: {
-            status: agent.status,
-            lastHeartbeat: agent.lastHeartbeat,
-            totalOnlineSeconds: agent.totalOnlineSeconds,
-          },
+          agent,
+          isRented,
+          activeTenantId: activeContract?.tenantId ?? null,
         }
       }),
     )
@@ -247,7 +260,12 @@ export function createRentalHandler(container: AppContainer) {
       return c.json({ chatDisabled: false })
     }
 
-    // Check if agent has any active listing
+    // Owner can always chat with their own agents
+    if (agent.ownerId === user.userId) {
+      return c.json({ chatDisabled: false })
+    }
+
+    // Check if agent has any listing
     const listings = await clawListingDao.findByOwnerId(agent.ownerId)
     const agentListing = listings.find((l) => l.agentId === agent.id)
     if (!agentListing) {
@@ -273,11 +291,16 @@ export function createRentalHandler(container: AppContainer) {
       })
     }
 
-    // Chat is disabled if the claw is currently listed or rented out
-    const chatDisabled = isListed || isRentedOut
-    const reason = isRentedOut ? 'rented_out' : isListed ? 'listed' : undefined
-
-    return c.json({ chatDisabled, reason })
+    // Non-owner without active contract: chat is disabled
+    // Reason: rented_out (someone else is renting), listed (on marketplace), or expired (no active rental)
+    if (isRentedOut) {
+      return c.json({ chatDisabled: true, reason: 'rented_out' })
+    }
+    if (isListed) {
+      return c.json({ chatDisabled: true, reason: 'listed' })
+    }
+    // Agent has a listing but not listed and no active contract — user's rental has expired or was terminated
+    return c.json({ chatDisabled: true, reason: 'expired' })
   })
 
   /** Record a usage session (typically called by the system/agent) */

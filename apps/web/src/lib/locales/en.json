@@ -719,7 +719,8 @@
     "listingDraft": "Draft",
     "listingPaused": "Paused",
     "listingExpired": "Expired",
-    "listingClosed": "Closed"
+    "listingClosed": "Closed",
+    "totalOnlineTime": "Total Online Time"
   },
   "serverHome": {
     "welcome": "Welcome to",
@@ -911,7 +912,15 @@
     "delistSuccess": "Claw has been delisted",
     "delistHint": "Once delisted, this Claw will no longer appear in the marketplace",
     "confirmDelist": "Are you sure you want to delist this Claw?",
-    "official": "Official"
+    "official": "Official",
+    "online": "Online",
+    "offline": "Offline",
+    "totalOnline": "Total",
+    "expired": "Expired",
+    "listingRented": "Rented Out",
+    "listingUnlisted": "Unlisted",
+    "relistClaw": "Relist Claw",
+    "relistSuccess": "Claw has been relisted"
   },
   "friends": {
     "title": "Friends",
@@ -957,7 +966,8 @@
     "inputPlaceholderDefault": "Send a message",
     "chatDisabledRentedOut": "This Buddy is rented by another user and temporarily unavailable",
     "chatDisabledListed": "This Buddy is listed on the marketplace and temporarily unavailable",
-    "rentalCostTip": "🦐 Daily cost reminder: Base fee {{baseDailyRate}}🦐 + Message fee {{messageFee}}🦐/msg, total spent {{totalCost}}🦐, {{messageCount}} messages sent"
+    "rentalCostTip": "🦐 Daily cost reminder: Base fee {{baseDailyRate}}🦐 + Message fee {{messageFee}}🦐/msg, total spent {{totalCost}}🦐, {{messageCount}} messages sent",
+    "chatDisabledExpired": "Your usage rights have expired. Please renew your rental to continue."
   },
   "openclaw": {
     "nav": {
@@ -1213,5 +1223,15 @@
       "archAgent": "Agent",
       "archDesc": "User sends message in Shadow channel → Forwarded via Buddy → Claw service processes → Agent generates reply → Returned to channel"
     }
+  },
+  "time": {
+    "seconds": "s",
+    "minutes": "min",
+    "hours": "h",
+    "days": "d",
+    "dayShort": "d",
+    "hourShort": "h",
+    "minShort": "m",
+    "secShort": "s"
   }
 }

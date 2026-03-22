@@ -719,7 +719,8 @@
     "listingDraft": "초안",
     "listingPaused": "일시 중지",
     "listingExpired": "만료됨",
-    "listingClosed": "종료됨"
+    "listingClosed": "종료됨",
+    "totalOnlineTime": "누적 온라인 시간"
   },
   "serverHome": {
     "welcome": "환영합니다",
@@ -911,7 +912,15 @@
     "delistSuccess": "Claw가 하장되었습니다",
     "delistHint": "하장하면 이 Claw가 더 이상 마켓에 표시되지 않습니다",
     "confirmDelist": "이 Claw를 하장하시겠습니까?",
-    "official": "공식"
+    "official": "공식",
+    "online": "온라인",
+    "offline": "오프라인",
+    "totalOnline": "누적",
+    "expired": "만료됨",
+    "listingRented": "대여 중",
+    "listingUnlisted": "하장됨",
+    "relistClaw": "재등록",
+    "relistSuccess": "Claw가 재등록되었습니다"
   },
   "friends": {
     "title": "친구",
@@ -957,7 +966,8 @@
     "inputPlaceholderDefault": "메시지 보내기",
     "chatDisabledRentedOut": "이 Buddy는 다른 사용자에게 대여되어 일시적으로 사용할 수 없습니다",
     "chatDisabledListed": "이 Buddy는 마켓플레이스에 등록되어 일시적으로 사용할 수 없습니다",
-    "rentalCostTip": "🦐 오늘의 비용 알림: 기본 일액 {{baseDailyRate}}🦐 + 메시지 요금 {{messageFee}}🦐/건, 누적 {{totalCost}}🦐, {{messageCount}}건 전송"
+    "rentalCostTip": "🦐 오늘의 비용 알림: 기본 일액 {{baseDailyRate}}🦐 + 메시지 요금 {{messageFee}}🦐/건, 누적 {{totalCost}}🦐, {{messageCount}}건 전송",
+    "chatDisabledExpired": "사용권이 만료되었습니다. 계속하려면 대여를 갱신해 주세요."
   },
   "openclaw": {
     "nav": {
@@ -1213,5 +1223,15 @@
       "archAgent": "에이전트",
       "archDesc": "사용자가 Shadow 채널에서 메시지 전송 → Buddy 연결을 통해 전달 → 크로 서비스 처리 → 에이전트가 응답 생성 → 채널로 반환"
     }
+  },
+  "time": {
+    "seconds": "초",
+    "minutes": "분",
+    "hours": "시간",
+    "days": "일",
+    "dayShort": "일",
+    "hourShort": "시",
+    "minShort": "분",
+    "secShort": "초"
   }
 }

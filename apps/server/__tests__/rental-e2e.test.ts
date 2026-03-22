@@ -605,20 +605,25 @@ describe('P2P Rental E2E', () => {
 
   /* ─────── 10. My Listings ─────── */
 
-  it('should get my listings as owner (filters out rented & unlisted)', async () => {
+  it('should get all my listings as owner (including rented & draft)', async () => {
     const res = await req('GET', '/api/marketplace/my-listings', {
       token: ownerToken,
     })
 
     expect(res.status).toBe(200)
-    const data = await json<{ listings?: { id: string }[]; length?: number }>(res)
-    const listings = Array.isArray(data) ? data : (data.listings ?? [])
-    // Active listing is rented (active contract) → filtered out
-    // Draft listing is not active/listed → filtered out
+    const data = await json<{
+      listings: { id: string; isRented?: boolean; activeTenantId?: string | null }[]
+    }>(res)
+    const listings = data.listings
+    // My-listings now returns ALL owner listings with status enrichment
     const rentedListing = listings.find((l) => l.id === listingId)
-    expect(rentedListing).toBeUndefined()
+    expect(rentedListing).toBeDefined()
+    expect(rentedListing!.isRented).toBe(true)
+    expect(rentedListing!.activeTenantId).toBe(tenantUserId)
+
     const draftListing = listings.find((l) => l.id === draftListingId)
-    expect(draftListing).toBeUndefined()
+    expect(draftListing).toBeDefined()
+    expect(draftListing!.isRented).toBe(false)
   })
 
   /* ─────── 11. Report Violation ─────── */

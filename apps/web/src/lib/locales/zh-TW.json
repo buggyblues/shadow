@@ -719,7 +719,8 @@
     "listingDraft": "草稿",
     "listingPaused": "已暫停",
     "listingExpired": "已過期",
-    "listingClosed": "已關閉"
+    "listingClosed": "已關閉",
+    "totalOnlineTime": "累計在線時長"
   },
   "serverHome": {
     "welcome": "歡迎來到",
@@ -911,7 +912,15 @@
     "delistSuccess": "Claw 已成功下架",
     "delistHint": "下架後該 Claw 將不再出現在市場中",
     "confirmDelist": "確定要下架這隻 Claw 嗎？",
-    "official": "官方"
+    "official": "官方",
+    "online": "在線",
+    "offline": "離線",
+    "totalOnline": "累計",
+    "expired": "已到期",
+    "listingRented": "出租中",
+    "listingUnlisted": "已下架",
+    "relistClaw": "重新上架",
+    "relistSuccess": "Claw 已重新上架"
   },
   "friends": {
     "title": "好友",
@@ -957,7 +966,8 @@
     "inputPlaceholderDefault": "發送訊息",
     "chatDisabledRentedOut": "該 Buddy 已出租給其他用戶，暫時無法聊天",
     "chatDisabledListed": "該 Buddy 已在集市掛單中，暫時無法聊天",
-    "rentalCostTip": "🦐 今日費用提醒：基礎日費 {{baseDailyRate}}🦐 + 訊息費 {{messageFee}}🦐/條，累計花費 {{totalCost}}🦐，已發送 {{messageCount}} 條訊息"
+    "rentalCostTip": "🦐 今日費用提醒：基礎日費 {{baseDailyRate}}🦐 + 訊息費 {{messageFee}}🦐/條，累計花費 {{totalCost}}🦐，已發送 {{messageCount}} 條訊息",
+    "chatDisabledExpired": "使用權已到期，請續租後再使用"
   },
   "openclaw": {
     "nav": {
@@ -1213,5 +1223,15 @@
       "archAgent": "智能體",
       "archDesc": "使用者在 Shadow 頻道發送訊息 → 透過 Buddy 連線轉發 → 龍蝦服務處理 → 智能體產生回覆 → 返回頻道"
     }
+  },
+  "time": {
+    "seconds": "秒",
+    "minutes": "分鐘",
+    "hours": "小時",
+    "days": "天",
+    "dayShort": "天",
+    "hourShort": "時",
+    "minShort": "分",
+    "secShort": "秒"
   }
 }

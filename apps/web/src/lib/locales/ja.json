@@ -719,7 +719,8 @@
     "listingDraft": "下書き",
     "listingPaused": "一時停止",
     "listingExpired": "期限切れ",
-    "listingClosed": "終了"
+    "listingClosed": "終了",
+    "totalOnlineTime": "累計オンライン時間"
   },
   "serverHome": {
     "welcome": "ようこそ",
@@ -911,7 +912,15 @@
     "delistSuccess": "Claw が取り下げられました",
     "delistHint": "取り下げるとこの Claw はマーケットに表示されなくなります",
     "confirmDelist": "この Claw を取り下げますか？",
-    "official": "公式"
+    "official": "公式",
+    "online": "オンライン",
+    "offline": "オフライン",
+    "totalOnline": "累計",
+    "expired": "期限切れ",
+    "listingRented": "貸出中",
+    "listingUnlisted": "取り下げ済み",
+    "relistClaw": "再出品",
+    "relistSuccess": "Claw が再出品されました"
   },
   "friends": {
     "title": "フレンド",
@@ -957,7 +966,8 @@
     "inputPlaceholderDefault": "メッセージを送信",
     "chatDisabledRentedOut": "このBuddyは他のユーザーに貸し出されており、一時的に利用できません",
     "chatDisabledListed": "このBuddyはマーケットに出品中で、一時的に利用できません",
-    "rentalCostTip": "🦐 本日の費用リマインダー：基本日額 {{baseDailyRate}}🦐 + メッセージ料金 {{messageFee}}🦐/通、累計 {{totalCost}}🦐、{{messageCount}}通送信済み"
+    "rentalCostTip": "🦐 本日の費用リマインダー：基本日額 {{baseDailyRate}}🦐 + メッセージ料金 {{messageFee}}🦐/通、累計 {{totalCost}}🦐、{{messageCount}}通送信済み",
+    "chatDisabledExpired": "使用権が期限切れです。継続するにはレンタルを更新してください"
   },
   "openclaw": {
     "nav": {
@@ -1213,5 +1223,15 @@
       "archAgent": "エージェント",
       "archDesc": "ユーザーが Shadow チャンネルでメッセージを送信 → Buddy 接続経由で転送 → クローサービスが処理 → エージェントが応答を生成 → チャンネルに返信"
     }
+  },
+  "time": {
+    "seconds": "秒",
+    "minutes": "分",
+    "hours": "時間",
+    "days": "日",
+    "dayShort": "日",
+    "hourShort": "時",
+    "minShort": "分",
+    "secShort": "秒"
   }
 }

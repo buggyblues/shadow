@@ -425,6 +425,9 @@ export class RentalService {
       )
     }
 
+    // Delist the listing so it doesn't reappear on the marketplace
+    await this.deps.clawListingDao.update(contract.listingId, { isListed: false })
+
     return this.deps.rentalContractDao.update(contractId, {
       status: 'completed',
       terminatedAt: new Date(),
@@ -641,6 +644,9 @@ export class RentalService {
             `退还租赁押金（合同到期）- 合同 ${contract.contractNo}`,
           )
         }
+
+        // Delist the listing so it doesn't reappear on the marketplace
+        await this.deps.clawListingDao.update(contract.listingId, { isListed: false })
 
         await this.deps.rentalContractDao.update(contract.id, {
           status: 'completed',

@@ -502,7 +502,9 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
             <span>
               {agentChatStatus?.reason === 'rented_out'
                 ? t('dm.chatDisabledRentedOut', '该 Buddy 已出租给其他用户，暂时无法聊天')
-                : t('dm.chatDisabledListed', '该 Buddy 已在集市挂单中，暂时无法聊天')}
+                : agentChatStatus?.reason === 'expired'
+                  ? t('dm.chatDisabledExpired', '使用权已到期，请续租后再使用')
+                  : t('dm.chatDisabledListed', '该 Buddy 已在集市挂单中，暂时无法聊天')}
             </span>
           </div>
         ) : (

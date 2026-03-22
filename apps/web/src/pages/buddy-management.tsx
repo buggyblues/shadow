@@ -126,15 +126,19 @@ function getAgentOnlineDotClass(agent: Agent): string {
 }
 
 /** Formats total online seconds into a human-readable duration string */
-function formatOnlineDuration(totalSeconds: number): string {
-  if (totalSeconds < 60) return `${totalSeconds}秒`
+function formatOnlineDuration(
+  totalSeconds: number,
+  t: (key: string, defaultValue?: string) => string,
+): string {
+  if (totalSeconds < 60) return `${totalSeconds}${t('time.seconds', '秒')}`
   const hours = Math.floor(totalSeconds / 3600)
   const minutes = Math.floor((totalSeconds % 3600) / 60)
-  if (hours === 0) return `${minutes}分钟`
-  if (hours < 24) return `${hours}小时${minutes > 0 ? `${minutes}分钟` : ''}`
+  if (hours === 0) return `${minutes}${t('time.minutes', '分钟')}`
+  if (hours < 24)
+    return `${hours}${t('time.hours', '小时')}${minutes > 0 ? `${minutes}${t('time.minutes', '分钟')}` : ''}`
   const days = Math.floor(hours / 24)
   const remainHours = hours % 24
-  return `${days}天${remainHours > 0 ? `${remainHours}小时` : ''}`
+  return `${days}${t('time.days', '天')}${remainHours > 0 ? `${remainHours}${t('time.hours', '小时')}` : ''}`
 }
 
 /* ── Agent Management Page ──────────────────────────── */
@@ -706,10 +710,13 @@ function AgentDetail({
         </div>
         <div>
           <label className="block text-[10px] font-bold uppercase text-text-muted mb-1">
-            累计在线时长
+            {t('agentMgmt.totalOnlineTime')}
           </label>
           <p className="text-sm text-text-primary">
-            {formatOnlineDuration(agent.totalOnlineSeconds ?? 0)}
+            {formatOnlineDuration(
+              agent.totalOnlineSeconds ?? 0,
+              t as (key: string, defaultValue?: string) => string,
+            )}
           </p>
         </div>
         <div>
@@ -1570,7 +1577,10 @@ export function BuddyManagementContent() {
                 <span className="truncate flex-1">{name}</span>
                 {(agent.totalOnlineSeconds ?? 0) > 0 && (
                   <span className="text-[10px] text-text-muted shrink-0">
-                    {formatOnlineDuration(agent.totalOnlineSeconds)}
+                    {formatOnlineDuration(
+                      agent.totalOnlineSeconds,
+                      t as (key: string, defaultValue?: string) => string,
+                    )}
                   </span>
                 )}
                 <AgentListingBadge agent={agent} />
