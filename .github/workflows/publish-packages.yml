@@ -62,8 +62,17 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Normalize GitHub git URLs to HTTPS
+        shell: bash
+        run: |
+          git config --global url."https://github.com/".insteadOf git@github.com:
+          git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+
+      - name: Install SDK workspace dependencies
+        run: |
+          pnpm install --frozen-lockfile \
+            --filter @shadowob/sdk... \
+            --filter @shadowob/shared...
 
       - name: Verify SDK versions before bump
         run: pnpm check:sdk-versions
