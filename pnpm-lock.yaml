@@ -379,7 +379,7 @@ importers:
         version: 1.19.11(hono@4.12.5)
       '@hono/zod-validator':
         specifier: ^0.5.0
-        version: 0.5.0(hono@4.12.5)(zod@3.25.76)
+        version: 0.5.0(hono@4.12.5)(zod@4.3.6)
       '@shadowob/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -441,8 +441,8 @@ importers:
         specifier: ^8.19.0
         version: 8.19.0
       zod:
-        specifier: ^3.25.67
-        version: 3.25.76
+        specifier: ^4.3.6
+        version: 4.3.6
     devDependencies:
       '@types/bcryptjs':
         specifier: ^3.0.0
@@ -595,8 +595,8 @@ importers:
         specifier: workspace:*
         version: link:../sdk
       zod:
-        specifier: ^3.25.67
-        version: 3.25.76
+        specifier: ^4.3.6
+        version: 4.3.6
     devDependencies:
       socket.io-client:
         specifier: ^4.8.3
@@ -12078,9 +12078,6 @@ packages:
     peerDependencies:
       zod: ^3.25 || ^4
 
-  zod@3.25.76:
-    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
-
   zod@4.3.6:
     resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
 
@@ -14518,10 +14515,10 @@ snapshots:
       hono: 4.12.7
     optional: true
 
-  '@hono/zod-validator@0.5.0(hono@4.12.5)(zod@3.25.76)':
+  '@hono/zod-validator@0.5.0(hono@4.12.5)(zod@4.3.6)':
     dependencies:
       hono: 4.12.5
-      zod: 3.25.76
+      zod: 4.3.6
 
   '@ide/backoff@1.0.0': {}
 
@@ -15245,8 +15242,8 @@ snapshots:
   '@mistralai/mistralai@1.14.1':
     dependencies:
       ws: 8.20.0
-      zod: 3.25.76
-      zod-to-json-schema: 3.25.1(zod@3.25.76)
+      zod: 4.3.6
+      zod-to-json-schema: 3.25.1(zod@4.3.6)
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -25645,15 +25642,9 @@ snapshots:
       compress-commons: 6.0.2
       readable-stream: 4.7.0
 
-  zod-to-json-schema@3.25.1(zod@3.25.76):
-    dependencies:
-      zod: 3.25.76
-
   zod-to-json-schema@3.25.1(zod@4.3.6):
     dependencies:
       zod: 4.3.6
-
-  zod@3.25.76: {}
 
   zod@4.3.6: {}
 
