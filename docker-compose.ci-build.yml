@@ -1,0 +1,25 @@
+name: shadow-ci-build
+
+services:
+  build-check:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    working_dir: /workspace
+    init: true
+    command: >-
+      bash -lc '
+        set -euo pipefail
+        echo "=== Checking package builds ==="
+
+        echo "--- Building @shadowob/server ---"
+        pnpm --filter @shadowob/server build
+
+        echo "--- Building @shadowob/web ---"
+        pnpm --filter @shadowob/web build
+
+        echo "--- Building @shadowob/admin ---"
+        pnpm --filter @shadowob/admin build
+
+        echo "=== All builds passed ==="
+      '

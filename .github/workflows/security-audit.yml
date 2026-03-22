@@ -1,0 +1,91 @@
+name: security-audit
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'    # Every Monday at 06:00 UTC
+  pull_request:
+    paths:
+      - 'pnpm-lock.yaml'
+      - '**/package.json'
+      - 'packages/sdk-python/pyproject.toml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: security-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  npm-audit:
+    name: npm dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run pnpm audit
+        run: pnpm audit --prod 2>&1 || true
+        # pnpm audit returns non-zero on findings — log but don't block yet
+
+      - name: Check for critical/high vulnerabilities
+        run: |
+          OUTPUT=$(pnpm audit --prod --json 2>/dev/null || true)
+          CRITICAL=$(echo "$OUTPUT" | node -e "
+            const data = require('fs').readFileSync('/dev/stdin','utf8');
+            try {
+              const obj = JSON.parse(data);
+              const meta = obj.metadata || {};
+              const vuln = meta.vulnerabilities || {};
+              const count = (vuln.critical || 0) + (vuln.high || 0);
+              console.log(count);
+            } catch { console.log('0'); }
+          ")
+          echo "Critical + High vulnerabilities: $CRITICAL"
+          if [ "$CRITICAL" -gt 0 ] 2>/dev/null; then
+            echo "::warning::Found $CRITICAL critical/high npm vulnerabilities"
+          fi
+
+  docker-scan:
+    name: Dockerfile lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Lint Dockerfiles with hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile.e2e
+          failure-threshold: warning
+
+      - name: Lint server Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: apps/server/Dockerfile
+          failure-threshold: warning
+
+      - name: Lint web Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: apps/web/Dockerfile
+          failure-threshold: warning
+
+      - name: Lint admin Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: apps/admin/Dockerfile
+          failure-threshold: warning
