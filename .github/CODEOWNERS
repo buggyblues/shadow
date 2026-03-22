@@ -1,0 +1,28 @@
+# Default owner for all files
+* @buggyblues
+
+# Server & database
+apps/server/ @buggyblues
+apps/server/src/db/ @buggyblues
+
+# Desktop app
+apps/desktop/ @buggyblues
+
+# Mobile app
+apps/mobile/ @buggyblues
+
+# Web & Admin
+apps/web/ @buggyblues
+apps/admin/ @buggyblues
+
+# Shared packages
+packages/shared/ @buggyblues
+packages/sdk/ @buggyblues
+packages/sdk-python/ @buggyblues
+packages/openclaw/ @buggyblues
+
+# CI / CD
+.github/ @buggyblues
+docker-compose*.yml @buggyblues
+Dockerfile* @buggyblues
+scripts/ @buggyblues
