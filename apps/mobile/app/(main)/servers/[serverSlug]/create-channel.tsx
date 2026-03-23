@@ -420,92 +420,73 @@ export default function CreateChannelScreen() {
           autoFocus
         />
         <View style={styles.section}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.typeChipsRow}
-          >
-            {(['text', 'voice', 'announcement'] as ChannelType[]).map((item) => {
-              const selected = channelType === item
-              return (
-                <Pressable
-                  key={item}
-                  style={[
-                    styles.typeChip,
-                    {
-                      backgroundColor: selected ? `${colors.primary}12` : colors.surface,
-                      borderColor: selected ? colors.primary : colors.border,
-                    },
-                  ]}
-                  onPress={() => setChannelType(item)}
-                >
-                  <View
+          <View style={styles.typeAndPrivacyRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.typeChipsRow}
+            >
+              {(['text', 'voice', 'announcement'] as ChannelType[]).map((item) => {
+                const selected = channelType === item
+                return (
+                  <Pressable
+                    key={item}
                     style={[
-                      styles.typeChipIconWrap,
+                      styles.typeChip,
                       {
-                        backgroundColor: colors.inputBackground,
+                        backgroundColor: selected ? `${colors.primary}12` : colors.surface,
+                        borderColor: selected ? colors.primary : colors.border,
                       },
                     ]}
+                    onPress={() => setChannelType(item)}
                   >
-                    {channelIcon(item, selected ? colors.primary : colors.textSecondary, 16)}
-                  </View>
-                  <Text
-                    style={[
-                      styles.typeChipText,
-                      { color: selected ? colors.primary : colors.text },
-                    ]}
-                  >
-                    {channelTypeLabel(item)}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </ScrollView>
-        </View>
-
-        <View style={styles.section}>
-          <Pressable
-            style={[
-              styles.privateToggle,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-              },
-            ]}
-            onPress={() => setIsPrivate(!isPrivate)}
-          >
-            <View style={styles.privateToggleLeft}>
-              <View style={[styles.privateIconWrap, { backgroundColor: colors.inputBackground }]}>
-                <Lock size={16} color={isPrivate ? colors.primary : colors.textSecondary} />
-              </View>
-              <View style={styles.privateTextWrap}>
-                <Text style={[styles.privateLabel, { color: colors.text }]}>
-                  {t('channel.privateChannel', '私有频道')}
-                </Text>
-                <Text style={[styles.privateDesc, { color: colors.textMuted }]}>
-                  {t('channel.privateChannelDesc', '仅受邀成员可加入')}
-                </Text>
-              </View>
-            </View>
-            <View
+                    <View
+                      style={[
+                        styles.typeChipIconWrap,
+                        {
+                          backgroundColor: colors.inputBackground,
+                        },
+                      ]}
+                    >
+                      {channelIcon(item, selected ? colors.primary : colors.textSecondary, 16)}
+                    </View>
+                    <Text
+                      style={[
+                        styles.typeChipText,
+                        { color: selected ? colors.primary : colors.text },
+                      ]}
+                    >
+                      {channelTypeLabel(item)}
+                    </Text>
+                  </Pressable>
+                )
+              })}
+            </ScrollView>
+            <Pressable
               style={[
-                styles.toggleSwitch,
+                styles.privateToggleCompact,
                 {
-                  backgroundColor: isPrivate ? colors.primary : colors.border,
+                  backgroundColor: isPrivate ? `${colors.primary}12` : colors.surface,
+                  borderColor: isPrivate ? colors.primary : colors.border,
                 },
               ]}
+              onPress={() => setIsPrivate(!isPrivate)}
             >
               <View
+                style={[styles.privateIconWrapCompact, { backgroundColor: colors.inputBackground }]}
+              >
+                <Lock size={14} color={isPrivate ? colors.primary : colors.textSecondary} />
+              </View>
+              <Text
                 style={[
-                  styles.toggleThumb,
-                  {
-                    backgroundColor: '#fff',
-                    transform: [{ translateX: isPrivate ? 20 : 0 }],
-                  },
+                  styles.privateLabelCompact,
+                  { color: isPrivate ? colors.primary : colors.text },
                 ]}
-              />
-            </View>
-          </Pressable>
+              >
+                {t('channel.private', '私密')}
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
         {categories.length > 0 && (
@@ -867,9 +848,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     letterSpacing: 0.5,
   },
+  typeAndPrivacyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   typeChipsRow: {
     gap: spacing.sm,
-    paddingRight: spacing.lg,
+    paddingRight: spacing.sm,
   },
   typeChip: {
     flexDirection: 'row',
@@ -913,6 +899,15 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     borderWidth: 1,
   },
+  privateToggleCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
   privateToggleLeft: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -926,11 +921,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  privateIconWrapCompact: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   privateTextWrap: {
     flex: 1,
   },
   privateLabel: {
     fontSize: 15,
+    fontWeight: '700',
+  },
+  privateLabelCompact: {
+    fontSize: 14,
     fontWeight: '700',
   },
   privateDesc: {
