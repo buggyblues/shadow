@@ -64,9 +64,14 @@ export function createRentalHandler(container: AppContainer) {
     const offset = Number(c.req.query('offset') || '0')
     const listings = await rentalService.getMyListings(user.userId, { limit, offset })
 
+    // Filter to only include active, listed, and not-rented listings
+    const filtered = listings.filter(
+      (l) => l.listingStatus === 'active' && l.isListed === true && l.isRented === false,
+    )
+
     // Enrich listings with agent status
     const enriched = await Promise.all(
-      listings.map(async (l) => {
+      filtered.map(async (l) => {
         let agent: {
           status: string
           lastHeartbeat: Date | null
@@ -260,6 +265,11 @@ export function createRentalHandler(container: AppContainer) {
     const activeContract = await rentalContractDao.findActiveByListingId(agentListing.id)
     const isRentedOut = !!activeContract
 
+    // If the requesting user is the owner, always allow chat
+    if (agent.ownerId === user.userId) {
+      return c.json({ chatDisabled: false })
+    }
+
     // If the requesting user is the active tenant, chat is ENABLED + return rental info
     if (activeContract && activeContract.tenantId === user.userId) {
       return c.json({
@@ -275,7 +285,7 @@ export function createRentalHandler(container: AppContainer) {
       })
     }
 
-    // Agent is listed or rented out - chat is disabled for everyone (including owner)
+    // Agent is listed or rented out - chat is disabled for non-owner/non-tenant users
     if (isRentedOut) {
       return c.json({ chatDisabled: true, reason: 'rented_out' })
     }
@@ -283,12 +293,7 @@ export function createRentalHandler(container: AppContainer) {
       return c.json({ chatDisabled: true, reason: 'listed' })
     }
 
-    // Agent has a listing but not listed and no active contract
-    // Owner can chat, but non-owner cannot (rental expired)
-    if (agent.ownerId === user.userId) {
-      return c.json({ chatDisabled: false })
-    }
-
+    // Agent has a listing but not listed and no active contract - rental expired
     return c.json({ chatDisabled: true, reason: 'expired' })
   })
 
