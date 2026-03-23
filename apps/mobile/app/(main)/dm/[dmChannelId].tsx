@@ -417,6 +417,40 @@ export default function DmChatScreen() {
     }
   }
 
+  const handlePasteFromClipboard = async () => {
+    try {
+      // Check if clipboard has image
+      const hasImage = await Clipboard.hasImageAsync()
+      if (hasImage) {
+        const image = await Clipboard.getImageAsync({ format: 'png' })
+        if (image) {
+          const timestamp = Date.now()
+          const fileName = `clipboard_${timestamp}.png`
+          setPendingFiles((prev) => [
+            ...prev,
+            {
+              uri: image.data,
+              name: fileName,
+              type: 'image/png',
+            },
+          ])
+          return
+        }
+      }
+
+      // Check if clipboard has text
+      const text = await Clipboard.getStringAsync()
+      if (text) {
+        setInputText((prev) => prev + text)
+        return
+      }
+
+      Alert.alert(t('common.error'), t('chat.clipboardEmpty', '剪贴板为空'))
+    } catch {
+      Alert.alert(t('common.error'), t('chat.pasteFailed', '粘贴失败'))
+    }
+  }
+
   const handleSend = async () => {
     const content = inputText.trim()
     if (!content && pendingFiles.length === 0) return
@@ -772,6 +806,7 @@ export default function DmChatScreen() {
           voiceTranscript={voiceTranscript}
           keyboardVisible={keyboardVisible}
           insetsBottom={insets.bottom}
+          canUseVoice={true}
           onToggleVoice={toggleVoiceInput}
           showAtButton={false}
           showEmojiPicker={showInputEmojiPicker}
@@ -781,6 +816,7 @@ export default function DmChatScreen() {
           onPickImage={handlePickImage}
           onPickFile={handlePickFile}
           onTakePhoto={handleTakePhoto}
+          onPaste={handlePasteFromClipboard}
         />
       )}
     </KeyboardAvoidingView>

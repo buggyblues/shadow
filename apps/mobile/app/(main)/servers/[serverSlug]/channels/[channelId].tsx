@@ -864,6 +864,41 @@ export default function ChannelViewScreen() {
     setPendingFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
+  // ---------- Paste from clipboard ----------
+  const handlePasteFromClipboard = async () => {
+    try {
+      // Check if clipboard has image
+      const hasImage = await Clipboard.hasImageAsync()
+      if (hasImage) {
+        const image = await Clipboard.getImageAsync({ format: 'png' })
+        if (image) {
+          const timestamp = Date.now()
+          const fileName = `clipboard_${timestamp}.png`
+          setPendingFiles((prev) => [
+            ...prev,
+            {
+              uri: image.data,
+              name: fileName,
+              type: 'image/png',
+            },
+          ])
+          return
+        }
+      }
+
+      // Check if clipboard has text
+      const text = await Clipboard.getStringAsync()
+      if (text) {
+        setInputText((prev) => prev + text)
+        return
+      }
+
+      Alert.alert(t('common.error'), t('chat.clipboardEmpty', '剪贴板为空'))
+    } catch {
+      Alert.alert(t('common.error'), t('chat.pasteFailed', '粘贴失败'))
+    }
+  }
+
   // ---------- Send message ----------
   const insertOptimisticMessage = useCallback(
     (content: string, replyToId?: string) => {
@@ -1531,6 +1566,7 @@ export default function ChannelViewScreen() {
           onPickImage={handlePickImage}
           onPickFile={handlePickFile}
           onTakePhoto={handleTakePhoto}
+          onPaste={handlePasteFromClipboard}
         />
       )}
 
