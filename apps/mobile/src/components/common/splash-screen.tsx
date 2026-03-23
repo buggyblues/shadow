@@ -1,4 +1,3 @@
-import { useNavigation } from '@react-navigation/native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -6,9 +5,6 @@ import {
   Animated,
   Dimensions,
   FlatList,
-  I18nManager,
-  Image,
-  Platform,
   StatusBar,
   StyleSheet,
   Text,
@@ -16,7 +12,7 @@ import {
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Bot, MessageCircle, Rocket, Server, Users } from '../../lib/icons'
+import { Bot, MessageCircle, Rocket, Users } from '../../lib/icons'
 
 interface SplashScreenProps {
   onComplete: () => void
@@ -115,7 +111,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar barStyle="light-content" />
-      
+
       {/* Skip button */}
       <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
         <Text style={styles.skipText}>{t('common.skip', 'Skip')}</Text>
@@ -130,11 +126,12 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-          { useNativeDriver: false },
-        )}
-        onViewableItemsChanged={onViewableItemsChanged.viewabilityConfig ? onViewableItemsChanged.onChange : undefined}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], {
+          useNativeDriver: false,
+        })}
+        onViewableItemsChanged={
+          onViewableItemsChanged.viewabilityConfig ? onViewableItemsChanged.onChange : undefined
+        }
         viewabilityConfig={onViewableItemsChanged.viewabilityConfig}
       />
 
@@ -159,10 +156,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
           return (
             <Animated.View
               key={index}
-              style={[
-                styles.indicator,
-                { opacity, transform: [{ scale }] },
-              ]}
+              style={[styles.indicator, { opacity, transform: [{ scale }] }]}
             />
           )
         })}

@@ -1260,7 +1260,7 @@
     "mobileUserDesc": "需要电脑端配合使用",
     "downloadTitle": "下载 OpenClaw 桌面端",
     "downloadDesc": "安装后打开，按设置向导完成 Buddy 绑定",
-    "installTip": "安装完成后，打开 OpenClaw，点击"添加 Buddy"即可",
+    "installTip": "安装完成后，打开 OpenClaw，点击「添加 Buddy」即可",
     "installed": "已安装，下一步",
     "commandTitle": "使用命令绑定",
     "commandDesc": "在 OpenClaw 对话框中输入以下命令",

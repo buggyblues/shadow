@@ -43,6 +43,7 @@ import ReactDOM from 'react-dom/client'
 import { useDesktopNotifications } from './hooks/use-desktop-notifications'
 import { DesktopSettingsPage } from './pages/desktop-settings'
 import { OpenClawPage } from './pages/openclaw'
+import { DesktopOnboardPage } from './pages/openclaw/desktop-onboard'
 
 // --- Desktop-specific enhancements ---
 
@@ -87,6 +88,13 @@ function DesktopAppRoute() {
 // Routes (mirroring web app)
 const rootRoute = createRootRoute({
   component: RootLayout,
+})
+
+// Onboarding route - standalone, no auth required
+const onboardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/onboard',
+  component: DesktopOnboardPage,
 })
 
 const indexRoute = createRoute({
@@ -307,6 +315,7 @@ const userProfileRoute = createRoute({
 })
 
 const routeTree = rootRoute.addChildren([
+  onboardRoute,
   indexRoute,
   loginRoute,
   registerRoute,

@@ -1,20 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import {
-  Bot,
-  ChevronRight,
-  Download,
-  MessageCircle,
-  Plus,
-  Rocket,
-  Smartphone,
-  Terminal,
-  X,
-} from 'lucide-react'
+import { Bot, ChevronRight, Download, Plus, Rocket, Smartphone, Terminal, X } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
-import { useAuthStore } from '../../stores/auth.store'
 
 interface BuddyOnboardingProps {
   serverId: string
@@ -31,8 +20,7 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
   // Check if user has any buddies
   const { data: buddies = [] } = useQuery({
     queryKey: ['buddies'],
-    queryFn: () =>
-      fetchApi<Array<{ id: string; name: string }>>('/api/buddies'),
+    queryFn: () => fetchApi<Array<{ id: string; name: string }>>('/api/buddies'),
   })
 
   const hasBuddies = buddies.length > 0
@@ -89,10 +77,7 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
                     {t('buddyOnboarding.getStarted', '开始设置 Buddy')}
                   </p>
                   <p className="text-sm text-text-muted">
-                    {t(
-                      'buddyOnboarding.getStartedDesc',
-                      '只需几步，让 AI 加入你的社区',
-                    )}
+                    {t('buddyOnboarding.getStartedDesc', '只需几步，让 AI 加入你的社区')}
                   </p>
                 </div>
                 <ChevronRight
@@ -142,10 +127,7 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
                     {t('buddyOnboarding.downloadDesktop', '下载桌面端')}
                   </p>
                   <p className="text-sm text-text-muted">
-                    {t(
-                      'buddyOnboarding.downloadDesktopDesc',
-                      '推荐新手，一键安装并配置',
-                    )}
+                    {t('buddyOnboarding.downloadDesktopDesc', '推荐新手，一键安装并配置')}
                   </p>
                 </div>
                 <span className="px-2 py-1 text-xs bg-primary/20 text-primary rounded-full">
@@ -164,16 +146,10 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
                 </div>
                 <div className="flex-1 text-left">
                   <p className="font-semibold text-text-primary">
-                    {t(
-                      'buddyOnboarding.haveOpenClaw',
-                      '已有 OpenClaw 桌面端',
-                    )}
+                    {t('buddyOnboarding.haveOpenClaw', '已有 OpenClaw 桌面端')}
                   </p>
                   <p className="text-sm text-text-muted">
-                    {t(
-                      'buddyOnboarding.haveOpenClawDesc',
-                      '使用命令快速绑定 Buddy',
-                    )}
+                    {t('buddyOnboarding.haveOpenClawDesc', '使用命令快速绑定 Buddy')}
                   </p>
                 </div>
               </button>
@@ -192,10 +168,7 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
                     {t('buddyOnboarding.mobileUser', '手机用户')}
                   </p>
                   <p className="text-sm text-text-muted">
-                    {t(
-                      'buddyOnboarding.mobileUserDesc',
-                      '需要电脑端配合使用',
-                    )}
+                    {t('buddyOnboarding.mobileUserDesc', '需要电脑端配合使用')}
                   </p>
                 </div>
               </button>
@@ -222,10 +195,7 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
                 {t('buddyOnboarding.downloadTitle', '下载 OpenClaw 桌面端')}
               </h2>
               <p className="text-text-muted text-sm">
-                {t(
-                  'buddyOnboarding.downloadDesc',
-                  '安装后打开，按设置向导完成 Buddy 绑定',
-                )}
+                {t('buddyOnboarding.downloadDesc', '安装后打开，按设置向导完成 Buddy 绑定')}
               </p>
             </div>
 
@@ -236,9 +206,7 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
                 className="flex items-center gap-3 p-3 bg-bg-tertiary hover:bg-bg-modifier-hover rounded-xl transition"
               >
                 <span className="text-2xl">🪟</span>
-                <span className="font-medium text-text-primary">
-                  Windows 版本
-                </span>
+                <span className="font-medium text-text-primary">Windows 版本</span>
               </a>
               <a
                 href="https://openclaw.ai/download/macos"
@@ -258,10 +226,8 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
 
             <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl mb-4">
               <p className="text-sm text-amber-400">
-                💡 {t(
-                  'buddyOnboarding.installTip',
-                  '安装完成后，打开 OpenClaw，点击"添加 Buddy"即可',
-                )}
+                💡{' '}
+                {t('buddyOnboarding.installTip', '安装完成后，打开 OpenClaw，点击"添加 Buddy"即可')}
               </p>
             </div>
 
@@ -295,10 +261,7 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
                 {t('buddyOnboarding.commandTitle', '使用命令绑定')}
               </h2>
               <p className="text-text-muted text-sm">
-                {t(
-                  'buddyOnboarding.commandDesc',
-                  '在 OpenClaw 对话框中输入以下命令',
-                )}
+                {t('buddyOnboarding.commandDesc', '在 OpenClaw 对话框中输入以下命令')}
               </p>
             </div>
 
@@ -314,9 +277,7 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(
-                      `/buddy bind --server ${serverId}`,
-                    )
+                    navigator.clipboard.writeText(`/buddy bind --server ${serverId}`)
                   }}
                   className="absolute top-2 right-2 px-2 py-1 text-xs text-text-muted hover:text-text-primary bg-bg-modifier-hover rounded transition"
                 >
@@ -361,10 +322,7 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
                 {t('buddyOnboarding.addToChannel', '添加 Buddy 到频道')}
               </h2>
               <p className="text-text-muted text-sm">
-                {t(
-                  'buddyOnboarding.addToChannelDesc',
-                  '让 Buddy 加入你的频道，开始对话',
-                )}
+                {t('buddyOnboarding.addToChannelDesc', '让 Buddy 加入你的频道，开始对话')}
               </p>
             </div>
 
@@ -379,10 +337,7 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
                     {t('buddyOnboarding.step1', '进入你的服务器频道')}
                   </p>
                   <p className="text-sm text-text-muted">
-                    {t(
-                      'buddyOnboarding.step1Desc',
-                      '点击左侧服务器列表中的频道',
-                    )}
+                    {t('buddyOnboarding.step1Desc', '点击左侧服务器列表中的频道')}
                   </p>
                 </div>
               </div>
@@ -413,10 +368,7 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
                     {t('buddyOnboarding.step3', '开始互动')}
                   </p>
                   <p className="text-sm text-text-muted">
-                    {t(
-                      'buddyOnboarding.step3Desc',
-                      'Buddy 会自动回复，你也可以给它分配任务',
-                    )}
+                    {t('buddyOnboarding.step3Desc', 'Buddy 会自动回复，你也可以给它分配任务')}
                   </p>
                 </div>
               </div>
