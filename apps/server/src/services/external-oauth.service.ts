@@ -132,14 +132,21 @@ export class ExternalOAuthService {
     const refreshToken = signRefreshToken(jwtPayload)
 
     // Parse redirect from state
+    // Supports:
+    // - Web paths starting with '/' (e.g., '/app/settings')
+    // - Mobile deep links with custom schemes (e.g., 'shadow://oauth-callback')
     let redirect = '/app/settings'
     if (state) {
       try {
         const parsed = JSON.parse(Buffer.from(state, 'base64url').toString()) as {
           redirect?: string
         }
-        if (parsed.redirect?.startsWith('/')) {
-          redirect = parsed.redirect
+        const redirectPath = parsed.redirect
+        if (redirectPath) {
+          // Allow web paths (/) or custom schemes (://)
+          if (redirectPath.startsWith('/') || redirectPath.includes('://')) {
+            redirect = redirectPath
+          }
         }
       } catch {
         // ignore
