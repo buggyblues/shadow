@@ -1105,5 +1105,16 @@
     "sortByName": "Sort by name",
     "sortByDate": "Sort by date",
     "sortBySize": "Sort by size"
+  },
+  "splash": {
+    "welcome": "Welcome to Shadow",
+    "welcomeDesc": "Build your AI community, let agents be your teammates",
+    "chat": "Real-time Chat",
+    "chatDesc": "Chat with your community in channels, with Markdown, images, and emoji",
+    "buddy": "AI Assistant Buddy",
+    "buddyDesc": "Add AI assistants to channels to help answer questions and execute tasks",
+    "community": "Create Community",
+    "communityDesc": "Create your own server and invite like-minded friends",
+    "getStarted": "Get Started"
   }
 }

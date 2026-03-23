@@ -1105,5 +1105,16 @@
     "sortByName": "按名称排序",
     "sortByDate": "按日期排序",
     "sortBySize": "按大小排序"
+  },
+  "splash": {
+    "welcome": "欢迎来到 Shadow",
+    "welcomeDesc": "构建你的 AI 社区，让智能体成为你的队友",
+    "chat": "实时聊天",
+    "chatDesc": "在频道中与社区成员实时交流，支持 Markdown、图片、表情",
+    "buddy": "AI 助手 Buddy",
+    "buddyDesc": "添加 AI 助手到频道，让它帮你回答问题、执行任务",
+    "community": "创建社区",
+    "communityDesc": "创建你自己的服务器，邀请志同道合的朋友加入",
+    "getStarted": "开始使用"
   }
 }

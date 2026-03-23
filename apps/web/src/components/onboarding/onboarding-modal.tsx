@@ -26,7 +26,7 @@ interface OnboardingModalProps {
   onClose: () => void
 }
 
-type Step = 'welcome' | 'create-server' | 'join-server' | 'complete'
+type Step = 'welcome' | 'create-server' | 'join-server' | 'buddy' | 'complete'
 
 const features = [
   {
@@ -64,6 +64,7 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
   const [slideIndex, setSlideIndex] = useState(0)
   const [serverName, setServerName] = useState('')
   const [inviteCode, setInviteCode] = useState('')
+  const [createdServerId, setCreatedServerId] = useState<string | null>(null)
   const touchStartX = useRef(0)
   const touchEndX = useRef(0)
 
@@ -92,12 +93,10 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['servers'] })
-      // 创建成功后直接完成 onboarding
-      localStorage.setItem('shadow_onboarding_completed', 'true')
-      onClose()
-      // 使用 id 而不是 slug（slug 可能为 null）
+      // 保存服务器 ID，跳转到 Buddy 绑定步骤
       const serverId = data.slug || data.id
-      void navigate({ to: '/servers/$serverSlug', params: { serverSlug: serverId } })
+      setCreatedServerId(serverId)
+      setStep('buddy')
     },
   })
 
@@ -110,12 +109,10 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['servers'] })
-      // 加入成功后直接完成 onboarding
-      localStorage.setItem('shadow_onboarding_completed', 'true')
-      onClose()
-      // 使用 id 而不是 slug（slug 可能为 null）
+      // 保存服务器 ID，跳转到 Buddy 绑定步骤
       const serverId = data.slug || data.id
-      void navigate({ to: '/servers/$serverSlug', params: { serverSlug: serverId } })
+      setCreatedServerId(serverId)
+      setStep('buddy')
     },
   })
 
@@ -395,6 +392,99 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
             >
               {t('onboarding.skipForNow', '暂时跳过')}
             </button>
+          </div>
+        )}
+
+        {/* Buddy onboarding step */}
+        {step === 'buddy' && createdServerId && (
+          <div className="p-8">
+            <div className="text-center mb-6">
+              <div className="w-20 h-20 mx-auto mb-6 relative">
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-red-500 animate-pulse opacity-75" />
+                <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/25">
+                  <Rocket size={40} className="text-white" />
+                </div>
+              </div>
+              <h2 className="text-2xl font-bold text-text-primary mb-2">
+                {t('buddyOnboarding.title', '让你的服务器活起来！')}
+              </h2>
+              <p className="text-text-muted">
+                {t(
+                  'buddyOnboarding.desc',
+                  '添加 Buddy AI 助手，让它成为你的第一个队友',
+                )}
+              </p>
+            </div>
+
+            {/* Quick actions */}
+            <div className="space-y-3 mb-6">
+              <a
+                href="https://openclaw.ai/download"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-4 p-4 bg-bg-tertiary hover:bg-bg-modifier-hover rounded-xl transition group"
+              >
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center">
+                  <svg
+                    className="w-6 h-6 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-text-primary group-hover:text-primary transition">
+                    {t('buddyOnboarding.downloadOpenClaw', '下载 OpenClaw 桌面端')}
+                  </p>
+                  <p className="text-sm text-text-muted">
+                    {t(
+                      'buddyOnboarding.downloadOpenClawDesc',
+                      '安装后打开，按向导完成 Buddy 绑定',
+                    )}
+                  </p>
+                </div>
+              </a>
+
+              <div className="p-4 bg-bg-tertiary rounded-xl">
+                <p className="text-sm text-text-muted mb-2">
+                  {t('buddyOnboarding.commandLabel', '或在 OpenClaw 对话中输入：')}
+                </p>
+                <code className="block w-full p-3 bg-bg-secondary rounded-lg text-primary font-mono text-sm">
+                  /buddy bind --server {createdServerId}
+                </code>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.setItem('shadow_onboarding_completed', 'true')
+                  onClose()
+                  void navigate({
+                    to: '/servers/$serverSlug',
+                    params: { serverSlug: createdServerId },
+                  })
+                }}
+                className="flex-1 py-3 text-text-muted hover:text-text-primary transition"
+              >
+                {t('common.skipForNow', '暂时跳过')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep('complete')}
+                className="flex-1 py-3 bg-primary text-white font-semibold rounded-xl hover:opacity-90 transition"
+              >
+                {t('buddyOnboarding.bound', '已绑定 Buddy')}
+              </button>
+            </div>
           </div>
         )}
 
