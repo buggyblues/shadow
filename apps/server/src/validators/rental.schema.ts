@@ -20,7 +20,7 @@ export const createListingSchema = z.object({
   osType: z.enum(['macos', 'windows', 'linux']).optional().default('macos'),
   deviceInfo: deviceInfoSchema.optional(),
   softwareTools: z.array(z.string().max(100)).max(50).optional().default([]),
-  hourlyRate: z.number().int().min(1).max(100_000).optional().default(0),
+  hourlyRate: z.number().int().min(0).max(100_000).optional().default(0),
   dailyRate: z.number().int().min(0).max(1_000_000).optional().default(0),
   monthlyRate: z.number().int().min(0).max(10_000_000).optional().default(0),
   tokenFeePassthrough: z.boolean().optional().default(true),
@@ -28,7 +28,7 @@ export const createListingSchema = z.object({
   /* Billing v2 fields */
   baseDailyRate: z.number().int().min(0).max(100_000).optional().default(0),
   messageFee: z.number().int().min(0).max(100_000).optional().default(0),
-  pricingVersion: z.number().int().min(1).max(2).optional().default(2),
+  pricingVersion: z.number().int().min(1).max(2).optional().default(1),
   listingStatus: z.enum(['draft', 'active']).optional().default('draft'),
   availableFrom: z
     .string()
@@ -96,6 +96,6 @@ export const browseListingsSchema = z.object({
   deviceTier: z.string().max(50).optional(),
   osType: z.string().max(50).optional(),
   sortBy: z.enum(['popular', 'newest', 'price-asc', 'price-desc']).optional().default('popular'),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  limit: z.coerce.number().int().min(1).max(500).optional().default(20),
   offset: z.coerce.number().int().min(0).optional().default(0),
 })

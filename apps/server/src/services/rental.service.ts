@@ -92,6 +92,7 @@ export class RentalService {
     return this.deps.clawListingDao.create({
       ownerId,
       ...data,
+      hourlyRate: data.hourlyRate ?? 0,
       availableFrom: data.availableFrom ? new Date(data.availableFrom) : undefined,
       availableUntil: data.availableUntil ? new Date(data.availableUntil) : null,
     })
@@ -167,7 +168,7 @@ export class RentalService {
   }
 
   async getMyListings(ownerId: string, opts?: { limit?: number; offset?: number }) {
-    return this.deps.clawListingDao.findByOwnerId(ownerId, opts)
+    return this.deps.clawListingDao.findActiveListedByOwnerId(ownerId, opts)
   }
 
   async browseListings(opts?: {
