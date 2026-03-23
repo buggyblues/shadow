@@ -381,6 +381,35 @@ export function MessageInput({
     }
   }, [channelId, content, pendingFiles, replyToId, onClearReply, queryClient, clearDraft])
 
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    // Handle pasted files from clipboard
+    const items = e.clipboardData?.items
+    if (!items) return
+
+    const files: File[] = []
+    for (const item of items) {
+      // Check if the item is a file
+      if (item.kind === 'file') {
+        const file = item.getAsFile()
+        if (file) {
+          files.push(file)
+        }
+      }
+    }
+
+    if (files.length > 0) {
+      e.preventDefault() // Prevent pasting file content as text
+      const newFiles: PendingFile[] = files.map((file) => {
+        const pf: PendingFile = { file }
+        if (file.type.startsWith('image/')) {
+          pf.preview = URL.createObjectURL(file)
+        }
+        return pf
+      })
+      setPendingFiles((prev) => [...prev, ...newFiles])
+    }
+  }, [])
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Handle mention autocomplete navigation
     if (mentionQuery !== null && filteredMembers.length > 0) {
@@ -645,6 +674,7 @@ export function MessageInput({
           value={content}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder={t('chat.inputPlaceholder', {
             channelName: channelName ?? t('chat.channelFallback'),
           })}
