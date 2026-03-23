@@ -12,7 +12,7 @@ on:
           - minor
           - major
       publish_npm:
-        description: Publish @shadowob/sdk to npm
+        description: Publish all public npm packages under packages/
         type: boolean
         default: true
       publish_pypi:
@@ -71,39 +71,67 @@ jobs:
       - name: Install SDK workspace dependencies
         run: |
           pnpm install --frozen-lockfile \
-            --filter @shadowob/sdk... \
-            --filter @shadowob/shared...
+            --filter ./packages/*...
 
-      - name: Verify SDK versions before bump
-        run: pnpm check:sdk-versions
+      - name: Compute publishable npm workspace filters
+        id: publish_targets
+        shell: bash
+        run: |
+          FILTERS=$(node <<'NODE'
+          const fs = require('node:fs')
+          const path = require('node:path')
 
-      - name: Compute new version
-        id: version
+          const packagesDir = path.resolve(process.cwd(), 'packages')
+          const dirs = fs.readdirSync(packagesDir).filter((d) => {
+            const full = path.join(packagesDir, d)
+            return fs.statSync(full).isDirectory()
+          })
+
+          const filters = []
+          for (const dir of dirs) {
+            const pkgJsonPath = path.join(packagesDir, dir, 'package.json')
+            if (!fs.existsSync(pkgJsonPath)) continue
+            const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
+            if (pkg.private) continue
+            filters.push(`--filter ${JSON.stringify(`./packages/${dir}`)}`)
+          }
+
+          process.stdout.write(filters.join(' '))
+          NODE
+          )
+
+          if [ -z "$FILTERS" ]; then
+            echo "No publishable npm packages found under packages/."
+            exit 1
+          fi
+
+          echo "npm_filters=$FILTERS" >> "$GITHUB_OUTPUT"
+          echo "NPM_FILTERS=$FILTERS" >> "$GITHUB_ENV"
+          echo "Publish filters: $FILTERS"
+
+      - name: Verify workspace dependencies before bump
+        run: pnpm check:workspace-deps
+
+      - name: Compute current SDK version
+        id: version_before
         shell: bash
         run: |
           CURRENT=$(node -p "require('./packages/sdk/package.json').version")
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
-          case "${{ inputs.bump }}" in
-            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
-            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
-            patch) PATCH=$((PATCH + 1)) ;;
-          esac
-          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-          echo "SDK_VERSION=$NEW_VERSION" >> "$GITHUB_ENV"
-          echo "Release version: $NEW_VERSION"
+          echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "SDK_VERSION_BEFORE=$CURRENT" >> "$GITHUB_ENV"
+          echo "Current SDK version: $CURRENT"
 
-      - name: Bump SDK versions
+      - name: Bump all public npm package versions
         shell: bash
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          pnpm -r ${NPM_FILTERS} version "${{ inputs.bump }}" --no-git-tag-version
 
-          # Bump npm package version - use cd instead of pnpm flags
-          (cd packages/sdk && pnpm version "$VERSION" --no-git-tag-version)
-          
-          # Bump Python package version using sed
-          sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" packages/sdk-python/pyproject.toml
-
+      - name: Sync sdk-python version with npm SDK
+        shell: bash
+        run: |
+          SDK_VERSION=$(node -p "require('./packages/sdk/package.json').version")
+          echo "SDK_VERSION=$SDK_VERSION" >> "$GITHUB_ENV"
+          sed -i "s/^version = \".*\"/version = \"${SDK_VERSION}\"/" packages/sdk-python/pyproject.toml
           pnpm check:sdk-versions
 
       - name: Build Python distribution
@@ -112,12 +140,12 @@ jobs:
           python -m pip install --upgrade pip build
           python -m build --wheel --sdist packages/sdk-python
 
-      - name: Publish @shadowob/sdk to npm
+      - name: Publish public npm packages
         if: inputs.publish_npm && !inputs.dry_run
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          (cd packages/sdk && pnpm publish --no-git-checks --access public)
+          pnpm -r ${NPM_FILTERS} publish --no-git-checks --access public
 
       - name: Publish shadowob-sdk to PyPI
         if: inputs.publish_pypi && !inputs.dry_run
@@ -138,11 +166,11 @@ jobs:
         if: ${{ !inputs.dry_run }}
         shell: bash
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${SDK_VERSION}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add packages/sdk/package.json packages/sdk-python/pyproject.toml
-          git commit -m "chore(release): sdk v${VERSION}"
+          git add packages/*/package.json packages/sdk-python/pyproject.toml pnpm-lock.yaml
+          git commit -m "chore(release): packages v${VERSION}"
           git tag "sdk-v${VERSION}"
           git push
           git push --tags
@@ -151,11 +179,11 @@ jobs:
         if: inputs.create_release && !inputs.dry_run
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: sdk-v${{ steps.version.outputs.version }}
+          tag_name: sdk-v${{ env.SDK_VERSION }}
           generate_release_notes: true
           body: |
-            SDK release version: `${{ steps.version.outputs.version }}`
+            SDK release version: `${{ env.SDK_VERSION }}`
 
             Published packages:
-            - npm: `@shadowob/sdk@${{ steps.version.outputs.version }}`
-            - PyPI: `shadowob-sdk==${{ steps.version.outputs.version }}`
+            - npm: all public packages under `packages/`
+            - PyPI: `shadowob-sdk==${{ env.SDK_VERSION }}`
