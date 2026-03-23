@@ -1,5 +1,15 @@
 import { Image } from 'expo-image'
-import { AtSign, Camera, File, Image as ImageIcon, Mic, Plus, Smile, X } from 'lucide-react-native'
+import {
+  AtSign,
+  Camera,
+  ClipboardPaste,
+  File,
+  Image as ImageIcon,
+  Mic,
+  Plus,
+  Smile,
+  X,
+} from 'lucide-react-native'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -293,6 +303,8 @@ interface ChatComposerProps {
   onPickImage: () => void
   onPickFile: () => void
   onTakePhoto?: () => void
+  /** Callback when user wants to paste from clipboard - checks for images/files */
+  onPaste?: () => void
 }
 
 function ImageViewerModal({
@@ -370,6 +382,7 @@ export const ChatComposer = memo(function ChatComposer({
   onPickImage,
   onPickFile,
   onTakePhoto,
+  onPaste,
 }: ChatComposerProps) {
   const colors = useColors()
   const { t } = useTranslation()
@@ -729,6 +742,22 @@ export const ChatComposer = memo(function ChatComposer({
                     {t('chat.pickFile', '文件')}
                   </Text>
                 </Pressable>
+                {onPaste && (
+                  <Pressable
+                    style={({ pressed }) => [styles.plusPanelItem, pressed && { opacity: 0.6 }]}
+                    onPress={() => {
+                      setShowPlusMenu(false)
+                      onPaste()
+                    }}
+                  >
+                    <View style={[styles.plusPanelIcon, { backgroundColor: '#8b5cf615' }]}>
+                      <ClipboardPaste size={28} color="#8b5cf6" />
+                    </View>
+                    <Text style={[styles.plusPanelLabel, { color: colors.textSecondary }]}>
+                      {t('chat.paste', '粘贴')}
+                    </Text>
+                  </Pressable>
+                )}
               </View>
             )}
           </View>

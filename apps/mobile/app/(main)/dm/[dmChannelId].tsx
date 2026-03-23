@@ -303,6 +303,41 @@ export default function DmChatScreen() {
     setPendingFiles((prev) => prev.filter((_, i) => i !== index))
   }, [])
 
+  // ---------- Handle paste (images/files from clipboard) ----------
+  const handlePaste = useCallback(async () => {
+    // Check clipboard for images using expo-clipboard
+    try {
+      const hasImage = await Clipboard.hasImageAsync()
+      if (hasImage) {
+        const imageUrl = await Clipboard.getImageUrlAsync({ gif: false })
+        if (imageUrl) {
+          // Determine the image type from the URL or default to jpeg
+          const extension = imageUrl.split('.').pop()?.toLowerCase()
+          let mimeType = 'image/jpeg'
+          if (extension === 'png') mimeType = 'image/png'
+          else if (extension === 'gif') mimeType = 'image/gif'
+          else if (extension === 'webp') mimeType = 'image/webp'
+
+          setPendingFiles((prev) => [
+            ...prev,
+            {
+              uri: imageUrl,
+              name: `clipboard_image_${Date.now()}.${extension || 'jpg'}`,
+              type: mimeType,
+            },
+          ])
+          return
+        }
+      }
+
+      // No image in clipboard - show feedback
+      Alert.alert(t('chat.paste', '粘贴'), t('chat.noImageInClipboard', '剪贴板中没有图片'))
+    } catch (err) {
+      console.warn('[Paste] Failed to check/get clipboard image:', err)
+      Alert.alert(t('common.error'), t('chat.pasteFailed', '粘贴失败'))
+    }
+  }, [t])
+
   const insertOptimisticMessage = (content: string, replyToId?: string) => {
     const tempId = `temp-${Date.now()}`
     const msg: Message = {
@@ -781,6 +816,7 @@ export default function DmChatScreen() {
           onPickImage={handlePickImage}
           onPickFile={handlePickFile}
           onTakePhoto={handleTakePhoto}
+          onPaste={handlePaste}
         />
       )}
     </KeyboardAvoidingView>
