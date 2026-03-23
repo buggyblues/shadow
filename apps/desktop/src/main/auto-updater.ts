@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, net, shell } from 'electron'
 
-const RELEASE_API_URL = 'https://api.github.com/repos/BuggyBlues/shadow/releases/latest'
+const RELEASE_API_URL = 'https://api.github.com/repos/buggyblues/shadow/releases/latest'
 
 type UpdateStatus = 'idle' | 'checking' | 'update-available' | 'up-to-date' | 'error'
 

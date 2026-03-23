@@ -16,11 +16,39 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
         if (userId) {
           try {
             const channelMemberDao = container.resolve('channelMemberDao')
+            const channelDao = container.resolve('channelDao')
             const membership = await channelMemberDao.get(channelId, userId)
             if (!membership) {
-              logger.warn({ userId, channelId }, 'Denied channel:join — not a member')
-              if (typeof ack === 'function') ack({ ok: false })
-              return
+              // Check if channel is public - auto-add member for public channels
+              const channel = await channelDao.findById(channelId)
+              if (channel && !channel.isPrivate) {
+                // Auto-add user to public channel
+                await channelMemberDao.add(channelId, userId)
+                logger.info({ userId, channelId }, 'Auto-added user to public channel')
+
+                // Broadcast member:joined to the channel
+                try {
+                  const userDao = container.resolve('userDao')
+                  const user = await userDao.findById(userId)
+                  if (user) {
+                    io.to(`channel:${channelId}`).emit('member:joined', {
+                      serverId: channel.serverId,
+                      channelId,
+                      userId,
+                      username: user.username ?? 'unknown',
+                      displayName: user.displayName ?? user.username ?? 'unknown',
+                      avatarUrl: user.avatarUrl ?? null,
+                      isBot: user.isBot ?? false,
+                    })
+                  }
+                } catch {
+                  /* non-critical broadcast failure */
+                }
+              } else {
+                logger.warn({ userId, channelId }, 'Denied channel:join — not a member')
+                if (typeof ack === 'function') ack({ ok: false })
+                return
+              }
             }
           } catch {
             /* membership check failed, allow join as fallback */
@@ -56,10 +84,41 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
         try {
           // Verify channel membership before sending
           const channelMemberDao = container.resolve('channelMemberDao')
+          const channelDao = container.resolve('channelDao')
           const membership = await channelMemberDao.get(data.channelId, userId)
           if (!membership) {
-            socket.emit('error', { message: 'You are not a member of this channel' })
-            return
+            // Check if channel is public - auto-add member for public channels
+            const channel = await channelDao.findById(data.channelId)
+            if (channel && !channel.isPrivate) {
+              // Auto-add user to public channel
+              await channelMemberDao.add(data.channelId, userId)
+              logger.info(
+                { userId, channelId: data.channelId },
+                'Auto-added user to public channel on message send',
+              )
+
+              // Broadcast member:joined to the channel
+              try {
+                const userDao = container.resolve('userDao')
+                const user = await userDao.findById(userId)
+                if (user) {
+                  io.to(`channel:${data.channelId}`).emit('member:joined', {
+                    serverId: channel.serverId,
+                    channelId: data.channelId,
+                    userId,
+                    username: user.username ?? 'unknown',
+                    displayName: user.displayName ?? user.username ?? 'unknown',
+                    avatarUrl: user.avatarUrl ?? null,
+                    isBot: user.isBot ?? false,
+                  })
+                }
+              } catch {
+                /* non-critical broadcast failure */
+              }
+            } else {
+              socket.emit('error', { message: 'You are not a member of this channel' })
+              return
+            }
           }
 
           const messageService = container.resolve('messageService')

@@ -185,7 +185,7 @@ shadow/
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-org/shadow.git && cd shadow
+git clone https://github.com/buggyblues/shadow.git && cd shadow
 
 # 2. Install dependencies
 pnpm install

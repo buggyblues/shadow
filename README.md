@@ -31,13 +31,13 @@
   </p>
 
   <p>
-    <a href="https://github.com/buggyblues/shadow/actions/workflows/release-desktop.yml"><img src="https://img.shields.io/github/actions/workflow/status/BuggyBlues/shadow/release-desktop.yml?style=flat-square&label=build" alt="Build"></a>
+    <a href="https://github.com/buggyblues/shadow/actions/workflows/release-desktop.yml"><img src="https://img.shields.io/github/actions/workflow/status/buggyblues/shadow/release-desktop.yml?style=flat-square&label=build" alt="Build"></a>
     &nbsp;
-    <a href="https://github.com/buggyblues/shadow/releases/latest"><img src="https://img.shields.io/github/v/release/BuggyBlues/shadow?style=flat-square&label=release" alt="Release"></a>
+    <a href="https://github.com/buggyblues/shadow/releases/latest"><img src="https://img.shields.io/github/v/release/buggyblues/shadow?style=flat-square&label=release" alt="Release"></a>
     &nbsp;
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square" alt="License"></a>
     &nbsp;
-    <a href="https://github.com/buggyblues/shadow/stargazers"><img src="https://img.shields.io/github/stars/BuggyBlues/shadow?style=flat-square" alt="Stars"></a>
+    <a href="https://github.com/buggyblues/shadow/stargazers"><img src="https://img.shields.io/github/stars/buggyblues/shadow?style=flat-square" alt="Stars"></a>
   </p>
 </div>
 
@@ -170,7 +170,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development workflow.
 
 <p>
   <a href="https://github.com/buggyblues/shadow/graphs/contributors">
-    <img src="https://contrib.rocks/image?repo=BuggyBlues/shadow" alt="Contributors">
+    <img src="https://contrib.rocks/image?repo=buggyblues/shadow" alt="Contributors">
   </a>
 </p>
 
