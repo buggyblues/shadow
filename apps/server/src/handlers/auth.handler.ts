@@ -241,7 +241,18 @@ export function createAuthHandler(container: AppContainer) {
 
     try {
       const result = await externalOAuthService.handleCallback(provider, code, state)
-      // Redirect to frontend callback page with tokens in hash
+
+      // Check if this is a mobile OAuth flow (redirect starts with custom scheme like shadow://)
+      if (
+        result.redirect.startsWith('shadow://') ||
+        result.redirect.startsWith('com.shadowob.mobile://')
+      ) {
+        // Mobile: redirect with tokens as query params for deep linking
+        const callbackUrl = `${result.redirect}?access_token=${encodeURIComponent(result.accessToken)}&refresh_token=${encodeURIComponent(result.refreshToken)}`
+        return c.redirect(callbackUrl)
+      }
+
+      // Web: redirect to frontend callback page with tokens in hash
       const callbackUrl = `/app/oauth-callback#access_token=${encodeURIComponent(result.accessToken)}&refresh_token=${encodeURIComponent(result.refreshToken)}&redirect=${encodeURIComponent(result.redirect)}`
       return c.redirect(callbackUrl)
     } catch (error) {

@@ -2,6 +2,7 @@ import { Link, useRouter } from 'expo-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -11,6 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import { useOAuth } from '../../src/hooks/use-oauth'
 import { fetchApi } from '../../src/lib/api'
 import { showToast } from '../../src/lib/toast'
 import { useAuthStore } from '../../src/stores/auth.store'
@@ -21,6 +23,7 @@ export default function LoginScreen() {
   const colors = useColors()
   const router = useRouter()
   const setAuth = useAuthStore((s) => s.setAuth)
+  const { signInWithGoogle, signInWithGitHub, isLoading: oauthLoading } = useOAuth()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -52,6 +55,26 @@ export default function LoginScreen() {
       setLoading(false)
     }
   }
+
+  const handleGoogleLogin = async () => {
+    try {
+      await signInWithGoogle()
+      router.replace('/(main)')
+    } catch (err) {
+      showToast((err as Error).message || t('auth.oauthFailed'), 'error')
+    }
+  }
+
+  const handleGitHubLogin = async () => {
+    try {
+      await signInWithGitHub()
+      router.replace('/(main)')
+    } catch (err) {
+      showToast((err as Error).message || t('auth.oauthFailed'), 'error')
+    }
+  }
+
+  const isButtonDisabled = loading || oauthLoading
 
   return (
     <KeyboardAvoidingView
@@ -109,13 +132,72 @@ export default function LoginScreen() {
           />
 
           <Pressable
-            style={[styles.button, { backgroundColor: colors.primary, opacity: loading ? 0.6 : 1 }]}
+            style={[
+              styles.button,
+              { backgroundColor: colors.primary, opacity: isButtonDisabled ? 0.6 : 1 },
+            ]}
             onPress={handleLogin}
-            disabled={loading}
+            disabled={isButtonDisabled}
           >
-            <Text style={styles.buttonText}>
-              {loading ? t('auth.loginLoading') : t('auth.loginSubmit')}
-            </Text>
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>{t('auth.loginSubmit')}</Text>
+            )}
+          </Pressable>
+        </View>
+
+        {/* Divider with OR text */}
+        <View style={styles.dividerContainer}>
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <Text style={[styles.dividerText, { color: colors.textMuted }]}>
+            {t('auth.orContinueWith', 'OR')}
+          </Text>
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        </View>
+
+        {/* OAuth Buttons */}
+        <View style={styles.oauthContainer}>
+          <Pressable
+            style={[
+              styles.oauthButton,
+              styles.googleButton,
+              { opacity: isButtonDisabled ? 0.6 : 1 },
+            ]}
+            onPress={handleGoogleLogin}
+            disabled={isButtonDisabled}
+          >
+            {oauthLoading ? (
+              <ActivityIndicator size="small" color="#333" />
+            ) : (
+              <>
+                <Text style={styles.googleIcon}>G</Text>
+                <Text style={styles.googleButtonText}>
+                  {t('auth.continueWithGoogle', 'Continue with Google')}
+                </Text>
+              </>
+            )}
+          </Pressable>
+
+          <Pressable
+            style={[
+              styles.oauthButton,
+              styles.githubButton,
+              { opacity: isButtonDisabled ? 0.6 : 1 },
+            ]}
+            onPress={handleGitHubLogin}
+            disabled={isButtonDisabled}
+          >
+            {oauthLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Text style={styles.githubIcon}>⌘</Text>
+                <Text style={styles.githubButtonText}>
+                  {t('auth.continueWithGitHub', 'Continue with GitHub')}
+                </Text>
+              </>
+            )}
           </Pressable>
         </View>
 
@@ -178,6 +260,58 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: fontSize.lg,
     fontWeight: '700',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: spacing.xl,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    marginHorizontal: spacing.md,
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  oauthContainer: {
+    gap: spacing.sm,
+  },
+  oauthButton: {
+    height: 48,
+    borderRadius: radius.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  googleButton: {
+    backgroundColor: '#ffffff',
+  },
+  googleButtonText: {
+    color: '#333333',
+    fontSize: fontSize.md,
+    fontWeight: '600',
+  },
+  googleIcon: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    color: '#4285F4',
+  },
+  githubButton: {
+    backgroundColor: '#24292f',
+  },
+  githubButtonText: {
+    color: '#ffffff',
+    fontSize: fontSize.md,
+    fontWeight: '600',
+  },
+  githubIcon: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    color: '#ffffff',
   },
   footer: {
     flexDirection: 'row',
