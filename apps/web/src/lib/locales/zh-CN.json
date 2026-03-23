@@ -65,6 +65,8 @@
   "auth": {
     "loginTitle": "欢迎回来",
     "loginSubtitle": "很高兴再次见到你！",
+    "emailOrUsernameLabel": "用户名或邮箱",
+    "emailOrUsernamePlaceholder": "用户名或邮箱",
     "emailLabel": "电子邮箱",
     "passwordLabel": "密码",
     "loginLoading": "登录中...",

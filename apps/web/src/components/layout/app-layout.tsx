@@ -42,21 +42,18 @@ export function AppLayout() {
     if (me) setUser(me)
   }, [me, setUser])
 
-  // Show onboarding for new users
+  // Show onboarding for new users (check if user has any servers)
   useEffect(() => {
-    if (me && !localStorage.getItem('shadow_onboarding_completed')) {
-      // Check if user has any servers
+    if (me) {
+      // Check if user has any servers - this is per-user, not global
       fetchApi<Array<{ id: string }>>('/api/servers')
         .then((servers) => {
-          if (servers.length === 0) {
-            setShowOnboarding(true)
-          } else {
-            localStorage.setItem('shadow_onboarding_completed', 'true')
-          }
+          // Show onboarding only if user has no servers
+          setShowOnboarding(servers.length === 0)
         })
         .catch(() => {
-          // On error, still show onboarding
-          setShowOnboarding(true)
+          // On error, don't show onboarding
+          setShowOnboarding(false)
         })
     }
   }, [me])

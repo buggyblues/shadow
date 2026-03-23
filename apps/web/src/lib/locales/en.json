@@ -65,6 +65,8 @@
   "auth": {
     "loginTitle": "Welcome back",
     "loginSubtitle": "Great to see you again!",
+    "emailOrUsernameLabel": "Username or Email",
+    "emailOrUsernamePlaceholder": "Username or Email",
     "emailLabel": "Email",
     "passwordLabel": "Password",
     "loginLoading": "Logging in...",

@@ -13,7 +13,7 @@ export function LoginPage() {
   const navigate = useNavigate()
   const searchParams = useSearch({ strict: false }) as { redirect?: string }
   const setAuth = useAuthStore((s) => s.setAuth)
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState('') // Can be email or username
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -77,16 +77,17 @@ export function LoginPage() {
 
           <div>
             <label className="block text-[12px] font-bold uppercase text-text-secondary mb-2 tracking-wide">
-              {t('auth.emailLabel')} <span className="text-[#f23f43]">*</span>
+              {t('auth.emailOrUsernameLabel', '用户名或邮箱')}{' '}
+              <span className="text-[#f23f43]">*</span>
             </label>
             <input
-              type="email"
+              type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              autoComplete="email"
+              autoComplete="username"
               className="w-full bg-bg-tertiary text-text-primary rounded-[3px] px-3 py-2.5 outline-none focus:ring-0 transition"
-              placeholder="you@shadowob.com"
+              placeholder={t('auth.emailOrUsernamePlaceholder', '用户名或邮箱')}
             />
           </div>
 

@@ -144,13 +144,12 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
   }
 
   const handleComplete = () => {
-    // Mark onboarding as completed
-    localStorage.setItem('shadow_onboarding_completed', 'true')
+    // No need to mark completed - the check is based on whether user has servers
     onClose()
   }
 
   const handleSkip = () => {
-    localStorage.setItem('shadow_onboarding_completed', 'true')
+    // User skips onboarding - close the modal
     onClose()
   }
 
@@ -409,10 +408,7 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
                 {t('buddyOnboarding.title', '让你的服务器活起来！')}
               </h2>
               <p className="text-text-muted">
-                {t(
-                  'buddyOnboarding.desc',
-                  '添加 Buddy AI 助手，让它成为你的第一个队友',
-                )}
+                {t('buddyOnboarding.desc', '添加 Buddy AI 助手，让它成为你的第一个队友')}
               </p>
             </div>
 
@@ -444,10 +440,7 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
                     {t('buddyOnboarding.downloadOpenClaw', '下载 OpenClaw 桌面端')}
                   </p>
                   <p className="text-sm text-text-muted">
-                    {t(
-                      'buddyOnboarding.downloadOpenClawDesc',
-                      '安装后打开，按向导完成 Buddy 绑定',
-                    )}
+                    {t('buddyOnboarding.downloadOpenClawDesc', '安装后打开，按向导完成 Buddy 绑定')}
                   </p>
                 </div>
               </a>
@@ -466,7 +459,6 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
               <button
                 type="button"
                 onClick={() => {
-                  localStorage.setItem('shadow_onboarding_completed', 'true')
                   onClose()
                   void navigate({
                     to: '/servers/$serverSlug',
@@ -515,17 +507,19 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
 }
 
 // Hook to check if onboarding should be shown
+// Note: The actual check is done in AppLayout by checking if user has servers
+// This hook is kept for backward compatibility
 export function useOnboarding() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const user = useAuthStore((s) => s.user)
 
   const shouldShow = () => {
-    if (!isAuthenticated || !user) return false
-    return !localStorage.getItem('shadow_onboarding_completed')
+    // This is now handled in AppLayout
+    return false
   }
 
   const markCompleted = () => {
-    localStorage.setItem('shadow_onboarding_completed', 'true')
+    // No longer needed - check is based on server count
   }
 
   return { shouldShow, markCompleted }

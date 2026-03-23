@@ -98,7 +98,12 @@ export class AuthService {
   async login(input: LoginInput) {
     const { userDao, inviteCodeDao, taskCenterService } = this.deps
 
-    const user = await userDao.findByEmail(input.email)
+    // Support login with email or username
+    let user = await userDao.findByEmail(input.email)
+    if (!user) {
+      // Try to find by username
+      user = await userDao.findByUsername(input.email)
+    }
     if (!user) {
       throw Object.assign(new Error('Invalid credentials'), { status: 401 })
     }
