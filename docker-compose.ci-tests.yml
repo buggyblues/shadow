@@ -64,6 +64,10 @@ services:
         echo "=== Pre-push checks ==="
         node scripts/pre-push-checks.mjs
 
+        echo "=== Build dependencies ==="
+        pnpm --filter @shadowob/shared build
+        pnpm --filter @shadowob/sdk build
+
         echo "=== Database migration ==="
         pnpm --filter @shadowob/server db:migrate
 

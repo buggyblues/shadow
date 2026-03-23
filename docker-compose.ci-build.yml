@@ -12,6 +12,12 @@ services:
         set -euo pipefail
         echo "=== Checking package builds ==="
 
+        echo "--- Building @shadowob/shared ---"
+        pnpm --filter @shadowob/shared build
+
+        echo "--- Building @shadowob/sdk ---"
+        pnpm --filter @shadowob/sdk build
+
         echo "--- Building @shadowob/server ---"
         pnpm --filter @shadowob/server build
 
@@ -20,6 +26,9 @@ services:
 
         echo "--- Building @shadowob/admin ---"
         pnpm --filter @shadowob/admin build
+
+        echo "--- Building @shadowob/cli ---"
+        pnpm --filter @shadowob/cli build
 
         echo "=== All builds passed ==="
       '

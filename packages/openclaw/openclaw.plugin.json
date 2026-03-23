@@ -3,7 +3,7 @@
   "name": "ShadowOwnBuddy",
   "description": "Shadow server channel plugin — enables AI agents to chat in Shadow channels with threads, reactions, and media support",
   "channels": ["shadowob"],
-  "skills": ["skills/shadow-server"],
+  "skills": ["skills/shadowob"],
   "configSchema": {
     "type": "object",
     "additionalProperties": false,

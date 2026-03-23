@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  # Shadow server for testing
+  shadow-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=test
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/shadow_test
+      - JWT_SECRET=test-secret-key-for-cli-testing
+      - REDIS_URL=redis://redis:6379
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=shadow_test
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+
+  # CLI test runner
+  cli-test:
+    build:
+      context: .
+      dockerfile: packages/cli/Dockerfile.test
+    environment:
+      - SHADOW_SERVER_URL=http://shadow-server:3000
+      - NODE_ENV=test
+    depends_on:
+      shadow-server:
+        condition: service_healthy
+    volumes:
+      - ./packages/cli:/app
+      - /app/node_modules
+    command: pnpm test:e2e
+
+volumes:
+  postgres_data:
+  redis_data:
