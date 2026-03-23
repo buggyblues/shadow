@@ -1,6 +1,6 @@
 {
   "name": "@shadowob/openclaw",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "OpenClaw Shadow channel plugin — enables AI agents to interact in Shadow server channels",
   "type": "module",
   "main": "./index.ts",
