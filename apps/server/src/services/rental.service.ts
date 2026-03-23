@@ -168,7 +168,21 @@ export class RentalService {
   }
 
   async getMyListings(ownerId: string, opts?: { limit?: number; offset?: number }) {
-    return this.deps.clawListingDao.findActiveListedByOwnerId(ownerId, opts)
+    const listings = await this.deps.clawListingDao.findByOwnerId(ownerId, opts)
+
+    // Enrich listings with rental status
+    const enriched = await Promise.all(
+      listings.map(async (listing) => {
+        const activeContract = await this.deps.rentalContractDao.findActiveByListingId(listing.id)
+        return {
+          ...listing,
+          isRented: !!activeContract,
+          activeTenantId: activeContract?.tenantId ?? null,
+        }
+      }),
+    )
+
+    return enriched
   }
 
   async browseListings(opts?: {

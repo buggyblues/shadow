@@ -60,23 +60,13 @@ export function createRentalHandler(container: AppContainer) {
     const user = c.get('user')
     const rentalService = container.resolve('rentalService')
     const agentDao = container.resolve('agentDao')
-    const clawListingDao = container.resolve('clawListingDao')
-    const rentalContractDao = container.resolve('rentalContractDao')
     const limit = Number(c.req.query('limit') || '50')
     const offset = Number(c.req.query('offset') || '0')
     const listings = await rentalService.getMyListings(user.userId, { limit, offset })
 
-    // Get actively rented listing IDs for status enrichment
-    const rentedIds = new Set(await clawListingDao.getActivelyRentedListingIds())
-
-    // Enrich listings with agent online status and rented status
+    // Enrich listings with agent status
     const enriched = await Promise.all(
       listings.map(async (l) => {
-        const isRented = rentedIds.has(l.id)
-        let activeContract: { tenantId: string } | null = null
-        if (isRented) {
-          activeContract = await rentalContractDao.findActiveByListingId(l.id)
-        }
         let agent: {
           status: string
           lastHeartbeat: Date | null
@@ -95,8 +85,6 @@ export function createRentalHandler(container: AppContainer) {
         return {
           ...l,
           agent,
-          isRented,
-          activeTenantId: activeContract?.tenantId ?? null,
         }
       }),
     )
@@ -260,15 +248,11 @@ export function createRentalHandler(container: AppContainer) {
       return c.json({ chatDisabled: false })
     }
 
-    // Owner can always chat with their own agents
-    if (agent.ownerId === user.userId) {
-      return c.json({ chatDisabled: false })
-    }
-
     // Check if agent has any listing
     const listings = await clawListingDao.findByOwnerId(agent.ownerId)
     const agentListing = listings.find((l) => l.agentId === agent.id)
     if (!agentListing) {
+      // No listing for this agent - always allow chat
       return c.json({ chatDisabled: false })
     }
 
@@ -291,15 +275,20 @@ export function createRentalHandler(container: AppContainer) {
       })
     }
 
-    // Non-owner without active contract: chat is disabled
-    // Reason: rented_out (someone else is renting), listed (on marketplace), or expired (no active rental)
+    // Agent is listed or rented out - chat is disabled for everyone (including owner)
     if (isRentedOut) {
       return c.json({ chatDisabled: true, reason: 'rented_out' })
     }
     if (isListed) {
       return c.json({ chatDisabled: true, reason: 'listed' })
     }
-    // Agent has a listing but not listed and no active contract — user's rental has expired or was terminated
+
+    // Agent has a listing but not listed and no active contract
+    // Owner can chat, but non-owner cannot (rental expired)
+    if (agent.ownerId === user.userId) {
+      return c.json({ chatDisabled: false })
+    }
+
     return c.json({ chatDisabled: true, reason: 'expired' })
   })
 

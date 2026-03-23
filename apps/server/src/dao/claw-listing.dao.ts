@@ -23,36 +23,6 @@ export class ClawListingDao {
       .offset(opts?.offset ?? 0)
   }
 
-  /** Find active, listed, and non-rented listings by owner (for my-listings API) */
-  async findActiveListedByOwnerId(ownerId: string, opts?: { limit?: number; offset?: number }) {
-    // Get actively rented listing IDs to exclude them
-    const rentedIds = await this.getActivelyRentedListingIds()
-
-    const conditions = [
-      eq(clawListings.ownerId, ownerId),
-      eq(clawListings.listingStatus, 'active'),
-      eq(clawListings.isListed, true),
-    ]
-
-    // Exclude listings that are currently being rented
-    if (rentedIds.length > 0) {
-      conditions.push(
-        sql`${clawListings.id} NOT IN (${sql.join(
-          rentedIds.map((id) => sql`${id}`),
-          sql`, `,
-        )})`,
-      )
-    }
-
-    return this.db
-      .select()
-      .from(clawListings)
-      .where(and(...conditions))
-      .orderBy(desc(clawListings.createdAt))
-      .limit(opts?.limit ?? 50)
-      .offset(opts?.offset ?? 0)
-  }
-
   /** Helper: get IDs of listings currently actively rented */
   async getActivelyRentedListingIds(): Promise<string[]> {
     const rows = await this.db
