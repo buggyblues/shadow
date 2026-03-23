@@ -508,7 +508,7 @@ writeFileSync(
       description: srcPkg.description,
       type: 'module',
       main: './index.mjs',
-      shadowob: {
+      openclaw: {
         extensions: ['./index.mjs'],
       },
       dependencies: {

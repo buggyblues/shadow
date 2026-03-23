@@ -20,7 +20,7 @@
     "channel",
     "ai-agent"
   ],
-  "shadowob": {
+  "openclaw": {
     "extensions": [
       "./index.ts"
     ]
