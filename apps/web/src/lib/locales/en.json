@@ -1290,6 +1290,25 @@
     "step2Desc": "Type @Buddy in the channel to say hi, e.g. @Buddy hello!",
     "step3": "Start Interacting",
     "step3Desc": "Buddy will reply automatically, you can also assign tasks",
-    "goToServer": "Go to Server"
+    "goToServer": "Go to Server",
+    "yourToken": "Your Token",
+    "configured": "I've configured it",
+    "waiting": "Waiting for Buddy to come online...",
+    "waitingDesc": "Please complete the setup in OpenClaw desktop",
+    "adding": "Adding Buddy to server...",
+    "sending": "Sending welcome message...",
+    "ready": "Buddy is ready!",
+    "timeout": "Waiting timeout",
+    "timeoutDesc": "You can configure Buddy later in settings",
+    "redirecting": "Redirecting to server..."
+  },
+  "onboarding": {
+    "timeline": {
+      "welcome": "Welcome",
+      "createServer": "Create Server",
+      "createBuddy": "Create Buddy",
+      "config": "Configure",
+      "complete": "Get Started"
+    }
   }
 }

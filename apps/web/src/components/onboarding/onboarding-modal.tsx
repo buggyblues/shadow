@@ -19,10 +19,9 @@ import {
   Terminal,
   X,
 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
-import { useAuthStore } from '../../stores/auth.store'
 
 interface OnboardingModalProps {
   open: boolean
@@ -35,7 +34,17 @@ type Step =
   | 'join-server'
   | 'create-buddy'
   | 'buddy-config'
+  | 'waiting-buddy'
   | 'complete'
+
+// 时间线步骤定义
+const timelineSteps = [
+  { id: 'welcome', labelKey: 'onboarding.timeline.welcome', labelDefault: '欢迎' },
+  { id: 'create-server', labelKey: 'onboarding.timeline.createServer', labelDefault: '创建服务器' },
+  { id: 'create-buddy', labelKey: 'onboarding.timeline.createBuddy', labelDefault: '创建 Buddy' },
+  { id: 'buddy-config', labelKey: 'onboarding.timeline.config', labelDefault: '配置连接' },
+  { id: 'complete', labelKey: 'onboarding.timeline.complete', labelDefault: '开始使用' },
+]
 
 const features = [
   {
@@ -64,15 +73,30 @@ const features = [
   },
 ]
 
+// 检测是否为移动端
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+  return isMobile
+}
+
 export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const isMobile = useIsMobile()
   const [step, setStep] = useState<Step>('welcome')
   const [slideIndex, setSlideIndex] = useState(0)
   const [serverName, setServerName] = useState('')
   const [inviteCode, setInviteCode] = useState('')
   const [createdServerId, setCreatedServerId] = useState<string | null>(null)
+  const [createdBuddyId, setCreatedBuddyId] = useState<string | null>(null)
+  const [buddyToken, setBuddyToken] = useState<string | null>(null)
   const touchStartX = useRef(0)
   const touchEndX = useRef(0)
 
@@ -103,7 +127,6 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
       queryClient.invalidateQueries({ queryKey: ['servers'] })
       const serverId = data.slug || data.id
       setCreatedServerId(serverId)
-      // 跳转到创建 Buddy 步骤
       setStep('create-buddy')
     },
   })
@@ -119,7 +142,6 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
       queryClient.invalidateQueries({ queryKey: ['servers'] })
       const serverId = data.slug || data.id
       setCreatedServerId(serverId)
-      // 跳转到创建 Buddy 步骤
       setStep('create-buddy')
     },
   })
@@ -140,25 +162,80 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
 
   const handleTouchEnd = () => {
     const diff = touchStartX.current - touchEndX.current
-    const threshold = 50 // Minimum swipe distance
+    const threshold = 50
 
     if (diff > threshold && slideIndex < features.length - 1) {
-      // Swipe left - next slide
       setSlideIndex(slideIndex + 1)
     } else if (diff < -threshold && slideIndex > 0) {
-      // Swipe right - previous slide
       setSlideIndex(slideIndex - 1)
     }
   }
 
   const handleComplete = () => {
-    // No need to mark completed - the check is based on whether user has servers
     onClose()
   }
 
   const handleSkip = () => {
-    // User skips onboarding - close the modal
     onClose()
+  }
+
+  const handleNavigateToServer = async () => {
+    onClose()
+    if (createdServerId) {
+      await navigate({
+        to: '/servers/$serverSlug',
+        params: { serverSlug: createdServerId },
+      })
+    }
+  }
+
+  // 获取当前步骤在时间线中的索引
+  const getCurrentStepIndex = () => {
+    return timelineSteps.findIndex((s) => s.id === step)
+  }
+
+  // 时间线组件
+  const Timeline = () => {
+    const currentIndex = getCurrentStepIndex()
+    return (
+      <div className="px-6 pt-4">
+        <div className="flex items-center justify-between">
+          {timelineSteps.map((s, idx) => {
+            const isCompleted = idx < currentIndex
+            const isCurrent = idx === currentIndex
+            return (
+              <div key={s.id} className="flex items-center flex-1 last:flex-none">
+                <div className="flex flex-col items-center">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                      isCompleted
+                        ? 'bg-primary text-white'
+                        : isCurrent
+                          ? 'bg-primary/20 text-primary border-2 border-primary'
+                          : 'bg-bg-tertiary text-text-muted'
+                    }`}
+                  >
+                    {isCompleted ? <Check size={14} /> : idx + 1}
+                  </div>
+                  <span
+                    className={`text-[10px] mt-1 hidden md:block ${
+                      isCurrent ? 'text-primary font-medium' : 'text-text-muted'
+                    }`}
+                  >
+                    {t(s.labelKey, s.labelDefault)}
+                  </span>
+                </div>
+                {idx < timelineSteps.length - 1 && (
+                  <div
+                    className={`flex-1 h-0.5 mx-2 ${isCompleted ? 'bg-primary' : 'bg-bg-tertiary'}`}
+                  />
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -167,66 +244,89 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
         {/* Close button */}
         <button
           type="button"
-          onClick={handleSkip}
+          onClick={onClose}
           className="absolute top-4 right-4 p-2 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-lg transition z-10"
         >
           <X size={20} />
         </button>
 
+        {/* Timeline - PC only */}
+        {!isMobile && step !== 'welcome' && step !== 'complete' && <Timeline />}
+
         {/* Welcome step */}
         {step === 'welcome' && (
           <div className="p-8">
             <div className="text-center mb-8">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center">
-                <Server size={40} className="text-white" />
+              <div className="w-24 h-24 mx-auto mb-6 relative">
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-cyan-400 via-blue-500 to-purple-500 animate-pulse opacity-75" />
+                <div className="relative w-24 h-24 rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center shadow-lg shadow-cyan-500/25">
+                  <Server size={48} className="text-white" />
+                </div>
               </div>
               <h1 className="text-2xl font-bold text-text-primary mb-2">
                 {t('onboarding.welcome', '欢迎来到 Shadow！')}
               </h1>
-              <p className="text-text-muted">
-                {t('onboarding.welcomeDesc', '让我们帮你开始构建你的社区')}
+              <p className="text-text-muted text-sm">
+                {t('onboarding.welcomeDesc', '构建你的 AI 社区，让智能体成为你的队友')}
               </p>
             </div>
 
-            {/* Feature slides */}
-            <div className="relative mb-8">
-              <div
-                className="overflow-hidden"
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-              >
+            {/* Mobile: Feature slides */}
+            {isMobile && (
+              <div className="relative mb-8">
                 <div
-                  className="flex transition-transform duration-300"
-                  style={{ transform: `translateX(-${slideIndex * 100}%)` }}
+                  className="overflow-hidden"
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
                 >
-                  {features.map((feature, idx) => (
-                    <div key={idx} className="w-full flex-shrink-0 px-4">
-                      <div className="bg-bg-tertiary rounded-xl p-6 text-center">
-                        <feature.icon size={32} className={`mx-auto mb-3 ${feature.color}`} />
-                        <h3 className="font-semibold text-text-primary mb-1">
-                          {t(feature.titleKey)}
-                        </h3>
-                        <p className="text-sm text-text-muted">{t(feature.descKey)}</p>
+                  <div
+                    className="flex transition-transform duration-300"
+                    style={{ transform: `translateX(-${slideIndex * 100}%)` }}
+                  >
+                    {features.map((feature, idx) => (
+                      <div key={idx} className="w-full flex-shrink-0 px-4">
+                        <div className="bg-bg-tertiary rounded-xl p-6 text-center">
+                          <feature.icon size={32} className={`mx-auto mb-3 ${feature.color}`} />
+                          <h3 className="font-semibold text-text-primary mb-1">
+                            {t(feature.titleKey)}
+                          </h3>
+                          <p className="text-sm text-text-muted">{t(feature.descKey)}</p>
+                        </div>
                       </div>
-                    </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex justify-center gap-2 mt-4">
+                  {features.map((_, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setSlideIndex(idx)}
+                      className={`w-2 h-2 rounded-full transition-all ${
+                        idx === slideIndex ? 'bg-primary w-4' : 'bg-bg-modifier-active'
+                      }`}
+                    />
                   ))}
                 </div>
               </div>
-              {/* Slide indicators */}
-              <div className="flex justify-center gap-2 mt-4">
-                {features.map((_, idx) => (
-                  <button
+            )}
+
+            {/* PC: Feature grid */}
+            {!isMobile && (
+              <div className="grid grid-cols-2 gap-3 mb-8">
+                {features.map((feature, idx) => (
+                  <div
                     key={idx}
-                    type="button"
-                    onClick={() => setSlideIndex(idx)}
-                    className={`w-2 h-2 rounded-full transition-all ${
-                      idx === slideIndex ? 'bg-primary w-4' : 'bg-bg-modifier-active'
-                    }`}
-                  />
+                    className="bg-bg-tertiary rounded-xl p-4 text-center hover:bg-bg-modifier-hover transition"
+                  >
+                    <feature.icon size={24} className={`mx-auto mb-2 ${feature.color}`} />
+                    <h3 className="font-medium text-text-primary text-sm">{t(feature.titleKey)}</h3>
+                    <p className="text-xs text-text-muted mt-1">{t(feature.descKey)}</p>
+                  </div>
                 ))}
               </div>
-            </div>
+            )}
 
             <div className="flex gap-3">
               <button
@@ -336,7 +436,6 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
               </p>
             </div>
 
-            {/* Invite code input */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-text-primary mb-2">
                 {t('onboarding.inviteCode', '邀请码')}
@@ -360,7 +459,6 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
               </div>
             </div>
 
-            {/* Public servers */}
             <div className="mb-6">
               <p className="text-sm text-text-muted mb-3">
                 {t('onboarding.orJoinPublic', '或选择公开服务器')}
@@ -406,22 +504,34 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
         {step === 'create-buddy' && (
           <CreateBuddyStep
             serverId={createdServerId}
-            onNext={() => setStep('buddy-config')}
-            onSkip={() => {
-              onClose()
-              if (createdServerId) {
-                void navigate({
-                  to: '/servers/$serverSlug',
-                  params: { serverSlug: createdServerId },
-                })
-              }
+            onNext={(buddyId, token) => {
+              setCreatedBuddyId(buddyId)
+              setBuddyToken(token)
+              setStep('buddy-config')
             }}
+            onSkip={handleNavigateToServer}
           />
         )}
 
         {/* Buddy config step */}
-        {step === 'buddy-config' && createdServerId && (
-          <BuddyConfigStep serverId={createdServerId} onComplete={() => setStep('complete')} />
+        {step === 'buddy-config' && createdBuddyId && buddyToken && (
+          <BuddyConfigStep
+            buddyId={createdBuddyId}
+            token={buddyToken}
+            serverId={createdServerId}
+            onConfigured={() => setStep('waiting-buddy')}
+            onSkip={handleNavigateToServer}
+          />
+        )}
+
+        {/* Waiting for Buddy to come online */}
+        {step === 'waiting-buddy' && createdBuddyId && createdServerId && (
+          <WaitingBuddyStep
+            buddyId={createdBuddyId}
+            serverId={createdServerId}
+            onComplete={handleNavigateToServer}
+            onTimeout={handleNavigateToServer}
+          />
         )}
 
         {/* Complete step */}
@@ -438,7 +548,7 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
             </p>
             <button
               type="button"
-              onClick={handleComplete}
+              onClick={handleNavigateToServer}
               className="w-full px-4 py-3 bg-primary text-white font-semibold rounded-xl hover:opacity-90 transition"
             >
               {t('onboarding.goToServer', '进入服务器')}
@@ -448,22 +558,6 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
       </div>
     </div>
   )
-}
-
-// Hook to check if onboarding should be shown
-// Note: The actual check is done in AppLayout by checking if user has servers
-// This hook is kept for backward compatibility
-export function useOnboarding() {
-  const shouldShow = () => {
-    // This is now handled in AppLayout
-    return false
-  }
-
-  const markCompleted = () => {
-    // No longer needed - check is based on server count
-  }
-
-  return { shouldShow, markCompleted }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
@@ -489,7 +583,7 @@ function CreateBuddyStep({
   onSkip,
 }: {
   serverId: string | null
-  onNext: () => void
+  onNext: (buddyId: string, token: string) => void
   onSkip: () => void
 }) {
   const { t } = useTranslation()
@@ -506,7 +600,8 @@ function CreateBuddyStep({
     setCreating(true)
     setError('')
     try {
-      await fetchApi<BuddyAgent>('/api/agents', {
+      // 1. 创建 Buddy
+      const buddy = await fetchApi<BuddyAgent>('/api/agents', {
         method: 'POST',
         body: JSON.stringify({
           name: name.trim(),
@@ -515,7 +610,13 @@ function CreateBuddyStep({
           config: {},
         }),
       })
-      onNext()
+
+      // 2. 自动生成 Token
+      const tokenResp = await fetchApi<{ token: string }>(`/api/agents/${buddy.id}/token`, {
+        method: 'POST',
+      })
+
+      onNext(buddy.id, tokenResp.token)
     } catch (err) {
       setError(err instanceof Error ? err.message : t('buddyOnboarding.createError', '创建失败'))
     } finally {
@@ -606,15 +707,26 @@ function CreateBuddyStep({
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
- * Buddy Config Step (复用 buddy-management 的配置说明)
+ * Buddy Config Step - 显示配置指南
  * ═════════════════════════════════════════════════════════════════════════════ */
 
-function BuddyConfigStep({ serverId, onComplete }: { serverId: string; onComplete: () => void }) {
+function BuddyConfigStep({
+  buddyId: _buddyId,
+  token,
+  serverId,
+  onConfigured,
+  onSkip,
+}: {
+  buddyId: string
+  token: string
+  serverId: string | null
+  onConfigured: () => void
+  onSkip: () => void
+}) {
   const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
 
-  // 生成绑定命令
-  const bindCommand = `/buddy bind --server ${serverId}`
+  const bindCommand = `/buddy bind --server ${serverId || 'your-server-id'} --token ${token}`
 
   const handleCopy = async (text: string) => {
     await navigator.clipboard.writeText(text)
@@ -636,7 +748,26 @@ function BuddyConfigStep({ serverId, onComplete }: { serverId: string; onComplet
         </p>
       </div>
 
-      {/* 方法1: 下载桌面端 */}
+      {/* Token display */}
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-text-primary mb-2">
+          {t('buddyOnboarding.yourToken', '你的 Token')}
+        </label>
+        <div className="flex items-center gap-2">
+          <code className="flex-1 p-3 bg-bg-tertiary rounded-lg text-primary font-mono text-xs overflow-x-auto">
+            {token}
+          </code>
+          <button
+            type="button"
+            onClick={() => handleCopy(token)}
+            className="p-3 text-text-muted hover:text-primary bg-bg-tertiary rounded-lg transition"
+          >
+            {copied ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
+          </button>
+        </div>
+      </div>
+
+      {/* Method 1: Download desktop */}
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-text-primary mb-2">
           {t('buddyOnboarding.method1', '方法 1: 使用 OpenClaw 桌面端（推荐）')}
@@ -652,7 +783,7 @@ function BuddyConfigStep({ serverId, onComplete }: { serverId: string; onComplet
           </div>
           <div className="flex-1">
             <p className="font-medium text-text-primary group-hover:text-primary transition">
-              {t('buddyOnboarding.downloadDesktop', '下载 OpenClaw 桌面端')}
+              {t('buddyOnboarding.downloadDesktopApp', '下载 OpenClaw 桌面端')}
             </p>
             <p className="text-xs text-text-muted">
               {t('buddyOnboarding.downloadDesktopHint', '安装后打开，按向导完成配置')}
@@ -661,7 +792,7 @@ function BuddyConfigStep({ serverId, onComplete }: { serverId: string; onComplet
         </a>
       </div>
 
-      {/* 方法2: 命令绑定 */}
+      {/* Method 2: Command */}
       <div className="mb-6">
         <h3 className="text-sm font-semibold text-text-primary mb-2">
           {t('buddyOnboarding.method2', '方法 2: 使用命令绑定')}
@@ -671,41 +802,243 @@ function BuddyConfigStep({ serverId, onComplete }: { serverId: string; onComplet
             {t('buddyOnboarding.commandHint', '在 OpenClaw 对话中输入以下命令：')}
           </p>
           <div className="flex items-center gap-2">
-            <code className="flex-1 p-3 bg-bg-secondary rounded-lg text-primary font-mono text-sm overflow-x-auto">
+            <code className="flex-1 p-3 bg-bg-secondary rounded-lg text-primary font-mono text-xs overflow-x-auto whitespace-nowrap">
               {bindCommand}
             </code>
             <button
               type="button"
               onClick={() => handleCopy(bindCommand)}
               className="p-3 text-text-muted hover:text-primary bg-bg-secondary rounded-lg transition"
-              title={t('common.copy', '复制')}
             >
-              {copied ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
+              <Copy size={16} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* 配置说明（复用 buddy-management 的样式） */}
+      {/* Setup guide */}
       <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
         <h4 className="text-sm font-semibold text-amber-400 mb-2">
           💡 {t('buddyOnboarding.setupGuide', '配置步骤')}
         </h4>
         <ol className="text-xs text-text-secondary space-y-1 list-decimal list-inside">
-          <li>{t('buddyOnboarding.step1', '下载并安装 OpenClaw 桌面端')}</li>
-          <li>{t('buddyOnboarding.step2', '打开 OpenClaw，完成初始设置')}</li>
-          <li>{t('buddyOnboarding.step3', '在对话中输入上述命令，或使用 Buddy 管理页面配置')}</li>
-          <li>{t('buddyOnboarding.step4', '连接成功后，Buddy 将自动出现在你的服务器中')}</li>
+          <li>{t('buddyOnboarding.setupStep1', '下载并安装 OpenClaw 桌面端')}</li>
+          <li>{t('buddyOnboarding.setupStep2', '打开 OpenClaw，完成初始设置')}</li>
+          <li>
+            {t('buddyOnboarding.setupStep3', '在对话中输入上述命令，或使用 Buddy 管理页面配置')}
+          </li>
+          <li>{t('buddyOnboarding.setupStep4', '连接成功后，Buddy 将自动出现在你的服务器中')}</li>
         </ol>
       </div>
 
-      <button
-        type="button"
-        onClick={onComplete}
-        className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:opacity-90 transition"
-      >
-        {t('buddyOnboarding.complete', '完成设置')}
-      </button>
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={onSkip}
+          className="flex-1 py-3 text-text-muted hover:text-text-primary transition"
+        >
+          {t('common.skipForNow', '稍后配置')}
+        </button>
+        <button
+          type="button"
+          onClick={onConfigured}
+          className="flex-1 py-3 bg-primary text-white font-semibold rounded-xl hover:opacity-90 transition"
+        >
+          {t('buddyOnboarding.configured', '我已配置完成')}
+        </button>
+      </div>
     </div>
   )
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+ * Waiting Buddy Step - 轮询等待 Buddy 上线
+ * ═════════════════════════════════════════════════════════════════════════════ */
+
+function WaitingBuddyStep({
+  buddyId,
+  serverId,
+  onComplete,
+  onTimeout,
+}: {
+  buddyId: string
+  serverId: string
+  onComplete: () => void
+  onTimeout: () => void
+}) {
+  const { t } = useTranslation()
+  const [status, setStatus] = useState<'waiting' | 'adding' | 'sending' | 'done' | 'timeout'>(
+    'waiting',
+  )
+  const [countdown, setCountdown] = useState(30)
+
+  // 发送欢迎消息
+  const sendWelcomeMessage = useCallback(async () => {
+    try {
+      const channels = await fetchApi<Array<{ id: string; name: string }>>(
+        `/api/servers/${serverId}/channels`,
+      )
+      const generalChannel = channels.find((c) => c.name === 'general')
+
+      if (generalChannel) {
+        await fetchApi(`/api/channels/${generalChannel.id}/messages`, {
+          method: 'POST',
+          body: JSON.stringify({
+            content: '👋 大家好！我是 AI 助手，有什么可以帮助你们的吗？',
+          }),
+        })
+      }
+    } catch {
+      // Ignore errors
+    }
+  }, [serverId])
+
+  // 添加 Buddy 到服务器
+  const addBuddyToServer = useCallback(async () => {
+    try {
+      await fetchApi(`/api/servers/${serverId}/members`, {
+        method: 'POST',
+        body: JSON.stringify({ buddyId }),
+      })
+
+      setStatus('sending')
+      await sendWelcomeMessage()
+      setStatus('done')
+      setTimeout(onComplete, 1000)
+    } catch {
+      setStatus('done')
+      setTimeout(onComplete, 1000)
+    }
+  }, [serverId, buddyId, sendWelcomeMessage, onComplete])
+
+  // 轮询 Buddy 状态
+  useEffect(() => {
+    if (status !== 'waiting') return
+
+    const interval = setInterval(async () => {
+      try {
+        const buddy = await fetchApi<BuddyAgent>(`/api/agents/${buddyId}`)
+        const isOnline =
+          buddy.lastHeartbeat && Date.now() - new Date(buddy.lastHeartbeat).getTime() < 90000
+
+        if (isOnline) {
+          clearInterval(interval)
+          setStatus('adding')
+          await addBuddyToServer()
+        }
+      } catch {
+        // Ignore errors
+      }
+    }, 2000)
+
+    return () => clearInterval(interval)
+  }, [buddyId, status, addBuddyToServer])
+
+  // 倒计时
+  useEffect(() => {
+    if (status !== 'waiting') return
+
+    const timer = setInterval(() => {
+      setCountdown((c) => {
+        if (c <= 1) {
+          clearInterval(timer)
+          setStatus('timeout')
+          return 0
+        }
+        return c - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [status])
+
+  // 超时处理
+  useEffect(() => {
+    if (status === 'timeout') {
+      const timer = setTimeout(onTimeout, 2000)
+      return () => clearTimeout(timer)
+    }
+  }, [status, onTimeout])
+
+  return (
+    <div className="p-8 text-center">
+      {status === 'waiting' && (
+        <>
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center">
+            <Loader2 size={32} className="text-white animate-spin" />
+          </div>
+          <h2 className="text-xl font-bold text-text-primary mb-2">
+            {t('buddyOnboarding.waiting', '等待 Buddy 上线...')}
+          </h2>
+          <p className="text-sm text-text-muted mb-4">
+            {t('buddyOnboarding.waitingDesc', '请在 OpenClaw 桌面端完成配置')}
+          </p>
+          <div className="text-3xl font-bold text-primary mb-4">{countdown}s</div>
+          <div className="w-full bg-bg-tertiary rounded-full h-2 mb-4">
+            <div
+              className="bg-primary h-2 rounded-full transition-all duration-1000"
+              style={{ width: `${((30 - countdown) / 30) * 100}%` }}
+            />
+          </div>
+        </>
+      )}
+
+      {status === 'adding' && (
+        <>
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center">
+            <Loader2 size={32} className="text-white animate-spin" />
+          </div>
+          <h2 className="text-xl font-bold text-text-primary mb-2">
+            {t('buddyOnboarding.adding', '正在添加 Buddy 到服务器...')}
+          </h2>
+        </>
+      )}
+
+      {status === 'sending' && (
+        <>
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-purple-400 to-violet-500 flex items-center justify-center">
+            <MessageCircle size={32} className="text-white" />
+          </div>
+          <h2 className="text-xl font-bold text-text-primary mb-2">
+            {t('buddyOnboarding.sending', '发送欢迎消息...')}
+          </h2>
+        </>
+      )}
+
+      {status === 'done' && (
+        <>
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center">
+            <Check size={32} className="text-white" />
+          </div>
+          <h2 className="text-xl font-bold text-text-primary mb-2">
+            {t('buddyOnboarding.ready', 'Buddy 已就绪！')}
+          </h2>
+        </>
+      )}
+
+      {status === 'timeout' && (
+        <>
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+            <Server size={32} className="text-white" />
+          </div>
+          <h2 className="text-xl font-bold text-text-primary mb-2">
+            {t('buddyOnboarding.timeout', '等待超时')}
+          </h2>
+          <p className="text-sm text-text-muted mb-4">
+            {t('buddyOnboarding.timeoutDesc', '你可以在设置中稍后配置 Buddy')}
+          </p>
+          <p className="text-xs text-text-muted">
+            {t('buddyOnboarding.redirecting', '正在跳转到服务器...')}
+          </p>
+        </>
+      )}
+    </div>
+  )
+}
+
+// Hook to check if onboarding should be shown
+export function useOnboarding() {
+  const shouldShow = () => false
+  const markCompleted = () => {}
+  return { shouldShow, markCompleted }
 }

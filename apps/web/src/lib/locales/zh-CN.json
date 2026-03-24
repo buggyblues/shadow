@@ -1292,6 +1292,25 @@
     "step2Desc": "在频道中输入 @Buddy 打招呼，例如：@Buddy 你好！",
     "step3": "开始互动",
     "step3Desc": "Buddy 会自动回复，你也可以给它分配任务",
-    "goToServer": "进入服务器"
+    "goToServer": "进入服务器",
+    "yourToken": "你的 Token",
+    "configured": "我已配置完成",
+    "waiting": "等待 Buddy 上线...",
+    "waitingDesc": "请在 OpenClaw 桌面端完成配置",
+    "adding": "正在添加 Buddy 到服务器...",
+    "sending": "发送欢迎消息...",
+    "ready": "Buddy 已就绪！",
+    "timeout": "等待超时",
+    "timeoutDesc": "你可以在设置中稍后配置 Buddy",
+    "redirecting": "正在跳转到服务器..."
+  },
+  "onboarding": {
+    "timeline": {
+      "welcome": "欢迎",
+      "createServer": "创建服务器",
+      "createBuddy": "创建 Buddy",
+      "config": "配置连接",
+      "complete": "开始使用"
+    }
   }
 }
