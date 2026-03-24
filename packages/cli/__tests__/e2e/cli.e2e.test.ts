@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execa } from 'execa'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { ensureCliBuilt } from '../helpers/test-utils.js'
 
 const CLI_PATH = join(__dirname, '../../dist/index.js')
 
@@ -10,7 +11,8 @@ describe('CLI E2E Tests', () => {
   let tempDir: string
   let _configDir: string
 
-  beforeAll(() => {
+  beforeAll(async () => {
+    await ensureCliBuilt()
     tempDir = mkdtempSync(join(tmpdir(), 'shadowob-cli-e2e-'))
     _configDir = join(tempDir, 'config')
   })
