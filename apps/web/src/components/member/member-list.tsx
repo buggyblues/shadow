@@ -10,6 +10,7 @@ import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
 import { UserAvatar } from '../common/avatar'
 import { useConfirmStore } from '../common/confirm-dialog'
+import { useContextMenuPosition } from '../common/context-menu'
 import { OnlineRank } from '../common/online-rank'
 import { UserProfileCard } from '../common/user-profile-card'
 
@@ -653,6 +654,9 @@ function BotContextMenu({
     ? buddyAgents.find((a) => a.botUser?.id === contextMenu.member.user?.id)
     : null
 
+  // Use the hook for accurate position calculation
+  const position = useContextMenuPosition(contextMenu.x, contextMenu.y, menuRef, 180)
+
   // Fetch current policy for the bot in this channel
   const { data: currentPolicy } = useQuery({
     queryKey: ['agent-policy', activeChannelId, agent?.id],
@@ -705,19 +709,6 @@ function BotContextMenu({
     }
   }
 
-  // Calculate main menu position to avoid window overflow
-  const getMenuStyle = (): React.CSSProperties => {
-    const menuWidth = 200
-    const menuHeight = 200
-    let x = contextMenu.x
-    let y = contextMenu.y
-    if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 8
-    if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 8
-    if (x < 8) x = 8
-    if (y < 8) y = 8
-    return { left: x, top: y }
-  }
-
   // Determine which actions to show
   const isSelf = contextMenu.member.userId === currentUser?.id
   const isOwner = contextMenu.member.role === 'owner'
@@ -745,8 +736,8 @@ function BotContextMenu({
       />
       <div
         ref={menuRef}
-        className="fixed z-[81] bg-bg-tertiary border border-border-dim rounded-lg shadow-xl py-1 min-w-[180px]"
-        style={getMenuStyle()}
+        className="fixed z-[81] bg-bg-tertiary/95 backdrop-blur-md border border-border-dim/60 rounded-xl shadow-xl py-1 min-w-[180px]"
+        style={{ left: position.x, top: position.y }}
       >
         {/* View profile — always visible */}
         <button

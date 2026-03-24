@@ -14,9 +14,10 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import type { WorkspaceNode } from '../../stores/workspace.store'
 import type { ContextMenuState } from './workspace-types'
+import { useContextMenuPosition } from '../common/context-menu'
 
 interface ContextMenuAction {
   icon: typeof Copy
@@ -77,21 +78,7 @@ export function WorkspaceContextMenu({
 }: WorkspaceContextMenuProps) {
   const node = menu.node
   const menuRef = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState({ x: menu.x, y: menu.y })
-
-  // Adjust position to stay within viewport
-  useEffect(() => {
-    const el = menuRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    let x = menu.x
-    let y = menu.y
-    if (x + rect.width > window.innerWidth - 8) x = window.innerWidth - rect.width - 8
-    if (y + rect.height > window.innerHeight - 8) y = window.innerHeight - rect.height - 8
-    if (x < 8) x = 8
-    if (y < 8) y = 8
-    setPos({ x, y })
-  }, [menu.x, menu.y])
+  const position = useContextMenuPosition(menu.x, menu.y, menuRef, 190)
 
   const groups = buildMenuGroups({
     node,
@@ -125,7 +112,7 @@ export function WorkspaceContextMenu({
       <div
         ref={menuRef}
         className="fixed z-[61] bg-bg-tertiary/95 backdrop-blur-md border border-border-dim/60 rounded-xl shadow-2xl py-1 min-w-[190px] animate-scale-in"
-        style={{ left: pos.x, top: pos.y }}
+        style={{ left: position.x, top: position.y }}
       >
         {groups.map((group, gi) => (
           <div key={gi}>

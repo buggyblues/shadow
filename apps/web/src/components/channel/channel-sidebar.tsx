@@ -32,6 +32,7 @@ import { joinChannel } from '../../lib/socket'
 import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
+import { ContextMenu } from '../common/context-menu'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { ChannelSortButton } from './channel-sort-button'
 
@@ -149,7 +150,6 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null)
   const [editChannelName, setEditChannelName] = useState('')
   const [blankContextMenu, setBlankContextMenu] = useState<{ x: number; y: number } | null>(null)
-  const contextMenuRef = useRef<HTMLDivElement>(null)
   const scopeReadCooldownRef = useRef<Map<string, number>>(new Map())
   const scopeReadInFlightRef = useRef<Set<string>>(new Set())
   const lastMarkedChannelRef = useRef<string | null>(null)
@@ -1160,207 +1160,153 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
 
       {/* Channel context menu */}
       {contextMenu && (
-        <>
-          <div
-            className="fixed inset-0 z-[49]"
-            onClick={() => setContextMenu(null)}
-            onContextMenu={(e) => {
-              e.preventDefault()
-              setContextMenu(null)
-            }}
-          />
-          <div
-            ref={contextMenuRef}
-            className="fixed z-50 bg-bg-tertiary border border-border-dim rounded-lg shadow-xl py-1 min-w-[160px]"
-            style={{ top: contextMenu.y, left: contextMenu.x }}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                setInviteTargetChannel(contextMenu.channel)
-                setShowInvitePanel(true)
-                setContextMenu(null)
-              }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
-            >
-              <UserPlus size={14} />
-              {t('channel.inviteMember')}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setShowAddAgent(true)
-                setContextMenu(null)
-              }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
-            >
-              <img src="/Logo.svg" alt="Buddy" className="w-4 h-4" />
-              {t('channel.addAgent')}
-            </button>
-            <div className="h-px bg-border-subtle my-1" />
-            <button
-              type="button"
-              onClick={() => {
-                const current = notificationPreference?.mutedChannelIds ?? []
-                const isMuted = current.includes(contextMenu.channel.id)
-                const next = isMuted
-                  ? current.filter((id) => id !== contextMenu.channel.id)
-                  : [...current, contextMenu.channel.id]
-                updateNotificationPreference.mutate({ mutedChannelIds: next })
-                setContextMenu(null)
-              }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
-            >
-              <Volume2 size={14} />
-              {(notificationPreference?.mutedChannelIds ?? []).includes(contextMenu.channel.id)
-                ? '取消静音频道'
-                : '静音频道通知'}
-            </button>
-            <div className="h-px bg-border-subtle my-1" />
-            <button
-              type="button"
-              onClick={() => {
-                setEditingChannel(contextMenu.channel)
-                setEditChannelName(contextMenu.channel.name)
-                setContextMenu(null)
-              }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
-            >
-              <Edit3 size={14} />
-              {t('channel.editChannel')}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                updateChannel.mutate({
-                  channelId: contextMenu.channel.id,
-                  name: contextMenu.channel.name,
-                  isPrivate: !contextMenu.channel.isPrivate,
-                })
-                setContextMenu(null)
-              }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
-            >
-              <Lock size={14} />
-              {contextMenu.channel.isPrivate ? '设为公开频道' : '设为私有频道'}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const slug = server?.slug ?? serverSlug
-                const channelLink = `${window.location.origin}/app/servers/${slug}/channels/${contextMenu.channel.id}`
-                navigator.clipboard.writeText(channelLink)
-                setContextMenu(null)
-              }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
-            >
-              <Copy size={14} />
-              {t('channel.copyChannelLink')}
-            </button>
-            <div className="h-px bg-border-subtle my-1" />
-            <button
-              type="button"
-              onClick={async () => {
-                const ok = await useConfirmStore.getState().confirm({
-                  title: t('channel.deleteChannel'),
-                  message: t('channel.deleteChannelConfirm'),
-                })
-                if (ok) {
-                  deleteChannel.mutate(contextMenu.channel.id)
-                }
-                setContextMenu(null)
-              }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition"
-            >
-              <Trash2 size={14} />
-              {t('channel.deleteChannel')}
-            </button>
-          </div>
-        </>
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          groups={[
+            {
+              items: [
+                {
+                  icon: UserPlus,
+                  label: t('channel.inviteMember'),
+                  onClick: () => {
+                    setInviteTargetChannel(contextMenu.channel)
+                    setShowInvitePanel(true)
+                  },
+                },
+                {
+                  label: t('channel.addAgent'),
+                  onClick: () => setShowAddAgent(true),
+                },
+              ],
+            },
+            {
+              items: [
+                {
+                  icon: Volume2,
+                  label: (notificationPreference?.mutedChannelIds ?? []).includes(contextMenu.channel.id)
+                    ? '取消静音频道'
+                    : '静音频道通知',
+                  onClick: () => {
+                    const current = notificationPreference?.mutedChannelIds ?? []
+                    const isMuted = current.includes(contextMenu.channel.id)
+                    const next = isMuted
+                      ? current.filter((id) => id !== contextMenu.channel.id)
+                      : [...current, contextMenu.channel.id]
+                    updateNotificationPreference.mutate({ mutedChannelIds: next })
+                  },
+                },
+              ],
+            },
+            {
+              items: [
+                {
+                  icon: Edit3,
+                  label: t('channel.editChannel'),
+                  onClick: () => {
+                    setEditingChannel(contextMenu.channel)
+                    setEditChannelName(contextMenu.channel.name)
+                  },
+                },
+                {
+                  icon: Lock,
+                  label: contextMenu.channel.isPrivate ? '设为公开频道' : '设为私有频道',
+                  onClick: () => {
+                    updateChannel.mutate({
+                      channelId: contextMenu.channel.id,
+                      name: contextMenu.channel.name,
+                      isPrivate: !contextMenu.channel.isPrivate,
+                    })
+                  },
+                },
+                {
+                  icon: Copy,
+                  label: t('channel.copyChannelLink'),
+                  onClick: () => {
+                    const slug = server?.slug ?? serverSlug
+                    const channelLink = `${window.location.origin}/app/servers/${slug}/channels/${contextMenu.channel.id}`
+                    navigator.clipboard.writeText(channelLink)
+                  },
+                },
+              ],
+            },
+            {
+              items: [
+                {
+                  icon: Trash2,
+                  label: t('channel.deleteChannel'),
+                  danger: true,
+                  onClick: async () => {
+                    const ok = await useConfirmStore.getState().confirm({
+                      title: t('channel.deleteChannel'),
+                      message: t('channel.deleteChannelConfirm'),
+                    })
+                    if (ok) {
+                      deleteChannel.mutate(contextMenu.channel.id)
+                    }
+                  },
+                },
+              ],
+            },
+          ]}
+        />
       )}
 
       {/* Blank area context menu */}
       {blankContextMenu && (
-        <>
-          <div
-            className="fixed inset-0 z-[49]"
-            onClick={() => setBlankContextMenu(null)}
-            onContextMenu={(e) => {
-              e.preventDefault()
-              setBlankContextMenu(null)
-            }}
-          />
-          <div
-            className="fixed z-50 bg-bg-tertiary border border-border-dim rounded-lg shadow-xl py-1 min-w-[160px]"
-            style={{ top: blankContextMenu.y, left: blankContextMenu.x }}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                setShowCreate(true)
-                setBlankContextMenu(null)
-              }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
-            >
-              <Plus size={14} />
-              {t('channel.createChannel')}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setInviteTargetChannel(null)
-                setShowInvitePanel(true)
-                setBlankContextMenu(null)
-              }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
-            >
-              <UserPlus size={14} />
-              {t('channel.inviteMember')}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setShowAddAgent(true)
-                setBlankContextMenu(null)
-              }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
-            >
-              <img src="/Logo.svg" alt="Buddy" className="w-4 h-4" />
-              {t('channel.addAgent')}
-            </button>
-            <div className="h-px bg-border-subtle my-1" />
-            <button
-              type="button"
-              onClick={() => {
-                if (!server?.id) return
-                const current = notificationPreference?.mutedServerIds ?? []
-                const isMuted = current.includes(server.id)
-                const next = isMuted
-                  ? current.filter((id) => id !== server.id)
-                  : [...current, server.id]
-                updateNotificationPreference.mutate({ mutedServerIds: next })
-                setBlankContextMenu(null)
-              }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
-            >
-              <Volume2 size={14} />
-              {(notificationPreference?.mutedServerIds ?? []).includes(server?.id ?? '')
-                ? '取消静音服务器'
-                : '静音服务器通知'}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                openServerEdit()
-                setBlankContextMenu(null)
-              }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
-            >
-              <Settings size={14} />
-              {t('channel.serverSettings')}
-            </button>
-          </div>
-        </>
+        <ContextMenu
+          x={blankContextMenu.x}
+          y={blankContextMenu.y}
+          onClose={() => setBlankContextMenu(null)}
+          groups={[
+            {
+              items: [
+                {
+                  icon: Plus,
+                  label: t('channel.createChannel'),
+                  onClick: () => setShowCreate(true),
+                },
+                {
+                  icon: UserPlus,
+                  label: t('channel.inviteMember'),
+                  onClick: () => {
+                    setInviteTargetChannel(null)
+                    setShowInvitePanel(true)
+                  },
+                },
+                {
+                  label: t('channel.addAgent'),
+                  onClick: () => setShowAddAgent(true),
+                },
+              ],
+            },
+            {
+              items: [
+                {
+                  icon: Volume2,
+                  label: (notificationPreference?.mutedServerIds ?? []).includes(server?.id ?? '')
+                    ? '取消静音服务器'
+                    : '静音服务器通知',
+                  onClick: () => {
+                    if (!server?.id) return
+                    const current = notificationPreference?.mutedServerIds ?? []
+                    const isMuted = current.includes(server.id)
+                    const next = isMuted
+                      ? current.filter((id) => id !== server.id)
+                      : [...current, server.id]
+                    updateNotificationPreference.mutate({ mutedServerIds: next })
+                  },
+                },
+                {
+                  icon: Settings,
+                  label: t('channel.serverSettings'),
+                  onClick: openServerEdit,
+                },
+              ],
+            },
+          ]}
+        />
       )}
 
       {/* Invite Panel */}

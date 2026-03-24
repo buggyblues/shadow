@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { Check, Compass, Copy, Info, Lock, LogOut, Plus, UserPlus } from 'lucide-react'
+import { Check, Compass, Copy, Info, Lock, LogOut, Plus, UserPlus, Volume2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSocketEvent } from '../../hooks/use-socket'
@@ -10,6 +10,7 @@ import { getCatAvatar } from '../../lib/pixel-cats'
 import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
+import { ContextMenu, type ContextMenuGroup } from '../common/context-menu'
 import { useConfirmStore } from '../common/confirm-dialog'
 
 interface ServerEntry {
@@ -472,105 +473,78 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
 
       {/* Server context menu */}
       {contextMenu && (
-        <>
-          <div
-            className="fixed inset-0 z-[60]"
-            onClick={closeContextMenu}
-            onContextMenu={(e) => {
-              e.preventDefault()
-              closeContextMenu()
-            }}
-          />
-          <div
-            className="fixed z-[61] bg-bg-tertiary border border-border-dim rounded-lg shadow-xl py-1 min-w-[180px]"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-          >
-            {/* Server info */}
-            <button
-              type="button"
-              onClick={() => {
-                handleSelect(contextMenu.server.server.id, contextMenu.server.server.slug)
-                setContextMenu(null)
-              }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
-            >
-              <Info size={14} />
-              {t('server.serverInfo')}
-            </button>
-
-            {/* Invite members */}
-            <button
-              type="button"
-              onClick={() => {
-                handleSelect(contextMenu.server.server.id, contextMenu.server.server.slug)
-                setContextMenu(null)
-              }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
-            >
-              <UserPlus size={14} />
-              {t('server.inviteMembers')}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                const targetId = contextMenu.server.server.id
-                const current = notificationPreference?.mutedServerIds ?? []
-                const isMuted = current.includes(targetId)
-                const next = isMuted
-                  ? current.filter((id) => id !== targetId)
-                  : [...current, targetId]
-                updateNotificationPreference.mutate({ mutedServerIds: next })
-                setContextMenu(null)
-              }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
-            >
-              <Info size={14} />
-              {(notificationPreference?.mutedServerIds ?? []).includes(contextMenu.server.server.id)
-                ? '取消静音服务器'
-                : '静音服务器通知'}
-            </button>
-
-            {/* Copy server ID */}
-            <button
-              type="button"
-              onClick={() => {
-                navigator.clipboard.writeText(contextMenu.server.server.id)
-                setCopiedId(true)
-                setTimeout(() => setCopiedId(false), 2000)
-                setContextMenu(null)
-              }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
-            >
-              {copiedId ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
-              {copiedId ? t('common.copied') : t('server.copyServerId')}
-            </button>
-
-            {/* Leave server — hidden for owners */}
-            {user?.id !== contextMenu.server.server.ownerId && (
-              <>
-                <div className="h-px bg-border-subtle my-1" />
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const name = contextMenu.server.server.name
-                    const ok = await useConfirmStore.getState().confirm({
-                      title: t('server.leaveServer'),
-                      message: t('server.leaveConfirm', { name }),
-                    })
-                    if (ok) {
-                      leaveServer.mutate(contextMenu.server.server.id)
-                    }
-                  }}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition"
-                >
-                  <LogOut size={14} />
-                  {t('server.leaveServer')}
-                </button>
-              </>
-            )}
-          </div>
-        </>
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={closeContextMenu}
+          groups={[
+            {
+              items: [
+                {
+                  icon: Info,
+                  label: t('server.serverInfo'),
+                  onClick: () => handleSelect(contextMenu.server.server.id, contextMenu.server.server.slug),
+                },
+                {
+                  icon: UserPlus,
+                  label: t('server.inviteMembers'),
+                  onClick: () => handleSelect(contextMenu.server.server.id, contextMenu.server.server.slug),
+                },
+              ],
+            },
+            {
+              items: [
+                {
+                  icon: Volume2,
+                  label: (notificationPreference?.mutedServerIds ?? []).includes(contextMenu.server.server.id)
+                    ? '取消静音服务器'
+                    : '静音服务器通知',
+                  onClick: () => {
+                    const targetId = contextMenu.server.server.id
+                    const current = notificationPreference?.mutedServerIds ?? []
+                    const isMuted = current.includes(targetId)
+                    const next = isMuted
+                      ? current.filter((id) => id !== targetId)
+                      : [...current, targetId]
+                    updateNotificationPreference.mutate({ mutedServerIds: next })
+                  },
+                },
+                {
+                  icon: copiedId ? Check : Copy,
+                  label: copiedId ? t('common.copied') : t('server.copyServerId'),
+                  onClick: () => {
+                    navigator.clipboard.writeText(contextMenu.server.server.id)
+                    setCopiedId(true)
+                    setTimeout(() => setCopiedId(false), 2000)
+                  },
+                },
+              ],
+            },
+            ...(user?.id !== contextMenu.server.server.ownerId
+              ? [
+                  {
+                    items: [
+                      {
+                        icon: LogOut,
+                        label: t('server.leaveServer'),
+                        danger: true,
+                        onClick: async () => {
+                          const name = contextMenu.server.server.name
+                          const ok = await useConfirmStore.getState().confirm({
+                            title: t('server.leaveServer'),
+                            message: t('server.leaveConfirm', { name }),
+                          })
+                          if (ok) {
+                            leaveServer.mutate(contextMenu.server.server.id)
+                          }
+                        },
+                      },
+                    ],
+                  },
+                ]
+              : []),
+          ]}
+        />
       )}
     </div>
   )
