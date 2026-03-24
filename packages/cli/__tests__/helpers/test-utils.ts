@@ -1,9 +1,18 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { type ExecaReturnValue, execa } from 'execa'
 
 const CLI_PATH = join(__dirname, '../../dist/index.js')
+let cliPrepared = false
+
+export async function ensureCliBuilt(): Promise<void> {
+  if (cliPrepared) return
+  if (!existsSync(CLI_PATH)) {
+    await execa('pnpm', ['--dir', join(__dirname, '../..'), 'build'])
+  }
+  cliPrepared = true
+}
 
 export interface TestContext {
   tempDir: string
@@ -66,6 +75,7 @@ export async function runCli(
   ctx: TestContext,
   options: { expectError?: boolean } = {},
 ): Promise<ExecaReturnValue<string>> {
+  await ensureCliBuilt()
   const env = {
     ...process.env,
     HOME: ctx.tempDir,

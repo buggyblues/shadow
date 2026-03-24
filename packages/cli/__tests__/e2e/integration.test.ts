@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { ShadowClient } from '@shadowob/sdk'
 import { execa } from 'execa'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { ensureCliBuilt } from '../helpers/test-utils.js'
 
 const CLI_PATH = join(__dirname, '../../dist/index.js')
 const SERVER_URL = process.env.SHADOW_SERVER_URL || 'http://localhost:3000'
@@ -17,6 +18,7 @@ describe.skipIf(!SHOULD_RUN_INTEGRATION)('CLI Integration Tests', () => {
   let testUser: { id: string; username: string }
 
   beforeAll(async () => {
+    await ensureCliBuilt()
     tempDir = mkdtempSync(join(tmpdir(), 'shadowob-cli-integration-'))
     _configDir = join(tempDir, 'config')
 
