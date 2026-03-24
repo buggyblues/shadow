@@ -84,9 +84,20 @@
     .logo-mark {
       width: 36px; height: 36px;
       background: var(--cyan);
-      border-radius: 10px;
+      border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
       box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .logo-mark::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.3) 1px, transparent 1px);
+      background-size: 8px 8px;
+      opacity: 0.5;
     }
     
     .theme-toggle {
@@ -348,12 +359,23 @@
     .server-pill {
       width: 32px; height: 32px;
       background: var(--bg-elevated);
-      border-radius: 10px;
+      border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
       font-size: 11px; font-weight: 700;
       color: var(--text-secondary);
       cursor: pointer;
       transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .server-pill::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.15) 1px, transparent 1px);
+      background-size: 6px 6px;
+      opacity: 0.5;
     }
     
     .server-pill:hover { background: var(--bg-overlay); color: var(--text-primary); }
@@ -433,7 +455,7 @@
   <!-- Hero -->
   <section class="hero">
     <div class="hero-badge">
-      <span>🎮</span>
+      <i data-lucide="gamepad-2" style="width: 14px; height: 14px;"></i>
       <span>Design System v2</span>
     </div>
     <h1 class="hero-title">Shadow <span>Design</span></h1>
@@ -586,7 +608,14 @@
       </div>
       <div class="card">
         <div class="empty">
-          <div class="empty-mascot">🦐</div>
+          <div class="empty-mascot">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a10 10 0 1 0 10 10H2a10 10 0 0 0 10-10Z"/>
+            <path d="M12 12v8"/>
+            <path d="M12 16l4-4"/>
+            <path d="M12 16l-4-4"/>
+          </svg>
+        </div>
           <div class="empty-title">No messages yet</div>
           <div class="empty-text">Start a conversation with your friends!</div>
           <button class="btn btn-cyan" style="margin-top: 16px;">
@@ -627,7 +656,7 @@
             <div class="message-avatar">A</div>
             <div class="message-content">
               <div class="message-author">Alex</div>
-              <div class="message-text">Hey everyone! Check out the new design 🎮</div>
+              <div class="message-text">Hey everyone! Check out the new design</div>
             </div>
           </div>
           <div class="message">
