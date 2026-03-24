@@ -2,18 +2,21 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
   ArrowRight,
+  Bot,
   Check,
   ChevronLeft,
-  ChevronRight,
+  Copy,
+  Download,
   Globe,
   Hash,
+  Loader2,
   MessageCircle,
   Plus,
   Rocket,
   Search,
   Server,
   SkipForward,
-  Users,
+  Terminal,
   X,
 } from 'lucide-react'
 import { useRef, useState } from 'react'
@@ -26,7 +29,13 @@ interface OnboardingModalProps {
   onClose: () => void
 }
 
-type Step = 'welcome' | 'create-server' | 'join-server' | 'buddy' | 'complete'
+type Step =
+  | 'welcome'
+  | 'create-server'
+  | 'join-server'
+  | 'create-buddy'
+  | 'buddy-config'
+  | 'complete'
 
 const features = [
   {
@@ -59,7 +68,6 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const user = useAuthStore((s) => s.user)
   const [step, setStep] = useState<Step>('welcome')
   const [slideIndex, setSlideIndex] = useState(0)
   const [serverName, setServerName] = useState('')
@@ -93,10 +101,10 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['servers'] })
-      // 保存服务器 ID，跳转到 Buddy 绑定步骤
       const serverId = data.slug || data.id
       setCreatedServerId(serverId)
-      setStep('buddy')
+      // 跳转到创建 Buddy 步骤
+      setStep('create-buddy')
     },
   })
 
@@ -109,10 +117,10 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['servers'] })
-      // 保存服务器 ID，跳转到 Buddy 绑定步骤
       const serverId = data.slug || data.id
       setCreatedServerId(serverId)
-      setStep('buddy')
+      // 跳转到创建 Buddy 步骤
+      setStep('create-buddy')
     },
   })
 
@@ -394,90 +402,26 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
           </div>
         )}
 
-        {/* Buddy onboarding step */}
-        {step === 'buddy' && createdServerId && (
-          <div className="p-8">
-            <div className="text-center mb-6">
-              <div className="w-20 h-20 mx-auto mb-6 relative">
-                <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-red-500 animate-pulse opacity-75" />
-                <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/25">
-                  <Rocket size={40} className="text-white" />
-                </div>
-              </div>
-              <h2 className="text-2xl font-bold text-text-primary mb-2">
-                {t('buddyOnboarding.title', '让你的服务器活起来！')}
-              </h2>
-              <p className="text-text-muted">
-                {t('buddyOnboarding.desc', '添加 Buddy AI 助手，让它成为你的第一个队友')}
-              </p>
-            </div>
+        {/* Create Buddy step */}
+        {step === 'create-buddy' && (
+          <CreateBuddyStep
+            serverId={createdServerId}
+            onNext={() => setStep('buddy-config')}
+            onSkip={() => {
+              onClose()
+              if (createdServerId) {
+                void navigate({
+                  to: '/servers/$serverSlug',
+                  params: { serverSlug: createdServerId },
+                })
+              }
+            }}
+          />
+        )}
 
-            {/* Quick actions */}
-            <div className="space-y-3 mb-6">
-              <a
-                href="https://openclaw.ai/download"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-4 p-4 bg-bg-tertiary hover:bg-bg-modifier-hover rounded-xl transition group"
-              >
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center">
-                  <svg
-                    className="w-6 h-6 text-white"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                    />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-text-primary group-hover:text-primary transition">
-                    {t('buddyOnboarding.downloadOpenClaw', '下载 OpenClaw 桌面端')}
-                  </p>
-                  <p className="text-sm text-text-muted">
-                    {t('buddyOnboarding.downloadOpenClawDesc', '安装后打开，按向导完成 Buddy 绑定')}
-                  </p>
-                </div>
-              </a>
-
-              <div className="p-4 bg-bg-tertiary rounded-xl">
-                <p className="text-sm text-text-muted mb-2">
-                  {t('buddyOnboarding.commandLabel', '或在 OpenClaw 对话中输入：')}
-                </p>
-                <code className="block w-full p-3 bg-bg-secondary rounded-lg text-primary font-mono text-sm">
-                  /buddy bind --server {createdServerId}
-                </code>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  onClose()
-                  void navigate({
-                    to: '/servers/$serverSlug',
-                    params: { serverSlug: createdServerId },
-                  })
-                }}
-                className="flex-1 py-3 text-text-muted hover:text-text-primary transition"
-              >
-                {t('common.skipForNow', '暂时跳过')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setStep('complete')}
-                className="flex-1 py-3 bg-primary text-white font-semibold rounded-xl hover:opacity-90 transition"
-              >
-                {t('buddyOnboarding.bound', '已绑定 Buddy')}
-              </button>
-            </div>
-          </div>
+        {/* Buddy config step */}
+        {step === 'buddy-config' && createdServerId && (
+          <BuddyConfigStep serverId={createdServerId} onComplete={() => setStep('complete')} />
         )}
 
         {/* Complete step */}
@@ -510,9 +454,6 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
 // Note: The actual check is done in AppLayout by checking if user has servers
 // This hook is kept for backward compatibility
 export function useOnboarding() {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const user = useAuthStore((s) => s.user)
-
   const shouldShow = () => {
     // This is now handled in AppLayout
     return false
@@ -523,4 +464,248 @@ export function useOnboarding() {
   }
 
   return { shouldShow, markCompleted }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+ * Create Buddy Step
+ * ═════════════════════════════════════════════════════════════════════════════ */
+
+interface BuddyAgent {
+  id: string
+  userId: string
+  status: 'running' | 'stopped' | 'error'
+  lastHeartbeat: string | null
+  botUser?: {
+    id: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+  } | null
+}
+
+function CreateBuddyStep({
+  serverId: _serverId,
+  onNext,
+  onSkip,
+}: {
+  serverId: string | null
+  onNext: () => void
+  onSkip: () => void
+}) {
+  const { t } = useTranslation()
+  const [name, setName] = useState('AI 助手')
+  const [username, setUsername] = useState(() => {
+    const suffix = Math.random().toString(36).slice(2, 8)
+    return `buddy_${suffix}`
+  })
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleCreate = async () => {
+    if (!name.trim()) return
+    setCreating(true)
+    setError('')
+    try {
+      await fetchApi<BuddyAgent>('/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: name.trim(),
+          username: username || `buddy_${Math.random().toString(36).slice(2, 8)}`,
+          kernelType: 'openclaw',
+          config: {},
+        }),
+      })
+      onNext()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('buddyOnboarding.createError', '创建失败'))
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  return (
+    <div className="p-8">
+      <div className="text-center mb-6">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+          <Bot size={32} className="text-white" />
+        </div>
+        <h2 className="text-xl font-bold text-text-primary mb-2">
+          {t('buddyOnboarding.createTitle', '创建你的 AI 助手')}
+        </h2>
+        <p className="text-sm text-text-muted">
+          {t('buddyOnboarding.createDesc', '给你的 AI 助手起个名字，它将在频道中与你对话')}
+        </p>
+      </div>
+
+      <div className="space-y-4 mb-6">
+        <div>
+          <label className="block text-sm font-medium text-text-primary mb-2">
+            {t('buddyOnboarding.buddyName', '助手名称')}
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="AI 助手"
+            className="w-full px-4 py-3 bg-bg-tertiary border border-border-subtle rounded-xl text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary"
+            maxLength={64}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-text-primary mb-2">
+            {t('buddyOnboarding.buddyUsername', '用户名')}
+          </label>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''))}
+            placeholder="buddy_xxx"
+            className="w-full px-4 py-3 bg-bg-tertiary border border-border-subtle rounded-xl text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary font-mono"
+            maxLength={32}
+          />
+          <p className="text-xs text-text-muted mt-1">@{username || 'buddy_xxx'}</p>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">
+          {error}
+        </div>
+      )}
+
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={onSkip}
+          className="flex-1 py-3 text-text-muted hover:text-text-primary transition"
+        >
+          {t('common.skipForNow', '暂时跳过')}
+        </button>
+        <button
+          type="button"
+          onClick={handleCreate}
+          disabled={!name.trim() || creating}
+          className="flex-1 py-3 bg-primary text-white font-semibold rounded-xl hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          {creating ? (
+            <>
+              <Loader2 size={16} className="animate-spin" />
+              {t('common.creating', '创建中...')}
+            </>
+          ) : (
+            <>
+              <Plus size={16} />
+              {t('buddyOnboarding.createBuddy', '创建 Buddy')}
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+ * Buddy Config Step (复用 buddy-management 的配置说明)
+ * ═════════════════════════════════════════════════════════════════════════════ */
+
+function BuddyConfigStep({ serverId, onComplete }: { serverId: string; onComplete: () => void }) {
+  const { t } = useTranslation()
+  const [copied, setCopied] = useState(false)
+
+  // 生成绑定命令
+  const bindCommand = `/buddy bind --server ${serverId}`
+
+  const handleCopy = async (text: string) => {
+    await navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="p-8">
+      <div className="text-center mb-6">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-purple-400 to-violet-500 flex items-center justify-center">
+          <Terminal size={32} className="text-white" />
+        </div>
+        <h2 className="text-xl font-bold text-text-primary mb-2">
+          {t('buddyOnboarding.configTitle', '配置 Buddy 连接')}
+        </h2>
+        <p className="text-sm text-text-muted">
+          {t('buddyOnboarding.configDesc', '使用 OpenClaw 桌面端连接你的 Buddy')}
+        </p>
+      </div>
+
+      {/* 方法1: 下载桌面端 */}
+      <div className="mb-4">
+        <h3 className="text-sm font-semibold text-text-primary mb-2">
+          {t('buddyOnboarding.method1', '方法 1: 使用 OpenClaw 桌面端（推荐）')}
+        </h3>
+        <a
+          href="https://openclaw.ai/download"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 p-4 bg-bg-tertiary hover:bg-bg-modifier-hover rounded-xl transition group"
+        >
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center">
+            <Download size={20} className="text-white" />
+          </div>
+          <div className="flex-1">
+            <p className="font-medium text-text-primary group-hover:text-primary transition">
+              {t('buddyOnboarding.downloadDesktop', '下载 OpenClaw 桌面端')}
+            </p>
+            <p className="text-xs text-text-muted">
+              {t('buddyOnboarding.downloadDesktopHint', '安装后打开，按向导完成配置')}
+            </p>
+          </div>
+        </a>
+      </div>
+
+      {/* 方法2: 命令绑定 */}
+      <div className="mb-6">
+        <h3 className="text-sm font-semibold text-text-primary mb-2">
+          {t('buddyOnboarding.method2', '方法 2: 使用命令绑定')}
+        </h3>
+        <div className="p-4 bg-bg-tertiary rounded-xl">
+          <p className="text-xs text-text-muted mb-2">
+            {t('buddyOnboarding.commandHint', '在 OpenClaw 对话中输入以下命令：')}
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 p-3 bg-bg-secondary rounded-lg text-primary font-mono text-sm overflow-x-auto">
+              {bindCommand}
+            </code>
+            <button
+              type="button"
+              onClick={() => handleCopy(bindCommand)}
+              className="p-3 text-text-muted hover:text-primary bg-bg-secondary rounded-lg transition"
+              title={t('common.copy', '复制')}
+            >
+              {copied ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 配置说明（复用 buddy-management 的样式） */}
+      <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+        <h4 className="text-sm font-semibold text-amber-400 mb-2">
+          💡 {t('buddyOnboarding.setupGuide', '配置步骤')}
+        </h4>
+        <ol className="text-xs text-text-secondary space-y-1 list-decimal list-inside">
+          <li>{t('buddyOnboarding.step1', '下载并安装 OpenClaw 桌面端')}</li>
+          <li>{t('buddyOnboarding.step2', '打开 OpenClaw，完成初始设置')}</li>
+          <li>{t('buddyOnboarding.step3', '在对话中输入上述命令，或使用 Buddy 管理页面配置')}</li>
+          <li>{t('buddyOnboarding.step4', '连接成功后，Buddy 将自动出现在你的服务器中')}</li>
+        </ol>
+      </div>
+
+      <button
+        type="button"
+        onClick={onComplete}
+        className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:opacity-90 transition"
+      >
+        {t('buddyOnboarding.complete', '完成设置')}
+      </button>
+    </div>
+  )
 }
