@@ -36,7 +36,7 @@ describe('CLI E2E Tests', () => {
     })
 
     it('should show config path', async () => {
-      const { stdout } = await execa('node', [CLI_PATH, 'config'])
+      const { stdout } = await execa('node', [CLI_PATH, 'config', 'path'])
       expect(stdout).toContain('shadowob.config.json')
     })
   })

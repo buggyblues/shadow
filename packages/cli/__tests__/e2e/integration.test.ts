@@ -7,8 +7,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const CLI_PATH = join(__dirname, '../../dist/index.js')
 const SERVER_URL = process.env.SHADOW_SERVER_URL || 'http://localhost:3000'
+const SHOULD_RUN_INTEGRATION = process.env.SHADOW_CLI_E2E === 'true'
+const INVITE_CODE = process.env.SHADOW_TEST_INVITE_CODE || ''
 
-describe('CLI Integration Tests', () => {
+describe.skipIf(!SHOULD_RUN_INTEGRATION)('CLI Integration Tests', () => {
   let tempDir: string
   let _configDir: string
   let testToken: string
@@ -24,7 +26,7 @@ describe('CLI Integration Tests', () => {
       email: `test-${Date.now()}@example.com`,
       password: 'testpassword123',
       username: `testuser${Date.now()}`,
-      inviteCode: 'test-invite',
+      inviteCode: INVITE_CODE,
     })
     testToken = result.token
     testUser = result.user

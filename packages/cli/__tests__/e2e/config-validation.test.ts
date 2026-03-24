@@ -104,10 +104,11 @@ describe('Config Validation and Fix', () => {
     })
 
     it('should warn about no current profile', async () => {
-      createMockConfig(
+      createInvalidConfig(
         ctx,
-        { default: { serverUrl: 'https://test.com', token: 'eyJ.test.token' } },
-        undefined,
+        JSON.stringify({
+          profiles: { default: { serverUrl: 'https://test.com', token: 'eyJ.test.token' } },
+        }),
       )
       const result = await runCli(['config', 'validate', '--json'], ctx)
       const output = parseJsonOutput(result.stdout) as { valid: boolean; warnings: string[] }
