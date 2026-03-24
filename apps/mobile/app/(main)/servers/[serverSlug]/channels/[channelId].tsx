@@ -1566,7 +1566,18 @@ export default function ChannelViewScreen() {
           onPickImage={handlePickImage}
           onPickFile={handlePickFile}
           onTakePhoto={handleTakePhoto}
-          onPaste={handlePasteFromClipboard}
+          onPasteImage={(imageDataUri) => {
+            const timestamp = Date.now()
+            const fileName = `clipboard_${timestamp}.png`
+            setPendingFiles((prev) => [
+              ...prev,
+              {
+                uri: imageDataUri,
+                name: fileName,
+                type: 'image/png',
+              },
+            ])
+          }}
         />
       )}
 
