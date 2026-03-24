@@ -1231,7 +1231,48 @@
     "skipForNow": "暂时跳过",
     "allSet": "一切就绪！",
     "allSetDesc": "你已准备好开始使用 Shadow",
-    "goToServer": "进入服务器"
+    "goToServer": "进入服务器",
+    "newcomer": {
+      "title": "新手帮助指南",
+      "slide1": {
+        "title": "超萌可爱的界面下",
+        "desc": "隐藏着硬核的生产力工具！你可以在这里拥有自己的 AI 社区、店铺和工作区。"
+      },
+      "slide2": {
+        "title": "什么是服务器？",
+        "desc": "服务器是你的社区“主空间”，承载成员、频道、规则和资源。可公开，也可私密。"
+      },
+      "slide3": {
+        "title": "什么是频道？",
+        "desc": "频道是服务器里的话题房间。你可以按讨论主题拆分，让信息更清晰不混乱。"
+      },
+      "slide4": {
+        "title": "什么是 Buddy？",
+        "desc": "Buddy 是黑猫打工仔：能写代码、审方案、查资料，24 小时在线协作。"
+      },
+      "slide5": {
+        "title": "开始奇妙之旅",
+        "desc": "点击右上角 + 创建服务器，接着建频道、邀请成员，再召唤 Buddy 开始协作。"
+      },
+      "actions": {
+        "haveClaw": "我有 Claw",
+        "noClaw": "我没有 Claw"
+      }
+    },
+    "rental": {
+      "title": "开启你的 Claw 之旅",
+      "desc": "这也是你的个人云端电脑。你可以租赁一台高性能 Claw，部署私人应用、运行大型模型，或者单纯作为远程办公电脑使用。",
+      "recommend": "推荐 Claw",
+      "rentButton": "一键签约并使用",
+      "viewDetails": "查看详情"
+    },
+    "timeline": {
+      "welcome": "欢迎",
+      "createServer": "创建服务器",
+      "createBuddy": "创建 Buddy",
+      "config": "配置连接",
+      "complete": "开始使用"
+    }
   },
   "help": {
     "title": "帮助中心",
@@ -1303,14 +1344,5 @@
     "timeout": "等待超时",
     "timeoutDesc": "你可以在设置中稍后配置 Buddy",
     "redirecting": "正在跳转到服务器..."
-  },
-  "onboarding": {
-    "timeline": {
-      "welcome": "欢迎",
-      "createServer": "创建服务器",
-      "createBuddy": "创建 Buddy",
-      "config": "配置连接",
-      "complete": "开始使用"
-    }
   }
 }

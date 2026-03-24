@@ -1231,7 +1231,48 @@
     "skipForNow": "Skip for now",
     "allSet": "You're All Set!",
     "allSetDesc": "You're ready to start using Shadow",
-    "goToServer": "Go to Server"
+    "goToServer": "Go to Server",
+    "newcomer": {
+      "title": "Newcomer Help Guide",
+      "slide1": {
+        "title": "Behind the Cute Interface",
+        "desc": "Hides hardcore productivity tools! Here you can own your AI community, shop, and workspace."
+      },
+      "slide2": {
+        "title": "What is a Server?",
+        "desc": "A server is your community's 'main space', hosting members, channels, rules, and resources. Can be public or private."
+      },
+      "slide3": {
+        "title": "What is a Channel?",
+        "desc": "Channels are topic rooms within a server. You can split by discussion topics to keep information clear and organized."
+      },
+      "slide4": {
+        "title": "What is a Buddy?",
+        "desc": "Buddies are black cat workers: they can write code, review plans, look up info, and collaborate 24/7."
+      },
+      "slide5": {
+        "title": "Start Your Journey",
+        "desc": "Click + on top right to create a server, then build channels, invite members, and summon Buddies to collaborate."
+      },
+      "actions": {
+        "haveClaw": "I have Claw",
+        "noClaw": "I don't have Claw"
+      }
+    },
+    "rental": {
+      "title": "Start Your Claw Journey",
+      "desc": "This is also your personal cloud computer. You can rent a high-performance Claw to deploy private apps, run large models, or just use as a remote office PC.",
+      "recommend": "Recommended Claws",
+      "rentButton": "One-click Sign & Use",
+      "viewDetails": "View Details"
+    },
+    "timeline": {
+      "welcome": "Welcome",
+      "createServer": "Create Server",
+      "createBuddy": "Create Buddy",
+      "config": "Configure",
+      "complete": "Get Started"
+    }
   },
   "help": {
     "title": "Help Center",
@@ -1285,11 +1326,12 @@
     "command": "Bind Command",
     "addToChannel": "Add Buddy to Channel",
     "addToChannelDesc": "Let Buddy join your channel and start chatting",
-    "step1Desc": "Click on a channel in the server list",
-    "step2": "Send a message @Buddy",
-    "step2Desc": "Type @Buddy in the channel to say hi, e.g. @Buddy hello!",
-    "step3": "Start Interacting",
-    "step3Desc": "Buddy will reply automatically, you can also assign tasks",
+    "chatStep1": "Click on a channel in the server list",
+    "chatStep1Desc": "Click on a channel in the server list",
+    "chatStep2": "Send a message @Buddy",
+    "chatStep2Desc": "Type @Buddy in the channel to say hi, e.g. @Buddy hello!",
+    "chatStep3": "Start Interacting",
+    "chatStep3Desc": "Buddy will reply automatically, you can also assign tasks",
     "goToServer": "Go to Server",
     "yourToken": "Your Token",
     "configured": "I've configured it",
@@ -1301,14 +1343,5 @@
     "timeout": "Waiting timeout",
     "timeoutDesc": "You can configure Buddy later in settings",
     "redirecting": "Redirecting to server..."
-  },
-  "onboarding": {
-    "timeline": {
-      "welcome": "Welcome",
-      "createServer": "Create Server",
-      "createBuddy": "Create Buddy",
-      "config": "Configure",
-      "complete": "Get Started"
-    }
   }
 }
