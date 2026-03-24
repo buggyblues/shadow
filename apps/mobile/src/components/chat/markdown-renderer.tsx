@@ -295,6 +295,17 @@ export function MarkdownRenderer({
         router.push(`/(main)/profile/${userId}` as never)
         return
       }
+      // Open external URLs in webview previewer
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        router.push({
+          pathname: '/(main)/webview-preview',
+          params: {
+            url: encodeURIComponent(url),
+          },
+        })
+        return
+      }
+      // Handle other schemes (tel:, mailto:, etc.) with system
       Linking.openURL(url)
     },
     [router],

@@ -597,11 +597,25 @@ export function MessageBubble({
                       <img src={src} alt={alt ?? ''} loading="lazy" />
                     </a>
                   ),
-                  a: ({ href, children }) => (
-                    <a href={href} target="_blank" rel="noopener noreferrer">
-                      {children}
-                    </a>
-                  ),
+                  a: ({ href, children }) => {
+                    // Handle plain URLs in message content that aren't already markdown links
+                    const handleClick = (e: React.MouseEvent) => {
+                      e.preventDefault()
+                      if (href) {
+                        window.open(href, '_blank', 'noopener,noreferrer')
+                      }
+                    }
+                    return (
+                      <a
+                        href={href}
+                        onClick={handleClick}
+                        className="text-primary hover:underline cursor-pointer"
+                        rel="noopener noreferrer"
+                      >
+                        {children}
+                      </a>
+                    )
+                  },
                   p: ({ children }) => <p>{renderMentions(children)}</p>,
                   li: ({ children }) => <li>{renderMentions(children)}</li>,
                   td: ({ children }) => <td>{renderMentions(children)}</td>,
