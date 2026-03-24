@@ -30,7 +30,7 @@ export function createDmsCommand(): Command {
     .action(async (dmChannelId: string, options: { profile?: string; json?: boolean }) => {
       try {
         const client = await getClient(options.profile)
-        const channel = await client.getDmChannel(dmChannelId)
+        const channel = await client.getChannel(dmChannelId)
         output(channel, { json: options.json })
       } catch (error) {
         outputError(error instanceof Error ? error.message : String(error), { json: options.json })
@@ -110,8 +110,7 @@ export function createDmsCommand(): Command {
       },
     )
 
-  // Note: SDK doesn't have deleteDmChannel, using mark-as-read as alternative
-  // or we can remove this command
+  // Note: SDK markScopeRead doesn't support dmChannelId, marking channel as read instead
   dms
     .command('mark-read')
     .description('Mark DM channel as read')
@@ -121,7 +120,7 @@ export function createDmsCommand(): Command {
     .action(async (dmChannelId: string, options: { profile?: string; json?: boolean }) => {
       try {
         const client = await getClient(options.profile)
-        await client.markScopeRead({ scope: 'dm', scopeId: dmChannelId })
+        await client.markScopeRead({ channelId: dmChannelId })
         const outputOpts: OutputOptions = { json: options.json }
         outputSuccess('DM channel marked as read', outputOpts)
       } catch (error) {

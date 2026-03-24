@@ -13,6 +13,13 @@ export interface Config {
   currentProfile?: string
 }
 
+export interface ValidationResult {
+  valid: boolean
+  errors: string[]
+  warnings: string[]
+  profileResults: Record<string, { valid: boolean; error?: string }>
+}
+
 const DEFAULT_CONFIG_DIR = join(homedir(), '.shadowob')
 const _DEFAULT_CONFIG_FILE = join(DEFAULT_CONFIG_DIR, 'shadowob.config.json')
 
@@ -93,6 +100,116 @@ export class ConfigManager {
 
   getConfigPath(): string {
     return this.configFile
+  }
+
+  async validate(): Promise<ValidationResult> {
+    const result: ValidationResult = {
+      valid: true,
+      errors: [],
+      warnings: [],
+      profileResults: {},
+    }
+
+    // Check if config file exists
+    if (!existsSync(this.configFile)) {
+      result.valid = false
+      result.errors.push('Config file does not exist')
+      return result
+    }
+
+    // Try to load and parse config
+    let config: Config
+    try {
+      const content = await readFile(this.configFile, 'utf-8')
+      config = JSON.parse(content) as Config
+    } catch (error) {
+      result.valid = false
+      result.errors.push(`Invalid JSON: ${error instanceof Error ? error.message : String(error)}`)
+      return result
+    }
+
+    // Validate structure
+    if (!config.profiles || typeof config.profiles !== 'object') {
+      result.valid = false
+      result.errors.push('Missing or invalid "profiles" field')
+      return result
+    }
+
+    // Check current profile
+    if (config.currentProfile) {
+      if (!config.profiles[config.currentProfile]) {
+        result.valid = false
+        result.errors.push(`Current profile "${config.currentProfile}" does not exist`)
+      }
+    } else {
+      result.warnings.push('No current profile set')
+    }
+
+    // Validate each profile
+    for (const [name, profile] of Object.entries(config.profiles)) {
+      const profileResult = { valid: true }
+
+      if (!profile.serverUrl) {
+        profileResult.valid = false
+        result.errors.push(`Profile "${name}" missing serverUrl`)
+      } else {
+        try {
+          new URL(profile.serverUrl)
+        } catch {
+          profileResult.valid = false
+          result.errors.push(`Profile "${name}" has invalid serverUrl: ${profile.serverUrl}`)
+        }
+      }
+
+      if (!profile.token) {
+        profileResult.valid = false
+        result.errors.push(`Profile "${name}" missing token`)
+      } else if (!profile.token.includes('.')) {
+        result.warnings.push(`Profile "${name}" token does not look like a JWT`)
+      }
+
+      result.profileResults[name] = profileResult
+      if (!profileResult.valid) {
+        result.valid = false
+      }
+    }
+
+    return result
+  }
+
+  async fix(): Promise<{ fixed: boolean; changes: string[] }> {
+    const changes: string[] = []
+    const config = await this.load()
+
+    // Remove profiles with missing required fields
+    for (const [name, profile] of Object.entries(config.profiles)) {
+      if (!profile.serverUrl || !profile.token) {
+        delete config.profiles[name]
+        changes.push(`Removed invalid profile "${name}"`)
+      }
+    }
+
+    // Reset current profile if it doesn't exist
+    if (config.currentProfile && !config.profiles[config.currentProfile]) {
+      const remainingProfiles = Object.keys(config.profiles)
+      if (remainingProfiles.length > 0) {
+        config.currentProfile = remainingProfiles[0]
+        changes.push(`Reset current profile to "${config.currentProfile}"`)
+      } else {
+        delete config.currentProfile
+        changes.push('Removed invalid current profile reference')
+      }
+    }
+
+    // Ensure profiles object exists
+    if (!config.profiles) {
+      config.profiles = {}
+      changes.push('Created empty profiles object')
+    }
+
+    await this.save()
+
+    return { fixed: changes.length > 0, changes }
   }
 }
 

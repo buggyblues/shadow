@@ -4,6 +4,7 @@ import { createAgentsCommand } from './commands/agents.js'
 import { createAppsCommand } from './commands/apps.js'
 import { createAuthCommand } from './commands/auth.js'
 import { createChannelsCommand } from './commands/channels.js'
+import { createConfigCommand } from './commands/config.js'
 import { createDmsCommand } from './commands/dms.js'
 import { createFriendsCommand } from './commands/friends.js'
 import { createInvitesCommand } from './commands/invites.js'
@@ -12,12 +13,13 @@ import { createMarketplaceCommand } from './commands/marketplace.js'
 import { createMediaCommand } from './commands/media.js'
 import { createNotificationsCommand } from './commands/notifications.js'
 import { createOAuthCommand } from './commands/oauth.js'
+import { createPingCommand } from './commands/ping.js'
 import { createSearchCommand } from './commands/search.js'
 import { createServersCommand } from './commands/servers.js'
 import { createShopCommand } from './commands/shop.js'
+import { createStatusCommand } from './commands/status.js'
 import { createThreadsCommand } from './commands/threads.js'
 import { createWorkspaceCommand } from './commands/workspace.js'
-import { configManager } from './config/manager.js'
 
 const program = new Command()
 
@@ -50,13 +52,8 @@ program.addCommand(createOAuthCommand())
 program.addCommand(createMarketplaceCommand())
 program.addCommand(createMediaCommand())
 program.addCommand(createSearchCommand())
-
-// Config command
-program
-  .command('config')
-  .description('Show configuration file path')
-  .action(() => {
-    console.log(configManager.getConfigPath())
-  })
+program.addCommand(createConfigCommand())
+program.addCommand(createPingCommand())
+program.addCommand(createStatusCommand())
 
 program.parse()

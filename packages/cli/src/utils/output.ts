@@ -71,8 +71,8 @@ function formatArray(items: unknown[]): void {
 
   for (const item of items) {
     const obj = item as Record<string, unknown>
-    const id = String(obj[idKey] ?? '')
-    const name = String(obj[nameKey] ?? '')
+    const id = String(obj[idKey as string] ?? '')
+    const name = String(obj[nameKey as string] ?? '')
 
     if (name && name !== id) {
       console.log(`${chalk.cyan(id)}  ${name}`)

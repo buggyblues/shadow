@@ -28,7 +28,7 @@ export function createSearchCommand(): Command {
           const client = await getClient(options.profile)
           const limit = Math.min(Math.max(parseInt(options.limit ?? '20', 10), 1), 100)
           const results = await client.searchMessages({
-            query: options.query,
+            q: options.query,
             serverId: options.serverId,
             channelId: options.channelId,
             limit,

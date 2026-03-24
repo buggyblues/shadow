@@ -50,9 +50,7 @@ export function createAppsCommand(): Command {
     .argument('<server-id>', 'Server ID or slug')
     .requiredOption('--name <name>', 'App name')
     .requiredOption('--type <type>', 'App type (url, workspace, static)')
-    .option('--source-url <url>', 'Source URL for URL apps')
-    .option('--description <desc>', 'App description')
-    .option('--settings <json>', 'App settings as JSON')
+    .option('--url <url>', 'Source URL for URL apps')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')
     .action(
@@ -61,9 +59,7 @@ export function createAppsCommand(): Command {
         options: {
           name: string
           type: string
-          sourceUrl?: string
-          description?: string
-          settings?: string
+          url?: string
           profile?: string
           json?: boolean
         },
@@ -72,10 +68,9 @@ export function createAppsCommand(): Command {
           const client = await getClient(options.profile)
           const app = await client.createApp(serverId, {
             name: options.name,
+            slug: options.name.toLowerCase().replace(/\s+/g, '-'),
             type: options.type,
-            sourceUrl: options.sourceUrl,
-            description: options.description,
-            settings: options.settings ? JSON.parse(options.settings) : undefined,
+            url: options.url,
           })
           output(app, { json: options.json })
         } catch (error) {
@@ -90,32 +85,28 @@ export function createAppsCommand(): Command {
   apps
     .command('update')
     .description('Update an app')
+    .argument('<server-id>', 'Server ID or slug')
     .argument('<app-id>', 'App ID')
     .option('--name <name>', 'New name')
-    .option('--description <desc>', 'New description')
-    .option('--source-url <url>', 'New source URL')
-    .option('--settings <json>', 'New settings as JSON')
+    .option('--url <url>', 'New source URL')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')
     .action(
       async (
+        serverId: string,
         appId: string,
         options: {
           name?: string
-          description?: string
-          sourceUrl?: string
-          settings?: string
+          url?: string
           profile?: string
           json?: boolean
         },
       ) => {
         try {
           const client = await getClient(options.profile)
-          const app = await client.updateApp(appId, {
+          const app = await client.updateApp(serverId, appId, {
             name: options.name,
-            description: options.description,
-            sourceUrl: options.sourceUrl,
-            settings: options.settings ? JSON.parse(options.settings) : undefined,
+            url: options.url,
           })
           output(app, { json: options.json })
         } catch (error) {

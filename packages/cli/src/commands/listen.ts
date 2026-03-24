@@ -1,4 +1,3 @@
-import type { ServerEventMap } from '@shadowob/sdk'
 import { Command } from 'commander'
 import { getSocket } from '../utils/client.js'
 import { outputError } from '../utils/output.js'
@@ -108,50 +107,50 @@ export function createListenCommand(): Command {
             }
           }
 
-          // Register event handlers
-          socket.on('message:new', ((msg: ServerEventMap['message:new']) => {
+          // Register event handlers - use unknown cast to avoid type issues
+          socket.on('message:new', ((msg: { channelId?: string }) => {
             if (msg.channelId === channelId) {
               outputEvent('message:new', msg)
             }
-          }) as ServerEventMap['message:new'])
+          }) as unknown as () => void)
 
-          socket.on('message:updated', ((msg: ServerEventMap['message:updated']) => {
+          socket.on('message:updated', ((msg: { channelId?: string }) => {
             if (msg.channelId === channelId) {
               outputEvent('message:updated', msg)
             }
-          }) as ServerEventMap['message:updated'])
+          }) as unknown as () => void)
 
-          socket.on('message:deleted', ((payload: ServerEventMap['message:deleted']) => {
+          socket.on('message:deleted', ((payload: { channelId?: string }) => {
             if (payload.channelId === channelId) {
               outputEvent('message:deleted', payload)
             }
-          }) as ServerEventMap['message:deleted'])
+          }) as unknown as () => void)
 
-          socket.on('reaction:add', ((payload: ServerEventMap['reaction:add']) => {
+          socket.on('reaction:add', ((payload: unknown) => {
             outputEvent('reaction:add', payload)
-          }) as ServerEventMap['reaction:add'])
+          }) as unknown as () => void)
 
-          socket.on('reaction:remove', ((payload: ServerEventMap['reaction:remove']) => {
+          socket.on('reaction:remove', ((payload: unknown) => {
             outputEvent('reaction:remove', payload)
-          }) as ServerEventMap['reaction:remove'])
+          }) as unknown as () => void)
 
-          socket.on('member:typing', ((payload: ServerEventMap['member:typing']) => {
+          socket.on('member:typing', ((payload: { channelId?: string }) => {
             if (payload.channelId === channelId) {
               outputEvent('member:typing', payload)
             }
-          }) as ServerEventMap['member:typing'])
+          }) as unknown as () => void)
 
-          socket.on('member:join', ((payload: ServerEventMap['member:join']) => {
+          socket.on('member:join', ((payload: { channelId?: string }) => {
             if (payload.channelId === channelId) {
               outputEvent('member:join', payload)
             }
-          }) as ServerEventMap['member:join'])
+          }) as unknown as () => void)
 
-          socket.on('member:leave', ((payload: ServerEventMap['member:leave']) => {
+          socket.on('member:leave', ((payload: { channelId?: string }) => {
             if (payload.channelId === channelId) {
               outputEvent('member:leave', payload)
             }
-          }) as ServerEventMap['member:leave'])
+          }) as unknown as () => void)
 
           // Connect and join channel
           socket.connect()
@@ -211,22 +210,29 @@ export function createListenCommand(): Command {
             process.exit(0)
           }, timeoutMs)
 
-          socket.on('dm:message:new', ((msg: ServerEventMap['dm:message:new']) => {
+          socket.on('dm:message:new', ((msg: {
+            dmChannelId?: string
+            createdAt?: string
+            author?: { username?: string }
+            content?: string
+          }) => {
             if (msg.dmChannelId !== dmChannelId) return
 
             count++
             if (options.json) {
               console.log(JSON.stringify({ type: 'dm:message:new', data: msg }))
             } else {
-              const timestamp = new Date(msg.createdAt).toLocaleTimeString()
-              console.log(`[${timestamp}] ${msg.author?.username ?? 'unknown'}: ${msg.content}`)
+              const timestamp = new Date(msg.createdAt ?? Date.now()).toLocaleTimeString()
+              console.log(
+                `[${timestamp}] ${msg.author?.username ?? 'unknown'}: ${msg.content ?? ''}`,
+              )
             }
 
             if (maxCount && count >= maxCount) {
               cleanup()
               process.exit(0)
             }
-          }) as ServerEventMap['dm:message:new'])
+          }) as unknown as () => void)
 
           // Connect and join DM channel
           socket.connect()

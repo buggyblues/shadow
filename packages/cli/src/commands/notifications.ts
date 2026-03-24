@@ -8,18 +8,23 @@ export function createNotificationsCommand(): Command {
   notifications
     .command('list')
     .description('List notifications')
-    .option('--limit <n>', 'Number of notifications (1-100)', '50')
-    .option('--offset <n>', 'Offset for pagination', '0')
+    .option('--unread-only', 'Show only unread notifications')
+    .option('--limit <n>', 'Number of notifications', '20')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')
     .action(
-      async (options: { limit?: string; offset?: string; profile?: string; json?: boolean }) => {
+      async (options: {
+        unreadOnly?: boolean
+        limit?: string
+        profile?: string
+        json?: boolean
+      }) => {
         try {
           const client = await getClient(options.profile)
-          const limit = Math.min(Math.max(parseInt(options.limit ?? '50', 10), 1), 100)
-          const offset = Math.max(parseInt(options.offset ?? '0', 10), 0)
-          const notificationsData = await client.listNotifications(limit, offset)
-          output(notificationsData, { json: options.json })
+          const limit = parseInt(options.limit ?? '20', 10)
+          const result = await client.listNotifications(limit)
+          const notifications = Array.isArray(result) ? result : []
+          output(notifications, { json: options.json })
         } catch (error) {
           outputError(error instanceof Error ? error.message : String(error), {
             json: options.json,
@@ -28,23 +33,6 @@ export function createNotificationsCommand(): Command {
         }
       },
     )
-
-  notifications
-    .command('get')
-    .description('Get notification details')
-    .argument('<notification-id>', 'Notification ID')
-    .option('--profile <name>', 'Profile to use')
-    .option('--json', 'Output as JSON')
-    .action(async (notificationId: string, options: { profile?: string; json?: boolean }) => {
-      try {
-        const client = await getClient(options.profile)
-        const notification = await client.getNotification(notificationId)
-        output(notification, { json: options.json })
-      } catch (error) {
-        outputError(error instanceof Error ? error.message : String(error), { json: options.json })
-        process.exit(1)
-      }
-    })
 
   notifications
     .command('mark-read')
@@ -80,61 +68,6 @@ export function createNotificationsCommand(): Command {
         process.exit(1)
       }
     })
-
-  // Note: SDK doesn't have deleteNotification, only mark-as-read
-  // Removing delete command as it's not supported by API
-
-  // Preferences
-  const prefs = notifications.command('preferences').description('Notification preferences')
-
-  prefs
-    .command('get')
-    .description('Get notification preferences')
-    .option('--profile <name>', 'Profile to use')
-    .option('--json', 'Output as JSON')
-    .action(async (options: { profile?: string; json?: boolean }) => {
-      try {
-        const client = await getClient(options.profile)
-        const preferences = await client.getNotificationPreferences()
-        output(preferences, { json: options.json })
-      } catch (error) {
-        outputError(error instanceof Error ? error.message : String(error), { json: options.json })
-        process.exit(1)
-      }
-    })
-
-  prefs
-    .command('update')
-    .description('Update notification preferences')
-    .option('--email-enabled <bool>', 'Enable email notifications')
-    .option('--push-enabled <bool>', 'Enable push notifications')
-    .option('--mentions-only <bool>', 'Only notify on mentions')
-    .option('--profile <name>', 'Profile to use')
-    .option('--json', 'Output as JSON')
-    .action(
-      async (options: {
-        emailEnabled?: string
-        pushEnabled?: string
-        mentionsOnly?: string
-        profile?: string
-        json?: boolean
-      }) => {
-        try {
-          const client = await getClient(options.profile)
-          const preferences = await client.updateNotificationPreferences({
-            emailEnabled: options.emailEnabled ? options.emailEnabled === 'true' : undefined,
-            pushEnabled: options.pushEnabled ? options.pushEnabled === 'true' : undefined,
-            mentionsOnly: options.mentionsOnly ? options.mentionsOnly === 'true' : undefined,
-          })
-          output(preferences, { json: options.json })
-        } catch (error) {
-          outputError(error instanceof Error ? error.message : String(error), {
-            json: options.json,
-          })
-          process.exit(1)
-        }
-      },
-    )
 
   return notifications
 }

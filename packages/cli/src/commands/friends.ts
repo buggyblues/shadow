@@ -14,7 +14,7 @@ export function createFriendsCommand(): Command {
     .action(async (options: { profile?: string; json?: boolean }) => {
       try {
         const client = await getClient(options.profile)
-        const friendsData = await client.getFriends()
+        const friendsData = await client.listFriends()
         output(friendsData, { json: options.json })
       } catch (error) {
         outputError(error instanceof Error ? error.message : String(error), { json: options.json })
@@ -85,10 +85,10 @@ export function createFriendsCommand(): Command {
     .argument('<request-id>', 'Friend request ID')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')
-    .action(async (userId: string, options: { profile?: string; json?: boolean }) => {
+    .action(async (requestId: string, options: { profile?: string; json?: boolean }) => {
       try {
         const client = await getClient(options.profile)
-        const result = await client.acceptFriendRequest(userId)
+        const result = await client.acceptFriendRequest(requestId)
         output(result, { json: options.json })
       } catch (error) {
         outputError(error instanceof Error ? error.message : String(error), { json: options.json })
@@ -126,58 +126,6 @@ export function createFriendsCommand(): Command {
         await client.removeFriend(friendshipId)
         const outputOpts: OutputOptions = { json: options.json }
         outputSuccess('Friend removed', outputOpts)
-      } catch (error) {
-        outputError(error instanceof Error ? error.message : String(error), { json: options.json })
-        process.exit(1)
-      }
-    })
-
-  friends
-    .command('block')
-    .description('Block user')
-    .argument('<user-id>', 'User ID to block')
-    .option('--profile <name>', 'Profile to use')
-    .option('--json', 'Output as JSON')
-    .action(async (userId: string, options: { profile?: string; json?: boolean }) => {
-      try {
-        const client = await getClient(options.profile)
-        await client.blockUser(userId)
-        const outputOpts: OutputOptions = { json: options.json }
-        outputSuccess('User blocked', outputOpts)
-      } catch (error) {
-        outputError(error instanceof Error ? error.message : String(error), { json: options.json })
-        process.exit(1)
-      }
-    })
-
-  friends
-    .command('unblock')
-    .description('Unblock user')
-    .argument('<user-id>', 'User ID to unblock')
-    .option('--profile <name>', 'Profile to use')
-    .option('--json', 'Output as JSON')
-    .action(async (userId: string, options: { profile?: string; json?: boolean }) => {
-      try {
-        const client = await getClient(options.profile)
-        await client.unblockUser(userId)
-        const outputOpts: OutputOptions = { json: options.json }
-        outputSuccess('User unblocked', outputOpts)
-      } catch (error) {
-        outputError(error instanceof Error ? error.message : String(error), { json: options.json })
-        process.exit(1)
-      }
-    })
-
-  friends
-    .command('blocked')
-    .description('List blocked users')
-    .option('--profile <name>', 'Profile to use')
-    .option('--json', 'Output as JSON')
-    .action(async (options: { profile?: string; json?: boolean }) => {
-      try {
-        const client = await getClient(options.profile)
-        const blocked = await client.getBlockedUsers()
-        output(blocked, { json: options.json })
       } catch (error) {
         outputError(error instanceof Error ? error.message : String(error), { json: options.json })
         process.exit(1)

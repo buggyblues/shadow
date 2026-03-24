@@ -19,8 +19,54 @@ describe('CLI Functional Tests', () => {
 
   describe('config command', () => {
     it('should show config path', async () => {
-      const { stdout } = await execa('node', [CLI_PATH, 'config'])
+      const { stdout } = await execa('node', [CLI_PATH, 'config', 'path'])
       expect(stdout).toContain('shadowob.config.json')
+    })
+
+    it('should validate empty config', async () => {
+      const { stdout } = await execa('node', [CLI_PATH, 'config', 'validate', '--json'], {
+        cwd: tempDir,
+      })
+      const result = JSON.parse(stdout)
+      expect(result.valid).toBe(false)
+      expect(result.errors).toContain('Config file does not exist')
+    })
+
+    it('should fix empty config', async () => {
+      const { stdout } = await execa('node', [CLI_PATH, 'config', 'fix', '--json'], {
+        cwd: tempDir,
+      })
+      const result = JSON.parse(stdout)
+      expect(result.fixed).toBe(false)
+    })
+  })
+
+  describe('ping command', () => {
+    it('should fail ping when not authenticated', async () => {
+      try {
+        await execa('node', [CLI_PATH, 'ping', '--json'], { cwd: tempDir })
+        expect.fail('Should have thrown')
+      } catch (error) {
+        const execaError = error as { exitCode?: number; stdout?: string }
+        expect(execaError.exitCode).toBe(1)
+        const result = JSON.parse(execaError.stdout || '{}')
+        expect(result.success).toBe(false)
+        expect(result.error).toBeDefined()
+      }
+    })
+  })
+
+  describe('status command', () => {
+    it('should fail status when not authenticated', async () => {
+      try {
+        await execa('node', [CLI_PATH, 'status', '--json'], { cwd: tempDir })
+        expect.fail('Should have thrown')
+      } catch (error) {
+        const execaError = error as { exitCode?: number; stdout?: string }
+        expect(execaError.exitCode).toBe(1)
+        const result = JSON.parse(execaError.stdout || '{}')
+        expect(result.error).toBeDefined()
+      }
     })
   })
 
