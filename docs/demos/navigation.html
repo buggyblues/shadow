@@ -3,85 +3,90 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shadow Design System - Navigation</title>
+  <title>Shadow - Navigation</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary: #6366F1;
-      --primary-dark: #4F46E5;
-      --primary-light: #818CF8;
-      --bg: #0F0F10;
-      --surface: #18181B;
-      --elevated: #1F1F23;
-      --border: #27272A;
-      --border-light: #3F3F46;
-      --text: #FAFAFA;
-      --text-secondary: #A1A1AA;
-      --text-muted: #71717A;
-      --success: #22C55E;
-      --radius: 8px;
+      --indigo-500: #6366F1;
+      --indigo-600: #4F46E5;
+      --indigo-400: #818CF8;
+      --gray-950: #030712;
+      --gray-900: #111827;
+      --gray-800: #1F2937;
+      --gray-700: #374151;
+      --gray-600: #4B5563;
+      --gray-500: #6B7280;
+      --gray-400: #9CA3AF;
+      --gray-300: #D1D5DB;
+      --gray-200: #E5E7EB;
+      --gray-100: #F3F4F6;
+      --green-500: #22C55E;
+      --radius-md: 8px;
       --radius-lg: 12px;
+      --radius-xl: 16px;
       --radius-full: 9999px;
+      --ease: cubic-bezier(0.4, 0, 0.2, 1);
     }
     
     * { margin: 0; padding: 0; box-sizing: border-box; }
     
     body {
-      font-family: -apple-system, 'Inter', 'PingFang SC', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.5;
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--gray-950);
+      color: var(--gray-100);
+      line-height: 1.6;
+      padding: 32px;
     }
     
     h1 {
       font-size: 24px;
-      font-weight: 600;
-      padding: 24px;
+      font-weight: 700;
+      margin-bottom: 24px;
     }
     
-    .layout {
+    /* Desktop Layout */
+    .desktop-layout {
       display: flex;
-      height: 500px;
-      margin: 0 24px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
+      height: 600px;
+      background: var(--gray-900);
+      border: 1px solid var(--gray-800);
+      border-radius: var(--radius-xl);
       overflow: hidden;
     }
     
     /* Server sidebar */
-    .servers {
+    .server-sidebar {
       width: 72px;
-      background: var(--surface);
+      background: var(--gray-950);
       padding: 12px 0;
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 8px;
-      border-right: 1px solid var(--border);
     }
     
     .server {
       width: 48px;
       height: 48px;
       border-radius: var(--radius-full);
-      background: var(--elevated);
+      background: var(--gray-800);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 18px;
+      font-size: 20px;
       cursor: pointer;
-      transition: all 150ms;
+      transition: all 200ms var(--ease);
       position: relative;
     }
     
     .server:hover {
       border-radius: var(--radius-lg);
-      background: var(--primary);
+      background: var(--indigo-600);
     }
     
     .server.active {
       border-radius: var(--radius-lg);
-      background: var(--primary);
+      background: var(--indigo-600);
     }
     
     .server-indicator {
@@ -89,114 +94,134 @@
       left: -12px;
       width: 4px;
       height: 8px;
-      background: var(--text);
+      background: var(--gray-300);
       border-radius: 0 4px 4px 0;
-      transition: height 150ms;
+      transition: height 200ms var(--ease);
     }
     
     .server:hover .server-indicator { height: 20px; }
-    .server.active .server-indicator { height: 36px; background: var(--primary); }
+    .server.active .server-indicator { height: 36px; background: var(--gray-100); }
     
     .server-divider {
       width: 32px;
       height: 2px;
-      background: var(--border);
+      background: var(--gray-700);
       border-radius: 1px;
       margin: 4px 0;
     }
     
     .server.add {
       background: transparent;
-      border: 2px dashed var(--border);
-      color: var(--success);
+      border: 2px dashed var(--gray-700);
+      color: var(--green-500);
     }
     
     .server.add:hover {
-      border-color: var(--success);
-      background: rgba(34, 197, 94, 0.1);
+      border-color: var(--green-500);
+      background: rgba(34,197,94,0.1);
     }
     
     /* Channel sidebar */
-    .channels {
-      width: 220px;
-      background: var(--elevated);
+    .channel-sidebar {
+      width: 240px;
+      background: var(--gray-900);
       display: flex;
       flex-direction: column;
     }
     
     .channel-header {
-      padding: 16px;
-      border-bottom: 1px solid var(--border);
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--gray-800);
       font-weight: 600;
-      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .channel-header-btn {
+      width: 28px;
+      height: 28px;
+      background: transparent;
+      border: none;
+      color: var(--gray-400);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+    }
+    
+    .channel-header-btn:hover {
+      background: var(--gray-800);
+      color: var(--gray-100);
     }
     
     .channel-list {
       flex: 1;
-      padding: 8px;
+      padding: 12px 8px;
       overflow-y: auto;
     }
     
     .category {
-      margin-bottom: 16px;
+      margin-bottom: 20px;
     }
     
-    .category-title {
-      padding: 6px 8px;
+    .category-header {
+      padding: 8px 10px;
       font-size: 11px;
       font-weight: 600;
-      color: var(--text-muted);
+      color: var(--gray-500);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .category-header::before {
+      content: '▼';
+      font-size: 8px;
     }
     
     .channel {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 8px 10px;
+      gap: 10px;
+      padding: 10px 12px;
       margin: 2px 0;
-      border-radius: var(--radius);
+      border-radius: var(--radius-md);
       cursor: pointer;
       transition: background 150ms;
     }
     
-    .channel:hover { background: var(--surface); }
-    
-    .channel.active { background: rgba(99, 102, 241, 0.2); }
+    .channel:hover { background: var(--gray-800); }
+    .channel.active { background: rgba(99,102,241,0.2); }
+    .channel.active .channel-name { color: var(--gray-100); font-weight: 500; }
     
     .channel-icon {
       font-size: 16px;
-      color: var(--text-muted);
+      color: var(--gray-500);
+      width: 18px;
     }
     
     .channel-name {
       flex: 1;
       font-size: 14px;
-      color: var(--text-secondary);
+      color: var(--gray-400);
     }
     
-    .channel.active .channel-name {
-      color: var(--text);
-      font-weight: 500;
-    }
-    
-    .channel.unread .channel-name {
-      color: var(--text);
-    }
+    .channel.unread .channel-name { color: var(--gray-100); font-weight: 500; }
     
     .channel-unread {
       width: 8px;
       height: 8px;
-      background: var(--text);
+      background: var(--gray-100);
       border-radius: var(--radius-full);
     }
     
     .channel-badge {
       min-width: 18px;
       height: 18px;
-      padding: 0 5px;
-      background: var(--primary);
+      padding: 0 6px;
+      background: var(--indigo-600);
       border-radius: var(--radius-full);
       font-size: 11px;
       font-weight: 600;
@@ -208,19 +233,18 @@
     
     /* User panel */
     .user-panel {
-      padding: 8px;
-      background: var(--surface);
-      border-top: 1px solid var(--border);
+      padding: 10px;
+      background: var(--gray-950);
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
     }
     
     .user-avatar {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       border-radius: var(--radius-full);
-      background: var(--primary);
+      background: linear-gradient(135deg, var(--indigo-500), #7C3AED);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -232,65 +256,81 @@
       position: absolute;
       bottom: -1px;
       right: -1px;
-      width: 10px;
-      height: 10px;
-      background: var(--success);
+      width: 12px;
+      height: 12px;
+      background: var(--green-500);
+      border: 2px solid var(--gray-950);
       border-radius: var(--radius-full);
-      border: 2px solid var(--surface);
     }
     
-    .user-info { flex: 1; }
+    .user-info { flex: 1; min-width: 0; }
     
     .user-name {
       font-size: 13px;
       font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     
     .user-status-text {
       font-size: 11px;
-      color: var(--text-muted);
+      color: var(--gray-500);
     }
     
     .user-btns {
       display: flex;
-      gap: 2px;
+      gap: 4px;
     }
     
     .user-btn {
-      width: 28px;
-      height: 28px;
-      background: none;
+      width: 32px;
+      height: 32px;
+      background: transparent;
       border: none;
-      color: var(--text-muted);
-      border-radius: 6px;
+      color: var(--gray-400);
+      border-radius: var(--radius-md);
       cursor: pointer;
       font-size: 14px;
     }
     
     .user-btn:hover {
-      background: var(--elevated);
-      color: var(--text);
+      background: var(--gray-800);
+      color: var(--gray-100);
     }
     
-    /* Main */
+    /* Main content */
     .main {
       flex: 1;
       display: flex;
       flex-direction: column;
+      background: var(--gray-900);
     }
     
     .main-header {
-      padding: 16px;
-      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--gray-800);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .main-title {
       font-weight: 600;
       display: flex;
       align-items: center;
       gap: 8px;
     }
     
-    .main-header::before {
+    .main-title::before {
       content: '#';
-      color: var(--text-muted);
+      color: var(--gray-500);
+    }
+    
+    .main-desc {
+      font-size: 13px;
+      color: var(--gray-500);
+      margin-left: auto;
     }
     
     .main-body {
@@ -298,42 +338,43 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      color: var(--text-muted);
+      color: var(--gray-500);
     }
     
     /* Member sidebar */
-    .members {
-      width: 220px;
-      background: var(--elevated);
-      border-left: 1px solid var(--border);
+    .member-sidebar {
+      width: 240px;
+      background: var(--gray-900);
+      border-left: 1px solid var(--gray-800);
       padding: 16px;
     }
     
     .member-category {
       font-size: 11px;
       font-weight: 600;
-      color: var(--text-muted);
+      color: var(--gray-500);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.08em;
       margin-bottom: 12px;
     }
     
     .member {
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 6px 8px;
-      border-radius: var(--radius);
+      gap: 12px;
+      padding: 8px 10px;
+      border-radius: var(--radius-md);
       cursor: pointer;
+      transition: background 150ms;
     }
     
-    .member:hover { background: var(--surface); }
+    .member:hover { background: var(--gray-800); }
     
     .member-avatar {
       width: 32px;
       height: 32px;
       border-radius: var(--radius-full);
-      background: var(--primary);
+      background: linear-gradient(135deg, var(--indigo-500), #7C3AED);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -348,58 +389,74 @@
       width: 10px;
       height: 10px;
       border-radius: var(--radius-full);
-      border: 2px solid var(--elevated);
+      border: 2px solid var(--gray-900);
     }
     
-    .status-online { background: var(--success); }
-    .status-idle { background: #EAB308; }
-    .status-offline { background: var(--text-muted); }
+    .status-online { background: var(--green-500); }
+    .status-idle { background: var(--gray-500); }
+    .status-offline { background: var(--gray-600); opacity: 0.5; }
     
     .member-name {
       font-size: 14px;
-      color: var(--text-secondary);
+      color: var(--gray-400);
     }
     
-    .member.online .member-name { color: var(--text); }
+    .member.online .member-name { color: var(--gray-100); }
     
-    /* Mobile nav */
+    /* Mobile */
+    .mobile-section {
+      margin-top: 48px;
+    }
+    
+    .mobile-preview {
+      max-width: 400px;
+      background: var(--gray-900);
+      border: 1px solid var(--gray-800);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+    }
+    
+    .mobile-content {
+      height: 300px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--gray-500);
+    }
+    
     .mobile-nav {
-      display: none;
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: var(--surface);
-      border-top: 1px solid var(--border);
-      padding: 8px 16px;
-      justify-content: space-around;
+      display: flex;
+      background: var(--gray-950);
+      border-top: 1px solid var(--gray-800);
+      padding: 8px 0;
     }
     
     .nav-item {
+      flex: 1;
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 4px;
-      padding: 8px;
-      color: var(--text-muted);
-      text-decoration: none;
+      padding: 10px;
+      color: var(--gray-500);
+      cursor: pointer;
       position: relative;
     }
     
-    .nav-item.active { color: var(--primary); }
+    .nav-item.active { color: var(--indigo-400); }
     
     .nav-icon { font-size: 20px; }
-    
-    .nav-label { font-size: 11px; }
+    .nav-label { font-size: 10px; font-weight: 500; }
     
     .nav-badge {
       position: absolute;
-      top: 4px;
-      right: -4px;
+      top: 6px;
+      right: 50%;
+      transform: translateX(120%);
       min-width: 16px;
       height: 16px;
       padding: 0 4px;
-      background: var(--primary);
+      background: var(--indigo-600);
       border-radius: var(--radius-full);
       font-size: 10px;
       font-weight: 600;
@@ -408,19 +465,14 @@
       align-items: center;
       justify-content: center;
     }
-    
-    @media (max-width: 768px) {
-      .layout { flex-direction: column; height: auto; border-radius: 0; margin: 0; }
-      .servers, .channels, .members { display: none; }
-      .mobile-nav { display: flex; position: relative; margin-top: 16px; }
-    }
   </style>
 </head>
 <body>
-  <h1>Navigation</h1>
+  <h1>Desktop Navigation</h1>
   
-  <div class="layout">
-    <div class="servers">
+  <div class="desktop-layout">
+    <!-- Servers -->
+    <div class="server-sidebar">
       <div class="server active"><span class="server-indicator"></span>🏠</div>
       <div class="server-divider"></div>
       <div class="server"><span class="server-indicator"></span>🎮</div>
@@ -430,34 +482,53 @@
       <div class="server add">+</div>
     </div>
     
-    <div class="channels">
-      <div class="channel-header">虾豆社区</div>
+    <!-- Channels -->
+    <div class="channel-sidebar">
+      <div class="channel-header">
+        <span>虾豆社区</span>
+        <button class="channel-header-btn">⚙️</button>
+      </div>
+      
       <div class="channel-list">
         <div class="category">
-          <div class="category-title">文字频道</div>
+          <div class="category-header">信息</div>
           <div class="channel active">
             <span class="channel-icon">#</span>
-            <span class="channel-name">general</span>
+            <span class="channel-name">公告</span>
           </div>
+          <div class="channel">
+            <span class="channel-icon">#</span>
+            <span class="channel-name">规则</span>
+          </div>
+        </div>
+        
+        <div class="category">
+          <div class="category-header">文字频道</div>
           <div class="channel unread">
             <span class="channel-icon">#</span>
-            <span class="channel-name">开发讨论</span>
+            <span class="channel-name">general</span>
             <span class="channel-unread"></span>
           </div>
           <div class="channel">
             <span class="channel-icon">#</span>
-            <span class="channel-name">设计反馈</span>
+            <span class="channel-name">开发讨论</span>
             <span class="channel-badge">3</span>
           </div>
+          <div class="channel">
+            <span class="channel-icon">#</span>
+            <span class="channel-name">设计反馈</span>
+          </div>
         </div>
+        
         <div class="category">
-          <div class="category-title">语音频道</div>
+          <div class="category-header">语音频道</div>
           <div class="channel">
             <span class="channel-icon">🔊</span>
             <span class="channel-name">会议室</span>
           </div>
         </div>
       </div>
+      
       <div class="user-panel">
         <div class="user-avatar">🐱<span class="user-status"></span></div>
         <div class="user-info">
@@ -471,17 +542,22 @@
       </div>
     </div>
     
+    <!-- Main -->
     <div class="main">
-      <div class="main-header">general</div>
+      <div class="main-header">
+        <span class="main-title">general</span>
+        <span class="main-desc">128 成员</span>
+      </div>
       <div class="main-body">
-        <div style="text-align:center;">
-          <div style="font-size:48px; margin-bottom:12px;">💬</div>
+        <div style="text-align: center;">
+          <div style="font-size: 48px; margin-bottom: 16px;">💬</div>
           <div>选择频道开始聊天</div>
         </div>
       </div>
     </div>
     
-    <div class="members">
+    <!-- Members -->
+    <div class="member-sidebar">
       <div class="member-category">在线 — 4</div>
       <div class="member online">
         <div class="member-avatar">🐱<span class="member-status status-online"></span></div>
@@ -493,27 +569,46 @@
       </div>
       <div class="member online">
         <div class="member-avatar">🤖<span class="member-status status-idle"></span></div>
-        <span class="member-name" style="color: var(--primary-light);">AI Assistant</span>
+        <span class="member-name" style="color: var(--indigo-400);">AI Assistant</span>
       </div>
-      <div class="member-category" style="margin-top:16px;">离线 — 12</div>
+      <div class="member-category" style="margin-top: 16px;">离线 — 12</div>
       <div class="member">
-        <div class="member-avatar" style="opacity:0.5;"><span class="member-status status-offline"></span></div>
+        <div class="member-avatar" style="opacity: 0.5;"><span class="member-status status-offline"></span></div>
         <span class="member-name">其他用户</span>
       </div>
     </div>
   </div>
   
   <!-- Mobile -->
-  <h1 style="margin-top:48px;">Mobile Navigation</h1>
-  <div style="background: var(--surface); padding: 48px 24px; border-radius: var(--radius-lg); max-width: 400px; margin: 0 24px;">
-    <div style="text-align:center; color: var(--text-muted); padding: 40px 0;">内容区域</div>
-    <nav class="mobile-nav" style="position:relative; margin-top:24px;">
-      <a class="nav-item active"><span class="nav-icon">🏠</span><span class="nav-label">首页</span></a>
-      <a class="nav-item"><span class="nav-icon">💬</span><span class="nav-label">消息</span><span class="nav-badge">5</span></a>
-      <a class="nav-item"><span class="nav-icon">👤</span><span class="nav-label">我的</span></a>
-      <a class="nav-item"><span class="nav-icon">🔔</span><span class="nav-label">通知</span><span class="nav-badge">3</span></a>
-      <a class="nav-item"><span class="nav-icon">⚙️</span><span class="nav-label">设置</span></a>
-    </nav>
+  <div class="mobile-section">
+    <h1>Mobile Navigation</h1>
+    <div class="mobile-preview">
+      <div class="mobile-content">内容区域</div>
+      <nav class="mobile-nav">
+        <div class="nav-item active">
+          <span class="nav-icon">🏠</span>
+          <span class="nav-label">首页</span>
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">💬</span>
+          <span class="nav-label">消息</span>
+          <span class="nav-badge">5</span>
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">👤</span>
+          <span class="nav-label">我的</span>
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">🔔</span>
+          <span class="nav-label">通知</span>
+          <span class="nav-badge">3</span>
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-label">设置</span>
+        </div>
+      </nav>
+    </div>
   </div>
 </body>
 </html>

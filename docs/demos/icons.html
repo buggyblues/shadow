@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shadow - Icon System</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    :root {
+      --indigo-500: #6366F1;
+      --indigo-600: #4F46E5;
+      --indigo-400: #818CF8;
+      --gray-950: #030712;
+      --gray-900: #111827;
+      --gray-800: #1F2937;
+      --gray-700: #374151;
+      --gray-600: #4B5563;
+      --gray-500: #6B7280;
+      --gray-400: #9CA3AF;
+      --gray-300: #D1D5DB;
+      --gray-200: #E5E7EB;
+      --gray-100: #F3F4F6;
+      --green-500: #22C55E;
+      --amber-500: #F59E0B;
+      --red-500: #EF4444;
+      --blue-500: #3B82F6;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-xl: 16px;
+      --ease: cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--gray-950);
+      color: var(--gray-100);
+      line-height: 1.6;
+      padding: 80px 48px;
+    }
+    
+    .container { max-width: 1200px; margin: 0 auto; }
+    
+    .header { margin-bottom: 64px; }
+    
+    .header h1 {
+      font-size: 48px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+    }
+    
+    .header p {
+      font-size: 18px;
+      color: var(--gray-400);
+    }
+    
+    .section { margin-bottom: 64px; }
+    
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--gray-500);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 24px;
+    }
+    
+    .card {
+      background: var(--gray-900);
+      border: 1px solid var(--gray-800);
+      border-radius: var(--radius-xl);
+      padding: 32px;
+    }
+    
+    /* Icon Grid */
+    .icon-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 8px;
+    }
+    
+    .icon-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 20px 12px;
+      border-radius: var(--radius-lg);
+      cursor: pointer;
+      transition: all 150ms var(--ease);
+    }
+    
+    .icon-item:hover {
+      background: var(--gray-800);
+    }
+    
+    .icon-item:hover .icon-svg {
+      color: var(--indigo-400);
+    }
+    
+    .icon-svg {
+      width: 24px;
+      height: 24px;
+      color: var(--gray-300);
+      transition: color 150ms;
+    }
+    
+    .icon-name {
+      font-size: 11px;
+      color: var(--gray-500);
+      text-align: center;
+      font-family: monospace;
+    }
+    
+    /* Size Demo */
+    .size-demo {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+    
+    .size-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .size-label {
+      font-size: 12px;
+      color: var(--gray-400);
+    }
+    
+    .size-value {
+      font-size: 11px;
+      color: var(--gray-500);
+      font-family: monospace;
+    }
+    
+    /* Color Demo */
+    .color-demo {
+      display: flex;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+    
+    .color-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .color-label {
+      font-size: 12px;
+      color: var(--gray-400);
+    }
+    
+    /* Usage Demo */
+    .usage-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+    }
+    
+    @media (max-width: 768px) {
+      .usage-grid { grid-template-columns: 1fr; }
+      .icon-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+    
+    .usage-card {
+      background: var(--gray-800);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+    }
+    
+    .usage-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: var(--gray-200);
+    }
+    
+    .usage-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--gray-700);
+    }
+    
+    .usage-row:last-child { border-bottom: none; }
+    
+    .usage-text {
+      font-size: 14px;
+      color: var(--gray-300);
+    }
+    
+    /* Button with icon */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all 150ms var(--ease);
+    }
+    
+    .btn-primary {
+      background: var(--indigo-600);
+      color: white;
+    }
+    
+    .btn-primary:hover { background: var(--indigo-500); }
+    
+    .btn-secondary {
+      background: var(--gray-800);
+      color: var(--gray-200);
+      border: 1px solid var(--gray-700);
+    }
+    
+    .btn-ghost {
+      background: transparent;
+      color: var(--gray-400);
+    }
+    
+    .btn-ghost:hover {
+      background: var(--gray-800);
+      color: var(--gray-200);
+    }
+    
+    .btn-danger {
+      background: var(--red-500);
+      color: white;
+    }
+    
+    /* Input with icon */
+    .input-wrapper {
+      position: relative;
+      margin-bottom: 12px;
+    }
+    
+    .input {
+      width: 100%;
+      height: 44px;
+      padding: 0 16px;
+      padding-left: 44px;
+      font-family: inherit;
+      font-size: 14px;
+      color: var(--gray-100);
+      background: var(--gray-800);
+      border: 1px solid var(--gray-700);
+      border-radius: var(--radius-md);
+      outline: none;
+    }
+    
+    .input:focus {
+      border-color: var(--indigo-500);
+    }
+    
+    .input-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 18px;
+      height: 18px;
+      color: var(--gray-500);
+    }
+    
+    /* Menu */
+    .menu {
+      background: var(--gray-800);
+      border: 1px solid var(--gray-700);
+      border-radius: var(--radius-lg);
+      padding: 8px;
+      min-width: 200px;
+    }
+    
+    .menu-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: background 150ms;
+    }
+    
+    .menu-item:hover { background: var(--gray-700); }
+    
+    .menu-item svg {
+      width: 18px;
+      height: 18px;
+      color: var(--gray-400);
+    }
+    
+    .menu-item span {
+      font-size: 14px;
+      color: var(--gray-200);
+    }
+    
+    .menu-item.danger svg,
+    .menu-item.danger span { color: var(--red-500); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Icon System</h1>
+      <p>Lucide Icons 图标系统，统一、现代、可扩展</p>
+    </div>
+    
+    <!-- Core Icons -->
+    <div class="section">
+      <div class="section-title">Core Icons</div>
+      <div class="card">
+        <div class="icon-grid">
+          <div class="icon-item">
+            <i data-lucide="home" class="icon-svg"></i>
+            <span class="icon-name">home</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="layout-grid" class="icon-svg"></i>
+            <span class="icon-name">layout-grid</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="message-square" class="icon-svg"></i>
+            <span class="icon-name">message-square</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="user" class="icon-svg"></i>
+            <span class="icon-name">user</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="settings" class="icon-svg"></i>
+            <span class="icon-name">settings</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="search" class="icon-svg"></i>
+            <span class="icon-name">search</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="plus" class="icon-svg"></i>
+            <span class="icon-name">plus</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="menu" class="icon-svg"></i>
+            <span class="icon-name">menu</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="x" class="icon-svg"></i>
+            <span class="icon-name">x</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="arrow-left" class="icon-svg"></i>
+            <span class="icon-name">arrow-left</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="arrow-right" class="icon-svg"></i>
+            <span class="icon-name">arrow-right</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="chevron-down" class="icon-svg"></i>
+            <span class="icon-name">chevron-down</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Channel Icons -->
+    <div class="section">
+      <div class="section-title">Channel & Message Icons</div>
+      <div class="card">
+        <div class="icon-grid">
+          <div class="icon-item">
+            <i data-lucide="hash" class="icon-svg"></i>
+            <span class="icon-name">hash</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="volume-2" class="icon-svg"></i>
+            <span class="icon-name">volume-2</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="video" class="icon-svg"></i>
+            <span class="icon-name">video</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="paperclip" class="icon-svg"></i>
+            <span class="icon-name">paperclip</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="smile" class="icon-svg"></i>
+            <span class="icon-name">smile</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="at-sign" class="icon-svg"></i>
+            <span class="icon-name">at-sign</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="reply" class="icon-svg"></i>
+            <span class="icon-name">reply</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="more-horizontal" class="icon-svg"></i>
+            <span class="icon-name">more-horizontal</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="pin" class="icon-svg"></i>
+            <span class="icon-name">pin</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="bell" class="icon-svg"></i>
+            <span class="icon-name">bell</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="bell-off" class="icon-svg"></i>
+            <span class="icon-name">bell-off</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="send" class="icon-svg"></i>
+            <span class="icon-name">send</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Status Icons -->
+    <div class="section">
+      <div class="section-title">Status & Feedback Icons</div>
+      <div class="card">
+        <div class="icon-grid">
+          <div class="icon-item">
+            <i data-lucide="check" class="icon-svg" style="color: var(--green-500);"></i>
+            <span class="icon-name">check</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="check-circle" class="icon-svg" style="color: var(--green-500);"></i>
+            <span class="icon-name">check-circle</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="x-circle" class="icon-svg" style="color: var(--red-500);"></i>
+            <span class="icon-name">x-circle</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="alert-triangle" class="icon-svg" style="color: var(--amber-500);"></i>
+            <span class="icon-name">alert-triangle</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="alert-circle" class="icon-svg" style="color: var(--amber-500);"></i>
+            <span class="icon-name">alert-circle</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="info" class="icon-svg" style="color: var(--blue-500);"></i>
+            <span class="icon-name">info</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="circle" class="icon-svg" style="color: var(--green-500);"></i>
+            <span class="icon-name">circle (online)</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="circle-dot" class="icon-svg" style="color: var(--amber-500);"></i>
+            <span class="icon-name">circle-dot (idle)</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="minus-circle" class="icon-svg" style="color: var(--red-500);"></i>
+            <span class="icon-name">minus-circle (dnd)</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="loader-2" class="icon-svg" style="animation: spin 1s linear infinite;"></i>
+            <span class="icon-name">loader-2</span>
+          </div>
+        </div>
+        <style>
+          @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        </style>
+      </div>
+    </div>
+    
+    <!-- AI Icons -->
+    <div class="section">
+      <div class="section-title">AI & Agent Icons</div>
+      <div class="card">
+        <div class="icon-grid">
+          <div class="icon-item">
+            <i data-lucide="bot" class="icon-svg" style="color: var(--indigo-400);"></i>
+            <span class="icon-name">bot</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="sparkles" class="icon-svg" style="color: var(--indigo-400);"></i>
+            <span class="icon-name">sparkles</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="lightbulb" class="icon-svg" style="color: var(--amber-500);"></i>
+            <span class="icon-name">lightbulb</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="zap" class="icon-svg" style="color: var(--amber-500);"></i>
+            <span class="icon-name">zap</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="brain" class="icon-svg" style="color: var(--indigo-400);"></i>
+            <span class="icon-name">brain</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="cpu" class="icon-svg" style="color: var(--indigo-400);"></i>
+            <span class="icon-name">cpu</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="terminal" class="icon-svg"></i>
+            <span class="icon-name">terminal</span>
+          </div>
+          <div class="icon-item">
+            <i data-lucide="code" class="icon-svg"></i>
+            <span class="icon-name">code</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Size Demo -->
+    <div class="section">
+      <div class="section-title">Icon Sizes</div>
+      <div class="card">
+        <div class="size-demo">
+          <div class="size-item">
+            <i data-lucide="home" style="width: 14px; height: 14px; color: var(--gray-300);"></i>
+            <span class="size-label">XS</span>
+            <span class="size-value">14px</span>
+          </div>
+          <div class="size-item">
+            <i data-lucide="home" style="width: 16px; height: 16px; color: var(--gray-300);"></i>
+            <span class="size-label">SM</span>
+            <span class="size-value">16px</span>
+          </div>
+          <div class="size-item">
+            <i data-lucide="home" style="width: 20px; height: 20px; color: var(--gray-300);"></i>
+            <span class="size-label">MD</span>
+            <span class="size-value">20px</span>
+          </div>
+          <div class="size-item">
+            <i data-lucide="home" style="width: 24px; height: 24px; color: var(--gray-300);"></i>
+            <span class="size-label">LG</span>
+            <span class="size-value">24px</span>
+          </div>
+          <div class="size-item">
+            <i data-lucide="home" style="width: 32px; height: 32px; color: var(--gray-300);"></i>
+            <span class="size-label">XL</span>
+            <span class="size-value">32px</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Color Demo -->
+    <div class="section">
+      <div class="section-title">Icon Colors</div>
+      <div class="card">
+        <div class="color-demo">
+          <div class="color-item">
+            <i data-lucide="heart" style="width: 24px; height: 24px; color: var(--gray-300);"></i>
+            <span class="color-label">Default</span>
+          </div>
+          <div class="color-item">
+            <i data-lucide="heart" style="width: 24px; height: 24px; color: var(--gray-500);"></i>
+            <span class="color-label">Secondary</span>
+          </div>
+          <div class="color-item">
+            <i data-lucide="heart" style="width: 24px; height: 24px; color: var(--indigo-400);"></i>
+            <span class="color-label">Interactive</span>
+          </div>
+          <div class="color-item">
+            <i data-lucide="heart" style="width: 24px; height: 24px; color: var(--green-500);"></i>
+            <span class="color-label">Success</span>
+          </div>
+          <div class="color-item">
+            <i data-lucide="heart" style="width: 24px; height: 24px; color: var(--amber-500);"></i>
+            <span class="color-label">Warning</span>
+          </div>
+          <div class="color-item">
+            <i data-lucide="heart" style="width: 24px; height: 24px; color: var(--red-500);"></i>
+            <span class="color-label">Error</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Usage Examples -->
+    <div class="section">
+      <div class="section-title">Usage Examples</div>
+      <div class="usage-grid">
+        <!-- Buttons -->
+        <div class="usage-card">
+          <div class="usage-title">Buttons with Icons</div>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <button class="btn btn-primary">
+              <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
+              Create
+            </button>
+            <button class="btn btn-secondary">
+              <i data-lucide="download" style="width: 16px; height: 16px;"></i>
+              Download
+            </button>
+            <button class="btn btn-ghost">
+              <i data-lucide="share-2" style="width: 16px; height: 16px;"></i>
+              Share
+            </button>
+            <button class="btn btn-danger">
+              <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+              Delete
+            </button>
+          </div>
+        </div>
+        
+        <!-- Search -->
+        <div class="usage-card">
+          <div class="usage-title">Input with Icon</div>
+          <div class="input-wrapper">
+            <i data-lucide="search" class="input-icon"></i>
+            <input class="input" placeholder="Search...">
+          </div>
+          <div class="input-wrapper">
+            <i data-lucide="mail" class="input-icon"></i>
+            <input class="input" placeholder="Email address">
+          </div>
+        </div>
+        
+        <!-- Menu -->
+        <div class="usage-card">
+          <div class="usage-title">Menu with Icons</div>
+          <div class="menu">
+            <div class="menu-item">
+              <i data-lucide="user"></i>
+              <span>Profile</span>
+            </div>
+            <div class="menu-item">
+              <i data-lucide="settings"></i>
+              <span>Settings</span>
+            </div>
+            <div class="menu-item">
+              <i data-lucide="bell"></i>
+              <span>Notifications</span>
+            </div>
+            <div class="menu-item danger">
+              <i data-lucide="log-out"></i>
+              <span>Log Out</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Status -->
+        <div class="usage-card">
+          <div class="usage-title">Status Indicators</div>
+          <div class="usage-row">
+            <i data-lucide="circle" style="width: 16px; height: 16px; color: var(--green-500);"></i>
+            <span class="usage-text">Online</span>
+          </div>
+          <div class="usage-row">
+            <i data-lucide="circle-dot" style="width: 16px; height: 16px; color: var(--amber-500);"></i>
+            <span class="usage-text">Idle</span>
+          </div>
+          <div class="usage-row">
+            <i data-lucide="minus-circle" style="width: 16px; height: 16px; color: var(--red-500);"></i>
+            <span class="usage-text">Do Not Disturb</span>
+          </div>
+          <div class="usage-row">
+            <i data-lucide="circle" style="width: 16px; height: 16px; color: var(--gray-500);"></i>
+            <span class="usage-text">Offline</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>

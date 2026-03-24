@@ -3,86 +3,135 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shadow Design System - Messages</title>
+  <title>Shadow - Messages</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary: #6366F1;
-      --primary-dark: #4F46E5;
-      --primary-light: #818CF8;
-      --bg: #0F0F10;
-      --surface: #18181B;
-      --elevated: #1F1F23;
-      --border: #27272A;
-      --border-light: #3F3F46;
-      --text: #FAFAFA;
-      --text-secondary: #A1A1AA;
-      --text-muted: #71717A;
-      --success: #22C55E;
-      --radius: 8px;
+      --indigo-500: #6366F1;
+      --indigo-600: #4F46E5;
+      --indigo-400: #818CF8;
+      --gray-950: #030712;
+      --gray-900: #111827;
+      --gray-800: #1F2937;
+      --gray-700: #374151;
+      --gray-600: #4B5563;
+      --gray-500: #6B7280;
+      --gray-400: #9CA3AF;
+      --gray-300: #D1D5DB;
+      --gray-200: #E5E7EB;
+      --gray-100: #F3F4F6;
+      --green-500: #22C55E;
+      --amber-500: #F59E0B;
+      --red-500: #EF4444;
+      --radius-md: 8px;
       --radius-lg: 12px;
+      --radius-xl: 16px;
       --radius-full: 9999px;
-      --glow: 0 0 0 3px rgba(99, 102, 241, 0.3);
-      --shadow: 0 2px 8px rgba(0,0,0,0.3);
+      --glow: 0 0 0 1px rgba(99,102,241,0.3), 0 0 24px rgba(99,102,241,0.15);
+      --ease: cubic-bezier(0.4, 0, 0.2, 1);
     }
     
     * { margin: 0; padding: 0; box-sizing: border-box; }
     
     body {
-      font-family: -apple-system, 'Inter', 'PingFang SC', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.5;
-      padding: 24px;
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--gray-950);
+      color: var(--gray-100);
+      line-height: 1.6;
+      padding: 48px;
     }
     
-    h1 {
-      font-size: 24px;
-      font-weight: 600;
-      margin-bottom: 24px;
-    }
-    
-    .chat {
-      max-width: 600px;
-      background: var(--surface);
-      border-radius: var(--radius-lg);
+    .chat-container {
+      max-width: 680px;
+      margin: 0 auto;
+      background: var(--gray-900);
+      border: 1px solid var(--gray-800);
+      border-radius: var(--radius-xl);
       overflow: hidden;
     }
     
+    /* Header */
     .chat-header {
-      padding: 16px;
-      border-bottom: 1px solid var(--border);
-      font-weight: 600;
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--gray-800);
       display: flex;
       align-items: center;
+      justify-content: space-between;
+    }
+    
+    .chat-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .chat-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--gray-800);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--gray-400);
+      font-size: 18px;
+    }
+    
+    .chat-name {
+      font-weight: 600;
+      font-size: 16px;
+    }
+    
+    .chat-meta {
+      font-size: 13px;
+      color: var(--gray-500);
+    }
+    
+    .chat-actions {
+      display: flex;
       gap: 8px;
     }
     
-    .chat-header::before {
-      content: '#';
-      color: var(--text-muted);
+    .header-btn {
+      width: 36px;
+      height: 36px;
+      background: transparent;
+      border: none;
+      color: var(--gray-400);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 150ms var(--ease);
     }
     
+    .header-btn:hover {
+      background: var(--gray-800);
+      color: var(--gray-100);
+    }
+    
+    /* Messages */
     .messages {
-      padding: 16px;
-      min-height: 320px;
+      padding: 24px;
+      min-height: 480px;
     }
     
-    .msg {
+    .message {
       display: flex;
-      gap: 12px;
-      padding: 8px 0;
-      border-radius: var(--radius);
+      gap: 16px;
+      padding: 12px 0;
+      border-radius: var(--radius-lg);
+      transition: background 150ms;
     }
     
-    .msg:hover {
+    .message:hover {
       background: rgba(255,255,255,0.02);
     }
     
-    .msg-avatar {
+    .message-avatar {
       width: 40px;
       height: 40px;
       border-radius: var(--radius-full);
-      background: var(--primary);
+      background: linear-gradient(135deg, var(--indigo-500), var(--indigo-600));
       display: flex;
       align-items: center;
       justify-content: center;
@@ -92,269 +141,459 @@
       flex-shrink: 0;
     }
     
-    .msg-content { flex: 1; min-width: 0; }
-    
-    .msg-header {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-      margin-bottom: 2px;
+    .message-content {
+      flex: 1;
+      min-width: 0;
     }
     
-    .msg-author {
+    .message-header {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+    
+    .message-author {
       font-weight: 600;
       font-size: 15px;
     }
     
-    .msg-author.ai {
-      color: var(--primary-light);
+    .message-author.ai {
+      color: var(--indigo-400);
     }
     
-    .msg-time {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-    
-    .msg-text {
-      color: var(--text-secondary);
-      font-size: 14px;
-    }
-    
-    .msg-text code {
-      background: var(--elevated);
-      padding: 2px 6px;
+    .message-badge {
+      padding: 2px 8px;
+      background: rgba(99,102,241,0.15);
+      color: var(--indigo-400);
+      font-size: 10px;
+      font-weight: 600;
       border-radius: 4px;
-      font-family: monospace;
-      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
     
-    .msg-reactions {
+    .message-time {
+      font-size: 12px;
+      color: var(--gray-500);
+    }
+    
+    .message-text {
+      color: var(--gray-300);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    
+    .message-text code {
+      background: var(--gray-800);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--indigo-400);
+    }
+    
+    /* Reactions */
+    .message-reactions {
       display: flex;
-      gap: 6px;
-      margin-top: 8px;
+      gap: 8px;
+      margin-top: 10px;
     }
     
     .reaction {
       display: flex;
       align-items: center;
-      gap: 4px;
-      padding: 4px 10px;
-      background: var(--elevated);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-full);
+      gap: 6px;
+      padding: 6px 12px;
+      background: var(--gray-800);
+      border: 1px solid var(--gray-700);
+      border-radius: 100px;
       font-size: 13px;
       cursor: pointer;
-      transition: all 150ms;
+      transition: all 150ms var(--ease);
     }
     
     .reaction:hover {
-      border-color: var(--primary);
+      border-color: var(--indigo-500);
+      background: rgba(99,102,241,0.1);
     }
     
     .reaction.active {
-      border-color: var(--primary);
-      background: rgba(99, 102, 241, 0.1);
+      border-color: var(--indigo-500);
+      background: rgba(99,102,241,0.15);
     }
     
     .reaction-count {
-      color: var(--text-muted);
+      color: var(--gray-400);
       font-weight: 500;
     }
     
-    /* Merged messages */
-    .msg-merged {
-      padding-left: 52px;
+    .reaction-add {
+      padding: 6px 10px;
+      color: var(--gray-500);
     }
     
-    .msg-merged .msg-avatar {
+    .reaction-add:hover {
+      color: var(--gray-300);
+    }
+    
+    /* Merged messages */
+    .message-merged {
+      padding-left: 56px;
+    }
+    
+    .message-merged .message-avatar {
       display: none;
     }
     
-    /* Unread divider */
-    .divider {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      margin: 16px 0;
+    .message-merged .message-header {
+      margin-bottom: 2px;
     }
     
-    .divider::before,
-    .divider::after {
+    /* Unread divider */
+    .unread-divider {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin: 24px 0;
+    }
+    
+    .unread-divider::before,
+    .unread-divider::after {
       content: '';
       flex: 1;
       height: 1px;
-      background: var(--primary);
+      background: var(--indigo-500);
+      opacity: 0.5;
     }
     
-    .divider-text {
-      font-size: 12px;
+    .unread-label {
+      font-size: 11px;
       font-weight: 600;
-      color: var(--primary);
+      color: var(--indigo-400);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.08em;
     }
     
-    /* Input */
-    .chat-input {
-      padding: 12px 16px;
-      border-top: 1px solid var(--border);
-    }
-    
-    .input {
-      width: 100%;
-      padding: 12px 14px;
-      font-size: 14px;
-      color: var(--text);
-      background: var(--elevated);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      outline: none;
-    }
-    
-    .input:focus {
-      border-color: var(--primary);
-      box-shadow: var(--glow);
-    }
-    
-    .input::placeholder {
-      color: var(--text-muted);
-    }
-    
-    .input-tools {
+    /* Reply */
+    .message-reply {
       display: flex;
-      gap: 8px;
-      margin-top: 8px;
-    }
-    
-    .tool-btn {
-      padding: 6px 12px;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--gray-800);
+      border-left: 3px solid var(--indigo-500);
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      margin-bottom: 10px;
       font-size: 13px;
-      color: var(--text-muted);
-      background: none;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
     }
     
-    .tool-btn:hover {
-      background: var(--elevated);
-      color: var(--text);
+    .reply-author {
+      color: var(--indigo-400);
+      font-weight: 500;
+    }
+    
+    .reply-content {
+      color: var(--gray-400);
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     
     /* Typing */
     .typing {
-      padding: 8px 16px;
+      padding: 12px 24px;
       font-size: 13px;
-      color: var(--text-muted);
+      color: var(--gray-500);
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
+      border-top: 1px solid var(--gray-800);
     }
     
     .typing-dots {
       display: flex;
-      gap: 3px;
+      gap: 4px;
     }
     
     .typing-dots span {
-      width: 5px;
-      height: 5px;
-      background: var(--text-muted);
+      width: 6px;
+      height: 6px;
+      background: var(--indigo-500);
       border-radius: 50%;
-      animation: bounce 1.2s infinite;
+      animation: bounce 1.4s infinite ease-in-out;
     }
     
+    .typing-dots span:nth-child(1) { animation-delay: 0s; }
     .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
     .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
     
     @keyframes bounce {
       0%, 60%, 100% { transform: translateY(0); }
-      30% { transform: translateY(-4px); }
+      30% { transform: translateY(-5px); }
+    }
+    
+    /* Input */
+    .chat-input-area {
+      padding: 16px 24px;
+      background: var(--gray-900);
+      border-top: 1px solid var(--gray-800);
+    }
+    
+    .input-wrapper {
+      position: relative;
+    }
+    
+    .chat-input {
+      width: 100%;
+      padding: 14px 16px;
+      padding-right: 100px;
+      font-family: inherit;
+      font-size: 14px;
+      color: var(--gray-100);
+      background: var(--gray-800);
+      border: 1px solid var(--gray-700);
+      border-radius: var(--radius-lg);
+      outline: none;
+      transition: all 150ms var(--ease);
+    }
+    
+    .chat-input:hover { border-color: var(--gray-600); }
+    .chat-input:focus {
+      border-color: var(--indigo-500);
+      box-shadow: var(--glow);
+    }
+    
+    .chat-input::placeholder {
+      color: var(--gray-500);
+    }
+    
+    .input-tools {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      gap: 4px;
+    }
+    
+    .tool-btn {
+      width: 32px;
+      height: 32px;
+      background: transparent;
+      border: none;
+      color: var(--gray-500);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 150ms var(--ease);
+    }
+    
+    .tool-btn:hover {
+      background: var(--gray-700);
+      color: var(--gray-300);
+    }
+    
+    /* Slash command panel */
+    .slash-panel {
+      position: absolute;
+      bottom: 100%;
+      left: 0;
+      right: 0;
+      margin-bottom: 8px;
+      background: var(--gray-800);
+      border: 1px solid var(--gray-700);
+      border-radius: var(--radius-lg);
+      padding: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    
+    .slash-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: background 150ms;
+    }
+    
+    .slash-item:hover {
+      background: var(--gray-700);
+    }
+    
+    .slash-item.selected {
+      background: rgba(99,102,241,0.15);
+    }
+    
+    .slash-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--gray-700);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    
+    .slash-info {
+      flex: 1;
+    }
+    
+    .slash-name {
+      font-weight: 500;
+      font-size: 14px;
+    }
+    
+    .slash-desc {
+      font-size: 12px;
+      color: var(--gray-500);
+    }
+    
+    .slash-shortcut {
+      font-size: 12px;
+      color: var(--gray-500);
+      font-family: monospace;
     }
   </style>
 </head>
 <body>
-  <h1>Messages</h1>
-  
-  <div class="chat">
-    <div class="chat-header">general</div>
+  <div class="chat-container">
+    <div class="chat-header">
+      <div class="chat-title">
+        <div class="chat-icon">#</div>
+        <div>
+          <div class="chat-name">general</div>
+          <div class="chat-meta">128 members</div>
+        </div>
+      </div>
+      <div class="chat-actions">
+        <button class="header-btn">🔔</button>
+        <button class="header-btn">📌</button>
+        <button class="header-btn">⋯</button>
+      </div>
+    </div>
     
     <div class="messages">
-      <div class="msg">
-        <div class="msg-avatar">P</div>
-        <div class="msg-content">
-          <div class="msg-header">
-            <span class="msg-author">彭猫</span>
-            <span class="msg-time">今天 14:23</span>
+      <!-- Message with reply -->
+      <div class="message">
+        <div class="message-avatar">P</div>
+        <div class="message-content">
+          <div class="message-header">
+            <span class="message-author">彭猫</span>
+            <span class="message-time">今天 14:23</span>
           </div>
-          <div class="msg-text">设计文档已更新，请查看</div>
-          <div class="msg-reactions">
+          <div class="message-reply">
+            <span class="reply-author">@小炸</span>
+            <span class="reply-content">好的，我来更新设计规范</span>
+          </div>
+          <div class="message-text">设计文档已更新，请审核 ✨</div>
+          <div class="message-reactions">
             <span class="reaction active">👍 <span class="reaction-count">3</span></span>
             <span class="reaction">✅ <span class="reaction-count">1</span></span>
+            <span class="reaction-add">+ 😊</span>
           </div>
         </div>
       </div>
       
-      <div class="msg">
-        <div class="msg-avatar">🤖</div>
-        <div class="msg-content">
-          <div class="msg-header">
-            <span class="msg-author ai">AI Assistant</span>
-            <span class="badge" style="background: rgba(99,102,241,0.15); color: var(--primary-light); padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 4px;">AI</span>
-            <span class="msg-time">今天 14:25</span>
+      <!-- AI message -->
+      <div class="message">
+        <div class="message-avatar">🤖</div>
+        <div class="message-content">
+          <div class="message-header">
+            <span class="message-author ai">AI Assistant</span>
+            <span class="message-badge">AI</span>
+            <span class="message-time">今天 14:25</span>
           </div>
-          <div class="msg-text">收到，正在分析文档...<br><br><code>/analyze</code> 命令已执行</div>
+          <div class="message-text">收到，正在分析文档结构...<br><br><code>/analyze --pr 77</code> 命令已执行，预计 2 分钟内完成。</div>
         </div>
       </div>
       
-      <div class="divider"><span class="divider-text">新消息</span></div>
+      <!-- Unread divider -->
+      <div class="unread-divider">
+        <span class="unread-label">新消息</span>
+      </div>
       
-      <div class="msg">
-        <div class="msg-avatar">小</div>
-        <div class="msg-content">
-          <div class="msg-header">
-            <span class="msg-author">小炸</span>
-            <span class="msg-time">今天 14:30</span>
+      <!-- Merged messages -->
+      <div class="message">
+        <div class="message-avatar">小</div>
+        <div class="message-content">
+          <div class="message-header">
+            <span class="message-author">小炸</span>
+            <span class="message-time">今天 14:30</span>
           </div>
-          <div class="msg-text">颜色方案已精简，统一使用 Indigo 主色</div>
+          <div class="message-text">颜色方案已精简，统一使用 Indigo 作为唯一主色</div>
         </div>
       </div>
       
-      <div class="msg msg-merged">
-        <div class="msg-avatar"></div>
-        <div class="msg-content">
-          <div class="msg-header">
-            <span class="msg-time">今天 14:31</span>
+      <div class="message message-merged">
+        <div class="message-avatar"></div>
+        <div class="message-content">
+          <div class="message-header">
+            <span class="message-time">今天 14:31</span>
           </div>
-          <div class="msg-text">移除了多余的强调色，整体更加简洁</div>
+          <div class="message-text">移除了之前的紫粉渐变，整体更加简洁大方</div>
         </div>
       </div>
       
-      <div class="msg msg-merged">
-        <div class="msg-avatar"></div>
-        <div class="msg-content">
-          <div class="msg-header">
-            <span class="msg-time">今天 14:32</span>
+      <div class="message message-merged">
+        <div class="message-avatar"></div>
+        <div class="message-content">
+          <div class="message-header">
+            <span class="message-time">今天 14:32</span>
           </div>
-          <div class="msg-text">Demo 文件也同步更新了 ✨</div>
-          <div class="msg-reactions">
+          <div class="message-text">新增了更多组件示例和场景用例 ✨</div>
+          <div class="message-reactions">
             <span class="reaction">🎉 <span class="reaction-count">2</span></span>
+            <span class="reaction">🚀 <span class="reaction-count">1</span></span>
           </div>
         </div>
       </div>
     </div>
     
+    <!-- Typing indicator -->
     <div class="typing">
       <div class="typing-dots"><span></span><span></span><span></span></div>
       <span>彭猫 正在输入...</span>
     </div>
     
-    <div class="chat-input">
-      <input class="input" placeholder="发送消息到 #general">
-      <div class="input-tools">
-        <button class="tool-btn">😊</button>
-        <button class="tool-btn">📎</button>
-        <button class="tool-btn">@</button>
+    <!-- Input with slash command -->
+    <div class="chat-input-area">
+      <div class="input-wrapper">
+        <input class="chat-input" placeholder="发送消息到 #general" value="/">
+        
+        <div class="slash-panel">
+          <div class="slash-item selected">
+            <div class="slash-icon">🤖</div>
+            <div class="slash-info">
+              <div class="slash-name">/ai</div>
+              <div class="slash-desc">召唤 AI 助手</div>
+            </div>
+            <span class="slash-shortcut">Enter</span>
+          </div>
+          <div class="slash-item">
+            <div class="slash-icon">📊</div>
+            <div class="slash-info">
+              <div class="slash-name">/poll</div>
+              <div class="slash-desc">创建投票</div>
+            </div>
+          </div>
+          <div class="slash-item">
+            <div class="slash-icon">📋</div>
+            <div class="slash-info">
+              <div class="slash-name">/code</div>
+              <div class="slash-desc">分享代码片段</div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="input-tools">
+          <button class="tool-btn">😊</button>
+          <button class="tool-btn">📎</button>
+          <button class="tool-btn">@</button>
+        </div>
       </div>
     </div>
   </div>

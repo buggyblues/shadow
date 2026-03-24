@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shadow - Settings</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --indigo-500: #6366F1;
+      --indigo-600: #4F46E5;
+      --indigo-400: #818CF8;
+      --gray-950: #030712;
+      --gray-900: #111827;
+      --gray-800: #1F2937;
+      --gray-700: #374151;
+      --gray-600: #4B5563;
+      --gray-500: #6B7280;
+      --gray-400: #9CA3AF;
+      --gray-300: #D1D5DB;
+      --gray-200: #E5E7EB;
+      --gray-100: #F3F4F6;
+      --green-500: #22C55E;
+      --amber-500: #F59E0B;
+      --red-500: #EF4444;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-xl: 16px;
+      --radius-full: 9999px;
+      --ease: cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--gray-950);
+      color: var(--gray-100);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    
+    .layout {
+      display: flex;
+      min-height: 100vh;
+    }
+    
+    /* Sidebar */
+    .sidebar {
+      width: 260px;
+      background: var(--gray-900);
+      border-right: 1px solid var(--gray-800);
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .sidebar-header {
+      padding: 0 8px;
+      margin-bottom: 24px;
+    }
+    
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      font-size: 18px;
+    }
+    
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--indigo-500), #7C3AED);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+    
+    .nav-section {
+      margin-bottom: 32px;
+    }
+    
+    .nav-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--gray-500);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0 12px;
+      margin-bottom: 8px;
+    }
+    
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      color: var(--gray-400);
+      cursor: pointer;
+      transition: all 150ms var(--ease);
+      margin-bottom: 4px;
+    }
+    
+    .nav-item:hover {
+      background: var(--gray-800);
+      color: var(--gray-200);
+    }
+    
+    .nav-item.active {
+      background: rgba(99,102,241,0.15);
+      color: var(--indigo-400);
+    }
+    
+    .nav-icon {
+      font-size: 18px;
+      width: 20px;
+      text-align: center;
+    }
+    
+    .nav-label {
+      font-size: 14px;
+      font-weight: 500;
+    }
+    
+    /* Main content */
+    .main {
+      flex: 1;
+      padding: 48px;
+      overflow-y: auto;
+    }
+    
+    .main-header {
+      margin-bottom: 40px;
+    }
+    
+    .main-title {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    
+    .main-desc {
+      color: var(--gray-400);
+      font-size: 15px;
+    }
+    
+    /* Settings sections */
+    .section {
+      margin-bottom: 48px;
+    }
+    
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--gray-800);
+    }
+    
+    /* Setting row */
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: var(--gray-900);
+      border: 1px solid var(--gray-800);
+      border-radius: var(--radius-lg);
+      margin-bottom: 12px;
+    }
+    
+    .setting-info {
+      flex: 1;
+    }
+    
+    .setting-label {
+      font-weight: 500;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+    
+    .setting-desc {
+      font-size: 13px;
+      color: var(--gray-500);
+    }
+    
+    /* Toggle */
+    .toggle {
+      width: 44px;
+      height: 24px;
+      background: var(--gray-700);
+      border-radius: 100px;
+      position: relative;
+      cursor: pointer;
+      transition: background 200ms var(--ease);
+      flex-shrink: 0;
+    }
+    
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      background: var(--gray-300);
+      border-radius: 50%;
+      transition: all 200ms var(--ease);
+    }
+    
+    .toggle.active {
+      background: var(--indigo-600);
+    }
+    
+    .toggle.active::after {
+      left: 23px;
+      background: white;
+    }
+    
+    /* Input */
+    .setting-input {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    
+    .input {
+      height: 40px;
+      padding: 0 14px;
+      font-family: inherit;
+      font-size: 14px;
+      color: var(--gray-100);
+      background: var(--gray-800);
+      border: 1px solid var(--gray-700);
+      border-radius: var(--radius-md);
+      outline: none;
+      min-width: 200px;
+      transition: all 150ms var(--ease);
+    }
+    
+    .input:hover { border-color: var(--gray-600); }
+    .input:focus { border-color: var(--indigo-500); }
+    
+    .input-suffix {
+      color: var(--gray-500);
+      font-size: 14px;
+    }
+    
+    /* Button */
+    .btn {
+      height: 40px;
+      padding: 0 18px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all 150ms var(--ease);
+    }
+    
+    .btn-primary {
+      background: var(--indigo-600);
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: var(--indigo-500);
+    }
+    
+    .btn-secondary {
+      background: var(--gray-800);
+      color: var(--gray-200);
+      border: 1px solid var(--gray-700);
+    }
+    
+    .btn-secondary:hover {
+      border-color: var(--gray-600);
+    }
+    
+    .btn-danger {
+      background: transparent;
+      color: var(--red-500);
+      border: 1px solid var(--red-500);
+    }
+    
+    .btn-danger:hover {
+      background: rgba(239,68,68,0.1);
+    }
+    
+    /* Select */
+    .select-wrapper {
+      position: relative;
+    }
+    
+    .select {
+      height: 40px;
+      padding: 0 36px 0 14px;
+      font-family: inherit;
+      font-size: 14px;
+      color: var(--gray-100);
+      background: var(--gray-800);
+      border: 1px solid var(--gray-700);
+      border-radius: var(--radius-md);
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      min-width: 160px;
+    }
+    
+    .select-arrow {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--gray-500);
+      pointer-events: none;
+      font-size: 10px;
+    }
+    
+    /* Danger zone */
+    .danger-zone {
+      padding: 20px;
+      background: rgba(239,68,68,0.05);
+      border: 1px solid rgba(239,68,68,0.2);
+      border-radius: var(--radius-lg);
+    }
+    
+    .danger-title {
+      color: var(--red-500);
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    
+    @media (max-width: 768px) {
+      .layout { flex-direction: column; }
+      .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--gray-800); }
+      .main { padding: 24px; }
+      .setting-row { flex-direction: column; align-items: flex-start; gap: 16px; }
+      .setting-input { width: 100%; }
+      .input { min-width: auto; flex: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <div class="logo-icon">🐱</div>
+          <span>Shadow</span>
+        </div>
+      </div>
+      
+      <div class="nav-section">
+        <div class="nav-title">设置</div>
+        <div class="nav-item active">
+          <span class="nav-icon">👤</span>
+          <span class="nav-label">个人资料</span>
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">🔒</span>
+          <span class="nav-label">隐私与安全</span>
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">🔔</span>
+          <span class="nav-label">通知</span>
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">🎨</span>
+          <span class="nav-label">外观</span>
+        </div>
+      </div>
+      
+      <div class="nav-section">
+        <div class="nav-title">社区</div>
+        <div class="nav-item">
+          <span class="nav-icon">🤖</span>
+          <span class="nav-label">AI 分身</span>
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">💳</span>
+          <span class="nav-label">订阅</span>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Main -->
+    <div class="main">
+      <div class="main-header">
+        <h1 class="main-title">个人资料</h1>
+        <p class="main-desc">管理你的账户信息和公开资料</p>
+      </div>
+      
+      <!-- Basic info -->
+      <div class="section">
+        <div class="section-title">基本信息</div>
+        
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">用户名</div>
+            <div class="setting-desc">你的唯一标识符</div>
+          </div>
+          <div class="setting-input">
+            <span class="input-suffix">@</span>
+            <input class="input" value="happlex">
+          </div>
+        </div>
+        
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">显示名称</div>
+            <div class="setting-desc">你的公开昵称</div>
+          </div>
+          <input class="input" value="彭猫">
+        </div>
+        
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">个人简介</div>
+            <div class="setting-desc">简短介绍你自己</div>
+          </div>
+          <input class="input" style="width: 300px;" value="虾豆项目负责人，热爱开源与 AI">
+        </div>
+      </div>
+      
+      <!-- Privacy -->
+      <div class="section">
+        <div class="section-title">隐私设置</div>
+        
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">显示在线状态</div>
+            <div class="setting-desc">其他用户可以看到你的在线状态</div>
+          </div>
+          <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+        </div>
+        
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">允许陌生人私信</div>
+            <div class="setting-desc">非好友可以向你发送私信</div>
+          </div>
+          <div class="toggle" onclick="this.classList.toggle('active')"></div>
+        </div>
+        
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">公开个人主页</div>
+            <div class="setting-desc">任何人都可以查看你的资料</div>
+          </div>
+          <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+        </div>
+      </div>
+      
+      <!-- Preferences -->
+      <div class="section">
+        <div class="section-title">偏好设置</div>
+        
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">语言</div>
+            <div class="setting-desc">界面显示语言</div>
+          </div>
+          <div class="select-wrapper">
+            <select class="select">
+              <option>简体中文</option>
+              <option>English</option>
+              <option>日本語</option>
+            </select>
+            <span class="select-arrow">▼</span>
+          </div>
+        </div>
+        
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">主题</div>
+            <div class="setting-desc">应用外观主题</div>
+          </div>
+          <div class="select-wrapper">
+            <select class="select">
+              <option>深色</option>
+              <option>浅色</option>
+              <option>跟随系统</option>
+            </select>
+            <span class="select-arrow">▼</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Danger zone -->
+      <div class="section">
+        <div class="section-title">危险操作</div>
+        
+        <div class="danger-zone">
+          <div class="danger-title">删除账户</div>
+          <div class="setting-row" style="margin: 0; background: transparent; border: none; padding: 0;">
+            <div class="setting-info">
+              <div class="setting-desc">永久删除你的账户和所有数据，此操作不可撤销。</div>
+            </div>
+            <button class="btn btn-danger">删除账户</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

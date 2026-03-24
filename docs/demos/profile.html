@@ -3,85 +3,112 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shadow Design System - Profile</title>
+  <title>Shadow - Profile</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary: #6366F1;
-      --primary-dark: #4F46E5;
-      --primary-light: #818CF8;
-      --bg: #0F0F10;
-      --surface: #18181B;
-      --elevated: #1F1F23;
-      --border: #27272A;
-      --text: #FAFAFA;
-      --text-secondary: #A1A1AA;
-      --text-muted: #71717A;
-      --success: #22C55E;
-      --radius: 8px;
+      --indigo-500: #6366F1;
+      --indigo-600: #4F46E5;
+      --indigo-400: #818CF8;
+      --gray-950: #030712;
+      --gray-900: #111827;
+      --gray-800: #1F2937;
+      --gray-700: #374151;
+      --gray-600: #4B5563;
+      --gray-500: #6B7280;
+      --gray-400: #9CA3AF;
+      --gray-300: #D1D5DB;
+      --gray-200: #E5E7EB;
+      --gray-100: #F3F4F6;
+      --green-500: #22C55E;
+      --amber-500: #F59E0B;
+      --radius-md: 8px;
       --radius-lg: 12px;
       --radius-xl: 16px;
+      --radius-2xl: 24px;
       --radius-full: 9999px;
+      --ease: cubic-bezier(0.4, 0, 0.2, 1);
     }
     
     * { margin: 0; padding: 0; box-sizing: border-box; }
     
     body {
-      font-family: -apple-system, 'Inter', 'PingFang SC', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.5;
-      padding: 24px;
-    }
-    
-    h1 {
-      font-size: 24px;
-      font-weight: 600;
-      margin-bottom: 24px;
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--gray-950);
+      color: var(--gray-100);
+      line-height: 1.6;
+      padding: 48px;
+      display: flex;
+      justify-content: center;
     }
     
     .profile {
-      max-width: 360px;
-      background: var(--surface);
-      border-radius: var(--radius-xl);
+      width: 100%;
+      max-width: 400px;
+      background: var(--gray-900);
+      border: 1px solid var(--gray-800);
+      border-radius: var(--radius-2xl);
       overflow: hidden;
-      border: 1px solid var(--border);
     }
     
+    /* Banner */
     .banner {
-      height: 80px;
-      background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+      height: 100px;
+      background: linear-gradient(135deg, var(--indigo-600), #7C3AED);
+      position: relative;
     }
     
+    .banner-edit {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 32px;
+      height: 32px;
+      background: rgba(0,0,0,0.4);
+      border: none;
+      border-radius: var(--radius-md);
+      color: white;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 200ms;
+    }
+    
+    .banner:hover .banner-edit {
+      opacity: 1;
+    }
+    
+    /* Avatar section */
     .avatar-section {
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
-      padding: 0 16px;
-      margin-top: -32px;
+      padding: 0 24px;
+      margin-top: -40px;
     }
     
     .avatar {
-      width: 64px;
-      height: 64px;
+      width: 80px;
+      height: 80px;
       border-radius: var(--radius-full);
-      background: var(--primary);
-      border: 4px solid var(--surface);
+      background: linear-gradient(135deg, var(--indigo-500), #7C3AED);
+      border: 4px solid var(--gray-900);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 24px;
+      font-size: 32px;
       position: relative;
     }
     
     .avatar-status {
       position: absolute;
-      bottom: 2px;
-      right: 2px;
-      width: 16px;
-      height: 16px;
-      background: var(--success);
-      border: 3px solid var(--surface);
+      bottom: 4px;
+      right: 4px;
+      width: 20px;
+      height: 20px;
+      background: var(--green-500);
+      border: 3px solid var(--gray-900);
       border-radius: var(--radius-full);
+      box-shadow: 0 0 12px var(--green-500);
     }
     
     .actions {
@@ -93,155 +120,231 @@
     .action-btn {
       width: 36px;
       height: 36px;
-      background: var(--elevated);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      color: var(--text-secondary);
+      background: var(--gray-800);
+      border: 1px solid var(--gray-700);
+      border-radius: var(--radius-md);
+      color: var(--gray-400);
       cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       font-size: 16px;
+      transition: all 150ms var(--ease);
     }
     
     .action-btn:hover {
-      border-color: var(--primary);
-      color: var(--text);
+      border-color: var(--indigo-500);
+      color: var(--gray-100);
     }
     
+    /* Info */
     .info {
-      padding: 16px;
+      padding: 20px 24px;
     }
     
     .name {
-      font-size: 20px;
+      font-size: 22px;
       font-weight: 700;
+      margin-bottom: 4px;
     }
     
     .username {
       font-size: 14px;
-      color: var(--text-muted);
-      margin-bottom: 12px;
+      color: var(--gray-500);
+      margin-bottom: 16px;
     }
     
     .bio {
       font-size: 14px;
-      color: var(--text-secondary);
-      margin-bottom: 16px;
-      line-height: 1.6;
+      color: var(--gray-300);
+      line-height: 1.7;
+      margin-bottom: 20px;
     }
     
     .badges {
       display: flex;
-      gap: 6px;
+      gap: 8px;
       flex-wrap: wrap;
-      margin-bottom: 16px;
+      margin-bottom: 24px;
     }
     
     .badge {
-      padding: 4px 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
       font-size: 12px;
       font-weight: 500;
-      border-radius: var(--radius-full);
-      background: rgba(99, 102, 241, 0.15);
-      color: var(--primary-light);
+      border-radius: 100px;
     }
     
+    .badge-primary {
+      background: rgba(99,102,241,0.15);
+      color: var(--indigo-400);
+    }
+    
+    .badge-success {
+      background: rgba(34,197,94,0.15);
+      color: var(--green-500);
+    }
+    
+    /* Stats */
     .stats {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      padding-top: 16px;
-      border-top: 1px solid var(--border);
+      gap: 16px;
+      padding-top: 24px;
+      border-top: 1px solid var(--gray-800);
     }
     
-    .stat { text-align: center; }
+    .stat {
+      text-align: center;
+    }
     
     .stat-value {
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 700;
-      color: var(--text);
+      color: var(--gray-100);
     }
     
     .stat-label {
       font-size: 12px;
-      color: var(--text-muted);
+      color: var(--gray-500);
+      margin-top: 2px;
     }
     
-    /* AI Section */
-    .ai-section {
-      margin: 16px;
+    /* Status card */
+    .status-card {
+      margin: 0 24px;
       padding: 16px;
-      background: var(--elevated);
+      background: var(--gray-800);
       border-radius: var(--radius-lg);
-      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    
+    .status-emoji {
+      font-size: 24px;
+    }
+    
+    .status-text {
+      flex: 1;
+    }
+    
+    .status-label {
+      font-size: 11px;
+      color: var(--gray-500);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    
+    .status-value {
+      font-size: 14px;
+      font-weight: 500;
+    }
+    
+    /* AI section */
+    .ai-section {
+      margin: 16px 24px;
+      padding: 20px;
+      background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(124,58,237,0.05));
+      border: 1px solid rgba(99,102,241,0.2);
+      border-radius: var(--radius-xl);
     }
     
     .ai-header {
       display: flex;
       align-items: center;
-      gap: 12px;
-      margin-bottom: 12px;
+      gap: 14px;
+      margin-bottom: 16px;
     }
     
     .ai-avatar {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, var(--indigo-500), #7C3AED);
+      border-radius: var(--radius-lg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      box-shadow: 0 0 20px rgba(99,102,241,0.3);
+    }
+    
+    .ai-name {
+      font-weight: 600;
+      font-size: 16px;
+      color: var(--indigo-400);
+    }
+    
+    .ai-desc {
+      font-size: 13px;
+      color: var(--gray-400);
+    }
+    
+    .ai-stats {
+      display: flex;
+      gap: 24px;
+      font-size: 13px;
+      color: var(--gray-400);
+    }
+    
+    /* Activity */
+    .activity {
+      padding: 24px;
+    }
+    
+    .activity-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--gray-500);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 16px;
+    }
+    
+    .activity-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--gray-800);
+    }
+    
+    .activity-item:last-child {
+      border-bottom: none;
+    }
+    
+    .activity-icon {
       width: 40px;
       height: 40px;
-      background: var(--primary);
-      border-radius: var(--radius);
+      background: var(--gray-800);
+      border-radius: var(--radius-lg);
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 18px;
     }
     
-    .ai-name {
-      font-weight: 600;
-      color: var(--primary-light);
+    .activity-info {
+      flex: 1;
     }
     
-    .ai-desc {
-      font-size: 13px;
-      color: var(--text-muted);
-    }
-    
-    .ai-stats {
-      display: flex;
-      gap: 16px;
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-    
-    /* Status */
-    .status {
-      margin: 16px;
-      padding: 12px 16px;
-      background: var(--elevated);
-      border-radius: var(--radius);
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    
-    .status-emoji { font-size: 20px; }
-    
-    .status-text { flex: 1; }
-    
-    .status-label {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-    
-    .status-value {
+    .activity-name {
+      font-weight: 500;
       font-size: 14px;
+    }
+    
+    .activity-time {
+      font-size: 12px;
+      color: var(--gray-500);
     }
   </style>
 </head>
 <body>
-  <h1>Profile</h1>
-  
   <div class="profile">
-    <div class="banner"></div>
+    <div class="banner">
+      <button class="banner-edit">✏️</button>
+    </div>
+    
     <div class="avatar-section">
       <div class="avatar">
         🐱
@@ -252,14 +355,16 @@
         <button class="action-btn">⋯</button>
       </div>
     </div>
+    
     <div class="info">
       <div class="name">彭猫</div>
       <div class="username">@happlex</div>
-      <div class="bio">虾豆项目负责人<br>热爱开源与 AI</div>
+      <div class="bio">虾豆项目负责人<br>热爱开源与 AI，追求好产品 ✨</div>
       <div class="badges">
-        <span class="badge">🤖 AI Creator</span>
-        <span class="badge">✅ Verified</span>
+        <span class="badge badge-primary">🤖 AI Creator</span>
+        <span class="badge badge-success">✓ Verified</span>
       </div>
+      
       <div class="stats">
         <div class="stat">
           <div class="stat-value">1.2k</div>
@@ -276,11 +381,11 @@
       </div>
     </div>
     
-    <div class="status">
+    <div class="status-card">
       <span class="status-emoji">🎧</span>
       <div class="status-text">
         <div class="status-label">状态</div>
-        <div class="status-value">正在听音乐</div>
+        <div class="status-value">正在听 Lo-Fi Beats</div>
       </div>
     </div>
     
@@ -289,12 +394,37 @@
         <div class="ai-avatar">🤖</div>
         <div>
           <div class="ai-name">AI 分身</div>
-          <div class="ai-desc">代表你参与对话</div>
+          <div class="ai-desc">代表你参与社区对话</div>
         </div>
       </div>
       <div class="ai-stats">
-        <span>💬 2.3k 对话</span>
+        <span>💬 2,341 对话</span>
         <span>⭐ 98% 好评</span>
+      </div>
+    </div>
+    
+    <div class="activity">
+      <div class="activity-title">最近动态</div>
+      <div class="activity-item">
+        <div class="activity-icon">🎉</div>
+        <div class="activity-info">
+          <div class="activity-name">PR #77 已合并</div>
+          <div class="activity-time">2 小时前</div>
+        </div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-icon">💬</div>
+        <div class="activity-info">
+          <div class="activity-name">在 #general 发言</div>
+          <div class="activity-time">5 小时前</div>
+        </div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-icon">🤖</div>
+        <div class="activity-info">
+          <div class="activity-name">AI 分身完成 42 次对话</div>
+          <div class="activity-time">今天</div>
+        </div>
       </div>
     </div>
   </div>

@@ -3,294 +3,427 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shadow Design System - Components</title>
+  <title>Shadow Design System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      /* Primary - Indigo */
-      --primary: #6366F1;
-      --primary-dark: #4F46E5;
-      --primary-light: #818CF8;
+      /* Brand - Indigo */
+      --indigo-50: #EEF2FF;
+      --indigo-100: #E0E7FF;
+      --indigo-200: #C7D2FE;
+      --indigo-300: #A5B4FC;
+      --indigo-400: #818CF8;
+      --indigo-500: #6366F1;
+      --indigo-600: #4F46E5;
+      --indigo-700: #4338CA;
+      --indigo-800: #3730A3;
       
-      /* Neutrals */
-      --bg: #0F0F10;
-      --surface: #18181B;
-      --elevated: #1F1F23;
-      --border: #27272A;
-      --border-light: #3F3F46;
-      
-      /* Text */
-      --text: #FAFAFA;
-      --text-secondary: #A1A1AA;
-      --text-muted: #71717A;
+      /* Grays */
+      --gray-950: #030712;
+      --gray-900: #111827;
+      --gray-800: #1F2937;
+      --gray-700: #374151;
+      --gray-600: #4B5563;
+      --gray-500: #6B7280;
+      --gray-400: #9CA3AF;
+      --gray-300: #D1D5DB;
+      --gray-200: #E5E7EB;
+      --gray-100: #F3F4F6;
       
       /* Semantic */
-      --success: #22C55E;
-      --warning: #EAB308;
-      --error: #EF4444;
-      
-      /* Spacing */
-      --space-1: 4px;
-      --space-2: 8px;
-      --space-3: 12px;
-      --space-4: 16px;
-      --space-6: 24px;
-      --space-8: 32px;
-      
-      /* Radius */
-      --radius: 8px;
-      --radius-lg: 12px;
-      --radius-full: 9999px;
+      --green-500: #22C55E;
+      --amber-500: #F59E0B;
+      --red-500: #EF4444;
+      --blue-500: #3B82F6;
       
       /* Shadows */
-      --shadow: 0 1px 3px rgba(0,0,0,0.3);
-      --shadow-lg: 0 4px 12px rgba(0,0,0,0.4);
-      --glow: 0 0 0 3px rgba(99, 102, 241, 0.3);
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+      --shadow-lg: 0 12px 32px rgba(0,0,0,0.4);
+      --shadow-xl: 0 20px 40px rgba(0,0,0,0.5);
+      --glow: 0 0 0 1px rgba(99,102,241,0.3), 0 0 24px rgba(99,102,241,0.15);
+      
+      /* Radius */
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-xl: 16px;
+      --radius-2xl: 24px;
+      
+      /* Animation */
+      --ease: cubic-bezier(0.4, 0, 0.2, 1);
+      --ease-out: cubic-bezier(0, 0, 0.2, 1);
+      --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     
     * { margin: 0; padding: 0; box-sizing: border-box; }
     
     body {
-      font-family: -apple-system, 'Inter', 'PingFang SC', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.5;
-      padding: var(--space-8);
-      max-width: 900px;
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--gray-950);
+      color: var(--gray-100);
+      line-height: 1.6;
+      min-height: 100vh;
     }
     
-    h1 {
-      font-size: 28px;
-      font-weight: 600;
-      margin-bottom: var(--space-8);
-      color: var(--text);
+    /* Layout */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 80px 48px;
     }
     
-    h2 {
+    .header {
+      margin-bottom: 80px;
+    }
+    
+    .header-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: rgba(99,102,241,0.1);
+      border: 1px solid rgba(99,102,241,0.2);
+      border-radius: 100px;
       font-size: 13px;
-      font-weight: 600;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin: var(--space-8) 0 var(--space-4);
+      font-weight: 500;
+      color: var(--indigo-400);
+      margin-bottom: 24px;
+    }
+    
+    .header h1 {
+      font-size: 48px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, var(--gray-100) 0%, var(--gray-400) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    .header p {
+      font-size: 18px;
+      color: var(--gray-400);
+      max-width: 600px;
     }
     
     .section {
-      background: var(--surface);
-      border-radius: var(--radius-lg);
-      padding: var(--space-6);
-      margin-bottom: var(--space-6);
+      margin-bottom: 64px;
     }
     
-    .row {
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--gray-500);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 24px;
+    }
+    
+    .grid {
+      display: grid;
+      gap: 24px;
+    }
+    
+    .grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .grid-4 { grid-template-columns: repeat(4, 1fr); }
+    
+    @media (max-width: 768px) {
+      .container { padding: 48px 24px; }
+      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+      .header h1 { font-size: 32px; }
+    }
+    
+    /* Card */
+    .card {
+      background: var(--gray-900);
+      border: 1px solid var(--gray-800);
+      border-radius: var(--radius-xl);
+      padding: 32px;
+      transition: all 200ms var(--ease);
+    }
+    
+    .card-interactive:hover {
+      border-color: var(--gray-700);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+    
+    /* ========== COLORS ========== */
+    .color-grid {
       display: flex;
-      gap: var(--space-3);
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    
+    .color-card {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .color-swatch {
+      width: 80px;
+      height: 80px;
+      border-radius: var(--radius-lg);
+      transition: transform 200ms var(--ease);
+    }
+    
+    .color-swatch:hover {
+      transform: scale(1.05);
+    }
+    
+    .color-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    
+    .color-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--gray-200);
+    }
+    
+    .color-value {
+      font-size: 12px;
+      font-family: monospace;
+      color: var(--gray-500);
+    }
+    
+    /* ========== BUTTONS ========== */
+    .btn-row {
+      display: flex;
+      gap: 12px;
       flex-wrap: wrap;
       align-items: center;
     }
     
-    /* Colors */
-    .colors {
-      display: flex;
-      gap: var(--space-2);
-    }
-    
-    .color {
-      width: 48px;
-      height: 48px;
-      border-radius: var(--radius);
-      display: flex;
-      align-items: flex-end;
-      justify-content: center;
-      padding-bottom: var(--space-1);
-      font-size: 10px;
-      font-family: monospace;
-    }
-    
-    /* Buttons */
     .btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: var(--space-2);
-      padding: 10px 18px;
+      gap: 8px;
+      font-family: inherit;
       font-size: 14px;
       font-weight: 500;
       border: none;
-      border-radius: var(--radius);
+      border-radius: var(--radius-md);
       cursor: pointer;
-      transition: all 150ms ease;
+      transition: all 150ms var(--ease);
+    }
+    
+    .btn:focus-visible {
+      outline: none;
+      box-shadow: var(--glow);
     }
     
     .btn-primary {
-      background: var(--primary);
+      height: 40px;
+      padding: 0 20px;
+      background: var(--indigo-600);
       color: white;
     }
     
     .btn-primary:hover {
-      background: var(--primary-dark);
-      box-shadow: var(--glow);
+      background: var(--indigo-500);
+      box-shadow: 0 0 20px rgba(99,102,241,0.3);
     }
     
     .btn-primary:active {
+      background: var(--indigo-700);
       transform: scale(0.98);
     }
     
     .btn-secondary {
-      background: var(--elevated);
-      color: var(--text);
-      border: 1px solid var(--border);
+      height: 40px;
+      padding: 0 20px;
+      background: transparent;
+      color: var(--gray-200);
+      border: 1px solid var(--gray-700);
     }
     
     .btn-secondary:hover {
-      border-color: var(--border-light);
+      background: var(--gray-800);
+      border-color: var(--gray-600);
     }
     
     .btn-ghost {
+      height: 40px;
+      padding: 0 16px;
       background: transparent;
-      color: var(--text-secondary);
+      color: var(--gray-400);
     }
     
     .btn-ghost:hover {
-      background: var(--elevated);
-      color: var(--text);
+      background: var(--gray-800);
+      color: var(--gray-200);
     }
     
     .btn-danger {
-      background: var(--error);
+      height: 40px;
+      padding: 0 20px;
+      background: var(--red-500);
       color: white;
     }
     
-    .btn-sm { padding: 6px 12px; font-size: 13px; }
-    .btn-lg { padding: 12px 24px; font-size: 15px; }
+    .btn-danger:hover {
+      background: #DC2626;
+    }
     
-    /* Inputs */
-    .input-group { margin-bottom: var(--space-4); }
+    .btn-sm { height: 32px; padding: 0 14px; font-size: 13px; }
+    .btn-lg { height: 48px; padding: 0 28px; font-size: 15px; }
+    
+    .btn-icon {
+      width: 40px;
+      height: 40px;
+      padding: 0;
+    }
+    
+    /* ========== INPUTS ========== */
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
     
     .input-label {
-      display: block;
       font-size: 13px;
       font-weight: 500;
-      color: var(--text-secondary);
-      margin-bottom: var(--space-2);
+      color: var(--gray-300);
     }
     
     .input {
-      width: 100%;
-      padding: 12px 14px;
+      height: 44px;
+      padding: 0 16px;
+      font-family: inherit;
       font-size: 14px;
-      color: var(--text);
-      background: var(--elevated);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
+      color: var(--gray-100);
+      background: var(--gray-900);
+      border: 1px solid var(--gray-700);
+      border-radius: var(--radius-md);
       outline: none;
-      transition: all 150ms ease;
+      transition: all 150ms var(--ease);
     }
     
-    .input::placeholder { color: var(--text-muted); }
-    
-    .input:hover { border-color: var(--border-light); }
-    
+    .input::placeholder { color: var(--gray-500); }
+    .input:hover { border-color: var(--gray-600); }
     .input:focus {
-      border-color: var(--primary);
+      border-color: var(--indigo-500);
       box-shadow: var(--glow);
     }
     
     .input-hint {
       font-size: 12px;
-      color: var(--text-muted);
-      margin-top: var(--space-1);
+      color: var(--gray-500);
     }
     
-    .input-error {
-      font-size: 12px;
-      color: var(--error);
-      margin-top: var(--space-1);
+    .textarea {
+      height: auto;
+      min-height: 100px;
+      padding: 12px 16px;
+      resize: vertical;
     }
     
-    /* Cards */
-    .card {
-      background: var(--elevated);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: var(--space-4);
-      transition: all 150ms ease;
-    }
-    
-    .card:hover {
-      border-color: var(--border-light);
-      transform: translateY(-2px);
-    }
-    
-    .card-header {
+    /* ========== AVATARS ========== */
+    .avatar-row {
       display: flex;
-      align-items: center;
-      gap: var(--space-3);
-      margin-bottom: var(--space-3);
+      gap: 16px;
+      align-items: flex-end;
     }
     
-    .card-title {
-      font-weight: 600;
-      font-size: 15px;
-    }
-    
-    .card-desc {
-      font-size: 13px;
-      color: var(--text-muted);
-    }
-    
-    /* Avatar */
     .avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: var(--radius-full);
-      background: var(--primary);
+      position: relative;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--indigo-500), var(--indigo-700));
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: 600;
-      font-size: 14px;
       color: white;
-      position: relative;
+      flex-shrink: 0;
     }
     
+    .avatar-xs { width: 24px; height: 24px; font-size: 10px; }
     .avatar-sm { width: 32px; height: 32px; font-size: 12px; }
+    .avatar-md { width: 40px; height: 40px; font-size: 14px; }
     .avatar-lg { width: 48px; height: 48px; font-size: 16px; }
+    .avatar-xl { width: 64px; height: 64px; font-size: 20px; }
     
     .avatar-status {
       position: absolute;
       bottom: 0;
       right: 0;
-      width: 12px;
-      height: 12px;
-      border-radius: var(--radius-full);
-      border: 2px solid var(--elevated);
+      border-radius: 50%;
+      border: 2px solid var(--gray-900);
     }
     
-    .status-online { background: var(--success); }
-    .status-idle { background: var(--warning); }
-    .status-offline { background: var(--text-muted); }
+    .status-online { background: var(--green-500); box-shadow: 0 0 8px var(--green-500); }
+    .status-idle { background: var(--amber-500); }
+    .status-dnd { background: var(--red-500); }
+    .status-offline { background: var(--gray-500); }
     
-    /* Badge */
+    /* ========== BADGES ========== */
+    .badge-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    
     .badge {
       display: inline-flex;
       align-items: center;
-      padding: 4px 10px;
+      gap: 4px;
+      height: 22px;
+      padding: 0 10px;
       font-size: 12px;
       font-weight: 500;
-      border-radius: var(--radius-full);
-      background: rgba(99, 102, 241, 0.15);
-      color: var(--primary-light);
+      border-radius: 100px;
     }
     
-    /* Toggle */
+    .badge-primary {
+      background: rgba(99,102,241,0.15);
+      color: var(--indigo-400);
+    }
+    
+    .badge-success {
+      background: rgba(34,197,94,0.15);
+      color: var(--green-500);
+    }
+    
+    .badge-warning {
+      background: rgba(245,158,11,0.15);
+      color: var(--amber-500);
+    }
+    
+    .badge-error {
+      background: rgba(239,68,68,0.15);
+      color: var(--red-500);
+    }
+    
+    /* ========== TOGGLE ========== */
+    .toggle-row {
+      display: flex;
+      gap: 24px;
+      align-items: center;
+    }
+    
+    .toggle-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
     .toggle {
       width: 44px;
       height: 24px;
-      background: var(--border);
-      border-radius: var(--radius-full);
+      background: var(--gray-700);
+      border-radius: 100px;
       position: relative;
       cursor: pointer;
-      transition: background 150ms;
+      transition: background 200ms var(--ease);
     }
     
     .toggle::after {
@@ -300,127 +433,397 @@
       left: 3px;
       width: 18px;
       height: 18px;
-      background: var(--text);
-      border-radius: var(--radius-full);
-      transition: left 150ms;
+      background: var(--gray-300);
+      border-radius: 50%;
+      transition: all 200ms var(--ease-bounce);
     }
     
     .toggle.active {
-      background: var(--primary);
+      background: var(--indigo-600);
     }
     
     .toggle.active::after {
       left: 23px;
+      background: white;
     }
     
-    /* Grid for cards */
-    .card-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: var(--space-4);
+    .toggle-label {
+      font-size: 14px;
+      color: var(--gray-300);
+    }
+    
+    /* ========== TOOLTIP ========== */
+    .tooltip-demo {
+      display: flex;
+      gap: 16px;
+    }
+    
+    .tooltip-wrapper {
+      position: relative;
+    }
+    
+    .tooltip {
+      position: absolute;
+      bottom: calc(100% + 10px);
+      left: 50%;
+      transform: translateX(-50%) scale(0.95);
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      background: var(--gray-700);
+      color: white;
+      border-radius: 6px;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 150ms var(--ease);
+    }
+    
+    .tooltip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 6px solid transparent;
+      border-top-color: var(--gray-700);
+    }
+    
+    .tooltip-wrapper:hover .tooltip {
+      opacity: 1;
+      transform: translateX(-50%) scale(1);
+    }
+    
+    /* ========== SELECT ========== */
+    .select-wrapper {
+      position: relative;
+    }
+    
+    .select {
+      height: 44px;
+      padding: 0 40px 0 16px;
+      font-family: inherit;
+      font-size: 14px;
+      color: var(--gray-100);
+      background: var(--gray-900);
+      border: 1px solid var(--gray-700);
+      border-radius: var(--radius-md);
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      transition: all 150ms var(--ease);
+    }
+    
+    .select:hover { border-color: var(--gray-600); }
+    .select:focus {
+      border-color: var(--indigo-500);
+      box-shadow: var(--glow);
+    }
+    
+    .select-arrow {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+      color: var(--gray-500);
+    }
+    
+    /* ========== PROGRESS ========== */
+    .progress-demo {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    
+    .progress-item {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+    
+    .progress-label { color: var(--gray-300); }
+    .progress-value { color: var(--gray-400); }
+    
+    .progress-bar {
+      height: 6px;
+      background: var(--gray-800);
+      border-radius: 100px;
+      overflow: hidden;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--indigo-600), var(--indigo-400));
+      border-radius: 100px;
+      transition: width 500ms var(--ease);
     }
   </style>
 </head>
 <body>
-  <h1>Shadow Components</h1>
-  
-  <h2>Brand Colors</h2>
-  <div class="section">
-    <div class="colors">
-      <div class="color" style="background: #6366F1; color: white;">Primary</div>
-      <div class="color" style="background: #4F46E5; color: white;">Dark</div>
-      <div class="color" style="background: #818CF8; color: white;">Light</div>
-      <div class="color" style="background: #0F0F10; border: 1px solid #27272A; color: #71717A;">BG</div>
-      <div class="color" style="background: #18181B; color: #71717A;">Surface</div>
-      <div class="color" style="background: #22C55E; color: white;">Success</div>
-      <div class="color" style="background: #EF4444; color: white;">Error</div>
-    </div>
-  </div>
-  
-  <h2>Buttons</h2>
-  <div class="section">
-    <div class="row">
-      <button class="btn btn-primary">Primary</button>
-      <button class="btn btn-secondary">Secondary</button>
-      <button class="btn btn-ghost">Ghost</button>
-      <button class="btn btn-danger">Delete</button>
-    </div>
-    <br><br>
-    <div class="row">
-      <button class="btn btn-primary btn-sm">Small</button>
-      <button class="btn btn-primary">Default</button>
-      <button class="btn btn-primary btn-lg">Large</button>
-    </div>
-  </div>
-  
-  <h2>Inputs</h2>
-  <div class="section">
-    <div style="max-width: 320px;">
-      <div class="input-group">
-        <label class="input-label">Username</label>
-        <input class="input" placeholder="Enter username">
-        <p class="input-hint">Your public display name</p>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-badge">
+        <span>✦</span>
+        Design System v3.0
       </div>
-      <div class="input-group">
-        <label class="input-label">Email</label>
-        <input class="input" value="invalid" style="border-color: var(--error);">
-        <p class="input-error">Please enter a valid email</p>
-      </div>
+      <h1>Shadow Design System</h1>
+      <p>一套现代、精致的设计系统，为 AI 原生的创作者社区而生。</p>
     </div>
-  </div>
-  
-  <h2>Cards</h2>
-  <div class="section">
-    <div class="card-grid">
+    
+    <!-- Colors -->
+    <div class="section">
+      <div class="section-title">Brand Colors</div>
       <div class="card">
-        <div class="card-header">
-          <div class="avatar">S</div>
-          <div>
-            <div class="card-title">Server</div>
-            <div class="card-desc">Manage settings</div>
+        <div class="color-grid">
+          <div class="color-card">
+            <div class="color-swatch" style="background: #6366F1;"></div>
+            <div class="color-info">
+              <span class="color-name">Primary</span>
+              <span class="color-value">#6366F1</span>
+            </div>
+          </div>
+          <div class="color-card">
+            <div class="color-swatch" style="background: #4F46E5;"></div>
+            <div class="color-info">
+              <span class="color-name">Primary Dark</span>
+              <span class="color-value">#4F46E5</span>
+            </div>
+          </div>
+          <div class="color-card">
+            <div class="color-swatch" style="background: #818CF8;"></div>
+            <div class="color-info">
+              <span class="color-name">Primary Light</span>
+              <span class="color-value">#818CF8</span>
+            </div>
+          </div>
+          <div class="color-card">
+            <div class="color-swatch" style="background: #22C55E;"></div>
+            <div class="color-info">
+              <span class="color-name">Success</span>
+              <span class="color-value">#22C55E</span>
+            </div>
+          </div>
+          <div class="color-card">
+            <div class="color-swatch" style="background: #EF4444;"></div>
+            <div class="color-info">
+              <span class="color-name">Error</span>
+              <span class="color-value">#EF4444</span>
+            </div>
+          </div>
+          <div class="color-card">
+            <div class="color-swatch" style="background: linear-gradient(135deg, #4F46E5, #7C3AED);"></div>
+            <div class="color-info">
+              <span class="color-name">Gradient</span>
+              <span class="color-value">Brand</span>
+            </div>
           </div>
         </div>
-        <button class="btn btn-secondary" style="width: 100%;">Configure</button>
       </div>
+    </div>
+    
+    <!-- Buttons -->
+    <div class="section">
+      <div class="section-title">Buttons</div>
       <div class="card">
-        <div class="card-header">
-          <div class="avatar">🤖</div>
-          <div>
-            <div class="card-title">AI Agent</div>
-            <div class="card-desc">Your assistant</div>
+        <div class="btn-row" style="margin-bottom: 20px;">
+          <button class="btn btn-primary">Primary Button</button>
+          <button class="btn btn-secondary">Secondary</button>
+          <button class="btn btn-ghost">Ghost</button>
+          <button class="btn btn-danger">Delete</button>
+        </div>
+        <div class="btn-row" style="margin-bottom: 20px;">
+          <button class="btn btn-primary btn-sm">Small</button>
+          <button class="btn btn-primary">Default</button>
+          <button class="btn btn-primary btn-lg">Large</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary btn-icon">+</button>
+          <button class="btn btn-secondary btn-icon">⋯</button>
+          <button class="btn btn-ghost btn-icon">✕</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Inputs -->
+    <div class="section">
+      <div class="section-title">Inputs</div>
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="input-group" style="margin-bottom: 20px;">
+            <label class="input-label">Username</label>
+            <input type="text" class="input" placeholder="Enter your username">
+            <span class="input-hint">Your public display name</span>
+          </div>
+          <div class="input-group" style="margin-bottom: 20px;">
+            <label class="input-label">Email</label>
+            <input type="email" class="input" placeholder="you@example.com">
+          </div>
+          <div class="input-group">
+            <label class="input-label">Bio</label>
+            <textarea class="input textarea" placeholder="Tell us about yourself..."></textarea>
           </div>
         </div>
-        <button class="btn btn-primary" style="width: 100%;">Start Chat</button>
+        <div class="card">
+          <div class="input-group" style="margin-bottom: 20px;">
+            <label class="input-label">With Icon</label>
+            <div style="position: relative;">
+              <span style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--gray-500);">🔍</span>
+              <input type="text" class="input" style="padding-left: 42px;" placeholder="Search...">
+            </div>
+          </div>
+          <div class="input-group">
+            <label class="input-label">Select</label>
+            <div class="select-wrapper">
+              <select class="select" style="width: 100%;">
+                <option>Option 1</option>
+                <option>Option 2</option>
+                <option>Option 3</option>
+              </select>
+              <span class="select-arrow">▼</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
-  
-  <h2>Avatars</h2>
-  <div class="section">
-    <div class="row">
-      <div class="avatar avatar-sm">A</div>
-      <div class="avatar">B</div>
-      <div class="avatar avatar-lg">C</div>
-      <div class="avatar"><span class="avatar-status status-online"></span>D</div>
-      <div class="avatar"><span class="avatar-status status-idle"></span>E</div>
-      <div class="avatar"><span class="avatar-status status-offline"></span>F</div>
+    
+    <!-- Avatars -->
+    <div class="section">
+      <div class="section-title">Avatars</div>
+      <div class="card">
+        <div class="avatar-row" style="margin-bottom: 24px;">
+          <div class="avatar avatar-xs">A</div>
+          <div class="avatar avatar-sm">B</div>
+          <div class="avatar avatar-md">C</div>
+          <div class="avatar avatar-lg">D</div>
+          <div class="avatar avatar-xl">E</div>
+        </div>
+        <div class="avatar-row">
+          <div class="avatar avatar-md"><span class="avatar-status status-online"></span>A</div>
+          <div class="avatar avatar-md"><span class="avatar-status status-idle"></span>B</div>
+          <div class="avatar avatar-md"><span class="avatar-status status-dnd"></span>C</div>
+          <div class="avatar avatar-md"><span class="avatar-status status-offline"></span>D</div>
+        </div>
+      </div>
     </div>
-  </div>
-  
-  <h2>Badges</h2>
-  <div class="section">
-    <div class="row">
-      <span class="badge">Pro</span>
-      <span class="badge">New</span>
-      <span class="badge">🤖 AI</span>
+    
+    <!-- Badges -->
+    <div class="section">
+      <div class="section-title">Badges</div>
+      <div class="card">
+        <div class="badge-row">
+          <span class="badge badge-primary">🤖 AI Agent</span>
+          <span class="badge badge-primary">Pro</span>
+          <span class="badge badge-success">✓ Verified</span>
+          <span class="badge badge-warning">⚠ Pending</span>
+          <span class="badge badge-error">✕ Error</span>
+        </div>
+      </div>
     </div>
-  </div>
-  
-  <h2>Toggle</h2>
-  <div class="section">
-    <div class="row">
-      <div class="toggle" onclick="this.classList.toggle('active')"></div>
-      <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+    
+    <!-- Toggle -->
+    <div class="section">
+      <div class="section-title">Toggle</div>
+      <div class="card">
+        <div class="toggle-row">
+          <div class="toggle-item">
+            <div class="toggle" onclick="this.classList.toggle('active')"></div>
+            <span class="toggle-label">Public Profile</span>
+          </div>
+          <div class="toggle-item">
+            <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+            <span class="toggle-label">Notifications</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Tooltip -->
+    <div class="section">
+      <div class="section-title">Tooltip</div>
+      <div class="card">
+        <div class="tooltip-demo">
+          <div class="tooltip-wrapper">
+            <button class="btn btn-secondary">Hover me</button>
+            <div class="tooltip">This is a tooltip</div>
+          </div>
+          <div class="tooltip-wrapper">
+            <button class="btn btn-primary">Another button</button>
+            <div class="tooltip">More information here</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Progress -->
+    <div class="section">
+      <div class="section-title">Progress</div>
+      <div class="card">
+        <div class="progress-demo">
+          <div class="progress-item">
+            <div class="progress-header">
+              <span class="progress-label">Upload Progress</span>
+              <span class="progress-value">75%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 75%;"></div>
+            </div>
+          </div>
+          <div class="progress-item">
+            <div class="progress-header">
+              <span class="progress-label">Storage Used</span>
+              <span class="progress-value">2.4 GB / 5 GB</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 48%;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Cards -->
+    <div class="section">
+      <div class="section-title">Cards</div>
+      <div class="grid grid-3">
+        <div class="card card-interactive">
+          <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+            <div class="avatar avatar-lg">🤖</div>
+            <div>
+              <div style="font-weight: 600; font-size: 16px;">AI Agent</div>
+              <div style="color: var(--gray-400); font-size: 14px;">Your assistant</div>
+            </div>
+          </div>
+          <button class="btn btn-primary" style="width: 100%;">Start Chat</button>
+        </div>
+        <div class="card card-interactive">
+          <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+            <div class="avatar avatar-lg">⚙️</div>
+            <div>
+              <div style="font-weight: 600; font-size: 16px;">Settings</div>
+              <div style="color: var(--gray-400); font-size: 14px;">Manage preferences</div>
+            </div>
+          </div>
+          <button class="btn btn-secondary" style="width: 100%;">Configure</button>
+        </div>
+        <div class="card card-interactive" style="background: linear-gradient(135deg, rgba(99,102,241,0.1), transparent); border-color: rgba(99,102,241,0.2);">
+          <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+            <div class="avatar avatar-lg" style="background: linear-gradient(135deg, var(--indigo-500), #7C3AED);">✨</div>
+            <div>
+              <div style="font-weight: 600; font-size: 16px;">Upgrade</div>
+              <div style="color: var(--gray-400); font-size: 14px;">Unlock all features</div>
+            </div>
+          </div>
+          <button class="btn btn-primary" style="width: 100%;">Upgrade Now</button>
+        </div>
+      </div>
     </div>
   </div>
 </body>
