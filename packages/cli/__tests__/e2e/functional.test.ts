@@ -47,30 +47,28 @@ describe('CLI Functional Tests', () => {
 
   describe('ping command', () => {
     it('should fail ping when not authenticated', async () => {
-      try {
-        await execa('node', [CLI_PATH, 'ping', '--json'], { cwd: tempDir })
-        expect.fail('Should have thrown')
-      } catch (error) {
-        const execaError = error as { exitCode?: number; stdout?: string }
-        expect(execaError.exitCode).toBe(1)
-        const result = JSON.parse(execaError.stdout || '{}')
-        expect(result.success).toBe(false)
-        expect(result.error).toBeDefined()
-      }
+      const result = await execa('node', [CLI_PATH, 'ping', '--json'], {
+        cwd: tempDir,
+        env: { ...process.env, HOME: tempDir },
+        reject: false,
+      })
+      expect(result.exitCode).toBe(1)
+      const payload = JSON.parse(result.stdout || result.stderr || '{}')
+      expect(payload.success).toBe(false)
+      expect(payload.error).toBeDefined()
     })
   })
 
   describe('status command', () => {
     it('should fail status when not authenticated', async () => {
-      try {
-        await execa('node', [CLI_PATH, 'status', '--json'], { cwd: tempDir })
-        expect.fail('Should have thrown')
-      } catch (error) {
-        const execaError = error as { exitCode?: number; stdout?: string }
-        expect(execaError.exitCode).toBe(1)
-        const result = JSON.parse(execaError.stdout || '{}')
-        expect(result.error).toBeDefined()
-      }
+      const result = await execa('node', [CLI_PATH, 'status', '--json'], {
+        cwd: tempDir,
+        env: { ...process.env, HOME: tempDir },
+        reject: false,
+      })
+      expect(result.exitCode).toBe(1)
+      const payload = JSON.parse(result.stdout || result.stderr || '{}')
+      expect(payload.error).toBeDefined()
     })
   })
 
