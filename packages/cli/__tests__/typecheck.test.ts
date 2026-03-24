@@ -1,5 +1,5 @@
-import { ShadowClient } from '@shadowob/sdk'
-import { describe, expect, it } from 'vitest'
+import { describe, expectTypeOf, it } from 'vitest'
+import type { ShadowClient } from '../../sdk/src/client'
 
 /**
  * Type checking tests - these verify that our CLI commands
@@ -9,182 +9,119 @@ import { describe, expect, it } from 'vitest'
  */
 describe('SDK Method Signatures', () => {
   it('should have correct apps method signatures', () => {
-    // listApps(serverId: string)
-    const listApps: (serverId: string) => Promise<unknown> = ShadowClient.prototype.listApps
-    expect(typeof listApps).toBe('function')
-
-    // getApp(serverId: string, appId: string)
-    const getApp: (serverId: string, appId: string) => Promise<unknown> =
-      ShadowClient.prototype.getApp
-    expect(typeof getApp).toBe('function')
-
-    // deleteApp(serverId: string, appId: string)
-    const deleteApp: (serverId: string, appId: string) => Promise<unknown> =
-      ShadowClient.prototype.deleteApp
-    expect(typeof deleteApp).toBe('function')
-
-    // publishApp(serverId: string, data: { name: string, slug: string })
-    const publishApp: (serverId: string, data: { name: string; slug: string }) => Promise<unknown> =
-      ShadowClient.prototype.publishApp
-    expect(typeof publishApp).toBe('function')
+    expectTypeOf<ShadowClient['listApps']>().toEqualTypeOf<(serverId: string) => Promise<unknown>>()
+    expectTypeOf<ShadowClient['getApp']>().toEqualTypeOf<
+      (serverId: string, appId: string) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['deleteApp']>().toEqualTypeOf<
+      (serverId: string, appId: string) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['publishApp']>().toEqualTypeOf<
+      (serverId: string, data: { name: string; slug: string }) => Promise<unknown>
+    >()
   })
 
   it('should have correct dms method signatures', () => {
-    // listDmChannels()
-    const listDmChannels: () => Promise<unknown> = ShadowClient.prototype.listDmChannels
-    expect(typeof listDmChannels).toBe('function')
-
-    // createDmChannel(userId: string)
-    const createDmChannel: (userId: string) => Promise<unknown> =
-      ShadowClient.prototype.createDmChannel
-    expect(typeof createDmChannel).toBe('function')
-
-    // getDmMessages(channelId: string, limit?: number, cursor?: string)
-    const getDmMessages: (channelId: string, limit?: number, cursor?: string) => Promise<unknown> =
-      ShadowClient.prototype.getDmMessages
-    expect(typeof getDmMessages).toBe('function')
-
-    // sendDmMessage(channelId: string, content: string)
-    const sendDmMessage: (channelId: string, content: string) => Promise<unknown> =
-      ShadowClient.prototype.sendDmMessage
-    expect(typeof sendDmMessage).toBe('function')
-
-    // markScopeRead(scope: { serverId?: string, channelId?: string, dmChannelId?: string })
-    const markScopeRead: (scope: {
-      serverId?: string
-      channelId?: string
-      dmChannelId?: string
-    }) => Promise<unknown> = ShadowClient.prototype.markScopeRead
-    expect(typeof markScopeRead).toBe('function')
+    expectTypeOf<ShadowClient['listDmChannels']>().toEqualTypeOf<() => Promise<unknown>>()
+    expectTypeOf<ShadowClient['createDmChannel']>().toEqualTypeOf<
+      (userId: string) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['getDmMessages']>().toEqualTypeOf<
+      (channelId: string, limit?: number, cursor?: string) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['sendDmMessage']>().toEqualTypeOf<
+      (channelId: string, content: string) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['markScopeRead']>().toEqualTypeOf<
+      (scope: { serverId?: string; channelId?: string; dmChannelId?: string }) => Promise<unknown>
+    >()
   })
 
   it('should have correct friends method signatures', () => {
-    // listFriends()
-    const listFriends: () => Promise<unknown> = ShadowClient.prototype.listFriends
-    expect(typeof listFriends).toBe('function')
-
-    // sendFriendRequest(username: string)
-    const sendFriendRequest: (username: string) => Promise<unknown> =
-      ShadowClient.prototype.sendFriendRequest
-    expect(typeof sendFriendRequest).toBe('function')
-
-    // acceptFriendRequest(requestId: string)
-    const acceptFriendRequest: (requestId: string) => Promise<unknown> =
-      ShadowClient.prototype.acceptFriendRequest
-    expect(typeof acceptFriendRequest).toBe('function')
-
-    // rejectFriendRequest(requestId: string)
-    const rejectFriendRequest: (requestId: string) => Promise<unknown> =
-      ShadowClient.prototype.rejectFriendRequest
-    expect(typeof rejectFriendRequest).toBe('function')
-
-    // removeFriend(friendshipId: string)
-    const removeFriend: (friendshipId: string) => Promise<unknown> =
-      ShadowClient.prototype.removeFriend
-    expect(typeof removeFriend).toBe('function')
-
-    // listPendingFriendRequests()
-    const listPendingFriendRequests: () => Promise<unknown> =
-      ShadowClient.prototype.listPendingFriendRequests
-    expect(typeof listPendingFriendRequests).toBe('function')
-
-    // listSentFriendRequests()
-    const listSentFriendRequests: () => Promise<unknown> =
-      ShadowClient.prototype.listSentFriendRequests
-    expect(typeof listSentFriendRequests).toBe('function')
+    expectTypeOf<ShadowClient['listFriends']>().toEqualTypeOf<() => Promise<unknown>>()
+    expectTypeOf<ShadowClient['sendFriendRequest']>().toEqualTypeOf<
+      (username: string) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['acceptFriendRequest']>().toEqualTypeOf<
+      (requestId: string) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['rejectFriendRequest']>().toEqualTypeOf<
+      (requestId: string) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['removeFriend']>().toEqualTypeOf<
+      (friendshipId: string) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['listPendingFriendRequests']>().toEqualTypeOf<
+      () => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['listSentFriendRequests']>().toEqualTypeOf<() => Promise<unknown>>()
   })
 
   it('should have correct marketplace method signatures', () => {
-    // browseListings(params?: { search?: string, tags?: string[], minPrice?: number, maxPrice?: number, limit?: number, offset?: number })
-    const browseListings: (params?: {
-      search?: string
-      tags?: string[]
-      minPrice?: number
-      maxPrice?: number
-      limit?: number
-      offset?: number
-    }) => Promise<unknown> = ShadowClient.prototype.browseListings
-    expect(typeof browseListings).toBe('function')
-
-    // getListing(listingId: string)
-    const getListing: (listingId: string) => Promise<unknown> = ShadowClient.prototype.getListing
-    expect(typeof getListing).toBe('function')
-
-    // createListing(data: { agentId: string, pricePerHour: number, title: string, description?: string, tags?: string[] })
-    const createListing: (data: {
-      agentId: string
-      pricePerHour: number
-      title: string
-      description?: string
-      tags?: string[]
-    }) => Promise<unknown> = ShadowClient.prototype.createListing
-    expect(typeof createListing).toBe('function')
-
-    // updateListing(listingId: string, data: Partial<...>)
-    const updateListing: (
-      listingId: string,
-      data: Partial<{ title: string; description: string; pricePerHour: number; tags: string[] }>,
-    ) => Promise<unknown> = ShadowClient.prototype.updateListing
-    expect(typeof updateListing).toBe('function')
-
-    // deleteListing(listingId: string)
-    const deleteListing: (listingId: string) => Promise<unknown> =
-      ShadowClient.prototype.deleteListing
-    expect(typeof deleteListing).toBe('function')
-
-    // signContract(data: { listingId: string, hours: number })
-    const signContract: (data: { listingId: string; hours: number }) => Promise<unknown> =
-      ShadowClient.prototype.signContract
-    expect(typeof signContract).toBe('function')
-
-    // listContracts(params?: { role?: 'tenant' | 'owner', status?: string })
-    const listContracts: (params?: {
-      role?: 'tenant' | 'owner'
-      status?: string
-    }) => Promise<unknown> = ShadowClient.prototype.listContracts
-    expect(typeof listContracts).toBe('function')
-
-    // getContract(contractId: string)
-    const getContract: (contractId: string) => Promise<unknown> = ShadowClient.prototype.getContract
-    expect(typeof getContract).toBe('function')
-
-    // terminateContract(contractId: string)
-    const terminateContract: (contractId: string) => Promise<unknown> =
-      ShadowClient.prototype.terminateContract
-    expect(typeof terminateContract).toBe('function')
+    expectTypeOf<ShadowClient['browseListings']>().toEqualTypeOf<
+      (params?: {
+        search?: string
+        tags?: string[]
+        minPrice?: number
+        maxPrice?: number
+        limit?: number
+        offset?: number
+      }) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['getListing']>().toEqualTypeOf<
+      (listingId: string) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['createListing']>().toEqualTypeOf<
+      (data: {
+        agentId: string
+        pricePerHour: number
+        title: string
+        description?: string
+        tags?: string[]
+      }) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['updateListing']>().toEqualTypeOf<
+      (
+        listingId: string,
+        data: Partial<{ title: string; description: string; pricePerHour: number; tags: string[] }>,
+      ) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['deleteListing']>().toEqualTypeOf<
+      (listingId: string) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['signContract']>().toEqualTypeOf<
+      (data: { listingId: string; hours: number }) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['listContracts']>().toEqualTypeOf<
+      (params?: { role?: 'tenant' | 'owner'; status?: string }) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['getContract']>().toEqualTypeOf<
+      (contractId: string) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['terminateContract']>().toEqualTypeOf<
+      (contractId: string) => Promise<unknown>
+    >()
   })
 
   it('should have correct media method signatures', () => {
-    // uploadMedia(file: Blob, filename: string, scope?: string)
-    const uploadMedia: (file: Blob, filename: string, scope?: string) => Promise<unknown> =
-      ShadowClient.prototype.uploadMedia
-    expect(typeof uploadMedia).toBe('function')
-
-    // downloadFile(contentRef: string)
-    const downloadFile: (contentRef: string) => Promise<Response> =
-      ShadowClient.prototype.downloadFile
-    expect(typeof downloadFile).toBe('function')
+    expectTypeOf<ShadowClient['uploadMedia']>().toEqualTypeOf<
+      (file: Blob, filename: string, scope?: string) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['downloadFile']>().toEqualTypeOf<
+      (contentRef: string) => Promise<Response>
+    >()
   })
 
   it('should have correct notifications method signatures', () => {
-    // listNotifications(limit?: number, offset?: number)
-    const listNotifications: (limit?: number, offset?: number) => Promise<unknown> =
-      ShadowClient.prototype.listNotifications
-    expect(typeof listNotifications).toBe('function')
-
-    // markNotificationRead(notificationId: string)
-    const markNotificationRead: (notificationId: string) => Promise<unknown> =
-      ShadowClient.prototype.markNotificationRead
-    expect(typeof markNotificationRead).toBe('function')
-
-    // markAllNotificationsRead()
-    const markAllNotificationsRead: () => Promise<unknown> =
-      ShadowClient.prototype.markAllNotificationsRead
-    expect(typeof markAllNotificationsRead).toBe('function')
-
-    // getNotificationPreferences()
-    const getNotificationPreferences: () => Promise<unknown> =
-      ShadowClient.prototype.getNotificationPreferences
-    expect(typeof getNotificationPreferences).toBe('function')
+    expectTypeOf<ShadowClient['listNotifications']>().toEqualTypeOf<
+      (limit?: number, offset?: number) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['markNotificationRead']>().toEqualTypeOf<
+      (notificationId: string) => Promise<unknown>
+    >()
+    expectTypeOf<ShadowClient['markAllNotificationsRead']>().toEqualTypeOf<() => Promise<unknown>>()
+    expectTypeOf<ShadowClient['getNotificationPreferences']>().toEqualTypeOf<
+      () => Promise<unknown>
+    >()
   })
 })

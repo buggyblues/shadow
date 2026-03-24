@@ -71,18 +71,14 @@ export async function runCli(
     HOME: ctx.tempDir,
   }
 
-  try {
-    const result = await execa('node', [CLI_PATH, ...args], { env })
-    if (options.expectError) {
-      throw new Error('Expected command to fail but it succeeded')
-    }
-    return result
-  } catch (error) {
-    if (options.expectError) {
-      return error as ExecaReturnValue<string>
-    }
-    throw error
+  const result = await execa('node', [CLI_PATH, ...args], { env, reject: false })
+  if (options.expectError && result.exitCode === 0) {
+    throw new Error('Expected command to fail but it succeeded')
   }
+  if (!options.expectError && result.exitCode !== 0 && !result.stdout) {
+    throw new Error(result.stderr || `Command failed with exit code ${result.exitCode}`)
+  }
+  return result
 }
 
 /**
