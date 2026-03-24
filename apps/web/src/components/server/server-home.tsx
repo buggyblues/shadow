@@ -4,6 +4,7 @@ import { ArrowLeft, Check, Copy, ExternalLink, Home, Settings } from 'lucide-rea
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
+import { copyToClipboardSilent } from '../../lib/clipboard'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
 
@@ -434,12 +435,14 @@ document.addEventListener('click', function(e) {
     ? rawHtml.replace('</body>', `${linkInterceptorScript}</body>`)
     : rawHtml + linkInterceptorScript
 
-  const handleCopyLink = () => {
+  const handleCopyLink = async () => {
     const slug = server.slug || server.id
     const url = `${window.location.origin}/s/${slug}`
-    navigator.clipboard.writeText(url)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    const success = await copyToClipboardSilent(url)
+    if (success) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
   }
 
   const handleOpenNewWindow = () => {

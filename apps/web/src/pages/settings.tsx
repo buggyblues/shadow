@@ -35,6 +35,7 @@ import { PriceDisplay } from '../components/shop/ui/currency'
 import { useAppStatus } from '../hooks/use-app-status'
 import { useUnreadCount } from '../hooks/use-unread-count'
 import { fetchApi } from '../lib/api'
+import { copyToClipboardSilent } from '../lib/clipboard'
 import { disconnectSocket } from '../lib/socket'
 import { useAuthStore } from '../stores/auth.store'
 import { type ThemeMode, useUIStore } from '../stores/ui.store'
@@ -972,11 +973,13 @@ function InviteManagement() {
     }
   }
 
-  const copyCode = (code: string, id: string) => {
+  const copyCode = async (code: string, id: string) => {
     const registerUrl = `${window.location.origin}/app/register?code=${code}`
-    navigator.clipboard.writeText(registerUrl)
-    setCopiedId(id)
-    setTimeout(() => setCopiedId(null), 2000)
+    const success = await copyToClipboardSilent(registerUrl)
+    if (success) {
+      setCopiedId(id)
+      setTimeout(() => setCopiedId(null), 2000)
+    }
   }
 
   const handleAddFriend = async (username: string, userId: string) => {
