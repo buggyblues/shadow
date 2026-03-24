@@ -4,39 +4,49 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Shadow Design System</title>
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
     :root {
-      /* Brand Colors */
-      --cyan: #00C8D6;
-      --cyan-light: #00E5F5;
-      --cyan-glow: rgba(0, 200, 214, 0.4);
-      --cyan-subtle: rgba(0, 200, 214, 0.15);
-      --warm: #F8E71C;
+      /* Brand Colors - Cyan to Blue to Purple */
+      --cyan: #00D4FF;
+      --blue: #3B82F6;
+      --purple: #8B5CF6;
+      --brand-gradient: linear-gradient(135deg, var(--cyan), var(--blue), var(--purple));
+      --glow: rgba(0, 212, 255, 0.3);
       
       /* Dark Mode */
-      --bg-base: #0D0D12;
-      --bg-elevated: #14141A;
+      --bg-base: #0A0A0F;
+      --bg-elevated: #13131A;
       --bg-surface: #1C1C24;
+      --bg-overlay: #252530;
+      
       --text-primary: #FAFAFA;
-      --text-secondary: #B5BAC1;
-      --border: rgba(255, 255, 255, 0.08);
+      --text-secondary: #A1A1AA;
+      --text-tertiary: #71717A;
+      
+      --border: rgba(255, 255, 255, 0.06);
+      --border-hover: rgba(255, 255, 255, 0.12);
     }
     
     [data-theme="light"] {
       --bg-base: #F8F9FA;
       --bg-elevated: #FFFFFF;
       --bg-surface: #FFFFFF;
-      --text-primary: #1A1A2E;
+      --bg-overlay: #F1F3F4;
+      
+      --text-primary: #0F0F1A;
       --text-secondary: #4A4A5A;
-      --border: rgba(0, 0, 0, 0.08);
+      --text-tertiary: #7A7A8A;
+      
+      --border: rgba(0, 0, 0, 0.06);
+      --border-hover: rgba(0, 0, 0, 0.12);
     }
     
     * { margin: 0; padding: 0; box-sizing: border-box; }
     
     body {
-      font-family: 'Nunito', sans-serif;
+      font-family: 'Inter', sans-serif;
       background: var(--bg-base);
       color: var(--text-primary);
       -webkit-font-smoothing: antialiased;
@@ -48,9 +58,9 @@
     /* Nav */
     .nav {
       position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-      background: rgba(13, 13, 18, 0.9);
+      background: rgba(10, 10, 15, 0.9);
       backdrop-filter: blur(20px);
-      border-bottom: 2px solid var(--border);
+      border-bottom: 1px solid var(--border);
     }
     
     [data-theme="light"] .nav { background: rgba(248, 249, 250, 0.95); }
@@ -63,24 +73,22 @@
     .logo {
       display: flex; align-items: center; gap: 12px;
       font-family: 'ZCOOL KuaiLe', cursive;
-      font-size: 28px;
+      font-size: 24px;
     }
     
     .logo-mark {
-      width: 44px; height: 44px;
-      background: linear-gradient(135deg, var(--cyan), var(--cyan-light));
-      border-radius: 12px;
+      width: 36px; height: 36px;
+      background: var(--brand-gradient);
+      border-radius: 10px;
       display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 24px var(--cyan-glow);
+      box-shadow: 0 4px 20px var(--glow);
     }
     
-    .nav-right { display: flex; align-items: center; gap: 24px; }
-    
     .theme-toggle {
-      width: 44px; height: 44px;
+      width: 40px; height: 40px;
       background: var(--bg-surface);
-      border: 2px solid var(--border);
-      border-radius: 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
       display: flex; align-items: center; justify-content: center;
       cursor: pointer;
       color: var(--text-secondary);
@@ -90,50 +98,18 @@
     
     /* Hero */
     .hero {
-      padding: 180px 0 100px;
+      padding: 160px 0 100px;
       text-align: center;
-      position: relative;
-    }
-    
-    .hero-grid {
-      position: absolute; inset: 0;
-      background-image: radial-gradient(circle at 1px 1px, rgba(0, 200, 214, 0.12) 1px, transparent 0);
-      background-size: 40px 40px;
-      pointer-events: none;
-    }
-    
-    .hero-badge {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 8px 16px;
-      background: var(--bg-surface);
-      border: 2px solid var(--border);
-      border-radius: 999px;
-      font-size: 14px; font-weight: 700;
-      color: var(--text-secondary);
-      margin-bottom: 32px;
-    }
-    
-    .hero-badge-dot {
-      width: 8px; height: 8px;
-      background: var(--cyan);
-      border-radius: 50%;
-      animation: pulse 2s infinite;
-    }
-    
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
     }
     
     .hero-title {
       font-family: 'ZCOOL KuaiLe', cursive;
-      font-size: 64px;
-      font-weight: 400;
+      font-size: 56px;
       margin-bottom: 16px;
     }
     
     .hero-title span {
-      background: linear-gradient(135deg, var(--cyan), var(--warm));
+      background: var(--brand-gradient);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
@@ -145,134 +121,307 @@
       margin: 0 auto 40px;
     }
     
-    /* Buttons */
-    .btn {
-      display: inline-flex; align-items: center; gap: 10px;
-      font-family: 'Nunito', sans-serif;
-      font-size: 16px; font-weight: 800;
-      border: none; cursor: pointer;
-      transition: all 0.2s;
-      height: 52px; padding: 0 28px;
-      border-radius: 999px;
-    }
-    
-    .btn-primary {
-      background: linear-gradient(135deg, var(--cyan), var(--cyan-light));
-      color: #0D0D12;
-      box-shadow: 0 4px 24px var(--cyan-glow);
-      border: 3px solid rgba(255, 255, 255, 0.2);
-    }
-    
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 32px var(--cyan-glow);
-    }
-    
     /* Section */
-    .section { padding: 80px 0; border-top: 2px solid var(--border); }
+    .section { padding: 80px 0; border-top: 1px solid var(--border); }
     .section-title {
-      font-family: 'ZCOOL KuaiLe', cursive;
-      font-size: 32px;
+      font-size: 28px;
+      font-weight: 700;
       margin-bottom: 40px;
     }
     
-    /* Colors */
-    .color-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
-    .color-item { text-align: center; }
-    .color-swatch { aspect-ratio: 1; border-radius: 16px; margin-bottom: 12px; }
-    .color-name { font-size: 14px; font-weight: 700; }
-    .color-hex { font-family: monospace; font-size: 12px; color: var(--text-secondary); }
+    /* === COMPONENTS === */
     
-    /* Typography */
-    .type-row { display: grid; grid-template-columns: 160px 1fr; gap: 32px; padding: 20px 0; border-bottom: 2px solid var(--border); align-items: center; }
-    .type-label { font-size: 14px; font-weight: 800; }
-    .type-spec { font-family: monospace; font-size: 12px; color: var(--text-secondary); }
+    /* Button */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px; font-weight: 600;
+      border: none; cursor: pointer;
+      transition: all 0.2s;
+      height: 44px; padding: 0 20px;
+      border-radius: 10px;
+    }
+    
+    .btn-primary {
+      background: var(--brand-gradient);
+      color: white;
+      box-shadow: 0 4px 20px var(--glow);
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 24px var(--glow);
+    }
+    
+    .btn-secondary {
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+    
+    .btn-secondary:hover { border-color: var(--border-hover); }
+    
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-secondary);
+    }
+    
+    .btn-ghost:hover { color: var(--text-primary); }
+    
+    /* Input */
+    .input {
+      width: 100%; height: 44px; padding: 0 16px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text-primary);
+      font-size: 14px;
+      outline: none;
+      transition: all 0.2s;
+    }
+    
+    .input:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+    }
+    
+    .input::placeholder { color: var(--text-tertiary); }
+    
+    /* Select */
+    .select {
+      width: 100%; height: 44px; padding: 0 16px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text-primary);
+      font-size: 14px;
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2371717A' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 40px;
+    }
+    
+    .select:focus { border-color: var(--cyan); }
+    
+    /* Card */
+    .card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      transition: all 0.2s;
+    }
+    
+    .card:hover {
+      border-color: var(--border-hover);
+      transform: translateY(-2px);
+    }
+    
+    .card-header {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 16px;
+    }
+    
+    .card-icon {
+      width: 40px; height: 40px;
+      background: rgba(0, 212, 255, 0.1);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--cyan);
+    }
+    
+    .card-title { font-size: 16px; font-weight: 600; }
+    .card-text { font-size: 14px; color: var(--text-secondary); margin-top: 4px; }
+    
+    /* Tabs */
+    .tabs {
+      display: flex; gap: 8px;
+      padding: 4px;
+      background: var(--bg-surface);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    
+    .tab {
+      padding: 8px 16px;
+      font-size: 14px; font-weight: 500;
+      color: var(--text-secondary);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .tab:hover { color: var(--text-primary); }
+    
+    .tab.active {
+      background: var(--bg-elevated);
+      color: var(--cyan);
+    }
+    
+    /* Modal */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 200;
+    }
+    
+    .modal {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px;
+      width: 100%; max-width: 400px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+    
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    
+    .modal-title { font-size: 20px; font-weight: 600; }
+    
+    .modal-close {
+      width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-tertiary);
+      cursor: pointer;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+    
+    .modal-close:hover {
+      background: var(--bg-surface);
+      color: var(--text-primary);
+    }
+    
+    /* Form */
+    .form-group { margin-bottom: 20px; }
+    
+    .form-label {
+      display: block;
+      font-size: 14px; font-weight: 500;
+      margin-bottom: 8px;
+      color: var(--text-secondary);
+    }
+    
+    .form-hint {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-top: 6px;
+    }
+    
+    /* Component Grid */
+    .comp-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+    .comp-card { background: var(--bg-elevated); border-radius: 16px; padding: 24px; border: 1px solid var(--border); }
+    .comp-title { font-size: 12px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 20px; }
+    .comp-row { display: flex; gap: 12px; margin-bottom: 12px; }
+    .comp-row:last-child { margin-bottom: 0; }
+    
+    /* Colors */
+    .color-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+    .color-item { text-align: center; }
+    .color-swatch { aspect-ratio: 1; border-radius: 12px; margin-bottom: 8px; }
+    .color-name { font-size: 13px; font-weight: 600; }
+    .color-hex { font-family: monospace; font-size: 11px; color: var(--text-tertiary); }
     
     /* Chat */
     .chat-frame {
       background: var(--bg-elevated);
-      border-radius: 24px; padding: 24px;
-      border: 2px solid var(--border);
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      overflow: hidden;
     }
     
     .chat-header {
       display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 20px; padding-bottom: 16px;
-      border-bottom: 2px solid var(--border);
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
     }
     
-    .chat-body { display: flex; gap: 16px; }
+    .chat-channel { display: flex; align-items: center; gap: 12px; }
+    .chat-channel-name { font-size: 16px; font-weight: 600; }
+    .chat-channel-status { font-size: 13px; color: var(--text-tertiary); }
+    
+    .chat-body { display: flex; height: 400px; }
     
     .chat-sidebar {
-      width: 60px; display: flex; flex-direction: column; gap: 12px;
+      width: 72px;
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border);
+      padding: 16px;
+      display: flex; flex-direction: column; gap: 12px;
     }
     
     .server-pill {
-      width: 52px; height: 52px;
-      background: var(--bg-surface);
-      border-radius: 16px;
-      border: 2px solid var(--border);
+      width: 40px; height: 40px;
+      background: var(--bg-elevated);
+      border-radius: 12px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 13px; font-weight: 800;
+      font-size: 12px; font-weight: 700;
       color: var(--text-secondary);
       cursor: pointer;
+      transition: all 0.2s;
     }
     
+    .server-pill:hover { background: var(--bg-overlay); color: var(--text-primary); }
+    
     .server-pill.active {
-      background: linear-gradient(135deg, var(--cyan), var(--cyan-light));
-      color: #0D0D12;
-      border-color: transparent;
-      box-shadow: 0 4px 20px var(--cyan-glow);
+      background: var(--brand-gradient);
+      color: white;
+      box-shadow: 0 4px 16px var(--glow);
     }
     
     .chat-main {
-      flex: 1; background: var(--bg-base);
-      border-radius: 16px; padding: 20px;
-      min-height: 300px;
+      flex: 1;
+      padding: 24px;
+      display: flex; flex-direction: column;
     }
     
-    .message { display: flex; gap: 12px; margin-bottom: 16px; }
+    .chat-messages { flex: 1; overflow-y: auto; }
+    
+    .message { display: flex; gap: 12px; margin-bottom: 20px; }
     
     .message-avatar {
-      width: 40px; height: 40px; border-radius: 50%;
-      background: linear-gradient(135deg, var(--cyan), var(--warm));
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: var(--brand-gradient);
       display: flex; align-items: center; justify-content: center;
-      font-size: 14px; font-weight: 800; color: #0D0D12;
+      font-size: 12px; font-weight: 700;
+      color: white;
+      flex-shrink: 0;
     }
     
-    .message-bubble {
-      background: var(--bg-surface);
-      border-radius: 16px; padding: 12px 16px;
-      max-width: 400px;
+    .message-content { flex: 1; }
+    .message-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .message-author { font-size: 14px; font-weight: 600; color: var(--cyan); }
+    .message-time { font-size: 12px; color: var(--text-tertiary); }
+    .message-text { font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
+    
+    .chat-input-area {
+      display: flex; gap: 12px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
     }
     
-    .message-author { font-size: 14px; font-weight: 800; color: var(--cyan); margin-bottom: 4px; }
-    .message-text { font-size: 15px; color: var(--text-secondary); }
-    
-    .chat-input-row { display: flex; gap: 12px; margin-top: 20px; }
-    
-    .chat-input {
-      flex: 1; height: 48px; padding: 0 16px;
-      background: var(--bg-surface);
-      border: 2px solid var(--border);
-      border-radius: 12px;
-      color: var(--text-primary);
-      font-size: 15px;
-      outline: none;
-    }
-    
-    .chat-input:focus { border-color: var(--cyan); }
+    .chat-input { flex: 1; }
     
     .chat-send {
-      width: 48px; height: 48px;
-      background: linear-gradient(135deg, var(--cyan), var(--cyan-light));
-      border-radius: 12px;
-      border: none;
+      width: 44px; height: 44px;
+      background: var(--brand-gradient);
+      border: none; border-radius: 10px;
       display: flex; align-items: center; justify-content: center;
-      color: #0D0D12;
+      color: white;
       cursor: pointer;
-      box-shadow: 0 4px 20px var(--cyan-glow);
+      box-shadow: 0 4px 16px var(--glow);
+      transition: all 0.2s;
     }
+    
+    .chat-send:hover { transform: scale(1.05); }
   </style>
 </head>
 <body>
@@ -281,33 +430,27 @@
   <div class="nav-inner">
     <div class="logo">
       <div class="logo-mark">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0D0D12" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/></svg>
       </div>
       虾豆
     </div>
-    <div class="nav-right">
-      <button class="theme-toggle" onclick="toggleTheme()">
-        <i data-lucide="sun" style="width: 20px; height: 20px;"></i>
-      </button>
-    </div>
+    <button class="theme-toggle" onclick="toggleTheme()">
+      <i data-lucide="sun" style="width: 18px; height: 18px;"></i>
+    </button>
   </div>
 </nav>
 
 <div class="page">
-  
+
   <section class="hero">
-    <div class="hero-grid"></div>
-    <div class="hero-badge">
-      <div class="hero-badge-dot"></div>
-      Design System v2.0
-    </div>
     <h1 class="hero-title">Shadow <span>Design</span></h1>
-    <p class="hero-desc">A vibrant design system for AI-native social platforms</p>
-    <div style="display: flex; gap: 16px; justify-content: center;">
+    <p class="hero-desc">Modern design system for AI-native social platforms</p>
+    <div style="display: flex; gap: 12px; justify-content: center;">
       <button class="btn btn-primary">
-        <i data-lucide="sparkles"></i>
-        开始使用
+        <i data-lucide="download" style="width: 16px; height: 16px;"></i>
+        Get Started
       </button>
+      <button class="btn btn-secondary">Documentation</button>
     </div>
   </section>
 
@@ -315,41 +458,118 @@
     <h2 class="section-title">Color System</h2>
     <div class="color-grid">
       <div class="color-item">
-        <div class="color-swatch" style="background: #0D0D12;"></div>
+        <div class="color-swatch" style="background: #0A0A0F;"></div>
         <div class="color-name">Base</div>
-        <div class="color-hex">#0D0D12</div>
+        <div class="color-hex">#0A0A0F</div>
       </div>
       <div class="color-item">
-        <div class="color-swatch" style="background: #00C8D6;"></div>
+        <div class="color-swatch" style="background: #00D4FF;"></div>
         <div class="color-name">Cyan</div>
-        <div class="color-hex">#00C8D6</div>
+        <div class="color-hex">#00D4FF</div>
       </div>
       <div class="color-item">
-        <div class="color-swatch" style="background: #F8E71C;"></div>
-        <div class="color-name">Warm</div>
-        <div class="color-hex">#F8E71C</div>
+        <div class="color-swatch" style="background: #3B82F6;"></div>
+        <div class="color-name">Blue</div>
+        <div class="color-hex">#3B82F6</div>
       </div>
       <div class="color-item">
-        <div class="color-swatch" style="background: linear-gradient(135deg, #00C8D6, #F8E71C);"></div>
+        <div class="color-swatch" style="background: #8B5CF6;"></div>
+        <div class="color-name">Purple</div>
+        <div class="color-hex">#8B5CF6</div>
+      </div>
+      <div class="color-item">
+        <div class="color-swatch" style="background: var(--brand-gradient);"></div>
         <div class="color-name">Gradient</div>
-        <div class="color-hex">Cyan → Warm</div>
+        <div class="color-hex">C→B→P</div>
       </div>
     </div>
   </section>
 
   <section class="section">
-    <h2 class="section-title">Typography</h2>
-    <div class="type-row">
-      <div><div class="type-label">Display</div><div class="type-spec">64px / ZCOOL KuaiLe</div></div>
-      <div style="font-family: 'ZCOOL KuaiLe', cursive; font-size: 48px;">虾豆 Shadow</div>
+    <h2 class="section-title">Components</h2>
+    <div class="comp-grid">
+      
+      <div class="comp-card">
+        <div class="comp-title">Buttons</div>
+        <div class="comp-row">
+          <button class="btn btn-primary">Primary</button>
+          <button class="btn btn-secondary">Secondary</button>
+          <button class="btn btn-ghost">Ghost</button>
+        </div>
+        <div class="comp-row">
+          <button class="btn btn-primary">
+            <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
+            New
+          </button>
+        </div>
+      </div>
+      
+      <div class="comp-card">
+        <div class="comp-title">Inputs</div>
+        <div class="comp-row">
+          <input type="text" class="input" placeholder="Enter text...">
+        </div>
+        <div class="comp-row">
+          <select class="select">
+            <option>Select option</option>
+            <option>Option 1</option>
+            <option>Option 2</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="comp-card">
+        <div class="comp-title">Card</div>
+        <div class="card" style="margin-bottom: 0;">
+          <div class="card-header">
+            <div class="card-icon">
+              <i data-lucide="layers" style="width: 20px; height: 20px;"></i>
+            </div>
+            <div>
+              <div class="card-title">Card Title</div>
+              <div class="card-text">Card description here</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="comp-card">
+        <div class="comp-title">Tabs</div>
+        <div class="tabs">
+          <div class="tab active">General</div>
+          <div class="tab">Settings</div>
+          <div class="tab">Profile</div>
+        </div>
+      </div>
+      
     </div>
-    <div class="type-row">
-      <div><div class="type-label">Heading</div><div class="type-spec">32px / Nunito 800</div></div>
-      <div style="font-size: 32px; font-weight: 800;">The quick brown fox</div>
-    </div>
-    <div class="type-row">
-      <div><div class="type-label">Body</div><div class="type-spec">16px / Nunito 400</div></div>
-      <div style="font-size: 16px; color: var(--text-secondary);">The quick brown fox jumps over the lazy dog</div>
+  </section>
+
+  <section class="section">
+    <h2 class="section-title">Form Example</h2>
+    <div class="card" style="max-width: 480px;">
+      <div class="form-group">
+        <label class="form-label">Email Address</label>
+        <input type="email" class="input" placeholder="you@example.com">
+        <div class="form-hint">We will never share your email.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Username</label>
+        <input type="text" class="input" placeholder="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Role</label>
+        <select class="select">
+          <option>Select a role</option>
+          <option>Admin</option>
+          <option>Member</option>
+          <option>Guest</option>
+        </select>
+      </div>
+      <div style="display: flex; gap: 12px; margin-top: 24px;">
+        <button class="btn btn-primary" style="flex: 1;">Save Changes</button>
+        <button class="btn btn-secondary">Cancel</button>
+      </div>
     </div>
   </section>
 
@@ -357,13 +577,17 @@
     <h2 class="section-title">Chat Interface</h2>
     <div class="chat-frame">
       <div class="chat-header">
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <i data-lucide="hash" style="width: 20px; height: 20px; color: var(--text-secondary);"></i>
-          <span style="font-weight: 800;">general</span>
+        <div class="chat-channel">
+          <i data-lucide="hash" style="width: 18px; height: 18px; color: var(--text-tertiary);"></i>
+          <div>
+            <div class="chat-channel-name">general</div>
+            <div class="chat-channel-status">24 members online</div>
+          </div>
         </div>
         <div style="display: flex; gap: 8px;">
-          <i data-lucide="phone" style="width: 20px; height: 20px; color: var(--text-secondary); cursor: pointer;"></i>
-          <i data-lucide="search" style="width: 20px; height: 20px; color: var(--text-secondary); cursor: pointer;"></i>
+          <i data-lucide="phone" style="width: 20px; height: 20px; color: var(--text-tertiary); cursor: pointer;"></i>
+          <i data-lucide="video" style="width: 20px; height: 20px; color: var(--text-tertiary); cursor: pointer;"></i>
+          <i data-lucide="search" style="width: 20px; height: 20px; color: var(--text-tertiary); cursor: pointer;"></i>
         </div>
       </div>
       <div class="chat-body">
@@ -371,24 +595,37 @@
           <div class="server-pill active">S1</div>
           <div class="server-pill">S2</div>
           <div class="server-pill">S3</div>
-          <div class="server-pill" style="border-style: dashed; background: transparent;">
-            <i data-lucide="plus" style="width: 20px; height: 20px;"></i>
+          <div class="server-pill" style="background: transparent; border: 1px dashed var(--border);">
+            <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
           </div>
         </div>
         <div class="chat-main">
-          <div class="message">
-            <div class="message-avatar">A</div>
-            <div>
-              <div class="message-bubble">
-                <div class="message-author">Alex</div>
-                <div class="message-text">Hey everyone! Check out the new design 🔥</div>
+          <div class="chat-messages">
+            <div class="message">
+              <div class="message-avatar">A</div>
+              <div class="message-content">
+                <div class="message-header">
+                  <span class="message-author">Alex</span>
+                  <span class="message-time">2:34 PM</span>
+                </div>
+                <div class="message-text">Hey everyone! Check out the new design system 🔥</div>
+              </div>
+            </div>
+            <div class="message">
+              <div class="message-avatar" style="background: linear-gradient(135deg, #8B5CF6, #EC4899);">S</div>
+              <div class="message-content">
+                <div class="message-header">
+                  <span class="message-author" style="color: #8B5CF6;">Sam</span>
+                  <span class="message-time">2:36 PM</span>
+                </div>
+                <div class="message-text">This looks amazing! Love the cyan gradient.</div>
               </div>
             </div>
           </div>
-          <div class="chat-input-row">
-            <input type="text" class="chat-input" placeholder="Type a message...">
+          <div class="chat-input-area">
+            <input type="text" class="input chat-input" placeholder="Type a message...">
             <button class="chat-send">
-              <i data-lucide="send" style="width: 20px; height: 20px;"></i>
+              <i data-lucide="send" style="width: 18px; height: 18px;"></i>
             </button>
           </div>
         </div>
@@ -400,12 +637,10 @@
 
 <script>
   lucide.createIcons();
-  
   function toggleTheme() {
     const html = document.documentElement;
     const current = html.getAttribute('data-theme');
-    const next = current === 'light' ? 'dark' : 'light';
-    html.setAttribute('data-theme', next);
+    html.setAttribute('data-theme', current === 'light' ? 'dark' : 'light');
   }
 </script>
 
