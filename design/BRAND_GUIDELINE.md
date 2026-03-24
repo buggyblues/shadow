@@ -1,470 +1,506 @@
-# Shadow 品牌与产品设计规范
+# Shadow Brand & Design Guideline
 
-## 1. 品牌定位
+## 1. Brand Foundation
 
-### 1.1 品牌愿景
+### 1.1 Brand Vision
 **让 AI 成为每个人的日常伙伴**
 
-Shadow 是一个连接用户与 AI Agent 的社交平台，让用户可以轻松发现、创建和与个性化的 AI 伙伴互动。
+Shadow connects people with AI companions, making intelligent assistance accessible, personal, and social.
 
-### 1.2 目标用户
-- **核心用户**: 18-30 岁数字原住民
-- **特征**: 熟悉 AI 工具、追求个性化表达、重视社交体验
-- **使用场景**: 日常陪伴、创意协作、知识获取、娱乐互动
+### 1.2 Target Audience
+- **Primary**: 18-30 year olds, digital natives
+- **Characteristics**: AI-native, value self-expression, seek authentic connections
+- **Mindset**: Curious, creative, prefer tools that feel personal over corporate
 
-### 1.3 品牌个性
-- **友好**:  approachable，降低 AI 使用门槛
-- **活力**:  年轻、有能量、不沉闷
-- **个性**:  支持自我表达，拒绝千篇一律
-- **智能**:  技术先进，体验流畅
+### 1.3 Brand Personality
+| Trait | Expression |
+|-------|------------|
+| **Friendly** | Approachable, welcoming, never intimidating |
+| **Energetic** | Dynamic, alive, responsive |
+| **Personal** | Customizable, adapts to individual style |
+| **Smart** | Capable, reliable, seamless |
 
-### 1.4 品牌关键词
-`AI伙伴` `社交` `个性化` `创意` `轻松` `未来感`
-
----
-
-## 2. 视觉语言
-
-### 2.1 色彩系统
-
-#### 主色调
-| 名称 | 色值 | 用途 |
-|------|------|------|
-| Primary | `#00C8D6` | 主按钮、链接、强调 |
-| Primary Hover | `#00A3B0` | 悬停状态 |
-| Accent | `#FF6B9D` | 次级强调、标签 |
-
-#### 背景色
-| 名称 | 色值 | 用途 |
-|------|------|------|
-| BG Primary | `#0F0F1A` | 主背景（深色模式）|
-| BG Secondary | `#1A1A2E` | 卡片背景 |
-| BG Tertiary | `#252542` | 输入框、悬浮层 |
-
-#### 文字色
-| 名称 | 色值 | 用途 |
-|------|------|------|
-| Text Primary | `#F2F3F5` | 标题、正文 |
-| Text Secondary | `#B5BAC1` | 次要文字 |
-| Text Muted | `#80848E` | 提示、禁用 |
-
-#### 功能色
-| 名称 | 色值 | 用途 |
-|------|------|------|
-| Success | `#57F287` | 成功状态 |
-| Warning | `#FEE75C` | 警告状态 |
-| Danger | `#ED4245` | 错误、删除 |
-
-### 2.2 字体规范
-
-#### 字体栈
-```css
-font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
-```
-
-#### 字号规范
-| 级别 | 大小 | 字重 | 用途 |
-|------|------|------|------|
-| H1 | 24px | 700 | 页面标题 |
-| H2 | 20px | 600 | 区块标题 |
-| H3 | 16px | 600 | 卡片标题 |
-| Body | 15px | 400 | 正文 |
-| Small | 13px | 400 | 辅助文字 |
-| Caption | 12px | 500 | 标签、时间 |
-
-### 2.3 圆角规范
-| 级别 | 值 | 用途 |
-|------|-----|------|
-| Small | 8px | 按钮、标签 |
-| Medium | 12px | 输入框、小卡片 |
-| Large | 16px | 卡片、弹窗 |
-| XL | 24px | 大卡片、模态框 |
-| Full | 9999px | 头像、胶囊按钮 |
-
-### 2.4 阴影规范
-```css
-/* 小阴影 - 按钮、标签 */
-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
-
-/* 中阴影 - 卡片 */
-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.3);
-
-/* 大阴影 - 弹窗、悬浮 */
-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
-
-/* 强调阴影 - 主按钮 */
-shadow-accent: 0 4px 20px rgba(0, 200, 214, 0.3);
-```
+### 1.4 Brand Voice
+- Direct and clear, no jargon
+- Warm but not overly casual
+- Encouraging, never condescending
+- Confident without being arrogant
 
 ---
 
-## 3. UI 组件规范
+## 2. Visual Identity
 
-### 3.1 Button
+### 2.1 Logo
 
-#### Primary Button
-```tsx
-<button className="
-  px-6 py-2.5
-  bg-[#00C8D6] hover:bg-[#00A3B0]
-  text-white font-medium
-  rounded-lg
-  shadow-[0_4px_20px_rgba(0,200,214,0.3)]
-  hover:shadow-[0_6px_24px_rgba(0,200,214,0.4)]
-  active:scale-[0.98]
-  transition-all duration-200
-">
-  按钮文字
-</button>
-```
+**Primary Logo**
+- Clean, modern wordmark
+- Accompanied by mascot icon (虾/shrimp character)
+- Works on dark and light backgrounds
 
-#### Secondary Button
-```tsx
-<button className="
-  px-6 py-2.5
-  bg-white/10 hover:bg-white/15
-  text-white font-medium
-  rounded-lg
-  border border-white/10
-  active:scale-[0.98]
-  transition-all duration-200
-">
-  次要按钮
-</button>
-```
+**Usage Rules**
+- Maintain clear space: minimum 2x logo height on all sides
+- Never distort, rotate, or apply effects
+- Use approved color variations only
 
-#### Ghost Button
-```tsx
-<button className="
-  px-4 py-2
-  text-[#B5BAC1] hover:text-white
-  font-medium
-  rounded-lg
-  hover:bg-white/5
-  transition-all duration-200
-">
-  文字按钮
-</button>
-```
+### 2.2 Color System
 
-### 3.2 Input
+#### Primary Palette
+| Color | Hex | Usage |
+|-------|-----|-------|
+| Cyan | `#00C8D6` | Primary actions, links, highlights |
+| Deep Navy | `#0F0F1A` | Primary background |
+| Off-White | `#F2F3F5` | Primary text |
 
-#### Text Input
-```tsx
-<input className="
-  w-full px-4 py-3
-  bg-[#252542]
-  border border-white/10
-  rounded-xl
-  text-white placeholder-[#80848E]
-  focus:border-[#00C8D6]/50 focus:ring-2 focus:ring-[#00C8D6]/20
-  transition-all duration-200
-"/>
-```
+#### Secondary Palette
+| Color | Hex | Usage |
+|-------|-----|-------|
+| Pink | `#FF6B9D` | Accent, tags, secondary highlights |
+| Teal | `#00A3B0` | Hover states, secondary actions |
+| Soft Gray | `#B5BAC1` | Secondary text |
+| Muted Gray | `#80848E` | Tertiary text, hints |
 
-### 3.3 Card
+#### Background Palette
+| Color | Hex | Usage |
+|-------|-----|-------|
+| Background Primary | `#0F0F1A` | Main app background |
+| Background Secondary | `#1A1A2E` | Cards, panels |
+| Background Tertiary | `#252542` | Inputs, elevated surfaces |
 
-#### Standard Card
-```tsx
-<div className="
-  bg-[#1A1A2E]
-  border border-white/5
-  rounded-2xl
-  p-6
-  shadow-[0_4px_16px_rgba(0,0,0,0.3)]
-">
-  卡片内容
-</div>
-```
+#### Functional Colors
+| Color | Hex | Usage |
+|-------|-----|-------|
+| Success | `#57F287` | Positive states, confirmations |
+| Warning | `#FEE75C` | Cautions, notices |
+| Error | `#ED4245` | Errors, destructive actions |
 
-#### Hoverable Card
-```tsx
-<div className="
-  bg-[#1A1A2E]
-  border border-white/5
-  rounded-2xl
-  p-6
-  shadow-[0_4px_16px_rgba(0,0,0,0.3)]
-  hover:border-[#00C8D6]/30
-  hover:-translate-y-1
-  hover:shadow-[0_8px_24px_rgba(0,0,0,0.4)]
-  transition-all duration-300
-">
-  可交互卡片
-</div>
-```
+#### Color Usage Principles
+1. **Dark-first**: Primary experience is dark mode
+2. **High contrast**: Text always readable against backgrounds
+3. **Accent restraint**: Use pink sparingly for maximum impact
+4. **Consistent hierarchy**: Same color = same meaning everywhere
 
-### 3.4 Avatar
+### 2.3 Typography
 
-```tsx
-<img className="
-  w-10 h-10
-  rounded-full
-  bg-[#252542]
-  object-cover
-  ring-2 ring-transparent
-  hover:ring-[#00C8D6]/50
-  transition-all duration-200
-"/>
-```
+**Font Family**
+- Primary: Inter (Latin scripts)
+- Secondary: Noto Sans SC (Chinese)
+- Fallback: System fonts
 
-### 3.5 Badge
+**Type Scale**
+| Level | Size | Weight | Usage |
+|-------|------|--------|-------|
+| H1 | 24px | 700 | Page titles |
+| H2 | 20px | 600 | Section headers |
+| H3 | 16px | 600 | Card titles |
+| Body | 15px | 400 | Main content |
+| Small | 13px | 400 | Secondary content |
+| Caption | 12px | 500 | Labels, timestamps |
 
-```tsx
-<span className="
-  px-2.5 py-1
-  bg-[#00C8D6]/20
-  text-[#00C8D6]
-  text-xs font-medium
-  rounded-full
-">
-  标签
-</span>
-```
+**Typography Principles**
+- Line height: 1.5 for body, 1.3 for headings
+- Max line length: 75 characters for readability
+- Use weight, not size, to create hierarchy within sections
+
+### 2.4 Spacing System
+
+**Base Unit: 4px**
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| XS | 4px | Tight spacing, icon gaps |
+| SM | 8px | Component internal padding |
+| MD | 12px | Related elements |
+| LG | 16px | Standard spacing |
+| XL | 24px | Section padding |
+| 2XL | 32px | Large section gaps |
+| 3XL | 48px | Page-level spacing |
+
+**Spacing Principles**
+- Use multiples of 4px exclusively
+- Increase spacing with element size/importance
+- Maintain consistent rhythm throughout
+
+### 2.5 Border Radius
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| Small | 8px | Buttons, tags, small elements |
+| Medium | 12px | Inputs, small cards |
+| Large | 16px | Cards, modals |
+| XL | 24px | Large cards, feature sections |
+| Full | Pill shape | Avatars, capsule buttons |
+
+### 2.6 Shadows
+
+| Token | Usage |
+|-------|-------|
+| Small | Subtle elevation, buttons at rest |
+| Medium | Cards, dropdowns |
+| Large | Modals, popovers, floating elements |
+
+**Shadow Principles**
+- Shadows indicate elevation, not borders
+- Darker backgrounds need stronger shadows
+- Avoid shadows on dark mode backgrounds (use borders instead)
 
 ---
 
-## 4. 布局规范
+## 3. Component Guidelines
 
-### 4.1 间距系统
-| Token | 值 | 用途 |
-|-------|-----|------|
-| space-1 | 4px | 紧凑间距 |
-| space-2 | 8px | 元素内间距 |
-| space-3 | 12px | 组件内间距 |
-| space-4 | 16px | 标准间距 |
-| space-6 | 24px | 区块间距 |
-| space-8 | 32px | 大区块间距 |
+### 3.1 Buttons
 
-### 4.2 布局结构
+**Primary Button**
+- Background: Cyan (`#00C8D6`)
+- Text: Dark (for contrast)
+- Radius: 8px
+- Padding: 12px 24px
+- Shadow: Accent glow
+- Hover: Darken 10%, lift slightly
 
-#### 桌面端
-```
-┌────────────────────────────────────────┐
-│  Sidebar    │        Main Content       │
-│   72px      │         flex-1            │
-│             │                           │
-│  [Servers]  │    [Header]               │
-│             │    ─────────────────      │
-│             │                           │
-│             │    [Content Area]         │
-│             │                           │
-│             │    ─────────────────      │
-│             │    [Input Area]           │
-└────────────────────────────────────────┘
-```
+**Secondary Button**
+- Background: White/10% opacity
+- Border: White/10% opacity
+- Text: White
+- Radius: 8px
+- Hover: Increase opacity to 15%
 
-#### 移动端
-```
-┌─────────────────────────┐
-│       Main Content      │
-│                         │
-│                         │
-│                         │
-├─────────────────────────┤
-│  🏠  🔍  ➕  💬  👤     │
-└─────────────────────────┘
-```
+**Ghost Button**
+- Background: Transparent
+- Text: Secondary gray
+- Hover: Subtle background, text becomes white
 
----
+**Button States**
+- Default: At rest
+- Hover: Elevated, brighter
+- Active: Slightly compressed
+- Disabled: 50% opacity, no interaction
+- Loading: Spinner replaces text
 
-## 5. 动效规范
+### 3.2 Inputs
 
-### 5.1 过渡时间
-| 类型 | 时长 | 用途 |
-|------|------|------|
-| Instant | 100ms | 颜色变化、透明度 |
-| Fast | 200ms | 按钮反馈、小交互 |
-| Normal | 300ms | 卡片悬浮、展开 |
-| Slow | 500ms | 页面过渡、大动画 |
+**Text Input**
+- Background: Tertiary background
+- Border: 1px subtle white/10%
+- Radius: 12px
+- Padding: 12px 16px
+- Focus: Cyan border glow
+- Error: Red border, red hint text
 
-### 5.2 缓动函数
-```css
-/* 标准 */
-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+**Input States**
+- Default: Subtle border
+- Focus: Cyan ring
+- Filled: Slightly elevated background
+- Error: Red border, error message below
+- Disabled: 50% opacity
 
-/* 进入 */
-ease-in: cubic-bezier(0, 0, 0.2, 1);
+### 3.3 Cards
 
-/* 退出 */
-ease-out: cubic-bezier(0.4, 0, 1, 1);
+**Standard Card**
+- Background: Secondary background
+- Border: 1px subtle
+- Radius: 16px
+- Padding: 24px
+- Shadow: None (dark mode)
 
-/* 弹性 */
-ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
-```
+**Interactive Card**
+- Same as standard
+- Hover: Border becomes cyan-tinted, slight lift
+- Active: Compressed feedback
 
-### 5.3 常用动画
+**Card Types**
+- Content cards: Text and media
+- Profile cards: Avatar + info
+- Settings cards: Icon + label + control
 
-#### Fade In
-```css
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-```
+### 3.4 Avatars
 
-#### Slide Up
-```css
-@keyframes slideUp {
-  from { 
-    opacity: 0; 
-    transform: translateY(20px); 
-  }
-  to { 
-    opacity: 1; 
-    transform: translateY(0); 
-  }
-}
-```
+**Sizes**
+- XS: 24px (inline mentions)
+- SM: 32px (message lists)
+- MD: 40px (standard)
+- LG: 48px (profile headers)
+- XL: 80px (profile pages)
 
-#### Scale In
-```css
-@keyframes scaleIn {
-  from { 
-    opacity: 0; 
-    transform: scale(0.95); 
-  }
-  to { 
-    opacity: 1; 
-    transform: scale(1); 
-  }
-}
-```
+**Styling**
+- Shape: Circle
+- Ring: Optional status indicator
+- Fallback: Generated pixel art character
 
-#### Pulse (用于通知)
-```css
-@keyframes pulse {
-  0%, 100% { 
-    box-shadow: 0 0 0 0 rgba(0, 200, 214, 0.4); 
-  }
-  50% { 
-    box-shadow: 0 0 0 8px rgba(0, 200, 214, 0); 
-  }
-}
-```
+### 3.5 Badges & Tags
+
+**Badge**
+- Background: Accent color/20%
+- Text: Accent color
+- Radius: Full (pill)
+- Padding: 4px 12px
+
+**Tag**
+- Background: Secondary background
+- Border: Subtle
+- Radius: 8px
+- Padding: 6px 12px
+
+### 3.6 Icons
+
+**Icon System**
+- Library: Lucide icons
+- Size: 16px (small), 20px (default), 24px (large)
+- Stroke: 2px
+- Color: Inherit from text
+
+**Usage**
+- Always paired with text for clarity
+- Can standalone in toolbars (with tooltips)
+- Maintain consistent sizing within contexts
 
 ---
 
-## 6. 功能矩阵
+## 4. Layout Principles
 
-### 6.1 核心功能
+### 4.1 Container Widths
+| Type | Max Width | Usage |
+|------|-----------|-------|
+| Full | 100% | Immersive experiences |
+| Content | 720px | Reading content |
+| Form | 480px | Input-heavy pages |
+| Modal | 400px | Dialogs, confirmations |
 
-| 功能 | 优先级 | 描述 |
-|------|--------|------|
-| AI 聊天 | P0 | 与 Buddy 进行文字对话 |
-| Buddy 发现 | P0 | 浏览和搜索公开 Buddy |
-| 好友系统 | P0 | 添加好友、私聊 |
-| 服务器/频道 | P0 | 群组聊天空间 |
-| Buddy 创建 | P1 | 自定义创建 AI 伙伴 |
-| 语音消息 | P1 | 发送和接收语音 |
-| 文件分享 | P1 | 图片、文档传输 |
-| 市场租赁 | P2 | Buddy 租赁交易 |
-| 工作空间 | P2 | 文件管理和协作 |
+### 4.2 Grid System
+- Base: 12-column grid
+- Gutter: 16px (24px on large screens)
+- Margin: 16px mobile, 24px tablet, 48px desktop
 
-### 6.2 平台覆盖
+### 4.3 Responsive Breakpoints
+| Name | Width | Target |
+|------|-------|--------|
+| Mobile | < 640px | Phones |
+| Tablet | 640-1024px | Tablets, small laptops |
+| Desktop | 1024-1440px | Standard screens |
+| Wide | > 1440px | Large monitors |
 
-| 平台 | 状态 | 备注 |
-|------|------|------|
-| Web | ✅ 已上线 | 主平台 |
-| Desktop | ✅ 已上线 | Electron |
-| iOS | 🚧 开发中 | React Native |
-| Android | 🚧 开发中 | React Native |
+### 4.4 Navigation Patterns
 
-### 6.3 功能优先级矩阵
+**Desktop**
+- Fixed sidebar (72px) for server list
+- Collapsible channel sidebar (240px)
+- Main content area (flexible)
 
-```
-          高价值
-            │
-   P1 语音  │  P0 AI聊天
-   P2 市场  │  P0 Buddy发现
-            │
-  ──────────┼────────── 高使用率
-            │
-   P2 工作  │  P1 Buddy创建
-   空间      │  P1 文件分享
-            │
-          低价值
-```
+**Mobile**
+- Bottom tab bar (5 items)
+- Full-screen overlays for secondary navigation
+- Gesture-based back navigation
 
 ---
 
-## 7. 设计原则
+## 5. Motion & Animation
 
-### 7.1 核心原则
+### 5.1 Duration Guidelines
+| Type | Duration | Usage |
+|------|----------|-------|
+| Instant | 100ms | Color changes, opacity |
+| Fast | 200ms | Button feedback, toggles |
+| Normal | 300ms | Cards, panels, modals |
+| Slow | 500ms | Page transitions |
 
-1. **清晰优先**
-   - 信息层级明确
-   - 操作反馈即时
-   - 错误提示友好
+### 5.2 Easing Functions
+- Standard: `cubic-bezier(0.4, 0, 0.2, 1)`
+- Enter: `cubic-bezier(0, 0, 0.2, 1)`
+- Exit: `cubic-bezier(0.4, 0, 1, 1)`
+- Bounce: `cubic-bezier(0.68, -0.55, 0.265, 1.55)`
 
-2. **一致性**
-   - 组件风格统一
-   - 交互模式统一
-   - 术语表达统一
+### 5.3 Common Animations
 
-3. **效率**
-   - 减少操作步骤
-   - 支持快捷操作
-   - 智能默认选项
+**Fade In**
+- Opacity: 0 → 1
+- Duration: 300ms
+- Use: Content appearance
 
-4. **愉悦**
-   - 适当的动效
-   - 惊喜的微交互
-   - 个性化表达
+**Slide Up**
+- Transform: translateY(20px) → translateY(0)
+- Opacity: 0 → 1
+- Duration: 300ms
+- Use: Cards, modals
 
-### 7.2 设计检查清单
+**Scale In**
+- Transform: scale(0.95) → scale(1)
+- Opacity: 0 → 1
+- Duration: 200ms
+- Use: Popovers, tooltips
 
-- [ ] 颜色对比度符合 WCAG 2.1 AA 标准
-- [ ] 交互元素最小点击区域 44x44px
-- [ ] 加载状态有明确反馈
-- [ ] 空状态有引导提示
-- [ ] 错误状态有恢复指引
-- [ ] 支持键盘导航
-- [ ] 支持屏幕阅读器
+**Pulse**
+- Box-shadow spread animation
+- Duration: 2s, infinite
+- Use: Notifications, online status
+
+### 5.4 Animation Principles
+1. **Purposeful**: Every animation serves a function
+2. **Subtle**: Enhance, don't distract
+3. **Consistent**: Same action = same animation
+4. **Performant**: 60fps, use transform/opacity only
 
 ---
 
-## 8. 文件组织
+## 6. Voice & Tone
 
-### 8.1 设计资源
+### 6.1 Writing Principles
+- Be concise: Cut unnecessary words
+- Be specific: Avoid vague language
+- Be active: Use active voice
+- Be helpful: Focus on user benefit
+
+### 6.2 UI Copy Guidelines
+
+**Buttons**
+- Use verb-noun: "Save Changes", "Send Message"
+- One word when clear: "Save", "Cancel", "Delete"
+- Avoid: "Click here", "Submit"
+
+**Labels**
+- Be descriptive: "Display Name" not "Name"
+- Use sentence case: "Email address" not "Email Address"
+- Avoid punctuation
+
+**Messages**
+- Error: Explain what happened and how to fix
+- Success: Brief confirmation
+- Empty: Guide toward action
+
+### 6.3 Examples
+
+| Don't | Do |
+|-------|-----|
+| "Your request has been processed successfully" | "Changes saved" |
+| "An error occurred" | "Couldn't save. Check your connection." |
+| "Click here to learn more" | "Learn more" |
+| "Are you sure you want to delete this item?" | "Delete this message?" |
+
+---
+
+## 7. Accessibility
+
+### 7.1 Color Contrast
+- Text on background: Minimum 4.5:1 (AA)
+- Large text: Minimum 3:1
+- Interactive elements: Must be distinguishable
+
+### 7.2 Touch Targets
+- Minimum size: 44x44px
+- Spacing: 8px between interactive elements
+
+### 7.3 Motion
+- Respect `prefers-reduced-motion`
+- Provide static alternatives for animations
+- No flashing content (>3Hz)
+
+### 7.4 Screen Readers
+- All images have alt text
+- Form inputs have labels
+- Interactive elements have aria-labels
+- Status updates are announced
+
+---
+
+## 8. File Organization
+
+### 8.1 Design Assets
 ```
 design/
-├── brand/
+├── BRAND_GUIDELINE.md      # This document
+├── assets/
 │   ├── logo/
-│   ├── colors/
-│   └── typography/
-├── components/
-│   ├── buttons/
-│   ├── inputs/
-│   ├── cards/
-│   └── icons/
+│   │   ├── logo-primary.svg
+│   │   ├── logo-white.svg
+│   │   └── logo-mark.svg
+│   └── illustrations/
 ├── templates/
 │   ├── web/
 │   ├── mobile/
 │   └── desktop/
-└── assets/
-    ├── illustrations/
-    └── animations/
+└── exports/
+    ├── colors.ase
+    └── typography.pdf
 ```
 
-### 8.2 代码组织
-```
-apps/
-├── web/src/
-│   ├── components/ui/      # 基础组件
-│   ├── components/common/  # 业务组件
-│   ├── styles/
-│   │   ├── globals.css
-│   │   └── tokens.css      # 设计令牌
-│   └── lib/
-│       └── theme.ts        # 主题配置
-├── mobile/src/
-│   └── ...
-└── desktop/src/
-    └── ...
-```
+### 8.2 Version Control
+- Major versions: Significant brand changes
+- Minor versions: Guidelines updates
+- Date format: YYYY-MM-DD
 
 ---
 
-*文档版本: 1.0*
-*最后更新: 2025-01*
+## 9. Feature Matrix
+
+### 9.1 Core Features (P0)
+| Feature | Description |
+|---------|-------------|
+| AI Chat | Real-time messaging with AI companions |
+| Buddy Discovery | Browse and search public AI companions |
+| Friend System | Add friends and direct messaging |
+| Server/Channel | Group chat spaces with organization |
+
+### 9.2 Important Features (P1)
+| Feature | Description |
+|---------|-------------|
+| Buddy Creation | Custom AI companion configuration |
+| Voice Messages | Audio messaging support |
+| File Sharing | Image and document transfer |
+| Notifications | Push and in-app notifications |
+
+### 9.3 Nice-to-Have (P2)
+| Feature | Description |
+|---------|-------------|
+| Marketplace | Buddy rental and exchange |
+| Workspace | File management and collaboration |
+| Themes | Custom color schemes |
+| Integrations | Third-party service connections |
+
+### 9.4 Platform Coverage
+| Platform | Status |
+|----------|--------|
+| Web | Live |
+| Desktop | Live |
+| iOS | In Development |
+| Android | In Development |
+
+---
+
+## 10. Design Principles
+
+### 10.1 Core Principles
+
+**1. Clarity First**
+- Information hierarchy is obvious
+- Actions are clearly labeled
+- Feedback is immediate
+
+**2. Consistency**
+- Same patterns work the same way
+- Visual language is unified
+- Interactions are predictable
+
+**3. Efficiency**
+- Reduce steps to complete tasks
+- Support keyboard shortcuts
+- Smart defaults
+
+**4. Delight**
+- Thoughtful animations
+- Surprising micro-interactions
+- Personal expression
+
+### 10.2 Design Checklist
+
+Before shipping any feature:
+- [ ] Colors meet contrast requirements
+- [ ] Touch targets are adequate
+- [ ] Loading states are handled
+- [ ] Empty states are designed
+- [ ] Error states are helpful
+- [ ] Keyboard navigation works
+- [ ] Screen reader compatible
+
+---
+
+*Version: 1.0*
+*Last Updated: 2025-01*
+*Owner: Design Team*

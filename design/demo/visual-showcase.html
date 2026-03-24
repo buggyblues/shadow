@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shadow Design System - Visual Showcase</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0F0F1A;
+      color: #F2F3F5;
+      line-height: 1.6;
+    }
+    
+    .section {
+      padding: 80px 40px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    .section-title {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 40px;
+      background: linear-gradient(135deg, #00C8D6, #FF6B9D);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    /* Color Palette */
+    .color-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 20px;
+    }
+    
+    .color-card {
+      background: #1A1A2E;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    
+    .color-swatch {
+      height: 100px;
+      position: relative;
+    }
+    
+    .color-info {
+      padding: 16px;
+    }
+    
+    .color-name {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+    
+    .color-hex {
+      font-family: monospace;
+      font-size: 12px;
+      color: #80848E;
+    }
+    
+    /* Typography */
+    .type-sample {
+      margin-bottom: 32px;
+      padding-bottom: 32px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    
+    .type-label {
+      font-size: 12px;
+      color: #80848E;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    
+    .h1-sample { font-size: 24px; font-weight: 700; }
+    .h2-sample { font-size: 20px; font-weight: 600; }
+    .h3-sample { font-size: 16px; font-weight: 600; }
+    .body-sample { font-size: 15px; font-weight: 400; color: #B5BAC1; }
+    .small-sample { font-size: 13px; font-weight: 400; color: #80848E; }
+    .caption-sample { font-size: 12px; font-weight: 500; color: #80848E; text-transform: uppercase; }
+    
+    /* Components */
+    .component-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      padding: 12px 24px;
+      background: #00C8D6;
+      color: #0F0F1A;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0, 200, 214, 0.3);
+    }
+    
+    .btn-primary:hover {
+      background: #00A3B0;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 24px rgba(0, 200, 214, 0.4);
+    }
+    
+    .btn-secondary {
+      padding: 12px 24px;
+      background: rgba(255, 255, 255, 0.1);
+      color: #F2F3F5;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+    
+    .btn-ghost {
+      padding: 8px 16px;
+      background: transparent;
+      color: #B5BAC1;
+      border-radius: 8px;
+    }
+    
+    .btn-ghost:hover {
+      color: #F2F3F5;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .btn-accent {
+      padding: 12px 24px;
+      background: #FF6B9D;
+      color: #0F0F1A;
+      border-radius: 8px;
+    }
+    
+    .btn-accent:hover {
+      background: #E55A8A;
+      transform: translateY(-1px);
+    }
+    
+    /* Inputs */
+    .input {
+      width: 300px;
+      padding: 12px 16px;
+      background: #252542;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      color: #F2F3F5;
+      font-size: 15px;
+      outline: none;
+    }
+    
+    .input:focus {
+      border-color: rgba(0, 200, 214, 0.5);
+      box-shadow: 0 0 0 3px rgba(0, 200, 214, 0.1);
+    }
+    
+    .input::placeholder {
+      color: #80848E;
+    }
+    
+    /* Cards */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 24px;
+    }
+    
+    .card {
+      background: #1A1A2E;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      padding: 24px;
+      transition: all 0.3s;
+    }
+    
+    .card-hover:hover {
+      border-color: rgba(0, 200, 214, 0.3);
+      transform: translateY(-2px);
+    }
+    
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    
+    .card-text {
+      font-size: 14px;
+      color: #B5BAC1;
+    }
+    
+    /* Avatars */
+    .avatar-row {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+    
+    .avatar {
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00C8D6, #FF6B9D);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      color: #0F0F1A;
+    }
+    
+    .avatar-xs { width: 24px; height: 24px; font-size: 10px; }
+    .avatar-sm { width: 32px; height: 32px; font-size: 12px; }
+    .avatar-md { width: 40px; height: 40px; font-size: 14px; }
+    .avatar-lg { width: 48px; height: 48px; font-size: 16px; }
+    .avatar-xl { width: 80px; height: 80px; font-size: 24px; }
+    
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    
+    .badge-accent {
+      background: rgba(255, 107, 157, 0.2);
+      color: #FF6B9D;
+    }
+    
+    .badge-success {
+      background: rgba(87, 242, 135, 0.2);
+      color: #57F287;
+    }
+    
+    .badge-default {
+      background: rgba(255, 255, 255, 0.1);
+      color: #B5BAC1;
+    }
+    
+    /* UI Mockup */
+    .mockup-container {
+      background: #1A1A2E;
+      border-radius: 24px;
+      padding: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    .mockup-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    .mockup-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    
+    .mockup-content {
+      display: flex;
+      gap: 16px;
+    }
+    
+    .mockup-sidebar {
+      width: 72px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: center;
+    }
+    
+    .mockup-server {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #252542;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .mockup-server:hover {
+      background: #00C8D6;
+      color: #0F0F1A;
+      border-radius: 12px;
+    }
+    
+    .mockup-main {
+      flex: 1;
+      background: #0F0F1A;
+      border-radius: 16px;
+      padding: 20px;
+      min-height: 300px;
+    }
+    
+    .mockup-message {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    
+    .mockup-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00C8D6, #FF6B9D);
+    }
+    
+    .mockup-bubble {
+      background: #252542;
+      padding: 12px 16px;
+      border-radius: 16px;
+      max-width: 400px;
+    }
+    
+    .mockup-name {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 4px;
+      color: #00C8D6;
+    }
+    
+    .mockup-text {
+      font-size: 14px;
+      color: #B5BAC1;
+    }
+    
+    /* Spacing Demo */
+    .spacing-demo {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    
+    .spacing-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    
+    .spacing-label {
+      width: 60px;
+      font-size: 12px;
+      color: #80848E;
+    }
+    
+    .spacing-box {
+      background: #00C8D6;
+      height: 24px;
+    }
+    
+    .spacing-xs { width: 4px; }
+    .spacing-sm { width: 8px; }
+    .spacing-md { width: 12px; }
+    .spacing-lg { width: 16px; }
+    .spacing-xl { width: 24px; }
+    .spacing-2xl { width: 32px; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="section" style="text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05);">
+    <h1 style="font-size: 48px; font-weight: 800; margin-bottom: 16px; background: linear-gradient(135deg, #00C8D6, #FF6B9D); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Shadow</h1>
+    <p style="font-size: 18px; color: #B5BAC1;">Design System Visual Showcase</p>
+  </div>
+
+  <!-- Color Palette -->
+  <div class="section">
+    <h2 class="section-title">Color Palette</h2>
+    <div class="color-grid">
+      <div class="color-card">
+        <div class="color-swatch" style="background: #00C8D6;"></div>
+        <div class="color-info">
+          <div class="color-name">Primary Cyan</div>
+          <div class="color-hex">#00C8D6</div>
+        </div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #FF6B9D;"></div>
+        <div class="color-info">
+          <div class="color-name">Accent Pink</div>
+          <div class="color-hex">#FF6B9D</div>
+        </div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #0F0F1A;"></div>
+        <div class="color-info">
+          <div class="color-name">Background</div>
+          <div class="color-hex">#0F0F1A</div>
+        </div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #1A1A2E;"></div>
+        <div class="color-info">
+          <div class="color-name">Card Background</div>
+          <div class="color-hex">#1A1A2E</div>
+        </div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #252542;"></div>
+        <div class="color-info">
+          <div class="color-name">Elevated Surface</div>
+          <div class="color-hex">#252542</div>
+        </div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #F2F3F5;"></div>
+        <div class="color-info">
+          <div class="color-name">Primary Text</div>
+          <div class="color-hex">#F2F3F5</div>
+        </div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #B5BAC1;"></div>
+        <div class="color-info">
+          <div class="color-name">Secondary Text</div>
+          <div class="color-hex">#B5BAC1</div>
+        </div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #80848E;"></div>
+        <div class="color-info">
+          <div class="color-name">Muted Text</div>
+          <div class="color-hex">#80848E</div>
+        </div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #57F287;"></div>
+        <div class="color-info">
+          <div class="color-name">Success</div>
+          <div class="color-hex">#57F287</div>
+        </div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #FEE75C;"></div>
+        <div class="color-info">
+          <div class="color-name">Warning</div>
+          <div class="color-hex">#FEE75C</div>
+        </div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #ED4245;"></div>
+        <div class="color-info">
+          <div class="color-name">Error</div>
+          <div class="color-hex">#ED4245</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Typography -->
+  <div class="section">
+    <h2 class="section-title">Typography</h2>
+    <div class="type-sample">
+      <div class="type-label">H1 / 24px / Bold</div>
+      <div class="h1-sample">The quick brown fox jumps over the lazy dog</div>
+    </div>
+    <div class="type-sample">
+      <div class="type-label">H2 / 20px / Semibold</div>
+      <div class="h2-sample">The quick brown fox jumps over the lazy dog</div>
+    </div>
+    <div class="type-sample">
+      <div class="type-label">H3 / 16px / Semibold</div>
+      <div class="h3-sample">The quick brown fox jumps over the lazy dog</div>
+    </div>
+    <div class="type-sample">
+      <div class="type-label">Body / 15px / Regular</div>
+      <div class="body-sample">The quick brown fox jumps over the lazy dog. This is the standard body text used throughout the interface for most content.</div>
+    </div>
+    <div class="type-sample">
+      <div class="type-label">Small / 13px / Regular</div>
+      <div class="small-sample">The quick brown fox jumps over the lazy dog. Used for secondary information and helper text.</div>
+    </div>
+    <div class="type-sample">
+      <div class="type-label">Caption / 12px / Medium</div>
+      <div class="caption-sample">The quick brown fox jumps over the lazy dog</div>
+    </div>
+  </div>
+
+  <!-- Buttons -->
+  <div class="section">
+    <h2 class="section-title">Buttons</h2>
+    <div class="component-row">
+      <button class="btn btn-primary">Primary Button</button>
+      <button class="btn btn-secondary">Secondary Button</button>
+      <button class="btn btn-ghost">Ghost Button</button>
+      <button class="btn btn-accent">Accent Button</button>
+    </div>
+    <div class="component-row">
+      <button class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">Small</button>
+      <button class="btn btn-primary">Default</button>
+      <button class="btn btn-primary" style="padding: 16px 32px; font-size: 16px;">Large</button>
+    </div>
+  </div>
+
+  <!-- Inputs -->
+  <div class="section">
+    <h2 class="section-title">Inputs</h2>
+    <div class="component-row" style="flex-direction: column; align-items: flex-start;">
+      <input type="text" class="input" placeholder="Enter your email...">
+      <input type="text" class="input" value="focused@example.com" style="border-color: rgba(0, 200, 214, 0.5); box-shadow: 0 0 0 3px rgba(0, 200, 214, 0.1);">
+      <input type="text" class="input" value="error@example.com" style="border-color: #ED4245;">
+    </div>
+  </div>
+
+  <!-- Cards -->
+  <div class="section">
+    <h2 class="section-title">Cards</h2>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title">Standard Card</div>
+        <div class="card-text">This is a standard card with default styling. Used for containing related content.</div>
+      </div>
+      <div class="card card-hover">
+        <div class="card-title">Interactive Card</div>
+        <div class="card-text">This card has hover effects. Try hovering over it to see the interaction.</div>
+      </div>
+      <div class="card" style="border-color: rgba(0, 200, 214, 0.3);">
+        <div class="card-title" style="color: #00C8D6;">Highlighted Card</div>
+        <div class="card-text">This card uses the primary color for emphasis. Used for featured content.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Avatars -->
+  <div class="section">
+    <h2 class="section-title">Avatars</h2>
+    <div class="avatar-row">
+      <div class="avatar avatar-xs">XS</div>
+      <div class="avatar avatar-sm">SM</div>
+      <div class="avatar avatar-md">MD</div>
+      <div class="avatar avatar-lg">LG</div>
+      <div class="avatar avatar-xl">XL</div>
+    </div>
+  </div>
+
+  <!-- Badges -->
+  <div class="section">
+    <h2 class="section-title">Badges</h2>
+    <div class="component-row">
+      <span class="badge badge-accent">New</span>
+      <span class="badge badge-success">Active</span>
+      <span class="badge badge-default">Default</span>
+      <span class="badge badge-accent">Beta</span>
+      <span class="badge badge-success">Online</span>
+    </div>
+  </div>
+
+  <!-- Spacing -->
+  <div class="section">
+    <h2 class="section-title">Spacing Scale</h2>
+    <div class="spacing-demo">
+      <div class="spacing-row">
+        <div class="spacing-label">4px</div>
+        <div class="spacing-box spacing-xs"></div>
+      </div>
+      <div class="spacing-row">
+        <div class="spacing-label">8px</div>
+        <div class="spacing-box spacing-sm"></div>
+      </div>
+      <div class="spacing-row">
+        <div class="spacing-label">12px</div>
+        <div class="spacing-box spacing-md"></div>
+      </div>
+      <div class="spacing-row">
+        <div class="spacing-label">16px</div>
+        <div class="spacing-box spacing-lg"></div>
+      </div>
+      <div class="spacing-row">
+        <div class="spacing-label">24px</div>
+        <div class="spacing-box spacing-xl"></div>
+      </div>
+      <div class="spacing-row">
+        <div class="spacing-label">32px</div>
+        <div class="spacing-box spacing-2xl"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- UI Mockup -->
+  <div class="section">
+    <h2 class="section-title">Interface Example</h2>
+    <div class="mockup-container">
+      <div class="mockup-header">
+        <div class="mockup-title">Server Name</div>
+        <div style="display: flex; gap: 8px;">
+          <span class="badge badge-default">#general</span>
+        </div>
+      </div>
+      <div class="mockup-content">
+        <div class="mockup-sidebar">
+          <div class="mockup-server" style="background: #00C8D6; color: #0F0F1A;">S1</div>
+          <div class="mockup-server">S2</div>
+          <div class="mockup-server">S3</div>
+          <div class="mockup-server" style="border: 2px dashed rgba(255,255,255,0.2); background: transparent;">+</div>
+        </div>
+        <div class="mockup-main">
+          <div class="mockup-message">
+            <div class="mockup-avatar"></div>
+            <div class="mockup-bubble">
+              <div class="mockup-name">Alex</div>
+              <div class="mockup-text">Hey everyone! How's it going?</div>
+            </div>
+          </div>
+          <div class="mockup-message">
+            <div class="mockup-avatar" style="background: linear-gradient(135deg, #FF6B9D, #FEE75C);"></div>
+            <div class="mockup-bubble">
+              <div class="mockup-name" style="color: #FF6B9D;">Sam</div>
+              <div class="mockup-text">Pretty good! Just working on the new design system.</div>
+            </div>
+          </div>
+          <div style="margin-top: 24px; display: flex; gap: 12px;">
+            <input type="text" class="input" style="flex: 1;" placeholder="Type a message...">
+            <button class="btn btn-primary">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
