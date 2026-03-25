@@ -14,30 +14,26 @@
  *   5. dispatchReplyWithBufferedBlockDispatcher()
  */
 
+import nodeCrypto from 'node:crypto'
+import fsPromises from 'node:fs/promises'
+import nodeOs from 'node:os'
+import nodePath from 'node:path'
 import type { ShadowChannelPolicy, ShadowMessage, ShadowRemoteConfig } from '@shadowob/sdk'
 import { ShadowClient, ShadowSocket } from '@shadowob/sdk'
-import type { OpenClawConfig } from 'openclaw/plugin-sdk/core'
-import { getShadowRuntime } from './runtime.js'
+import type { ReplyPayload } from 'openclaw/plugin-sdk'
 import type {
-  AgentChainMetadata,
   CreateTypingCallbacksParams,
-  PluginRuntime,
-  ReplyPayload,
-  ShadowAccountConfig,
-  ShadowPolicyConfig,
   TypingCallbacks,
-} from './types.js'
+} from 'openclaw/plugin-sdk/channel-reply-pipeline'
+import type { OpenClawConfig, PluginRuntime } from 'openclaw/plugin-sdk/core'
+import { getShadowRuntime } from './runtime.js'
+import type { AgentChainMetadata, ShadowAccountConfig, ShadowPolicyConfig } from './types.js'
 
 /**
  * Resolve the OpenClaw data directory.
  * Prefers OPENCLAW_DATA_DIR env var (set by desktop gateway), falls back to ~/.openclaw.
  */
 async function getDataDir(): Promise<string> {
-  // @ts-expect-error node:os available at runtime
-  const nodeOs = await import('node:os')
-  // @ts-expect-error node:path available at runtime
-  const nodePath = await import('node:path')
-  // @ts-expect-error process.env available at runtime
   const dataDir = process.env.OPENCLAW_DATA_DIR
   return dataDir || nodePath.join(nodeOs.homedir(), '.openclaw')
 }
@@ -52,6 +48,16 @@ export type ShadowMonitorOptions = {
 
 export type ShadowMonitorResult = {
   stop: () => void
+}
+
+function resolveSessionStore(cfg: OpenClawConfig): string | undefined {
+  const raw = (cfg as { session?: { store?: unknown } }).session?.store
+  if (typeof raw === 'string') return raw
+  if (raw && typeof raw === 'object') {
+    const pathValue = (raw as { path?: unknown }).path
+    if (typeof pathValue === 'string') return pathValue
+  }
+  return undefined
 }
 
 // ─── Typing Keepalive ─────────────────────────────────────────────────────
@@ -113,7 +119,6 @@ function createTypingCallbacks(params: CreateTypingCallbacksParams): TypingCallb
 }
 
 // ─── Process Channel Message ──────────────────────────────────────────────
-
 async function processShadowMessage(params: {
   message: ShadowMessage
   account: ShadowAccountConfig
@@ -168,7 +173,8 @@ async function processShadowMessage(params: {
     }
 
     const maxDepth = policyConfig.maxBuddyChainDepth ?? 3
-    const chainMeta = message.metadata?.agentChain as AgentChainMetadata | undefined
+    const chainMeta = (message as { metadata?: { agentChain?: AgentChainMetadata } }).metadata
+      ?.agentChain
     if (chainMeta) {
       if (chainMeta.depth >= maxDepth) {
         runtime.log?.(
@@ -362,13 +368,6 @@ async function processShadowMessage(params: {
   }
 
   if (allRawUrls.length > 0) {
-    // @ts-expect-error node:fs/promises available at runtime
-    const fsPromises = await import('node:fs/promises')
-    // @ts-expect-error node:path available at runtime
-    const nodePath = await import('node:path')
-    // @ts-expect-error node:crypto available at runtime
-    const nodeCrypto = await import('node:crypto')
-
     const dataDir = await getDataDir()
     const mediaDir = nodePath.join(dataDir, 'media', 'inbound')
     await fsPromises.mkdir(mediaDir, { recursive: true })
@@ -424,6 +423,9 @@ async function processShadowMessage(params: {
   const mentionRegex = new RegExp(`@${escapedBotUsername}(?:\\s|$)`, 'i')
   const wasMentioned = mentionRegex.test(message.content)
 
+  const triggerChain = (message as { metadata?: { agentChain?: AgentChainMetadata } }).metadata
+    ?.agentChain
+
   const ctxPayload = core.channel.reply.finalizeInboundContext({
     Body: body,
     BodyForAgent: cleanBody,
@@ -461,10 +463,9 @@ async function processShadowMessage(params: {
     ...mediaCtx,
   })
 
-  const storePath = core.channel.session.resolveStorePath(
-    (cfg as Record<string, unknown>).session as unknown,
-    { agentId: route.agentId },
-  )
+  const storePath = core.channel.session.resolveStorePath(resolveSessionStore(cfg), {
+    agentId: route.agentId,
+  })
   await core.channel.session.recordInboundSession({
     storePath,
     sessionKey: ctxPayload.SessionKey ?? route.sessionKey,
@@ -481,7 +482,6 @@ async function processShadowMessage(params: {
 
   runtime.log?.(`[msg] Dispatching to AI pipeline for message ${message.id}`)
   const client = new ShadowClient(account.serverUrl, account.token)
-  const triggerChain = message.metadata?.agentChain as AgentChainMetadata | undefined
 
   const typingCbs = createTypingCallbacks({
     start: async () => {
@@ -742,7 +742,7 @@ async function processShadowDmMessage(params: {
     cfg,
     channel: 'shadowob',
     accountId,
-    peer: { kind: 'private', id: peerId },
+    peer: { kind: 'direct', id: peerId },
   })
 
   runtime.log?.(`[routing] DM resolved agent: ${route.agentId} (account ${accountId})`)
@@ -781,10 +781,9 @@ async function processShadowDmMessage(params: {
     ChannelId: dmChannelId,
   })
 
-  const storePath = core.channel.session.resolveStorePath(
-    (cfg as Record<string, unknown>).session as unknown,
-    { agentId: route.agentId },
-  )
+  const storePath = core.channel.session.resolveStorePath(resolveSessionStore(cfg), {
+    agentId: route.agentId,
+  })
   await core.channel.session.recordInboundSession({
     storePath,
     sessionKey: ctxPayload.SessionKey ?? route.sessionKey,
@@ -907,8 +906,6 @@ async function deliverShadowDmReply(params: {
 // ─── Session Cache ────────────────────────────────────────────────────────
 
 async function getSessionCachePath(accountId: string): Promise<string> {
-  // @ts-expect-error node:path available at runtime
-  const nodePath = await import('node:path')
   const dataDir = await getDataDir()
   return nodePath.join(dataDir, 'shadow', `session-cache-${accountId}.json`)
 }
@@ -918,10 +915,6 @@ async function saveSessionCache(
   data: { remoteConfig: ShadowRemoteConfig; botUserId: string; botUsername: string },
 ): Promise<void> {
   try {
-    // @ts-expect-error node:fs/promises available at runtime
-    const fsPromises = await import('node:fs/promises')
-    // @ts-expect-error node:path available at runtime
-    const nodePath = await import('node:path')
     const cachePath = await getSessionCachePath(accountId)
     await fsPromises.mkdir(nodePath.dirname(cachePath), { recursive: true })
     await fsPromises.writeFile(cachePath, JSON.stringify(data), 'utf-8')
@@ -934,8 +927,6 @@ async function loadSessionCache(
   accountId: string,
 ): Promise<{ remoteConfig: ShadowRemoteConfig; botUserId: string; botUsername: string } | null> {
   try {
-    // @ts-expect-error node:fs/promises available at runtime
-    const fsPromises = await import('node:fs/promises')
     const cachePath = await getSessionCachePath(accountId)
     const raw = await fsPromises.readFile(cachePath, 'utf-8')
     return JSON.parse(raw)

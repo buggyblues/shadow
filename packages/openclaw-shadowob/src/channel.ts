@@ -9,11 +9,8 @@
  */
 
 import { ShadowClient } from '@shadowob/sdk'
-import {
-  createChannelPluginBase,
-  createChatChannelPlugin,
-  type OpenClawConfig,
-} from 'openclaw/plugin-sdk/core'
+import type { ChannelGatewayContext, ChannelMessageActionContext } from 'openclaw/plugin-sdk'
+import { createChatChannelPlugin, type OpenClawConfig } from 'openclaw/plugin-sdk/core'
 import { DEFAULT_ACCOUNT_ID, getAccountConfig, listAccountIds } from './config.js'
 import { parseTarget, shadowOutbound } from './outbound.js'
 import type { ShadowAccountConfig } from './types.js'
@@ -43,11 +40,32 @@ function inspectAccount(
 // ─── Channel Plugin ─────────────────────────────────────────────────────────
 
 export const shadowPlugin = createChatChannelPlugin<ShadowAccountConfig>({
-  base: createChannelPluginBase({
+  base: {
     id: 'shadowob',
+
+    meta: {
+      id: 'shadowob',
+      label: 'ShadowOwnBuddy',
+      selectionLabel: 'ShadowOwnBuddy (Server)',
+      docsPath: '/channels/shadowob',
+      blurb: 'Shadow server channel integration — chat with AI agents in Shadow channels',
+      aliases: ['shadow-server', 'openclaw-shadowob'],
+    },
+
+    capabilities: {
+      chatTypes: ['channel', 'thread'],
+      reactions: true,
+      threads: true,
+      media: true,
+      reply: true,
+      edit: true,
+      unsend: true,
+    },
 
     config: {
       listAccountIds: (cfg: OpenClawConfig): string[] => listAccountIds(cfg),
+
+      inspectAccount,
 
       resolveAccount: (cfg: OpenClawConfig, accountId?: string | null): ShadowAccountConfig => {
         return resolveAccount(cfg, accountId)
@@ -71,10 +89,10 @@ export const shadowPlugin = createChatChannelPlugin<ShadowAccountConfig>({
     },
 
     setup: {
-      resolveAccount,
-      inspectAccount,
+      resolveAccountId: ({ accountId }) => accountId ?? DEFAULT_ACCOUNT_ID,
+      applyAccountConfig: ({ cfg }) => cfg,
     },
-  }),
+  },
 
   // DM security: define allowlist-based DM policy
   security: {
@@ -97,7 +115,7 @@ export const shadowPlugin = createChatChannelPlugin<ShadowAccountConfig>({
         | Record<string, unknown>
         | undefined
       const mode = shadow?.replyToMode
-      if (mode === 'first' || mode === 'all' || mode === 'off' || mode === 'reply') return mode
+      if (mode === 'first' || mode === 'all' || mode === 'off') return mode
       return 'first'
     },
   },
@@ -299,7 +317,7 @@ shadowPlugin.status = {
 
 /** Gateway adapter — manages Socket.IO connection lifecycle */
 shadowPlugin.gateway = {
-  startAccount: async (ctx: any): Promise<void> => {
+  startAccount: async (ctx: ChannelGatewayContext<ShadowAccountConfig>): Promise<void> => {
     const account = ctx.account
     const accountId = ctx.accountId
 
@@ -325,7 +343,7 @@ shadowPlugin.gateway = {
     })
   },
 
-  stopAccount: async (ctx: any): Promise<void> => {
+  stopAccount: async (ctx: ChannelGatewayContext<ShadowAccountConfig>): Promise<void> => {
     ctx.setStatus({
       accountId: ctx.accountId,
       running: false,
@@ -362,31 +380,29 @@ const SHADOW_ACTIONS = [
 ] as const
 
 shadowPlugin.actions = {
-  listActions: () => [...SHADOW_ACTIONS],
+  describeMessageTool: () => null,
 
   supportsAction: ({ action }: { action: string }): boolean =>
     (SHADOW_ACTIONS as readonly string[]).includes(action),
 
-  handleAction: async (ctx: {
-    cfg: OpenClawConfig
-    action: string
-    params: Record<string, unknown>
-    accountId?: string
-    [key: string]: unknown
-  }) => {
+  handleAction: async (ctx: ChannelMessageActionContext) => {
+    const textResult = (value: Record<string, unknown>) => ({
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify(value),
+        },
+      ],
+      details: value,
+    })
+
     const account = getAccountConfig(ctx.cfg, ctx.accountId ?? DEFAULT_ACCOUNT_ID)
     if (!account) {
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: JSON.stringify({ ok: false, error: 'Shadow account not configured' }),
-          },
-        ],
-      }
+      return textResult({ ok: false, error: 'Shadow account not configured' })
     }
 
-    const { action, params } = ctx
+    const action = String(ctx.action)
+    const { params } = ctx
 
     // sendAttachment — upload file with base64 buffer or URL fallback
     if (action === 'sendAttachment') {
@@ -415,17 +431,10 @@ shadowPlugin.actions = {
             replyToId: params.replyTo as string | undefined,
           })
         } else {
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: JSON.stringify({
-                  ok: false,
-                  error: 'Could not resolve target channel or thread',
-                }),
-              },
-            ],
-          }
+          return textResult({
+            ok: false,
+            error: 'Could not resolve target channel or thread',
+          })
         }
 
         if (base64Buffer) {
@@ -437,44 +446,20 @@ shadowPlugin.actions = {
         } else if (mediaUrl) {
           await client.uploadMediaFromUrl(mediaUrl, message.id)
         } else {
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: JSON.stringify({
-                  ok: false,
-                  error: 'No buffer or media URL provided for attachment',
-                }),
-              },
-            ],
-          }
+          return textResult({
+            ok: false,
+            error: 'No buffer or media URL provided for attachment',
+          })
         }
 
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: JSON.stringify({
-                ok: true,
-                action: 'sendAttachment',
-                messageId: message.id,
-                filename,
-              }),
-            },
-          ],
-        }
+        return textResult({
+          ok: true,
+          action: 'sendAttachment',
+          messageId: message.id,
+          filename,
+        })
       } catch (err) {
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: JSON.stringify({
-                ok: false,
-                error: err instanceof Error ? err.message : String(err),
-              }),
-            },
-          ],
-        }
+        return textResult({ ok: false, error: err instanceof Error ? err.message : String(err) })
       }
     }
 
@@ -484,31 +469,13 @@ shadowPlugin.actions = {
       const messageId = (params.messageId as string) ?? (params.message_id as string) ?? ''
       const emoji = (params.emoji as string) ?? (params.reaction as string) ?? ''
       if (!messageId || !emoji) {
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: JSON.stringify({ ok: false, error: 'messageId and emoji are required' }),
-            },
-          ],
-        }
+        return textResult({ ok: false, error: 'messageId and emoji are required' })
       }
       try {
         await client.addReaction(messageId, emoji)
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: JSON.stringify({ ok: true, action: 'react', messageId, emoji }),
-            },
-          ],
-        }
+        return textResult({ ok: true, action: 'react', messageId, emoji })
       } catch (err) {
-        return {
-          content: [
-            { type: 'text' as const, text: JSON.stringify({ ok: false, error: String(err) }) },
-          ],
-        }
+        return textResult({ ok: false, error: String(err) })
       }
     }
 
@@ -518,31 +485,13 @@ shadowPlugin.actions = {
       const messageId = (params.messageId as string) ?? (params.message_id as string) ?? ''
       const content = (params.message as string) ?? (params.content as string) ?? ''
       if (!messageId || !content) {
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: JSON.stringify({ ok: false, error: 'messageId and content are required' }),
-            },
-          ],
-        }
+        return textResult({ ok: false, error: 'messageId and content are required' })
       }
       try {
         await client.editMessage(messageId, content)
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: JSON.stringify({ ok: true, action: 'edit', messageId }),
-            },
-          ],
-        }
+        return textResult({ ok: true, action: 'edit', messageId })
       } catch (err) {
-        return {
-          content: [
-            { type: 'text' as const, text: JSON.stringify({ ok: false, error: String(err) }) },
-          ],
-        }
+        return textResult({ ok: false, error: String(err) })
       }
     }
 
@@ -551,47 +500,19 @@ shadowPlugin.actions = {
       const client = new ShadowClient(account.serverUrl, account.token)
       const messageId = (params.messageId as string) ?? (params.message_id as string) ?? ''
       if (!messageId) {
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: JSON.stringify({ ok: false, error: 'messageId is required' }),
-            },
-          ],
-        }
+        return textResult({ ok: false, error: 'messageId is required' })
       }
       try {
         await client.deleteMessage(messageId)
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: JSON.stringify({ ok: true, action: 'delete', messageId }),
-            },
-          ],
-        }
+        return textResult({ ok: true, action: 'delete', messageId })
       } catch (err) {
-        return {
-          content: [
-            { type: 'text' as const, text: JSON.stringify({ ok: false, error: String(err) }) },
-          ],
-        }
+        return textResult({ ok: false, error: String(err) })
       }
     }
 
     // pin / unpin — not yet supported
     if (action === 'pin' || action === 'unpin') {
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: JSON.stringify({
-              ok: false,
-              error: `${action} is not yet supported for Shadow channels`,
-            }),
-          },
-        ],
-      }
+      return textResult({ ok: false, error: `${action} is not yet supported for Shadow channels` })
     }
 
     // get-server — fetch server info
@@ -602,32 +523,14 @@ shadowPlugin.actions = {
         (params.server as string) ??
         ''
       if (!serverId) {
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: JSON.stringify({ ok: false, error: 'serverId is required' }),
-            },
-          ],
-        }
+        return textResult({ ok: false, error: 'serverId is required' })
       }
       try {
         const client = new ShadowClient(account.serverUrl, account.token)
         const server = await client.getServer(serverId)
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: JSON.stringify({ ok: true, action: 'get-server', server }),
-            },
-          ],
-        }
+        return textResult({ ok: true, action: 'get-server', server })
       } catch (err) {
-        return {
-          content: [
-            { type: 'text' as const, text: JSON.stringify({ ok: false, error: String(err) }) },
-          ],
-        }
+        return textResult({ ok: false, error: String(err) })
       }
     }
 
@@ -644,38 +547,20 @@ shadowPlugin.actions = {
         (params.homepage_html as string) ??
         null
       if (!serverId) {
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: JSON.stringify({ ok: false, error: 'serverId is required' }),
-            },
-          ],
-        }
+        return textResult({ ok: false, error: 'serverId is required' })
       }
       try {
         const client = new ShadowClient(account.serverUrl, account.token)
         const result = await client.updateServerHomepage(serverId, html)
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: JSON.stringify({
-                ok: true,
-                action: 'update-homepage',
-                serverId: result.id,
-                slug: result.slug,
-                homepageHtml: result.homepageHtml ? `(${result.homepageHtml.length} chars)` : null,
-              }),
-            },
-          ],
-        }
+        return textResult({
+          ok: true,
+          action: 'update-homepage',
+          serverId: result.id,
+          slug: result.slug,
+          homepageHtml: result.homepageHtml ? `(${result.homepageHtml.length} chars)` : null,
+        })
       } catch (err) {
-        return {
-          content: [
-            { type: 'text' as const, text: JSON.stringify({ ok: false, error: String(err) }) },
-          ],
-        }
+        return textResult({ ok: false, error: String(err) })
       }
     }
 
@@ -711,24 +596,10 @@ shadowPlugin.actions = {
           }
         }),
       )
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: JSON.stringify({ ok: true, action: 'get-connection-status', accounts: results }),
-          },
-        ],
-      }
+      return textResult({ ok: true, action: 'get-connection-status', accounts: results })
     }
 
     // Default: unsupported action
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: JSON.stringify({ ok: false, error: `Action ${action} not yet implemented` }),
-        },
-      ],
-    }
+    return textResult({ ok: false, error: `Action ${action} not yet implemented` })
   },
 }
