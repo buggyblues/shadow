@@ -9,9 +9,9 @@ import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
 import { UserAvatar } from '../common/avatar'
+import { BuddyListItem, BuddyListItemData, memberToBuddyItem } from '../common/buddy-list-item'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { useContextMenuPosition } from '../common/context-menu'
-import { OnlineRank } from '../common/online-rank'
 import { UserProfileCard } from '../common/user-profile-card'
 
 interface MemberUser {
@@ -52,13 +52,6 @@ interface BuddyAgent {
   } | null
 }
 
-const statusColors: Record<string, string> = {
-  online: 'bg-green-500',
-  idle: 'bg-yellow-500',
-  dnd: 'bg-red-500',
-  offline: 'bg-gray-500',
-}
-
 export function MemberList() {
   const { t } = useTranslation()
   const { activeServerId, activeChannelId } = useChatStore()
@@ -71,19 +64,6 @@ export function MemberList() {
 
   // Profile panel state (shown on "View Profile" click)
   const [profileMember, setProfileMember] = useState<Member | null>(null)
-
-  // Hover card state
-  const [hoveredMemberId, setHoveredMemberId] = useState<string | null>(null)
-  const [hoveredCard, setHoveredCard] = useState<{
-    member: Member
-    ownerName?: string
-    ownerId?: string
-    ownerAvatarUrl?: string | null
-    description?: string
-    totalOnlineSeconds?: number
-    anchorRect: DOMRect
-  } | null>(null)
-  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -186,50 +166,6 @@ export function MemberList() {
       }),
   })
 
-  // Hover card handlers
-  const handleMemberMouseEnter = useCallback(
-    (
-      member: Member,
-      anchorEl: HTMLElement,
-      buddyMeta?: {
-        ownerName?: string
-        ownerId?: string
-        ownerAvatarUrl?: string | null
-        description?: string
-        totalOnlineSeconds?: number
-      },
-    ) => {
-      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
-      hoverTimeoutRef.current = setTimeout(() => {
-        setHoveredMemberId(member.id)
-        setHoveredCard({
-          member,
-          ownerName: buddyMeta?.ownerName,
-          ownerId: buddyMeta?.ownerId,
-          ownerAvatarUrl: buddyMeta?.ownerAvatarUrl,
-          description: buddyMeta?.description,
-          totalOnlineSeconds: buddyMeta?.totalOnlineSeconds,
-          anchorRect: anchorEl.getBoundingClientRect(),
-        })
-      }, 400)
-    },
-    [],
-  )
-
-  const handleMemberMouseLeave = useCallback(() => {
-    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
-    hoverTimeoutRef.current = setTimeout(() => {
-      setHoveredMemberId(null)
-      setHoveredCard(null)
-    }, 200)
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
-    }
-  }, [])
-
   // Context menu handler
   const handleContextMenu = useCallback((e: React.MouseEvent, member: Member) => {
     e.preventDefault()
@@ -300,74 +236,25 @@ export function MemberList() {
           const topLevelMembers = items.filter((m) => !m.user?.isBot)
 
           const renderMemberRow = (member: Member, rowOpts?: { child?: boolean }) => {
-            const user = member.user
-            if (!user) return null
-            const buddyMeta = user.isBot ? buddyMetaByUserId.get(user.id) : undefined
-            const badge =
-              member.role === 'owner'
-                ? { label: t('member.owner'), color: 'text-yellow-400' }
-                : member.role === 'admin'
-                  ? { label: t('member.admin'), color: 'text-blue-400' }
-                  : null
-            const isHovered = hoveredMemberId === member.id
+            const buddyMeta = member.user?.isBot ? buddyMetaByUserId.get(member.user.id) : undefined
+            const buddyItem = memberToBuddyItem(member, buddyMeta)
+            if (!buddyItem) return null
+
             return (
               <div key={member.id} className={`relative ${rowOpts?.child ? 'pl-3' : 'mx-2'}`}>
                 {rowOpts?.child && (
                   <div className="absolute left-0 top-1/2 -translate-y-1/2 w-3 h-px bg-border-dim" />
                 )}
-                <button
-                  type="button"
-                  className="flex items-center gap-3 px-2 py-1.5 w-full rounded-md hover:bg-bg-modifier-hover transition group"
-                  onMouseEnter={(e) =>
-                    handleMemberMouseEnter(member, e.currentTarget, {
-                      ownerName: buddyMeta?.ownerName,
-                      ownerId: buddyMeta?.ownerId,
-                      ownerAvatarUrl: buddyMeta?.ownerAvatarUrl,
-                      description: buddyMeta?.description,
-                    })
-                  }
-                  onMouseLeave={handleMemberMouseLeave}
-                  onContextMenu={(e) => handleContextMenu(e, member)}
-                >
-                  {/* Avatar with status dot */}
-                  <div className="relative shrink-0">
-                    <UserAvatar
-                      userId={user.id}
-                      avatarUrl={user.avatarUrl}
-                      displayName={user.displayName || user.username}
-                      size="sm"
-                    />
-                    <div
-                      className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-[2.5px] border-bg-secondary ${statusColors[user.status]}`}
-                      title={t(`member.${user.status}`)}
-                    />
-                  </div>
-
-                  {/* Name */}
-                  <div className="flex-1 min-w-0 text-left">
-                    <div className="flex items-center gap-1">
-                      <span
-                        className={`text-[15px] truncate font-medium ${user.status === 'offline' ? 'text-text-muted' : 'text-text-secondary group-hover:text-text-primary'} transition`}
-                      >
-                        {member.nickname ?? user.displayName}
-                      </span>
-                      {user.isBot && (
-                        <span className="text-[10px] bg-[#5865F2] text-white px-1.5 py-0.5 rounded-[3px] font-semibold flex items-center gap-1 shrink-0">
-                          <Check size={8} className="text-white" />
-                          Buddy
-                        </span>
-                      )}
-                    </div>
-                    {badge && <span className={`text-[10px] ${badge.color}`}>{badge.label}</span>}
-                    {user.isBot &&
-                      buddyMeta?.totalOnlineSeconds != null &&
-                      buddyMeta.totalOnlineSeconds > 0 && (
-                        <OnlineRank totalSeconds={buddyMeta.totalOnlineSeconds} />
-                      )}
-                  </div>
-                </button>
-
-                {isHovered && null}
+                <div onContextMenu={(e) => handleContextMenu(e, member)}>
+                  <BuddyListItem
+                    buddy={buddyItem}
+                    showHoverCard={true}
+                    clickable={true}
+                    showBotBadge={true}
+                    showRoleBadge={true}
+                    showOnlineRank={true}
+                  />
+                </div>
               </div>
             )
           }
@@ -549,33 +436,6 @@ export function MemberList() {
           </div>
         </div>
       )}
-
-      {/* Hover profile card (portal to avoid clipping in scroll containers) */}
-      {hoveredCard?.member.user &&
-        createPortal(
-          <div
-            className="fixed z-[80]"
-            style={{
-              left: Math.max(8, hoveredCard.anchorRect.left - 272 - 12),
-              top: Math.max(8, Math.min(hoveredCard.anchorRect.top, window.innerHeight - 260)),
-            }}
-            onMouseEnter={() => {
-              if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
-            }}
-            onMouseLeave={handleMemberMouseLeave}
-          >
-            <UserProfileCard
-              user={hoveredCard.member.user}
-              role={hoveredCard.member.role}
-              ownerName={hoveredCard.ownerName}
-              ownerId={hoveredCard.ownerId}
-              ownerAvatarUrl={hoveredCard.ownerAvatarUrl}
-              description={hoveredCard.description}
-              totalOnlineSeconds={hoveredCard.totalOnlineSeconds}
-            />
-          </div>,
-          document.body,
-        )}
     </>
   )
 }

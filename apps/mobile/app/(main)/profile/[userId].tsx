@@ -143,6 +143,24 @@ export default function UserProfileScreen() {
           </View>
           <Text style={[styles.username, { color: colors.textMuted }]}>@{profile.username}</Text>
 
+          {/* Business Card Button - Show for both users and bots */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.businessCardBtn,
+              {
+                backgroundColor: pressed ? `${colors.primary}DD` : colors.primary,
+              },
+            ]}
+            onPress={() => setShowQrCard(true)}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <QrCode size={16} color="#fff" />
+              <Text style={styles.businessCardText}>
+                {t('profile.viewBusinessCard', '查看名片')}
+              </Text>
+            </View>
+          </Pressable>
+
           {!isSelf && !profile.isBot && (
             <Pressable
               style={({ pressed }) => [
@@ -174,23 +192,6 @@ export default function UserProfileScreen() {
                       ? t('friends.requestPending', '等待对方接受')
                       : t('friends.addFriend', '添加好友')}
               </Text>
-            </Pressable>
-          )}
-
-          {isSelf && (
-            <Pressable
-              style={({ pressed }) => [
-                styles.addFriendBtn,
-                {
-                  backgroundColor: pressed ? `${colors.primary}DD` : colors.primary,
-                },
-              ]}
-              onPress={() => setShowQrCard(true)}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <QrCode size={16} color="#fff" />
-                <Text style={styles.addFriendText}>{t('profile.myQrCard', '我的名片')}</Text>
-              </View>
             </Pressable>
           )}
 
@@ -428,8 +429,21 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     marginTop: 4,
   },
-  addFriendBtn: {
+  businessCardBtn: {
     marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    height: 38,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  businessCardText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: fontSize.sm,
+  },
+  addFriendBtn: {
+    marginTop: spacing.sm,
     paddingHorizontal: spacing.lg,
     height: 38,
     borderRadius: radius.lg,

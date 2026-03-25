@@ -1,4 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
+import { QrCode, X } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { UserAvatar } from './avatar'
 import { formatDuration, OnlineRank } from './online-rank'
@@ -47,6 +50,7 @@ export function UserProfileCard({
 }: UserProfileCardProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [showQrCard, setShowQrCard] = useState(false)
   const status = user.status ?? 'offline'
 
   const goToProfile = (userId: string) => {
@@ -161,7 +165,65 @@ export function UserProfileCard({
             </p>
           </div>
         )}
+
+        {/* Business Card Button - Show for both users and bots */}
+        <div className="mt-3 pt-3 border-t border-border-subtle">
+          <button
+            type="button"
+            onClick={() => setShowQrCard(true)}
+            className="flex items-center justify-center gap-2 w-full px-3 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition text-sm font-medium"
+          >
+            <QrCode className="w-4 h-4" />
+            {t('profile.viewBusinessCard', '查看名片')}
+          </button>
+        </div>
       </div>
+
+      {/* QR Code Business Card Modal */}
+      {showQrCard && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60"
+          onClick={() => setShowQrCard(false)}
+          onKeyDown={(e) => e.key === 'Escape' && setShowQrCard(false)}
+        >
+          <div
+            className="bg-bg-secondary rounded-2xl p-8 w-[320px] flex flex-col items-center relative shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={() => {}}
+          >
+            <button
+              type="button"
+              onClick={() => setShowQrCard(false)}
+              className="absolute top-4 right-4 text-text-muted hover:text-text-primary transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <UserAvatar
+              userId={user.id}
+              avatarUrl={user.avatarUrl}
+              displayName={user.displayName}
+              size="lg"
+              className="w-16 h-16"
+            />
+            <h2 className="text-lg font-bold text-text-primary mt-3">{user.displayName}</h2>
+            <p className="text-sm text-text-muted">@{user.username}</p>
+
+            <div className="bg-white p-4 rounded-xl mt-5">
+              <QRCodeSVG
+                value={`${window.location.origin}/app/profile/${user.username}`}
+                size={180}
+                bgColor="#ffffff"
+                fgColor="#000000"
+              />
+            </div>
+
+            <p className="text-xs text-text-muted mt-4">
+              {t('profile.scanToVisit', '扫一扫，访问主页')}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
