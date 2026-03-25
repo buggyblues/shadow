@@ -26,7 +26,12 @@ export interface UpdateChannelRequest {
 }
 
 /** Channel sorting options */
-export type ChannelSortBy = 'createdAt' | 'updatedAt' | 'lastMessageAt' | 'lastAccessedAt'
+export type ChannelSortBy =
+  | 'position'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'lastMessageAt'
+  | 'lastAccessedAt'
 
 export type ChannelSortDirection = 'asc' | 'desc'
 

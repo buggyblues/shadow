@@ -1201,5 +1201,15 @@
       "archAgent": "Agent",
       "archDesc": "User sends message in Shadow channel → Forwarded via Buddy → Claw service processes → Agent generates reply → Returned to channel"
     }
+  },
+  "sort": {
+    "title": "Sort & Filter",
+    "byPosition": "Default Order",
+    "byCreatedAt": "Created Time",
+    "byUpdatedAt": "Updated Time",
+    "byLastMessage": "Latest Message",
+    "byLastAccessed": "Last Accessed",
+    "filterPlaceholder": "Search channels...",
+    "clear": "Clear Filters"
   }
 }

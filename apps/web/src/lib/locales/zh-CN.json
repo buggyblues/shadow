@@ -1201,5 +1201,15 @@
       "archAgent": "智能体",
       "archDesc": "用户在 Shadow 频道发送消息 → 通过 Buddy 连接转发 → 龙虾服务处理 → 智能体生成回复 → 返回频道"
     }
+  },
+  "sort": {
+    "title": "排序和筛选",
+    "byPosition": "默认顺序",
+    "byCreatedAt": "创建时间",
+    "byUpdatedAt": "更新时间",
+    "byLastMessage": "最新消息",
+    "byLastAccessed": "访问时间",
+    "filterPlaceholder": "搜索频道...",
+    "clear": "清除筛选"
   }
 }

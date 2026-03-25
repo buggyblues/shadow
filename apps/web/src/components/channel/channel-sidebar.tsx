@@ -22,8 +22,9 @@ import {
   Volume2,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useChannelSort } from '../../hooks/use-channel-sort'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
 import { joinChannel } from '../../lib/socket'
@@ -31,6 +32,7 @@ import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
 import { useConfirmStore } from '../common/confirm-dialog'
+import { ChannelSortFilterButton } from './channel-sort-filter-button'
 
 interface Channel {
   id: string
@@ -40,6 +42,9 @@ interface Channel {
   position: number
   isPrivate: boolean
   isMember?: boolean
+  createdAt?: string
+  updatedAt?: string
+  lastMessageAt?: string | null
 }
 
 interface Server {
@@ -371,9 +376,15 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
 
   const { setMobileView, openMobileServerSidebar } = useUIStore()
 
+  // Channel sort and filter
+  const { sortChannels, updateLastAccessed, filterKeyword, hasActiveFilter } = useChannelSort(
+    server?.id,
+  )
+
   const handleSelectChannel = useCallback(
     (channelId: string) => {
       requestMarkScopeRead({ channelId })
+      updateLastAccessed(channelId)
       setMobileView('chat')
       // Navigate to channel URL using channel ID
       navigate({
@@ -381,7 +392,7 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
         params: { serverSlug: server?.slug ?? serverSlug, channelId },
       })
     },
-    [setMobileView, server?.slug, serverSlug, navigate, requestMarkScopeRead],
+    [setMobileView, server?.slug, serverSlug, navigate, requestMarkScopeRead, updateLastAccessed],
   )
 
   // Rejoin active channel room on socket reconnect
@@ -414,13 +425,23 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
     queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
   })
 
+  // Apply sorting and filtering to channels
+  const sortedChannels = useMemo(() => {
+    const sorted = sortChannels(channels)
+    if (!hasActiveFilter || !filterKeyword.trim()) {
+      return sorted
+    }
+    const keyword = filterKeyword.toLowerCase().trim()
+    return sorted.filter((ch) => ch.name.toLowerCase().includes(keyword))
+  }, [channels, sortChannels, filterKeyword, hasActiveFilter])
+
+  const textChannels = sortedChannels.filter((c) => c.type === 'text')
+  const voiceChannels = sortedChannels.filter((c) => c.type === 'voice')
+  const announcementChannels = sortedChannels.filter((c) => c.type === 'announcement')
+
   const toggleGroup = (label: string) => {
     setCollapsedGroups((prev) => ({ ...prev, [label]: !prev[label] }))
   }
-
-  const textChannels = channels.filter((c) => c.type === 'text')
-  const voiceChannels = channels.filter((c) => c.type === 'voice')
-  const announcementChannels = channels.filter((c) => c.type === 'announcement')
   const isInShop = /\/app\/servers\/[^/]+\/shop(?:\/|$)/.test(location.pathname)
   const isInWorkspace = /\/app\/servers\/[^/]+\/workspace(?:\/|$)/.test(location.pathname)
   const isInApps = /\/app\/servers\/[^/]+\/apps(?:\/|$)/.test(location.pathname)
@@ -444,6 +465,10 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
             )}
             <span className="truncate">{label}</span>
           </button>
+          {/* Sort/Filter button - only show for first group (announcement) */}
+          {label === t('channel.announcement') && server?.id && (
+            <ChannelSortFilterButton serverId={server.id} />
+          )}
           <button
             type="button"
             onClick={() => setShowCreate(true)}
