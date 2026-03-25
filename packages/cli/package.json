@@ -1,6 +1,6 @@
 {
   "name": "@shadowob/cli",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Shadow CLI — command-line interface for Shadow servers",
   "type": "module",
   "bin": {
