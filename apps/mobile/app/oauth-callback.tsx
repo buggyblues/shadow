@@ -10,6 +10,8 @@ export default function OAuthCallbackScreen() {
   const params = useLocalSearchParams<{
     accessToken?: string
     refreshToken?: string
+    access_token?: string
+    refresh_token?: string
     error?: string
   }>()
   const colors = useColors()
@@ -23,10 +25,13 @@ export default function OAuthCallbackScreen() {
         return
       }
 
-      if (params.accessToken && params.refreshToken) {
+      const accessToken = params.accessToken ?? params.access_token
+      const refreshToken = params.refreshToken ?? params.refresh_token
+
+      if (accessToken && refreshToken) {
         // Store tokens
-        await SecureStore.setItemAsync('accessToken', params.accessToken)
-        await SecureStore.setItemAsync('refreshToken', params.refreshToken)
+        await SecureStore.setItemAsync('accessToken', accessToken)
+        await SecureStore.setItemAsync('refreshToken', refreshToken)
 
         // Fetch user info
         try {
@@ -37,9 +42,9 @@ export default function OAuthCallbackScreen() {
             displayName: string | null
             avatarUrl: string | null
           }>('/api/auth/me', {
-            headers: { Authorization: `Bearer ${params.accessToken}` },
+            headers: { Authorization: `Bearer ${accessToken}` },
           })
-          setAuth(user, params.accessToken, params.refreshToken)
+          setAuth(user, accessToken, refreshToken)
           router.replace('/(main)')
         } catch {
           router.replace('/(auth)/login')
@@ -50,7 +55,15 @@ export default function OAuthCallbackScreen() {
     }
 
     handleCallback()
-  }, [params.accessToken, params.refreshToken, params.error, router.replace, setAuth])
+  }, [
+    params.accessToken,
+    params.refreshToken,
+    params.access_token,
+    params.refresh_token,
+    params.error,
+    router.replace,
+    setAuth,
+  ])
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

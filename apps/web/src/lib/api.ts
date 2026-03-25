@@ -106,6 +106,15 @@ export async function fetchApi<T>(path: string, options?: RequestInit): Promise<
     }
   }
 
+  // Refresh may succeed but token can still be unauthorized (revoked/expired server-side).
+  if (
+    response.status === 401 &&
+    !path.endsWith('/auth/login') &&
+    !path.endsWith('/auth/register')
+  ) {
+    clearAuthState()
+  }
+
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))
     let errorMessage = `Request failed (${response.status})`

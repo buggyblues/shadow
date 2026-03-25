@@ -335,7 +335,7 @@ export default function CreateChannelScreen() {
       : t('common.create', '创建')
 
   const handleCreate = () => {
-    setChannelName(channelName.trim() || generateChannelName())
+    setChannelName(channelName.trim() || generateChannelName() || '')
     createChannelMutation.mutate()
   }
 

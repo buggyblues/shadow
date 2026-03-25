@@ -1,4 +1,4 @@
-import type { Channel, ChannelSortBy, ChannelSortDirection } from '@shadow/shared'
+import type { Channel, ChannelSortBy, ChannelSortDirection } from '@shadowob/shared'
 import { useCallback, useMemo } from 'react'
 import { DEFAULT_SORT, useChannelSortStore } from '../stores/channel-sort.store'
 
@@ -10,6 +10,8 @@ function getSafeTime(value?: string | null): number {
 
 export interface SortedChannel extends Channel {
   lastAccessedAt?: string
+  categoryId?: string | null
+  isPrivate?: boolean
 }
 
 export interface UseChannelSortReturn {

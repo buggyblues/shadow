@@ -1,4 +1,4 @@
-import type { ChannelSortBy } from '@shadow/shared'
+import type { ChannelSortBy } from '@shadowob/shared'
 import {
   ArrowDown,
   ArrowUp,
