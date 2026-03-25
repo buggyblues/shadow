@@ -192,7 +192,11 @@
     "leaveServer": "サーバーから退出",
     "leaveConfirm": "サーバー \"{{name}}\" から退出しますか？",
     "publicBadge": "公開",
-    "homeWelcome": "サイドバーからチャンネルを選択してチャットを開始するか、サーバーを探索してください。"
+    "homeWelcome": "サイドバーからチャンネルを選択してチャットを開始するか、サーバーを探索してください。",
+    "publicServer": "公開サーバー",
+    "privateServer": "非公開サーバー",
+    "publicServerDesc": "誰でも探索ページで発見できます",
+    "privateServerDesc": "招待コードでのみ参加可能"
   },
   "channel": {
     "serverSettings": "サーバー設定",

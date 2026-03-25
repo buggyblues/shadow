@@ -192,7 +192,11 @@
     "leaveServer": "离开服务器",
     "leaveConfirm": "确定要离开服务器 \"{{name}}\" 吗？",
     "publicBadge": "公开",
-    "homeWelcome": "从侧栏选择频道开始聊天，或浏览服务器。"
+    "homeWelcome": "从侧栏选择频道开始聊天，或浏览服务器。",
+    "publicServer": "公开服务器",
+    "privateServer": "私有服务器",
+    "publicServerDesc": "所有人都可以在探索页面发现",
+    "privateServerDesc": "仅通过邀请码加入"
   },
   "channel": {
     "serverSettings": "服务器设置",

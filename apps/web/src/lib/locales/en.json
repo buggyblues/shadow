@@ -192,7 +192,11 @@
     "leaveServer": "Leave Server",
     "leaveConfirm": "Are you sure you want to leave \"{{name}}\"?",
     "publicBadge": "Public",
-    "homeWelcome": "Select a channel from the sidebar to start chatting, or explore the server."
+    "homeWelcome": "Select a channel from the sidebar to start chatting, or explore the server.",
+    "publicServer": "Public Server",
+    "privateServer": "Private Server",
+    "publicServerDesc": "Discoverable by everyone on the Discover page",
+    "privateServerDesc": "Join by invite code only"
   },
   "channel": {
     "serverSettings": "Server Settings",

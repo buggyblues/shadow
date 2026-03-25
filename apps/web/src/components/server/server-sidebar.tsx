@@ -1,6 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { Check, Compass, Copy, Info, Lock, LogOut, Plus, UserPlus, Volume2 } from 'lucide-react'
+import {
+  Check,
+  Compass,
+  Copy,
+  Globe,
+  Info,
+  Lock,
+  LogOut,
+  Plus,
+  UserPlus,
+  Volume2,
+} from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSocketEvent } from '../../hooks/use-socket'
@@ -10,8 +21,8 @@ import { getCatAvatar } from '../../lib/pixel-cats'
 import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
-import { ContextMenu, type ContextMenuGroup } from '../common/context-menu'
 import { useConfirmStore } from '../common/confirm-dialog'
+import { ContextMenu, type ContextMenuGroup } from '../common/context-menu'
 
 interface ServerEntry {
   server: {
@@ -44,6 +55,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   const [showCreate, setShowCreate] = useState(false)
   const [showJoin, setShowJoin] = useState(false)
   const [newName, setNewName] = useState('')
+  const [isPublic, setIsPublic] = useState(true)
   const [joinCode, setJoinCode] = useState('')
   const [copiedId, setCopiedId] = useState(false)
   const [contextMenu, setContextMenu] = useState<{
@@ -95,15 +107,16 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   })
 
   const createServer = useMutation({
-    mutationFn: (name: string) =>
+    mutationFn: ({ name, isPublic }: { name: string; isPublic: boolean }) =>
       fetchApi<{ id: string; slug: string | null }>('/api/servers', {
         method: 'POST',
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, isPublic }),
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['servers'] })
       setShowCreate(false)
       setNewName('')
+      setIsPublic(true)
       handleSelect(data.id, data.slug)
     },
   })
@@ -395,12 +408,44 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                   newName.trim()
                 ) {
                   e.preventDefault()
-                  createServer.mutate(newName.trim())
+                  createServer.mutate({ name: newName.trim(), isPublic })
                 }
               }}
               placeholder={t('server.serverName')}
               className="w-full bg-bg-tertiary text-text-primary rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-primary mb-4"
             />
+            {/* Public/Private toggle */}
+            <div className="flex items-center justify-between mb-4 p-3 bg-bg-tertiary rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-bg-primary flex items-center justify-center">
+                  {isPublic ? (
+                    <Globe size={16} className="text-text-primary" />
+                  ) : (
+                    <Lock size={16} className="text-text-primary" />
+                  )}
+                </div>
+                <div>
+                  <div className="text-text-primary font-medium text-sm">
+                    {isPublic ? t('server.publicServer') : t('server.privateServer')}
+                  </div>
+                  <div className="text-text-muted text-xs">
+                    {isPublic ? t('server.publicServerDesc') : t('server.privateServerDesc')}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsPublic(!isPublic)}
+                className={`relative w-11 h-6 rounded-full transition-colors ${
+                  isPublic ? 'bg-primary' : 'bg-bg-primary'
+                }`}
+              >
+                <span
+                  className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                    isPublic ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowCreate(false)}
@@ -409,7 +454,9 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                 {t('common.cancel')}
               </button>
               <button
-                onClick={() => newName.trim() && createServer.mutate(newName.trim())}
+                onClick={() =>
+                  newName.trim() && createServer.mutate({ name: newName.trim(), isPublic })
+                }
                 disabled={!newName.trim() || createServer.isPending}
                 className="px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg transition disabled:opacity-50 font-bold"
               >
@@ -483,12 +530,14 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                 {
                   icon: Info,
                   label: t('server.serverInfo'),
-                  onClick: () => handleSelect(contextMenu.server.server.id, contextMenu.server.server.slug),
+                  onClick: () =>
+                    handleSelect(contextMenu.server.server.id, contextMenu.server.server.slug),
                 },
                 {
                   icon: UserPlus,
                   label: t('server.inviteMembers'),
-                  onClick: () => handleSelect(contextMenu.server.server.id, contextMenu.server.server.slug),
+                  onClick: () =>
+                    handleSelect(contextMenu.server.server.id, contextMenu.server.server.slug),
                 },
               ],
             },
@@ -496,7 +545,9 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
               items: [
                 {
                   icon: Volume2,
-                  label: (notificationPreference?.mutedServerIds ?? []).includes(contextMenu.server.server.id)
+                  label: (notificationPreference?.mutedServerIds ?? []).includes(
+                    contextMenu.server.server.id,
+                  )
                     ? '取消静音服务器'
                     : '静音服务器通知',
                   onClick: () => {
