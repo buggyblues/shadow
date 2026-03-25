@@ -1421,12 +1421,14 @@ function QuickstartPage({
       action: () => setActiveTab('buddy'),
     },
     {
-      icon: Users,
-      title: t('friends.title', '好友'),
-      desc: '添加好友，开始聊天',
-      color: 'text-violet-400',
-      bgColor: 'bg-violet-500/10',
-      action: () => setActiveTab('friends'),
+      icon: Sparkles,
+      title: 'Buddy 集市',
+      desc: '浏览和租赁 AI 助手',
+      color: 'text-amber-400',
+      bgColor: 'bg-amber-500/10',
+      action: () => {
+        window.location.href = '/buddies'
+      },
     },
   ]
 
@@ -1483,19 +1485,16 @@ function QuickstartPage({
   return (
     <div className="space-y-8">
       {/* Hero Section */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/20 via-cyan-500/10 to-violet-500/10 p-8 text-center">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white/5 to-transparent" />
-        <div className="relative">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-white/10 backdrop-blur-sm mb-4">
-            <img src="/Logo.svg" alt="Shadow" className="w-12 h-12 opacity-90" />
-          </div>
-          <h1 className="text-2xl font-extrabold text-text-primary mb-2">
-            {t('common.welcomeTitle')}
-          </h1>
-          <p className="text-text-secondary text-[15px] max-w-md mx-auto">
-            {t('common.welcomeDesc')}
-          </p>
+      <div className="text-center py-8">
+        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-bg-secondary border border-border-subtle mb-4">
+          <img src="/Logo.svg" alt="Shadow" className="w-12 h-12 opacity-90" />
         </div>
+        <h1 className="text-2xl font-extrabold text-text-primary mb-2">
+          {t('common.welcomeTitle')}
+        </h1>
+        <p className="text-text-secondary text-[15px] max-w-md mx-auto">
+          {t('common.welcomeDesc')}
+        </p>
       </div>
 
       {/* Quick Actions */}
