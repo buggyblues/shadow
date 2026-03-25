@@ -319,7 +319,14 @@
     "policySearchUsers": "Search users...",
     "policyMentionOnlyDesc": "Only reply when the Buddy is directly @mentioned",
     "notInChannel": "Not in channel",
-    "inChannel": "In channel"
+    "inChannel": "In channel",
+    "policyBuddyInteraction": "Buddy Interaction",
+    "policyReplyToBuddy": "Reply to other Buddy messages",
+    "policyReplyToBuddyDesc": "Allow this Buddy to reply to messages from other Buddies in the channel",
+    "policyMaxBuddyChainDepth": "Max conversation chain depth",
+    "policyMaxBuddyChainDepthDesc": "Prevent infinite loops between Buddies (default: 3)",
+    "policySmartReply": "Smart Reply",
+    "policySmartReplyDesc": "Skip messages clearly targeting others (e.g., @mentions others but not this Buddy)"
   },
   "features": {
     "pageTitle": "All the Collaboration Features You Need",

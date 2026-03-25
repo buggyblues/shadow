@@ -614,7 +614,14 @@ function BotContextMenu({
         channelId: string
         agentId: string
         mode: string
-        config?: { replyToUsers?: string[]; keywords?: string[]; mentionOnly?: boolean }
+        config?: {
+          replyToUsers?: string[]
+          keywords?: string[]
+          mentionOnly?: boolean
+          replyToBuddy?: boolean
+          maxBuddyChainDepth?: number
+          smartReply?: boolean
+        }
       }
     >
   >
@@ -631,6 +638,10 @@ function BotContextMenu({
   const [customReplyToUsers, setCustomReplyToUsers] = useState<string[]>([])
   const [customKeywords, setCustomKeywords] = useState('')
   const [customMentionOnly, setCustomMentionOnly] = useState(false)
+  // Buddy interaction settings
+  const [customReplyToBuddy, setCustomReplyToBuddy] = useState(false)
+  const [customMaxBuddyChainDepth, setCustomMaxBuddyChainDepth] = useState(3)
+  const [customSmartReply, setCustomSmartReply] = useState(true)
   const [userPickerOpen, setUserPickerOpen] = useState(false)
   const [userPickerSearch, setUserPickerSearch] = useState('')
   const queryClient = useQueryClient()
@@ -829,11 +840,21 @@ function BotContextMenu({
                     onClick={() => {
                       // Pre-fill with current config (persisted values)
                       const cfg = currentPolicy?.config as
-                        | { replyToUsers?: string[]; keywords?: string[]; mentionOnly?: boolean }
+                        | {
+                            replyToUsers?: string[]
+                            keywords?: string[]
+                            mentionOnly?: boolean
+                            replyToBuddy?: boolean
+                            maxBuddyChainDepth?: number
+                            smartReply?: boolean
+                          }
                         | undefined
                       setCustomReplyToUsers(cfg?.replyToUsers ?? [])
                       setCustomKeywords(cfg?.keywords?.join('\n') ?? '')
                       setCustomMentionOnly(cfg?.mentionOnly ?? false)
+                      setCustomReplyToBuddy(cfg?.replyToBuddy ?? false)
+                      setCustomMaxBuddyChainDepth(cfg?.maxBuddyChainDepth ?? 3)
+                      setCustomSmartReply(cfg?.smartReply ?? true)
                       setCustomPolicyOpen(true)
                       setPolicyOpen(false)
                     }}
@@ -1111,6 +1132,74 @@ function BotContextMenu({
                 />
               </div>
 
+              {/* Buddy Interaction Settings */}
+              <div className="mb-5 pt-3 border-t border-border-subtle">
+                <h4 className="text-xs font-bold text-text-secondary mb-3">
+                  {t('member.policyBuddyInteraction')}
+                </h4>
+
+                {/* Smart Reply - skip if targeting others */}
+                <div className="mb-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={customSmartReply}
+                      onChange={(e) => setCustomSmartReply(e.target.checked)}
+                      className="w-4 h-4 rounded border-border-dim bg-bg-primary text-primary focus:ring-primary/50"
+                    />
+                    <span className="text-xs font-semibold text-text-secondary">
+                      {t('member.policySmartReply')}
+                    </span>
+                  </label>
+                  <p className="text-[11px] text-text-muted mt-1 ml-6">
+                    {t('member.policySmartReplyDesc')}
+                  </p>
+                </div>
+
+                {/* Reply to other Buddies */}
+                <div className="mb-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={customReplyToBuddy}
+                      onChange={(e) => setCustomReplyToBuddy(e.target.checked)}
+                      className="w-4 h-4 rounded border-border-dim bg-bg-primary text-primary focus:ring-primary/50"
+                    />
+                    <span className="text-xs font-semibold text-text-secondary">
+                      {t('member.policyReplyToBuddy')}
+                    </span>
+                  </label>
+                  <p className="text-[11px] text-text-muted mt-1 ml-6">
+                    {t('member.policyReplyToBuddyDesc')}
+                  </p>
+                </div>
+
+                {/* Max Buddy chain depth */}
+                {customReplyToBuddy && (
+                  <div className="ml-6">
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">
+                      {t('member.policyMaxBuddyChainDepth')}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min={1}
+                        max={10}
+                        value={customMaxBuddyChainDepth}
+                        onChange={(e) => setCustomMaxBuddyChainDepth(parseInt(e.target.value, 10))}
+                        className="flex-1 h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
+                      />
+                      <span className="text-xs text-text-primary font-mono w-6 text-center">
+                        {customMaxBuddyChainDepth}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-text-muted mt-1">
+                      {t('member.policyMaxBuddyChainDepthDesc')}
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <button
                 type="button"
                 onClick={() => {
@@ -1128,6 +1217,10 @@ function BotContextMenu({
                         ...(replyToUsers.length ? { replyToUsers } : {}),
                         ...(keywords.length ? { keywords } : {}),
                         ...(customMentionOnly ? { mentionOnly: true } : {}),
+                        ...(customReplyToBuddy
+                          ? { replyToBuddy: true, maxBuddyChainDepth: customMaxBuddyChainDepth }
+                          : {}),
+                        ...(customSmartReply !== true ? { smartReply: false } : {}),
                       },
                     },
                     {

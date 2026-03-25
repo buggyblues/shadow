@@ -6,12 +6,13 @@ import {
   ChevronRight,
   Crown,
   MessageSquare,
+  Settings,
   Shield,
   UserPlus,
 } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Modal, Pressable, SectionList, StyleSheet, Text, View } from 'react-native'
+import { Modal, Pressable, SectionList, StyleSheet, Switch, Text, View } from 'react-native'
 import { Avatar } from '../../../../src/components/common/avatar'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
 import { StatusBadge } from '../../../../src/components/common/status-badge'
@@ -40,7 +41,16 @@ interface BuddyAgent {
   botUser?: { id: string; username: string } | null
 }
 
-type PolicyMode = 'replyAll' | 'mentionOnly' | 'disabled'
+type PolicyMode = 'replyAll' | 'mentionOnly' | 'custom' | 'disabled'
+
+interface PolicyConfig {
+  replyToUsers?: string[]
+  keywords?: string[]
+  mentionOnly?: boolean
+  replyToBuddy?: boolean
+  maxBuddyChainDepth?: number
+  smartReply?: boolean
+}
 
 export default function MembersScreen() {
   const { serverSlug, channelId } = useLocalSearchParams<{
@@ -54,6 +64,12 @@ export default function MembersScreen() {
   const currentUser = useAuthStore((s) => s.user)
 
   const [policySheet, setPolicySheet] = useState<Member | null>(null)
+  const [showCustomPolicy, setShowCustomPolicy] = useState(false)
+
+  // Custom policy state
+  const [customReplyToBuddy, setCustomReplyToBuddy] = useState(false)
+  const [customMaxBuddyChainDepth, setCustomMaxBuddyChainDepth] = useState(3)
+  const [customSmartReply, setCustomSmartReply] = useState(true)
 
   const { data: server, isLoading: isServerLoading } = useQuery({
     queryKey: ['server', serverSlug],
@@ -90,7 +106,7 @@ export default function MembersScreen() {
   const { data: currentPolicy } = useQuery({
     queryKey: ['agent-policy', channelId, selectedAgent?.id],
     queryFn: () =>
-      fetchApi<{ mentionOnly: boolean; reply: boolean; config: Record<string, unknown> }>(
+      fetchApi<{ mentionOnly: boolean; reply: boolean; config: PolicyConfig }>(
         `/api/channels/${channelId}/agents/${selectedAgent!.id}/policy`,
       ),
     enabled: !!channelId && !!selectedAgent,
@@ -100,21 +116,29 @@ export default function MembersScreen() {
     if (!currentPolicy) return 'replyAll'
     if (!currentPolicy.reply) return 'disabled'
     if (currentPolicy.mentionOnly) return 'mentionOnly'
+    const config = currentPolicy.config as PolicyConfig | undefined
+    if (
+      config?.replyToUsers?.length ||
+      config?.keywords?.length ||
+      config?.replyToBuddy ||
+      config?.smartReply === false
+    ) {
+      return 'custom'
+    }
     return 'replyAll'
   })()
 
   // Update policy mutation
   const updatePolicy = useMutation({
-    mutationFn: ({ mode }: { mode: string }) =>
+    mutationFn: ({ mode, config }: { mode: string; config?: PolicyConfig }) =>
       fetchApi(`/api/channels/${channelId}/agents/${selectedAgent!.id}/policy`, {
         method: 'PUT',
-        body: JSON.stringify({ mode }),
+        body: JSON.stringify({ mode, config }),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['agent-policy', channelId, selectedAgent?.id],
       })
-      setPolicySheet(null)
     },
   })
 
@@ -125,6 +149,29 @@ export default function MembersScreen() {
     if (!agent) return false
     // Owner of the buddy or server admin/owner
     return agent.ownerId === currentUser?.id || server?.id != null
+  }
+
+  // Open custom policy sheet with current values
+  const openCustomPolicy = () => {
+    const config = currentPolicy?.config as PolicyConfig | undefined
+    setCustomReplyToBuddy(config?.replyToBuddy ?? false)
+    setCustomMaxBuddyChainDepth(config?.maxBuddyChainDepth ?? 3)
+    setCustomSmartReply(config?.smartReply ?? true)
+    setShowCustomPolicy(true)
+  }
+
+  // Save custom policy
+  const saveCustomPolicy = () => {
+    updatePolicy.mutate({
+      mode: 'custom',
+      config: {
+        replyToBuddy: customReplyToBuddy,
+        maxBuddyChainDepth: customReplyToBuddy ? customMaxBuddyChainDepth : undefined,
+        ...(customSmartReply !== true ? { smartReply: false } : {}),
+      },
+    })
+    setShowCustomPolicy(false)
+    setPolicySheet(null)
   }
 
   if (isLoading) return <LoadingScreen />
@@ -241,7 +288,7 @@ export default function MembersScreen() {
 
       {/* Buddy Reply Policy Sheet */}
       <Modal
-        visible={!!policySheet}
+        visible={!!policySheet && !showCustomPolicy}
         transparent
         animationType="slide"
         onRequestClose={() => setPolicySheet(null)}
@@ -263,7 +310,10 @@ export default function MembersScreen() {
             {/* Reply All */}
             <Pressable
               style={[styles.policyOption, { borderBottomColor: colors.border }]}
-              onPress={() => updatePolicy.mutate({ mode: 'replyAll' })}
+              onPress={() => {
+                updatePolicy.mutate({ mode: 'replyAll' })
+                setPolicySheet(null)
+              }}
             >
               <View style={styles.policyOptionContent}>
                 <Text style={[styles.policyLabel, { color: colors.text }]}>
@@ -279,7 +329,10 @@ export default function MembersScreen() {
             {/* Mention Only */}
             <Pressable
               style={[styles.policyOption, { borderBottomColor: colors.border }]}
-              onPress={() => updatePolicy.mutate({ mode: 'mentionOnly' })}
+              onPress={() => {
+                updatePolicy.mutate({ mode: 'mentionOnly' })
+                setPolicySheet(null)
+              }}
             >
               <View style={styles.policyOptionContent}>
                 <Text style={[styles.policyLabel, { color: colors.text }]}>
@@ -292,10 +345,30 @@ export default function MembersScreen() {
               {currentMode === 'mentionOnly' && <Check size={18} color="#23a559" />}
             </Pressable>
 
+            {/* Custom */}
+            <Pressable
+              style={[styles.policyOption, { borderBottomColor: colors.border }]}
+              onPress={openCustomPolicy}
+            >
+              <View style={styles.policyOptionContent}>
+                <Text style={[styles.policyLabel, { color: colors.text }]}>
+                  <Settings size={14} color={colors.primary} />{' '}
+                  {t('member.policyCustom', '自定义策略')}
+                </Text>
+                <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
+                  {t('member.policyCustomDesc', '配置 Buddy 互动、智能回复等高级选项')}
+                </Text>
+              </View>
+              {currentMode === 'custom' && <Check size={18} color="#23a559" />}
+            </Pressable>
+
             {/* Disabled */}
             <Pressable
               style={[styles.policyOption, { borderBottomColor: colors.border }]}
-              onPress={() => updatePolicy.mutate({ mode: 'disabled' })}
+              onPress={() => {
+                updatePolicy.mutate({ mode: 'disabled' })
+                setPolicySheet(null)
+              }}
             >
               <View style={styles.policyOptionContent}>
                 <Text style={[styles.policyLabel, { color: colors.error }]}>
@@ -311,6 +384,119 @@ export default function MembersScreen() {
             <Pressable
               style={[styles.sheetCancel, { backgroundColor: colors.background }]}
               onPress={() => setPolicySheet(null)}
+            >
+              <Text style={[styles.sheetCancelText, { color: colors.text }]}>
+                {t('common.cancel', '取消')}
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Custom Policy Sheet */}
+      <Modal
+        visible={showCustomPolicy}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCustomPolicy(false)}
+      >
+        <Pressable style={styles.sheetOverlay} onPress={() => setShowCustomPolicy(false)}>
+          <Pressable
+            style={[styles.sheetContent, { backgroundColor: colors.surface }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={[styles.sheetHandle, { backgroundColor: colors.textMuted }]} />
+            <Text style={[styles.sheetTitle, { color: colors.text }]}>
+              <Settings size={16} color={colors.primary} />{' '}
+              {t('member.policyCustomTitle', '自定义回复策略')}
+            </Text>
+            <Text style={[styles.sheetSubtitle, { color: colors.textMuted }]}>
+              {policySheet?.user.displayName || policySheet?.user.username}
+            </Text>
+
+            {/* Smart Reply */}
+            <View style={[styles.customOption, { borderBottomColor: colors.border }]}>
+              <View style={styles.customOptionContent}>
+                <Text style={[styles.policyLabel, { color: colors.text }]}>
+                  {t('member.policySmartReply', '智能回复')}
+                </Text>
+                <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
+                  {t('member.policySmartReplyDesc', '跳过明显针对其他人的消息')}
+                </Text>
+              </View>
+              <Switch
+                value={customSmartReply}
+                onValueChange={setCustomSmartReply}
+                trackColor={{ false: colors.border, true: colors.primary }}
+              />
+            </View>
+
+            {/* Reply to Buddy */}
+            <View style={[styles.customOption, { borderBottomColor: colors.border }]}>
+              <View style={styles.customOptionContent}>
+                <Text style={[styles.policyLabel, { color: colors.text }]}>
+                  {t('member.policyReplyToBuddy', '回复其他 Buddy 的消息')}
+                </Text>
+                <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
+                  {t('member.policyReplyToBuddyDesc', '允许回复其他 Buddy 发送的消息')}
+                </Text>
+              </View>
+              <Switch
+                value={customReplyToBuddy}
+                onValueChange={setCustomReplyToBuddy}
+                trackColor={{ false: colors.border, true: colors.primary }}
+              />
+            </View>
+
+            {/* Max Buddy Chain Depth */}
+            {customReplyToBuddy && (
+              <View style={[styles.customOption, { borderBottomColor: colors.border }]}>
+                <View style={styles.customOptionContent}>
+                  <Text style={[styles.policyLabel, { color: colors.text }]}>
+                    {t('member.policyMaxBuddyChainDepth', '最大对话链深度')}:{' '}
+                    {customMaxBuddyChainDepth}
+                  </Text>
+                  <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
+                    {t('member.policyMaxBuddyChainDepthDesc', '防止 Buddy 之间无限循环对话')}
+                  </Text>
+                  {/* Simple +/- controls instead of slider */}
+                  <View style={styles.stepperRow}>
+                    <Pressable
+                      style={[styles.stepperBtn, { backgroundColor: colors.background }]}
+                      onPress={() =>
+                        setCustomMaxBuddyChainDepth(Math.max(1, customMaxBuddyChainDepth - 1))
+                      }
+                    >
+                      <Text style={[styles.stepperText, { color: colors.text }]}>−</Text>
+                    </Pressable>
+                    <Text style={[styles.stepperValue, { color: colors.text }]}>
+                      {customMaxBuddyChainDepth}
+                    </Text>
+                    <Pressable
+                      style={[styles.stepperBtn, { backgroundColor: colors.background }]}
+                      onPress={() =>
+                        setCustomMaxBuddyChainDepth(Math.min(10, customMaxBuddyChainDepth + 1))
+                      }
+                    >
+                      <Text style={[styles.stepperText, { color: colors.text }]}>+</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            <Pressable
+              style={[styles.sheetSave, { backgroundColor: colors.primary }]}
+              onPress={saveCustomPolicy}
+            >
+              <Text style={[styles.sheetSaveText, { color: '#fff' }]}>
+                {t('member.policySave', '保存策略')}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.sheetCancel, { backgroundColor: colors.background }]}
+              onPress={() => setShowCustomPolicy(false)}
             >
               <Text style={[styles.sheetCancelText, { color: colors.text }]}>
                 {t('common.cancel', '取消')}
@@ -442,5 +628,47 @@ const styles = StyleSheet.create({
   sheetCancelText: {
     fontSize: fontSize.md,
     fontWeight: '600',
+  },
+  // Custom policy
+  customOption: {
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  customOptionContent: {
+    flex: 1,
+  },
+  sheetSave: {
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    marginTop: spacing.lg,
+  },
+  sheetSaveText: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+  },
+  // Stepper
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    gap: spacing.md,
+  },
+  stepperBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperText: {
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+  },
+  stepperValue: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    minWidth: 24,
+    textAlign: 'center',
   },
 })

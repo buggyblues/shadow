@@ -421,7 +421,7 @@ export class ShadowClient {
   async sendMessage(
     channelId: string,
     content: string,
-    opts?: { threadId?: string; replyToId?: string },
+    opts?: { threadId?: string; replyToId?: string; metadata?: Record<string, unknown> },
   ): Promise<ShadowMessage> {
     return this.request<ShadowMessage>(`/api/channels/${channelId}/messages`, {
       method: 'POST',
@@ -429,6 +429,7 @@ export class ShadowClient {
         content,
         ...(opts?.threadId ? { threadId: opts.threadId } : {}),
         ...(opts?.replyToId ? { replyToId: opts.replyToId } : {}),
+        ...(opts?.metadata ? { metadata: opts.metadata } : {}),
       }),
     })
   }
@@ -570,11 +571,15 @@ export class ShadowClient {
   async sendDmMessage(
     channelId: string,
     content: string,
-    options?: { replyToId?: string },
+    options?: { replyToId?: string; metadata?: Record<string, unknown> },
   ): Promise<ShadowMessage> {
     return this.request(`/api/dm/channels/${channelId}/messages`, {
       method: 'POST',
-      body: JSON.stringify({ content, replyToId: options?.replyToId }),
+      body: JSON.stringify({
+        content,
+        replyToId: options?.replyToId,
+        ...(options?.metadata ? { metadata: options.metadata } : {}),
+      }),
     })
   }
 

@@ -410,7 +410,14 @@
     "inChannel": "已加入频道",
     "inviteMembers": "邀请成员",
     "searchMembers": "搜索成员...",
-    "allMembersAdded": "所有服务器成员已在此频道中"
+    "allMembersAdded": "所有服务器成员已在此频道中",
+    "policyBuddyInteraction": "Buddy 互动",
+    "policyReplyToBuddy": "回复其他 Buddy 的消息",
+    "policyReplyToBuddyDesc": "允许此 Buddy 回复频道中其他 Buddy 发送的消息",
+    "policyMaxBuddyChainDepth": "最大对话链深度",
+    "policyMaxBuddyChainDepthDesc": "防止 Buddy 之间无限循环对话（默认：3）",
+    "policySmartReply": "智能回复",
+    "policySmartReplyDesc": "跳过明显针对其他人的消息（如 @了别人但没 @ 自己）"
   },
   "features": {
     "pageTitle": "所有你需要的协作功能",

@@ -18,11 +18,13 @@ import type { ShadowChannelPolicy, ShadowMessage, ShadowRemoteConfig } from '@sh
 import { ShadowClient, ShadowSocket } from '@shadowob/sdk'
 import { getShadowRuntime } from './runtime.js'
 import type {
+  AgentChainMetadata,
   CreateTypingCallbacksParams,
   OpenClawConfig,
   PluginRuntime,
   ReplyPayload,
   ShadowAccountConfig,
+  ShadowPolicyConfig,
   TypingCallbacks,
 } from './types.js'
 
@@ -128,8 +130,12 @@ async function processShadowMessage(params: {
   core: PluginRuntime
   botUserId: string
   botUsername: string
+  agentId: string | null
   channelPolicies: Map<string, ShadowChannelPolicy>
-  channelServerMap: Map<string, { serverId: string; serverSlug: string; serverName: string }>
+  channelServerMap: Map<
+    string,
+    { serverId: string; serverSlug: string; serverName: string; channelName: string }
+  >
   socket: ShadowSocket
 }): Promise<void> {
   const {
@@ -141,6 +147,7 @@ async function processShadowMessage(params: {
     core,
     botUserId,
     botUsername,
+    agentId,
     channelPolicies,
     channelServerMap,
     socket,
@@ -154,15 +161,73 @@ async function processShadowMessage(params: {
     runtime.log?.(`[msg] Skipping own message ${message.id}`)
     return
   }
-  // Skip messages from other bots
+
+  // Bot message handling with replyToBuddy policy
+  let isProcessingBuddyMessage = false
   if (message.author?.isBot) {
-    runtime.log?.(`[msg] Skipping bot message from ${senderLabel} (${message.id})`)
-    return
+    const policy = channelPolicies.get(message.channelId)
+    const policyConfig = policy?.config as ShadowPolicyConfig | undefined
+
+    // Default: skip bot messages unless replyToBuddy is enabled
+    if (!policyConfig?.replyToBuddy) {
+      runtime.log?.(
+        `[msg] Skipping bot message from ${senderLabel} (replyToBuddy=false) (${message.id})`,
+      )
+      return
+    }
+
+    // Check maxBuddyChainDepth (anti-loop)
+    const maxDepth = policyConfig.maxBuddyChainDepth ?? 3
+    const chainMeta = message.metadata?.agentChain as AgentChainMetadata | undefined
+    if (chainMeta) {
+      // Check if we've exceeded the chain depth
+      if (chainMeta.depth >= maxDepth) {
+        runtime.log?.(
+          `[msg] Buddy chain depth ${chainMeta.depth} >= max ${maxDepth}, stopping loop (${message.id})`,
+        )
+        return
+      }
+
+      // Check if we're already in the chain (circular detection)
+      if (chainMeta.participants?.includes(botUserId)) {
+        runtime.log?.(
+          `[msg] Already in buddy chain [${chainMeta.participants.join(', ')}], skipping to prevent loop (${message.id})`,
+        )
+        return
+      }
+
+      // Check blacklist
+      const senderAgentId = message.author?.id
+      if (senderAgentId && policyConfig.buddyBlacklist?.includes(senderAgentId)) {
+        runtime.log?.(
+          `[msg] Sender agent ${senderAgentId} is in blacklist, skipping (${message.id})`,
+        )
+        return
+      }
+
+      // Check whitelist (if defined)
+      if (
+        senderAgentId &&
+        policyConfig.buddyWhitelist?.length &&
+        !policyConfig.buddyWhitelist.includes(senderAgentId)
+      ) {
+        runtime.log?.(
+          `[msg] Sender agent ${senderAgentId} not in whitelist, skipping (${message.id})`,
+        )
+        return
+      }
+    }
+
+    // Mark that we're processing a Buddy message (skip smartReply later)
+    isProcessingBuddyMessage = true
+    runtime.log?.(
+      `[msg] Processing bot message from ${senderLabel} (replyToBuddy=true) (${message.id})`,
+    )
   }
 
   const channelId = message.channelId
 
-  // Look up channel policy
+  // Look up channel policy (may have been fetched above)
   const policy = channelPolicies.get(channelId)
 
   // If policy exists and listen is false, skip
@@ -178,11 +243,12 @@ async function processShadowMessage(params: {
   }
 
   // If mentionOnly, check for @mention using bot username
+  let wasMentionedExplicitly = false
   if (policy?.mentionOnly) {
     const escapedUsername = botUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const mentionRegex = new RegExp(`@${escapedUsername}(?:\\s|$)`, 'i')
-    const wasMentioned = mentionRegex.test(message.content)
-    if (!wasMentioned) {
+    wasMentionedExplicitly = mentionRegex.test(message.content)
+    if (!wasMentionedExplicitly) {
       runtime.log?.(
         `[msg] mentionOnly policy — no @${botUsername} mention found, skipping (${message.id})`,
       )
@@ -194,9 +260,7 @@ async function processShadowMessage(params: {
   }
 
   // Custom policy: replyToUsers — only reply to specific users
-  const policyConfig = policy?.config as
-    | { replyToUsers?: string[]; keywords?: string[] }
-    | undefined
+  const policyConfig = policy?.config as ShadowPolicyConfig | undefined
   if (policyConfig?.replyToUsers?.length) {
     const allowedUsers = policyConfig.replyToUsers.map((u) => u.toLowerCase())
     const senderUser = (message.author?.username ?? '').toLowerCase()
@@ -217,6 +281,47 @@ async function processShadowMessage(params: {
       return
     }
     runtime.log?.(`[msg] keywords policy — keyword matched, processing (${message.id})`)
+  }
+
+  // Smart reply: skip if message is targeting someone else (not this Buddy)
+  // Skip this check if:
+  // 1. Processing a Buddy message (already validated by replyToBuddy)
+  // 2. Was explicitly mentioned (mentionOnly passed)
+  const smartReplyEnabled = policyConfig?.smartReply !== false // Default: enabled
+  if (smartReplyEnabled && !isProcessingBuddyMessage && !wasMentionedExplicitly) {
+    // 1. Check if message has @mentions to other users (but not this Buddy)
+    const mentionPattern = /@([a-zA-Z0-9_\-\u4e00-\u9fa5]+)/g // Support Chinese and other unicode chars
+    const allMentions = message.content.match(mentionPattern) || []
+    const mentionsWithoutSelf = allMentions.filter((m) => {
+      const mentionedUser = m.slice(1).toLowerCase() // Remove @ prefix
+      return mentionedUser !== botUsername.toLowerCase()
+    })
+
+    // If there are @mentions but none to this Buddy, skip
+    if (allMentions.length > 0 && mentionsWithoutSelf.length === allMentions.length) {
+      runtime.log?.(
+        `[msg] Smart reply: message @mentions others (${allMentions.join(', ')}) but not @${botUsername}, skipping (${message.id})`,
+      )
+      return
+    }
+
+    // 2. Check if message is a reply to someone else's message
+    // Note: This requires the replyTo message info with author to be available
+    // If the SDK/Server provides this in the future, we can enable this check
+    const replyToData = (message as { replyTo?: { authorId?: string } }).replyTo
+    if (replyToData?.authorId && replyToData.authorId !== botUserId) {
+      // The message is a reply to someone else, skip unless we're also mentioned
+      const selfMentioned = allMentions.some((m) => {
+        const mentionedUser = m.slice(1).toLowerCase()
+        return mentionedUser === botUsername.toLowerCase()
+      })
+      if (!selfMentioned) {
+        runtime.log?.(
+          `[msg] Smart reply: message is a reply to another user (${replyToData.authorId}), not this Buddy, skipping (${message.id})`,
+        )
+        return
+      }
+    }
   }
 
   runtime.log?.(
@@ -398,8 +503,15 @@ async function processShadowMessage(params: {
           ServerId: serverInfo.serverId,
           ServerSlug: serverInfo.serverSlug,
           ServerName: serverInfo.serverName,
+          ChannelName: serverInfo.channelName,
         }
       : {}),
+    // Buddy self-identity — allows the AI agent to know who it is
+    BotUserId: botUserId,
+    BotUsername: botUsername,
+    AgentId: route.agentId,
+    // Channel context
+    ChannelId: channelId,
     ...(message.threadId ? { ThreadId: message.threadId } : {}),
     ...(message.replyToId ? { ReplyToId: message.replyToId } : {}),
     ...mediaCtx,
@@ -427,6 +539,9 @@ async function processShadowMessage(params: {
   // 6. Dispatch to AI + deliver reply
   runtime.log?.(`[msg] Dispatching to AI pipeline for message ${message.id}`)
   const client = new ShadowClient(account.serverUrl, account.token)
+
+  // Extract agent chain metadata from the triggering message (for anti-loop)
+  const triggerChain = message.metadata?.agentChain as AgentChainMetadata | undefined
 
   // Build typing callbacks: emit typing indicator during AI processing
   const typingCbs = createTypingCallbacks({
@@ -458,6 +573,9 @@ async function processShadowMessage(params: {
               replyToId: message.id,
               client,
               runtime,
+              agentChain: triggerChain,
+              agentId,
+              botUserId,
             })
           },
         })
@@ -476,6 +594,9 @@ async function processShadowMessage(params: {
               replyToId: message.id,
               client,
               runtime,
+              agentChain: triggerChain,
+              agentId,
+              botUserId,
             })
           },
         },
@@ -502,6 +623,9 @@ async function processShadowMessage(params: {
               replyToId: message.id,
               client,
               runtime,
+              agentChain: triggerChain,
+              agentId,
+              botUserId,
             })
           },
         },
@@ -534,8 +658,24 @@ async function deliverShadowReply(params: {
   replyToId?: string
   client: ShadowClient
   runtime: { log?: (msg: string) => void; error?: (msg: string) => void }
+  /** Agent chain metadata from the triggering message (for anti-loop) */
+  agentChain?: AgentChainMetadata
+  /** This Buddy's agent ID */
+  agentId: string | null
+  /** This Buddy's bot user ID */
+  botUserId: string
 }): Promise<void> {
-  const { payload, channelId, threadId, replyToId, client, runtime } = params
+  const {
+    payload,
+    channelId,
+    threadId,
+    replyToId,
+    client,
+    runtime,
+    agentChain,
+    agentId,
+    botUserId,
+  } = params
 
   try {
     if (!payload.text && !(payload.mediaUrl || payload.mediaUrls?.length)) {
@@ -550,6 +690,19 @@ async function deliverShadowReply(params: {
     // Collect media URLs first so we know whether media is present
     const mediaUrls = [payload.mediaUrl, ...(payload.mediaUrls ?? [])].filter(Boolean) as string[]
 
+    // Build agent chain metadata for anti-loop tracking
+    const newAgentChain: AgentChainMetadata | undefined = agentId
+      ? {
+          agentId,
+          depth: (agentChain?.depth ?? 0) + 1,
+          participants: [...(agentChain?.participants ?? []), botUserId].filter(
+            Boolean,
+          ) as string[],
+          startedAt: agentChain?.startedAt ?? Date.now(),
+          rootMessageId: agentChain?.rootMessageId ?? replyToId,
+        }
+      : undefined
+
     // Send the text message first (or a placeholder if media-only)
     let sentMessage: ShadowMessage | null = null
     // Always create a message when we have media so attachments can be linked
@@ -558,10 +711,13 @@ async function deliverShadowReply(params: {
       if (threadId) {
         sentMessage = await client.sendToThread(threadId, contentToSend)
       } else {
-        sentMessage = await client.sendMessage(channelId, contentToSend, { replyToId })
+        sentMessage = await client.sendMessage(channelId, contentToSend, {
+          replyToId,
+          metadata: newAgentChain ? { agentChain: newAgentChain } : undefined,
+        })
       }
       runtime.log?.(
-        `[reply] Message created (${sentMessage.id})${text ? '' : ' [media-only placeholder]'}`,
+        `[reply] Message created (${sentMessage.id})${text ? '' : ' [media-only placeholder]'}${newAgentChain ? ` [chain depth: ${newAgentChain.depth}]` : ''}`,
       )
     }
 
@@ -616,9 +772,21 @@ async function processShadowDmMessage(params: {
   core: PluginRuntime
   botUserId: string
   botUsername: string
+  shadowAgentId: string | null
   socket: ShadowSocket
 }): Promise<void> {
-  const { dmMessage, account, accountId, config, runtime, core, botUserId, socket } = params
+  const {
+    dmMessage,
+    account,
+    accountId,
+    config,
+    runtime,
+    core,
+    botUserId,
+    botUsername,
+    shadowAgentId,
+    socket,
+  } = params
   const cfg = config as OpenClawConfig
 
   const senderLabel = dmMessage.author?.username ?? dmMessage.senderId
@@ -700,6 +868,12 @@ async function processShadowDmMessage(params: {
     WasMentioned: true, // Always "mentioned" in DM
     OriginatingChannel: 'shadowob',
     OriginatingTo: `shadowob:dm:${dmChannelId}`,
+    // Buddy self-identity — allows the AI agent to know who it is
+    BotUserId: botUserId,
+    BotUsername: botUsername,
+    AgentId: route.agentId,
+    // DM channel context
+    ChannelId: dmChannelId,
   })
 
   // 4. Record session
@@ -718,6 +892,10 @@ async function processShadowDmMessage(params: {
   // 5. Dispatch to AI + deliver reply via DM
   runtime.log?.(`[dm] Dispatching to AI pipeline for DM message ${dmMessage.id}`)
   const client = new ShadowClient(account.serverUrl, account.token)
+
+  // Extract agent chain metadata from the triggering DM message (for anti-loop)
+  const triggerChain = (dmMessage as { metadata?: { agentChain?: AgentChainMetadata } }).metadata
+    ?.agentChain
 
   // Build typing callbacks for DM channel
   const typingCbs = createTypingCallbacks({
@@ -747,6 +925,9 @@ async function processShadowDmMessage(params: {
             replyToId: dmMessage.id,
             client,
             runtime,
+            agentChain: triggerChain,
+            agentId: shadowAgentId,
+            botUserId,
           })
         },
       },
@@ -770,8 +951,15 @@ async function deliverShadowDmReply(params: {
   replyToId?: string
   client: ShadowClient
   runtime: { log?: (msg: string) => void; error?: (msg: string) => void }
+  /** Agent chain metadata from the triggering message (for anti-loop) */
+  agentChain?: AgentChainMetadata
+  /** This Buddy's agent ID */
+  agentId: string | null
+  /** This Buddy's bot user ID */
+  botUserId: string
 }): Promise<void> {
-  const { payload, dmChannelId, replyToId, client, runtime } = params
+  const { payload, dmChannelId, replyToId, client, runtime, agentChain, agentId, botUserId } =
+    params
 
   try {
     if (!payload.text && !(payload.mediaUrl || payload.mediaUrls?.length)) {
@@ -785,13 +973,29 @@ async function deliverShadowDmReply(params: {
     // Collect media URLs first so we know whether media is present
     const mediaUrls = [payload.mediaUrl, ...(payload.mediaUrls ?? [])].filter(Boolean) as string[]
 
+    // Build agent chain metadata for anti-loop tracking
+    const newAgentChain: AgentChainMetadata | undefined = agentId
+      ? {
+          agentId,
+          depth: (agentChain?.depth ?? 0) + 1,
+          participants: [...(agentChain?.participants ?? []), botUserId].filter(
+            Boolean,
+          ) as string[],
+          startedAt: agentChain?.startedAt ?? Date.now(),
+          rootMessageId: agentChain?.rootMessageId ?? replyToId,
+        }
+      : undefined
+
     // Send the text message first (or a placeholder if media-only)
     let sentMessage: ShadowMessage | null = null
     if (text || mediaUrls.length > 0) {
       const contentToSend = text || '\u200B' // zero-width space placeholder for media-only
-      sentMessage = await client.sendDmMessage(dmChannelId, contentToSend, { replyToId })
+      sentMessage = await client.sendDmMessage(dmChannelId, contentToSend, {
+        replyToId,
+        metadata: newAgentChain ? { agentChain: newAgentChain } : undefined,
+      })
       runtime.log?.(
-        `[dm-reply] DM message created (${sentMessage.id})${text ? '' : ' [media-only placeholder]'}`,
+        `[dm-reply] DM message created (${sentMessage.id})${text ? '' : ' [media-only placeholder]'}${newAgentChain ? ` [chain depth: ${newAgentChain.depth}]` : ''}`,
       )
     }
 
@@ -893,7 +1097,7 @@ export async function monitorShadowProvider(
   const channelPolicies = new Map<string, ShadowChannelPolicy>()
   const channelServerMap = new Map<
     string,
-    { serverId: string; serverSlug: string; serverName: string }
+    { serverId: string; serverSlug: string; serverName: string; channelName: string }
   >()
   const allChannelIds: string[] = []
 
@@ -913,6 +1117,7 @@ export async function monitorShadowProvider(
             serverId: server.id,
             serverSlug: server.slug ?? server.id,
             serverName: server.name,
+            channelName: ch.name,
           })
           // Only join channels where listen is enabled
           if (ch.policy.listen) {
@@ -947,6 +1152,7 @@ export async function monitorShadowProvider(
               serverId: server.id,
               serverSlug: server.slug ?? server.id,
               serverName: server.name,
+              channelName: ch.name,
             })
             if (ch.policy.listen) {
               allChannelIds.push(ch.id)
@@ -1053,6 +1259,7 @@ export async function monitorShadowProvider(
             serverId: server.id,
             serverSlug: server.slug ?? server.id,
             serverName: server.name,
+            channelName: ch.name,
           })
           if (!channelPolicies.has(ch.id)) {
             channelPolicies.set(ch.id, ch.policy)
@@ -1223,6 +1430,7 @@ export async function monitorShadowProvider(
             core,
             botUserId,
             botUsername: me.username,
+            shadowAgentId: agentId,
             socket,
           })
         } catch (err) {
@@ -1271,6 +1479,7 @@ export async function monitorShadowProvider(
           core,
           botUserId,
           botUsername: me.username,
+          agentId,
           channelPolicies,
           channelServerMap,
           socket,

@@ -118,6 +118,7 @@ export class MessageDao {
     authorId: string
     threadId?: string
     replyToId?: string
+    metadata?: Record<string, unknown>
   }) {
     const result = await this.db.insert(messages).values(data).returning()
     return result[0]

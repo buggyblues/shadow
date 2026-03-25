@@ -319,7 +319,14 @@
     "policySearchUsers": "搜索用户...",
     "policyMentionOnlyDesc": "仅在被直接 @提及时才回复",
     "notInChannel": "未加入频道",
-    "inChannel": "已加入频道"
+    "inChannel": "已加入频道",
+    "policyBuddyInteraction": "Buddy 互动",
+    "policyReplyToBuddy": "回复其他 Buddy 的消息",
+    "policyReplyToBuddyDesc": "允许此 Buddy 回复频道中其他 Buddy 发送的消息",
+    "policyMaxBuddyChainDepth": "最大对话链深度",
+    "policyMaxBuddyChainDepthDesc": "防止 Buddy 之间无限循环对话（默认：3）",
+    "policySmartReply": "智能回复",
+    "policySmartReplyDesc": "跳过明显针对其他人的消息（如 @了别人但没 @ 自己）"
   },
   "features": {
     "pageTitle": "所有你需要的协作功能",

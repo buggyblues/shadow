@@ -404,6 +404,46 @@ export interface ShadowChannelPolicy {
   config: Record<string, unknown>
 }
 
+/** Extended policy config for Buddy behavior */
+export interface ShadowPolicyConfig {
+  /** Only reply to messages from these users (by username) */
+  replyToUsers?: string[]
+  /** Only reply when message contains any of these keywords */
+  keywords?: string[]
+  /** Whether to reply to other Buddy/bot messages */
+  replyToBuddy?: boolean
+  /** Maximum depth of Buddy-to-Buddy conversation chain (default: 3) */
+  maxBuddyChainDepth?: number
+  /** Cooldown in ms between Buddy replies in the same chain */
+  buddyReplyCooldownMs?: number
+  /** Whitelist of agent IDs allowed to trigger this Buddy */
+  buddyWhitelist?: string[]
+  /** Blacklist of agent IDs that cannot trigger this Buddy */
+  buddyBlacklist?: string[]
+  /**
+   * Smart reply mode (default: true).
+   * When enabled, Buddy will skip messages that are clearly targeting someone else:
+   * - Messages that @mention other users but not this Buddy
+   * - Messages that are replies to other users' messages
+   * Set to false to disable and reply to all messages.
+   */
+  smartReply?: boolean
+}
+
+/** Metadata for tracking Buddy conversation chains to prevent infinite loops */
+export interface AgentChainMetadata {
+  /** ID of the agent that sent this message */
+  agentId: string
+  /** Depth of the conversation chain (0 = human message, 1+ = Buddy replies) */
+  depth: number
+  /** IDs of all agents that have participated in this chain */
+  participants: string[]
+  /** Timestamp of the first message in the chain */
+  startedAt?: number
+  /** ID of the message that started this chain */
+  rootMessageId?: string
+}
+
 /** Channel info with policy (from remote config) */
 export interface ShadowRemoteChannel {
   id: string

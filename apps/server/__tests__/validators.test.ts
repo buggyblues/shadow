@@ -232,6 +232,36 @@ describe('Message Validators', () => {
       })
       expect(result.success).toBe(true)
     })
+
+    it('should accept metadata.agentChain with UUID ids', () => {
+      const result = sendMessageSchema.safeParse({
+        content: 'reply',
+        metadata: {
+          agentChain: {
+            agentId: '550e8400-e29b-41d4-a716-446655440000',
+            depth: 1,
+            participants: ['550e8400-e29b-41d4-a716-446655440001'],
+            rootMessageId: '550e8400-e29b-41d4-a716-446655440002',
+          },
+        },
+      })
+      expect(result.success).toBe(true)
+    })
+
+    it('should accept metadata.agentChain with legacy non-UUID ids', () => {
+      const result = sendMessageSchema.safeParse({
+        content: 'reply',
+        metadata: {
+          agentChain: {
+            agentId: 'main',
+            depth: 1,
+            participants: ['bot_shadowob'],
+            rootMessageId: 'legacy-msg-123',
+          },
+        },
+      })
+      expect(result.success).toBe(true)
+    })
   })
 
   describe('updateMessageSchema', () => {
