@@ -468,7 +468,7 @@ export function MemberList() {
 
       {/* Add Agent dialog */}
       {showAddAgent && activeServerId && (
-        <MemberAddAgentDialog
+        <AddAgentDialog
           serverId={activeServerId}
           channelId={activeChannelId ?? undefined}
           onClose={() => setShowAddAgent(false)}
@@ -476,7 +476,6 @@ export function MemberList() {
             queryClient.invalidateQueries({ queryKey: ['members'] })
             setShowAddAgent(false)
           }}
-          t={t}
         />
       )}
 
@@ -1258,19 +1257,18 @@ interface AgentDialogOption {
   } | null
 }
 
-function MemberAddAgentDialog({
+export function AddAgentDialog({
   serverId,
   channelId,
   onClose,
   onSuccess,
-  t,
 }: {
   serverId: string
   channelId?: string
   onClose: () => void
   onSuccess: () => void
-  t: (key: string, opts?: Record<string, unknown>) => string
 }) {
+  const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [addingId, setAddingId] = useState<string | null>(null)
   const queryClient = useQueryClient()
@@ -1547,13 +1545,15 @@ interface ServerMember {
   } | null
 }
 
-function InvitePanel({
+export function InvitePanel({
   serverId,
   channelId,
+  channelName,
   onClose,
 }: {
   serverId: string
   channelId: string | null
+  channelName?: string
   onClose: () => void
 }) {
   const { t } = useTranslation()
