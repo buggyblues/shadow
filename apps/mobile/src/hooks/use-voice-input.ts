@@ -93,6 +93,6 @@ export function useVoiceInput(options: UseVoiceInputOptions): UseVoiceInputRetur
   }
 }
 
-// Re-export types and individual hooks for advanced usage
-export { useTypelessVoiceInput, useMockVoiceInput }
 export type { UseTypelessVoiceInputOptions }
+// Re-export types and individual hooks for advanced usage
+export { useMockVoiceInput, useTypelessVoiceInput }

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import type { ChannelSortBy, ChannelSortDirection } from '@shadow/shared'
+import type { ChannelSortBy, ChannelSortDirection } from '@shadowob/shared'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 

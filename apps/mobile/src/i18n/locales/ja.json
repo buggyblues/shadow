@@ -71,6 +71,8 @@
     "ctaButton": "無料で始める"
   },
   "auth": {
+    "brandName": "ShadowOwnBuddy",
+    "brandSlogan": "スーパー個人のためのスーパーコミュニティ",
     "loginTitle": "おかえりなさい",
     "loginSubtitle": "また会えて嬉しいです！",
     "emailLabel": "メールアドレス",

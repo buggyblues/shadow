@@ -1,21 +1,8 @@
 import { useLocalSearchParams, useNavigation } from 'expo-router'
-import {
-  ArrowLeft,
-  ArrowRight,
-  ExternalLink,
-  RefreshCw,
-  X,
-} from 'lucide-react-native'
+import { ArrowLeft, ArrowRight, ExternalLink, RefreshCw, X } from 'lucide-react-native'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  ActivityIndicator,
-  Linking,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native'
+import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native'
 import WebView from 'react-native-webview'
 import { HeaderButton, HeaderButtonGroup } from '../../src/components/common/header-button'
 import { useColors } from '../../src/theme'
@@ -60,19 +47,17 @@ export default function WebViewPreviewScreen() {
     }
   }, [currentUrl])
 
-  const onNavigationStateChange = useCallback((navState: {
-    canGoBack: boolean
-    canGoForward: boolean
-    url: string
-    title: string
-  }) => {
-    setCanGoBack(navState.canGoBack)
-    setCanGoForward(navState.canGoForward)
-    setCurrentUrl(navState.url)
-    if (navState.title && navState.title !== 'about:blank') {
-      setPageTitle(navState.title)
-    }
-  }, [])
+  const onNavigationStateChange = useCallback(
+    (navState: { canGoBack: boolean; canGoForward: boolean; url: string; title: string }) => {
+      setCanGoBack(navState.canGoBack)
+      setCanGoForward(navState.canGoForward)
+      setCurrentUrl(navState.url)
+      if (navState.title && navState.title !== 'about:blank') {
+        setPageTitle(navState.title)
+      }
+    },
+    [],
+  )
 
   useEffect(() => {
     navigation.setOptions({
@@ -95,21 +80,9 @@ export default function WebViewPreviewScreen() {
       ),
       headerRight: () => (
         <HeaderButtonGroup>
-          <HeaderButton
-            icon={RefreshCw}
-            onPress={handleRefresh}
-            color={colors.text}
-          />
-          <HeaderButton
-            icon={ExternalLink}
-            onPress={handleOpenInBrowser}
-            color={colors.text}
-          />
-          <HeaderButton
-            icon={X}
-            onPress={handleClose}
-            color={colors.text}
-          />
+          <HeaderButton icon={RefreshCw} onPress={handleRefresh} color={colors.text} />
+          <HeaderButton icon={ExternalLink} onPress={handleOpenInBrowser} color={colors.text} />
+          <HeaderButton icon={X} onPress={handleClose} color={colors.text} />
         </HeaderButtonGroup>
       ),
     })

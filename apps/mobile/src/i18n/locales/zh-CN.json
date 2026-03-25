@@ -71,6 +71,8 @@
     "ctaButton": "立即免费入驻"
   },
   "auth": {
+    "brandName": "虾豆 ShadowOwnBuddy",
+    "brandSlogan": "超级个体的超级社区",
     "loginTitle": "欢迎回来",
     "loginSubtitle": "很高兴再次见到你！",
     "emailLabel": "电子邮箱",

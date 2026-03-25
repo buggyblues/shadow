@@ -17,9 +17,11 @@ export function getImageUrl(path: string | null | undefined): string | null {
 let isRefreshing = false
 let refreshPromise: Promise<string | null> | null = null
 
-function clearAuthState() {
-  SecureStore.deleteItemAsync('accessToken')
-  SecureStore.deleteItemAsync('refreshToken')
+async function clearAuthState() {
+  await Promise.all([
+    SecureStore.deleteItemAsync('accessToken'),
+    SecureStore.deleteItemAsync('refreshToken'),
+  ])
   queryClient.removeQueries()
   queryClient.clear()
   router.replace('/(auth)/login')
@@ -75,8 +77,13 @@ export async function fetchApi<T>(path: string, options?: RequestInit): Promise<
         headers,
       })
     } else {
-      clearAuthState()
+      await clearAuthState()
     }
+  }
+
+  // Refresh token may succeed but still be invalid/revoked on retry.
+  if (response.status === 401 && !path.includes('/auth/')) {
+    await clearAuthState()
   }
 
   if (!response.ok) {

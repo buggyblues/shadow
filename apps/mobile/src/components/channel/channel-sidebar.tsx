@@ -1,4 +1,4 @@
-import type { Channel } from '@shadow/shared'
+import type { Channel } from '@shadowob/shared'
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import {

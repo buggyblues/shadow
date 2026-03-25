@@ -21,7 +21,7 @@ export function PriceDisplay({
 
   const sizeMap = {
     sm: { icon: 12, font: fontSize.sm, lineHeight: fontSize.sm * 1.2 },
-    md: { icon: 16, font: fontSize.base, lineHeight: fontSize.base * 1.2 },
+    md: { icon: 16, font: fontSize.md, lineHeight: fontSize.md * 1.2 },
     lg: { icon: 20, font: fontSize.lg, lineHeight: fontSize.lg * 1.2 },
   }
 

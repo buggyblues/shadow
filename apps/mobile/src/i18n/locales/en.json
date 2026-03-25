@@ -71,6 +71,8 @@
     "ctaButton": "Start free"
   },
   "auth": {
+    "brandName": "ShadowOwnBuddy",
+    "brandSlogan": "The super community for super individuals.",
     "loginTitle": "Welcome back",
     "loginSubtitle": "Great to see you again!",
     "emailLabel": "Email",

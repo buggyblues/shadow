@@ -71,6 +71,8 @@
     "ctaButton": "立即免費入駐"
   },
   "auth": {
+    "brandName": "蝦豆 ShadowOwnBuddy",
+    "brandSlogan": "超級個體的超級社群",
     "loginTitle": "歡迎回來",
     "loginSubtitle": "很高興再次見到你！",
     "emailLabel": "電子郵箱",

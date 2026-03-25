@@ -4,8 +4,11 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
+    "prestart": "pnpm --filter @shadowob/shared build",
     "start": "expo start",
+    "preios": "pnpm --filter @shadowob/shared build",
     "android": "expo run:android",
+    "preandroid": "pnpm --filter @shadowob/shared build",
     "ios": "expo run:ios",
     "prebuild": "expo prebuild",
     "lint": "biome check src/ app/"
