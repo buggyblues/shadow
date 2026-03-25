@@ -54,7 +54,7 @@ function CodeBlock({
   colors: ColorTokens
 }) {
   const [copied, setCopied] = useState(false)
-  const timerRef = useRef<ReturnType<typeof setTimeout>>()
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleCopy = useCallback(async () => {
     await Clipboard.setStringAsync(code)
@@ -295,6 +295,17 @@ export function MarkdownRenderer({
         router.push(`/(main)/profile/${userId}` as never)
         return
       }
+      // Open external URLs in webview previewer
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        router.push({
+          pathname: '/(main)/webview-preview',
+          params: {
+            url: encodeURIComponent(url),
+          },
+        })
+        return
+      }
+      // Handle other schemes (tel:, mailto:, etc.) with system
       Linking.openURL(url)
     },
     [router],
@@ -316,13 +327,23 @@ export function MarkdownRenderer({
   }
 
   // Hybrid rendering: code blocks get custom copy-button component
+  const seenKeys = new Map<string, number>()
+
   return (
     <View>
-      {segments.map((segment, i) => {
+      {segments.map((segment) => {
+        const baseKey =
+          segment.type === 'code'
+            ? `code-${segment.language || 'plain'}-${segment.content.length}-${segment.content.slice(0, 32)}`
+            : `text-${segment.content.length}-${segment.content.slice(0, 32)}`
+        const duplicateIndex = seenKeys.get(baseKey) ?? 0
+        seenKeys.set(baseKey, duplicateIndex + 1)
+        const key = `${baseKey}-${duplicateIndex}`
+
         if (segment.type === 'code') {
           return (
             <CodeBlock
-              key={`code-${i}`}
+              key={key}
               code={segment.content}
               language={segment.language}
               colors={colors}
@@ -331,7 +352,7 @@ export function MarkdownRenderer({
         }
         return (
           <EnrichedMarkdownText
-            key={`text-${i}`}
+            key={key}
             markdown={segment.content}
             markdownStyle={markdownStyle}
             selectable={selectable}

@@ -100,7 +100,7 @@ export function ChannelBrandIcon({
   const icon = path ? { path } : undefined
   const colorClass = CHANNEL_COLORS[channelId] ?? 'text-text-muted'
 
-  if (channelId === 'shadowob') {
+  if (channelId === 'shadowob' || channelId === 'openclaw-shadowob') {
     return <ShadowIcon size={size} className={className ?? colorClass} />
   }
 

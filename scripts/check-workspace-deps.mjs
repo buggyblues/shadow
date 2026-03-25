@@ -11,7 +11,7 @@ import path from 'node:path'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
 
-const WORKSPACE_DIRS = ['apps/server', 'apps/web', 'apps/admin', 'apps/desktop', 'apps/mobile', 'packages/sdk', 'packages/sdk-python', 'packages/shared', 'packages/openclaw', 'packages/ui', 'packages/oauth']
+const WORKSPACE_DIRS = ['apps/server', 'apps/web', 'apps/admin', 'apps/desktop', 'apps/mobile', 'packages/sdk', 'packages/sdk-python', 'packages/shared', 'packages/openclaw-shadowob', 'packages/ui', 'packages/oauth']
 
 function getWorkspacePackages() {
   const packages = new Map()

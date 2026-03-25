@@ -71,6 +71,8 @@
     "ctaButton": "立即免費入駐"
   },
   "auth": {
+    "brandName": "蝦豆 ShadowOwnBuddy",
+    "brandSlogan": "超級個體的超級社群",
     "loginTitle": "歡迎回來",
     "loginSubtitle": "很高興再次見到你！",
     "emailLabel": "電子郵箱",
@@ -293,7 +295,9 @@
     "noSearchResults": "未找到符合的 Buddy",
     "homepageHtml": "主頁 HTML",
     "homepageHtmlPlaceholder": "<h1>歡迎！</h1>\n<p>這是伺服器主頁。</p>",
-    "homepageHtmlDesc": "伺服器主頁的自訂 HTML。留空使用預設主頁。"
+    "homepageHtmlDesc": "伺服器主頁的自訂 HTML。留空使用預設主頁。",
+    "privateChannel": "私有頻道",
+    "privateChannelDesc": "僅受邀成員可加入"
   },
   "chat": {
     "selectChannel": "選擇一個頻道開始聊天",
@@ -674,7 +678,7 @@
     "faq10q": "Buddy 可以接入哪些 AI 模型？",
     "faq10a": "透過 OpenClaw 外掛，Buddy 可以接入任意 AI 後端，包括 OpenAI、Claude、本地模型等。具體取決於你的 OpenClaw 設定。",
     "openclawDoc": "OpenClaw 外掛",
-    "openclawIntro": "OpenClaw 是一個可擴展的 AI 智能體框架。Shadow 外掛（@shadowob/openclaw）讓 AI 智能體可以無縫融入 Shadow 頻道進行協作。",
+    "openclawIntro": "OpenClaw 是一個可擴展的 AI 智能體框架。Shadow 外掛（@shadowob/openclaw-shadowob）讓 AI 智能體可以無縫融入 Shadow 頻道進行協作。",
     "openclawWhat": "什麼是 OpenClaw？",
     "openclawWhatDesc": "OpenClaw 是一個基於外掛的 AI 智能體平台，可以連接各種訊息服務。Shadow 外掛讓你的 AI 智能體加入伺服器、參與對話、發送媒體、回覆訊息——所有操作都透過 Socket.IO 即時完成。",
     "openclawInstall": "安裝",

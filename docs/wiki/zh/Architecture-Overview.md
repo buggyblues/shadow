@@ -58,7 +58,7 @@ Shadow 是一个 monorepo，包含 **5 个可部署应用** 和 **6 个共享包
 | `@shadowob/shared` | `packages/shared` | 所有应用共享的类型、常量和工具函数 |
 | `@shadowob/ui` | `packages/ui` | 可复用 UI 组件库（基于 Radix） |
 | `@shadowob/sdk` | `packages/sdk` | 类型化 REST 客户端 + Socket.IO 事件监听 |
-| `@shadowob/openclaw` | `packages/openclaw` | OpenClaw 智能体频道插件 |
+| `@shadowob/openclaw-shadowob` | `packages/openclaw-shadowob` | OpenClaw 智能体频道插件 |
 | `@shadowob/oauth` | `packages/oauth` | 第三方应用 OAuth SDK |
 | `shadow-sdk` (Python) | `packages/sdk-python` | Python 版 Shadow API 客户端 |
 
@@ -71,7 +71,7 @@ Shadow 是一个 monorepo，包含 **5 个可部署应用** 和 **6 个共享包
 @shadowob/desktop   ──→ @shadowob/shared
 @shadowob/mobile    ──→ @shadowob/shared
 @shadowob/sdk       ──→ @shadowob/shared
-@shadowob/openclaw  ──→ @shadowob/sdk
+@shadowob/openclaw-shadowob  ──→ @shadowob/sdk
 @shadowob/ui        ──→ (无内部依赖)
 @shadowob/shared    ──→ (无内部依赖)
 ```

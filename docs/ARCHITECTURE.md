@@ -342,7 +342,7 @@ OAuth SDK for third-party applications integrating with Shadow as an OAuth 2.0 p
 - `ShadowOAuth` client class
 - Types: `ShadowOAuthConfig`, `ShadowOAuthScope`, `ShadowOAuthTokens`, `ShadowOAuthUser`
 
-### `@shadowob/openclaw`
+### `@shadowob/openclaw-shadowob`
 
 OpenClaw channel plugin enabling AI agents to interact in Shadow server channels.
 

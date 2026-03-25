@@ -175,7 +175,7 @@ export class OpenClawPaths {
   }
 
   /**
-   * Resolve the Shadow channel plugin (@shadowob/openclaw) directory.
+   * Resolve the Shadow channel plugin (@shadowob/openclaw-shadowob) directory.
    * This is the PLUGIN that OpenClaw loads, not the core OpenClaw package.
    * Used for plugins.load.paths in openclaw.json.
    *

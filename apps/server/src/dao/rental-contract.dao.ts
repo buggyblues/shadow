@@ -1,6 +1,7 @@
 import { and, desc, eq, isNotNull, lt, or, sql } from 'drizzle-orm'
 import type { Database } from '../db'
-import { rentalContracts, rentalUsageRecords, rentalViolations } from '../db/schema'
+import { clawListings, rentalContracts, rentalUsageRecords, rentalViolations } from '../db/schema'
+import { agents } from '../db/schema/agents'
 
 /* ──────────────── Rental Contract DAO ──────────────── */
 
@@ -141,6 +142,11 @@ export class RentalContractDao {
     tenantAgreedAt?: Date
     startsAt?: Date
     expiresAt?: Date | null
+    /* Billing v2 */
+    baseDailyRate?: number
+    messageFee?: number
+    pricingVersion?: number
+    lastBilledDailyAt?: Date
   }) {
     const r = await this.db.insert(rentalContracts).values(data).returning()
     return r[0] ?? null
@@ -155,6 +161,9 @@ export class RentalContractDao {
       terminationReason: string
       totalCost: number
       lastBilledOnlineSeconds: number
+      /* Billing v2 */
+      lastBilledDailyAt: Date
+      lastBilledMessageCount: number
     }>,
   ) {
     const r = await this.db
@@ -176,6 +185,40 @@ export class RentalContractDao {
       .where(eq(rentalContracts.id, id))
       .returning()
     return r[0] ?? null
+  }
+
+  /** Atomically increment message count for billing v2 */
+  async incrementMessageCount(id: string) {
+    const r = await this.db
+      .update(rentalContracts)
+      .set({
+        messageCount: sql`${rentalContracts.messageCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(rentalContracts.id, id))
+      .returning()
+    return r[0] ?? null
+  }
+
+  /**
+   * Find active contract where the given user is a tenant chatting with a bot.
+   * Joins: contracts -> listings -> agents to resolve botUserId -> agentId -> listingId.
+   */
+  async findActiveByTenantAndBotUserId(tenantId: string, botUserId: string) {
+    const r = await this.db
+      .select({ contract: rentalContracts })
+      .from(rentalContracts)
+      .innerJoin(clawListings, eq(rentalContracts.listingId, clawListings.id))
+      .innerJoin(agents, eq(clawListings.agentId, agents.id))
+      .where(
+        and(
+          eq(rentalContracts.tenantId, tenantId),
+          eq(rentalContracts.status, 'active'),
+          eq(agents.userId, botUserId),
+        ),
+      )
+      .limit(1)
+    return r[0]?.contract ?? null
   }
 }
 
@@ -208,6 +251,10 @@ export class RentalUsageDao {
     rentalCost: number
     platformFee: number
     totalCost: number
+    /* Billing v2 */
+    usageMessageCount?: number
+    messageCost?: number
+    baseRentalCost?: number
   }) {
     const r = await this.db.insert(rentalUsageRecords).values(data).returning()
     return r[0] ?? null

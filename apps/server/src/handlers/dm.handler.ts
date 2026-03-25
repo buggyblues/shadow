@@ -151,6 +151,14 @@ export function createDmHandler(container: AppContainer) {
             replyToId: message.replyToId,
             attachments: message.attachments,
           })
+
+          // Record rental message for billing (fire-and-forget)
+          try {
+            const rentalService = container.resolve('rentalService')
+            await rentalService.recordRentalMessage(user.userId, otherUserId)
+          } catch {
+            /* non-critical */
+          }
         }
       } catch (err) {
         logger.error({ err, dmChannelId: id }, 'REST: Bot DM relay failed')

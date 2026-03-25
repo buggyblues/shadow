@@ -5,7 +5,7 @@
  * dependencies into a self-contained directory (build/openclaw/) for
  * Electron Forge to pick up via extraResource.
  *
- * Also bundles the @shadowob/openclaw channel plugin with its deps
+ * Also bundles the @shadowob/openclaw-shadowob channel plugin with its deps
  * into build/openclaw-plugins/shadowob/.
  *
  * Adapted from ClawX's bundle-openclaw.mjs — uses pnpm virtual store
@@ -294,6 +294,22 @@ function cleanupBundle(outputDir) {
 function patchBrokenModules(nodeModulesDir) {
   let count = 0
 
+  // lru-cache@7: exports `module.exports = LRUCache` but hosted-git-info@9
+  // requires `const { LRUCache } = require('lru-cache')` (named export).
+  // Patch: add named export so both patterns work.
+  const lruCachePath = join(nodeModulesDir, 'lru-cache', 'index.js')
+  if (existsSync(lruCachePath)) {
+    const lruSrc = readFileSync(lruCachePath, 'utf-8')
+    if (lruSrc.includes('module.exports = LRUCache') && !lruSrc.includes('module.exports.LRUCache')) {
+      writeFileSync(
+        lruCachePath,
+        `${lruSrc.trimEnd()}\nmodule.exports.LRUCache = LRUCache;\n`,
+        'utf-8',
+      )
+      count++
+    }
+  }
+
   // node-domexception: sets module.exports = undefined
   const domExPath = join(nodeModulesDir, 'node-domexception', 'index.js')
   if (existsSync(domExPath)) {
@@ -389,24 +405,26 @@ console.log(
   `  Removed ${cleaned} files, ${formatSize(sizeBefore)} → ${formatSize(sizeAfter)} (saved ${formatSize(sizeBefore - sizeAfter)})`,
 )
 
-// ─── Bundle @shadowob/openclaw Channel Plugin ───────────────────────────────
+// ─── Bundle @shadowob/openclaw-shadowob Channel Plugin ──────────────────────
 //
-// Strategy: bundle ALL TypeScript source (packages/openclaw + packages/sdk +
+// Strategy: bundle ALL TypeScript source (packages/openclaw-shadowob + packages/sdk +
 // packages/shared) into a single ESM file using esbuild. Only runtime
 // dependencies that have native/binary parts stay as external in node_modules.
 //
 // This avoids workspace:* resolution issues in production.
 
-console.log('\n📦 Bundling @shadowob/openclaw channel plugin...')
+console.log('\n📦 Bundling @shadowob/openclaw-shadowob channel plugin...')
 
-const PLUGIN_SRC = resolve(ROOT, '..', '..', 'packages', 'openclaw')
+const PLUGIN_SRC = resolve(ROOT, '..', '..', 'packages', 'openclaw-shadowob')
 const PLUGIN_OUTPUT = join(BUILD_DIR, 'shadowob')
 
 if (existsSync(PLUGIN_OUTPUT)) rmSync(PLUGIN_OUTPUT, { recursive: true })
 mkdirSync(PLUGIN_OUTPUT, { recursive: true })
 
 // External packages — kept in node_modules (not inlined into the bundle)
+// openclaw/* modules are provided by the OpenClaw host at runtime
 const PLUGIN_EXTERNALS = ['socket.io-client']
+const PLUGIN_EXTERNAL_PATTERNS = ['socket.io-client', 'openclaw', 'openclaw/*']
 
 try {
   // esbuild may not be a direct dep — resolve from pnpm virtual store
@@ -431,14 +449,13 @@ try {
       throw new Error('esbuild not found in pnpm store')
     }
   }
-  await esbuild.build({
-    entryPoints: [join(PLUGIN_SRC, 'index.ts')],
-    outfile: join(PLUGIN_OUTPUT, 'index.mjs'),
+  // Build main entry point
+  const commonBuildOptions = {
     bundle: true,
     format: 'esm',
     platform: 'node',
     target: 'node22',
-    external: PLUGIN_EXTERNALS,
+    external: PLUGIN_EXTERNAL_PATTERNS,
     // Resolve workspace packages from the monorepo
     alias: {
       '@shadowob/sdk': resolve(ROOT, '..', '..', 'packages', 'sdk', 'src', 'index.ts'),
@@ -479,8 +496,22 @@ try {
     sourcemap: false,
     minify: false, // Keep readable for debugging
     treeShaking: true,
+  }
+
+  await esbuild.build({
+    ...commonBuildOptions,
+    entryPoints: [join(PLUGIN_SRC, 'index.ts')],
+    outfile: join(PLUGIN_OUTPUT, 'index.mjs'),
   })
   console.log('  ✅ esbuild bundle complete → index.mjs')
+
+  // Build setup entry point (lightweight, loaded when channel is disabled/unconfigured)
+  await esbuild.build({
+    ...commonBuildOptions,
+    entryPoints: [join(PLUGIN_SRC, 'setup-entry.ts')],
+    outfile: join(PLUGIN_OUTPUT, 'setup-entry.mjs'),
+  })
+  console.log('  ✅ esbuild bundle complete → setup-entry.mjs')
 } catch (err) {
   console.error('  ❌ esbuild bundle failed:', err.message)
   process.exit(1)
@@ -503,13 +534,22 @@ writeFileSync(
   join(PLUGIN_OUTPUT, 'package.json'),
   `${JSON.stringify(
     {
-      name: '@shadowob/openclaw',
+      name: '@shadowob/openclaw-shadowob',
       version: srcPkg.version,
       description: srcPkg.description,
       type: 'module',
       main: './index.mjs',
-      shadowob: {
+      openclaw: {
         extensions: ['./index.mjs'],
+        setupEntry: './setup-entry.mjs',
+        channel: {
+          id: 'shadowob',
+          label: 'ShadowOwnBuddy',
+          blurb: 'Shadow server channel integration — chat with AI agents in Shadow channels',
+          selectionLabel: 'ShadowOwnBuddy (Server)',
+          docsPath: '/channels/shadowob',
+          aliases: ['shadow-server', 'openclaw-shadowob'],
+        },
       },
       dependencies: {
         'socket.io-client': '^4.8.1',

@@ -1337,7 +1337,9 @@ export default function ChannelViewScreen() {
             <Hash size={28} color={colors.primary} />
           </View>
           <Text style={[styles.emptyTitle, { color: colors.text }]}>
-            {t('chat.welcomeChannel', { channelName: channel?.name ?? t('chat.channelFallback') })}
+            {t('chat.welcomeChannel', {
+              channelName: channel?.name ?? t('chat.channelFallback'),
+            })}
           </Text>
           <Text style={[styles.emptyDescription, { color: colors.textMuted }]}>
             {t('chat.welcomeStart')}
@@ -1531,6 +1533,18 @@ export default function ChannelViewScreen() {
           onPickImage={handlePickImage}
           onPickFile={handlePickFile}
           onTakePhoto={handleTakePhoto}
+          onPasteImage={(imageDataUri) => {
+            const timestamp = Date.now()
+            const fileName = `clipboard_${timestamp}.png`
+            setPendingFiles((prev) => [
+              ...prev,
+              {
+                uri: imageDataUri,
+                name: fileName,
+                type: 'image/png',
+              },
+            ])
+          }}
         />
       )}
 

@@ -7,6 +7,7 @@ import {
   CircleAlert,
   Hash,
   Layers3,
+  Lock,
   Megaphone,
   Search,
   Sparkles,
@@ -89,6 +90,7 @@ export default function CreateChannelScreen() {
 
   const [channelName, setChannelName] = useState('')
   const [channelType, setChannelType] = useState<ChannelType>('text')
+  const [isPrivate, setIsPrivate] = useState(false)
   const [categoryId, setCategoryId] = useState<string | null>(null)
   const [memberSearch, setMemberSearch] = useState('')
   const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set())
@@ -289,7 +291,7 @@ export default function CreateChannelScreen() {
       const finalName = channelName.trim() || generateChannelName()
       const channel = await fetchApi<{ id: string }>(`/api/servers/${server.id}/channels`, {
         method: 'POST',
-        body: JSON.stringify({ name: finalName, type: channelType, categoryId }),
+        body: JSON.stringify({ name: finalName, type: channelType, categoryId, isPrivate }),
       })
 
       const memberPromises = Array.from(selectedMembers).map((userId) =>
@@ -333,7 +335,7 @@ export default function CreateChannelScreen() {
       : t('common.create', '创建')
 
   const handleCreate = () => {
-    setChannelName(channelName.trim() || generateChannelName())
+    setChannelName(channelName.trim() || generateChannelName() || '')
     createChannelMutation.mutate()
   }
 
@@ -418,47 +420,73 @@ export default function CreateChannelScreen() {
           autoFocus
         />
         <View style={styles.section}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.typeChipsRow}
-          >
-            {(['text', 'voice', 'announcement'] as ChannelType[]).map((item) => {
-              const selected = channelType === item
-              return (
-                <Pressable
-                  key={item}
-                  style={[
-                    styles.typeChip,
-                    {
-                      backgroundColor: selected ? `${colors.primary}12` : colors.surface,
-                      borderColor: selected ? colors.primary : colors.border,
-                    },
-                  ]}
-                  onPress={() => setChannelType(item)}
-                >
-                  <View
+          <View style={styles.typeAndPrivacyRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.typeChipsRow}
+            >
+              {(['text', 'voice', 'announcement'] as ChannelType[]).map((item) => {
+                const selected = channelType === item
+                return (
+                  <Pressable
+                    key={item}
                     style={[
-                      styles.typeChipIconWrap,
+                      styles.typeChip,
                       {
-                        backgroundColor: colors.inputBackground,
+                        backgroundColor: selected ? `${colors.primary}12` : colors.surface,
+                        borderColor: selected ? colors.primary : colors.border,
                       },
                     ]}
+                    onPress={() => setChannelType(item)}
                   >
-                    {channelIcon(item, selected ? colors.primary : colors.textSecondary, 16)}
-                  </View>
-                  <Text
-                    style={[
-                      styles.typeChipText,
-                      { color: selected ? colors.primary : colors.text },
-                    ]}
-                  >
-                    {channelTypeLabel(item)}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </ScrollView>
+                    <View
+                      style={[
+                        styles.typeChipIconWrap,
+                        {
+                          backgroundColor: colors.inputBackground,
+                        },
+                      ]}
+                    >
+                      {channelIcon(item, selected ? colors.primary : colors.textSecondary, 16)}
+                    </View>
+                    <Text
+                      style={[
+                        styles.typeChipText,
+                        { color: selected ? colors.primary : colors.text },
+                      ]}
+                    >
+                      {channelTypeLabel(item)}
+                    </Text>
+                  </Pressable>
+                )
+              })}
+            </ScrollView>
+            <Pressable
+              style={[
+                styles.privateToggleCompact,
+                {
+                  backgroundColor: isPrivate ? `${colors.primary}12` : colors.surface,
+                  borderColor: isPrivate ? colors.primary : colors.border,
+                },
+              ]}
+              onPress={() => setIsPrivate(!isPrivate)}
+            >
+              <View
+                style={[styles.privateIconWrapCompact, { backgroundColor: colors.inputBackground }]}
+              >
+                <Lock size={14} color={isPrivate ? colors.primary : colors.textSecondary} />
+              </View>
+              <Text
+                style={[
+                  styles.privateLabelCompact,
+                  { color: isPrivate ? colors.primary : colors.text },
+                ]}
+              >
+                {t('channel.private', '私密')}
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
         {categories.length > 0 && (
@@ -820,9 +848,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     letterSpacing: 0.5,
   },
+  typeAndPrivacyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   typeChipsRow: {
     gap: spacing.sm,
-    paddingRight: spacing.lg,
+    paddingRight: spacing.sm,
   },
   typeChip: {
     flexDirection: 'row',
@@ -857,6 +890,69 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 999,
     borderWidth: 1,
+  },
+  privateToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.md,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+  },
+  privateToggleCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  privateToggleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  privateIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  privateIconWrapCompact: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  privateTextWrap: {
+    flex: 1,
+  },
+  privateLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  privateLabelCompact: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  privateDesc: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  toggleSwitch: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    padding: 4,
+  },
+  toggleThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
   },
   selectionSection: {
     borderRadius: radius.xl,

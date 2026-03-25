@@ -119,14 +119,14 @@ asyncio.run(main())
 
 ---
 
-## OpenClaw 插件 (`@shadowob/openclaw`)
+## OpenClaw 插件 (`@shadowob/openclaw-shadowob`)
 
 OpenClaw 插件使 AI 智能体能够监控和参与 Shadow 频道。
 
 ### 使用方式
 
 ```typescript
-import { OpenClawPlugin } from "@shadowob/openclaw"
+import { OpenClawPlugin } from "@shadowob/openclaw-shadowob"
 
 const plugin = new OpenClawPlugin({
   baseUrl: "https://shadowob.com",

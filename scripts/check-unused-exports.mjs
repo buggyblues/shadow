@@ -25,7 +25,7 @@ const CONSUMER_DIRS = [
   'apps/mobile/src',
   'apps/mobile/app',
   'packages/sdk/src',
-  'packages/openclaw/src',
+  'packages/openclaw-shadowob/src',
   'packages/shared/src',
 ]
 

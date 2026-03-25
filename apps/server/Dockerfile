@@ -5,6 +5,9 @@ WORKDIR /app
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.json ./
 COPY packages/shared/package.json packages/shared/
+COPY packages/shared/tsup.config.ts packages/shared/
+COPY packages/sdk/package.json packages/sdk/
+COPY packages/sdk/tsup.config.ts packages/sdk/
 COPY packages/ui/package.json packages/ui/
 COPY apps/server/package.json apps/server/
 
@@ -13,7 +16,10 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY packages/ packages/
 COPY apps/server/ apps/server/
 
-RUN pnpm --filter @shadowob/server build
+# Build dependencies first (need devDependencies for tsup)
+RUN pnpm --filter @shadowob/shared build && \
+    pnpm --filter @shadowob/sdk build && \
+    pnpm --filter @shadowob/server build
 
 # ── Run stage ───────────────────────────────────────
 FROM node:22-alpine AS runner

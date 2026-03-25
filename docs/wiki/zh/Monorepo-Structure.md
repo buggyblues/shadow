@@ -17,7 +17,7 @@ shadow/
 │   ├── ui/                  # @shadowob/ui — 可复用 UI 组件
 │   ├── sdk/                 # @shadowob/sdk — 类型化 REST + Socket.IO 客户端
 │   ├── sdk-python/          # shadow-sdk — Python 客户端
-│   ├── openclaw/            # @shadowob/openclaw — AI 智能体插件
+│   ├── openclaw/            # @shadowob/openclaw-shadowob — AI 智能体插件
 │   └── oauth/               # @shadowob/oauth — OAuth SDK
 ├── docs/                    # 文档
 │   ├── ARCHITECTURE.md      # 详细架构文档
@@ -126,7 +126,7 @@ apps/mobile/
 
 Python SDK，通过 `httpx` 和 `python-socketio` 提供 REST API 访问和 Socket.IO 事件订阅。
 
-### `packages/openclaw`
+### `packages/openclaw-shadowob`
 
 OpenClaw 插件，使 AI 智能体能够监控和参与 Shadow 服务器频道。
 

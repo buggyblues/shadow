@@ -33,6 +33,10 @@ interface ContractDetail {
   hourlyRate: number
   dailyRate?: number
   monthlyRate?: number
+  baseDailyRate?: number
+  messageFee?: number
+  pricingVersion?: number
+  messageCount?: number
   platformFeeRate?: number
   depositAmount: number
   totalCost: number
@@ -207,7 +211,11 @@ export function ContractDetailPage() {
               <div className="text-xs font-bold text-gray-400 mb-1 flex items-center gap-1">
                 <DollarSign className="w-3.5 h-3.5" /> {t('marketplace.rate', '费率')}
               </div>
-              <div className="font-bold">{contract.hourlyRate} 🦐/h</div>
+              <div className="font-bold">
+                {contract.pricingVersion === 2
+                  ? `${contract.baseDailyRate ?? 0} 🦐/d`
+                  : `${contract.hourlyRate} 🦐/h`}
+              </div>
             </div>
             <div className="bg-gray-50 rounded-xl p-3">
               <div className="text-xs font-bold text-gray-400 mb-1 flex items-center gap-1">
@@ -364,7 +372,11 @@ function ContractInfoSection({ contract, t }: { contract: ContractDetail; t: TFu
           <div className="text-xs text-gray-400 font-bold mb-1">
             {t('marketplace.rate', '费率')}
           </div>
-          <div className="font-bold text-sm">{contract.hourlyRate} 🦐/h</div>
+          <div className="font-bold text-sm">
+            {contract.pricingVersion === 2
+              ? `${contract.baseDailyRate ?? 0} 🦐/d`
+              : `${contract.hourlyRate} 🦐/h`}
+          </div>
         </div>
         <div className="bg-gray-50 rounded-xl p-3">
           <div className="text-xs text-gray-400 font-bold mb-1">
@@ -404,7 +416,43 @@ function ContractInfoSection({ contract, t }: { contract: ContractDetail; t: TFu
       {expanded && (
         <div className="mt-6 space-y-5 animate-in slide-in-from-top-2 duration-200">
           {/* Pricing details */}
-          {(contract.dailyRate || contract.monthlyRate || contract.platformFeeRate) && (
+          {contract.pricingVersion === 2 ? (
+            <div>
+              <h3 className="text-sm font-bold text-gray-600 mb-2 flex items-center gap-1.5">
+                <DollarSign className="w-4 h-4" /> {t('marketplace.pricingDetail', '费率详情')}
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-gray-50 rounded-lg p-2.5">
+                  <div className="text-xs text-gray-400">
+                    {t('marketplace.baseDailyRate', '基础每日费用')}
+                  </div>
+                  <div className="font-bold text-sm">{contract.baseDailyRate ?? 0} 🦐/d</div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-2.5">
+                  <div className="text-xs text-gray-400">
+                    {t('marketplace.messageFee', '每条消息费用')}
+                  </div>
+                  <div className="font-bold text-sm">{contract.messageFee ?? 0} 🦐/msg</div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-2.5">
+                  <div className="text-xs text-gray-400">
+                    {t('marketplace.messageCount', '消息次数')}
+                  </div>
+                  <div className="font-bold text-sm">{contract.messageCount ?? 0}</div>
+                </div>
+                {contract.platformFeeRate ? (
+                  <div className="bg-gray-50 rounded-lg p-2.5">
+                    <div className="text-xs text-gray-400">
+                      {t('marketplace.platformFee', '平台费率')}
+                    </div>
+                    <div className="font-bold text-sm">
+                      {(contract.platformFeeRate / 100).toFixed(1)}%
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : contract.dailyRate || contract.monthlyRate || contract.platformFeeRate ? (
             <div>
               <h3 className="text-sm font-bold text-gray-600 mb-2 flex items-center gap-1.5">
                 <DollarSign className="w-4 h-4" /> {t('marketplace.pricingDetail', '费率详情')}
@@ -442,7 +490,7 @@ function ContractInfoSection({ contract, t }: { contract: ContractDetail; t: TFu
                 ) : null}
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* Listing snapshot */}
           {snapshot && (

@@ -20,7 +20,7 @@
 - [ ] Mobile (`apps/mobile`)
 - [ ] SDK (`packages/sdk`, `packages/sdk-python`)
 - [ ] Shared (`packages/shared`)
-- [ ] OpenClaw (`packages/openclaw`)
+- [ ] OpenClaw (`packages/openclaw-shadowob`)
 - [ ] CI / Workflows
 
 ## Checklist

@@ -41,7 +41,7 @@ npm install @shadowob/openclaw
 ### Basic Agent
 
 ```typescript
-import { OpenClawPlugin } from "@shadowob/openclaw"
+import { OpenClawPlugin } from "@shadowob/openclaw-shadowob"
 
 const agent = new OpenClawPlugin({
   baseUrl: "https://shadowob.com",
@@ -110,13 +110,13 @@ Shadow's agent system follows the **Model Context Protocol (MCP)** standard, all
 The recommended approach:
 
 1. Create a new Node.js project
-2. Install `@shadowob/openclaw`
+2. Install `@shadowob/openclaw-shadowob`
 3. Implement your AI model integration
 4. Deploy as a long-running process
 
 ```typescript
 // agent/index.ts
-import { OpenClawPlugin } from "@shadowob/openclaw"
+import { OpenClawPlugin } from "@shadowob/openclaw-shadowob"
 import Anthropic from "@anthropic-ai/sdk"
 
 const anthropic = new Anthropic()

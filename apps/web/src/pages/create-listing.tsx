@@ -52,9 +52,8 @@ interface ListingForm {
   deviceStorage: string
   deviceGpu: string
   softwareTools: string
-  hourlyRate: number
-  dailyRate: number
-  monthlyRate: number
+  baseDailyRate: number
+  messageFee: number
   depositAmount: number
   tokenFeePassthrough: boolean
   availableFrom: string
@@ -75,9 +74,8 @@ const INITIAL_FORM: ListingForm = {
   deviceStorage: '',
   deviceGpu: '',
   softwareTools: '',
-  hourlyRate: 10,
-  dailyRate: 200,
-  monthlyRate: 5000,
+  baseDailyRate: 500,
+  messageFee: 10,
   depositAmount: 100,
   tokenFeePassthrough: true,
   availableFrom: '',
@@ -125,9 +123,9 @@ export function CreateListingPage() {
         deviceStorage: deviceInfo.storage || '',
         deviceGpu: deviceInfo.gpu || '',
         softwareTools: ((e.softwareTools as string[]) || []).join(', '),
-        hourlyRate: (e.hourlyRate as number) || 10,
-        dailyRate: (e.dailyRate as number) || 200,
-        monthlyRate: (e.monthlyRate as number) || 5000,
+        baseDailyRate:
+          (e.baseDailyRate as number) || ((e.pricingVersion as number) === 2 ? 0 : 500),
+        messageFee: (e.messageFee as number) || ((e.pricingVersion as number) === 2 ? 0 : 10),
         depositAmount: (e.depositAmount as number) || 100,
         tokenFeePassthrough: (e.tokenFeePassthrough as boolean) ?? true,
         availableFrom: formatDatetimeLocal((e.availableFrom as string) || ''),
@@ -200,11 +198,11 @@ export function CreateListingPage() {
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean),
-      hourlyRate: form.hourlyRate,
-      dailyRate: form.dailyRate || undefined,
-      monthlyRate: form.monthlyRate || undefined,
+      baseDailyRate: form.baseDailyRate,
+      messageFee: form.messageFee,
       depositAmount: form.depositAmount,
       tokenFeePassthrough: form.tokenFeePassthrough,
+      pricingVersion: 2,
       availableFrom: form.availableFrom ? new Date(form.availableFrom).toISOString() : undefined,
       availableUntil: form.availableUntil ? new Date(form.availableUntil).toISOString() : undefined,
       listingStatus: status,
@@ -497,49 +495,42 @@ export function CreateListingPage() {
               {t('marketplace.pricingSetup', '定价设置')}
             </h2>
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block">
                     <span className="text-sm font-bold text-gray-500 block mb-1">
-                      {t('marketplace.hourlyRate', '时租')} (🦐/h) *
+                      {t('marketplace.baseDailyRate', '基础每日费用')} (🦐/d) *
                     </span>
                     <input
                       type="number"
                       required
                       min={1}
-                      value={form.hourlyRate}
-                      onChange={(e) => update('hourlyRate', Number(e.target.value))}
+                      value={form.baseDailyRate}
+                      onChange={(e) => update('baseDailyRate', Number(e.target.value))}
                       className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-bold text-center focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
                     />
                   </label>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {t('marketplace.baseDailyRateHint', '不管是否使用，每天自动收取')}
+                  </p>
                 </div>
                 <div>
                   <label className="block">
                     <span className="text-sm font-bold text-gray-500 block mb-1">
-                      {t('marketplace.dailyRate', '日租')} (🦐/d)
+                      {t('marketplace.messageFee', '每条消息费用')} (🦐/msg) *
                     </span>
                     <input
                       type="number"
+                      required
                       min={0}
-                      value={form.dailyRate}
-                      onChange={(e) => update('dailyRate', Number(e.target.value))}
+                      value={form.messageFee}
+                      onChange={(e) => update('messageFee', Number(e.target.value))}
                       className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-bold text-center focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
                     />
                   </label>
-                </div>
-                <div>
-                  <label className="block">
-                    <span className="text-sm font-bold text-gray-500 block mb-1">
-                      {t('marketplace.monthlyRate', '月租')} (🦐/m)
-                    </span>
-                    <input
-                      type="number"
-                      min={0}
-                      value={form.monthlyRate}
-                      onChange={(e) => update('monthlyRate', Number(e.target.value))}
-                      className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-200 font-bold text-center focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
-                    />
-                  </label>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {t('marketplace.messageFeeHint', '用户每发送一条消息收取的费用')}
+                  </p>
                 </div>
               </div>
               <div>
@@ -571,8 +562,8 @@ export function CreateListingPage() {
               <div className="bg-amber-50 rounded-xl p-4 text-xs text-amber-800 leading-relaxed">
                 <strong>{t('marketplace.pricingNote', '定价说明：')}</strong>{' '}
                 {t(
-                  'marketplace.pricingExplain',
-                  '最终费用 = 基础租金 + 电费 (2🦐/h) + Token消耗 (如开启代付) + 5% 平台手续费。日租/月租为优惠价，系统会自动选择最优方案。',
+                  'marketplace.pricingExplainNew',
+                  '总费用 = 基础每日费用 + 消息次数费 + Token消耗(如开启代付) + 5% 平台手续费。基础费用每日自动收取，消息费按使用次数定期结算。',
                 )}
               </div>
             </div>

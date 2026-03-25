@@ -19,7 +19,7 @@ apps/admin/ @buggyblues
 packages/shared/ @buggyblues
 packages/sdk/ @buggyblues
 packages/sdk-python/ @buggyblues
-packages/openclaw/ @buggyblues
+packages/openclaw-shadowob/ @buggyblues
 
 # CI / CD
 .github/ @buggyblues

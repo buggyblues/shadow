@@ -671,7 +671,7 @@ function HTMLPreview({ text, url }: { text?: string; url: string }) {
     <iframe
       src={iframeSrc}
       title="HTML Preview"
-      sandbox="allow-same-origin"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
       className="w-full h-full border-0 bg-white rounded"
     />
   )

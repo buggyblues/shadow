@@ -11,8 +11,6 @@ import {
   Alert,
   FlatList,
   Keyboard,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -564,11 +562,7 @@ export default function DmChatScreen() {
   const otherUser = dmChannel?.otherUser
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={0}
-    >
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View
         style={[styles.header, { backgroundColor: colors.surface, paddingTop: insets.top + 4 }]}
       >
@@ -772,6 +766,7 @@ export default function DmChatScreen() {
           voiceTranscript={voiceTranscript}
           keyboardVisible={keyboardVisible}
           insetsBottom={insets.bottom}
+          canUseVoice={true}
           onToggleVoice={toggleVoiceInput}
           showAtButton={false}
           showEmojiPicker={showInputEmojiPicker}
@@ -781,9 +776,21 @@ export default function DmChatScreen() {
           onPickImage={handlePickImage}
           onPickFile={handlePickFile}
           onTakePhoto={handleTakePhoto}
+          onPasteImage={(imageDataUri) => {
+            const timestamp = Date.now()
+            const fileName = `clipboard_${timestamp}.png`
+            setPendingFiles((prev) => [
+              ...prev,
+              {
+                uri: imageDataUri,
+                name: fileName,
+                type: 'image/png',
+              },
+            ])
+          }}
         />
       )}
-    </KeyboardAvoidingView>
+    </View>
   )
 }
 

@@ -1,6 +1,24 @@
 import { LIMITS } from '@shadowob/shared'
 import { z } from 'zod'
 
+const idLikeSchema = z.string().min(1)
+
+/** Agent chain metadata for tracking Buddy-to-Buddy conversations */
+const agentChainSchema = z.object({
+  agentId: idLikeSchema,
+  depth: z.number().int().min(0),
+  participants: z.array(idLikeSchema),
+  startedAt: z.number().optional(),
+  rootMessageId: idLikeSchema.optional(),
+})
+
+/** Message metadata schema */
+const metadataSchema = z
+  .object({
+    agentChain: agentChainSchema.optional(),
+  })
+  .passthrough() // Allow additional custom metadata
+
 export const sendMessageSchema = z.object({
   content: z
     .string()
@@ -21,6 +39,7 @@ export const sendMessageSchema = z.object({
       }),
     )
     .optional(),
+  metadata: metadataSchema.optional(),
 })
 
 export const updateMessageSchema = z.object({

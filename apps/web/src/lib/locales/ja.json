@@ -192,7 +192,11 @@
     "leaveServer": "サーバーから退出",
     "leaveConfirm": "サーバー \"{{name}}\" から退出しますか？",
     "publicBadge": "公開",
-    "homeWelcome": "サイドバーからチャンネルを選択してチャットを開始するか、サーバーを探索してください。"
+    "homeWelcome": "サイドバーからチャンネルを選択してチャットを開始するか、サーバーを探索してください。",
+    "publicServer": "公開サーバー",
+    "privateServer": "非公開サーバー",
+    "publicServerDesc": "誰でも探索ページで発見できます",
+    "privateServerDesc": "招待コードでのみ参加可能"
   },
   "channel": {
     "serverSettings": "サーバー設定",
@@ -318,6 +322,13 @@
     "policySelectUsers": "ユーザーを選択...",
     "policySearchUsers": "ユーザーを検索...",
     "policyMentionOnlyDesc": "ボットが直接@メンションされた場合のみ返信",
+    "policyBuddyInteraction": "Buddy 連携",
+    "policyReplyToBuddy": "他の Buddy のメッセージに返信",
+    "policyReplyToBuddyDesc": "この Buddy がチャンネル内の他の Buddy のメッセージに返信できるようにします",
+    "policyMaxBuddyChainDepth": "最大会話チェーン深度",
+    "policyMaxBuddyChainDepthDesc": "Buddy 同士の無限ループ会話を防ぎます（デフォルト: 3）",
+    "policySmartReply": "スマート返信",
+    "policySmartReplyDesc": "明らかに他者向けのメッセージをスキップします（例: 他人には @ しているが自分には @ していない）",
     "notInChannel": "未参加",
     "inChannel": "参加中"
   },
@@ -719,7 +730,8 @@
     "listingDraft": "下書き",
     "listingPaused": "一時停止",
     "listingExpired": "期限切れ",
-    "listingClosed": "終了"
+    "listingClosed": "終了",
+    "totalOnlineTime": "累計オンライン時間"
   },
   "serverHome": {
     "welcome": "ようこそ",
@@ -866,6 +878,15 @@
     "tokenPassthrough": "トークン費用はテナント負担",
     "pricingNote": "料金説明：",
     "pricingExplain": "合計 = 基本レンタル + 電気代 (2🦐/h) + トークン使用量(有効時) + 5%プラットフォーム手数料。日額/月額は自動適用される割引です。",
+    "pricingExplainNew": "合計 = 基本日額 + メッセージ料金 + トークン使用量(有効時) + 5%プラットフォーム手数料。基本料金は毎日自動請求、メッセージ料金は定期精算。",
+    "baseDailyRate": "基本日額",
+    "baseDailyRateHint": "使用有無に関わらず毎日自動請求",
+    "messageFee": "メッセージ単価",
+    "messageFeeHint": "ユーザーが1通送信ごとに請求",
+    "messageCount": "メッセージ数",
+    "dailyBaseCost": "基本日額",
+    "estimatedMessageCost": "推定メッセージ料金",
+    "pricingDetail": "料金詳細",
     "availability": "利用可能時間",
     "availableFrom": "開始日時",
     "availableUntil": "終了日時",
@@ -902,7 +923,15 @@
     "delistSuccess": "Claw が取り下げられました",
     "delistHint": "取り下げるとこの Claw はマーケットに表示されなくなります",
     "confirmDelist": "この Claw を取り下げますか？",
-    "official": "公式"
+    "official": "公式",
+    "online": "オンライン",
+    "offline": "オフライン",
+    "totalOnline": "累計",
+    "expired": "期限切れ",
+    "listingRented": "貸出中",
+    "listingUnlisted": "取り下げ済み",
+    "relistClaw": "再出品",
+    "relistSuccess": "Claw が再出品されました"
   },
   "friends": {
     "title": "フレンド",
@@ -945,7 +974,11 @@
     "welcomeMessage": "会話の始まりです。",
     "noMessages": "まだメッセージがありません。最初のメッセージを送りましょう！",
     "inputPlaceholder": "メッセージを送信",
-    "inputPlaceholderDefault": "メッセージを送信"
+    "inputPlaceholderDefault": "メッセージを送信",
+    "chatDisabledRentedOut": "このBuddyは他のユーザーに貸し出されており、一時的に利用できません",
+    "chatDisabledListed": "このBuddyはマーケットに出品中で、一時的に利用できません",
+    "rentalCostTip": "🦐 本日の費用リマインダー：基本日額 {{baseDailyRate}}🦐 + メッセージ料金 {{messageFee}}🦐/通、累計 {{totalCost}}🦐、{{messageCount}}通送信済み",
+    "chatDisabledExpired": "使用権が期限切れです。継続するにはレンタルを更新してください"
   },
   "openclaw": {
     "nav": {
@@ -1201,5 +1234,15 @@
       "archAgent": "エージェント",
       "archDesc": "ユーザーが Shadow チャンネルでメッセージを送信 → Buddy 接続経由で転送 → クローサービスが処理 → エージェントが応答を生成 → チャンネルに返信"
     }
+  },
+  "time": {
+    "seconds": "秒",
+    "minutes": "分",
+    "hours": "時間",
+    "days": "日",
+    "dayShort": "日",
+    "hourShort": "時",
+    "minShort": "分",
+    "secShort": "秒"
   }
 }

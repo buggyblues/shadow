@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
-import type { TFunction } from 'i18next'
+import { useTranslation } from 'react-i18next'
+
+type TranslateFn = ReturnType<typeof useTranslation>['t']
+
 import {
   ChevronDown,
   ChevronLeft,
@@ -16,7 +19,6 @@ import {
   Users,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../lib/api'
 import { showToast } from '../lib/toast'
 import { useMarketplaceStore } from '../stores/marketplace.store'
@@ -32,6 +34,10 @@ interface Contract {
   expiresAt: string | null
   terminatedAt: string | null
   hourlyRate: number
+  baseDailyRate?: number
+  messageFee?: number
+  pricingVersion?: number
+  messageCount?: number
   depositAmount: number
   totalCost: number
   listing?: { title: string; deviceTier: string; osType: string } | null
@@ -47,9 +53,14 @@ interface MyListing {
   deviceTier: string
   osType: string
   hourlyRate: number
+  baseDailyRate?: number
+  messageFee?: number
+  pricingVersion?: number
   viewCount: number
   rentalCount: number
   createdAt: string
+  isRented?: boolean
+  activeTenantId?: string | null
   agent?: {
     status: string
     lastHeartbeat: string | null
@@ -87,10 +98,10 @@ function isAgentOnline(agent?: MyListing['agent']): boolean {
   return Date.now() - new Date(agent.lastHeartbeat).getTime() < 90_000
 }
 
-function formatOnlineDuration(seconds: number): string {
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟`
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}小时`
-  return `${Math.floor(seconds / 86400)}天${Math.floor((seconds % 86400) / 3600)}小时`
+function formatOnlineDuration(seconds: number, t: TranslateFn): string {
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}${t('time.minutes', '分钟')}`
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}${t('time.hours', '小时')}`
+  return `${Math.floor(seconds / 86400)}${t('time.days', '天')}${Math.floor((seconds % 86400) / 3600)}${t('time.hours', '小时')}`
 }
 
 export function MyRentalsPage() {
@@ -153,6 +164,21 @@ export function MyRentalsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplace'] })
       showToast(t('marketplace.delistSuccess', 'Claw 已下架'), 'success')
+    },
+    onError: (err: Error) => showToast(err.message, 'error'),
+  })
+
+  // Relist listing (toggle isListed to true)
+  const relistMutation = useMutation({
+    mutationFn: (id: string) =>
+      fetchApi(`/api/marketplace/listings/${id}/toggle`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isListed: true }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marketplace'] })
+      showToast(t('marketplace.relistSuccess', 'Claw 已重新上架'), 'success')
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })
@@ -306,7 +332,11 @@ export function MyRentalsPage() {
                                 ? `${Math.round((new Date(c.expiresAt).getTime() - new Date(c.startsAt).getTime()) / 3600000)}h`
                                 : t('marketplace.unlimited', '不限时')}
                             </span>
-                            <span>{c.hourlyRate} 🦐/h</span>
+                            <span>
+                              {c.pricingVersion === 2
+                                ? `${c.baseDailyRate ?? 0} 🦐/d`
+                                : `${c.hourlyRate} 🦐/h`}
+                            </span>
                           </div>
                         </div>
                         <div className="text-right">
@@ -360,6 +390,7 @@ export function MyRentalsPage() {
             t={t}
             toggleMutation={toggleMutation}
             delistMutation={delistMutation}
+            relistMutation={relistMutation}
             deleteMutation={deleteMutation}
           />
         )}
@@ -376,13 +407,15 @@ function ListingsSection({
   t,
   toggleMutation,
   delistMutation,
+  relistMutation,
   deleteMutation,
 }: {
   myListings: { listings: MyListing[] } | undefined
   isLoadingListings: boolean
-  t: TFunction
+  t: TranslateFn
   toggleMutation: { mutate: (p: { id: string; listingStatus: string }) => void }
   delistMutation: { mutate: (id: string) => void }
+  relistMutation: { mutate: (id: string) => void }
   deleteMutation: { mutate: (id: string) => void }
 }) {
   const [showOffline, setShowOffline] = useState(false)
@@ -423,6 +456,7 @@ function ListingsSection({
           t={t}
           toggleMutation={toggleMutation}
           delistMutation={delistMutation}
+          relistMutation={relistMutation}
           deleteMutation={deleteMutation}
         />
       ))}
@@ -447,6 +481,7 @@ function ListingsSection({
                 t={t}
                 toggleMutation={toggleMutation}
                 delistMutation={delistMutation}
+                relistMutation={relistMutation}
                 deleteMutation={deleteMutation}
               />
             ))}
@@ -461,24 +496,46 @@ function ListingCard({
   t,
   toggleMutation,
   delistMutation,
+  relistMutation,
   deleteMutation,
 }: {
   listing: MyListing
-  t: TFunction
+  t: TranslateFn
   toggleMutation: { mutate: (p: { id: string; listingStatus: string }) => void }
   delistMutation: { mutate: (id: string) => void }
+  relistMutation: { mutate: (id: string) => void }
   deleteMutation: { mutate: (id: string) => void }
 }) {
-  const ls = LISTING_STATUS[l.listingStatus] ?? LISTING_STATUS.draft!
   const online = isAgentOnline(l.agent)
+
+  // Determine effective display status considering isListed and isRented
+  let statusBadge: { label: string; bg: string; text: string }
+  if (l.isRented) {
+    statusBadge = {
+      label: t('marketplace.listingRented', '出租中'),
+      bg: 'bg-amber-50',
+      text: 'text-amber-700',
+    }
+  } else if (!l.isListed && l.listingStatus === 'active') {
+    statusBadge = {
+      label: t('marketplace.listingUnlisted', '已下架'),
+      bg: 'bg-gray-50',
+      text: 'text-gray-500',
+    }
+  } else {
+    const ls = LISTING_STATUS[l.listingStatus] ?? LISTING_STATUS.draft!
+    statusBadge = { label: t(ls.labelKey), bg: ls.bg, text: ls.text }
+  }
 
   return (
     <div className="bg-white/80 backdrop-blur rounded-2xl border-2 border-white/90 shadow-md p-6">
       <div className="flex items-center justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-1">
-            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${ls.bg} ${ls.text}`}>
-              {t(ls.labelKey)}
+            <span
+              className={`px-2.5 py-1 rounded-full text-xs font-bold ${statusBadge.bg} ${statusBadge.text}`}
+            >
+              {statusBadge.label}
             </span>
             {/* Online status indicator */}
             <span className="flex items-center gap-1.5 text-xs">
@@ -486,13 +543,14 @@ function ListingCard({
                 className={`w-2 h-2 rounded-full ${online ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}
               />
               <span className={online ? 'text-green-600 font-bold' : 'text-gray-400'}>
-                {online ? '在线' : '离线'}
+                {online ? t('marketplace.online', '在线') : t('marketplace.offline', '离线')}
               </span>
             </span>
             {l.agent?.totalOnlineSeconds ? (
               <span className="text-xs text-gray-400 flex items-center gap-1">
                 <Clock className="w-3 h-3" />
-                累计 {formatOnlineDuration(l.agent.totalOnlineSeconds)}
+                {t('marketplace.totalOnline', '累计')}{' '}
+                {formatOnlineDuration(l.agent.totalOnlineSeconds, t)}
               </span>
             ) : null}
             <span className="text-xs text-gray-400">
@@ -504,7 +562,9 @@ function ListingCard({
           </div>
           <h3 className="font-bold text-lg">{l.title}</h3>
           <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-            <span>{l.hourlyRate} 🦐/h</span>
+            <span>
+              {l.pricingVersion === 2 ? `${l.baseDailyRate ?? 0} 🦐/d` : `${l.hourlyRate} 🦐/h`}
+            </span>
             <span className="flex items-center gap-1">
               <Eye className="w-3.5 h-3.5" /> {l.viewCount}
             </span>
@@ -515,39 +575,53 @@ function ListingCard({
         </div>
 
         <div className="flex items-center gap-2">
-          {l.listingStatus === 'active' && l.isListed && (
-            <button
-              type="button"
-              onClick={() => {
-                if (window.confirm(t('marketplace.confirmDelist', '确定要下架此 Claw 吗？'))) {
-                  delistMutation.mutate(l.id)
-                }
-              }}
-              className="p-2 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
-              title={t('marketplace.delistClaw', '下架 Claw')}
-            >
-              <PackageMinus className="w-4 h-4" />
-            </button>
-          )}
-          {l.listingStatus === 'active' && (
-            <button
-              type="button"
-              onClick={() => toggleMutation.mutate({ id: l.id, listingStatus: 'paused' })}
-              className="p-2 rounded-lg text-yellow-600 hover:bg-yellow-50 transition-colors"
-              title={t('marketplace.pause', '暂停')}
-            >
-              <Pause className="w-4 h-4" />
-            </button>
-          )}
-          {l.listingStatus === 'paused' && (
-            <button
-              type="button"
-              onClick={() => toggleMutation.mutate({ id: l.id, listingStatus: 'active' })}
-              className="p-2 rounded-lg text-green-600 hover:bg-green-50 transition-colors"
-              title={t('marketplace.resume', '恢复')}
-            >
-              <Play className="w-4 h-4" />
-            </button>
+          {l.isRented ? null : (
+            <>
+              {l.listingStatus === 'active' && l.isListed && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm(t('marketplace.confirmDelist', '确定要下架此 Claw 吗？'))) {
+                      delistMutation.mutate(l.id)
+                    }
+                  }}
+                  className="p-2 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                  title={t('marketplace.delistClaw', '下架 Claw')}
+                >
+                  <PackageMinus className="w-4 h-4" />
+                </button>
+              )}
+              {l.listingStatus === 'active' && !l.isListed && (
+                <button
+                  type="button"
+                  onClick={() => relistMutation.mutate(l.id)}
+                  className="p-2 rounded-lg text-green-600 hover:bg-green-50 transition-colors"
+                  title={t('marketplace.relistClaw', '重新上架')}
+                >
+                  <Play className="w-4 h-4" />
+                </button>
+              )}
+              {l.listingStatus === 'active' && l.isListed && (
+                <button
+                  type="button"
+                  onClick={() => toggleMutation.mutate({ id: l.id, listingStatus: 'paused' })}
+                  className="p-2 rounded-lg text-yellow-600 hover:bg-yellow-50 transition-colors"
+                  title={t('marketplace.pause', '暂停')}
+                >
+                  <Pause className="w-4 h-4" />
+                </button>
+              )}
+              {l.listingStatus === 'paused' && (
+                <button
+                  type="button"
+                  onClick={() => toggleMutation.mutate({ id: l.id, listingStatus: 'active' })}
+                  className="p-2 rounded-lg text-green-600 hover:bg-green-50 transition-colors"
+                  title={t('marketplace.resume', '恢复')}
+                >
+                  <Play className="w-4 h-4" />
+                </button>
+              )}
+            </>
           )}
           <Link
             to={`/marketplace/edit/${l.id}`}
@@ -581,6 +655,7 @@ function ListingCard({
 /* ──────────────── Rental Countdown ──────────────── */
 
 function RentalCountdown({ expiresAt }: { expiresAt: string }) {
+  const { t } = useTranslation()
   const [remaining, setRemaining] = useState(() => calcRemaining(expiresAt))
 
   useEffect(() => {
@@ -591,13 +666,15 @@ function RentalCountdown({ expiresAt }: { expiresAt: string }) {
   }, [expiresAt])
 
   if (remaining <= 0) {
-    return <span className="text-xs font-bold text-red-500">已到期</span>
+    return (
+      <span className="text-xs font-bold text-red-500">{t('marketplace.expired', '已到期')}</span>
+    )
   }
 
   return (
     <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-cyan-700">
       <Clock className="w-3 h-3" />
-      {formatCountdown(remaining)}
+      {formatCountdown(remaining, t)}
     </span>
   )
 }
@@ -606,13 +683,15 @@ function calcRemaining(expiresAt: string): number {
   return Math.max(0, new Date(expiresAt).getTime() - Date.now())
 }
 
-function formatCountdown(ms: number): string {
+function formatCountdown(ms: number, t: TranslateFn): string {
   const totalSec = Math.floor(ms / 1000)
   const d = Math.floor(totalSec / 86400)
   const h = Math.floor((totalSec % 86400) / 3600)
   const m = Math.floor((totalSec % 3600) / 60)
   const s = totalSec % 60
-  if (d > 0) return `${d}天 ${h}时 ${m}分`
-  if (h > 0) return `${h}时 ${m}分 ${s}秒`
-  return `${m}分 ${s}秒`
+  if (d > 0)
+    return `${d}${t('time.dayShort', '天')} ${h}${t('time.hourShort', '时')} ${m}${t('time.minShort', '分')}`
+  if (h > 0)
+    return `${h}${t('time.hourShort', '时')} ${m}${t('time.minShort', '分')} ${s}${t('time.secShort', '秒')}`
+  return `${m}${t('time.minShort', '分')} ${s}${t('time.secShort', '秒')}`
 }

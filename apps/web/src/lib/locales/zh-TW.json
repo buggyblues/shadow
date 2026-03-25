@@ -192,7 +192,11 @@
     "leaveServer": "離開伺服器",
     "leaveConfirm": "確定要離開伺服器 \"{{name}}\" 嗎？",
     "publicBadge": "公開",
-    "homeWelcome": "從側欄選擇頻道開始聊天，或瀏覽伺服器。"
+    "homeWelcome": "從側欄選擇頻道開始聊天，或瀏覽伺服器。",
+    "publicServer": "公開伺服器",
+    "privateServer": "私有伺服器",
+    "publicServerDesc": "所有人都可以在探索頁面發現",
+    "privateServerDesc": "僅透過邀請碼加入"
   },
   "channel": {
     "serverSettings": "伺服器設定",
@@ -318,6 +322,13 @@
     "policySelectUsers": "選擇用戶...",
     "policySearchUsers": "搜尋用戶...",
     "policyMentionOnlyDesc": "僅在被直接 @提及時才回覆",
+    "policyBuddyInteraction": "Buddy 互動",
+    "policyReplyToBuddy": "回覆其他 Buddy 的訊息",
+    "policyReplyToBuddyDesc": "允許此 Buddy 回覆頻道中其他 Buddy 發送的訊息",
+    "policyMaxBuddyChainDepth": "最大對話鏈深度",
+    "policyMaxBuddyChainDepthDesc": "防止 Buddy 之間無限循環對話（預設：3）",
+    "policySmartReply": "智慧回覆",
+    "policySmartReplyDesc": "跳過明顯針對其他人的訊息（如 @ 了別人但沒 @ 自己）",
     "notInChannel": "未加入頻道",
     "inChannel": "已加入頻道"
   },
@@ -719,7 +730,8 @@
     "listingDraft": "草稿",
     "listingPaused": "已暫停",
     "listingExpired": "已過期",
-    "listingClosed": "已關閉"
+    "listingClosed": "已關閉",
+    "totalOnlineTime": "累計在線時長"
   },
   "serverHome": {
     "welcome": "歡迎來到",
@@ -866,6 +878,15 @@
     "tokenPassthrough": "Token 費用由使用方承擔",
     "pricingNote": "定價說明：",
     "pricingExplain": "最終費用 = 基礎租金 + 電費 (2🦐/h) + Token消耗 (如開啟代付) + 5% 平台手續費。日租/月租為優惠價，系統會自動選擇最優方案。",
+    "pricingExplainNew": "總費用 = 基礎每日費用 + 訊息次數費 + Token消耗(如開啟代付) + 5% 平台手續費。基礎費用每日自動收取，訊息費按使用次數定期結算。",
+    "baseDailyRate": "基礎每日費用",
+    "baseDailyRateHint": "不管是否使用，每天自動收取",
+    "messageFee": "每條訊息費用",
+    "messageFeeHint": "用戶每發送一條訊息收取的費用",
+    "messageCount": "訊息次數",
+    "dailyBaseCost": "基礎日費",
+    "estimatedMessageCost": "預估訊息費",
+    "pricingDetail": "費率詳情",
     "availability": "可用時間",
     "availableFrom": "開始時間",
     "availableUntil": "結束時間",
@@ -902,7 +923,15 @@
     "delistSuccess": "Claw 已成功下架",
     "delistHint": "下架後該 Claw 將不再出現在市場中",
     "confirmDelist": "確定要下架這隻 Claw 嗎？",
-    "official": "官方"
+    "official": "官方",
+    "online": "在線",
+    "offline": "離線",
+    "totalOnline": "累計",
+    "expired": "已到期",
+    "listingRented": "出租中",
+    "listingUnlisted": "已下架",
+    "relistClaw": "重新上架",
+    "relistSuccess": "Claw 已重新上架"
   },
   "friends": {
     "title": "好友",
@@ -945,7 +974,11 @@
     "welcomeMessage": "這是你們的聊天記錄的開始。",
     "noMessages": "還沒有訊息，發送第一條訊息開始聊天吧！",
     "inputPlaceholder": "發送訊息",
-    "inputPlaceholderDefault": "發送訊息"
+    "inputPlaceholderDefault": "發送訊息",
+    "chatDisabledRentedOut": "該 Buddy 已出租給其他用戶，暫時無法聊天",
+    "chatDisabledListed": "該 Buddy 已在集市掛單中，暫時無法聊天",
+    "rentalCostTip": "🦐 今日費用提醒：基礎日費 {{baseDailyRate}}🦐 + 訊息費 {{messageFee}}🦐/條，累計花費 {{totalCost}}🦐，已發送 {{messageCount}} 條訊息",
+    "chatDisabledExpired": "使用權已到期，請續租後再使用"
   },
   "openclaw": {
     "nav": {
@@ -1201,5 +1234,15 @@
       "archAgent": "智能體",
       "archDesc": "使用者在 Shadow 頻道發送訊息 → 透過 Buddy 連線轉發 → 龍蝦服務處理 → 智能體產生回覆 → 返回頻道"
     }
+  },
+  "time": {
+    "seconds": "秒",
+    "minutes": "分鐘",
+    "hours": "小時",
+    "days": "天",
+    "dayShort": "天",
+    "hourShort": "時",
+    "minShort": "分",
+    "secShort": "秒"
   }
 }

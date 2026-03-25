@@ -25,7 +25,7 @@ function checkTestOnlyDirectives() {
     'apps/desktop/__tests__',
     'apps/web/__tests__',
     'packages/shared/__tests__',
-    'packages/openclaw/__tests__',
+    'packages/openclaw-shadowob/__tests__',
     'apps/desktop/e2e',
   ]
 

@@ -397,7 +397,7 @@ export class ConfigService {
 
   getShadowChannelBlock(): Record<string, unknown> {
     const config = this.read()
-    const current = config.channels?.shadowob
+    const current = config.channels?.shadowob ?? config.channels?.['openclaw-shadowob']
     if (current && typeof current === 'object' && !Array.isArray(current)) {
       return current as Record<string, unknown>
     }
@@ -549,8 +549,24 @@ export class ConfigService {
       }
     }
 
-    // 6. Strip localAgentId from channel accounts (desktop-only, not part of OpenClaw schema)
-    const shadowBlock = cfg.channels?.shadowob as Record<string, unknown> | undefined
+    // 6. Migrate old channels['openclaw-shadowob'] → channels.shadowob (channel name is 'shadowob')
+    if (cfg.channels?.['openclaw-shadowob'] && !cfg.channels?.shadowob) {
+      cfg.channels.shadowob = cfg.channels['openclaw-shadowob']
+      delete cfg.channels['openclaw-shadowob']
+      dirty = true
+    } else if (cfg.channels?.['openclaw-shadowob'] && cfg.channels?.shadowob) {
+      // Both exist — merge into 'shadowob', drop old key
+      const oldBlock = cfg.channels['openclaw-shadowob'] as Record<string, unknown>
+      const newBlock = cfg.channels.shadowob as Record<string, unknown>
+      cfg.channels.shadowob = { ...oldBlock, ...newBlock }
+      delete cfg.channels['openclaw-shadowob']
+      dirty = true
+    }
+
+    // 6b. Strip localAgentId from channel accounts (desktop-only, not part of OpenClaw schema)
+    const shadowBlock = (cfg.channels?.shadowob ?? cfg.channels?.['openclaw-shadowob']) as
+      | Record<string, unknown>
+      | undefined
     if (shadowBlock?.accounts && typeof shadowBlock.accounts === 'object') {
       const accounts = shadowBlock.accounts as Record<string, Record<string, unknown>>
       for (const acct of Object.values(accounts)) {
@@ -562,17 +578,19 @@ export class ConfigService {
     }
 
     const allow = cfg.plugins.allow as string[] | undefined
-    if (!allow || !allow.includes('shadowob')) {
-      cfg.plugins.allow = ['shadowob']
+    if (!allow || !allow.includes('openclaw-shadowob')) {
+      cfg.plugins.allow = ['openclaw-shadowob']
       dirty = true
     }
 
     // 8.5 Migrate accountAgentMap → bindings (OpenClaw native multi-agent routing)
     // Step A: collect all accountAgentMap entries from both old locations
-    const oldPluginMap = cfg.plugins.entries?.shadowob?.config?.accountAgentMap as
-      | Record<string, string>
-      | undefined
-    const sb = (cfg.channels?.shadowob ?? {}) as Record<string, unknown>
+    const oldPluginMap = (cfg.plugins.entries?.['openclaw-shadowob']?.config?.accountAgentMap ??
+      cfg.plugins.entries?.shadowob?.config?.accountAgentMap) as Record<string, string> | undefined
+    const sb = (cfg.channels?.shadowob ?? cfg.channels?.['openclaw-shadowob'] ?? {}) as Record<
+      string,
+      unknown
+    >
     const channelMap = sb.accountAgentMap as Record<string, string> | undefined
 
     const allMappings: Record<string, string> = { ...oldPluginMap, ...channelMap }
@@ -582,16 +600,24 @@ export class ConfigService {
       for (const [accId, agId] of Object.entries(allMappings)) {
         // Only add if no binding already exists for this (channel, accountId)
         const exists = cfg.bindings.some(
-          (b) => b.match.channel === 'shadowob' && b.match.accountId === accId,
+          (b) =>
+            (b.match.channel === 'shadowob' || b.match.channel === 'openclaw-shadowob') &&
+            b.match.accountId === accId,
         )
         if (!exists) {
-          cfg.bindings.push({ agentId: agId, match: { channel: 'shadowob', accountId: accId } })
+          cfg.bindings.push({
+            agentId: agId,
+            match: { channel: 'shadowob', accountId: accId },
+          })
         }
       }
 
       // Clean up old accountAgentMap from both locations
-      if (oldPluginMap) {
-        delete cfg.plugins.entries!.shadowob!.config!.accountAgentMap
+      if (cfg.plugins.entries?.['openclaw-shadowob']?.config?.accountAgentMap) {
+        delete cfg.plugins.entries['openclaw-shadowob'].config!.accountAgentMap
+      }
+      if (cfg.plugins.entries?.shadowob?.config?.accountAgentMap) {
+        delete cfg.plugins.entries.shadowob.config!.accountAgentMap
       }
       if (channelMap) {
         delete (sb as Record<string, unknown>).accountAgentMap
@@ -600,7 +626,27 @@ export class ConfigService {
       dirty = true
     }
 
-    // 8.6 Ensure non-main agents have workspace set (multi-agent isolation)
+    // 8.6 Migrate old bindings: channel 'openclaw-shadowob' → 'shadowob'
+    if (cfg.bindings?.length) {
+      for (const b of cfg.bindings) {
+        if (b.match.channel === 'openclaw-shadowob') {
+          b.match.channel = 'shadowob'
+          dirty = true
+        }
+      }
+    }
+
+    // 8.7 Migrate old plugins.entries.shadowob → plugins.entries['openclaw-shadowob']
+    if (cfg.plugins.entries?.shadowob && !cfg.plugins.entries?.['openclaw-shadowob']) {
+      cfg.plugins.entries['openclaw-shadowob'] = cfg.plugins.entries.shadowob
+      delete cfg.plugins.entries.shadowob
+      dirty = true
+    } else if (cfg.plugins.entries?.shadowob) {
+      delete cfg.plugins.entries.shadowob
+      dirty = true
+    }
+
+    // 8.8 Ensure non-main agents have workspace set (multi-agent isolation)
     for (const agent of cfg.agents.list) {
       if (agent.id !== 'main' && !agent.workspace) {
         agent.workspace = join(this.paths.workspaceDir, agent.id)
@@ -650,12 +696,12 @@ export class ConfigService {
       channels: {},
       plugins: {
         enabled: true,
-        allow: ['shadowob'],
+        allow: ['openclaw-shadowob'],
         load: {
           paths: pluginLoadPaths,
         },
         entries: {
-          shadowob: { enabled: true },
+          'openclaw-shadowob': { enabled: true },
         },
       },
       skills: {

@@ -192,7 +192,11 @@
     "leaveServer": "서버 나가기",
     "leaveConfirm": "서버 \"{{name}}\"에서 나가시겠습니까?",
     "publicBadge": "공개",
-    "homeWelcome": "사이드바에서 채널을 선택하여 채팅을 시작하거나 서버를 탐색하세요."
+    "homeWelcome": "사이드바에서 채널을 선택하여 채팅을 시작하거나 서버를 탐색하세요.",
+    "publicServer": "공개 서버",
+    "privateServer": "비공개 서버",
+    "publicServerDesc": "누구나 탐색 페이지에서 발견할 수 있습니다",
+    "privateServerDesc": "초대 코드로만 참가 가능"
   },
   "channel": {
     "serverSettings": "서버 설정",
@@ -318,6 +322,13 @@
     "policySelectUsers": "사용자 선택...",
     "policySearchUsers": "사용자 검색...",
     "policyMentionOnlyDesc": "봇이 직접 @멘션된 경우에만 답장",
+    "policyBuddyInteraction": "Buddy 상호작용",
+    "policyReplyToBuddy": "다른 Buddy의 메시지에 답장",
+    "policyReplyToBuddyDesc": "이 Buddy가 채널 내 다른 Buddy가 보낸 메시지에 답장하도록 허용합니다",
+    "policyMaxBuddyChainDepth": "최대 대화 체인 깊이",
+    "policyMaxBuddyChainDepthDesc": "Buddy 간 무한 루프 대화를 방지합니다 (기본값: 3)",
+    "policySmartReply": "스마트 답장",
+    "policySmartReplyDesc": "명백히 다른 사람을 향한 메시지는 건너뜁니다 (예: 다른 사람만 @하고 자신은 @하지 않음)",
     "notInChannel": "채널 미참여",
     "inChannel": "채널 참여 중"
   },
@@ -719,7 +730,8 @@
     "listingDraft": "초안",
     "listingPaused": "일시 중지",
     "listingExpired": "만료됨",
-    "listingClosed": "종료됨"
+    "listingClosed": "종료됨",
+    "totalOnlineTime": "누적 온라인 시간"
   },
   "serverHome": {
     "welcome": "환영합니다",
@@ -866,6 +878,15 @@
     "tokenPassthrough": "토큰 비용은 임차인 부담",
     "pricingNote": "요금 안내:",
     "pricingExplain": "합계 = 기본 대여료 + 전기요금 (2🦐/h) + 토큰 사용량(활성화 시) + 5% 플랫폼 수수료. 일간/월간 요금은 자동 적용 할인입니다.",
+    "pricingExplainNew": "합계 = 기본 일액 + 메시지 요금 + 토큰 사용량(활성화 시) + 5% 플랫폼 수수료. 기본 요금은 매일 자동 청구, 메시지 요금은 정기 정산됩니다.",
+    "baseDailyRate": "기본 일액",
+    "baseDailyRateHint": "사용 여부와 관계없이 매일 자동 청구",
+    "messageFee": "메시지 단가",
+    "messageFeeHint": "사용자가 1건 전송 시마다 청구",
+    "messageCount": "메시지 수",
+    "dailyBaseCost": "기본 일액",
+    "estimatedMessageCost": "예상 메시지 요금",
+    "pricingDetail": "요금 상세",
     "availability": "이용 가능 시간",
     "availableFrom": "시작 시간",
     "availableUntil": "종료 시간",
@@ -902,7 +923,15 @@
     "delistSuccess": "Claw가 하장되었습니다",
     "delistHint": "하장하면 이 Claw가 더 이상 마켓에 표시되지 않습니다",
     "confirmDelist": "이 Claw를 하장하시겠습니까?",
-    "official": "공식"
+    "official": "공식",
+    "online": "온라인",
+    "offline": "오프라인",
+    "totalOnline": "누적",
+    "expired": "만료됨",
+    "listingRented": "대여 중",
+    "listingUnlisted": "하장됨",
+    "relistClaw": "재등록",
+    "relistSuccess": "Claw가 재등록되었습니다"
   },
   "friends": {
     "title": "친구",
@@ -945,7 +974,11 @@
     "welcomeMessage": "대화의 시작입니다.",
     "noMessages": "아직 메시지가 없습니다. 첫 번째 메시지를 보내보세요!",
     "inputPlaceholder": "메시지 보내기",
-    "inputPlaceholderDefault": "메시지 보내기"
+    "inputPlaceholderDefault": "메시지 보내기",
+    "chatDisabledRentedOut": "이 Buddy는 다른 사용자에게 대여되어 일시적으로 사용할 수 없습니다",
+    "chatDisabledListed": "이 Buddy는 마켓플레이스에 등록되어 일시적으로 사용할 수 없습니다",
+    "rentalCostTip": "🦐 오늘의 비용 알림: 기본 일액 {{baseDailyRate}}🦐 + 메시지 요금 {{messageFee}}🦐/건, 누적 {{totalCost}}🦐, {{messageCount}}건 전송",
+    "chatDisabledExpired": "사용권이 만료되었습니다. 계속하려면 대여를 갱신해 주세요."
   },
   "openclaw": {
     "nav": {
@@ -1201,5 +1234,15 @@
       "archAgent": "에이전트",
       "archDesc": "사용자가 Shadow 채널에서 메시지 전송 → Buddy 연결을 통해 전달 → 크로 서비스 처리 → 에이전트가 응답 생성 → 채널로 반환"
     }
+  },
+  "time": {
+    "seconds": "초",
+    "minutes": "분",
+    "hours": "시간",
+    "days": "일",
+    "dayShort": "일",
+    "hourShort": "시",
+    "minShort": "분",
+    "secShort": "초"
   }
 }

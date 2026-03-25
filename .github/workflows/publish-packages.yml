@@ -178,6 +178,12 @@ jobs:
           sed -i "s/^version = \".*\"/version = \"${SDK_VERSION}\"/" packages/sdk-python/pyproject.toml
           pnpm check:sdk-versions
 
+      - name: Build npm publish artifacts
+        if: inputs.publish_npm
+        shell: bash
+        run: |
+          pnpm -r ${NPM_FILTERS} build
+
       - name: Build Python distribution
         if: inputs.publish_pypi
         run: |
@@ -204,7 +210,7 @@ jobs:
         if: inputs.dry_run
         run: |
           echo "dry_run=true, publish/tag/release steps were skipped."
-          echo "built SDK artifacts and verified version consistency only."
+          echo "built npm/python artifacts and verified version consistency only."
 
       - name: Commit and tag release
         if: ${{ !inputs.dry_run }}

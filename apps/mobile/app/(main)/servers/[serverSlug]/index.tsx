@@ -1,4 +1,4 @@
-import type { Channel, ChannelSortBy } from '@shadow/shared'
+import type { Channel, ChannelSortBy } from '@shadowob/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -61,7 +61,7 @@ import { spacing, useColors } from '../../../../src/theme'
 // ── Types ────────────────────────────────────────────────────────────────────
 
 interface ServerChannel extends Channel {
-  categoryId: string | null
+  categoryId?: string | null
   isPrivate?: boolean
 }
 
@@ -251,7 +251,7 @@ export default function ServerHomeScreen() {
 
   const grouped = useMemo(() => {
     const sorted = [...categories].sort((a, b) => a.position - b.position)
-    const groups: { category: Category | null; channels: Channel[] }[] = []
+    const groups: { category: Category | null; channels: ServerChannel[] }[] = []
 
     const uncategorized = sortedChannels.filter((c) => !c.categoryId)
     if (uncategorized.length > 0) {

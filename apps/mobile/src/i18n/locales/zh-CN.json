@@ -71,6 +71,8 @@
     "ctaButton": "立即免费入驻"
   },
   "auth": {
+    "brandName": "虾豆 ShadowOwnBuddy",
+    "brandSlogan": "超级个体的超级社区",
     "loginTitle": "欢迎回来",
     "loginSubtitle": "很高兴再次见到你！",
     "emailLabel": "电子邮箱",
@@ -293,7 +295,9 @@
     "noSearchResults": "未找到匹配的 Buddy",
     "homepageHtml": "主页 HTML",
     "homepageHtmlPlaceholder": "<h1>欢迎！</h1>\n<p>这是服务器主页。</p>",
-    "homepageHtmlDesc": "服务器主页的自定义 HTML。留空使用默认主页。"
+    "homepageHtmlDesc": "服务器主页的自定义 HTML。留空使用默认主页。",
+    "privateChannel": "私有频道",
+    "privateChannelDesc": "仅受邀成员可加入"
   },
   "chat": {
     "selectChannel": "选择一个频道开始聊天",
@@ -408,7 +412,14 @@
     "inChannel": "已加入频道",
     "inviteMembers": "邀请成员",
     "searchMembers": "搜索成员...",
-    "allMembersAdded": "所有服务器成员已在此频道中"
+    "allMembersAdded": "所有服务器成员已在此频道中",
+    "policyBuddyInteraction": "Buddy 互动",
+    "policyReplyToBuddy": "回复其他 Buddy 的消息",
+    "policyReplyToBuddyDesc": "允许此 Buddy 回复频道中其他 Buddy 发送的消息",
+    "policyMaxBuddyChainDepth": "最大对话链深度",
+    "policyMaxBuddyChainDepthDesc": "防止 Buddy 之间无限循环对话（默认：3）",
+    "policySmartReply": "智能回复",
+    "policySmartReplyDesc": "跳过明显针对其他人的消息（如 @了别人但没 @ 自己）"
   },
   "features": {
     "pageTitle": "所有你需要的协作功能",
@@ -677,7 +688,7 @@
     "faq10q": "Buddy 可以接入哪些 AI 模型？",
     "faq10a": "通过 OpenClaw 插件，Buddy 可以接入任意 AI 后端，包括 OpenAI、Claude、本地模型等。具体取决于你的 OpenClaw 配置。",
     "openclawDoc": "OpenClaw 插件",
-    "openclawIntro": "OpenClaw 是一个可扩展的 AI Buddy框架。Shadow 插件（@shadowob/openclaw）让 AI Buddy可以无缝融入 Shadow 频道进行协作。",
+    "openclawIntro": "OpenClaw 是一个可扩展的 AI Buddy框架。Shadow 插件（@shadowob/openclaw-shadowob）让 AI Buddy可以无缝融入 Shadow 频道进行协作。",
     "openclawWhat": "什么是 OpenClaw？",
     "openclawWhatDesc": "OpenClaw 是一个基于插件的 AI Buddy平台，可以连接各种消息服务。Shadow 插件让你的 AI Buddy加入服务器、参与对话、发送媒体、回复消息——所有操作都通过 Socket.IO 实时完成。",
     "openclawInstall": "安装",

@@ -77,4 +77,4 @@ Shadow 使用的技术和框架完整列表。
 | TypeScript SDK | TypeScript | `@shadowob/sdk` |
 | Python SDK | Python | `shadow-sdk` |
 | OAuth SDK | TypeScript | `@shadowob/oauth` |
-| OpenClaw 插件 | TypeScript | `@shadowob/openclaw` |
+| OpenClaw 插件 | TypeScript | `@shadowob/openclaw-shadowob` |

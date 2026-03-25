@@ -293,6 +293,7 @@ interface ChatComposerProps {
   onPickImage: () => void
   onPickFile: () => void
   onTakePhoto?: () => void
+  onPasteImage?: (imageDataUri: string) => void
 }
 
 function ImageViewerModal({
@@ -409,12 +410,17 @@ export const ChatComposer = memo(function ChatComposer({
     const showSub = Keyboard.addListener(showEvent, (e) => {
       keyboardUpRef.current = true
       panelIntentRef.current = false
-      const height = e.endCoordinates.height
+      // Prefer native keyboard height to avoid over-lifting the input bar.
+      // Fallback to screenY delta only when native height is unavailable.
+      const screenHeight = Dimensions.get('window').height
+      const keyboardHeight = e.endCoordinates.height
+      const fallbackHeight = Math.max(0, screenHeight - e.endCoordinates.screenY)
+      const actualHeight = keyboardHeight > 0 ? keyboardHeight : fallbackHeight
       const duration = e.duration ?? 250
       // Close panels — keyboard takes over the bottom slot
       setShowPlusMenu(false)
       setShowEmojiPicker(false)
-      animateBottomTo(height, duration)
+      animateBottomTo(actualHeight, duration)
     })
 
     const hideSub = Keyboard.addListener(hideEvent, (e) => {
@@ -553,7 +559,8 @@ export const ChatComposer = memo(function ChatComposer({
           {
             backgroundColor: colors.surface,
             borderTopColor: colors.border,
-            paddingBottom: 8,
+            paddingBottom: spacing.sm,
+            paddingTop: spacing.sm,
           },
         ]}
       >

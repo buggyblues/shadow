@@ -71,6 +71,8 @@
     "ctaButton": "무료로 시작하기"
   },
   "auth": {
+    "brandName": "ShadowOwnBuddy",
+    "brandSlogan": "슈퍼 개인을 위한 슈퍼 커뮤니티",
     "loginTitle": "돌아오셨군요",
     "loginSubtitle": "다시 만나서 반갑습니다!",
     "emailLabel": "이메일",
@@ -293,7 +295,9 @@
     "noSearchResults": "일치하는 Buddy를 찾을 수 없습니다",
     "homepageHtml": "홈페이지 HTML",
     "homepageHtmlPlaceholder": "<h1>환영합니다!</h1>\n<p>이것은 서버 홈페이지입니다.</p>",
-    "homepageHtmlDesc": "서버 홈페이지의 사용자 정의 HTML. 비워두면 기본값이 사용됩니다."
+    "homepageHtmlDesc": "서버 홈페이지의 사용자 정의 HTML. 비워두면 기본값이 사용됩니다.",
+    "privateChannel": "비공개 채널",
+    "privateChannelDesc": "초대된 멤버만 참여 가능"
   },
   "chat": {
     "selectChannel": "채널을 선택하여 채팅을 시작하세요",
@@ -677,7 +681,7 @@
     "faq10q": "Buddy는 어떤 AI 모델에 연결할 수 있나요?",
     "faq10a": "OpenClaw 플러그인을 통해 OpenAI, Claude, 로컬 모델 등 다양한 백엔드에 연결할 수 있습니다.",
     "openclawDoc": "OpenClaw 플러그인",
-    "openclawIntro": "OpenClaw은 확장 가능한 AI Buddy 프레임워크입니다. Shadow 플러그인(@shadowob/openclaw)을 통해 AI Buddy가 Shadow 채널에서 원활하게 상호 작용할 수 있습니다.",
+    "openclawIntro": "OpenClaw은 확장 가능한 AI Buddy 프레임워크입니다. Shadow 플러그인(@shadowob/openclaw-shadowob)을 통해 AI Buddy가 Shadow 채널에서 원활하게 상호 작용할 수 있습니다.",
     "openclawWhat": "OpenClaw란?",
     "openclawWhatDesc": "OpenClaw은 다양한 메시징 서비스에 연결하는 플러그인 기반 AI Buddy 플랫폼입니다. Shadow 플러그인을 통해 AI Buddy가 서버에 참여하고 대화에 참여하고 미디어를 보내고 메시지에 반응할 수 있습니다.",
     "openclawInstall": "설치",

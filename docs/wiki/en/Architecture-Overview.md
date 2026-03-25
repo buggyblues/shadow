@@ -58,7 +58,7 @@ Shadow is a monorepo comprising **5 deployable applications** and **6 shared pac
 | `@shadowob/shared` | `packages/shared` | Types, constants, utilities shared across all apps |
 | `@shadowob/ui` | `packages/ui` | Reusable UI component library (Radix-based) |
 | `@shadowob/sdk` | `packages/sdk` | Typed REST client + Socket.IO event listener |
-| `@shadowob/openclaw` | `packages/openclaw` | OpenClaw agent channel plugin |
+| `@shadowob/openclaw-shadowob` | `packages/openclaw-shadowob` | OpenClaw agent channel plugin |
 | `@shadowob/oauth` | `packages/oauth` | OAuth SDK for third-party apps |
 | `shadowob-sdk` (Python) | `packages/sdk-python` | Python client for Shadow API |
 
@@ -71,7 +71,7 @@ Shadow is a monorepo comprising **5 deployable applications** and **6 shared pac
 @shadowob/desktop   ──→ @shadowob/shared
 @shadowob/mobile    ──→ @shadowob/shared
 @shadowob/sdk       ──→ @shadowob/shared
-@shadowob/openclaw  ──→ @shadowob/sdk
+@shadowob/openclaw-shadowob  ──→ @shadowob/sdk
 @shadowob/ui        ──→ (no internal deps)
 @shadowob/shared    ──→ (no internal deps)
 ```

@@ -1,6 +1,7 @@
 import { Download, FolderPlus, Image, Info, Link } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { showToast } from '../../lib/toast'
+import { useContextMenuPosition } from '../common/context-menu'
 
 interface ImageContextMenuProps {
   x: number
@@ -24,23 +25,9 @@ export function ImageContextMenu({
   onSaveToWorkspace,
 }: ImageContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState({ x, y })
+  const position = useContextMenuPosition(x, y, menuRef, 180)
   const [showInfo, setShowInfo] = useState(false)
   const [dimensions, setDimensions] = useState<{ w: number; h: number } | null>(null)
-
-  // Adjust position to stay within viewport
-  useEffect(() => {
-    const el = menuRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    let px = x
-    let py = y
-    if (px + rect.width > window.innerWidth - 8) px = window.innerWidth - rect.width - 8
-    if (py + rect.height > window.innerHeight - 8) py = window.innerHeight - rect.height - 8
-    if (px < 8) px = 8
-    if (py < 8) py = 8
-    setPos({ x: px, y: py })
-  }, [x, y])
 
   // Load image dimensions
   useEffect(() => {
@@ -101,8 +88,8 @@ export function ImageContextMenu({
       />
       <div
         ref={menuRef}
-        className="fixed z-[81] bg-bg-tertiary border border-border-dim rounded-xl shadow-2xl py-1.5 min-w-[180px]"
-        style={{ left: pos.x, top: pos.y }}
+        className="fixed z-[81] bg-bg-tertiary/95 backdrop-blur-md border border-border-dim/60 rounded-xl shadow-2xl py-1.5 min-w-[180px]"
+        style={{ left: position.x, top: position.y }}
       >
         {items.map((item) => (
           <button

@@ -77,4 +77,4 @@ Comprehensive list of technologies and frameworks used in Shadow.
 | TypeScript SDK | TypeScript | `@shadowob/sdk` |
 | Python SDK | Python | `shadow-sdk` |
 | OAuth SDK | TypeScript | `@shadowob/oauth` |
-| OpenClaw Plugin | TypeScript | `@shadowob/openclaw` |
+| OpenClaw Plugin | TypeScript | `@shadowob/openclaw-shadowob` |

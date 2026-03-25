@@ -48,7 +48,7 @@ jobs:
             desktop:
               - 'apps/desktop/**'
               - 'packages/shared/**'
-              - 'packages/openclaw/**'
+              - 'packages/openclaw-shadowob/**'
             mobile:
               - 'apps/mobile/**'
               - 'packages/shared/**'

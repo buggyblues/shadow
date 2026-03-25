@@ -194,7 +194,11 @@
     "leaveServer": "Leave Server",
     "leaveConfirm": "Are you sure you want to leave \"{{name}}\"?",
     "publicBadge": "Public",
-    "homeWelcome": "Select a channel from the sidebar to start chatting, or explore the server."
+    "homeWelcome": "Select a channel from the sidebar to start chatting, or explore the server.",
+    "publicServer": "Public Server",
+    "privateServer": "Private Server",
+    "publicServerDesc": "Discoverable by everyone on the Discover page",
+    "privateServerDesc": "Join by invite code only"
   },
   "channel": {
     "serverSettings": "Server Settings",
@@ -321,7 +325,14 @@
     "policySearchUsers": "Search users...",
     "policyMentionOnlyDesc": "Only reply when the Buddy is directly @mentioned",
     "notInChannel": "Not in channel",
-    "inChannel": "In channel"
+    "inChannel": "In channel",
+    "policyBuddyInteraction": "Buddy Interaction",
+    "policyReplyToBuddy": "Reply to other Buddy messages",
+    "policyReplyToBuddyDesc": "Allow this Buddy to reply to messages from other Buddies in the channel",
+    "policyMaxBuddyChainDepth": "Max conversation chain depth",
+    "policyMaxBuddyChainDepthDesc": "Prevent infinite loops between Buddies (default: 3)",
+    "policySmartReply": "Smart Reply",
+    "policySmartReplyDesc": "Skip messages clearly targeting others (e.g., @mentions others but not this Buddy)"
   },
   "features": {
     "pageTitle": "All the Collaboration Features You Need",
@@ -721,7 +732,8 @@
     "listingDraft": "Draft",
     "listingPaused": "Paused",
     "listingExpired": "Expired",
-    "listingClosed": "Closed"
+    "listingClosed": "Closed",
+    "totalOnlineTime": "Total Online Time"
   },
   "serverHome": {
     "welcome": "Welcome to",
@@ -867,6 +879,15 @@
     "tokenPassthrough": "Token costs paid by tenant",
     "pricingNote": "Pricing Info:",
     "pricingExplain": "Total = Base rental + Electricity (2🦐/h) + Token usage (if enabled) + 5% platform fee. Daily/monthly rates are discounts applied automatically.",
+    "pricingExplainNew": "Total = Base daily fee + Message fee + Token usage (if enabled) + 5% platform fee. Base fee is charged daily, message fee is settled periodically.",
+    "baseDailyRate": "Base Daily Fee",
+    "baseDailyRateHint": "Charged daily regardless of usage",
+    "messageFee": "Per-Message Fee",
+    "messageFeeHint": "Charged per message sent by user",
+    "messageCount": "Messages",
+    "dailyBaseCost": "Daily Base Cost",
+    "estimatedMessageCost": "Est. Message Cost",
+    "pricingDetail": "Pricing Details",
     "availability": "Availability",
     "availableFrom": "Available From",
     "availableUntil": "Available Until",
@@ -904,7 +925,15 @@
     "delistSuccess": "Claw has been delisted",
     "delistHint": "Once delisted, this Claw will no longer appear in the marketplace",
     "confirmDelist": "Are you sure you want to delist this Claw?",
-    "official": "Official"
+    "official": "Official",
+    "online": "Online",
+    "offline": "Offline",
+    "totalOnline": "Total",
+    "expired": "Expired",
+    "listingRented": "Rented Out",
+    "listingUnlisted": "Unlisted",
+    "relistClaw": "Relist Claw",
+    "relistSuccess": "Claw has been relisted"
   },
   "friends": {
     "title": "Friends",
@@ -947,7 +976,11 @@
     "welcomeMessage": "This is the beginning of your conversation.",
     "noMessages": "No messages yet — send the first one!",
     "inputPlaceholder": "Send a message",
-    "inputPlaceholderDefault": "Send a message"
+    "inputPlaceholderDefault": "Send a message",
+    "chatDisabledRentedOut": "This Buddy is rented by another user and temporarily unavailable",
+    "chatDisabledListed": "This Buddy is listed on the marketplace and temporarily unavailable",
+    "rentalCostTip": "🦐 Daily cost reminder: Base fee {{baseDailyRate}}🦐 + Message fee {{messageFee}}🦐/msg, total spent {{totalCost}}🦐, {{messageCount}} messages sent",
+    "chatDisabledExpired": "Your usage rights have expired. Please renew your rental to continue."
   },
   "openclaw": {
     "nav": {
@@ -1343,5 +1376,15 @@
     "timeout": "Waiting timeout",
     "timeoutDesc": "You can configure Buddy later in settings",
     "redirecting": "Redirecting to server..."
+  },
+  "time": {
+    "seconds": "s",
+    "minutes": "min",
+    "hours": "h",
+    "days": "d",
+    "dayShort": "d",
+    "hourShort": "h",
+    "minShort": "m",
+    "secShort": "s"
   }
 }

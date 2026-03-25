@@ -102,7 +102,7 @@ export class GatewayService {
 
     return new Promise((resolve) => {
       const openclawDir = this.paths.root
-      const npmArgs = ['install', '@shadowob/openclaw@latest', '--save']
+      const npmArgs = ['install', '@shadowob/openclaw-shadowob@latest', '--save']
 
       const pkgJsonPath = join(openclawDir, 'package.json')
       if (!existsSync(pkgJsonPath)) {

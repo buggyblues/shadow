@@ -1,0 +1,77 @@
+{
+  "name": "@shadowob/openclaw-shadowob",
+  "version": "1.1.1",
+  "description": "OpenClaw Shadow channel plugin — enables AI agents to interact in Shadow server channels",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "exports": {
+    ".": {
+      "development": "./index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./setup-entry": {
+      "development": "./setup-entry.ts",
+      "import": "./dist/setup-entry.js",
+      "default": "./dist/setup-entry.js"
+    }
+  },
+  "files": [
+    "dist",
+    "openclaw.plugin.json",
+    "skills",
+    "README.md"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/buggyblues/shadow",
+    "directory": "packages/openclaw-shadowob"
+  },
+  "homepage": "https://github.com/buggyblues/shadow/tree/main/packages/openclaw-shadowob#readme",
+  "keywords": [
+    "openclaw",
+    "openclaw-plugin",
+    "shadow",
+    "chat",
+    "channel",
+    "ai-agent"
+  ],
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "setupEntry": "./dist/setup-entry.js",
+    "channel": {
+      "id": "shadowob",
+      "label": "ShadowOwnBuddy",
+      "blurb": "Shadow server channel integration — chat with AI agents in Shadow channels",
+      "selectionLabel": "ShadowOwnBuddy (Server)",
+      "docsPath": "/channels/shadowob",
+      "aliases": [
+        "shadow-server",
+        "shadowob"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepack": "pnpm build",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@shadowob/sdk": "workspace:*",
+    "zod": "^3.25.67",
+    "openclaw": "^2026.3.23-2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "tsup": "^8.5.0",
+    "socket.io-client": "^4.8.3",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  }
+}

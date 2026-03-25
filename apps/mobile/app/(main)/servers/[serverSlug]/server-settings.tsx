@@ -27,6 +27,18 @@ import { showToast } from '../../../../src/lib/toast'
 import { useAuthStore } from '../../../../src/stores/auth.store'
 import { fontSize, radius, spacing, useColors } from '../../../../src/theme'
 
+interface ServerData {
+  id: string
+  name: string
+  slug: string | null
+  description: string | null
+  iconUrl: string | null
+  bannerUrl: string | null
+  ownerId: string
+  isPublic: boolean
+  inviteCode: string
+}
+
 export default function ServerSettingsScreen() {
   const { serverSlug } = useLocalSearchParams<{ serverSlug: string }>()
   const { t } = useTranslation()
@@ -43,22 +55,12 @@ export default function ServerSettingsScreen() {
 
   const { data: server, isLoading } = useQuery({
     queryKey: ['server', serverSlug],
-    queryFn: () =>
-      fetchApi<{
-        id: string
-        name: string
-        slug: string | null
-        description: string | null
-        iconUrl: string | null
-        bannerUrl: string | null
-        ownerId: string
-        isPublic: boolean
-        inviteCode: string
-      }>(`/api/servers/${serverSlug}`),
+    queryFn: () => fetchApi<ServerData>(`/api/servers/${serverSlug}`),
     enabled: !!serverSlug,
   })
 
   const [name, setName] = useState('')
+  const [slug, setSlug] = useState('')
   const [description, setDescription] = useState('')
   const [iconUrl, setIconUrl] = useState<string | null>(null)
   const [bannerUrl, setBannerUrl] = useState<string | null>(null)
@@ -67,13 +69,18 @@ export default function ServerSettingsScreen() {
   const [uploadingIcon, setUploadingIcon] = useState(false)
   const [uploadingBanner, setUploadingBanner] = useState(false)
 
+  // Track if there are unsaved changes (excluding images which are saved immediately)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+
   React.useEffect(() => {
     if (server) {
       setName(server.name)
+      setSlug(server.slug ?? '')
       setDescription(server.description ?? '')
       setIconUrl(server.iconUrl)
       setBannerUrl(server.bannerUrl)
       setIsPublic(server.isPublic ?? false)
+      setHasUnsavedChanges(false)
     }
   }, [server])
 
@@ -90,10 +97,37 @@ export default function ServerSettingsScreen() {
     })
   }, [server, t])
 
+  // Save image immediately after upload
+  const saveImageImmediately = async (field: 'iconUrl' | 'bannerUrl', url: string) => {
+    if (!server) return
+
+    try {
+      await fetchApi(`/api/servers/${server.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ [field]: url }),
+      })
+
+      // Update local state
+      if (field === 'iconUrl') {
+        setIconUrl(url)
+      } else {
+        setBannerUrl(url)
+      }
+
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['server', serverSlug] })
+      queryClient.invalidateQueries({ queryKey: ['servers'] })
+
+      showToast(t('common.saveSuccess'), 'success')
+    } catch (err) {
+      showToast((err as Error).message, 'error')
+    }
+  }
+
   const pickAndUploadImage = async (
     aspect: [number, number],
     setUploading: (v: boolean) => void,
-    onSuccess: (url: string) => void,
+    field: 'iconUrl' | 'bannerUrl',
   ) => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
@@ -115,7 +149,9 @@ export default function ServerSettingsScreen() {
         method: 'POST',
         body: formData,
       })
-      onSuccess(data.url)
+
+      // Save immediately after upload
+      await saveImageImmediately(field, data.url)
     } catch (err) {
       showToast((err as Error).message, 'error')
     } finally {
@@ -127,25 +163,53 @@ export default function ServerSettingsScreen() {
     if (!server) return
     setSaving(true)
     try {
+      const payload: Record<string, unknown> = {
+        name,
+        description: description || undefined,
+        isPublic,
+      }
+
+      // Only include slug if it's changed and valid
+      const trimmedSlug = slug.trim()
+      if (trimmedSlug && trimmedSlug !== server.slug) {
+        payload.slug = trimmedSlug
+      }
+
       await fetchApi(`/api/servers/${server.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({
-          name,
-          description: description || undefined,
-          iconUrl,
-          bannerUrl,
-          isPublic,
-        }),
+        body: JSON.stringify(payload),
       })
+
       queryClient.invalidateQueries({ queryKey: ['server', serverSlug] })
       queryClient.invalidateQueries({ queryKey: ['servers'] })
+      setHasUnsavedChanges(false)
       showToast(t('common.saveSuccess'), 'success')
+
+      // Navigate to new slug if it changed
+      if (trimmedSlug && trimmedSlug !== serverSlug) {
+        router.replace(`/servers/${trimmedSlug}/server-settings`)
+      }
     } catch (err) {
       showToast((err as Error).message, 'error')
     } finally {
       setSaving(false)
     }
   }
+
+  // Track changes for unsaved indicator
+  const checkForChanges = useCallback(() => {
+    if (!server) return false
+    return (
+      name !== server.name ||
+      slug !== (server.slug ?? '') ||
+      description !== (server.description ?? '') ||
+      isPublic !== server.isPublic
+    )
+  }, [server, name, slug, description, isPublic])
+
+  useEffect(() => {
+    setHasUnsavedChanges(checkForChanges())
+  }, [checkForChanges])
 
   const leaveMutation = useMutation({
     mutationFn: () => fetchApi(`/api/servers/${server!.id}/leave`, { method: 'POST' }),
@@ -195,15 +259,24 @@ export default function ServerSettingsScreen() {
         >
           <ChevronLeft size={26} color={colors.text} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
-          服务器设置
-        </Text>
+        <View style={styles.headerTitleWrap}>
+          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
+            服务器设置
+          </Text>
+          {hasUnsavedChanges && isOwner && (
+            <Text style={[styles.unsavedBadge, { color: colors.textMuted }]}>未保存</Text>
+          )}
+        </View>
         {isOwner ? (
           <Pressable
             onPress={handleSave}
-            disabled={saving}
+            disabled={saving || !hasUnsavedChanges}
             hitSlop={8}
-            style={({ pressed }) => [styles.headerBtn, pressed && { opacity: 0.5 }]}
+            style={({ pressed }) => [
+              styles.headerBtn,
+              pressed && { opacity: 0.5 },
+              !hasUnsavedChanges && { opacity: 0.4 },
+            ]}
           >
             {saving ? (
               <ActivityIndicator size="small" color={colors.primary} />
@@ -221,7 +294,7 @@ export default function ServerSettingsScreen() {
         <Reanimated.View entering={FadeInDown.delay(100).springify()} style={styles.heroSection}>
           {isOwner ? (
             <Pressable
-              onPress={() => pickAndUploadImage([3, 1], setUploadingBanner, setBannerUrl)}
+              onPress={() => pickAndUploadImage([3, 1], setUploadingBanner, 'bannerUrl')}
               style={[styles.bannerWrap, { backgroundColor: colors.inputBackground }]}
             >
               {bannerUrl ? (
@@ -260,7 +333,7 @@ export default function ServerSettingsScreen() {
           <View style={styles.avatarSection}>
             {isOwner ? (
               <Pressable
-                onPress={() => pickAndUploadImage([1, 1], setUploadingIcon, setIconUrl)}
+                onPress={() => pickAndUploadImage([1, 1], setUploadingIcon, 'iconUrl')}
                 style={styles.avatarWrap}
               >
                 <View style={[styles.avatarBorder, { borderColor: colors.background }]}>
@@ -309,7 +382,27 @@ export default function ServerSettingsScreen() {
                 ]}
                 value={name}
                 onChangeText={setName}
+                placeholder="服务器名称"
+                placeholderTextColor={colors.textMuted}
               />
+            </View>
+            <View style={styles.fieldRow}>
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>别名 (Slug)</Text>
+              <TextInput
+                style={[
+                  styles.fieldInput,
+                  { color: colors.text, borderBottomColor: colors.border },
+                ]}
+                value={slug}
+                onChangeText={setSlug}
+                placeholder="自定义 URL 别名 (可选)"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Text style={[styles.fieldHint, { color: colors.textMuted }]}>
+                设置后可通过 /servers/{'{'}slug{'}'} 访问
+              </Text>
             </View>
             <View style={styles.fieldRow}>
               <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>描述</Text>
@@ -367,12 +460,14 @@ export default function ServerSettingsScreen() {
               {server.id.slice(0, 12)}...
             </Text>
           </View>
-          {server.slug && (
-            <View style={styles.infoRow}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>别名</Text>
-              <Text style={[styles.infoValue, { color: colors.text }]}>{server.slug}</Text>
-            </View>
-          )}
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>别名</Text>
+            <Text
+              style={[styles.infoValue, { color: server.slug ? colors.text : colors.textMuted }]}
+            >
+              {server.slug || '未设置'}
+            </Text>
+          </View>
           <View style={styles.infoRow}>
             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>可见性</Text>
             <Text style={[styles.infoValue, { color: colors.text }]}>
@@ -453,11 +548,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerTitleWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
   headerTitle: {
     fontSize: fontSize.lg,
     fontWeight: '700',
-    flex: 1,
-    textAlign: 'center',
+  },
+  unsavedBadge: {
+    fontSize: fontSize.xs,
+    fontWeight: '500',
   },
 
   content: { paddingBottom: spacing['3xl'] },
@@ -549,6 +653,10 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     fontWeight: '600',
     marginBottom: 4,
+  },
+  fieldHint: {
+    fontSize: fontSize.xs,
+    marginTop: 2,
   },
   fieldInput: {
     fontSize: fontSize.md,

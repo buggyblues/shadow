@@ -104,12 +104,22 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
   const { data: agentChatStatus } = useQuery({
     queryKey: ['agent-chat-status', otherUser?.id],
     queryFn: () =>
-      fetchApi<{ chatDisabled: boolean; reason?: string }>(
-        `/api/marketplace/agent-chat-status/${otherUser!.id}`,
-      ),
+      fetchApi<{
+        chatDisabled: boolean
+        reason?: string
+        rental?: {
+          contractId: string
+          baseDailyRate: number
+          messageFee: number
+          totalCost: number
+          messageCount: number
+          pricingVersion: number
+        }
+      }>(`/api/marketplace/agent-chat-status/${otherUser!.id}`),
     enabled: !!otherUser?.isBot && !!otherUser?.id,
   })
   const chatDisabled = agentChatStatus?.chatDisabled === true
+  const rental = agentChatStatus?.rental
 
   // Fetch messages
   const {
@@ -450,6 +460,41 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
         </div>
       )}
 
+      {/* Daily rental cost tip */}
+      {rental &&
+        rental.pricingVersion === 2 &&
+        (() => {
+          const tipKey = `rental-tip-${rental.contractId}-${new Date().toISOString().slice(0, 10)}`
+          const dismissed = localStorage.getItem(tipKey) === '1'
+          if (dismissed) return null
+          return (
+            <div className="mx-4 mb-1 flex items-center justify-between gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+              <span>
+                {t(
+                  'dm.rentalCostTip',
+                  '🦐 今日费用提醒：基础日费 {{baseDailyRate}}🦐 + 消息费 {{messageFee}}🦐/条，累计花费 {{totalCost}}🦐，已发送 {{messageCount}} 条消息',
+                  {
+                    baseDailyRate: rental.baseDailyRate,
+                    messageFee: rental.messageFee,
+                    totalCost: rental.totalCost,
+                    messageCount: rental.messageCount,
+                  },
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.setItem(tipKey, '1')
+                  queryClient.invalidateQueries({ queryKey: ['agent-chat-status', otherUser?.id] })
+                }}
+                className="shrink-0 text-amber-600 hover:text-amber-800 font-bold"
+              >
+                ×
+              </button>
+            </div>
+          )
+        })()}
+
       {/* Message input */}
       <div className="px-4 pb-4 pt-1 shrink-0">
         {chatDisabled ? (
@@ -457,7 +502,9 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
             <span>
               {agentChatStatus?.reason === 'rented_out'
                 ? t('dm.chatDisabledRentedOut', '该 Buddy 已出租给其他用户，暂时无法聊天')
-                : t('dm.chatDisabledListed', '该 Buddy 已在集市挂单中，暂时无法聊天')}
+                : agentChatStatus?.reason === 'expired'
+                  ? t('dm.chatDisabledExpired', '使用权已到期，请续租后再使用')
+                  : t('dm.chatDisabledListed', '该 Buddy 已在集市挂单中，暂时无法聊天')}
             </span>
           </div>
         ) : (

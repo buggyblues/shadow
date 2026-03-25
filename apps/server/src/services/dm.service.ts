@@ -154,10 +154,11 @@ export class DmService {
     content: string,
     replyToId?: string,
     attachmentInputs?: { filename: string; url: string; contentType: string; size: number }[],
+    metadata?: Record<string, unknown>,
   ) {
     const result = await this.deps.db
       .insert(dmMessages)
-      .values({ content, dmChannelId, authorId, replyToId: replyToId ?? null })
+      .values({ content, dmChannelId, authorId, replyToId: replyToId ?? null, metadata })
       .returning()
 
     // Update last_message_at

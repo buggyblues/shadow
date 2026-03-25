@@ -27,6 +27,7 @@ export class MessageService {
       authorId,
       threadId: input.threadId,
       replyToId: input.replyToId,
+      metadata: input.metadata,
     })
     if (!message) {
       throw Object.assign(new Error('Failed to create message'), { status: 500 })
@@ -173,7 +174,11 @@ export class MessageService {
     await this.deps.messageDao.deleteThread(threadId)
   }
 
-  async sendToThread(threadId: string, userId: string, input: { content: string }) {
+  async sendToThread(
+    threadId: string,
+    userId: string,
+    input: { content: string; metadata?: Record<string, unknown> },
+  ) {
     const thread = await this.deps.messageDao.findThreadById(threadId)
     if (!thread) {
       throw Object.assign(new Error('Thread not found'), { status: 404 })
@@ -187,6 +192,7 @@ export class MessageService {
       channelId: thread.channelId,
       authorId: userId,
       threadId,
+      metadata: input.metadata,
     })
 
     const user = await this.deps.userDao.findById(userId)

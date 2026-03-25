@@ -523,9 +523,9 @@ export function detectVoiceCommand(text: string): {
 
 // Export for testing
 export {
-  CONSERVATIVE_FILLERS,
-  EXTENDED_FILLERS,
   CHINESE_CORRECTION_PATTERNS,
+  CONSERVATIVE_FILLERS,
   ENGLISH_CORRECTION_PATTERNS,
+  EXTENDED_FILLERS,
   LIST_KEYWORDS,
 }

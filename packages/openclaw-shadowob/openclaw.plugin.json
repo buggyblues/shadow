@@ -1,0 +1,34 @@
+{
+  "id": "openclaw-shadowob",
+  "name": "ShadowOwnBuddy",
+  "description": "Shadow server channel plugin — enables AI agents to chat in Shadow channels with threads, reactions, and media support",
+  "channels": ["shadowob"],
+  "skills": ["skills/shadowob"],
+  "uiHints": {
+    "token": {
+      "label": "Agent Token",
+      "sensitive": true,
+      "placeholder": "Paste the JWT token generated in Shadow → Agents"
+    },
+    "serverUrl": {
+      "label": "Server URL",
+      "placeholder": "https://shadowob.com"
+    },
+    "enabled": {
+      "label": "Enabled"
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "accountAgentMap": {
+        "type": "object",
+        "description": "Map of Shadow account IDs to local OpenClaw agent IDs",
+        "additionalProperties": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

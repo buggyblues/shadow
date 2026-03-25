@@ -126,15 +126,19 @@ function getAgentOnlineDotClass(agent: Agent): string {
 }
 
 /** Formats total online seconds into a human-readable duration string */
-function formatOnlineDuration(totalSeconds: number): string {
-  if (totalSeconds < 60) return `${totalSeconds}秒`
+function formatOnlineDuration(
+  totalSeconds: number,
+  t: (key: string, defaultValue?: string) => string,
+): string {
+  if (totalSeconds < 60) return `${totalSeconds}${t('time.seconds', '秒')}`
   const hours = Math.floor(totalSeconds / 3600)
   const minutes = Math.floor((totalSeconds % 3600) / 60)
-  if (hours === 0) return `${minutes}分钟`
-  if (hours < 24) return `${hours}小时${minutes > 0 ? `${minutes}分钟` : ''}`
+  if (hours === 0) return `${minutes}${t('time.minutes', '分钟')}`
+  if (hours < 24)
+    return `${hours}${t('time.hours', '小时')}${minutes > 0 ? `${minutes}${t('time.minutes', '分钟')}` : ''}`
   const days = Math.floor(hours / 24)
   const remainHours = hours % 24
-  return `${days}天${remainHours > 0 ? `${remainHours}小时` : ''}`
+  return `${days}${t('time.days', '天')}${remainHours > 0 ? `${remainHours}${t('time.hours', '小时')}` : ''}`
 }
 
 /* ── Agent Management Page ──────────────────────────── */
@@ -706,10 +710,13 @@ function AgentDetail({
         </div>
         <div>
           <label className="block text-[10px] font-bold uppercase text-text-muted mb-1">
-            累计在线时长
+            {t('agentMgmt.totalOnlineTime')}
           </label>
           <p className="text-sm text-text-primary">
-            {formatOnlineDuration(agent.totalOnlineSeconds ?? 0)}
+            {formatOnlineDuration(
+              agent.totalOnlineSeconds ?? 0,
+              t as (key: string, defaultValue?: string) => string,
+            )}
           </p>
         </div>
         <div>
@@ -929,7 +936,7 @@ function OpenClawSetupGuide({
   const [activeTab, setActiveTab] = useState<'manual' | 'chat'>('chat')
 
   // Bash one-liner for manual setup
-  const bashCommand = `openclaw plugins install @shadowob/openclaw && openclaw config set channels.shadowob.token "${token || '<TOKEN>'}" && openclaw config set channels.shadowob.serverUrl "${serverUrl}" && openclaw gateway restart`
+  const bashCommand = `openclaw plugins install @shadowob/openclaw-shadowob && openclaw config set channels.shadowob.token "${token || '<TOKEN>'}" && openclaw config set channels.shadowob.serverUrl "${serverUrl}" && openclaw gateway restart`
 
   // AI prompt for chat-based setup
   const aiPrompt = `请帮我安装和配置 ShadowOwnBuddy 插件，连接到 Shadow 服务器。
@@ -1040,7 +1047,7 @@ function OpenClawSetupGuide({
               </span>
             </div>
             <div className="ml-7">
-              <CopyBlock content="openclaw plugins install @shadowob/openclaw" t={t} />
+              <CopyBlock content="openclaw plugins install @shadowob/openclaw-shadowob" t={t} />
             </div>
           </div>
 
@@ -1118,7 +1125,7 @@ function OpenClawSetupGuide({
       {/* Link to full docs */}
       <div className="mt-4 pt-3 border-t border-border-subtle">
         <a
-          href="/docs"
+          href="/product/index.html"
           target="_blank"
           rel="noopener noreferrer"
           className="text-xs text-primary hover:text-primary-hover font-bold flex items-center gap-1 transition"
@@ -1570,7 +1577,10 @@ export function BuddyManagementContent() {
                 <span className="truncate flex-1">{name}</span>
                 {(agent.totalOnlineSeconds ?? 0) > 0 && (
                   <span className="text-[10px] text-text-muted shrink-0">
-                    {formatOnlineDuration(agent.totalOnlineSeconds)}
+                    {formatOnlineDuration(
+                      agent.totalOnlineSeconds,
+                      t as (key: string, defaultValue?: string) => string,
+                    )}
                   </span>
                 )}
                 <AgentListingBadge agent={agent} />

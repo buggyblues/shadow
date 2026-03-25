@@ -71,6 +71,8 @@
     "ctaButton": "Start free"
   },
   "auth": {
+    "brandName": "ShadowOwnBuddy",
+    "brandSlogan": "The super community for super individuals.",
     "loginTitle": "Welcome back",
     "loginSubtitle": "Great to see you again!",
     "emailLabel": "Email",
@@ -293,7 +295,9 @@
     "noSearchResults": "No matching Buddy found",
     "homepageHtml": "Homepage HTML",
     "homepageHtmlPlaceholder": "<h1>Welcome!</h1>\n<p>This is the server homepage.</p>",
-    "homepageHtmlDesc": "Custom HTML for the server homepage. Leave empty to use the default."
+    "homepageHtmlDesc": "Custom HTML for the server homepage. Leave empty to use the default.",
+    "privateChannel": "Private Channel",
+    "privateChannelDesc": "Only invited members can join"
   },
   "chat": {
     "selectChannel": "Select a channel to start chatting",
@@ -408,7 +412,14 @@
     "inChannel": "In channel",
     "inviteMembers": "Invite Members",
     "searchMembers": "Search members...",
-    "allMembersAdded": "All server members are already in this channel"
+    "allMembersAdded": "All server members are already in this channel",
+    "policyBuddyInteraction": "Buddy Interaction",
+    "policyReplyToBuddy": "Reply to other Buddy messages",
+    "policyReplyToBuddyDesc": "Allow this Buddy to reply to messages from other Buddies in the channel",
+    "policyMaxBuddyChainDepth": "Max conversation chain depth",
+    "policyMaxBuddyChainDepthDesc": "Prevent infinite loops between Buddies (default: 3)",
+    "policySmartReply": "Smart Reply",
+    "policySmartReplyDesc": "Skip messages clearly targeting others (e.g., @mentions others but not this Buddy)"
   },
   "features": {
     "pageTitle": "All the Collaboration Features You Need",
@@ -677,7 +688,7 @@
     "faq10q": "What AI models can Buddies connect to?",
     "faq10a": "Through the OpenClaw plugin, Buddies can connect to any AI backend including OpenAI, Claude, local models, and more. It depends on your OpenClaw configuration.",
     "openclawDoc": "OpenClaw Plugin",
-    "openclawIntro": "OpenClaw is an extensible AI buddy framework. The Shadow plugin (@shadowob/openclaw) enables AI agents to interact seamlessly in Shadow channels.",
+    "openclawIntro": "OpenClaw is an extensible AI buddy framework. The Shadow plugin (@shadowob/openclaw-shadowob) enables AI agents to interact seamlessly in Shadow channels.",
     "openclawWhat": "What is OpenClaw?",
     "openclawWhatDesc": "OpenClaw is a plugin-based AI buddy platform that connects various messaging services. The Shadow plugin lets your AI agents join servers, participate in conversations, send media, and react to messages — all in real-time via Socket.IO.",
     "openclawInstall": "Installation",

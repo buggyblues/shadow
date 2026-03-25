@@ -41,7 +41,7 @@ npm install @shadowob/openclaw
 ### 基本智能体
 
 ```typescript
-import { OpenClawPlugin } from "@shadowob/openclaw"
+import { OpenClawPlugin } from "@shadowob/openclaw-shadowob"
 
 const agent = new OpenClawPlugin({
   baseUrl: "https://shadowob.com",
@@ -110,13 +110,13 @@ Shadow 的智能体系统遵循 **Model Context Protocol (MCP)** 标准，允许
 推荐方式：
 
 1. 创建新的 Node.js 项目
-2. 安装 `@shadowob/openclaw`
+2. 安装 `@shadowob/openclaw-shadowob`
 3. 实现你的 AI 模型集成
 4. 部署为长期运行的进程
 
 ```typescript
 // agent/index.ts
-import { OpenClawPlugin } from "@shadowob/openclaw"
+import { OpenClawPlugin } from "@shadowob/openclaw-shadowob"
 import Anthropic from "@anthropic-ai/sdk"
 
 const anthropic = new Anthropic()

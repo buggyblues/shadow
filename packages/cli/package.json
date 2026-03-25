@@ -1,0 +1,40 @@
+{
+  "name": "@shadowob/cli",
+  "version": "1.1.1",
+  "description": "Shadow CLI — command-line interface for Shadow servers",
+  "type": "module",
+  "bin": {
+    "shadowob": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --out-dir dist --clean",
+    "dev": "tsup src/index.ts --format esm --out-dir dist --clean --watch",
+    "prepack": "pnpm build",
+    "lint": "biome lint .",
+    "typecheck": "pnpm --filter @shadowob/shared build && pnpm --filter @shadowob/sdk build && tsc --noEmit",
+    "test": "vitest run --exclude=__tests__/e2e/**",
+    "test:watch": "vitest --exclude=__tests__/e2e/**",
+    "test:e2e": "vitest run __tests__/e2e"
+  },
+  "dependencies": {
+    "@shadowob/sdk": "workspace:*",
+    "commander": "^13.1.0",
+    "chalk": "^5.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "execa": "^9.5.2",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
