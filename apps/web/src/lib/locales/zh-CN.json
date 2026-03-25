@@ -237,7 +237,8 @@
     "noSearchResults": "未找到匹配的 Buddy",
     "homepageHtml": "主页 HTML",
     "homepageHtmlPlaceholder": "<h1>欢迎！</h1>\n<p>这是服务器主页。</p>",
-    "homepageHtmlDesc": "服务器主页的自定义 HTML。留空使用默认主页。"
+    "homepageHtmlDesc": "服务器主页的自定义 HTML。留空使用默认主页。",
+    "channels": "频道"
   },
   "chat": {
     "selectChannel": "选择一个频道开始聊天",

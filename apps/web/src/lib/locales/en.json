@@ -237,7 +237,8 @@
     "noSearchResults": "No matching Buddy found",
     "homepageHtml": "Homepage HTML",
     "homepageHtmlPlaceholder": "<h1>Welcome!</h1>\n<p>This is the server homepage.</p>",
-    "homepageHtmlDesc": "Custom HTML for the server homepage. Leave empty to use the default."
+    "homepageHtmlDesc": "Custom HTML for the server homepage. Leave empty to use the default.",
+    "channels": "Channels"
   },
   "chat": {
     "selectChannel": "Select a channel to start chatting",

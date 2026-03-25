@@ -117,7 +117,7 @@ export function ChannelSortFilterButton({
             onClick={() => setIsOpen(false)}
             aria-label="Close"
           />
-          <div className="absolute right-0 top-full mt-1 z-50 w-64 bg-bg-tertiary rounded-lg shadow-lg border border-border-subtle py-2">
+          <div className="absolute left-0 top-full mt-1 z-[100] w-64 bg-bg-tertiary rounded-lg shadow-lg border border-border-subtle py-2">
             {/* Filter Input */}
             <div className="px-3 pb-2 border-b border-border-subtle">
               <div className="flex items-center gap-2 px-2 py-1.5 bg-bg-primary/50 rounded-md">

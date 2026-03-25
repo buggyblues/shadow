@@ -511,8 +511,8 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
   const isInChannel = /\/servers\/[^/]+\/channels\//.test(location.pathname)
   const isHomeActive = !isInChannel && !isInShop && !isInWorkspace && !isInApps
 
-  const renderChannelGroup = (label: string, items: Channel[], isFirstGroup: boolean) => {
-    if (items.length === 0 && !isFirstGroup) return null
+  const renderChannelGroup = (label: string, items: Channel[]) => {
+    if (items.length === 0) return null
     const isCollapsed = !!collapsedGroups[label]
     return (
       <div className="mb-4">
@@ -527,23 +527,6 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
               <ChevronDown size={12} className="shrink-0" />
             )}
             <span className="truncate">{label}</span>
-          </button>
-          {/* Sort/Filter button - only show for first group */}
-          {isFirstGroup && server?.id && (
-            <ChannelSortFilterButton
-              serverId={server.id}
-              filterKeyword={filterKeyword}
-              onFilterChange={setFilterKeyword}
-              hasActiveFilter={hasActiveFilter}
-            />
-          )}
-          <button
-            type="button"
-            onClick={() => setShowCreate(true)}
-            className="text-text-secondary hover:text-text-primary transition p-0.5 rounded hover:bg-bg-modifier-hover"
-            title={t('channel.createChannel')}
-          >
-            <Plus size={14} />
           </button>
         </div>
         {!isCollapsed &&
@@ -765,9 +748,35 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
           <span className="truncate">应用</span>
         </button>
         <div className="h-px bg-divider mx-4 mb-2" />
-        {renderChannelGroup(t('channel.announcement'), announcementChannels, true)}
-        {renderChannelGroup(t('channel.text'), textChannels, false)}
-        {renderChannelGroup(t('channel.voice'), voiceChannels, false)}
+
+        {/* Channel filter and sort bar */}
+        {server?.id && (
+          <div className="flex items-center justify-between px-4 py-2 mb-2">
+            <span className="text-[12px] font-bold tracking-wide uppercase text-text-secondary">
+              {t('channel.channels', { defaultValue: '频道' })}
+            </span>
+            <div className="flex items-center gap-1">
+              <ChannelSortFilterButton
+                serverId={server.id}
+                filterKeyword={filterKeyword}
+                onFilterChange={setFilterKeyword}
+                hasActiveFilter={hasActiveFilter}
+              />
+              <button
+                type="button"
+                onClick={() => setShowCreate(true)}
+                className="text-text-secondary hover:text-text-primary transition p-1 rounded hover:bg-bg-modifier-hover"
+                title={t('channel.createChannel')}
+              >
+                <Plus size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {renderChannelGroup(t('channel.announcement'), announcementChannels)}
+        {renderChannelGroup(t('channel.text'), textChannels)}
+        {renderChannelGroup(t('channel.voice'), voiceChannels)}
 
         {channels.length === 0 && (
           <p className="text-text-muted text-sm px-4 py-2">{t('channel.noChannels')}</p>
