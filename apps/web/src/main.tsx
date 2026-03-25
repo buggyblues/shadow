@@ -179,6 +179,36 @@ const settingsRoute = createRoute({
   }),
 })
 
+const settingsSubRoutes = [
+  { path: '/settings/quickstart', tab: 'quickstart' },
+  { path: '/settings/profile', tab: 'profile' },
+  { path: '/settings/account', tab: 'account' },
+  { path: '/settings/invite', tab: 'invite' },
+  { path: '/settings/tasks', tab: 'tasks' },
+  { path: '/settings/buddy', tab: 'buddy' },
+  { path: '/settings/appearance', tab: 'appearance' },
+  { path: '/settings/notification', tab: 'notification' },
+  { path: '/settings/friends', tab: 'friends' },
+  { path: '/settings/chat', tab: 'chat' },
+].map(({ path, tab }) =>
+  createRoute({
+    getParentRoute: () => appRoute,
+    path: path as '/settings/quickstart',
+    component: SettingsPage,
+    validateSearch: (search: Record<string, unknown>) => ({
+      tab: tab,
+      dm: (search.dm as string) || undefined,
+    }),
+    beforeLoad: () => {
+      // Redirect to main settings route with tab parameter for backward compatibility
+      throw redirect({
+        to: '/settings',
+        search: { tab },
+      })
+    },
+  }),
+)
+
 const buddyMgmtRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/buddies',
@@ -252,6 +282,7 @@ const routeTree = rootRoute.addChildren([
       serverAppsRoute,
     ]),
     settingsRoute,
+    ...settingsSubRoutes,
     buddyMgmtRoute,
     discoverRoute,
     myRentalsRoute,
