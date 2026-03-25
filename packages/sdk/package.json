@@ -1,6 +1,6 @@
 {
   "name": "@shadowob/sdk",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Shadow SDK — typed REST client and real-time Socket.IO event listener for Shadow servers",
   "type": "module",
   "main": "./dist/index.js",
