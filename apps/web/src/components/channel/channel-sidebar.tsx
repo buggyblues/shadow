@@ -751,11 +751,11 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
 
         {/* Channel filter and sort bar */}
         {server?.id && (
-          <div className="flex items-center justify-between px-4 py-2 mb-2">
-            <span className="text-[12px] font-bold tracking-wide uppercase text-text-secondary">
+          <div className="flex items-center justify-between px-4 py-1.5 mb-1">
+            <span className="text-[11px] font-bold tracking-wide uppercase text-text-secondary">
               {t('channel.channels', { defaultValue: '频道' })}
             </span>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
               <ChannelSortFilterButton
                 serverId={server.id}
                 filterKeyword={filterKeyword}
@@ -765,10 +765,10 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
               <button
                 type="button"
                 onClick={() => setShowCreate(true)}
-                className="text-text-secondary hover:text-text-primary transition p-1 rounded hover:bg-bg-modifier-hover"
+                className="text-text-muted hover:text-text-secondary transition p-1 rounded hover:bg-bg-modifier-hover"
                 title={t('channel.createChannel')}
               >
-                <Plus size={16} />
+                <Plus size={14} />
               </button>
             </div>
           </div>
