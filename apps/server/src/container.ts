@@ -1,5 +1,6 @@
 import { type AwilixContainer, asClass, asValue, createContainer, InjectionMode } from 'awilix'
 import type { Server as SocketIOServer } from 'socket.io'
+import { AgentDashboardDao } from './dao/agent-dashboard.dao'
 import { AgentDao } from './dao/agent.dao'
 import { AgentPolicyDao } from './dao/agent-policy.dao'
 import { AppDao } from './dao/app.dao'
@@ -30,6 +31,7 @@ import { WorkspaceNodeDao } from './dao/workspace-node.dao'
 import type { Database } from './db'
 // Lib
 import { logger } from './lib/logger'
+import { AgentDashboardService } from './services/agent-dashboard.service'
 import { AgentService } from './services/agent.service'
 import { AgentPolicyService } from './services/agent-policy.service'
 import { AppService } from './services/app.service'
@@ -104,6 +106,9 @@ export interface Cradle {
   rentalUsageDao: RentalUsageDao
   rentalViolationDao: RentalViolationDao
 
+  // Dashboard DAOs
+  agentDashboardDao: AgentDashboardDao
+
   // Services
   authService: AuthService
   oauthService: OAuthService
@@ -131,6 +136,7 @@ export interface Cradle {
   rentalService: RentalService
   taskCenterService: TaskCenterService
   voiceEnhanceService: VoiceEnhanceService
+  agentDashboardService: AgentDashboardService
 }
 
 export type AppContainer = AwilixContainer<Cradle>
@@ -186,6 +192,9 @@ export function createAppContainer(db: Database): AppContainer {
     rentalUsageDao: asClass(RentalUsageDao).singleton(),
     rentalViolationDao: asClass(RentalViolationDao).singleton(),
 
+    // Dashboard DAOs
+    agentDashboardDao: asClass(AgentDashboardDao).singleton(),
+
     // Services
     authService: asClass(AuthService).singleton(),
     oauthService: asClass(OAuthService).singleton(),
@@ -213,6 +222,7 @@ export function createAppContainer(db: Database): AppContainer {
     rentalService: asClass(RentalService).singleton(),
     taskCenterService: asClass(TaskCenterService).singleton(),
     voiceEnhanceService: asClass(VoiceEnhanceService).singleton(),
+    agentDashboardService: asClass(AgentDashboardService).singleton(),
   })
 
   return container

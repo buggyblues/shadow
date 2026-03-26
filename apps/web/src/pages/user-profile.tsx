@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from '@tanstack/react-router'
-import { ChevronLeft, QrCode, X } from 'lucide-react'
+import { ChevronLeft, LayoutDashboard, QrCode, X } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -156,6 +156,18 @@ export function UserProfilePage() {
                       </p>
                     </div>
                   )}
+
+                  {/* Dashboard Link */}
+                  <div className="mt-4 pt-4 border-t border-border-subtle">
+                    <Link
+                      to="/buddy/$agentId/dashboard"
+                      params={{ agentId: profile.agent.id }}
+                      className="flex items-center gap-2 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition font-medium text-sm"
+                    >
+                      <LayoutDashboard className="w-4 h-4" />
+                      {t('buddyDashboard.viewDashboard', 'View Dashboard')}
+                    </Link>
+                  </div>
 
                   {/* Owner link */}
                   <div className="mt-4 pt-4 border-t border-border-subtle">

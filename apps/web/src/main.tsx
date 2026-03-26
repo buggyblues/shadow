@@ -13,6 +13,7 @@ import { AppLayout } from './components/layout/app-layout'
 import { RootLayout } from './components/layout/root-layout'
 import { queryClient } from './lib/query-client'
 import { AppPageRoute } from './pages/apps'
+import { BuddyDashboardPage } from './pages/buddy-dashboard'
 import { BuddyManagementPage } from './pages/buddy-management'
 import { ChannelView } from './pages/channel-view'
 import { ContractDetailPage } from './pages/contract-detail'
@@ -257,6 +258,12 @@ const userProfileRoute = createRoute({
   component: UserProfilePage,
 })
 
+const buddyDashboardRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/buddy/$agentId/dashboard',
+  component: BuddyDashboardPage,
+})
+
 const dmChatRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/dm/$dmChannelId',
@@ -291,6 +298,7 @@ const routeTree = rootRoute.addChildren([
     editListingRoute,
     marketplaceDetailRoute,
     userProfileRoute,
+    buddyDashboardRoute,
     dmChatRoute,
   ]),
 ])

@@ -1,5 +1,10 @@
 export { agentPolicies } from './agent-policies'
 export { agentStatusEnum, agents } from './agents'
+export {
+  agentActivityEvents,
+  agentDailyStats,
+  agentHourlyStats,
+} from './agent-dashboard'
 export { appSourceEnum, appStatusEnum, apps } from './apps'
 export { attachments } from './attachments'
 export { channelMembers } from './channel-members'

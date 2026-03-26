@@ -3,6 +3,7 @@ import { bodyLimit } from 'hono/body-limit'
 import { cors } from 'hono/cors'
 import type { AppContainer } from './container'
 import { createAdminHandler } from './handlers/admin.handler'
+import { createAgentDashboardHandler } from './handlers/agent-dashboard.handler'
 import { createAgentHandler } from './handlers/agent.handler'
 import { createAppHandler } from './handlers/app.handler'
 import { createAuthHandler } from './handlers/auth.handler'
@@ -93,6 +94,7 @@ export function createApp(container: AppContainer) {
   app.route('/api/notifications', createNotificationHandler(container))
   app.route('/api/media', createMediaHandler(container))
   app.route('/api/agents', createAgentHandler(container))
+  app.route('/api/agents', createAgentDashboardHandler(container))
   app.route('/api/invite-codes', createInviteHandler(container))
   app.route('/api/admin', createAdminHandler(container))
   app.route('/api', createTaskCenterHandler(container))
