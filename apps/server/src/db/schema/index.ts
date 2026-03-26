@@ -31,6 +31,7 @@ export {
   oauthConsents,
   oauthRefreshTokens,
 } from './oauth'
+export { profileCommentReactions, profileComments } from './profile-comments'
 export { reactions } from './reactions'
 export {
   clawListings,

@@ -15,6 +15,7 @@ import { createMediaHandler } from './handlers/media.handler'
 import { createMessageHandler } from './handlers/message.handler'
 import { createNotificationHandler } from './handlers/notification.handler'
 import { createOAuthHandler } from './handlers/oauth.handler'
+import { createProfileCommentHandler } from './handlers/profile-comment.handler'
 import { createRentalHandler } from './handlers/rental.handler'
 import { createSearchHandler } from './handlers/search.handler'
 import { createServerHandler } from './handlers/server.handler'
@@ -100,6 +101,7 @@ export function createApp(container: AppContainer) {
   app.route('/api', createTaskCenterHandler(container))
   app.route('/api', createShopHandler(container))
   app.route('/api', createRentalHandler(container))
+  app.route('/api/profile-comments', createProfileCommentHandler(container))
   app.route('/api/voice', voiceEnhanceHandler)
 
   // 404 handler
