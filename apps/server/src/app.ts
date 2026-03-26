@@ -3,8 +3,8 @@ import { bodyLimit } from 'hono/body-limit'
 import { cors } from 'hono/cors'
 import type { AppContainer } from './container'
 import { createAdminHandler } from './handlers/admin.handler'
-import { createAgentDashboardHandler } from './handlers/agent-dashboard.handler'
 import { createAgentHandler } from './handlers/agent.handler'
+import { createAgentDashboardHandler } from './handlers/agent-dashboard.handler'
 import { createAppHandler } from './handlers/app.handler'
 import { createAuthHandler } from './handlers/auth.handler'
 import { createChannelHandler } from './handlers/channel.handler'
@@ -16,6 +16,7 @@ import { createMediaHandler } from './handlers/media.handler'
 import { createMessageHandler } from './handlers/message.handler'
 import { createNotificationHandler } from './handlers/notification.handler'
 import { createOAuthHandler } from './handlers/oauth.handler'
+import { createPortfolioHandler } from './handlers/portfolio.handler'
 import { createProfileCommentHandler } from './handlers/profile-comment.handler'
 import { createRentalHandler } from './handlers/rental.handler'
 import { createSearchHandler } from './handlers/search.handler'
@@ -103,6 +104,7 @@ export function createApp(container: AppContainer) {
   app.route('/api', createShopHandler(container))
   app.route('/api', createRentalHandler(container))
   app.route('/api/profile-comments', createProfileCommentHandler(container))
+  app.route('/api', createPortfolioHandler(container))
   app.route('/api/voice', voiceEnhanceHandler)
 
   // Discover endpoints (public)
