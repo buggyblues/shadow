@@ -643,15 +643,37 @@
     "acceptInvite": "接受邀请"
   },
   "discover": {
-    "title": "探索服务器",
-    "subtitle": "发现并加入感兴趣的社区",
-    "searchPlaceholder": "搜索服务器...",
+    "title": "发现",
+    "subtitle": "发现服务器、频道和正在租赁的 Buddy",
+    "searchPlaceholder": "搜索...",
     "noServers": "暂无公开的服务器",
+    "noChannels": "暂无活跃的频道",
+    "noRentals": "暂无正在租赁的 Buddy",
     "noDescription": "暂无描述",
     "members": "成员",
     "joinButton": "加入",
     "enterButton": "进入",
-    "public": "公开"
+    "public": "公开",
+    "joinToView": "加入后查看",
+    "rentedSince": "租赁于",
+    "unknownListing": "未知租赁",
+    "unknownAgent": "未知 Buddy",
+    "unknownUser": "未知用户",
+    "justNow": "刚刚",
+    "minutesAgo": "{{count}} 分钟前",
+    "hoursAgo": "{{count}} 小时前",
+    "daysAgo": "{{count}} 天前",
+    "tabs": {
+      "servers": "服务器",
+      "channels": "频道",
+      "rentals": "租赁"
+    },
+    "deviceTier": {
+      "highEnd": "高端",
+      "midRange": "中端",
+      "lowEnd": "低端",
+      "unknown": "未知"
+    }
   },
   "notification": {
     "title": "通知",

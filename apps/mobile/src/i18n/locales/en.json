@@ -730,15 +730,37 @@
     "joining": "Joining..."
   },
   "discover": {
-    "title": "Discover Servers",
-    "subtitle": "Find and join communities you're interested in",
-    "searchPlaceholder": "Search servers...",
+    "title": "Discover",
+    "subtitle": "Find servers, channels, and active rentals",
+    "searchPlaceholder": "Search...",
     "noServers": "No public servers available",
+    "noChannels": "No active channels available",
+    "noRentals": "No active rentals",
     "noDescription": "No description",
     "members": "members",
     "joinButton": "Join",
     "enterButton": "Enter",
-    "public": "Public"
+    "public": "Public",
+    "joinToView": "Join to view",
+    "rentedSince": "Rented",
+    "unknownListing": "Unknown Listing",
+    "unknownAgent": "Unknown Buddy",
+    "unknownUser": "Unknown User",
+    "justNow": "Just now",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago",
+    "tabs": {
+      "servers": "Servers",
+      "channels": "Channels",
+      "rentals": "Rentals"
+    },
+    "deviceTier": {
+      "highEnd": "High-end",
+      "midRange": "Mid-range",
+      "lowEnd": "Low-end",
+      "unknown": "Unknown"
+    }
   },
   "notification": {
     "title": "Notifications",
