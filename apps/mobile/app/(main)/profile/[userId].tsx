@@ -8,6 +8,7 @@ import QRCode from 'react-native-qrcode-svg'
 import { Avatar } from '../../../src/components/common/avatar'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { StatusBadge } from '../../../src/components/common/status-badge'
+import { ProfileCommentSection } from '../../../src/components/profile/ProfileCommentSection'
 import { fetchApi } from '../../../src/lib/api'
 import { showToast } from '../../../src/lib/toast'
 import { useAuthStore } from '../../../src/stores/auth.store'
@@ -337,6 +338,11 @@ export default function UserProfileScreen() {
               </View>
             </View>
           )}
+
+          {/* Comment Section */}
+          <View style={[styles.sectionDivider, { borderTopColor: `${colors.border}60` }]}>
+            <ProfileCommentSection profileUserId={profile.id} />
+          </View>
         </View>
       </ScrollView>
 
