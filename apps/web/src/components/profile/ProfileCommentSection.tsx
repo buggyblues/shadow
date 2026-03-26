@@ -2,9 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 import { MessageSquare, MoreHorizontal, Reply, Send, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
+import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
 import { UserAvatar } from '../common/avatar'
 
@@ -82,6 +83,9 @@ export function ProfileCommentSection({ profileUserId }: ProfileCommentSectionPr
       setNewComment('')
       setReplyTo(null)
     },
+    onError: (err: Error) => {
+      showToast(err.message || t('common.error', '操作失败'), 'error')
+    },
   })
 
   // Delete comment mutation
@@ -89,6 +93,9 @@ export function ProfileCommentSection({ profileUserId }: ProfileCommentSectionPr
     mutationFn: (id: string) => fetchApi(`/api/profile-comments/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile-comments', profileUserId] })
+    },
+    onError: (err: Error) => {
+      showToast(err.message || t('common.error', '操作失败'), 'error')
     },
   })
 
@@ -264,6 +271,22 @@ function CommentItem({
   const { t } = useTranslation()
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
+  const emojiPickerRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Close emoji picker and menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+        setShowEmojiPicker(false)
+      }
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   // Fetch replies when expanded
   const { data: replies = [] } = useQuery({
@@ -309,7 +332,7 @@ function CommentItem({
           <div className="flex flex-wrap items-center gap-2 mt-2">
             {/* Emoji picker button */}
             {currentUserId && (
-              <div className="relative">
+              <div className="relative" ref={emojiPickerRef}>
                 <button
                   type="button"
                   onClick={() => setShowEmojiPicker(!showEmojiPicker)}
@@ -435,7 +458,7 @@ function CommentItem({
 
         {/* Actions menu */}
         {isOwner && (
-          <div className="relative">
+          <div className="relative" ref={menuRef}>
             <button
               type="button"
               onClick={() => setShowMenu(!showMenu)}
