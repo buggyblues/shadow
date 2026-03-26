@@ -1601,7 +1601,7 @@ export function InvitePanel({
           ) : availableBuddies.length === 0 ? (
             <div className="text-center py-8 text-text-muted text-sm">
               暂无可用 Buddy，
-              <a href="/app/buddy" className="text-primary hover:underline">
+              <a href="/buddy" className="text-primary hover:underline">
                 去创建
               </a>
             </div>

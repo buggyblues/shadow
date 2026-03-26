@@ -88,7 +88,7 @@ export function BuddyListItem({
     if (onClick) {
       onClick(buddy)
     } else if (clickable) {
-      navigate({ to: '/app/profile/$userId', params: { userId: buddy.userId } })
+      navigate({ to: '/profile/$userId', params: { userId: buddy.userId } })
     }
   }, [buddy, clickable, navigate, onClick])
 

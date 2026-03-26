@@ -161,7 +161,7 @@ export function UserProfilePage() {
                   <div className="mt-4 pt-4 border-t border-border-subtle">
                     <p className="text-xs uppercase tracking-wide text-text-muted mb-2">主人</p>
                     <Link
-                      to="/app/profile/$userId"
+                      to="/profile/$userId"
                       params={{ userId: profile.agent.ownerId }}
                       className="flex items-center gap-3 p-2 rounded-xl hover:bg-bg-modifier-hover transition group"
                     >
@@ -197,7 +197,7 @@ export function UserProfilePage() {
                     {profile.ownedAgents.map((agent) => (
                       <Link
                         key={agent.id}
-                        to="/app/profile/$userId"
+                        to="/profile/$userId"
                         params={{ userId: agent.userId }}
                         className="flex items-center gap-3 p-3 rounded-xl bg-bg-tertiary hover:bg-bg-modifier-hover transition group"
                       >
