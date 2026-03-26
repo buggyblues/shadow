@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { UserAvatar } from '../components/common/avatar'
 import { formatDuration, OnlineRank } from '../components/common/online-rank'
+import { ProfileCommentSection } from '../components/profile/ProfileCommentSection'
 import { fetchApi } from '../lib/api'
 import { useAuthStore } from '../stores/auth.store'
 
@@ -255,6 +256,9 @@ export function UserProfilePage() {
                   {new Date(profile.createdAt).toLocaleDateString()}
                 </p>
               </div>
+
+              {/* Comment Section */}
+              <ProfileCommentSection profileUserId={profile.id} />
             </div>
           </div>
         </div>

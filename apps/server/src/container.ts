@@ -18,6 +18,7 @@ import { OAuthAccountDao } from './dao/oauth-account.dao'
 import { OrderDao } from './dao/order.dao'
 import { ProductDao, ProductMediaDao, SkuDao } from './dao/product.dao'
 import { ProductCategoryDao } from './dao/product-category.dao'
+import { ProfileCommentDao } from './dao/profile-comment.dao'
 import { RentalContractDao, RentalUsageDao, RentalViolationDao } from './dao/rental-contract.dao'
 import { ReviewDao } from './dao/review.dao'
 import { ServerDao } from './dao/server.dao'
@@ -110,6 +111,9 @@ export interface Cradle {
   // Dashboard DAOs
   agentDashboardDao: AgentDashboardDao
 
+  // Profile Comment DAOs
+  profileCommentDao: ProfileCommentDao
+
   // Services
   authService: AuthService
   oauthService: OAuthService
@@ -195,6 +199,9 @@ export function createAppContainer(db: Database): AppContainer {
 
     // Dashboard DAOs
     agentDashboardDao: asClass(AgentDashboardDao).singleton(),
+
+    // Profile Comment DAOs
+    profileCommentDao: asClass(ProfileCommentDao).singleton(),
 
     // Services
     authService: asClass(AuthService).singleton(),
