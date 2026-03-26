@@ -218,6 +218,13 @@
       "when": 1774677800000,
       "tag": "0030_add_profile_comments",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1774677900000,
+      "tag": "0031_add_portfolio_schema",
+      "breakpoints": true
     }
   ]
 }

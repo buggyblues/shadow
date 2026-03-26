@@ -4,6 +4,7 @@ import { AgentDao } from './dao/agent.dao'
 import { AgentDashboardDao } from './dao/agent-dashboard.dao'
 import { AgentPolicyDao } from './dao/agent-policy.dao'
 import { AppDao } from './dao/app.dao'
+import { AttachmentDao } from './dao/attachment.dao'
 import { CartDao } from './dao/cart.dao'
 import { ChannelDao } from './dao/channel.dao'
 import { ChannelMemberDao } from './dao/channel-member.dao'
@@ -16,6 +17,7 @@ import { NotificationDao } from './dao/notification.dao'
 import { OAuthAppDao } from './dao/oauth.dao'
 import { OAuthAccountDao } from './dao/oauth-account.dao'
 import { OrderDao } from './dao/order.dao'
+import { PortfolioDao } from './dao/portfolio.dao'
 import { ProductDao, ProductMediaDao, SkuDao } from './dao/product.dao'
 import { ProductCategoryDao } from './dao/product-category.dao'
 import { ProfileCommentDao } from './dao/profile-comment.dao'
@@ -50,6 +52,8 @@ import { NotificationService } from './services/notification.service'
 import { OAuthService } from './services/oauth.service'
 import { OrderService } from './services/order.service'
 import { PermissionService } from './services/permission.service'
+import { PortfolioService } from './services/portfolio.service'
+import { PortfolioSocialService } from './services/portfolio-social.service'
 import { ProductService } from './services/product.service'
 import { RentalService } from './services/rental.service'
 import { ReviewService } from './services/review.service'
@@ -85,6 +89,10 @@ export interface Cradle {
 
   // App DAOs
   appDao: AppDao
+
+  // Portfolio DAOs
+  attachmentDao: AttachmentDao
+  portfolioDao: PortfolioDao
 
   // Shop DAOs
   shopDao: ShopDao
@@ -130,6 +138,8 @@ export interface Cradle {
   agentService: AgentService
   agentPolicyService: AgentPolicyService
   appService: AppService
+  portfolioService: PortfolioService
+  portfolioSocialService: PortfolioSocialService
   shopService: ShopService
   productService: ProductService
   walletService: WalletService
@@ -175,6 +185,10 @@ export function createAppContainer(db: Database): AppContainer {
     // App DAOs
     appDao: asClass(AppDao).singleton(),
 
+    // Portfolio DAOs
+    attachmentDao: asClass(AttachmentDao).singleton(),
+    portfolioDao: asClass(PortfolioDao).singleton(),
+
     // Shop DAOs
     shopDao: asClass(ShopDao).singleton(),
     productDao: asClass(ProductDao).singleton(),
@@ -219,6 +233,8 @@ export function createAppContainer(db: Database): AppContainer {
     agentService: asClass(AgentService).singleton(),
     agentPolicyService: asClass(AgentPolicyService).singleton(),
     appService: asClass(AppService).singleton(),
+    portfolioService: asClass(PortfolioService).singleton(),
+    portfolioSocialService: asClass(PortfolioSocialService).singleton(),
     shopService: asClass(ShopService).singleton(),
     productService: asClass(ProductService).singleton(),
     walletService: asClass(WalletService).singleton(),
