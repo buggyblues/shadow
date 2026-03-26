@@ -5,6 +5,15 @@ export {
   agentDailyStats,
   agentHourlyStats,
 } from './agent-dashboard'
+export {
+  portfolios,
+  portfolioComments,
+  portfolioFavorites,
+  portfolioLikes,
+  portfolioStatusEnum,
+  portfolioVisibilityEnum,
+} from './portfolios'
+export type { NewPortfolio, Portfolio, PortfolioComment, PortfolioFavorite, PortfolioLike } from './portfolios'
 export { appSourceEnum, appStatusEnum, apps } from './apps'
 export { attachments } from './attachments'
 export { channelMembers } from './channel-members'
