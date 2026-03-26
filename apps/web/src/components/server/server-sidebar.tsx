@@ -13,6 +13,7 @@ import {
   Volume2,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
@@ -22,7 +23,7 @@ import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
 import { useConfirmStore } from '../common/confirm-dialog'
-import { ContextMenu, type ContextMenuGroup } from '../common/context-menu'
+import { ContextMenu } from '../common/context-menu'
 
 interface ServerEntry {
   server: {
@@ -34,6 +35,107 @@ interface ServerEntry {
     isPublic?: boolean
   }
   member: { role: string }
+}
+
+// Simple tooltip component using portal to avoid overflow clipping
+function ServerTooltip({
+  text,
+  targetRef,
+  visible,
+}: {
+  text: string
+  targetRef: React.RefObject<HTMLButtonElement | null>
+  visible: boolean
+}) {
+  const [position, setPosition] = useState({ top: 0, left: 0 })
+
+  useEffect(() => {
+    if (visible && targetRef.current) {
+      const rect = targetRef.current.getBoundingClientRect()
+      setPosition({
+        top: rect.top + rect.height / 2,
+        left: rect.right + 12,
+      })
+    }
+  }, [visible, targetRef])
+
+  if (!visible) return null
+
+  return createPortal(
+    <div
+      className="fixed px-3 py-1.5 bg-bg-tertiary text-text-primary text-sm font-medium rounded-md shadow-lg whitespace-nowrap pointer-events-none z-[9999] -translate-y-1/2"
+      style={{ top: position.top, left: position.left }}
+    >
+      {text}
+      <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-bg-tertiary" />
+    </div>,
+    document.body,
+  )
+}
+
+// Individual server item component to properly use hooks
+function ServerItem({
+  server,
+  member,
+  index,
+  isActive,
+  unreadCount,
+  isMuted,
+  onSelect,
+  onContextMenu,
+}: {
+  server: ServerEntry['server']
+  member: ServerEntry['member']
+  index: number
+  isActive: boolean
+  unreadCount: number
+  isMuted: boolean
+  onSelect: (id: string, slug?: string | null) => void
+  onContextMenu: (e: React.MouseEvent, serverEntry: ServerEntry) => void
+}) {
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const [tooltipVisible, setTooltipVisible] = useState(false)
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      onContextMenu(e, { server, member })
+    },
+    [onContextMenu, server, member],
+  )
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => onSelect(server.id, server.slug)}
+        onContextMenu={handleContextMenu}
+        onMouseEnter={() => setTooltipVisible(true)}
+        onMouseLeave={() => setTooltipVisible(false)}
+        className={`w-12 h-12 transition-all duration-200 flex items-center justify-center font-bold text-[15px] overflow-hidden ${
+          isActive
+            ? 'bg-[#5865F2] rounded-[16px] text-white shadow-sm'
+            : 'bg-bg-primary text-text-primary rounded-[24px] hover:rounded-[16px] hover:bg-[#5865F2] hover:text-white'
+        }`}
+      >
+        {server.iconUrl ? (
+          <img src={server.iconUrl} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <img src={getCatAvatar(index)} alt={server.name} className="w-10 h-10" />
+        )}
+      </button>
+      {server.isPublic === false && (
+        <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-bg-secondary flex items-center justify-center shadow-sm">
+          <Lock size={10} className="text-text-muted" />
+        </span>
+      )}
+      {unreadCount > 0 && !isMuted && (
+        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-danger border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.35)]" />
+      )}
+      {/* Portal Tooltip */}
+      <ServerTooltip text={server.name} targetRef={buttonRef} visible={tooltipVisible} />
+    </div>
+  )
 }
 
 interface NotificationPreference {
@@ -208,7 +310,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   }
 
   return (
-    <div className="w-[72px] bg-bg-tertiary flex flex-col items-center py-3 shrink-0 h-full overflow-hidden">
+    <div className="w-[72px] bg-bg-tertiary flex flex-col items-center py-3 shrink-0 h-full">
       {/* User avatar → settings/profile */}
       <div className="relative group/user shrink-0">
         <button
@@ -234,39 +336,19 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
       <div className="w-8 h-0.5 bg-divider rounded-full my-1 shrink-0" />
 
       {/* Scrollable server list */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col items-center gap-2 min-h-0 py-1 scrollbar-thin">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col items-center gap-2 min-h-0 py-1 scrollbar-hidden">
         {servers.map((s, i) => (
-          <div key={s.server.id} className="relative group/server shrink-0">
-            <button
-              onClick={() => handleSelect(s.server.id, s.server.slug)}
-              onContextMenu={(e) => handleContextMenu(e, s)}
-              className={`w-12 h-12 transition-all duration-200 flex items-center justify-center font-bold text-[15px] overflow-hidden ${
-                activeServerId === s.server.id
-                  ? 'bg-[#5865F2] rounded-[16px] text-white shadow-sm'
-                  : 'bg-bg-primary text-text-primary rounded-[24px] hover:rounded-[16px] hover:bg-[#5865F2] hover:text-white'
-              }`}
-            >
-              {s.server.iconUrl ? (
-                <img src={s.server.iconUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <img src={getCatAvatar(i)} alt={s.server.name} className="w-10 h-10" />
-              )}
-            </button>
-            {s.server.isPublic === false && (
-              <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-bg-secondary flex items-center justify-center shadow-sm">
-                <Lock size={10} className="text-text-muted" />
-              </span>
-            )}
-            {(scopedUnread?.serverUnread?.[s.server.id] ?? 0) > 0 &&
-              !notificationPreference?.mutedServerIds?.includes(s.server.id) && (
-                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-danger border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.35)]" />
-              )}
-            {/* Tooltip */}
-            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-bg-tertiary text-text-primary text-sm font-medium rounded-md shadow-lg whitespace-nowrap pointer-events-none opacity-0 group-hover/server:opacity-100 transition-opacity z-50">
-              {s.server.name}
-              <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-bg-tertiary" />
-            </div>
-          </div>
+          <ServerItem
+            key={s.server.id}
+            server={s.server}
+            member={s.member}
+            index={i}
+            isActive={activeServerId === s.server.id}
+            unreadCount={scopedUnread?.serverUnread?.[s.server.id] ?? 0}
+            isMuted={notificationPreference?.mutedServerIds?.includes(s.server.id) ?? false}
+            onSelect={handleSelect}
+            onContextMenu={handleContextMenu}
+          />
         ))}
       </div>
 

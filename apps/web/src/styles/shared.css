@@ -126,6 +126,15 @@ body {
   scrollbar-width: thin;
 }
 
+/* Hidden scrollbar - scrollable but no visible scrollbar */
+.scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
 /* Markdown message styling */
 .msg-markdown p {
   margin: 0.125rem 0;
