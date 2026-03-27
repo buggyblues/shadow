@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Clock, QrCode, User, X } from 'lucide-react-native'
+import { Clock, Image, QrCode, User, X } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
@@ -8,6 +8,7 @@ import QRCode from 'react-native-qrcode-svg'
 import { Avatar } from '../../../src/components/common/avatar'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { StatusBadge } from '../../../src/components/common/status-badge'
+import { PortfolioGrid } from '../../../src/components/portfolio'
 import { ProfileCommentSection } from '../../../src/components/profile/ProfileCommentSection'
 import { fetchApi } from '../../../src/lib/api'
 import { showToast } from '../../../src/lib/toast'
@@ -328,6 +329,19 @@ export default function UserProfileScreen() {
             </View>
           )}
 
+          {/* Portfolio */}
+          <View style={[styles.sectionDivider, { borderTopColor: `${colors.border}60` }]}>
+            <View style={styles.sectionHeaderRow}>
+              <Image size={16} color={colors.textMuted} />
+              <Text style={[styles.sectionTitle, { color: colors.textMuted, marginBottom: 0 }]}>
+                {t('profile.portfolio', '作品集')}
+              </Text>
+            </View>
+            <View style={{ width: '100%', marginTop: spacing.sm }}>
+              <PortfolioGrid userId={profile.id} isOwner={isSelf} />
+            </View>
+          </View>
+
           {profile.createdAt && (
             <View style={[styles.sectionDivider, { borderTopColor: `${colors.border}60` }]}>
               <View style={styles.infoRow}>
@@ -492,6 +506,12 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: spacing.sm,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
   },
   infoRow: {
     flexDirection: 'row',
