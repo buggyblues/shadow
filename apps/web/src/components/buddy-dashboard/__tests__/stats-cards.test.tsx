@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { StatsCards } from '../stats-cards'
+
+// @vitest-environment jsdom
 
 // Mock i18next
 vi.mock('react-i18next', () => ({

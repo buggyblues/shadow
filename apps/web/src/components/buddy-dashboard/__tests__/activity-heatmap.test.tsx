@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ActivityHeatmap } from '../activity-heatmap'
+
+// @vitest-environment jsdom
 
 // Mock i18next
 vi.mock('react-i18next', () => ({
