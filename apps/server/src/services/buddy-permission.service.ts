@@ -4,6 +4,22 @@ import type { AgentDao } from '../dao/agent.dao'
 import type { UserDao } from '../dao/user.dao'
 
 /**
+ * Permission types for Buddy access control
+ */
+type PermissionKey = 'canView' | 'canInteract' | 'canMention' | 'canManage'
+type DefaultPermissionKey = 'defaultCanView' | 'defaultCanInteract' | 'defaultCanMention'
+
+/**
+ * Maps permission keys to their corresponding default settings keys
+ */
+const PERMISSION_DEFAULT_MAP: Record<PermissionKey, DefaultPermissionKey> = {
+  canView: 'defaultCanView',
+  canInteract: 'defaultCanInteract',
+  canMention: 'defaultCanMention',
+  canManage: 'defaultCanMention', // manage uses mention default as fallback
+}
+
+/**
  * Service for managing Buddy permissions
  *
  * Handles business logic for:
@@ -21,23 +37,26 @@ export class BuddyPermissionService {
     }
   ) {}
 
-  // ==================== Permission Checks ====================
+  // ==================== Private Helpers ====================
 
   /**
-   * Check if a user can view a Buddy
+   * Generic permission check with DRY implementation
+   * All public permission methods delegate to this
    */
-  async canView(
+  private async checkPermission(
     buddyId: string,
     serverId: string,
     userId: string,
-    channelId?: string | null
+    channelId: string | null | undefined,
+    permissionKey: PermissionKey,
+    defaultForPublic: boolean = true
   ): Promise<boolean> {
     const settings = await this.deps.buddyPermissionDao.findServerSettings(buddyId, serverId)
 
-    // If public or no settings, allow view
-    if (!settings || !settings.isPrivate) return true
+    // Public mode: allow all (or use default)
+    if (!settings || !settings.isPrivate) return defaultForPublic
 
-    // Buddy owner can always view
+    // Buddy owner has all permissions
     const buddy = await this.deps.agentDao.findById(buddyId)
     if (buddy?.ownerId === userId) return true
 
@@ -49,10 +68,45 @@ export class BuddyPermissionService {
       userId
     )
 
-    if (permission) return permission.canView
+    if (permission) return permission[permissionKey]
 
-    // Fall back to defaults
-    return settings.defaultCanView
+    // Fall back to defaults (manage defaults to false)
+    if (permissionKey === 'canManage') return false
+
+    const defaultKey = PERMISSION_DEFAULT_MAP[permissionKey]
+    return settings[defaultKey] ?? defaultForPublic
+  }
+
+  /**
+   * Verify that the user owns the Buddy
+   * @throws {Error} 404 if Buddy not found, 403 if not owner
+   */
+  private async verifyOwnership(buddyId: string, ownerId: string) {
+    const buddy = await this.deps.agentDao.findById(buddyId)
+
+    if (!buddy) {
+      throw Object.assign(new Error('Buddy not found'), { status: 404 })
+    }
+
+    if (buddy.ownerId !== ownerId) {
+      throw Object.assign(new Error('Not the owner of this Buddy'), { status: 403 })
+    }
+
+    return buddy
+  }
+
+  // ==================== Public Permission Checks ====================
+
+  /**
+   * Check if a user can view a Buddy
+   */
+  async canView(
+    buddyId: string,
+    serverId: string,
+    userId: string,
+    channelId?: string | null
+  ): Promise<boolean> {
+    return this.checkPermission(buddyId, serverId, userId, channelId, 'canView')
   }
 
   /**
@@ -65,27 +119,7 @@ export class BuddyPermissionService {
     userId: string,
     channelId?: string | null
   ): Promise<boolean> {
-    const settings = await this.deps.buddyPermissionDao.findServerSettings(buddyId, serverId)
-
-    // If public or no settings, allow interaction
-    if (!settings || !settings.isPrivate) return true
-
-    // Buddy owner can always interact
-    const buddy = await this.deps.agentDao.findById(buddyId)
-    if (buddy?.ownerId === userId) return true
-
-    // Check explicit permission
-    const permission = await this.deps.buddyPermissionDao.findEffectivePermission(
-      buddyId,
-      serverId,
-      channelId,
-      userId
-    )
-
-    if (permission) return permission.canInteract
-
-    // Fall back to defaults
-    return settings.defaultCanInteract
+    return this.checkPermission(buddyId, serverId, userId, channelId, 'canInteract')
   }
 
   /**
@@ -97,27 +131,7 @@ export class BuddyPermissionService {
     userId: string,
     channelId?: string | null
   ): Promise<boolean> {
-    const settings = await this.deps.buddyPermissionDao.findServerSettings(buddyId, serverId)
-
-    // If public or no settings, allow mention
-    if (!settings || !settings.isPrivate) return true
-
-    // Buddy owner can always mention
-    const buddy = await this.deps.agentDao.findById(buddyId)
-    if (buddy?.ownerId === userId) return true
-
-    // Check explicit permission
-    const permission = await this.deps.buddyPermissionDao.findEffectivePermission(
-      buddyId,
-      serverId,
-      channelId,
-      userId
-    )
-
-    if (permission) return permission.canMention
-
-    // Fall back to defaults
-    return settings.defaultCanMention
+    return this.checkPermission(buddyId, serverId, userId, channelId, 'canMention')
   }
 
   /**
@@ -129,19 +143,7 @@ export class BuddyPermissionService {
     userId: string,
     channelId?: string | null
   ): Promise<boolean> {
-    // Buddy owner can always manage
-    const buddy = await this.deps.agentDao.findById(buddyId)
-    if (buddy?.ownerId === userId) return true
-
-    // Check explicit manage permission
-    const permission = await this.deps.buddyPermissionDao.findEffectivePermission(
-      buddyId,
-      serverId,
-      channelId,
-      userId
-    )
-
-    return permission?.canManage ?? false
+    return this.checkPermission(buddyId, serverId, userId, channelId, 'canManage', false)
   }
 
   // ==================== Bulk Operations ====================
@@ -201,14 +203,7 @@ export class BuddyPermissionService {
       canManage?: boolean
     }
   ) {
-    // Verify ownership
-    const buddy = await this.deps.agentDao.findById(data.buddyId)
-    if (!buddy) {
-      throw Object.assign(new Error('Buddy not found'), { status: 404 })
-    }
-    if (buddy.ownerId !== ownerId) {
-      throw Object.assign(new Error('Not the owner of this Buddy'), { status: 403 })
-    }
+    await this.verifyOwnership(data.buddyId, ownerId)
 
     // Cannot grant permissions to self (owner already has full access)
     if (data.userId === ownerId) {
@@ -243,14 +238,7 @@ export class BuddyPermissionService {
    * Revoke permission from a user
    */
   async revokePermission(ownerId: string, buddyId: string, permissionId: string) {
-    // Verify ownership
-    const buddy = await this.deps.agentDao.findById(buddyId)
-    if (!buddy) {
-      throw Object.assign(new Error('Buddy not found'), { status: 404 })
-    }
-    if (buddy.ownerId !== ownerId) {
-      throw Object.assign(new Error('Not the owner of this Buddy'), { status: 403 })
-    }
+    await this.verifyOwnership(buddyId, ownerId)
 
     await this.deps.buddyPermissionDao.delete(permissionId)
 
@@ -278,14 +266,7 @@ export class BuddyPermissionService {
       canManage?: boolean
     }
   ) {
-    // Verify ownership
-    const buddy = await this.deps.agentDao.findById(buddyId)
-    if (!buddy) {
-      throw Object.assign(new Error('Buddy not found'), { status: 404 })
-    }
-    if (buddy.ownerId !== ownerId) {
-      throw Object.assign(new Error('Not the owner of this Buddy'), { status: 403 })
-    }
+    await this.verifyOwnership(buddyId, ownerId)
 
     const permission = await this.deps.buddyPermissionDao.update(permissionId, data)
 
@@ -348,14 +329,7 @@ export class BuddyPermissionService {
       defaultCanMention?: boolean
     }
   ) {
-    // Verify ownership
-    const buddy = await this.deps.agentDao.findById(data.buddyId)
-    if (!buddy) {
-      throw Object.assign(new Error('Buddy not found'), { status: 404 })
-    }
-    if (buddy.ownerId !== ownerId) {
-      throw Object.assign(new Error('Not the owner of this Buddy'), { status: 403 })
-    }
+    await this.verifyOwnership(data.buddyId, ownerId)
 
     const settings = await this.deps.buddyPermissionDao.upsertServerSettings({
       buddyId: data.buddyId,
@@ -401,6 +375,7 @@ export class BuddyPermissionService {
 
   /**
    * Get permissions list with user details
+   * Optimized to avoid N+1 queries by batch fetching users
    */
   async getPermissionsWithUsers(
     buddyId: string,
@@ -412,6 +387,7 @@ export class BuddyPermissionService {
   ) {
     let permissions = await this.deps.buddyPermissionDao.findByBuddyId(buddyId)
 
+    // Apply filters
     if (filters?.serverId) {
       permissions = permissions.filter((p) => p.serverId === filters.serverId)
     }
@@ -428,24 +404,27 @@ export class BuddyPermissionService {
       permissions = permissions.filter((p) => p.userId === filters.userId)
     }
 
-    // Enrich with user details
-    const enriched = await Promise.all(
-      permissions.map(async (perm) => {
-        const user = await this.deps.userDao.findById(perm.userId)
-        return {
-          ...perm,
-          user: user
-            ? {
-                id: user.id,
-                username: user.username,
-                displayName: user.displayName,
-                avatarUrl: user.avatarUrl,
-              }
-            : null,
-        }
-      })
+    // Batch fetch users to avoid N+1 queries
+    const uniqueUserIds = [...new Set(permissions.map((p) => p.userId))]
+    const users = await Promise.all(
+      uniqueUserIds.map((id) => this.deps.userDao.findById(id))
     )
+    const userMap = new Map(users.filter(Boolean).map((u) => [u!.id, u]))
 
-    return enriched
+    // Enrich without additional queries
+    return permissions.map((perm) => {
+      const user = userMap.get(perm.userId)
+      return {
+        ...perm,
+        user: user
+          ? {
+              id: user.id,
+              username: user.username,
+              displayName: user.displayName,
+              avatarUrl: user.avatarUrl,
+            }
+          : null,
+      }
+    })
   }
 }
