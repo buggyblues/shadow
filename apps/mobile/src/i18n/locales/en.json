@@ -759,6 +759,23 @@
     "heat": {
       "hot": "Hot"
     },
+    "filter": {
+      "title": "Filter",
+      "searchPlaceholder": "Search channels...",
+      "sortBy": "Sort by",
+      "ascending": "Ascending",
+      "descending": "Descending",
+      "showArchived": "Show archived",
+      "clear": "Clear",
+      "apply": "Apply",
+      "sort": {
+        "default": "Default",
+        "lastMessage": "Last message",
+        "activity": "Activity",
+        "created": "Created",
+        "updated": "Updated"
+      }
+    },
     "loadMore": "Loading more...",
     "noMore": "No more",
     "emptyTitle": "Nothing here",

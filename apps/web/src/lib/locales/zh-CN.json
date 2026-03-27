@@ -679,6 +679,23 @@
       "hot": "热门",
       "trending": " trending"
     },
+    "filter": {
+      "title": "筛选",
+      "searchPlaceholder": "搜索频道...",
+      "sortBy": "排序方式",
+      "ascending": "升序",
+      "descending": "降序",
+      "showArchived": "显示已归档",
+      "clear": "清除",
+      "apply": "应用",
+      "sort": {
+        "default": "默认",
+        "lastMessage": "最新消息",
+        "activity": "活跃度",
+        "created": "创建时间",
+        "updated": "更新时间"
+      }
+    },
     "deviceTier": {
       "highEnd": "高端",
       "midRange": "中端",

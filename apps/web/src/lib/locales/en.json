@@ -679,6 +679,23 @@
       "hot": "Hot",
       "trending": "Trending"
     },
+    "filter": {
+      "title": "Filter",
+      "searchPlaceholder": "Search channels...",
+      "sortBy": "Sort by",
+      "ascending": "Ascending",
+      "descending": "Descending",
+      "showArchived": "Show archived",
+      "clear": "Clear",
+      "apply": "Apply",
+      "sort": {
+        "default": "Default",
+        "lastMessage": "Last message",
+        "activity": "Activity",
+        "created": "Created",
+        "updated": "Updated"
+      }
+    },
     "deviceTier": {
       "highEnd": "High-end",
       "midRange": "Mid-range",
