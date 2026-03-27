@@ -520,57 +520,70 @@ function FeedCard({
             })
           }
         }}
-        className="bg-bg-secondary rounded-2xl p-4 hover:bg-[#383a40] transition cursor-pointer border border-[#1e1f22]"
+        className="bg-bg-secondary rounded-2xl overflow-hidden hover:bg-[#383a40] hover:-translate-y-0.5 hover:shadow-xl transition-all duration-200 cursor-pointer border border-[#1e1f22] group relative"
       >
-        <div className="flex gap-4">
-          {/* Server Icon */}
-          <div className="w-12 h-12 rounded-xl overflow-hidden bg-bg-tertiary shrink-0">
-            {channel.server.iconUrl ? (
-              <img src={channel.server.iconUrl} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-lg font-bold text-primary/60">
-                {channel.server.name.charAt(0)}
-              </div>
-            )}
-          </div>
+        {/* Header with server icon and channel badge */}
+        <div className="h-[80px] bg-gradient-to-br from-[#5865F2]/20 to-[#5865F2]/5 relative p-4">
+          {/* Channel Badge */}
+          <span className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 bg-primary/80 backdrop-blur-md text-white text-[11px] font-bold rounded-full z-10 uppercase tracking-widest">
+            <Hash size={10} />
+            {t('discover.channelBadge')}
+          </span>
 
-          {/* Content */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-text-muted text-[13px]">{channel.server.name}</span>
-              <span className="text-text-muted">/</span>
-              <div className="flex items-center gap-1">
-                <Hash size={14} className="text-text-muted" />
-                <span className="font-semibold text-text-primary">{channel.name}</span>
-              </div>
-            </div>
-
-            {channel.topic && (
-              <p className="text-text-secondary text-[13px] mb-2">{channel.topic}</p>
-            )}
-
-            {channel.lastMessage && (
-              <div className="bg-bg-tertiary/50 rounded-lg p-3 mt-2">
-                <p className="text-text-secondary text-[13px] line-clamp-2">
-                  {channel.lastMessage.content}
-                </p>
-                <p className="text-text-muted text-[11px] mt-1">
-                  {formatTimeAgo(channel.lastMessage.createdAt)}
-                </p>
-              </div>
-            )}
-
-            <div className="flex items-center gap-3 mt-3">
-              <span className="flex items-center gap-1 text-[12px] text-text-muted">
-                <MessageCircle size={12} />
-                {channel.memberCount} {t('discover.members')}
-              </span>
-              {!isJoined && (
-                <span className="text-[11px] text-text-muted bg-bg-tertiary px-2 py-0.5 rounded">
-                  {t('discover.joinToView')}
-                </span>
+          {/* Server Info */}
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl overflow-hidden bg-bg-tertiary shrink-0 border-2 border-bg-secondary">
+              {channel.server.iconUrl ? (
+                <img src={channel.server.iconUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-lg font-bold text-primary/60 bg-bg-tertiary">
+                  {channel.server.name.charAt(0)}
+                </div>
               )}
             </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-text-muted text-[12px] truncate">{channel.server.name}</p>
+              <div className="flex items-center gap-1">
+                <Hash size={14} className="text-primary" />
+                <span className="font-bold text-text-primary text-[15px] truncate">
+                  {channel.name}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-4 flex flex-col flex-1">
+          {channel.topic && (
+            <p className="text-text-secondary text-[14px] mb-3 line-clamp-2">{channel.topic}</p>
+          )}
+
+          {channel.lastMessage && (
+            <div className="bg-bg-tertiary/50 rounded-lg p-3 mb-3">
+              <p className="text-text-secondary text-[13px] line-clamp-2">
+                {channel.lastMessage.content}
+              </p>
+              <p className="text-text-muted text-[11px] mt-1">
+                {formatTimeAgo(channel.lastMessage.createdAt)}
+              </p>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between mt-auto pt-3 border-t border-bg-tertiary">
+            <span className="flex items-center gap-1.5 text-[12px] font-medium text-text-muted">
+              <div className="w-2 h-2 rounded-full bg-[#23a559]"></div>
+              {channel.memberCount} {t('discover.members')}
+            </span>
+            {!isJoined ? (
+              <span className="text-[11px] text-text-muted bg-bg-tertiary px-2 py-1 rounded">
+                {t('discover.joinToView')}
+              </span>
+            ) : (
+              <span className="text-[11px] text-green-400 bg-green-500/10 px-2 py-1 rounded">
+                {t('discover.enterButton')}
+              </span>
+            )}
           </div>
         </div>
       </div>
