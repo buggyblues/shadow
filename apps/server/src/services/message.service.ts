@@ -2,7 +2,9 @@ import type { AgentDao } from '../dao/agent.dao'
 import type { AgentDashboardDao } from '../dao/agent-dashboard.dao'
 import type { ChannelDao } from '../dao/channel.dao'
 import type { MessageDao } from '../dao/message.dao'
+import type { PortfolioDao } from '../dao/portfolio.dao'
 import type { UserDao } from '../dao/user.dao'
+import type { Logger } from '../lib/logger'
 import type {
   CreateThreadInput,
   ReactionInput,
@@ -19,6 +21,8 @@ export class MessageService {
       channelDao: ChannelDao
       agentDao: AgentDao
       agentDashboardDao: AgentDashboardDao
+      portfolioDao: PortfolioDao
+      logger?: Logger
     },
   ) {}
 
@@ -92,6 +96,36 @@ export class MessageService {
           'Failed to track dashboard stats',
         )
       }
+
+      // Auto-publish to portfolio for Buddy attachments
+      if (messageAttachments.length > 0) {
+        for (const att of messageAttachments) {
+          try {
+            // Check if already published
+            const existing = await this.deps.portfolioDao.findByAttachmentId(att.id)
+            if (!existing) {
+              await this.deps.portfolioDao.create({
+                ownerId: authorId,
+                attachmentId: att.id,
+                title: att.filename.replace(/\.[^/.]+$/, ''),
+                fileUrl: att.url,
+                fileName: att.filename,
+                fileType: att.contentType,
+                fileSize: att.size,
+                fileWidth: att.width ?? undefined,
+                fileHeight: att.height ?? undefined,
+                visibility: 'public',
+              })
+            }
+          } catch (err) {
+            // Non-critical: don't fail message creation if portfolio publish fails
+            this.deps.logger?.warn?.(
+              { err, attachmentId: att.id },
+              'Failed to auto-publish to portfolio',
+            )
+          }
+        }
+      }
     }
 
     return {
@@ -101,7 +135,7 @@ export class MessageService {
             id: user.id,
             username: user.username,
             displayName: user.displayName,
-            avatarName: user.avatarUrl,
+            avatarUrl: user.avatarUrl,
             status: user.status,
             isBot: user.isBot,
           }
