@@ -750,12 +750,21 @@
     "minutesAgo": "{{count}} 分钟前",
     "hoursAgo": "{{count}} 小时前",
     "daysAgo": "{{count}} 天前",
-    "tabs": {
+    "filters": {
+      "all": "全部",
       "servers": "服务器",
       "channels": "频道",
-      "explore": "发现"
+      "rentals": "租赁"
     },
-    "exploreComingSoon": "更多功能即将推出",
+    "heat": {
+      "hot": "热门"
+    },
+    "loadMore": "加载更多...",
+    "noMore": "没有更多了",
+    "emptyTitle": "这里还没有内容",
+    "emptyDesc": "成为第一个创建社区的人吧！",
+    "noSearchResults": "未找到结果",
+    "noSearchResultsDesc": "尝试不同的关键词",
     "deviceTier": {
       "highEnd": "高端",
       "midRange": "中端",

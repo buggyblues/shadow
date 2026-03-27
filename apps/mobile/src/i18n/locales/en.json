@@ -750,12 +750,21 @@
     "minutesAgo": "{{count}}m ago",
     "hoursAgo": "{{count}}h ago",
     "daysAgo": "{{count}}d ago",
-    "tabs": {
+    "filters": {
+      "all": "All",
       "servers": "Servers",
       "channels": "Channels",
-      "explore": "Explore"
+      "rentals": "Rentals"
     },
-    "exploreComingSoon": "More features coming soon",
+    "heat": {
+      "hot": "Hot"
+    },
+    "loadMore": "Loading more...",
+    "noMore": "No more",
+    "emptyTitle": "Nothing here",
+    "emptyDesc": "Be the first to create a community!",
+    "noSearchResults": "No results",
+    "noSearchResultsDesc": "Try different keywords",
     "deviceTier": {
       "highEnd": "High-end",
       "midRange": "Mid-range",
