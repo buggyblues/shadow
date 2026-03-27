@@ -753,8 +753,9 @@
     "tabs": {
       "servers": "服务器",
       "channels": "频道",
-      "rentals": "租赁"
+      "explore": "发现"
     },
+    "exploreComingSoon": "更多功能即将推出",
     "deviceTier": {
       "highEnd": "高端",
       "midRange": "中端",

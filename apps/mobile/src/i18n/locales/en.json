@@ -753,8 +753,9 @@
     "tabs": {
       "servers": "Servers",
       "channels": "Channels",
-      "rentals": "Rentals"
+      "explore": "Explore"
     },
+    "exploreComingSoon": "More features coming soon",
     "deviceTier": {
       "highEnd": "High-end",
       "midRange": "Mid-range",
