@@ -197,36 +197,20 @@ shadowob workspace folders delete <folder-id>
 ```bash
 # Shop info
 shadowob shop get <server-id> --json
-shadowob shop update <server-id> [--name <name>] [--description <desc>] --json
-
-# Categories
-shadowob shop categories list <server-id> --json
-shadowob shop categories create <server-id> --name <name> [--description <desc>] --json
-shadowob shop categories update <category-id> [--name <name>] [--description <desc>] --json
-shadowob shop categories delete <category-id>
 
 # Products
-shadowob shop products list <server-id> [--category-id <id>] --json
-shadowob shop products get <product-id> --json
-shadowob shop products create <server-id> --name <name> --price <n> [--description <desc>] [--category-id <id>] [--stock <n>] --json
-shadowob shop products update <product-id> [--name <name>] [--price <n>] [--description <desc>] [--stock <n>] --json
-shadowob shop products delete <product-id>
+shadowob shop products list <server-id> --json
+shadowob shop products get <server-id> <product-id> --json
 
 # Cart
 shadowob shop cart list <server-id> --json
-shadowob shop cart add <server-id> --product-id <id> [--quantity <n>] --json
-shadowob shop cart update <item-id> --quantity <n> --json
-shadowob shop cart remove <item-id>
 
 # Orders
-shadowob shop orders list [--server-id <id>] --json
-shadowob shop orders get <order-id> --json
-shadowob shop orders create <server-id> [--note <text>] --json
+shadowob shop orders list <server-id> --json
+shadowob shop orders get <server-id> <order-id> --json
 
 # Wallet
 shadowob shop wallet balance --json
-shadowob shop wallet transactions [--limit <n>] --json
-shadowob shop wallet topup --amount <n> --json
 ```
 
 ## Apps
@@ -273,50 +257,42 @@ shadowob notifications preferences update [--email-enabled <bool>] [--push-enabl
 # List friends
 shadowob friends list --json
 
-# Requests
+# Friend requests
 shadowob friends requests [--incoming] [--outgoing] --json
-shadowob friends add <user-id> [--message <text>] --json
-shadowob friends accept <user-id> --json
-shadowob friends reject <user-id>
+shadowob friends add <username> [--message <text>] --json
+shadowob friends accept <request-id> --json
+shadowob friends reject <request-id> --json
 
-# Manage
-shadowob friends remove <user-id>
-shadowob friends block <user-id>
-shadowob friends unblock <user-id>
-shadowob friends blocked --json
+# Remove friend
+shadowob friends remove <friendship-id> --json
 ```
 
 ## Invites
 
 ```bash
-# List invites
-shadowob invites list <server-id> --json
+# List your invite codes
+shadowob invites list --json
 
-# Create/Revoke
-shadowob invites create <server-id> [--max-uses <n>] [--expires-in <hours>] --json
-shadowob invites revoke <invite-id>
-shadowob invites regenerate <server-id> --json
+# Create invite code
+shadowob invites create [--max-uses <n>] [--expires-in <hours>] --json
 
-# Get by code
-shadowob invites get <invite-code> --json
+# Deactivate/Delete invite
+shadowob invites deactivate <invite-id>
+shadowob invites delete <invite-id>
 ```
 
 ## OAuth
 
 ```bash
-# List apps
+# List OAuth apps
 shadowob oauth list --json
 
-# Get/Create/Update/Delete
-shadowob oauth get <app-id> --json
+# Create OAuth app
 shadowob oauth create --name <name> [--description <desc>] [--redirect-uri <uri>] [--homepage <url>] --json
+
+# Update/Delete OAuth app
 shadowob oauth update <app-id> [--name <name>] [--description <desc>] [--redirect-uri <uri>] [--homepage <url>] --json
 shadowob oauth delete <app-id>
-shadowob oauth regenerate-secret <app-id> --json
-
-# Tokens
-shadowob oauth tokens list --json
-shadowob oauth tokens revoke <token-id>
 ```
 
 ## Marketplace
@@ -340,23 +316,18 @@ shadowob marketplace contracts extend <contract-id> --hours <n> --json
 ## Media
 
 ```bash
-# Upload/Download
+# Upload a file
 shadowob media upload --file <path> [--server-id <id>] [--channel-id <id>] --json
-shadowob media download <content-ref> [--output <path>]
-shadowob media delete <content-ref>
-shadowob media list [--server-id <id>] [--channel-id <id>] [--limit <n>] --json
+
+# Download a file
+shadowob media download <file-url> [--output <path>]
 ```
 
 ## Search
 
 ```bash
-# Global search
-shadowob search global --query <text> [--server-id <id>] [--channel-id <id>] [--type <type>] [--limit <n>] --json
-
-# Specific searches
+# Search messages
 shadowob search messages --query <text> [--server-id <id>] [--channel-id <id>] [--author-id <id>] [--after <date>] [--before <date>] [--has-attachments] [--limit <n>] --json
-shadowob search users --query <text> [--limit <n>] --json
-shadowob search servers --query <text> [--limit <n>] --json
 ```
 
 ## Listen (Real-time Events)
