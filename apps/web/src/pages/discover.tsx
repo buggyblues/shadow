@@ -323,7 +323,7 @@ export function DiscoverPage() {
           ) : allItems.length === 0 ? (
             <EmptyState isSearching={isSearching} t={t} />
           ) : (
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {allItems.map((item, index) => (
                 <FeedCard
                   key={`${item.type}-${item.id}-${index}`}
@@ -414,77 +414,83 @@ function FeedCard({
             })
           }
         }}
-        className="bg-bg-secondary rounded-2xl p-4 hover:bg-[#383a40] transition cursor-pointer border border-[#1e1f22] group"
+        className="bg-bg-secondary rounded-2xl overflow-hidden hover:bg-[#383a40] hover:-translate-y-0.5 hover:shadow-xl transition-all duration-200 cursor-pointer border border-[#1e1f22] group relative"
       >
-        <div className="flex gap-4">
-          {/* Server Icon */}
-          <div className="relative shrink-0">
-            <div className="w-16 h-16 rounded-2xl overflow-hidden bg-bg-tertiary">
-              {server.iconUrl ? (
-                <img src={server.iconUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <img src={getCatAvatar(0)} alt={server.name} className="w-full h-full" />
-              )}
-            </div>
-            {server.isPublic && (
-              <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                <Shield size={10} className="text-white" />
-              </div>
+        {/* Banner */}
+        <div className="h-[120px] bg-gradient-to-br from-[#5865F2]/20 to-[#5865F2]/5 relative">
+          {server.bannerUrl ? (
+            <img
+              src={server.bannerUrl}
+              alt=""
+              className="w-full h-full object-cover absolute inset-0"
+            />
+          ) : null}
+          {server.isPublic && (
+            <span className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 bg-black/50 backdrop-blur-md text-white text-[11px] font-bold rounded-full z-10 uppercase tracking-widest">
+              <Shield size={12} />
+              {t('discover.public')}
+            </span>
+          )}
+        </div>
+
+        {/* Icon overlay */}
+        <div className="absolute top-[92px] left-4 p-1.5 bg-bg-secondary group-hover:bg-[#383a40] rounded-[18px] transition-colors duration-200 z-20">
+          <div className="w-[48px] h-[48px] rounded-[12px] overflow-hidden bg-bg-tertiary flex items-center justify-center">
+            {server.iconUrl ? (
+              <img src={server.iconUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <img src={getCatAvatar(0)} alt={server.name} className="w-9 h-9" />
             )}
           </div>
+        </div>
 
-          {/* Content */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <h3 className="font-bold text-text-primary text-[16px] truncate">{server.name}</h3>
-                <div className="flex items-center gap-3 mt-1">
-                  <span className="flex items-center gap-1 text-[12px] text-text-muted">
-                    <Users size={12} />
-                    {server.memberCount} {t('discover.members')}
-                  </span>
-                  {heat.icon && (
-                    <span className={['flex items-center gap-1 text-[12px]', heat.color].join(' ')}>
-                      <heat.icon size={12} />
-                      {t('discover.heat.hot')}
-                    </span>
-                  )}
-                </div>
-              </div>
+        {/* Content */}
+        <div className="pt-10 p-4 flex flex-col flex-1">
+          <h3 className="font-bold text-[#f2f3f5] text-[16px] mb-1 truncate">{server.name}</h3>
+          <p className="text-text-primary text-[14px] mb-4 line-clamp-2 min-h-[2.5rem] flex-1">
+            {server.description ?? t('discover.noDescription')}
+          </p>
 
-              {isJoined ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    navigate({
-                      to: '/servers/$serverSlug',
-                      params: { serverSlug: server.slug ?? server.id },
-                    })
-                  }}
-                  className="px-4 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-[13px] font-medium transition"
-                >
-                  {t('discover.enterButton')}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    joinMutation.mutate({ inviteCode: server.inviteCode })
-                  }}
-                  disabled={joinMutation.isPending}
-                  className="px-4 py-1.5 bg-primary hover:bg-primary/80 text-white rounded-lg text-[13px] font-medium transition disabled:opacity-50"
-                >
-                  {t('discover.joinButton')}
-                </button>
+          <div className="flex items-center justify-between mt-auto">
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1.5 text-[12px] font-medium text-text-muted">
+                <div className="w-2 h-2 rounded-full bg-[#23a559]"></div>
+                {server.memberCount} {t('discover.members')}
+              </span>
+              {heat.icon && (
+                <span className={['flex items-center gap-1 text-[12px]', heat.color].join(' ')}>
+                  <heat.icon size={12} />
+                  {t('discover.heat.hot')}
+                </span>
               )}
             </div>
 
-            {server.description && (
-              <p className="text-text-secondary text-[14px] mt-2 line-clamp-2">
-                {server.description}
-              </p>
+            {isJoined ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  navigate({
+                    to: '/servers/$serverSlug',
+                    params: { serverSlug: server.slug ?? server.id },
+                  })
+                }}
+                className="flex items-center gap-1.5 px-4 py-1.5 bg-[#23a559] hover:bg-[#1d8749] text-white rounded-[3px] text-[14px] font-medium transition"
+              >
+                {t('discover.enterButton')}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  joinMutation.mutate({ inviteCode: server.inviteCode })
+                }}
+                disabled={joinMutation.isPending}
+                className="flex items-center gap-1.5 px-4 py-1.5 bg-[#5865F2] hover:bg-[#4752C4] text-white rounded-[3px] text-[14px] font-medium transition disabled:opacity-50"
+              >
+                {t('discover.joinButton')}
+              </button>
             )}
           </div>
         </div>
