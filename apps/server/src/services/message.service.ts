@@ -66,7 +66,8 @@ export class MessageService {
       try {
         const agent = await this.deps.agentDao.findByUserId(authorId)
         if (agent) {
-          await this.deps.agentDashboardDao.incrementMessageCount(agent.id, new Date().toISOString().split('T')[0])
+          const { getDateString } = await import('@shadowob/shared/utils/date')
+          await this.deps.agentDashboardDao.incrementMessageCount(agent.id, getDateString(new Date()))
           await this.deps.agentDashboardDao.incrementHourlyMessage(agent.id, new Date().getHours())
           await this.deps.agentDashboardDao.createEvent(agent.id, 'message', {
             preview: input.content.substring(0, 100),
@@ -74,8 +75,10 @@ export class MessageService {
             messageId: message.id,
           })
         }
-      } catch {
+      } catch (err) {
         // Non-critical: don't fail message creation if stats tracking fails
+        // But log for monitoring
+        this.deps.logger?.warn?.({ err, agentId: authorId, messageId: message.id }, 'Failed to track dashboard stats')
       }
     }
 

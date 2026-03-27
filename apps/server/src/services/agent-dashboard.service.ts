@@ -1,3 +1,10 @@
+import {
+  ACTIVITY_LEVELS,
+  calculateActivityLevel,
+  DASHBOARD_CONSTANTS,
+  getDateString,
+  getDaysAgoDateString,
+} from '@shadowob/shared/utils/date'
 import type { Logger } from 'pino'
 import type { AgentDashboardDao } from '../dao/agent-dashboard.dao'
 import type { AgentDao } from '../dao/agent.dao'
@@ -91,9 +98,9 @@ export class AgentDashboardService {
     }
 
     const now = new Date()
-    const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-    const twelveMonthsAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+    const oneYearAgo = new Date(now.getTime() - DASHBOARD_CONSTANTS.HEATMAP_DAYS * 24 * 60 * 60 * 1000)
+    const sevenDaysAgo = new Date(now.getTime() - DASHBOARD_CONSTANTS.WEEKLY_DAYS * 24 * 60 * 60 * 1000)
+    const twelveMonthsAgo = new Date(now.getTime() - DASHBOARD_CONSTANTS.MONTHLY_MONTHS * 30 * 24 * 60 * 60 * 1000)
 
     // Fetch all data in parallel
     const [
@@ -185,11 +192,11 @@ export class AgentDashboardService {
   }
 
   /**
-   * Clean up old events (keep last 90 days)
+   * Clean up old events (keep last N days)
    */
   async cleanupOldEvents(): Promise<void> {
     const cutoffDate = new Date()
-    cutoffDate.setDate(cutoffDate.getDate() - 90)
+    cutoffDate.setDate(cutoffDate.getDate() - DASHBOARD_CONSTANTS.EVENT_RETENTION_DAYS)
     await this.deps.agentDashboardDao.deleteOldEvents(cutoffDate)
     this.deps.logger.info({ cutoffDate }, 'Cleaned up old agent activity events')
   }
@@ -197,11 +204,17 @@ export class AgentDashboardService {
   /* ───────────── Private Helpers ───────────── */
 
   private async checkIsTenant(agentId: string, userId: string): Promise<boolean> {
-    // Check if user has an active rental contract for this agent
+    // Find listings for this agent
+    const listings = await this.deps.clawListingDao.findByAgentId(agentId)
+    if (listings.length === 0) {
+      return false
+    }
+
+    const listingIds = listings.map((l) => l.id)
+
+    // Check if user has an active contract for any of these listings
     const contracts = await this.deps.rentalContractDao.findByTenantId(userId, { status: 'active' })
-    // Need to check if any contract's listing is for this agent
-    // This is a simplified check - in production, you'd join with listings
-    return false // TODO: Implement proper tenant check
+    return contracts.some((contract) => listingIds.includes(contract.listingId))
   }
 
   private async getRentalStats(agentId: string): Promise<RentalStats> {
@@ -280,19 +293,14 @@ export class AgentDashboardService {
     const result: ActivityHeatmapItem[] = []
     const today = new Date()
 
-    for (let i = 364; i >= 0; i--) {
+    for (let i = DASHBOARD_CONSTANTS.HEATMAP_DAYS - 1; i >= 0; i--) {
       const date = new Date(today)
       date.setDate(date.getDate() - i)
-      const dateStr = date.toISOString().split('T')[0]
+      const dateStr = getDateString(date)
       const count = statsMap.get(dateStr) ?? 0
 
       // Calculate level based on message count
-      let level: 0 | 1 | 2 | 3 | 4 = 0
-      if (count >= 100) level = 4
-      else if (count >= 51) level = 3
-      else if (count >= 11) level = 2
-      else if (count >= 1) level = 1
-
+      const level = calculateActivityLevel(count)
       result.push({ date: dateStr, messageCount: count, level })
     }
 
@@ -306,10 +314,10 @@ export class AgentDashboardService {
     const statsMap = new Map(dailyStats.map((s) => [s.date, s.messageCount]))
     const result: WeeklyActivityItem[] = []
 
-    for (let i = 6; i >= 0; i--) {
+    for (let i = DASHBOARD_CONSTANTS.WEEKLY_DAYS - 1; i >= 0; i--) {
       const date = new Date()
       date.setDate(date.getDate() - i)
-      const dateStr = date.toISOString().split('T')[0]
+      const dateStr = getDateString(date)
       result.push({
         date: dateStr,
         messageCount: statsMap.get(dateStr) ?? 0,
@@ -347,11 +355,11 @@ export class AgentDashboardService {
       monthlyMap.set(month, (monthlyMap.get(month) ?? 0) + stat.messageCount)
     }
 
-    // Generate last 12 months
+    // Generate last N months
     const result: MonthlyTrendItem[] = []
     const today = new Date()
 
-    for (let i = 11; i >= 0; i--) {
+    for (let i = DASHBOARD_CONSTANTS.MONTHLY_MONTHS - 1; i >= 0; i--) {
       const date = new Date(today.getFullYear(), today.getMonth() - i, 1)
       const monthStr = date.toISOString().substring(0, 7)
       result.push({

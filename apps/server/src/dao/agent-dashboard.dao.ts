@@ -1,4 +1,5 @@
 import { and, desc, eq, gte, lte, sql, type SQL } from 'drizzle-orm'
+import { getDateString } from '@shadowob/shared/utils/date'
 import type { Database } from '../db'
 import { agentActivityEvents, agentDailyStats, agentHourlyStats } from '../db/schema'
 
@@ -18,8 +19,8 @@ export class AgentDashboardDao {
       .where(
         and(
           eq(agentDailyStats.agentId, agentId),
-          gte(agentDailyStats.date, startDate.toISOString().split('T')[0]),
-          lte(agentDailyStats.date, endDate.toISOString().split('T')[0])
+          gte(agentDailyStats.date, getDateString(startDate)),
+          lte(agentDailyStats.date, getDateString(endDate))
         )
       )
       .orderBy(agentDailyStats.date)
@@ -89,7 +90,7 @@ export class AgentDashboardDao {
       .where(
         and(
           eq(agentDailyStats.agentId, agentId),
-          gte(agentDailyStats.date, since.toISOString().split('T')[0]),
+          gte(agentDailyStats.date, getDateString(since)),
           sql`${agentDailyStats.messageCount} > 0`
         )
       )

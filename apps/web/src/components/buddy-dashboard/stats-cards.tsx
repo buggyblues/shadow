@@ -1,3 +1,4 @@
+import { formatDurationShort } from '@shadowob/shared/utils/date'
 import { Calendar, Clock, Flame, MessageSquare } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -9,21 +10,6 @@ interface StatsCardsProps {
     currentStreak: number
     longestStreak: number
   }
-}
-
-function formatDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-
-  if (hours === 0) {
-    return `${minutes}m`
-  }
-  if (hours < 24) {
-    return `${hours}h ${minutes}m`
-  }
-  const days = Math.floor(hours / 24)
-  const remainingHours = hours % 24
-  return `${days}d ${remainingHours}h`
 }
 
 export function StatsCards({ stats }: StatsCardsProps) {
@@ -40,7 +26,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
     {
       icon: Clock,
       label: t('buddyDashboard.onlineTime', 'Online Time'),
-      value: formatDuration(stats.totalOnlineSeconds),
+      value: formatDurationShort(stats.totalOnlineSeconds),
       color: 'text-green-400',
       bgColor: 'bg-green-400/10',
     },
