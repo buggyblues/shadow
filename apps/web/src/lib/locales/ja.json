@@ -243,7 +243,8 @@
     "noSearchResults": "一致する Buddy が見つかりません",
     "homepageHtml": "ホームページ HTML",
     "homepageHtmlPlaceholder": "<h1>ようこそ！</h1>\n<p>これはサーバーのホームページです。</p>",
-    "homepageHtmlDesc": "サーバーホームページのカスタムHTML。空にするとデフォルトが使用されます。"
+    "homepageHtmlDesc": "サーバーホームページのカスタムHTML。空にするとデフォルトが使用されます。",
+    "channels": "チャンネル"
   },
   "chat": {
     "selectChannel": "チャンネルを選んでチャットを始めましょう",
@@ -1387,5 +1388,15 @@
     "timeout": "等待超时",
     "timeoutDesc": "你可以在设置中稍后配置 Buddy",
     "redirecting": "正在跳转到服务器..."
+  },
+  "sort": {
+    "title": "並べ替えとフィルター",
+    "byPosition": "デフォルト順",
+    "byCreatedAt": "作成日時",
+    "byUpdatedAt": "更新日時",
+    "byLastMessage": "最新メッセージ",
+    "byLastAccessed": "アクセス日時",
+    "filterPlaceholder": "チャンネルを検索...",
+    "clear": "フィルターをクリア"
   }
 }
