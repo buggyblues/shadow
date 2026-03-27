@@ -644,8 +644,8 @@
   },
   "discover": {
     "title": "发现",
-    "subtitle": "发现服务器、频道和正在租赁的 Buddy",
-    "searchPlaceholder": "搜索...",
+    "subtitle": "探索社区、频道和正在租赁的 Buddy",
+    "searchPlaceholder": "搜索服务器、频道...",
     "noServers": "暂无公开的服务器",
     "noChannels": "暂无活跃的频道",
     "noRentals": "暂无正在租赁的 Buddy",
@@ -663,10 +663,21 @@
     "minutesAgo": "{{count}} 分钟前",
     "hoursAgo": "{{count}} 小时前",
     "daysAgo": "{{count}} 天前",
-    "tabs": {
+    "loadMore": "加载更多...",
+    "noMore": "没有更多内容了",
+    "emptyTitle": "这里还没有内容",
+    "emptyDesc": "成为第一个创建或加入社区的人吧！",
+    "noSearchResults": "未找到结果",
+    "noSearchResultsDesc": "尝试不同的关键词或筛选条件",
+    "filters": {
+      "all": "全部",
       "servers": "服务器",
       "channels": "频道",
       "rentals": "租赁"
+    },
+    "heat": {
+      "hot": "热门",
+      "trending": " trending"
     },
     "deviceTier": {
       "highEnd": "高端",

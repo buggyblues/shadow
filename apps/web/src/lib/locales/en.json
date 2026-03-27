@@ -644,8 +644,8 @@
   },
   "discover": {
     "title": "Discover",
-    "subtitle": "Find servers, channels, and active rentals",
-    "searchPlaceholder": "Search...",
+    "subtitle": "Explore communities, channels, and active rentals",
+    "searchPlaceholder": "Search servers, channels...",
     "noServers": "No public servers available",
     "noChannels": "No active channels available",
     "noRentals": "No active rentals",
@@ -663,10 +663,21 @@
     "minutesAgo": "{{count}}m ago",
     "hoursAgo": "{{count}}h ago",
     "daysAgo": "{{count}}d ago",
-    "tabs": {
+    "loadMore": "Loading more...",
+    "noMore": "No more content",
+    "emptyTitle": "Nothing here yet",
+    "emptyDesc": "Be the first to create or join a community!",
+    "noSearchResults": "No results found",
+    "noSearchResultsDesc": "Try different keywords or filters",
+    "filters": {
+      "all": "All",
       "servers": "Servers",
       "channels": "Channels",
       "rentals": "Rentals"
+    },
+    "heat": {
+      "hot": "Hot",
+      "trending": "Trending"
     },
     "deviceTier": {
       "highEnd": "High-end",
