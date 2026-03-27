@@ -1,4 +1,4 @@
-import { ACTIVITY_LEVELS, type ActivityLevel } from '@shadowob/shared/utils/date'
+import { ACTIVITY_LEVELS, type ActivityLevel } from '@shadowob/shared'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -53,9 +53,7 @@ export function ActivityHeatmap({ data }: ActivityHeatmapProps) {
         const weekDays: typeof data = []
         for (let i = 0; i < 7; i++) {
           const day = days.find((d) => new Date(d.date).getDay() === i)
-          weekDays.push(
-            day ?? { date: '', messageCount: 0, level: 0 }
-          )
+          weekDays.push(day ?? { date: '', messageCount: 0, level: 0 })
         }
         return weekDays
       })
@@ -101,12 +99,14 @@ export function ActivityHeatmap({ data }: ActivityHeatmapProps) {
       {/* Heatmap grid */}
       <div className="flex gap-1">
         {weeks.map((week, weekIndex) => (
-          <div key={weekIndex} className="flex flex-col gap-1">
+          <div key={`week-${weekIndex}`} className="flex flex-col gap-1">
             {week.map((day, dayIndex) => (
               <div
-                key={dayIndex}
+                key={`day-${weekIndex}-${dayIndex}-${day.date || 'empty'}`}
                 className={`w-3 h-3 rounded-sm ${LEVEL_COLORS[day.level]} transition-all hover:ring-2 hover:ring-primary/50 cursor-pointer`}
-                title={day.date ? `${formatDate(day.date)}: ${day.messageCount} messages` : 'No data'}
+                title={
+                  day.date ? `${formatDate(day.date)}: ${day.messageCount} messages` : 'No data'
+                }
               />
             ))}
           </div>

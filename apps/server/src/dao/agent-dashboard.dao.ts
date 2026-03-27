@@ -1,5 +1,5 @@
-import { and, desc, eq, gte, lte, sql, type SQL } from 'drizzle-orm'
-import { getDateString } from '@shadowob/shared/utils/date'
+import { getDateString } from '@shadowob/shared'
+import { and, desc, eq, gte, lte, type SQL, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import { agentActivityEvents, agentDailyStats, agentHourlyStats } from '../db/schema'
 
@@ -20,8 +20,8 @@ export class AgentDashboardDao {
         and(
           eq(agentDailyStats.agentId, agentId),
           gte(agentDailyStats.date, getDateString(startDate)),
-          lte(agentDailyStats.date, getDateString(endDate))
-        )
+          lte(agentDailyStats.date, getDateString(endDate)),
+        ),
       )
       .orderBy(agentDailyStats.date)
   }
@@ -29,7 +29,7 @@ export class AgentDashboardDao {
   async upsertDailyStats(
     agentId: string,
     date: string,
-    data: { messageCount?: number; onlineSeconds?: number }
+    data: { messageCount?: number; onlineSeconds?: number },
   ) {
     const existing = await this.db
       .select()
@@ -91,8 +91,8 @@ export class AgentDashboardDao {
         and(
           eq(agentDailyStats.agentId, agentId),
           gte(agentDailyStats.date, getDateString(since)),
-          sql`${agentDailyStats.messageCount} > 0`
-        )
+          sql`${agentDailyStats.messageCount} > 0`,
+        ),
       )
     return result[0]?.count ?? 0
   }
@@ -110,7 +110,7 @@ export class AgentDashboardDao {
   async upsertHourlyStats(
     agentId: string,
     hourOfDay: number,
-    data: { messageCount?: number; activityCount?: number }
+    data: { messageCount?: number; activityCount?: number },
   ) {
     const existing = await this.db
       .select()
@@ -153,11 +153,7 @@ export class AgentDashboardDao {
 
   /* ───────────── Activity Events ───────────── */
 
-  async createEvent(
-    agentId: string,
-    eventType: string,
-    eventData: Record<string, unknown> = {}
-  ) {
+  async createEvent(agentId: string, eventType: string, eventData: Record<string, unknown> = {}) {
     const result = await this.db
       .insert(agentActivityEvents)
       .values({
@@ -179,9 +175,7 @@ export class AgentDashboardDao {
   }
 
   async deleteOldEvents(beforeDate: Date) {
-    await this.db
-      .delete(agentActivityEvents)
-      .where(lte(agentActivityEvents.createdAt, beforeDate))
+    await this.db.delete(agentActivityEvents).where(lte(agentActivityEvents.createdAt, beforeDate))
   }
 
   /* ───────────── Streak Calculation ───────────── */
@@ -209,7 +203,9 @@ export class AgentDashboardDao {
     // Check if today or yesterday has activity for current streak
     const mostRecent = new Date(stats[0].date)
     mostRecent.setHours(0, 0, 0, 0)
-    const daysSinceLastActivity = Math.floor((today.getTime() - mostRecent.getTime()) / (1000 * 60 * 60 * 24))
+    const daysSinceLastActivity = Math.floor(
+      (today.getTime() - mostRecent.getTime()) / (1000 * 60 * 60 * 24),
+    )
 
     for (const stat of stats) {
       if (stat.messageCount === 0) continue
@@ -220,7 +216,9 @@ export class AgentDashboardDao {
       if (prevDate === null) {
         tempStreak = 1
       } else {
-        const diffDays = Math.floor((prevDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24))
+        const diffDays = Math.floor(
+          (prevDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24),
+        )
         if (diffDays === 1) {
           tempStreak++
         } else {

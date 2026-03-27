@@ -1,4 +1,4 @@
-import { formatDurationShort } from '@shadowob/shared/utils/date'
+import { formatDurationShort } from '@shadowob/shared'
 import { Calendar, Clock, Flame, MessageSquare } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -41,9 +41,10 @@ export function StatsCards({ stats }: StatsCardsProps) {
       icon: Flame,
       label: t('buddyDashboard.currentStreak', 'Current Streak'),
       value: `${stats.currentStreak} ${t('buddyDashboard.days', 'days')}`,
-      subValue: stats.longestStreak > 0
-        ? `${t('buddyDashboard.best', 'Best')}: ${stats.longestStreak}`
-        : undefined,
+      subValue:
+        stats.longestStreak > 0
+          ? `${t('buddyDashboard.best', 'Best')}: ${stats.longestStreak}`
+          : undefined,
       color: 'text-orange-400',
       bgColor: 'bg-orange-400/10',
     },
@@ -56,14 +57,14 @@ export function StatsCards({ stats }: StatsCardsProps) {
           key={card.label}
           className="bg-bg-secondary rounded-xl p-4 border border-border-subtle"
         >
-          <div className={`w-10 h-10 rounded-lg ${card.bgColor} flex items-center justify-center mb-3`}>
+          <div
+            className={`w-10 h-10 rounded-lg ${card.bgColor} flex items-center justify-center mb-3`}
+          >
             <card.icon className={`w-5 h-5 ${card.color}`} />
           </div>
           <div className="text-2xl font-bold text-text-primary">{card.value}</div>
           <div className="text-xs text-text-muted mt-1">{card.label}</div>
-          {card.subValue && (
-            <div className="text-xs text-text-muted mt-1">{card.subValue}</div>
-          )}
+          {card.subValue && <div className="text-xs text-text-muted mt-1">{card.subValue}</div>}
         </div>
       ))}
     </div>

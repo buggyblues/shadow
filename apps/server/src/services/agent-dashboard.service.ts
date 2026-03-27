@@ -1,13 +1,7 @@
-import {
-  ACTIVITY_LEVELS,
-  calculateActivityLevel,
-  DASHBOARD_CONSTANTS,
-  getDateString,
-  getDaysAgoDateString,
-} from '@shadowob/shared/utils/date'
+import { calculateActivityLevel, DASHBOARD_CONSTANTS, getDateString } from '@shadowob/shared'
 import type { Logger } from 'pino'
-import type { AgentDashboardDao } from '../dao/agent-dashboard.dao'
 import type { AgentDao } from '../dao/agent.dao'
+import type { AgentDashboardDao } from '../dao/agent-dashboard.dao'
 import type { RentalContractDao } from '../dao/rental-contract.dao'
 
 export interface DashboardStats {
@@ -76,7 +70,7 @@ export class AgentDashboardService {
       clawListingDao: ClawListingDao
       userDao: UserDao
       logger: Logger
-    }
+    },
   ) {}
 
   /**
@@ -98,26 +92,26 @@ export class AgentDashboardService {
     }
 
     const now = new Date()
-    const oneYearAgo = new Date(now.getTime() - DASHBOARD_CONSTANTS.HEATMAP_DAYS * 24 * 60 * 60 * 1000)
-    const sevenDaysAgo = new Date(now.getTime() - DASHBOARD_CONSTANTS.WEEKLY_DAYS * 24 * 60 * 60 * 1000)
-    const twelveMonthsAgo = new Date(now.getTime() - DASHBOARD_CONSTANTS.MONTHLY_MONTHS * 30 * 24 * 60 * 60 * 1000)
+    const oneYearAgo = new Date(
+      now.getTime() - DASHBOARD_CONSTANTS.HEATMAP_DAYS * 24 * 60 * 60 * 1000,
+    )
+    const sevenDaysAgo = new Date(
+      now.getTime() - DASHBOARD_CONSTANTS.WEEKLY_DAYS * 24 * 60 * 60 * 1000,
+    )
+    const twelveMonthsAgo = new Date(
+      now.getTime() - DASHBOARD_CONSTANTS.MONTHLY_MONTHS * 30 * 24 * 60 * 60 * 1000,
+    )
 
     // Fetch all data in parallel
-    const [
-      dailyStats,
-      hourlyStats,
-      totalMessages,
-      activeDays30d,
-      streaks,
-      recentEvents,
-    ] = await Promise.all([
-      this.deps.agentDashboardDao.findDailyStats(agentId, oneYearAgo, now),
-      this.deps.agentDashboardDao.findHourlyStats(agentId),
-      this.deps.agentDashboardDao.getTotalMessages(agentId),
-      this.deps.agentDashboardDao.getActiveDaysCount(agentId, 30),
-      this.deps.agentDashboardDao.calculateStreaks(agentId),
-      this.deps.agentDashboardDao.findRecentEvents(agentId, 10),
-    ])
+    const [dailyStats, hourlyStats, totalMessages, activeDays30d, streaks, recentEvents] =
+      await Promise.all([
+        this.deps.agentDashboardDao.findDailyStats(agentId, oneYearAgo, now),
+        this.deps.agentDashboardDao.findHourlyStats(agentId),
+        this.deps.agentDashboardDao.getTotalMessages(agentId),
+        this.deps.agentDashboardDao.getActiveDaysCount(agentId, 30),
+        this.deps.agentDashboardDao.calculateStreaks(agentId),
+        this.deps.agentDashboardDao.findRecentEvents(agentId, 10),
+      ])
 
     // Build activity heatmap (last 365 days)
     const activityHeatmap = this.buildActivityHeatmap(dailyStats)
@@ -186,7 +180,7 @@ export class AgentDashboardService {
   async addEvent(
     agentId: string,
     eventType: string,
-    eventData: Record<string, unknown> = {}
+    eventData: Record<string, unknown> = {},
   ): Promise<void> {
     await this.deps.agentDashboardDao.createEvent(agentId, eventType, eventData)
   }
@@ -256,7 +250,8 @@ export class AgentDashboardService {
     let totalDuration = 0
     for (const contract of completedContracts) {
       if (contract.startsAt && contract.terminatedAt) {
-        const duration = new Date(contract.terminatedAt).getTime() - new Date(contract.startsAt).getTime()
+        const duration =
+          new Date(contract.terminatedAt).getTime() - new Date(contract.startsAt).getTime()
         totalDuration += duration / (1000 * 60 * 60 * 24) // Convert to days
       }
     }
@@ -285,7 +280,7 @@ export class AgentDashboardService {
   }
 
   private buildActivityHeatmap(
-    dailyStats: { date: string; messageCount: number }[]
+    dailyStats: { date: string; messageCount: number }[],
   ): ActivityHeatmapItem[] {
     const statsMap = new Map(dailyStats.map((s) => [s.date, s.messageCount]))
 
@@ -309,7 +304,7 @@ export class AgentDashboardService {
 
   private buildWeeklyActivity(
     dailyStats: { date: string; messageCount: number }[],
-    since: Date
+    _since: Date,
   ): WeeklyActivityItem[] {
     const statsMap = new Map(dailyStats.map((s) => [s.date, s.messageCount]))
     const result: WeeklyActivityItem[] = []
@@ -328,7 +323,7 @@ export class AgentDashboardService {
   }
 
   private buildHourlyDistribution(
-    hourlyStats: { hourOfDay: number; messageCount: number }[]
+    hourlyStats: { hourOfDay: number; messageCount: number }[],
   ): HourlyDistributionItem[] {
     // Initialize all 24 hours with 0
     const result: HourlyDistributionItem[] = []
@@ -346,7 +341,7 @@ export class AgentDashboardService {
 
   private buildMonthlyTrend(
     dailyStats: { date: string; messageCount: number }[],
-    since: Date
+    _since: Date,
   ): MonthlyTrendItem[] {
     const monthlyMap = new Map<string, number>()
 

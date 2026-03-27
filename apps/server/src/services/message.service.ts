@@ -1,5 +1,5 @@
-import type { AgentDashboardDao } from '../dao/agent-dashboard.dao'
 import type { AgentDao } from '../dao/agent.dao'
+import type { AgentDashboardDao } from '../dao/agent-dashboard.dao'
 import type { ChannelDao } from '../dao/channel.dao'
 import type { MessageDao } from '../dao/message.dao'
 import type { UserDao } from '../dao/user.dao'
@@ -12,13 +12,15 @@ import type {
 } from '../validators/message.schema'
 
 export class MessageService {
-  constructor(private deps: {
-    messageDao: MessageDao
-    userDao: UserDao
-    channelDao: ChannelDao
-    agentDao: AgentDao
-    agentDashboardDao: AgentDashboardDao
-  }) {}
+  constructor(
+    private deps: {
+      messageDao: MessageDao
+      userDao: UserDao
+      channelDao: ChannelDao
+      agentDao: AgentDao
+      agentDashboardDao: AgentDashboardDao
+    },
+  ) {}
 
   async getByChannelId(channelId: string, limit?: number, cursor?: string) {
     return this.deps.messageDao.findByChannelId(channelId, limit, cursor)
@@ -66,8 +68,11 @@ export class MessageService {
       try {
         const agent = await this.deps.agentDao.findByUserId(authorId)
         if (agent) {
-          const { getDateString } = await import('@shadowob/shared/utils/date')
-          await this.deps.agentDashboardDao.incrementMessageCount(agent.id, getDateString(new Date()))
+          const { getDateString } = await import('@shadowob/shared')
+          await this.deps.agentDashboardDao.incrementMessageCount(
+            agent.id,
+            getDateString(new Date()),
+          )
           await this.deps.agentDashboardDao.incrementHourlyMessage(agent.id, new Date().getHours())
           await this.deps.agentDashboardDao.createEvent(agent.id, 'message', {
             preview: input.content.substring(0, 100),
@@ -78,7 +83,10 @@ export class MessageService {
       } catch (err) {
         // Non-critical: don't fail message creation if stats tracking fails
         // But log for monitoring
-        this.deps.logger?.warn?.({ err, agentId: authorId, messageId: message.id }, 'Failed to track dashboard stats')
+        this.deps.logger?.warn?.(
+          { err, agentId: authorId, messageId: message.id },
+          'Failed to track dashboard stats',
+        )
       }
     }
 

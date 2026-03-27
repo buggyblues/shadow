@@ -6,14 +6,14 @@
  * Get today's date as ISO string (YYYY-MM-DD)
  */
 export function getTodayDateString(): string {
-  return new Date().toISOString().split('T')[0]
+  return new Date().toISOString().slice(0, 10)
 }
 
 /**
  * Get date string for a specific date
  */
 export function getDateString(date: Date): string {
-  return date.toISOString().split('T')[0]
+  return date.toISOString().slice(0, 10)
 }
 
 /**
