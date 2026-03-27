@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { StatsCards } from '../stats-cards'
 
 // @vitest-environment jsdom
+import '@testing-library/jest-dom'
 
 // Mock i18next
 vi.mock('react-i18next', () => ({

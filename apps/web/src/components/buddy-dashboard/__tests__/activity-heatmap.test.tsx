@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ActivityHeatmap } from '../activity-heatmap'
 
 // @vitest-environment jsdom
+import '@testing-library/jest-dom'
 
 // Mock i18next
 vi.mock('react-i18next', () => ({
