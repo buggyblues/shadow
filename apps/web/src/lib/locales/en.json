@@ -679,6 +679,7 @@
       "hot": "Hot",
       "trending": "Trending"
     },
+    "channelBadge": "Channel",
     "filter": {
       "title": "Filter",
       "searchPlaceholder": "Search channels...",

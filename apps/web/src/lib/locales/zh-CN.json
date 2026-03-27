@@ -679,6 +679,7 @@
       "hot": "热门",
       "trending": " trending"
     },
+    "channelBadge": "频道",
     "filter": {
       "title": "筛选",
       "searchPlaceholder": "搜索频道...",
