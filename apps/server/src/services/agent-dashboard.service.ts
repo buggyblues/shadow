@@ -1,6 +1,27 @@
-import { calculateActivityLevel, DASHBOARD_CONSTANTS, getDateString } from '@shadowob/shared'
 import type { Logger } from 'pino'
 import type { AgentDao } from '../dao/agent.dao'
+
+// Dashboard constants
+const DASHBOARD_CONSTANTS = {
+  HEATMAP_DAYS: 365,
+  WEEKLY_DAYS: 7,
+  MONTHLY_MONTHS: 12,
+  ACTIVE_DAYS_WINDOW: 30,
+  EVENT_RETENTION_DAYS: 90,
+} as const
+
+function getDateString(date: Date): string {
+  return date.toISOString().slice(0, 10)
+}
+
+function calculateActivityLevel(count: number): 0 | 1 | 2 | 3 | 4 {
+  if (count >= 100) return 4
+  if (count >= 51) return 3
+  if (count >= 11) return 2
+  if (count >= 1) return 1
+  return 0
+}
+
 import type { AgentDashboardDao } from '../dao/agent-dashboard.dao'
 import type { RentalContractDao } from '../dao/rental-contract.dao'
 

@@ -1,4 +1,3 @@
-import { formatDurationShort } from '@shadowob/shared'
 import { Calendar, Clock, Flame, MessageSquare } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -10,6 +9,21 @@ interface StatsCardsProps {
     currentStreak: number
     longestStreak: number
   }
+}
+
+function formatDurationShort(seconds: number): string {
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+
+  if (hours === 0) {
+    return `${minutes}m`
+  }
+  if (hours < 24) {
+    return `${hours}h ${minutes}m`
+  }
+  const days = Math.floor(hours / 24)
+  const remainingHours = hours % 24
+  return `${days}d ${remainingHours}h`
 }
 
 export function StatsCards({ stats }: StatsCardsProps) {

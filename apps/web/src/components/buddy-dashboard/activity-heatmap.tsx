@@ -1,4 +1,3 @@
-import { ACTIVITY_LEVELS, type ActivityLevel } from '@shadowob/shared'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -6,24 +5,26 @@ interface ActivityHeatmapProps {
   data: Array<{
     date: string
     messageCount: number
-    level: ActivityLevel
+    level: 0 | 1 | 2 | 3 | 4
   }>
 }
 
+type ActivityLevel = 0 | 1 | 2 | 3 | 4
+
 const LEVEL_COLORS: Record<ActivityLevel, string> = {
-  0: ACTIVITY_LEVELS[0].color,
-  1: ACTIVITY_LEVELS[1].color,
-  2: ACTIVITY_LEVELS[2].color,
-  3: ACTIVITY_LEVELS[3].color,
-  4: ACTIVITY_LEVELS[4].color,
+  0: 'bg-transparent',
+  1: 'bg-green-900/30',
+  2: 'bg-green-700/50',
+  3: 'bg-green-500/70',
+  4: 'bg-green-400',
 }
 
 const LEVEL_LABELS: Record<ActivityLevel, string> = {
-  0: ACTIVITY_LEVELS[0].label,
-  1: ACTIVITY_LEVELS[1].label,
-  2: ACTIVITY_LEVELS[2].label,
-  3: ACTIVITY_LEVELS[3].label,
-  4: ACTIVITY_LEVELS[4].label,
+  0: 'No activity',
+  1: '1-10 messages',
+  2: '11-50 messages',
+  3: '51-100 messages',
+  4: '100+ messages',
 }
 
 export function ActivityHeatmap({ data }: ActivityHeatmapProps) {

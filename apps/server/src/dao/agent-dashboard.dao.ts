@@ -1,7 +1,10 @@
-import { getDateString } from '@shadowob/shared'
 import { and, desc, eq, gte, lte, type SQL, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import { agentActivityEvents, agentDailyStats, agentHourlyStats } from '../db/schema'
+
+function getDateString(date: Date): string {
+  return date.toISOString().slice(0, 10)
+}
 
 export class AgentDashboardDao {
   constructor(private deps: { db: Database }) {}

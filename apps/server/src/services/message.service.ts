@@ -68,7 +68,7 @@ export class MessageService {
       try {
         const agent = await this.deps.agentDao.findByUserId(authorId)
         if (agent) {
-          const { getDateString } = await import('@shadowob/shared')
+          const getDateString = (date: Date): string => date.toISOString().slice(0, 10)
           await this.deps.agentDashboardDao.incrementMessageCount(
             agent.id,
             getDateString(new Date()),
