@@ -747,6 +747,18 @@ export function ChatArea() {
               channelName={channel?.name}
               serverId={activeServerId}
               channelId={activeChannelId}
+              isArchived={channel?.isArchived}
+              onUnarchive={async () => {
+                const ok = await useConfirmStore.getState().confirm({
+                  title: t('channel.unarchiveChannel'),
+                  message: t('channel.unarchiveChannelConfirm'),
+                })
+                if (ok) {
+                  await fetchApi(`/api/channels/${activeChannelId}/unarchive`, { method: 'POST' })
+                  queryClient.invalidateQueries({ queryKey: ['channel', activeChannelId] })
+                  queryClient.invalidateQueries({ queryKey: ['channels'] })
+                }
+              }}
             />
           ) : (
             <div
@@ -919,6 +931,30 @@ export function ChatArea() {
               {t('common.cancel')}
             </button>
           </div>
+        ) : channel?.isArchived && messages.length > 0 ? (
+          <div className="flex items-center justify-center gap-3 px-4 py-3 bg-bg-tertiary border-t border-border-subtle">
+            <div className="flex items-center gap-2 text-text-muted">
+              <Archive size={18} />
+              <span>{t('channel.archivedNotice')}</span>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                const ok = await useConfirmStore.getState().confirm({
+                  title: t('channel.unarchiveChannel'),
+                  message: t('channel.unarchiveChannelConfirm'),
+                })
+                if (ok) {
+                  await fetchApi(`/api/channels/${activeChannelId}/unarchive`, { method: 'POST' })
+                  queryClient.invalidateQueries({ queryKey: ['channel', activeChannelId] })
+                  queryClient.invalidateQueries({ queryKey: ['channels'] })
+                }
+              }}
+              className="px-3 py-1.5 bg-primary hover:bg-primary-hover text-white rounded-lg text-sm font-medium transition"
+            >
+              {t('channel.unarchive')}
+            </button>
+          </div>
         ) : (
           <MessageInput
             channelId={activeChannelId}
@@ -955,10 +991,14 @@ function EmptyChannelState({
   channelName,
   serverId,
   channelId,
+  isArchived,
+  onUnarchive,
 }: {
   channelName?: string
   serverId: string | null
   channelId: string | null
+  isArchived?: boolean
+  onUnarchive?: () => void
 }) {
   const { t } = useTranslation()
   const [showInvitePanel, setShowInvitePanel] = useState(false)
@@ -974,24 +1014,42 @@ function EmptyChannelState({
           })}
         </p>
         <p className="text-sm mb-6">{t('chat.welcomeStart')}</p>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setShowInvitePanel(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg text-sm font-medium transition"
-          >
-            <UserPlus size={16} />
-            邀请成员
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowAddBuddy(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-bg-tertiary hover:bg-bg-modifier-hover text-text-primary rounded-lg text-sm font-medium transition"
-          >
-            <img src="/Logo.svg" alt="Buddy" className="w-4 h-4" />
-            添加 Buddy
-          </button>
-        </div>
+        {isArchived ? (
+          <div className="flex flex-col items-center gap-4">
+            <div className="flex items-center gap-2 text-text-muted">
+              <Archive size={20} />
+              <span>{t('channel.archivedNotice')}</span>
+            </div>
+            {onUnarchive && (
+              <button
+                type="button"
+                onClick={onUnarchive}
+                className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg text-sm font-medium transition"
+              >
+                {t('channel.unarchive')}
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowInvitePanel(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg text-sm font-medium transition"
+            >
+              <UserPlus size={16} />
+              邀请成员
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAddBuddy(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-bg-tertiary hover:bg-bg-modifier-hover text-text-primary rounded-lg text-sm font-medium transition"
+            >
+              <img src="/Logo.svg" alt="Buddy" className="w-4 h-4" />
+              添加 Buddy
+            </button>
+          </div>
+        )}
       </div>
 
       {showInvitePanel && serverId && (
