@@ -27,6 +27,7 @@ import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
+import { useConfirmStore } from '../common/confirm-dialog'
 import { AddAgentDialog, InvitePanel } from '../member/member-list'
 import { NotificationBell } from '../notification/notification-bell'
 import { type PickerResult, WorkspaceFilePicker } from '../workspace'
@@ -939,7 +940,7 @@ export function ChatArea() {
               {t('common.cancel')}
             </button>
           </div>
-        ) : channel?.isArchived ? (
+        ) : channel?.isArchived && messages.length > 0 ? (
           <div className="flex items-center justify-center gap-3 px-4 py-3 bg-bg-tertiary border-t border-border-subtle">
             <div className="flex items-center gap-2 text-text-muted">
               <Archive size={18} />
