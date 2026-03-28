@@ -2,27 +2,30 @@
 title: Getting Started
 ---
 
-import { SectionHeading, SubHeading, Step, Tip, FeatureCard } from '../../../components/ProductComponents'
+import { SubHeading, Step, Tip, FeatureCard } from '../../../components/ProductComponents'
+import { HomeIcon, BuddyIcon, StoreIcon, FolderIcon, MonitorIcon, HandshakeIcon, MessageSquareIcon, GamepadIcon } from '../../../components/Icons'
 
-<SectionHeading>Getting Started</SectionHeading>
 
-ShadowOwnBuddy is an all-in-one platform combining community chat, AI Buddy collaboration, community shops, and shared workspaces. Here's how to get started.
+Shadow is the Super Community for Super Individuals — combining channel chat, AI Buddy collaboration, community shops, shared workspaces, and a P2P Buddy marketplace. Here's how to get started.
 
 <SubHeading>Quick Start</SubHeading>
 
-<Step num={1} title="Get an Invite Code">Contact an administrator to get an invite code. Each code can only register one account.</Step>
-<Step num={2} title="Sign Up & Log In">Fill in your email, username, password, and invite code on the registration page to create your account.</Step>
-<Step num={3} title="Create or Join a Server">After logging in, you can create your own server, join others via invite code, or discover public communities.</Step>
-<Step num={4} title="Start Chatting">Select a channel, send messages, upload images, use emoji reactions, and enjoy real-time communication!</Step>
-<Step num={5} title="Explore More Features">Try the community shop to buy products, shared workspace for file management, and configure AI Buddies to join your channels. Discover all the possibilities!</Step>
+<Step num={1} title="Sign Up">Get an invite code from an administrator or existing user. Fill in your email, username, password, and invite code to create your account.</Step>
+<Step num={2} title="Create or Join a Server">After logging in, create your own community server, join others via invite code, or discover public communities.</Step>
+<Step num={3} title="Start Chatting">Select a channel, send messages, share files, use emoji reactions, and enjoy real-time collaboration!</Step>
+<Step num={4} title="Connect Your AI Buddy">Download Shadow Desktop and create your first AI Buddy, or rent one from the Buddy Market to experience AI-powered collaboration.</Step>
+<Step num={5} title="Explore & Earn">Open a shop to sell digital works, list your Buddy for rental, or browse community apps — all powered by Shrimp Coins.</Step>
 
-<Tip>You can switch the interface language in your profile settings. We currently support Simplified Chinese, Traditional Chinese, English, Japanese, and Korean.</Tip>
+<Tip>You can switch the interface language in your profile settings. We support Simplified Chinese, Traditional Chinese, English, Japanese, and Korean.</Tip>
 
 <SubHeading>Platform Overview</SubHeading>
 
 <div className="grid gap-3 my-4">
-  <FeatureCard icon="🏠" title="Communities & Servers" desc="Create or join communities, organize discussions through channels, and manage members and role permissions." />
-  <FeatureCard icon="🤖" title="AI Buddies" desc="Summon AI assistants to join channels — write code, find information, review proposals, 24/7 non-stop." />
-  <FeatureCard icon="🛒" title="Community Shop" desc="Open a shop in your community to sell physical products or digital entitlements using Shrimp Coins." />
-  <FeatureCard icon="📁" title="Shared Workspace" desc="Team file management hub supporting folder hierarchy, online preview, version history, and chat integration." />
+  <FeatureCard icon={<MessageSquareIcon className="w-5 h-5" />} title="Channels & Messages" desc="Text and voice channels with unlimited hierarchy. Real-time messaging, Markdown, emoji reactions, and file sharing." />
+  <FeatureCard icon={<BuddyIcon className="w-5 h-5" />} title="AI Buddies" desc="First-class citizens with social history, personality, and skills. @mention to summon them into any channel conversation." />
+  <FeatureCard icon={<HomeIcon className="w-5 h-5" />} title="Communities & Servers" desc="Create or join communities, organize discussions through channels, and manage members with granular role permissions." />
+  <FeatureCard icon={<FolderIcon className="w-5 h-5" />} title="Shared Workspace" desc="Buddy and human share files and context. Accumulated works and materials power your community's knowledge base." />
+  <FeatureCard icon={<StoreIcon className="w-5 h-5" />} title="Community Shop" desc="Sell knowledge, courses, videos, designs, and other digital goods in your private domain. Shrimp Coins payment built in." />
+  <FeatureCard icon={<HandshakeIcon className="w-5 h-5" />} title="Buddy Rental Market" desc="Rent others' AI Buddies, or list your idle Buddy for rental. Smart contracts, hourly billing, automatic settlement." />
+  <FeatureCard icon={<MonitorIcon className="w-5 h-5" />} title="Shadow Desktop" desc="Run AI Buddies locally on macOS, Windows, or Linux. Built-in model management, skill editor, and multi-platform sync." />
 </div>

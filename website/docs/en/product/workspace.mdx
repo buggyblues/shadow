@@ -2,34 +2,41 @@
 title: Shared Workspace
 ---
 
-import { SectionHeading, SubHeading, Tip, CheckCard } from '../../../components/ProductComponents'
+import { SubHeading, Tip, CheckCard, FeatureCard } from '../../../components/ProductComponents'
+import { FolderIcon, BuddyIcon, FileTextIcon } from '../../../components/Icons'
 
-<SectionHeading>Shared Workspace</SectionHeading>
 
-Every server has a shared workspace for team file management and collaboration. Supports folder hierarchy, multi-format online preview, file search, and chat integration.
+Every server has a shared workspace — the community's knowledge base where humans and AI Buddies collaborate on files. Documents, code, designs, and other works accumulate here, creating a persistent shared context that powers better conversations and smarter Buddies.
 
 <SubHeading>Core Features</SubHeading>
 
 <div className="grid gap-3 my-4">
   <CheckCard title="File Tree Structure" desc="Multi-level folder nesting with auto-saved expand/collapse states. Right-click context menus for quick create, rename, move, and delete." />
-  <CheckCard title="File Upload" desc="Drag & drop and click-to-upload support. Upload multiple files to any folder simultaneously." />
+  <CheckCard title="File Upload" desc="Drag & drop and click-to-upload. Upload multiple files to any folder simultaneously." />
   <CheckCard title="Online Preview" desc="Preview file contents directly in the workbench panel without downloading. Supports images, videos, audio, PDF, Markdown, code (syntax highlighting), spreadsheets, and more." />
   <CheckCard title="Clipboard Operations" desc="Copy/cut/paste files and folders. Batch select and move multiple items at once." />
   <CheckCard title="File Search" desc="Search files by name within the workspace to quickly find what you need." />
 </div>
 
+<SubHeading>Buddy + Workspace</SubHeading>
+
+<div className="grid gap-3 my-4">
+  <FeatureCard icon={<BuddyIcon className="w-5 h-5" />} title="Buddy Contributions" desc="AI Buddies can read from and write to the workspace. Documents, code, and research they generate are saved here — building a growing knowledge base." />
+  <FeatureCard icon={<FileTextIcon className="w-5 h-5" />} title="Shared Context" desc="Workspace files provide context for Buddy conversations. The more content accumulated, the smarter and more relevant your Buddy's responses become." />
+</div>
+
 <SubHeading>Supported File Formats</SubHeading>
 
-The workspace workbench supports online preview of the following file formats:
+The workspace workbench supports online preview of the following formats:
 
 <div className="flex flex-wrap gap-2 my-4">
   {['Images', 'Video', 'Audio', 'PDF', 'Markdown', 'Code', 'Spreadsheets'].map(fmt => (
-    <span key={fmt} className="px-3 py-1 bg-cyan-50 text-cyan-700 rounded-full text-xs font-bold border border-cyan-200">{fmt}</span>
+    <span key={fmt} className="px-3 py-1 bg-cyan-50 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-300 rounded-full text-xs font-bold border border-cyan-200 dark:border-cyan-800">{fmt}</span>
   ))}
 </div>
 
 <SubHeading>Chat Integration</SubHeading>
 
-Attach workspace files directly from the chat input. Workspace files connect seamlessly with chat for more efficient collaboration.
+Attach workspace files directly from the chat input. Workspace files connect seamlessly with channel conversations for more efficient collaboration.
 
-<Tip>The workspace is perfect for storing shared team documents, design files, code snippets, and other resources accessible to all server members.</Tip>
+<Tip>The workspace is more than file storage — it's the shared brain of your community. Buddies and humans both contribute, creating a knowledge base that grows with every interaction.</Tip>

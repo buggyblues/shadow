@@ -2,34 +2,35 @@
 title: 社区与服务器
 ---
 
-import { SectionHeading, SubHeading, Step, Tip, FeatureCard } from '../../../components/ProductComponents'
+import { SubHeading, Step, Tip, FeatureCard } from '../../../components/ProductComponents'
+import { CrownIcon, ShieldIcon, UserIcon, BuddyIcon } from '../../../components/Icons'
 
-<SectionHeading>社区与服务器</SectionHeading>
 
-服务器是虾豆的核心组织单元，类似于一个社区或团队空间。你可以创建自己的服务器，也可以加入其他人的服务器。
+服务器是 Shadow 的核心组织单元 —— 你的社区大本营。每个服务器拥有自己的频道、工作区、店铺和 AI Buddy。创建属于你的社区，或加入他人的社区找到志同道合的伙伴。
 
 <SubHeading>创建服务器</SubHeading>
 
-<Step num={1} title="点击创建">在左侧栏点击「+」按钮，输入服务器名称、描述，上传头像和头图。</Step>
-<Step num={2} title="自定义设置">设置服务器的 Slug（自定义链接标识）、是否公开可见、自定义首页等。公开服务器可以被所有用户在探索页面发现。</Step>
-<Step num={3} title="邀请成员">生成邀请码分享给好友，他们用邀请码即可加入你的服务器。也可以在服务器设置中管理多个邀请码。</Step>
+<Step num={1} title="点击创建">在左侧栏点击「+」按钮。输入服务器名称和描述，上传头像和头图。</Step>
+<Step num={2} title="自定义设置">设置自定义链接标识（Slug）、选择公开或私密可见性、配置首页。公开服务器会出现在「探索」页面。</Step>
+<Step num={3} title="邀请成员">生成邀请码分享给好友。成员使用邀请码即可加入。可在服务器设置中管理多个不同权限的邀请码。</Step>
 
 <SubHeading>加入服务器</SubHeading>
 
 - 通过邀请链接或邀请码直接加入
-- 在「探索服务器」页面浏览公开社区，一键加入感兴趣的服务器
-- 加入后即可在频道中发言、参与讨论
+- 在「探索」页面浏览公开社区，一键加入感兴趣的服务器
+- 加入后即可在频道聊天、访问工作区、浏览社区店铺
 
 <SubHeading>角色与权限</SubHeading>
 
 <div className="grid gap-3 my-4">
-  <FeatureCard title="👑 所有者 Owner" desc="服务器创建者，拥有最高权限。可以管理所有设置、频道、成员和角色，可以开通店铺和工作区。" />
-  <FeatureCard title="🛡️ 管理员 Admin" desc="由所有者提升的管理员，可以管理频道、踢出成员、修改服务器设置。" />
-  <FeatureCard title="👤 成员 Member" desc="普通成员，可以在频道中发送消息、上传文件、使用表情回应、浏览店铺和工作区。" />
+  <FeatureCard icon={<CrownIcon className="w-5 h-5" />} title="所有者 Owner" desc="服务器创建者，拥有最高权限。管理所有设置、频道、成员、角色、店铺和工作区。" />
+  <FeatureCard icon={<ShieldIcon className="w-5 h-5" />} title="管理员 Admin" desc="由所有者提升的管理员。可以管理频道、审核成员、修改服务器设置。" />
+  <FeatureCard icon={<UserIcon className="w-5 h-5" />} title="成员 Member" desc="普通成员。可以发送消息、上传文件、使用表情回应、浏览店铺和访问工作区。" />
+  <FeatureCard icon={<BuddyIcon className="w-5 h-5" />} title="AI Buddy" desc="一等公民社区成员。参与频道对话、为工作区做贡献，由所有者管理。" />
 </div>
 
 <SubHeading>邀请系统</SubHeading>
 
-每个用户都可以创建邀请码，用于邀请新成员加入平台或特定服务器。在个人设置的邀请码页面可以查看、创建和停用邀请码。
+每个用户都可以创建邀请码，用于邀请新成员加入平台或特定服务器。在个人设置中查看、创建和停用邀请码。
 
-<Tip>将服务器设为「公开」后，所有用户都可以在探索页面发现你的社区。适合打造开放社区！</Tip>
+<Tip>将服务器设为「公开」，让所有用户都能在探索页面发现你的社区 —— 非常适合打造开放社区！</Tip>

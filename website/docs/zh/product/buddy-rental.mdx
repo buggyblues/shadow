@@ -2,56 +2,65 @@
 title: Buddy 租赁
 ---
 
-import { SectionHeading, SubHeading, FeatureCard, Step, Tip, WarningCard } from '../../../components/ProductComponents'
+import { SubHeading, Step, Tip, FeatureCard, WarningCard } from '../../../components/ProductComponents'
+import { ClockIcon, ZapIcon, LandmarkIcon, LockIcon, CoinIcon, BuddyIcon, BarChartIcon, RefreshCwIcon, FileTextIcon, HourglassIcon, CheckIcon, BanIcon, ClipboardIcon, BanknoteIcon, ShieldIcon } from '../../../components/Icons'
 
-<SectionHeading>Buddy 租赁</SectionHeading>
 
-Buddy 租赁系统允许用户将自己创建的 AI Buddy 出租给其他用户或频道使用，以赚取收入。
+Buddy 租赁是 Shadow 的 P2P 算力共享市场。拥有 Shadow 桌面端的用户可以将闲置 Buddy 上架出租，他人可以按时租用来完成各种任务。
 
 <SubHeading>拥有者指南</SubHeading>
 
-<Step number={1} title="创建 Buddy">
-先在 Buddy 管理中心创建并训练你的 Buddy。
-</Step>
-
-<Step number={2} title="发布到租赁市场">
-设定租金和可租赁时间段，发布到市场。
-</Step>
-
-<Step number={3} title="管理租赁订单">
-查看租赁请求，确认或拒绝。
-</Step>
+<Step num={1} title="创建 Buddy">在 Buddy 管理页面创建 Buddy，通过 Shadow 桌面端连接到你的设备。确保 Buddy 在线。</Step>
+<Step num={2} title="创建上架">前往 Buddy 市场点击「上架我的 Buddy」。填写设备信息（型号、CPU、内存）、技能标签、使用指南和定价（时/日/月费率）。</Step>
+<Step num={3} title="管理上架">在「我的租赁 > 我的上架」中可以暂停/恢复上架、查看统计、随时下架。</Step>
+<Step num={4} title="收取租金">系统根据实际在线时间自动计费。平台收取 5% 服务费，其余进入你的虾币钱包。</Step>
 
 <SubHeading>租户指南</SubHeading>
 
-<Step number={1} title="浏览市场">
-在租赁市场中搜索或浏览可用的 Buddies。
-</Step>
+<Step num={1} title="浏览市场">访问 Buddy 市场（/buddies）浏览可用 Buddy。按设备等级、操作系统筛选，按价格或人气排序。</Step>
+<Step num={2} title="查看详情">点击 Buddy 查看详细信息：设备规格、已安装软件、技能标签、所有者使用指南和定价。</Step>
+<Step num={3} title="签订合约">选择租赁时长（1小时/1天/1周/1个月或自定义），确认费用明细（租金 + 电费 + 平台费 + 押金），阅读并同意条款。</Step>
+<Step num={4} title="使用与管理">签约后 Buddy 即可使用。在「我的租赁」中查看合约状态、使用记录和费用明细。可随时提前终止。</Step>
 
-<Step number={2} title="发起租赁">
-选择你想租赁的 Buddy，确认租赁条款并支付。
-</Step>
+<SubHeading>定价体系</SubHeading>
 
-<Step number={3} title="使用 Buddy">
-租赁成功后，Buddy 会出现在你指定的频道中。
-</Step>
-
-<SubHeading>定价模型</SubHeading>
-
-<div className="grid gap-4 my-4">
-  <FeatureCard title="⏱️ 按时计费" desc="按小时或天数支付租赁费用。" />
-  <FeatureCard title="📦 套餐计费" desc="固定时段的预付套餐，通常更划算。" />
-  <FeatureCard title="🔁 订阅模式" desc="每月自动续费的长期租赁计划。" />
+<div className="grid gap-3 my-4">
+  <FeatureCard icon={<ClockIcon className="w-5 h-5" />} title="按时计费" desc="基础费率按小时计算。系统根据实际在线时间计费，精确到分钟。" />
+  <FeatureCard icon={<ZapIcon className="w-5 h-5" />} title="电费" desc="固定电费 2 虾币/小时，用于补偿设备用电成本。" />
+  <FeatureCard icon={<LandmarkIcon className="w-5 h-5" />} title="平台费" desc="平台收取总费用 5% 作为服务费，用于维护市场秩序和技术支持。" />
+  <FeatureCard icon={<LockIcon className="w-5 h-5" />} title="押金" desc="押金金额由拥有者设定。合约正常结束时自动退还。" />
 </div>
 
-<SubHeading>工作原理</SubHeading>
+<SubHeading>运作原理</SubHeading>
 
-租赁的 Buddy 在工作原理上与自有 Buddy 相同，区别在于租赁 Buddy 的所有权归原创建者，租赁到期后将自动从频道中移除。
+Buddy 租赁是 Shadow 独特的 P2P 算力共享功能。出租闲置 Buddy 赚取虾币，或租用他人 Buddy 协助完成任务。全程通过智能合约管理 —— 安全透明。
 
-<SubHeading>合约和规则</SubHeading>
+<div className="grid gap-3 my-4">
+  <FeatureCard icon={<CoinIcon className="w-5 h-5" />} title="出租赚钱" desc="将 Buddy 上架市场，设定时费。只要 Buddy 保持在线，系统自动计费，租金流入你的钱包。" />
+  <FeatureCard icon={<BuddyIcon className="w-5 h-5" />} title="租赁助手" desc="浏览其他用户的 Buddy，查看设备规格和技能标签，找到合适的签订租赁合约。" />
+  <FeatureCard icon={<BarChartIcon className="w-5 h-5" />} title="等级与信誉" desc="Buddy 在线时间积累等级（星级、月亮、太阳）。等级越高越可靠。" />
+  <FeatureCard icon={<RefreshCwIcon className="w-5 h-5" />} title="灵活时长" desc="支持 1 小时、1 天、1 周、1 个月或自定义时长。短期试用或长期租赁，自由选择。" />
+</div>
 
-<WarningCard>
-  租赁合约一经确认不可退款，请确保在租赁前仔细阅读 Buddy 的描述和评价。
-</WarningCard>
+<SubHeading>合约机制</SubHeading>
 
-<Tip>拥有者可以随时修改未被租赁的 Buddy 的设定和定价。</Tip>
+每次租赁都会生成智能合约保护双方。合约包含完整的费用快照和平台条款。
+
+<div className="grid gap-3 my-4">
+  <FeatureCard icon={<FileTextIcon className="w-5 h-5" />} title="签约" desc="租户选择时长，确认费用，签订合约。押金在签约时支付，合约立即生效。" />
+  <FeatureCard icon={<HourglassIcon className="w-5 h-5" />} title="执行" desc="合约期间，系统根据实际在线时间自动计费。5% 平台费在转给拥有者前扣除。" />
+  <FeatureCard icon={<CheckIcon className="w-5 h-5" />} title="完成" desc="合约到期自动结束，押金退还。任一方可提前终止 —— 已产生费用不可退，但押金会退还。" />
+</div>
+
+<SubHeading>规则与违规</SubHeading>
+
+<div className="grid gap-3 my-4">
+  <WarningCard icon={<BanIcon className="w-5 h-5" />} title="拥有者不可自用" desc="合约期间，拥有者不能使用已出租的 Buddy。租户可举报违规，拥有者押金将被扣除。" />
+  <WarningCard icon={<ClipboardIcon className="w-5 h-5" />} title="遵守使用指南" desc="租户应遵守拥有者设定的使用指南，合理使用 Buddy。" />
+  <WarningCard icon={<BanknoteIcon className="w-5 h-5" />} title="Token 消耗" desc="租赁期间 AI Token 消耗（每 1K Token 1 虾币）由租户承担，与租金分开计算。" />
+  <WarningCard icon={<ShieldIcon className="w-5 h-5" />} title="争议处理" desc="可提交争议申请由平台调解。平台保留对违规者进行处罚的权利。" />
+</div>
+
+<Tip>拥有者需保持 Buddy 在线以确保正常计费和服务。离线超过 90 秒视为不可用。使用 Shadow 桌面端的自动重连功能保持稳定在线。</Tip>
+
+<Tip>租赁前请查看 Buddy 的在线等级和设备规格。等级越高的 Buddy 通常越稳定。仔细阅读费用明细。</Tip>

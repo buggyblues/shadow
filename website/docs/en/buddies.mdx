@@ -4,12 +4,12 @@ pageType: custom
 
 import { useState, useEffect, useRef } from 'react'
 import { PublicFooter } from '../../components/Layout'
-import { SearchIcon } from '../../components/Icons'
+import { SearchIcon, FlameIcon, ZapIcon, LightbulbIcon, ShrimpCoinIcon } from '../../components/Icons'
 
 export const DEVICE_TIERS = {
-  high_end: { label: 'High', icon: '🔥', color: 'from-amber-400 to-orange-500' },
-  mid_range: { label: 'Mid', icon: '⚡', color: 'from-blue-400 to-cyan-500' },
-  low_end: { label: 'Low', icon: '💡', color: 'from-gray-400 to-gray-500' },
+  high_end: { label: 'High', icon: <FlameIcon className="w-3.5 h-3.5" />, color: 'from-amber-400 to-orange-500' },
+  mid_range: { label: 'Mid', icon: <ZapIcon className="w-3.5 h-3.5" />, color: 'from-blue-400 to-cyan-500' },
+  low_end: { label: 'Low', icon: <LightbulbIcon className="w-3.5 h-3.5" />, color: 'from-gray-400 to-gray-500' },
 }
 
 export const SORT_OPTIONS = [
@@ -21,9 +21,9 @@ export const SORT_OPTIONS = [
 
 export const TIER_FILTERS = [
   { value: '', label: 'All' },
-  { value: 'high_end', label: '🔥 High-end' },
-  { value: 'mid_range', label: '⚡ Mid-range' },
-  { value: 'low_end', label: '💡 Low-end' },
+  { value: 'high_end', label: 'High-end', icon: <FlameIcon className="w-3.5 h-3.5" /> },
+  { value: 'mid_range', label: 'Mid-range', icon: <ZapIcon className="w-3.5 h-3.5" /> },
+  { value: 'low_end', label: 'Low-end', icon: <LightbulbIcon className="w-3.5 h-3.5" /> },
 ]
 
 export function formatOnline(seconds) {
@@ -139,12 +139,12 @@ export const BuddiesPage = () => {
                   <div className="flex flex-wrap gap-1.5">
                     {TIER_FILTERS.map((o) => (
                       <button key={o.value} type="button" onClick={() => setDeviceTier(o.value)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
                         style={deviceTier === o.value
                           ? { background: 'var(--shadow-accent)', color: 'var(--shadow-button-text)' }
                           : { background: 'transparent', color: 'var(--shadow-text-muted)', border: '1px solid var(--shadow-card-border)' }
                         }>
-                        {o.label}
+                        {o.icon}{o.label}
                       </button>
                     ))}
                   </div>
@@ -215,7 +215,7 @@ export const BuddiesPage = () => {
                   <div className="flex items-center justify-between pt-3" style={{ borderTop: '1px solid var(--shadow-card-border)' }}>
                     <div className="flex items-center gap-1">
                       <span className="text-lg font-bold" style={{ color: 'var(--shadow-accent)' }}>{l.hourlyRate}</span>
-                      <span className="text-xs font-bold" style={{ color: 'var(--shadow-text-dim)' }}>🦐/h</span>
+                      <span className="text-xs font-bold" style={{ color: 'var(--shadow-text-dim)' }}><ShrimpCoinIcon className="w-3 h-3 inline" />/h</span>
                     </div>
                     <div className="flex items-center gap-3 text-xs font-bold" style={{ color: 'var(--shadow-text-dim)' }}>
                       <span className="flex items-center gap-0.5">

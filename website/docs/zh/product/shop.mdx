@@ -2,52 +2,42 @@
 title: 社区店铺
 ---
 
-import { SectionHeading, SubHeading, FeatureCard, Step, Tip } from '../../../components/ProductComponents'
+import { SubHeading, Step, Tip, FeatureCard } from '../../../components/ProductComponents'
+import { PackageIcon, TicketIcon, BookOpenIcon, PaletteIcon, BuddyIcon, FileTextIcon } from '../../../components/Icons'
 
-<SectionHeading>社区店铺</SectionHeading>
 
-社区店铺让服务器可以托管自己的数字商城，支持出售数字商品、会员资格等。
+每个服务器都可以开设自己的社区店铺 —— 私域数字商城，销售数字作品、知识产品和服务权益。所有交易使用虾币（Shrimp Coins），Shadow 的内置虚拟货币。
 
 <SubHeading>买家指南</SubHeading>
 
-<Step number={1} title="进入店铺">
-在服务器侧边栏中点击"店铺"入口。
-</Step>
-
-<Step number={2} title="浏览商品">
-你可以查看商品列表、搜索商品或按分类筛选。
-</Step>
-
-<Step number={3} title="下单购买">
-选择商品后点击购买，确认信息并完成支付。
-</Step>
+<Step num={1} title="浏览商品">进入服务器的店铺板块浏览商品。按分类筛选、查看商品详情、规格、图片和评价。</Step>
+<Step num={2} title="加入购物车">选择商品规格（尺寸、款式等）后加入购物车。可以一次购买多件商品。</Step>
+<Step num={3} title="下单购买">确认购物车后提交订单。使用钱包中的虾币支付。订单状态实时更新。</Step>
+<Step num={4} title="评价商品">收到商品后，给出星级评分并撰写评价，帮助其他买家做出决策。</Step>
 
 <SubHeading>卖家指南</SubHeading>
 
-<Step number={1} title="创建店铺">
-在你的服务器设置中启用店铺功能。
-</Step>
+<Step num={1} title="开设店铺">服务器所有者可在服务器设置中启用店铺功能，设置店铺名称和描述。</Step>
+<Step num={2} title="上架商品">创建商品分类，添加商品信息、图片和价格。支持多规格 SKU，每个规格独立定价和库存。</Step>
+<Step num={3} title="管理订单">在店铺管理后台查看和处理订单。更新订单状态或取消异常订单。</Step>
 
-<Step number={2} title="上架商品">
-填写商品标题、描述、价格和图片后发布即可。
-</Step>
+<SubHeading>可以卖什么？</SubHeading>
 
-<Step number={3} title="管理订单">
-在店铺后台查看和管理订单状态。
-</Step>
-
-<SubHeading>商品类型</SubHeading>
-
-<div className="grid gap-4 my-4">
-  <FeatureCard title="📦 数字商品" desc="可交付的数字文件或内容，如模板、教程、素材等。" />
-  <FeatureCard title="🎫 会员资格" desc="限时访问权限或专属内容解锁。" />
-  <FeatureCard title="🎨 定制服务" desc="一对一的定制化服务或咨询。" />
+<div className="grid gap-3 my-4">
+  <FeatureCard icon={<BookOpenIcon className="w-5 h-5" />} title="知识与课程" desc="教程、电子书、指南和教育内容。在社区中将你的专业知识变现。" />
+  <FeatureCard icon={<PaletteIcon className="w-5 h-5" />} title="设计与创意作品" desc="模板、插画、UI 套件和其他数字艺术。销售社区创作的作品。" />
+  <FeatureCard icon={<BuddyIcon className="w-5 h-5" />} title="AI 生成作品" desc="AI Buddy 生产的内容 —— 研究报告、代码库、生成艺术等。" />
+  <FeatureCard icon={<FileTextIcon className="w-5 h-5" />} title="视频与媒体" desc="视频教程、播客、录屏和多媒体内容。" />
+  <FeatureCard icon={<PackageIcon className="w-5 h-5" />} title="实物商品" desc="需要发货的实体商品，如周边、手办和书籍。订单遵循 处理中 → 已发货 → 已送达 流程。" />
+  <FeatureCard icon={<TicketIcon className="w-5 h-5" />} title="数字权益" desc="会员资格、角色权限、Buddy 访问权和服务特权。购买后即时激活。" />
 </div>
 
-<SubHeading>钱包与收入</SubHeading>
+<SubHeading>钱包与虾币</SubHeading>
 
-<Tip>所有交易通过虾豆内置钱包系统完成，支持提现到外部账户。</Tip>
+每位用户都有一个虾币钱包。充值获取虾币，在社区店铺中购买商品。所有交易和余额变动都可在钱包页面查看。
 
 <SubHeading>评价系统</SubHeading>
 
-买家可以在完成交易后给商品留下评价和星级评分，帮助其他用户了解商品质量。
+为购买的商品打星并撰写文字评价。评价展示在商品详情页面帮助其他用户。支持匿名评价。
+
+<Tip>虾币是社区的虚拟货币 —— 用于激励内容创作、购买服务和在所有 Shadow 社区中交易商品。</Tip>

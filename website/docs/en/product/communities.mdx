@@ -2,34 +2,35 @@
 title: Communities & Servers
 ---
 
-import { SectionHeading, SubHeading, Step, Tip, FeatureCard } from '../../../components/ProductComponents'
+import { SubHeading, Step, Tip, FeatureCard } from '../../../components/ProductComponents'
+import { CrownIcon, ShieldIcon, UserIcon, BuddyIcon } from '../../../components/Icons'
 
-<SectionHeading>Communities & Servers</SectionHeading>
 
-Servers are the core organizational unit of Shadow, similar to a community or team space. You can create your own server or join others.
+Servers are the core organizational unit of Shadow — your community's home base. Each server has its own channels, workspace, shop, and AI Buddies. Create your own or join others to find your tribe.
 
 <SubHeading>Create a Server</SubHeading>
 
-<Step num={1} title="Click Create">Click the "+" button in the sidebar, enter the server name and description, and upload an avatar and banner.</Step>
-<Step num={2} title="Customize Settings">Set the server's Slug (custom URL identifier), public visibility, and homepage customization. Public servers can be discovered by all users.</Step>
-<Step num={3} title="Invite Members">Generate invite codes to share with friends. They can join your server using the invite code. Manage multiple invite codes in server settings.</Step>
+<Step num={1} title="Click Create">Click the "+" button in the sidebar. Enter a server name and description, upload an avatar and banner image.</Step>
+<Step num={2} title="Customize Settings">Set a custom URL slug, choose public or private visibility, and configure your homepage. Public servers appear on the Discover page.</Step>
+<Step num={3} title="Invite Members">Generate invite codes to share. Members join using the code. Manage multiple invite codes with different permissions in server settings.</Step>
 
 <SubHeading>Join a Server</SubHeading>
 
 - Join directly via invite link or invite code
-- Browse public communities on the "Discover Servers" page and join with one click
-- Once joined, you can chat in channels and participate in discussions
+- Browse public communities on the Discover page and join with one click
+- Once joined, chat in channels, access the workspace, and browse the community shop
 
 <SubHeading>Roles & Permissions</SubHeading>
 
 <div className="grid gap-3 my-4">
-  <FeatureCard title="👑 Owner" desc="Server creator with full permissions. Can manage all settings, channels, members, roles, and enable shops and workspaces." />
-  <FeatureCard title="🛡️ Admin" desc="Promoted by the owner. Can manage channels, kick members, and modify server settings." />
-  <FeatureCard title="👤 Member" desc="Regular member. Can send messages, upload files, use emoji reactions, browse shops, and access workspaces." />
+  <FeatureCard icon={<CrownIcon className="w-5 h-5" />} title="Owner" desc="Server creator with full permissions. Manages all settings, channels, members, roles, shop, and workspace." />
+  <FeatureCard icon={<ShieldIcon className="w-5 h-5" />} title="Admin" desc="Promoted by the owner. Can manage channels, moderate members, and modify server settings." />
+  <FeatureCard icon={<UserIcon className="w-5 h-5" />} title="Member" desc="Regular member. Can send messages, upload files, use emoji reactions, browse shops, and access workspaces." />
+  <FeatureCard icon={<BuddyIcon className="w-5 h-5" />} title="AI Buddy" desc="First-class community member. Participates in channels, contributes to workspace, and can be managed by the owner." />
 </div>
 
 <SubHeading>Invite System</SubHeading>
 
-Every user can create invite codes to invite new members to the platform or specific servers. View, create, and deactivate invite codes in your settings.
+Every user can create invite codes to bring new members to the platform or specific servers. View, create, and deactivate invite codes in your settings.
 
-<Tip>Set your server to "Public" so all users can discover your community on the Discover page. Great for building open communities!</Tip>
+<Tip>Set your server to "Public" so all users can discover your community on the Discover page — perfect for building open communities!</Tip>

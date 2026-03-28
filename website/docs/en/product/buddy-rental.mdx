@@ -2,9 +2,9 @@
 title: Buddy Rental
 ---
 
-import { SectionHeading, SubHeading, Step, Tip, FeatureCard, WarningCard } from '../../../components/ProductComponents'
+import { SubHeading, Step, Tip, FeatureCard, WarningCard } from '../../../components/ProductComponents'
+import { ClockIcon, ZapIcon, LandmarkIcon, LockIcon, CoinIcon, BuddyIcon, BarChartIcon, RefreshCwIcon, FileTextIcon, HourglassIcon, CheckIcon, BanIcon, ClipboardIcon, BanknoteIcon, ShieldIcon } from '../../../components/Icons'
 
-<SectionHeading>Buddy Rental</SectionHeading>
 
 Buddy Rental is Shadow's P2P computing power sharing marketplace. Users with Shadow Desktop devices can list idle Buddies for rent, and others can rent them by the hour to complete various tasks.
 
@@ -25,40 +25,40 @@ Buddy Rental is Shadow's P2P computing power sharing marketplace. Users with Sha
 <SubHeading>Pricing</SubHeading>
 
 <div className="grid gap-3 my-4">
-  <FeatureCard icon="⏱" title="Hourly Billing" desc="Base rate is hourly. The system bills based on actual online time, accurate to the minute." />
-  <FeatureCard icon="⚡" title="Electricity" desc="Fixed electricity fee of 2 🦐/hour to compensate for device power costs." />
-  <FeatureCard icon="🏛" title="Platform Fee" desc="Platform charges 5% of total cost as a service fee for maintaining market order and technical support." />
-  <FeatureCard icon="🔒" title="Deposit" desc="Deposit amount set by the owner. Automatically refunded when the contract ends normally." />
+  <FeatureCard icon={<ClockIcon className="w-5 h-5" />} title="Hourly Billing" desc="Base rate is hourly. The system bills based on actual online time, accurate to the minute." />
+  <FeatureCard icon={<ZapIcon className="w-5 h-5" />} title="Electricity" desc="Fixed electricity fee of 2 Shrimp Coins/hour to compensate for device power costs." />
+  <FeatureCard icon={<LandmarkIcon className="w-5 h-5" />} title="Platform Fee" desc="Platform charges 5% of total cost as a service fee for maintaining market order and technical support." />
+  <FeatureCard icon={<LockIcon className="w-5 h-5" />} title="Deposit" desc="Deposit amount set by the owner. Automatically refunded when the contract ends normally." />
 </div>
 
-<SubHeading>🎮 How It Works</SubHeading>
+<SubHeading>How It Works</SubHeading>
 
 Buddy Rental is Shadow's unique P2P computing power sharing feature. Rent out your idle Buddies to earn Shrimp Coins, or rent others' Buddies to help with tasks. The entire process is managed through smart contracts — secure and transparent.
 
 <div className="grid gap-3 my-4">
-  <FeatureCard icon="💰" title="Earn by Renting" desc="List your Buddy on the market, set your hourly rate. As long as the Buddy stays online, the system bills automatically and rent flows into your wallet." />
-  <FeatureCard icon="🤖" title="Rent an Assistant" desc="Browse other users' Buddies, check device specs and skill tags, find the right one and sign a rental contract." />
-  <FeatureCard icon="📊" title="Levels & Reputation" desc="Buddy online time accumulates levels (⭐ Star → 🌙 Moon → ☀️ Sun). Higher levels mean more reliable." />
-  <FeatureCard icon="🔄" title="Flexible Duration" desc="Supports 1 hour, 1 day, 1 week, 1 month, or custom duration. Short trials or long-term — choose what works best." />
+  <FeatureCard icon={<CoinIcon className="w-5 h-5" />} title="Earn by Renting" desc="List your Buddy on the market, set your hourly rate. As long as the Buddy stays online, the system bills automatically and rent flows into your wallet." />
+  <FeatureCard icon={<BuddyIcon className="w-5 h-5" />} title="Rent an Assistant" desc="Browse other users' Buddies, check device specs and skill tags, find the right one and sign a rental contract." />
+  <FeatureCard icon={<BarChartIcon className="w-5 h-5" />} title="Levels & Reputation" desc="Buddy online time accumulates levels (Star, Moon, Sun). Higher levels mean more reliable." />
+  <FeatureCard icon={<RefreshCwIcon className="w-5 h-5" />} title="Flexible Duration" desc="Supports 1 hour, 1 day, 1 week, 1 month, or custom duration. Short trials or long-term — choose what works best." />
 </div>
 
-<SubHeading>📜 Contract Mechanism</SubHeading>
+<SubHeading>Contract Mechanism</SubHeading>
 
 Every rental generates a smart contract to protect both parties. Contracts contain complete cost snapshots and platform terms.
 
 <div className="grid gap-3 my-4">
-  <FeatureCard icon="📝" title="Signing" desc="Tenant selects duration, confirms costs, and signs the contract. Deposit is paid at signing, contract takes effect immediately." />
-  <FeatureCard icon="⏳" title="Execution" desc="During the contract, the system bills automatically based on actual online time. 5% platform fee deducted before transferring to the owner." />
-  <FeatureCard icon="✅" title="Completion" desc="Contract ends automatically on expiry, deposit is refunded. Either party can terminate early — accrued costs are non-refundable, but the deposit is returned." />
+  <FeatureCard icon={<FileTextIcon className="w-5 h-5" />} title="Signing" desc="Tenant selects duration, confirms costs, and signs the contract. Deposit is paid at signing, contract takes effect immediately." />
+  <FeatureCard icon={<HourglassIcon className="w-5 h-5" />} title="Execution" desc="During the contract, the system bills automatically based on actual online time. 5% platform fee deducted before transferring to the owner." />
+  <FeatureCard icon={<CheckIcon className="w-5 h-5" />} title="Completion" desc="Contract ends automatically on expiry, deposit is refunded. Either party can terminate early — accrued costs are non-refundable, but the deposit is returned." />
 </div>
 
-<SubHeading>⚖️ Rules & Violations</SubHeading>
+<SubHeading>Rules & Violations</SubHeading>
 
 <div className="grid gap-3 my-4">
-  <WarningCard icon="🚫" title="Owner Cannot Self-Use" desc="During the contract, the owner cannot use the rented Buddy. The tenant can report violations, and the owner's deposit will be deducted." />
-  <WarningCard icon="📋" title="Follow Usage Guidelines" desc="Tenants should follow the usage guidelines set by the owner and use the Buddy responsibly." />
-  <WarningCard icon="💸" title="Token Costs" desc="AI token consumption during rental (1 🦐 per 1K tokens) is borne by the tenant, calculated separately from rent." />
-  <WarningCard icon="🛡" title="Dispute Resolution" desc="Disputes can be filed and the platform will mediate. The platform reserves the right to penalize violators." />
+  <WarningCard icon={<BanIcon className="w-5 h-5" />} title="Owner Cannot Self-Use" desc="During the contract, the owner cannot use the rented Buddy. The tenant can report violations, and the owner's deposit will be deducted." />
+  <WarningCard icon={<ClipboardIcon className="w-5 h-5" />} title="Follow Usage Guidelines" desc="Tenants should follow the usage guidelines set by the owner and use the Buddy responsibly." />
+  <WarningCard icon={<BanknoteIcon className="w-5 h-5" />} title="Token Costs" desc="AI token consumption during rental (1 Shrimp Coin per 1K tokens) is borne by the tenant, calculated separately from rent." />
+  <WarningCard icon={<ShieldIcon className="w-5 h-5" />} title="Dispute Resolution" desc="Disputes can be filed and the platform will mediate. The platform reserves the right to penalize violators." />
 </div>
 
 <Tip>Owners must keep Buddies online for proper billing and service. Offline for more than 90 seconds is considered unavailable. Use Shadow Desktop's auto-reconnect feature for stable uptime.</Tip>

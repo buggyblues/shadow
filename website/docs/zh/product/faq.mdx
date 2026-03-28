@@ -2,46 +2,27 @@
 title: 常见问题
 ---
 
-import { SectionHeading, SubHeading } from '../../../components/ProductComponents'
 
-<SectionHeading>常见问题</SectionHeading>
+export const faqs = [
+  { q: 'Shadow 免费吗？', a: '基础频道聊天和协作功能完全免费。进阶功能（如更多 Buddy 配额和店铺高级功能）通过付费计划提供。' },
+  { q: '如何获取邀请码？', a: '联系平台管理员或现有用户获取邀请码。每个邀请码只能注册一个账号。' },
+  { q: '支持哪些语言？', a: '目前支持简体中文、繁体中文、英语、日语和韩语。在个人设置中切换界面语言。' },
+  { q: '支持哪些消息格式？', a: '消息支持完整的 Markdown 格式，包括粗体、斜体、代码块、列表和链接。还可以分享图片和使用表情回应。' },
+  { q: '手机上能用 Shadow 吗？', a: 'Shadow 的 Web 界面对移动端做了深度优化，提供接近原生应用的体验。专属移动端 App 也在开发中。' },
+  { q: '我的数据安全吗？', a: 'Shadow 支持自部署，所有数据存储在你自己的服务器上。所有通信均进行传输加密。' },
+  { q: '如何创建 AI Buddy？', a: '前往设置 → Buddy 管理，点击「新建 Buddy」，设置名称、头像和人设。然后生成 Token 通过 Shadow 桌面端连接。' },
+  { q: 'Buddy 可以使用哪些 AI 模型？', a: '通过 Shadow 桌面端，Buddy 可以连接任何 AI 后端 —— OpenAI、Claude、本地模型（Ollama、LM Studio）等。你可以完全控制模型选择。' },
+  { q: '如何开设社区店铺？', a: '服务器所有者可在服务器管理中启用店铺功能。启用后，创建商品分类并上架商品，供社区成员使用虾币购买。' },
+  { q: '什么是 Buddy 租赁市场？', a: 'P2P 市场，你可以出租闲置的 AI Buddy 或按小时租用他人的 Buddy。智能合约自动处理计费和结算。' },
+  { q: '工作区有文件大小限制吗？', a: '单个文件上传大小取决于服务器配置（默认 50MB）。总工作区存储容量因计划而异。' },
+  { q: '如何反馈问题？', a: '使用应用内的反馈按钮提交，或在 Shadow 官方社区服务器中发帖。我们会积极关注并回复所有反馈。' },
+]
 
-<SubHeading>虾豆和 Discord / Slack 有什么不同？</SubHeading>
-
-虾豆融合了社交、AI 和电商能力，不仅仅是一个聊天工具。Buddy 系统、社区店铺和共享工作区是我们独有的特色。
-
-<SubHeading>虾豆免费使用吗？</SubHeading>
-
-基础功能完全免费。我们提供付费订阅计划以解锁更多高级功能，如更多 Buddy 配额和店铺高级功能。
-
-<SubHeading>我可以在哪些设备上使用虾豆？</SubHeading>
-
-目前支持 Web 浏览器和桌面应用（macOS / Windows / Linux）。移动端 App 正在开发中。
-
-<SubHeading>如何创建一个服务器？</SubHeading>
-
-注册并登录后，在左侧面板点击「创建社区」按钮，按照引导填写名称和描述即可完成创建。
-
-<SubHeading>Buddy 的回复是实时生成的吗？</SubHeading>
-
-是的，Buddy 的回复基于 AI 模型实时生成，每次对话可能略有不同。
-
-<SubHeading>如何将 Buddy 添加到我的频道？</SubHeading>
-
-在频道设置中，选择「Buddy 管理」，然后从可用 Buddy 列表中选择添加。
-
-<SubHeading>店铺功能是否收取平台费？</SubHeading>
-
-我们对店铺交易收取少量平台服务费，具体比例请参考定价页面。
-
-<SubHeading>工作区是否支持离线编辑？</SubHeading>
-
-目前工作区需要在线使用。离线编辑和同步功能正在规划中。
-
-<SubHeading>Shadow 桌面端插件是否有审核要求？</SubHeading>
-
-发布到公共市场的 Shadow 桌面端插件需要通过审核。个人使用的插件不需要审核。
-
-<SubHeading>如何反馈问题或建议？</SubHeading>
-
-你可以通过产品内的反馈按钮提交，也可以在虾豆官方社区服务器中反馈。
+<div className="space-y-4 my-6">
+  {faqs.map((f, i) => (
+    <div key={i} className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+      <p className="font-bold text-gray-800 dark:text-gray-100 mb-2">Q: {f.q}</p>
+      <p className="text-gray-600 dark:text-gray-300">{f.a}</p>
+    </div>
+  ))}
+</div>

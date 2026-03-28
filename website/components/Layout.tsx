@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { GlobeIcon } from './Icons'
 
 /* ─── Base URL helper (prepends DOCS_BASE in Docker builds) ─── */
 function getBase(): string {
@@ -190,7 +191,7 @@ function LangSwitcher({ lang }: { lang: 'zh' | 'en' }) {
         }}
         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-100 transition"
       >
-        <span style={{ fontSize: '14px' }}>🌐</span>
+        <GlobeIcon className="w-4 h-4" />
         <span>{currentLabel}</span>
         <svg
           width="12"

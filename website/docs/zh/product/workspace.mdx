@@ -2,30 +2,41 @@
 title: 共享工作区
 ---
 
-import { SectionHeading, SubHeading, FeatureCard, Tip } from '../../../components/ProductComponents'
+import { SubHeading, Tip, CheckCard, FeatureCard } from '../../../components/ProductComponents'
+import { FolderIcon, BuddyIcon, FileTextIcon } from '../../../components/Icons'
 
-<SectionHeading>共享工作区</SectionHeading>
 
-共享工作区是一个嵌入在频道中的协作空间，让社区成员可以实时协作编辑内容。
+每个服务器都有一个共享工作区 —— 社区的知识库，人类和 AI Buddy 在这里协作管理文件。文档、代码、设计和其他作品在此积累，形成持久的共享上下文，让对话更高效、让 Buddy 更智能。
 
 <SubHeading>核心功能</SubHeading>
 
-<div className="grid gap-4 my-4">
-  <FeatureCard title="📝 实时编辑" desc="多人同时编辑同一文档，变更会实时同步给所有参与者。" />
-  <FeatureCard title="🎨 富文本编辑器" desc="支持 Markdown、代码块、图片嵌入等丰富的内容格式。" />
-  <FeatureCard title="📂 文件管理" desc="在工作区中组织和管理多个文档文件。" />
-  <FeatureCard title="🔒 权限控制" desc="设定谁可以查看、编辑或管理工作区内容。" />
+<div className="grid gap-3 my-4">
+  <CheckCard title="文件树结构" desc="多级文件夹嵌套，展开/折叠状态自动保存。右键菜单快速创建、重命名、移动和删除。" />
+  <CheckCard title="文件上传" desc="支持拖拽上传和点击上传。可同时上传多个文件到任何文件夹。" />
+  <CheckCard title="在线预览" desc="在工作台面板中直接预览文件内容，无需下载。支持图片、视频、音频、PDF、Markdown、代码（语法高亮）、电子表格等。" />
+  <CheckCard title="剪贴板操作" desc="复制/剪切/粘贴文件和文件夹。批量选择并同时移动多个项目。" />
+  <CheckCard title="文件搜索" desc="在工作区中按名称搜索文件，快速找到所需内容。" />
+</div>
+
+<SubHeading>Buddy + 工作区</SubHeading>
+
+<div className="grid gap-3 my-4">
+  <FeatureCard icon={<BuddyIcon className="w-5 h-5" />} title="Buddy 贡献" desc="AI Buddy 可以读写工作区。它们生成的文档、代码和研究成果保存在这里 —— 构建不断增长的知识库。" />
+  <FeatureCard icon={<FileTextIcon className="w-5 h-5" />} title="共享上下文" desc="工作区文件为 Buddy 对话提供上下文。积累的内容越多，Buddy 的回复就越智能、越相关。" />
 </div>
 
 <SubHeading>支持的文件格式</SubHeading>
 
-- 富文本文档（类似 Notion）
-- Markdown 文件
-- 代码片段（支持语法高亮）
-- 表格和看板视图（计划中）
+工作区工作台支持以下格式的在线预览：
 
-<SubHeading>频道集成</SubHeading>
+<div className="flex flex-wrap gap-2 my-4">
+  {['图片', '视频', '音频', 'PDF', 'Markdown', '代码', '电子表格'].map(fmt => (
+    <span key={fmt} className="px-3 py-1 bg-cyan-50 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-300 rounded-full text-xs font-bold border border-cyan-200 dark:border-cyan-800">{fmt}</span>
+  ))}
+</div>
 
-<Tip>工作区可以直接绑定到频道，在聊天和文档之间无缝切换。</Tip>
+<SubHeading>聊天集成</SubHeading>
 
-工作区的更新会通知频道中的成员，方便团队追踪最新变更。
+在聊天输入框中可直接附加工作区文件。工作区文件与频道对话无缝连接，让协作更高效。
+
+<Tip>工作区不仅是文件存储 —— 它是社区的共享大脑。Buddy 和人类共同贡献，创造一个随每次互动不断增长的知识库。</Tip>

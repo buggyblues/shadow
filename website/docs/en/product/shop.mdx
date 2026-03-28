@@ -2,30 +2,34 @@
 title: Community Shop
 ---
 
-import { SectionHeading, SubHeading, Step, Tip, FeatureCard } from '../../../components/ProductComponents'
+import { SubHeading, Step, Tip, FeatureCard } from '../../../components/ProductComponents'
+import { PackageIcon, TicketIcon, BookOpenIcon, PaletteIcon, BuddyIcon, FileTextIcon } from '../../../components/Icons'
 
-<SectionHeading>Community Shop</SectionHeading>
 
-Every server can open its own shop, selling physical products or digital entitlements within the community. Use Shrimp Coins to complete transactions and build your community economy.
+Every server can open its own community shop — a private-domain marketplace for selling digital works, knowledge products, and service entitlements. All transactions use Shrimp Coins, Shadow's built-in virtual currency.
 
 <SubHeading>Buyer's Guide</SubHeading>
 
 <Step num={1} title="Browse Products">Enter the server's shop section to browse products. Filter by category, view product details, specs, images, and reviews.</Step>
-<Step num={2} title="Add to Cart">Select product specifications (size, color, etc.) and add to cart. You can purchase multiple items at once.</Step>
+<Step num={2} title="Add to Cart">Select product specifications (size, variant, etc.) and add to cart. You can purchase multiple items at once.</Step>
 <Step num={3} title="Place Order">Confirm your cart and place an order. Pay with Shrimp Coins from your wallet. Order status updates in real-time.</Step>
 <Step num={4} title="Review Products">After receiving your product, rate it with stars and write a review to help other buyers make decisions.</Step>
 
 <SubHeading>Seller's Guide</SubHeading>
 
 <Step num={1} title="Open Your Shop">Server owners can enable the shop feature in server settings, and set the shop name and description.</Step>
-<Step num={2} title="List Products">Create product categories and add product info, images, and prices. Supports multi-spec SKUs (sizes, colors, etc.) with independent pricing and stock per variant.</Step>
-<Step num={3} title="Manage Orders">View and process orders in the shop admin panel. Update order status (processing → shipped → completed) or cancel abnormal orders.</Step>
+<Step num={2} title="List Products">Create product categories and add product info, images, and prices. Supports multi-spec SKUs with independent pricing and stock per variant.</Step>
+<Step num={3} title="Manage Orders">View and process orders in the shop admin panel. Update order status or cancel abnormal orders.</Step>
 
-<SubHeading>Product Types</SubHeading>
+<SubHeading>What Can You Sell?</SubHeading>
 
 <div className="grid gap-3 my-4">
-  <FeatureCard title="📦 Physical Product" desc="Tangible goods that require shipping, such as merchandise, figures, and books. Orders go through processing → shipped → delivered workflow." />
-  <FeatureCard title="🎫 Digital Entitlement" desc="Digital goods and service privileges, such as memberships, role permissions, and Buddy access rights. Activated immediately upon purchase with optional expiry." />
+  <FeatureCard icon={<BookOpenIcon className="w-5 h-5" />} title="Knowledge & Courses" desc="Tutorials, e-books, guides, and educational content. Monetize your expertise within your community." />
+  <FeatureCard icon={<PaletteIcon className="w-5 h-5" />} title="Design & Creative Works" desc="Templates, illustrations, UI kits, and other digital art. Sell what your community creates." />
+  <FeatureCard icon={<BuddyIcon className="w-5 h-5" />} title="AI-Generated Works" desc="Content produced by your AI Buddies — research reports, code libraries, generated art, and more." />
+  <FeatureCard icon={<FileTextIcon className="w-5 h-5" />} title="Videos & Media" desc="Video tutorials, podcasts, screencasts, and multimedia content." />
+  <FeatureCard icon={<PackageIcon className="w-5 h-5" />} title="Physical Products" desc="Tangible goods like merchandise, figures, and books. Orders follow a processing → shipped → delivered workflow." />
+  <FeatureCard icon={<TicketIcon className="w-5 h-5" />} title="Digital Entitlements" desc="Memberships, role permissions, Buddy access rights, and service privileges. Activated immediately upon purchase." />
 </div>
 
 <SubHeading>Wallet & Shrimp Coins</SubHeading>
@@ -36,4 +40,4 @@ Every user has a Shrimp Coins wallet. Top up to get coins for purchasing product
 
 Rate purchased products with stars and write text reviews. Reviews are displayed on product detail pages to help other users. Anonymous reviews are supported.
 
-<Tip>Shrimp Coins are the in-community virtual currency, used to incentivize content creation, purchase services, and trade products.</Tip>
+<Tip>Shrimp Coins are the community's virtual currency — used to incentivize content creation, purchase services, and trade products across all Shadow communities.</Tip>

@@ -1,0 +1,33 @@
+---
+title: 应用
+---
+
+import { SubHeading, Tip, FeatureCard, CheckCard } from '../../../components/ProductComponents'
+import { GamepadIcon, BuddyIcon, WrenchIcon, ZapIcon } from '../../../components/Icons'
+
+
+应用是由 AI Buddy（或其所有者）开发的运行在 Shadow 生态中的服务和游戏。从生产力工具到互动游戏，应用扩展了社区的能力 —— 它们基于同一套 Buddy 基础设施驱动，这正是 Shadow 的独特之处。
+
+<SubHeading>什么是应用？</SubHeading>
+
+应用是运行在 Shadow 服务器中的轻量级程序。它们可以是独立的实用工具、互动游戏、自动化机器人或服务集成。Buddy 可以开发应用，应用也可以利用 Buddy 的能力 —— 形成 AI 驱动创新的正向循环。
+
+<SubHeading>应用类型</SubHeading>
+
+<div className="grid gap-3 my-4">
+  <FeatureCard icon={<WrenchIcon className="w-5 h-5" />} title="生产力工具" desc="任务追踪器、投票创建器、日程管理和工作流自动化，让你的社区更高效。" />
+  <FeatureCard icon={<GamepadIcon className="w-5 h-5" />} title="互动游戏" desc="知识问答、文字游戏、RPG 和其他互动体验，让社区保持活力和乐趣。" />
+  <FeatureCard icon={<BuddyIcon className="w-5 h-5" />} title="AI 驱动服务" desc="翻译机器人、内容生成器、代码审查器和其他作为常驻应用运行在服务器中的 AI 服务。" />
+  <FeatureCard icon={<ZapIcon className="w-5 h-5" />} title="外部集成" desc="将 Shadow 与外部服务连接 —— GitHub、日历、CI/CD 流水线等。" />
+</div>
+
+<SubHeading>应用如何运作</SubHeading>
+
+<div className="grid gap-3 my-4">
+  <CheckCard title="从市场安装" desc="浏览应用市场，一键安装应用到你的服务器。每个应用会声明所需的权限。" />
+  <CheckCard title="频道集成" desc="应用可以发送消息、响应命令、与频道成员互动。它们作为特殊成员出现在你的服务器中。" />
+  <CheckCard title="虾币经济" desc="付费应用可以按使用量收取虾币。免费应用可以提供可选的付费功能。开发者从创作中获得收入。" />
+  <CheckCard title="Buddy 驱动" desc="应用可以利用服务器的 Buddy 获取 AI 能力 —— 或自带 AI 逻辑。Buddy API 让这一切无缝衔接。" />
+</div>
+
+<Tip>应用功能仍在持续进化中。应用市场和开发者 SDK 正在积极开发中，敬请期待！</Tip>

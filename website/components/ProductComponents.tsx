@@ -1,4 +1,5 @@
 import type React from 'react'
+import { CheckIcon, LightbulbIcon } from './Icons'
 
 export function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
@@ -17,7 +18,7 @@ export function SubHeading({ children }: { children: React.ReactNode }) {
 export function Tip({ children }: { children: React.ReactNode }) {
   return (
     <div className="bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-800 rounded-xl p-4 my-4 text-sm text-cyan-800 dark:text-cyan-200 flex gap-2">
-      <span>💡</span>
+      <LightbulbIcon className="w-5 h-5 shrink-0 mt-0.5" />
       <div>{children}</div>
     </div>
   )
@@ -45,10 +46,18 @@ export function Step({
   )
 }
 
-export function FeatureCard({ icon, title, desc }: { icon?: string; title: string; desc: string }) {
+export function FeatureCard({
+  icon,
+  title,
+  desc,
+}: {
+  icon?: React.ReactNode
+  title: string
+  desc: string
+}) {
   return (
     <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700 flex items-start gap-3">
-      {icon && <span className="text-2xl">{icon}</span>}
+      {icon && <span className="text-2xl shrink-0">{icon}</span>}
       <div>
         <p className="font-bold text-gray-800 dark:text-gray-100">{title}</p>
         <p className="text-gray-600 dark:text-gray-300 text-sm">{desc}</p>
@@ -57,10 +66,18 @@ export function FeatureCard({ icon, title, desc }: { icon?: string; title: strin
   )
 }
 
-export function WarningCard({ icon, title, desc }: { icon?: string; title: string; desc: string }) {
+export function WarningCard({
+  icon,
+  title,
+  desc,
+}: {
+  icon?: React.ReactNode
+  title: string
+  desc: string
+}) {
   return (
     <div className="bg-amber-50 dark:bg-amber-950/40 rounded-xl p-4 border border-amber-200 dark:border-amber-800 flex items-start gap-3">
-      {icon && <span className="text-xl">{icon}</span>}
+      {icon && <span className="text-xl shrink-0">{icon}</span>}
       <div>
         <p className="font-bold text-gray-800 dark:text-gray-100">{title}</p>
         <p className="text-gray-600 dark:text-gray-300 text-sm">{desc}</p>
@@ -72,7 +89,7 @@ export function WarningCard({ icon, title, desc }: { icon?: string; title: strin
 export function CheckCard({ title, desc }: { title: string; desc: string }) {
   return (
     <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700 flex items-start gap-3">
-      <span className="text-green-500 mt-0.5">✅</span>
+      <CheckIcon className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
       <div>
         <p className="font-bold text-gray-800 dark:text-gray-100">{title}</p>
         <p className="text-gray-600 dark:text-gray-300 text-sm">{desc}</p>

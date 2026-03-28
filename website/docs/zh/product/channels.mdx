@@ -2,28 +2,36 @@
 title: 频道与消息
 ---
 
-import { SectionHeading, SubHeading, FeatureCard } from '../../../components/ProductComponents'
+import { SubHeading, Step, Tip, FeatureCard, CheckCard } from '../../../components/ProductComponents'
+import { MessageSquareIcon, Volume2Icon, MegaphoneIcon, BuddyIcon, FileTextIcon } from '../../../components/Icons'
 
-<SectionHeading>频道与消息</SectionHeading>
 
-频道是虾豆的核心沟通方式。每个服务器可以创建多个频道来组织不同的话题和讨论。
+频道是 Shadow 的核心沟通方式。每个服务器通过频道组织对话 —— 文字、语音或公告 —— 让讨论保持聚焦且易于查找。
 
 <SubHeading>频道类型</SubHeading>
 
 <div className="grid gap-4 my-4">
-  <FeatureCard title="💬 文字频道" desc="最常用的频道类型，支持实时消息、Markdown 格式、图片发送、表情回应和消息回复。" />
-  <FeatureCard title="🔊 语音频道" desc="支持语音通话的频道（即将推出）。" />
-  <FeatureCard title="📢 公告频道" desc="用于发布重要公告和通知的频道。" />
+  <FeatureCard icon={<MessageSquareIcon className="w-5 h-5" />} title="文字频道" desc="实时消息、Markdown 格式、图片分享、表情回应、引用回复和文件附件。日常协作的主力频道。" />
+  <FeatureCard icon={<Volume2Icon className="w-5 h-5" />} title="语音频道" desc="用于实时讨论和会议的语音通话频道（即将推出）。" />
+  <FeatureCard icon={<MegaphoneIcon className="w-5 h-5" />} title="公告频道" desc="单向广播频道，用于发布重要公告和通知。仅管理员和所有者可以发布。" />
 </div>
 
 <SubHeading>消息功能</SubHeading>
 
-- 支持 Markdown 格式渲染，包括 **粗体**、*斜体*、代码块、列表等
-- 支持表情选择器和 Emoji 回应
-- 支持引用回复，清晰展示对话上下文
-- 支持拖拽上传和粘贴图片
-- 支持编辑和删除自己的消息
+<div className="grid gap-3 my-4">
+  <CheckCard title="丰富格式" desc="完整的 Markdown 渲染 —— 粗体、斜体、代码块、列表、链接等。" />
+  <CheckCard title="表情回应" desc="用 Emoji 对任何消息进行回应，无需额外消息就能表达反馈。" />
+  <CheckCard title="引用回复" desc="引用特定消息进行回复，保持讨论线索清晰。" />
+  <CheckCard title="文件分享" desc="拖拽或粘贴图片和文件直接发送。也可附加工作区文件实现无缝协作。" />
+  <CheckCard title="编辑与删除" desc="随时编辑或删除你发送的消息。编辑过的消息会显示「已编辑」标识。" />
+</div>
+
+<SubHeading>AI Buddy 集成</SubHeading>
+
+<FeatureCard icon={<BuddyIcon className="w-5 h-5" />} title="@提及你的 Buddy" desc="在频道对话中 @提及任何 AI Buddy 来召唤它。Buddy 会阅读对话上下文并自然回应 —— 就像一个永远在线的团队成员。" />
 
 <SubHeading>服务器管理</SubHeading>
 
-服务器创建者可以管理服务器设置，包括修改名称、描述、头图、自定义链接标识（Slug）、设置公开可见性，以及管理频道和成员。
+服务器所有者和管理员可以管理频道 —— 创建、排序、重命名或删除。服务器设置包括名称、描述、头图、自定义链接标识（Slug）和公开可见性。公开服务器会出现在「探索」页面供所有用户发现。
+
+<Tip>用频道组织话题 —— 例如 #综合 用于日常聊天，#开发 用于技术讨论，#公告 用于重要通知。</Tip>

@@ -3,14 +3,15 @@ pageType: custom
 ---
 
 import { PublicFooter } from '../../components/Layout'
-import { MonitorIcon, HandshakeIcon, MessageSquareIcon, RocketIcon, SparkleIcon, ServerIcon, TvIcon, BuddyIcon, CoinIcon, StoreIcon, FolderIcon, PawIcon } from '../../components/Icons'
+import { MonitorIcon, HandshakeIcon, MessageSquareIcon, RocketIcon, SparkleIcon, ServerIcon, TvIcon, BuddyIcon, CoinIcon, StoreIcon, FolderIcon, PawIcon, SearchIcon, HomeIcon, ShrimpCoinIcon } from '../../components/Icons'
+import { ArchitectureSvg } from '../../components/ArchitectureSvg'
 
 export const GuidePage = () => {
   const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL || '/').replace(/\/$/, '')
 
   const paths = [
     {
-      emoji: '🐱',
+      emoji: <BuddyIcon className="w-8 h-8 text-cyan-500" />,
       title: 'Create My Own AI Buddy',
       desc: 'Download the Desktop app, create and connect your AI Buddy in one click. Run locally, data stays with you.',
       steps: [
@@ -26,11 +27,11 @@ export const GuidePage = () => {
       bgColor: 'bg-cyan-50',
     },
     {
-      emoji: '🔍',
+      emoji: <SearchIcon className="w-8 h-8 text-yellow-500" />,
       title: 'Try Others\' Buddies First',
       desc: 'Browse the Buddy Market, rent a Buddy with your gifted Shrimp Coins. No setup needed — start chatting instantly.',
       steps: [
-        'Sign up and receive your welcome Shrimp Coins (🦐)',
+        'Sign up and receive your welcome Shrimp Coins',
         'Browse the Buddy Market — filter by skills, ratings, price',
         'Rent a Buddy — pay per hour with Shrimp Coins',
         'Chat with your rented Buddy in any channel',
@@ -42,7 +43,7 @@ export const GuidePage = () => {
       bgColor: 'bg-yellow-50',
     },
     {
-      emoji: '🏠',
+      emoji: <HomeIcon className="w-8 h-8 text-pink-500" />,
       title: 'Create a Community First',
       desc: 'Start your own server, invite friends, set up channels. Build your community before adding AI — it\'s free.',
       steps: [
@@ -78,14 +79,19 @@ export const GuidePage = () => {
               <div className="text-4xl mb-4">{p.emoji}</div>
               <h3 className="zcool text-2xl font-bold mb-3">{p.title}</h3>
               <p className="text-sm font-medium mb-5" style={{ color: 'var(--shadow-text-muted)' }}>{p.desc}</p>
-              <ol className="space-y-3 mb-8 flex-1">
-                {p.steps.map((s, i) => (
-                  <li key={i} className="flex items-start gap-3">
-                    <span className={`shrink-0 w-6 h-6 rounded-full bg-gradient-to-r ${p.color} text-white text-xs font-bold flex items-center justify-center`}>{i + 1}</span>
-                    <span className="text-sm font-medium" style={{ color: 'var(--shadow-text-muted)' }}>{s}</span>
-                  </li>
-                ))}
-              </ol>
+              <details className="mb-8 flex-1">
+                <summary className="cursor-pointer font-bold text-sm mb-3 flex items-center gap-2 select-none" style={{ color: 'var(--shadow-text-muted)' }}>
+                  <span className="details-arrow text-xs" style={{ transition: 'transform 0.2s' }}>▶</span> Steps
+                </summary>
+                <ol className="space-y-3">
+                  {p.steps.map((s, i) => (
+                    <li key={i} className="flex items-start gap-3">
+                      <span className={`shrink-0 w-6 h-6 rounded-full bg-gradient-to-r ${p.color} text-white text-xs font-bold flex items-center justify-center`}>{i + 1}</span>
+                      <span className="text-sm font-medium" style={{ color: 'var(--shadow-text-muted)' }}>{s}</span>
+                    </li>
+                  ))}
+                </ol>
+              </details>
               <a
                 href={p.btnHref}
                 className={`block text-center font-bold py-3 rounded-full bg-gradient-to-r ${p.color} text-white transition-all hover:scale-105 zcool`}
@@ -157,7 +163,7 @@ export const GuidePage = () => {
             { icon: <ServerIcon className="w-7 h-7 text-cyan-500" />, bg: 'bg-cyan-50', name: 'Server', desc: 'Your community space — create channels, invite members, host your AI Buddies. Each server is an independent community.' },
             { icon: <TvIcon className="w-7 h-7 text-blue-500" />, bg: 'bg-blue-50', name: 'Channel', desc: 'Text and voice rooms within a server. Organize discussions by topic. Buddies can join any channel.' },
             { icon: <BuddyIcon className="w-7 h-7 text-yellow-500" />, bg: 'bg-yellow-50', name: 'Buddy', desc: 'Your AI companion — a first-class citizen with social history, personality, and skills. Runs locally via Shadow Desktop.' },
-            { icon: <CoinIcon className="w-7 h-7 text-orange-500" />, bg: 'bg-orange-50', name: 'Shrimp Coins', desc: 'Platform currency (🦐). Earned through tasks and Buddy rental. Spent in shops, marketplace, and community games.' },
+            { icon: <CoinIcon className="w-7 h-7 text-orange-500" />, bg: 'bg-orange-50', name: 'Shrimp Coins', desc: 'Platform currency. Earned through tasks and Buddy rental. Spent in shops, marketplace, and community games.' },
             { icon: <StoreIcon className="w-7 h-7 text-pink-500" />, bg: 'bg-pink-50', name: 'Shop', desc: 'Sell digital works — courses, designs, code, articles. Each community can have its own shop. Paid with Shrimp Coins.' },
             { icon: <FolderIcon className="w-7 h-7 text-emerald-500" />, bg: 'bg-emerald-50', name: 'Workspace', desc: 'Shared files, documents, and context for your community. Buddies read and write to workspace to produce work.' },
             { icon: <HandshakeIcon className="w-7 h-7 text-amber-500" />, bg: 'bg-amber-50', name: 'Buddy Market', desc: 'P2P marketplace where you can rent or list Buddies. Smart contracts, hourly billing, automatic settlement.' },
@@ -174,43 +180,7 @@ export const GuidePage = () => {
         {/* Architecture Diagram */}
         <div className="glass-card rounded-3xl p-8 md:p-10">
           <h3 className="zcool text-xl font-bold text-center mb-8">How Everything Connects</h3>
-          <div className="flex flex-col items-center gap-2 text-sm font-medium" style={{ color: 'var(--shadow-text-muted)' }}>
-            {/* Top: User */}
-            <div className="flex items-center gap-2 px-5 py-2.5 bg-cyan-50 border-2 border-cyan-300 rounded-xl font-bold text-cyan-700">
-              <PawIcon className="w-4 h-4" /> You (Owner)
-            </div>
-            <div style={{ color: 'var(--shadow-text-dim)' }}>↓ creates & manages</div>
-            {/* Server */}
-            <div className="flex items-center gap-2 px-5 py-2.5 bg-blue-50 border-2 border-blue-300 rounded-xl font-bold text-blue-700">
-              <ServerIcon className="w-4 h-4" /> Server (Community)
-            </div>
-            <div style={{ color: 'var(--shadow-text-dim)' }}>↓ contains</div>
-            {/* Channel + Workspace row */}
-            <div className="flex flex-wrap justify-center gap-4">
-              <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border-2 border-indigo-300 rounded-xl font-bold text-indigo-700">
-                <TvIcon className="w-4 h-4" /> Channels
-              </div>
-              <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border-2 border-emerald-300 rounded-xl font-bold text-emerald-700">
-                <FolderIcon className="w-4 h-4" /> Workspace
-              </div>
-              <div className="flex items-center gap-2 px-4 py-2 bg-pink-50 border-2 border-pink-300 rounded-xl font-bold text-pink-700">
-                <StoreIcon className="w-4 h-4" /> Shop
-              </div>
-            </div>
-            <div style={{ color: 'var(--shadow-text-dim)' }}>↕ Buddy participates in all</div>
-            {/* Buddy */}
-            <div className="flex items-center gap-2 px-5 py-2.5 bg-yellow-50 border-2 border-yellow-400 rounded-xl font-bold text-yellow-700">
-              <BuddyIcon className="w-4 h-4" /> AI Buddy (First-Class Citizen)
-            </div>
-            <div style={{ color: 'var(--shadow-text-dim)' }}>↕ powered by</div>
-            {/* Desktop */}
-            <div className="flex items-center gap-2 px-5 py-2.5 bg-red-50 border-2 border-red-300 rounded-xl font-bold text-red-700">
-              <MonitorIcon className="w-4 h-4" /> Shadow Desktop (Local Runtime)
-            </div>
-            <div className="mt-4 text-center text-xs" style={{ color: 'var(--shadow-text-dim)' }}>
-              <span className="inline-flex items-center gap-1"><CoinIcon className="w-3 h-3 text-orange-500" /> Shrimp Coins flow through <strong>Shop</strong>, <strong>Buddy Market</strong>, and <strong>Community Games</strong></span>
-            </div>
-          </div>
+          <ArchitectureSvg lang="en" />
         </div>
       </section>
 

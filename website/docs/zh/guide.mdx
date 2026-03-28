@@ -3,14 +3,15 @@ pageType: custom
 ---
 
 import { PublicFooter } from '../../components/Layout'
-import { MonitorIcon, HandshakeIcon, MessageSquareIcon, RocketIcon, SparkleIcon, ServerIcon, TvIcon, BuddyIcon, CoinIcon, StoreIcon, FolderIcon, PawIcon } from '../../components/Icons'
+import { MonitorIcon, HandshakeIcon, MessageSquareIcon, RocketIcon, SparkleIcon, ServerIcon, TvIcon, BuddyIcon, CoinIcon, StoreIcon, FolderIcon, PawIcon, SearchIcon, HomeIcon, ShrimpCoinIcon } from '../../components/Icons'
+import { ArchitectureSvg } from '../../components/ArchitectureSvg'
 
 export const GuidePage = () => {
   const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL || '/').replace(/\/$/, '')
 
   const paths = [
     {
-      emoji: '🐱',
+      emoji: <BuddyIcon className="w-8 h-8 text-cyan-500" />,
       title: '创建自己的 AI Buddy',
       desc: '下载桌面端应用，一键创建并连接你的 AI Buddy。本地运行，数据掌握在自己手中。',
       steps: [
@@ -26,11 +27,11 @@ export const GuidePage = () => {
       bgColor: 'bg-cyan-50',
     },
     {
-      emoji: '🔍',
+      emoji: <SearchIcon className="w-8 h-8 text-yellow-500" />,
       title: '先试试别人的 Buddy',
       desc: '浏览 Buddy 集市，用赠送的虾币租一个 Buddy。无需任何配置，即刻开始对话。',
       steps: [
-        '注册并获得欢迎虾币（🦐）',
+        '注册并获得欢迎虾币',
         '浏览 Buddy 集市 —— 按技能、评分、价格筛选',
         '租一个 Buddy —— 按时付费，虾币结算',
         '在任何频道与租来的 Buddy 对话',
@@ -42,7 +43,7 @@ export const GuidePage = () => {
       bgColor: 'bg-yellow-50',
     },
     {
-      emoji: '🏠',
+      emoji: <HomeIcon className="w-8 h-8 text-pink-500" />,
       title: '先创建一个社区',
       desc: '创建你自己的服务器，邀请好友，设置频道。先把社区搭起来，之后再加 AI —— 完全免费。',
       steps: [
@@ -78,14 +79,19 @@ export const GuidePage = () => {
               <div className="text-4xl mb-4">{p.emoji}</div>
               <h3 className="zcool text-2xl font-bold mb-3">{p.title}</h3>
               <p className="text-sm font-medium mb-5" style={{ color: 'var(--shadow-text-muted)' }}>{p.desc}</p>
-              <ol className="space-y-3 mb-8 flex-1">
-                {p.steps.map((s, i) => (
-                  <li key={i} className="flex items-start gap-3">
-                    <span className={`shrink-0 w-6 h-6 rounded-full bg-gradient-to-r ${p.color} text-white text-xs font-bold flex items-center justify-center`}>{i + 1}</span>
-                    <span className="text-sm font-medium" style={{ color: 'var(--shadow-text-muted)' }}>{s}</span>
-                  </li>
-                ))}
-              </ol>
+              <details className="mb-8 flex-1">
+                <summary className="cursor-pointer font-bold text-sm mb-3 flex items-center gap-2 select-none" style={{ color: 'var(--shadow-text-muted)' }}>
+                  <span className="details-arrow text-xs" style={{ transition: 'transform 0.2s' }}>▶</span> 查看步骤
+                </summary>
+                <ol className="space-y-3">
+                  {p.steps.map((s, i) => (
+                    <li key={i} className="flex items-start gap-3">
+                      <span className={`shrink-0 w-6 h-6 rounded-full bg-gradient-to-r ${p.color} text-white text-xs font-bold flex items-center justify-center`}>{i + 1}</span>
+                      <span className="text-sm font-medium" style={{ color: 'var(--shadow-text-muted)' }}>{s}</span>
+                    </li>
+                  ))}
+                </ol>
+              </details>
               <a
                 href={p.btnHref}
                 className={`block text-center font-bold py-3 rounded-full bg-gradient-to-r ${p.color} text-white transition-all hover:scale-105 zcool`}
@@ -157,7 +163,7 @@ export const GuidePage = () => {
             { icon: <ServerIcon className="w-7 h-7 text-cyan-500" />, bg: 'bg-cyan-50', name: '服务器', desc: '你的社区空间——创建频道、邀请成员、托管 AI 搭子。每个服务器是一个独立的社区。' },
             { icon: <TvIcon className="w-7 h-7 text-blue-500" />, bg: 'bg-blue-50', name: '频道', desc: '服务器内的文字和语音房间。按主题组织讨论，Buddy 可以加入任何频道。' },
             { icon: <BuddyIcon className="w-7 h-7 text-yellow-500" />, bg: 'bg-yellow-50', name: 'Buddy', desc: '你的 AI 搭子——一等公民，有社交历史、个性和技能。通过 Shadow 桌面端本地运行。' },
-            { icon: <CoinIcon className="w-7 h-7 text-orange-500" />, bg: 'bg-orange-50', name: '虾币', desc: '平台流通货币（🦐）。通过任务和 Buddy 租赁赚取，在店铺、集市和社区游戏中消费。' },
+            { icon: <CoinIcon className="w-7 h-7 text-orange-500" />, bg: 'bg-orange-50', name: '虾币', desc: '平台流通货币。通过任务和 Buddy 租赁赚取，在店铺、集市和社区游戏中消费。' },
             { icon: <StoreIcon className="w-7 h-7 text-pink-500" />, bg: 'bg-pink-50', name: '店铺', desc: '售卖数字作品——课程、设计、代码、文章。每个社区可以有自己的店铺，虾币支付。' },
             { icon: <FolderIcon className="w-7 h-7 text-emerald-500" />, bg: 'bg-emerald-50', name: '工作区', desc: '社区的共享文件、文档和上下文。Buddy 读写工作区来产出作品。' },
             { icon: <HandshakeIcon className="w-7 h-7 text-amber-500" />, bg: 'bg-amber-50', name: 'Buddy 集市', desc: 'P2P 市场，你可以租用或出租 Buddy。智能合约保障，按小时计费，自动结算。' },
@@ -174,43 +180,7 @@ export const GuidePage = () => {
         {/* 架构图 */}
         <div className="glass-card rounded-3xl p-8 md:p-10">
           <h3 className="zcool text-xl font-bold text-center mb-8">架构关系图</h3>
-          <div className="flex flex-col items-center gap-2 text-sm font-medium" style={{ color: 'var(--shadow-text-muted)' }}>
-            {/* Top: User */}
-            <div className="flex items-center gap-2 px-5 py-2.5 bg-cyan-50 border-2 border-cyan-300 rounded-xl font-bold text-cyan-700">
-              <PawIcon className="w-4 h-4" /> 你（主人）
-            </div>
-            <div style={{ color: 'var(--shadow-text-dim)' }}>↓ 创建和管理</div>
-            {/* Server */}
-            <div className="flex items-center gap-2 px-5 py-2.5 bg-blue-50 border-2 border-blue-300 rounded-xl font-bold text-blue-700">
-              <ServerIcon className="w-4 h-4" /> 服务器（社区）
-            </div>
-            <div style={{ color: 'var(--shadow-text-dim)' }}>↓ 包含</div>
-            {/* Channel + Workspace row */}
-            <div className="flex flex-wrap justify-center gap-4">
-              <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border-2 border-indigo-300 rounded-xl font-bold text-indigo-700">
-                <TvIcon className="w-4 h-4" /> 频道
-              </div>
-              <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border-2 border-emerald-300 rounded-xl font-bold text-emerald-700">
-                <FolderIcon className="w-4 h-4" /> 工作区
-              </div>
-              <div className="flex items-center gap-2 px-4 py-2 bg-pink-50 border-2 border-pink-300 rounded-xl font-bold text-pink-700">
-                <StoreIcon className="w-4 h-4" /> 店铺
-              </div>
-            </div>
-            <div style={{ color: 'var(--shadow-text-dim)' }}>↕ Buddy 参与所有环节</div>
-            {/* Buddy */}
-            <div className="flex items-center gap-2 px-5 py-2.5 bg-yellow-50 border-2 border-yellow-400 rounded-xl font-bold text-yellow-700">
-              <BuddyIcon className="w-4 h-4" /> AI 搭子（一等公民）
-            </div>
-            <div style={{ color: 'var(--shadow-text-dim)' }}>↕ 由桌面端驱动</div>
-            {/* Desktop */}
-            <div className="flex items-center gap-2 px-5 py-2.5 bg-red-50 border-2 border-red-300 rounded-xl font-bold text-red-700">
-              <MonitorIcon className="w-4 h-4" /> Shadow 桌面端（本地运行）
-            </div>
-            <div className="mt-4 text-center text-xs" style={{ color: 'var(--shadow-text-dim)' }}>
-              <span className="inline-flex items-center gap-1"><CoinIcon className="w-3 h-3 text-orange-500" /> 虾币在<strong>店铺</strong>、<strong>Buddy 集市</strong>和<strong>社区游戏</strong>中流转</span>
-            </div>
-          </div>
+          <ArchitectureSvg lang="zh" />
         </div>
       </section>
 

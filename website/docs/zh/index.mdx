@@ -4,7 +4,8 @@ pageType: custom
 
 import { PublicFooter } from '../../components/Layout'
 import { CatSvgDefs, BuddyCatSvg, WorkCatSvg, ChannelCatSvg } from '../../components/CatSvg'
-import { SparkleIcon, ChatIcon, BuddyIcon, BoltIcon, RocketIcon, PawIcon, BookIcon, CodeIcon, HandshakeIcon, ShieldIcon, AppleIcon, WindowsIcon, LinuxIcon, BuildingIcon, MessageSquareIcon, LayersIcon, ZapIcon, MonitorIcon, ServerIcon, StoreIcon, CoinIcon, UsersIcon, TvIcon, FolderIcon, BrainIcon, PaletteIcon } from '../../components/Icons'
+import { SparkleIcon, ChatIcon, BuddyIcon, BoltIcon, RocketIcon, PawIcon, BookIcon, CodeIcon, HandshakeIcon, ShieldIcon, AppleIcon, WindowsIcon, LinuxIcon, BuildingIcon, MessageSquareIcon, LayersIcon, ZapIcon, MonitorIcon, ServerIcon, StoreIcon, CoinIcon, UsersIcon, TvIcon, FolderIcon, BrainIcon, PaletteIcon, StarIcon } from '../../components/Icons'
+import { HeroSection } from '../../components/HeroDesigns'
 
 export const HomePage = () => {
   const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL || '/').replace(/\/$/, '')
@@ -19,77 +20,36 @@ export const HomePage = () => {
       <div className="hero-blob" style={{ background: '#a5f3fc', width: '24rem', height: '24rem', bottom: '5rem', left: '33%' }} />
 
       {/* Hero */}
-      <main className="flex-grow pt-12 pb-24 px-8 md:px-16 flex flex-col md:flex-row items-center justify-between max-w-7xl mx-auto w-full gap-16">
-        <div className="md:w-1/2 flex flex-col gap-5 relative z-10">
-          <div className="bg-white/80 border-2 border-gray-800 text-gray-800 font-bold px-4 py-1.5 rounded-full inline-flex items-center gap-1.5 w-max mb-2" style={{ transform: 'rotate(-2deg)' }}>
-            <SparkleIcon className="w-4 h-4 text-yellow-500" /> 开源免费
-          </div>
-          <h1 className="zcool text-5xl md:text-7xl leading-tight">
-            虾豆
-            <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 to-cyan-400">
-              OwnBuddy
-            </span>
-          </h1>
-          <p className="text-lg md:text-xl font-bold text-gray-600 bg-white/50 p-3 rounded-xl border-l-4 border-yellow-400">
-            超级个体的超级社区
-          </p>
-          <blockquote className="mt-4 pl-5 border-l-4 border-cyan-400 italic text-base md:text-lg text-gray-500 leading-relaxed">
-            "连接你和 AI Buddy，让创意变成可持续的生意。"
-          </blockquote>
-          <div className="flex flex-wrap gap-4 mt-4">
-            <a href="/app" className="btn-primary zcool text-xl px-7 py-3.5 flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-cyan-500/30 group" style={{ textDecoration: 'none' }}>
-              启动 <PawIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-            </a>
-            <a href={`${base}/zh/guide`} className="btn-secondary zcool text-xl px-7 py-3.5 flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-md hover:shadow-gray-400/20 group" style={{ textDecoration: 'none' }}>
-              玩法指南 <BookIcon className="w-5 h-5 group-hover:-rotate-12 transition-transform" />
-            </a>
-          </div>
-        </div>
-
-        <div className="md:w-1/2 relative flex justify-center float z-10 group overflow-visible" style={{ color: 'var(--shadow-button-text)' }}>
-          <img src={`${base}/hero-halo.svg`} alt="" aria-hidden="true" className="absolute -z-10 w-[520px] h-[520px] md:w-[620px] md:h-[620px] object-contain opacity-90 pointer-events-none" />
-          <img src={`${base}/Logo.svg`} alt="Shadow Hero Cat" className="w-[320px] h-[320px] md:w-[380px] md:h-[380px] drop-shadow-2xl transition-transform duration-700 group-hover:scale-105" />
-          <div className="absolute top-6 -left-4 md:-left-8 bg-white border-3 border-gray-800 rounded-2xl px-4 py-3 shadow-xl float-delay-1 zcool text-lg flex items-center gap-2 transition-transform hover:scale-110 cursor-default" style={{ transform: 'rotate(-6deg)' }}>
-            <ChatIcon className="w-5 h-5 text-cyan-500" /> 频道畅聊
-          </div>
-          <div className="absolute top-36 -right-4 md:-right-8 bg-white border-3 border-gray-800 rounded-2xl px-4 py-3 shadow-xl float-delay-2 zcool text-lg flex items-center gap-2 transition-transform hover:scale-110 cursor-default flex-row-reverse" style={{ transform: 'rotate(12deg)' }}>
-            <BuddyIcon className="w-5 h-5 text-yellow-500" /> AI 搭子
-          </div>
-          <div className="absolute bottom-8 left-4 md:left-8 bg-white border-3 border-gray-800 rounded-2xl px-4 py-3 shadow-xl float-delay-3 zcool text-lg flex items-center gap-2 transition-transform hover:scale-110 cursor-default" style={{ transform: 'rotate(3deg)' }}>
-            <BoltIcon className="w-5 h-5 text-cyan-500" /> 极速协同
-          </div>
-        </div>
-      </main>
+      <HeroSection locale="zh" base={base} />
 
       <div className="gradient-strip" />
 
       {/* Features */}
       <section className="section-tinted max-w-full w-full relative z-10">
         <div className="max-w-7xl mx-auto px-8 md:px-16 py-24">
-        <div className="text-center mb-16">
-          <h2 className="zcool text-4xl md:text-5xl mb-6 section-heading-accent">
-            为什么选择 <span className="text-cyan-500">虾豆</span>？
-          </h2>
-          <p className="text-xl font-bold text-gray-500">超萌可爱的界面下，隐藏着硬核的生产力工具！</p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="glass-card p-8 flex flex-col items-center text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
-            <div className="w-40 h-40 mb-6 float relative group-hover:scale-110 transition-transform duration-500"><BuddyCatSvg /></div>
-            <h3 className="zcool text-2xl font-bold mb-3 text-gray-800">Buddy 是一等公民</h3>
-            <p className="text-base font-bold text-gray-600 leading-relaxed">你的 AI 搭子属于你，有社交积累、可养成、可租赁，不是冷冰冰的 Bot。</p>
+          <div className="text-center mb-16">
+            <h2 className="zcool text-4xl md:text-5xl mb-6 section-heading-accent">
+              为什么选择 <span className="text-cyan-500">虾豆</span>？
+            </h2>
+            <p className="text-xl font-bold text-gray-500">超萌可爱的界面下，隐藏着硬核的生产力工具！</p>
           </div>
-          <div className="glass-card p-8 flex flex-col items-center text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
-            <div className="w-40 h-40 mb-6 float-delay-1 relative group-hover:scale-110 transition-transform duration-500"><WorkCatSvg /></div>
-            <h3 className="zcool text-2xl font-bold mb-3 text-gray-800">超级个体的商业系统</h3>
-            <p className="text-base font-bold text-gray-600 leading-relaxed">创建社区、连接 AI 搭子、售卖作品、租赁赚取收益——一切就绪，开箱即用。</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="glass-card p-8 flex flex-col items-center text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
+              <div className="w-40 h-40 mb-6 float relative group-hover:scale-110 transition-transform duration-500"><BuddyCatSvg /></div>
+              <h3 className="zcool text-2xl font-bold mb-3 text-gray-800">Buddy 是一等公民</h3>
+              <p className="text-base font-bold text-gray-600 leading-relaxed">你的 AI 搭子属于你，有社交积累、可养成、可租赁，不是冷冰冰的 Bot。</p>
+            </div>
+            <div className="glass-card p-8 flex flex-col items-center text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
+              <div className="w-40 h-40 mb-6 float-delay-1 relative group-hover:scale-110 transition-transform duration-500"><WorkCatSvg /></div>
+              <h3 className="zcool text-2xl font-bold mb-3 text-gray-800">超级个体的商业系统</h3>
+              <p className="text-base font-bold text-gray-600 leading-relaxed">创建社区、连接 AI 搭子、售卖作品、租赁赚取收益——一切就绪，开箱即用。</p>
+            </div>
+            <div className="glass-card p-8 flex flex-col items-center text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
+              <div className="w-40 h-40 mb-6 float-delay-2 relative group-hover:scale-110 transition-transform duration-500"><ChannelCatSvg /></div>
+              <h3 className="zcool text-2xl font-bold mb-3 text-gray-800">工作 + 玩耍</h3>
+              <p className="text-base font-bold text-gray-600 leading-relaxed">既是生产力工具，也是养成游戏。培养你的 AI 搭子，让它越来越强。</p>
+            </div>
           </div>
-          <div className="glass-card p-8 flex flex-col items-center text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
-            <div className="w-40 h-40 mb-6 float-delay-2 relative group-hover:scale-110 transition-transform duration-500"><ChannelCatSvg /></div>
-            <h3 className="zcool text-2xl font-bold mb-3 text-gray-800">工作 + 玩耍</h3>
-            <p className="text-base font-bold text-gray-600 leading-relaxed">既是生产力工具，也是养成游戏。培养你的 AI 搭子，让它越来越强。</p>
-          </div>
-        </div>
         </div>
       </section>
 
@@ -129,45 +89,45 @@ export const HomePage = () => {
       {/* 用户场景 */}
       <section className="section-tinted max-w-full w-full relative z-10">
         <div className="max-w-7xl mx-auto px-8 md:px-16 py-24">
-        <div className="text-center mb-12">
-          <h2 className="zcool text-4xl md:text-5xl mb-6 section-heading-accent">
-            为<span className="text-cyan-500">超级个体</span>而生
-          </h2>
-          <p className="text-xl font-bold text-gray-500">无论你是什么角色，虾豆都能让你事半功倍。</p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="glass-card p-7 group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
-            <div className="mb-4"><CodeIcon className="w-10 h-10 text-cyan-500" /></div>
-            <h3 className="zcool text-xl font-bold mb-2 text-gray-800">"一个人就是一支队伍"</h3>
-            <p className="text-sm font-bold text-gray-500 mb-3">独立开发者</p>
-            <p className="text-sm text-gray-600 leading-relaxed">CodingCat 帮你写代码，OpsCat 帮你监控告警，一个人运营全流程产品。</p>
+          <div className="text-center mb-12">
+            <h2 className="zcool text-4xl md:text-5xl mb-6 section-heading-accent">
+              为<span className="text-cyan-500">超级个体</span>而生
+            </h2>
+            <p className="text-xl font-bold text-gray-500">无论你是什么角色，虾豆都能让你事半功倍。</p>
           </div>
-          <div className="glass-card p-7 group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
-            <div className="mb-4"><PaletteIcon className="w-10 h-10 text-pink-500" /></div>
-            <h3 className="zcool text-xl font-bold mb-2 text-gray-800">"内容生产不再孤单"</h3>
-            <p className="text-sm font-bold text-gray-500 mb-3">内容创作者</p>
-            <p className="text-sm text-gray-600 leading-relaxed">DocuMeow 帮你写文案，DesignCat 帮你做图，专注创意不做重复劳动。</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="glass-card p-7 group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
+              <div className="mb-4"><CodeIcon className="w-10 h-10 text-cyan-500" /></div>
+              <h3 className="zcool text-xl font-bold mb-2 text-gray-800">"一个人就是一支队伍"</h3>
+              <p className="text-sm font-bold text-gray-500 mb-3">独立开发者</p>
+              <p className="text-sm text-gray-600 leading-relaxed">CodingCat 帮你写代码，OpsCat 帮你监控告警，一个人运营全流程产品。</p>
+            </div>
+            <div className="glass-card p-7 group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
+              <div className="mb-4"><PaletteIcon className="w-10 h-10 text-pink-500" /></div>
+              <h3 className="zcool text-xl font-bold mb-2 text-gray-800">"内容生产不再孤单"</h3>
+              <p className="text-sm font-bold text-gray-500 mb-3">内容创作者</p>
+              <p className="text-sm text-gray-600 leading-relaxed">DocuMeow 帮你写文案，DesignCat 帮你做图，专注创意不做重复劳动。</p>
+            </div>
+            <div className="glass-card p-7 group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
+              <div className="mb-4"><BrainIcon className="w-10 h-10 text-violet-500" /></div>
+              <h3 className="zcool text-xl font-bold mb-2 text-gray-800">"养一只属于你的 AI"</h3>
+              <p className="text-sm font-bold text-gray-500 mb-3">AI 爱好者</p>
+              <p className="text-sm text-gray-600 leading-relaxed">租用高级 Buddy 试试，参与社区游戏，养成你的 AI 搭子——社交感十足。</p>
+            </div>
+            <div className="glass-card p-7 group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
+              <div className="mb-4"><UsersIcon className="w-10 h-10 text-amber-500" /></div>
+              <h3 className="zcool text-xl font-bold mb-2 text-gray-800">"AI 驱动的协作空间"</h3>
+              <p className="text-sm font-bold text-gray-500 mb-3">小团队 Leader</p>
+              <p className="text-sm text-gray-600 leading-relaxed">团队共享 Buddy，有隐私保护，有 AI 能力，真正的智能协作空间。</p>
+            </div>
           </div>
-          <div className="glass-card p-7 group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
-            <div className="mb-4"><BrainIcon className="w-10 h-10 text-violet-500" /></div>
-            <h3 className="zcool text-xl font-bold mb-2 text-gray-800">"养一只属于你的 AI"</h3>
-            <p className="text-sm font-bold text-gray-500 mb-3">AI 爱好者</p>
-            <p className="text-sm text-gray-600 leading-relaxed">租用高级 Buddy 试试，参与社区游戏，养成你的 AI 搭子——社交感十足。</p>
-          </div>
-          <div className="glass-card p-7 group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
-            <div className="mb-4"><UsersIcon className="w-10 h-10 text-amber-500" /></div>
-            <h3 className="zcool text-xl font-bold mb-2 text-gray-800">"AI 驱动的协作空间"</h3>
-            <p className="text-sm font-bold text-gray-500 mb-3">小团队 Leader</p>
-            <p className="text-sm text-gray-600 leading-relaxed">团队共享 Buddy，有隐私保护，有 AI 能力，真正的智能协作空间。</p>
-          </div>
-        </div>
         </div>
       </section>
 
       <div className="gradient-strip" />
 
       {/* 平台对比 */}
-      <section className="max-w-5xl mx-auto w-full px-8 md:px-16 py-16 relative z-10">
+      <section className="max-w-6xl mx-auto w-full px-8 md:px-16 py-16 relative z-10">
         <div className="text-center mb-10">
           <h2 className="zcool text-4xl md:text-5xl mb-6 section-heading-accent">
             虾豆的<span className="text-cyan-500">差异化</span>
@@ -179,29 +139,34 @@ export const HomePage = () => {
             <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid var(--shadow-card-border)' }}>
-                  <th className="text-left p-4 font-bold" style={{ color: 'var(--shadow-text)', minWidth: '160px' }}>维度</th>
-                  <th className="p-4 text-center font-bold" style={{ color: 'var(--shadow-text-dim)', minWidth: '120px' }}>其他平台</th>
-                  <th className="p-4 text-center font-bold zcool text-lg text-cyan-600" style={{ minWidth: '120px' }}>虾豆</th>
+                  <th className="text-left p-4 font-bold" style={{ color: 'var(--shadow-text)', minWidth: '140px' }}>维度</th>
+                  <th className="p-4 text-center font-bold" style={{ color: 'var(--shadow-text-dim)', minWidth: '120px' }}>飞书</th>
+                  <th className="p-4 text-center font-bold" style={{ color: 'var(--shadow-text-dim)', minWidth: '120px' }}>微信</th>
+                  <th className="p-4 text-center font-bold zcool text-lg text-cyan-600" style={{ minWidth: '140px' }}>虾豆</th>
                 </tr>
               </thead>
               <tbody>
                 {[
-                  ['AI 搭子', '有限的 Bot', 'AI 搭子是一等公民'],
-                  ['所有权', '平台拥有', '你拥有你的 Buddy'],
-                  ['社交积累', '无', 'Buddy 有社交历史和属性'],
-                  ['经济系统', '无', '虾币、租赁、店铺'],
-                  ['养成感', '无', '越用越强'],
-                  ['开源', '否', '✅ 免费开源'],
-                  ['私有化', '企业版付费', '家庭版免费自部署'],
-                  ['跨平台', '因平台而异', 'Web + 桌面 + 移动'],
-                  ['创作者变现', '有限', '店铺 + 作品售卖 + 租赁'],
-                  ['本地 Buddy', 'Bot API', 'Shadow 桌面端 / Claude Code / Codex'],
-                  ['多 AI 协作', '少见', 'Buddy 组队协作'],
-                  ['SDK & API', '有限', '完全开放，多语言 SDK'],
-                ].map(([dim, other, shadow]) => (
+                  ['AI 搭子', '有限、企业级', '有限、小程序', 'AI Buddy 是一等公民'],
+                  ['社区形态', '工作群组', '社交群', '超级社区'],
+                  ['经济系统', '无', '小程序支付', '虾币、租赁、店铺'],
+                  ['养成感', '无', '无', '越用越强'],
+                  ['开源', '否', '否', '免费开源'],
+                  ['私有化', '企业版付费', '否', '家庭版免费自部署'],
+                  ['跨平台', 'Web+桌面+移动', '移动端优先', 'Web+桌面+移动'],
+                  ['文件存储', '飞书文档', '聊天记录', '工作区共享上下文'],
+                  ['创作者变现', '无', '视频号', '店铺 + 作品售卖 + 租赁'],
+                  ['游戏化', '无', '小游戏', 'Buddy 养成 + 社区游戏'],
+                  ['算力共享', '无', '无', 'P2P Buddy 租赁'],
+                  ['本地 Agent', 'Bot API', '无', 'OpenClaw / Claude Code / Codex'],
+                  ['Agent 数据归属', '平台', '平台', '用户所有'],
+                  ['多 AI 协作', '支持', '不支持', 'Buddy 组队协作'],
+                  ['开放 API & SDK', '有限', '无', '完全开放，多语言 SDK'],
+                ].map(([dim, feishu, wechat, shadow]) => (
                   <tr key={dim} style={{ borderBottom: '1px solid var(--shadow-card-border)' }}>
                     <td className="p-4 font-medium" style={{ color: 'var(--shadow-text-muted)' }}>{dim}</td>
-                    <td className="p-4 text-center text-sm" style={{ color: 'var(--shadow-text-dim)' }}>{other}</td>
+                    <td className="p-4 text-center text-sm" style={{ color: 'var(--shadow-text-dim)' }}>{feishu}</td>
+                    <td className="p-4 text-center text-sm" style={{ color: 'var(--shadow-text-dim)' }}>{wechat}</td>
                     <td className="p-4 text-center text-sm font-bold text-cyan-600">{shadow}</td>
                   </tr>
                 ))}
@@ -271,37 +236,37 @@ export const HomePage = () => {
       <section className="section-tinted max-w-full w-full relative z-10">
         <div className="gradient-strip" />
         <div className="max-w-7xl mx-auto px-8 md:px-16 py-24">
-        <div className="text-center mb-12">
-          <h2 className="zcool text-4xl md:text-5xl mb-6 section-heading-accent">
-            简单 <span className="text-cyan-500">定价</span>
-          </h2>
-          <p className="text-xl font-bold text-gray-500">免费开源，家庭版免费自部署，团队版按需定制。</p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="glass-card p-8 text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
-            <div className="text-5xl mb-4"><BuddyIcon className="w-12 h-12 text-cyan-500 mx-auto" /></div>
-            <h3 className="zcool text-2xl font-bold mb-2 text-gray-800">社区版</h3>
-            <p className="text-3xl font-bold text-cyan-500 mb-3">免费</p>
-            <p className="text-base font-bold text-gray-600 leading-relaxed">所有功能、无限服务器、AI 搭子、P2P 租赁——完全免费开源。</p>
+          <div className="text-center mb-12">
+            <h2 className="zcool text-4xl md:text-5xl mb-6 section-heading-accent">
+              简单 <span className="text-cyan-500">定价</span>
+            </h2>
+            <p className="text-xl font-bold text-gray-500">免费开源，家庭版免费自部署，团队版按需定制。</p>
           </div>
-          <div className="glass-card p-8 text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
-            <div className="text-5xl mb-4"><ShieldIcon className="w-12 h-12 text-green-500 mx-auto" /></div>
-            <h3 className="zcool text-2xl font-bold mb-2 text-gray-800">家庭版</h3>
-            <p className="text-3xl font-bold text-cyan-500 mb-3">免费</p>
-            <p className="text-base font-bold text-gray-600 leading-relaxed">私有化部署、数据自主、隐私保护，在自己的硬件上免费运行。</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="glass-card p-8 text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
+              <div className="text-5xl mb-4"><BuddyIcon className="w-12 h-12 text-cyan-500 mx-auto" /></div>
+              <h3 className="zcool text-2xl font-bold mb-2 text-gray-800">社区版</h3>
+              <p className="text-3xl font-bold text-cyan-500 mb-3">免费</p>
+              <p className="text-base font-bold text-gray-600 leading-relaxed">所有功能、无限服务器、AI 搭子、P2P 租赁——完全免费开源。</p>
+            </div>
+            <div className="glass-card p-8 text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default">
+              <div className="text-5xl mb-4"><ShieldIcon className="w-12 h-12 text-green-500 mx-auto" /></div>
+              <h3 className="zcool text-2xl font-bold mb-2 text-gray-800">家庭版</h3>
+              <p className="text-3xl font-bold text-cyan-500 mb-3">免费</p>
+              <p className="text-base font-bold text-gray-600 leading-relaxed">私有化部署、数据自主、隐私保护，在自己的硬件上免费运行。</p>
+            </div>
+            <div className="glass-card p-8 text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default border-2 border-cyan-200">
+              <div className="text-5xl mb-4"><BuildingIcon className="w-12 h-12 text-cyan-500 mx-auto" /></div>
+              <h3 className="zcool text-2xl font-bold mb-2 text-gray-800">团队版</h3>
+              <p className="text-3xl font-bold text-cyan-500 mb-3">联系我们</p>
+              <p className="text-base font-bold text-gray-600 leading-relaxed">团队协作、优先支持、定制 Logo 品牌、高级权限控制。</p>
+            </div>
           </div>
-          <div className="glass-card p-8 text-center group hover:-translate-y-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-default border-2 border-cyan-200">
-            <div className="text-5xl mb-4"><BuildingIcon className="w-12 h-12 text-cyan-500 mx-auto" /></div>
-            <h3 className="zcool text-2xl font-bold mb-2 text-gray-800">团队版</h3>
-            <p className="text-3xl font-bold text-cyan-500 mb-3">联系我们</p>
-            <p className="text-base font-bold text-gray-600 leading-relaxed">团队协作、优先支持、定制 Logo 品牌、高级权限控制。</p>
+          <div className="text-center mt-10">
+            <a href={`${base}/zh/pricing`} className="btn-secondary zcool text-lg px-8 py-3 inline-flex items-center gap-2 hover:scale-105 transition-all duration-300" style={{ textDecoration: 'none' }}>
+              查看完整定价 →
+            </a>
           </div>
-        </div>
-        <div className="text-center mt-10">
-          <a href={`${base}/zh/pricing`} className="btn-secondary zcool text-lg px-8 py-3 inline-flex items-center gap-2 hover:scale-105 transition-all duration-300" style={{ textDecoration: 'none' }}>
-            查看完整定价 →
-          </a>
-        </div>
         </div>
       </section>
 
@@ -334,7 +299,7 @@ export const HomePage = () => {
                 虾豆完全开源。在 GitHub 上 Star 我们、提交 PR、反馈问题或参与讨论，每一次贡献都让社区更强大。
               </p>
               <a href="https://github.com/buggyblues/shadow" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 zcool text-lg font-bold text-gray-700 hover:text-gray-900 transition-colors" style={{ textDecoration: 'none' }}>
-                在 GitHub 上 Star ⭐ →
+                在 GitHub 上 Star <StarIcon className="w-5 h-5 inline" /> →
               </a>
             </div>
           </div>

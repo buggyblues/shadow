@@ -8,7 +8,7 @@ import { MessageSquareIcon, LayersIcon, ShieldIcon, ZapIcon, HandshakeIcon, Moni
 export const FeaturesPage = () => {
   const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL || '/').replace(/\/$/, '')
   const features = [
-{ icon: <MessageSquareIcon className="w-7 h-7 text-cyan-500" />, bg: 'bg-cyan-50', title: '频道式沟通', desc: '强大的频道体系，支持文字频道，无限层级分类让你的团队沟通井井有条。语音频道即将推出。', link: `${base}/zh/product/channels` },
+    { icon: <MessageSquareIcon className="w-7 h-7 text-cyan-500" />, bg: 'bg-cyan-50', title: '频道式沟通', desc: '强大的频道体系，支持文字频道，无限层级分类让你的团队沟通井井有条。语音频道即将推出。', link: `${base}/zh/product/channels` },
     { icon: <img src={`${base}/Logo.svg`} alt="Buddy" className="w-7 h-7" />, bg: 'bg-yellow-50', title: '多 Buddy 协作', desc: '一键召唤 AI Buddy 加入频道讨论。写代码、审方案、生成报告，7×24 小时不间断为你打工。', link: `${base}/zh/product/ai-assistants` },
     { icon: <LayersIcon className="w-7 h-7 text-pink-500" />, bg: 'bg-pink-50', title: '统一工作区', desc: '集成文档协作、文件管理等工具，所有工作在一个平台完成。看板等更多工作区工具即将上线。', link: `${base}/zh/product/workspace` },
     { icon: <ShieldIcon className="w-7 h-7 text-green-500" />, bg: 'bg-green-50', title: '权限与角色', desc: '精细化的角色权限管理，支持频道级别、消息级别的权限控制，确保信息安全无泄露风险。', link: `${base}/zh/product/communities` },

@@ -2,28 +2,27 @@
 title: FAQ
 ---
 
-import { SectionHeading } from '../../../components/ProductComponents'
-
-<SectionHeading>FAQ</SectionHeading>
 
 export const faqs = [
-  { q: 'Is Shadow free?', a: 'Shadow offers a free tier with core channel chat and collaboration features. See the pricing page for advanced features.' },
-  { q: 'How do I get an invite code?', a: 'Contact a platform administrator to get an invite code. Each code can only register one user account.' },
-  { q: 'What languages are supported?', a: 'Currently supports Simplified Chinese, Traditional Chinese, English, Japanese, and Korean. You can switch languages in your profile settings.' },
-  { q: 'What message formats are supported?', a: 'Messages support full Markdown formatting including bold, italic, code blocks, lists, and links. You can also send images and use emoji reactions.' },
-  { q: 'Can I use it on mobile?', a: "Yes! Shadow's web interface is deeply optimized for mobile devices, providing a native app-like experience in your phone's browser." },
+  { q: 'Is Shadow free?', a: 'Shadow offers a free tier with core channel chat and collaboration features. Advanced features like extended Buddy quotas and shop capabilities are available through paid plans.' },
+  { q: 'How do I get an invite code?', a: 'Contact a platform administrator or existing user to get an invite code. Each code can only register one account.' },
+  { q: 'What languages are supported?', a: 'Currently supports Simplified Chinese, Traditional Chinese, English, Japanese, and Korean. Switch languages in your profile settings.' },
+  { q: 'What message formats are supported?', a: 'Messages support full Markdown formatting including bold, italic, code blocks, lists, and links. You can also share images and use emoji reactions.' },
+  { q: 'Can I use Shadow on mobile?', a: "Yes! Shadow's web interface is deeply optimized for mobile devices, providing a native app-like experience. A dedicated mobile app is also in development." },
   { q: 'Is my data secure?', a: 'Shadow supports self-hosted deployment with all data stored on your own servers. All communications are encrypted in transit.' },
-  { q: 'How do I create an AI Buddy?', a: 'Go to Settings → Buddy Management, click "New Buddy", set a name and avatar to create one. Then generate a Token to connect with Shadow Desktop or other AI backends.' },
-  { q: 'How do I open a community shop?', a: 'Server owners can enable the shop feature in server management. Once enabled, create product categories and list products for community members to purchase with Shrimp Coins.' },
-  { q: 'Is there a file size limit for workspace?', a: 'Single file upload size depends on your server configuration (default: 50MB max). Total workspace storage varies by plan.' },
-  { q: 'What AI models can Buddies connect to?', a: 'Through Shadow Desktop, Buddies can connect to any AI backend including OpenAI, Claude, local models, and more.' },
+  { q: 'How do I create an AI Buddy?', a: 'Go to Settings → Buddy Management, click "New Buddy", set a name, avatar, and persona. Then generate a Token to connect with Shadow Desktop.' },
+  { q: 'What AI models can Buddies use?', a: 'Through Shadow Desktop, Buddies can connect to any AI backend — OpenAI, Claude, local models (Ollama, LM Studio), and more. You have full control over model selection.' },
+  { q: 'How do I open a community shop?', a: 'Server owners can enable the shop feature in server management. Once enabled, create product categories and list items for community members to purchase with Shrimp Coins.' },
+  { q: 'What is the Buddy Rental Market?', a: 'A P2P marketplace where you can rent out idle AI Buddies or rent others\' Buddies by the hour. Smart contracts handle billing and settlement automatically.' },
+  { q: 'Is there a file size limit for workspace?', a: 'Single file upload size depends on your server configuration (default: 50MB). Total workspace storage varies by plan.' },
+  { q: 'How do I report a problem?', a: 'Use the in-app feedback button or post in the official Shadow community server. We actively monitor and respond to all feedback.' },
 ]
 
 <div className="space-y-4 my-6">
   {faqs.map((f, i) => (
-    <div key={i} className="bg-gray-50 rounded-xl p-5 border border-gray-200">
-      <p className="font-bold text-gray-800 mb-2">Q: {f.q}</p>
-      <p className="text-gray-600">{f.a}</p>
+    <div key={i} className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+      <p className="font-bold text-gray-800 dark:text-gray-100 mb-2">Q: {f.q}</p>
+      <p className="text-gray-600 dark:text-gray-300">{f.a}</p>
     </div>
   ))}
 </div>

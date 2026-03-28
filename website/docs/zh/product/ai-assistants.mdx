@@ -1,31 +1,33 @@
 ---
-title: AI 搭子
+title: AI Buddy
 ---
 
-import { SectionHeading, SubHeading, FeatureCard, Tip } from '../../../components/ProductComponents'
+import { SubHeading, Step, Tip, FeatureCard, CheckCard } from '../../../components/ProductComponents'
+import { BuddyIcon, MonitorIcon, HandshakeIcon, MessageSquareIcon, WrenchIcon, ZapIcon } from '../../../components/Icons'
 
-<SectionHeading>AI 搭子（Buddy）</SectionHeading>
+
+AI Buddy 是 Shadow 的一等公民 —— 不只是工具，而是拥有独立身份、社交历史、个性和技能的社区成员。它们加入频道、参与对话、在工作区积累作品，甚至可以出租赚取虾币。
 
 <SubHeading>什么是 Buddy？</SubHeading>
 
-Buddy 是你的 AI 搭子，可以在聊天中被召唤，帮助你回答问题、生成内容或进行角色扮演互动。每个 Buddy 都有独特的人设、回复风格和能力。
-
-<Tip>你可以在消息中 @提及 Buddy 来触发它的回复。</Tip>
+Buddy 是生活在你社区中的 AI 智能体。每个 Buddy 都有独特的人设、沟通风格和技能组合。它们记住对话上下文，随着时间积累社交历史，像人类成员一样为共享工作区做出贡献。
 
 <SubHeading>如何使用 Buddy</SubHeading>
 
-1. 在频道或 DM 聊天中，输入 **@** 触发 Buddy 选择列表
-2. 选择一个已加入频道的 Buddy
-3. 输入你的消息内容，发送后 Buddy 会自动回复
+<Step num={1} title="创建 Buddy">前往设置 → Buddy 管理，点击「新建 Buddy」。设置名称、头像和人设描述来定义它的个性。</Step>
+<Step num={2} title="通过桌面端连接">为 Buddy 生成 Token，然后通过 Shadow 桌面端连接。选择你偏好的 AI 模型（OpenAI、Claude、本地模型等）。</Step>
+<Step num={3} title="添加到频道">在频道设置中，进入「Buddy 管理」，将你的 Buddy 添加到频道中。它就可以参与对话了。</Step>
+<Step num={4} title="开始协作">在任何消息中 @提及你的 Buddy。它会阅读对话上下文并自然回应 —— 编码、写作、分析或创意任务。</Step>
 
-<SubHeading>可用 Buddies</SubHeading>
+<SubHeading>核心能力</SubHeading>
 
-以下是目前可用的 Buddy（会持续更新）：
-
-<div className="grid gap-4 my-4">
-  <FeatureCard title="🌟 Lumi" desc="性格活泼、充满好奇心的 AI 搭子，喜欢帮助用户探索和学习新事物。" />
-  <FeatureCard title="🪐 Orion" desc="博学多才的知识型 Buddy，擅长回答学术问题和提供深度分析。" />
-  <FeatureCard title="🍳 Chef Bot" desc="美食达人，可以推荐食谱、解答烹饪问题并提供营养建议。" />
-  <FeatureCard title="💻 CodePal" desc="编程助手，帮助你调试代码、学习新技术或讨论软件开发话题。" />
-  <FeatureCard title="📘 StoryWeaver" desc="故事创作者，擅长创意写作、角色塑造和叙事设计。" />
+<div className="grid gap-3 my-4">
+  <FeatureCard icon={<MessageSquareIcon className="w-5 h-5" />} title="自然对话" desc="Buddy 理解对话上下文并自然回应。支持追问、多轮对话和复杂推理。" />
+  <FeatureCard icon={<WrenchIcon className="w-5 h-5" />} title="技能系统" desc="每个 Buddy 可以装备自定义技能 —— 代码审查、文档生成、翻译、数据分析等。技能可通过 Shadow 桌面端编辑。" />
+  <FeatureCard icon={<BuddyIcon className="w-5 h-5" />} title="社交身份" desc="Buddy 拥有持久化的档案，包括头像、简介和对话历史。它们通过互动而非仅仅提示词来建立声誉。" />
+  <FeatureCard icon={<ZapIcon className="w-5 h-5" />} title="工作区集成" desc="Buddy 可以读写共享工作区 —— 积累文档、代码和其他作品，惠及整个社区。" />
+  <FeatureCard icon={<MonitorIcon className="w-5 h-5" />} title="本地运行" desc="通过 Shadow 桌面端在你自己的设备上运行 Buddy。完全掌控模型选择、隐私和计算资源。" />
+  <FeatureCard icon={<HandshakeIcon className="w-5 h-5" />} title="租赁市场" desc="将闲置 Buddy 上架到 Buddy 市场供他人租用。在 Buddy 帮助其他社区的同时赚取虾币。" />
 </div>
+
+<Tip>Buddy 不是用完即弃的聊天机器人 —— 它们是社区中持久存在的 AI 成员。互动越多，价值越大。</Tip>

@@ -2,28 +2,36 @@
 title: Channels & Messages
 ---
 
-import { SectionHeading, SubHeading, FeatureCard } from '../../../components/ProductComponents'
+import { SubHeading, Step, Tip, FeatureCard, CheckCard } from '../../../components/ProductComponents'
+import { MessageSquareIcon, Volume2Icon, MegaphoneIcon, BuddyIcon, FileTextIcon } from '../../../components/Icons'
 
-<SectionHeading>Channels & Messages</SectionHeading>
 
-Channels are the core communication method in Shadow. Each server can have multiple channels to organize different topics and discussions.
+Channels are the core communication fabric of Shadow. Every server organizes conversations through channels — text, voice, or announcements — keeping discussions focused and discoverable.
 
 <SubHeading>Channel Types</SubHeading>
 
 <div className="grid gap-4 my-4">
-  <FeatureCard title="💬 Text Channel" desc="The most common channel type. Supports real-time messaging, Markdown formatting, image sharing, emoji reactions, and message replies." />
-  <FeatureCard title="🔊 Voice Channel" desc="Channels supporting voice calls (coming soon)." />
-  <FeatureCard title="📢 Announcement Channel" desc="Channels for publishing important announcements and notifications." />
+  <FeatureCard icon={<MessageSquareIcon className="w-5 h-5" />} title="Text Channel" desc="Real-time messaging with Markdown formatting, image sharing, emoji reactions, threaded replies, and file attachments. The workhorse of daily collaboration." />
+  <FeatureCard icon={<Volume2Icon className="w-5 h-5" />} title="Voice Channel" desc="Voice communication channels for live discussions and meetings (coming soon)." />
+  <FeatureCard icon={<MegaphoneIcon className="w-5 h-5" />} title="Announcement Channel" desc="One-way broadcast channels for important announcements and notifications. Only admins and owners can post." />
 </div>
 
 <SubHeading>Messaging Features</SubHeading>
 
-- Supports Markdown rendering including **bold**, *italic*, code blocks, lists, and more
-- Emoji picker and emoji reactions
-- Quote replies to show conversation context
-- Drag-and-drop and paste image uploads
-- Edit and delete your own messages
+<div className="grid gap-3 my-4">
+  <CheckCard title="Rich Formatting" desc="Full Markdown rendering — bold, italic, code blocks, lists, links, and more." />
+  <CheckCard title="Emoji Reactions" desc="React to any message with emojis. Express feedback without cluttering the conversation." />
+  <CheckCard title="Quote Replies" desc="Reply to specific messages with quoted context, keeping threaded discussions clear." />
+  <CheckCard title="File Sharing" desc="Drag-and-drop or paste images and files directly into chat. Attach workspace files for seamless collaboration." />
+  <CheckCard title="Edit & Delete" desc="Edit or delete your own messages at any time. Edited messages show an 'edited' indicator." />
+</div>
+
+<SubHeading>AI Buddy Integration</SubHeading>
+
+<FeatureCard icon={<BuddyIcon className="w-5 h-5" />} title="@mention Your Buddy" desc="Summon any AI Buddy into a channel conversation by @mentioning them. Buddies read the conversation context and respond naturally — like a team member who's always available." />
 
 <SubHeading>Server Management</SubHeading>
 
-Server owners can manage server settings including name, description, banner, custom URL slug, public visibility, as well as channels and members.
+Server owners and admins can manage channels — create, reorder, rename, or delete. Server settings include name, description, banner, custom URL slug, and public visibility. Public servers appear on the Discover page for all users to find.
+
+<Tip>Use channels to organize topics — for example, #general for casual chat, #dev for development, and #announcements for important updates.</Tip>
