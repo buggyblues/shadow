@@ -84,6 +84,13 @@ export function MemberList() {
     enabled: !!activeServerId,
   })
 
+  const { data: channel } = useQuery({
+    queryKey: ['channel', activeChannelId],
+    queryFn: () =>
+      fetchApi<{ id: string; isArchived?: boolean }>(`/api/channels/${activeChannelId}`),
+    enabled: !!activeChannelId,
+  })
+
   const { data: server } = useQuery({
     queryKey: ['server', activeServerId],
     queryFn: () => fetchApi<{ id: string; inviteCode: string }>(`/api/servers/${activeServerId}`),
@@ -287,27 +294,29 @@ export function MemberList() {
 
   const memberContent = (
     <>
-      {/* Action buttons */}
-      <div className="px-2 pb-2 flex gap-1">
-        <button
-          type="button"
-          onClick={() => setShowInvitePanel(true)}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-text-muted hover:text-text-primary hover:bg-bg-primary/30 transition flex-1"
-          title={t('channel.inviteMember')}
-        >
-          <UserPlus size={13} />
-          <span className="truncate">{t('channel.inviteMember')}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowAddAgent(true)}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-text-muted hover:text-text-primary hover:bg-bg-primary/30 transition flex-1"
-          title={t('channel.addAgent')}
-        >
-          <img src="/Logo.svg" alt="Buddy" className="w-[13px] h-[13px]" />
-          <span className="truncate">{t('channel.addAgent')}</span>
-        </button>
-      </div>
+      {/* Action buttons - hidden when channel is archived */}
+      {!channel?.isArchived && (
+        <div className="px-2 pb-2 flex gap-1">
+          <button
+            type="button"
+            onClick={() => setShowInvitePanel(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-text-muted hover:text-text-primary hover:bg-bg-primary/30 transition flex-1"
+            title={t('channel.inviteMember')}
+          >
+            <UserPlus size={13} />
+            <span className="truncate">{t('channel.inviteMember')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowAddAgent(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-text-muted hover:text-text-primary hover:bg-bg-primary/30 transition flex-1"
+            title={t('channel.addAgent')}
+          >
+            <img src="/Logo.svg" alt="Buddy" className="w-[13px] h-[13px]" />
+            <span className="truncate">{t('channel.addAgent')}</span>
+          </button>
+        </div>
+      )}
       {renderMemberGroup(t('member.groupOnline'), onlineMembers)}
       {renderMemberGroup(t('member.groupOffline'), offlineMembers, { flat: true })}
       {members.length === 0 && (

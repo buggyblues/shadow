@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
+  Archive,
   ArrowLeft,
   ClipboardCopy,
   Hash,
