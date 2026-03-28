@@ -643,15 +643,66 @@
     "acceptInvite": "接受邀請"
   },
   "discover": {
-    "title": "探索伺服器",
-    "subtitle": "發現並加入感興趣的社群",
-    "searchPlaceholder": "搜尋伺服器...",
+    "title": "發現",
+    "subtitle": "探索社群、頻道和正在租賃的 Buddy",
+    "searchPlaceholder": "搜尋伺服器、頻道...",
     "noServers": "暫無公開的伺服器",
+    "noChannels": "暫無活躍的頻道",
+    "noRentals": "暫無正在租賃的 Buddy",
     "noDescription": "暫無描述",
     "members": "成員",
     "joinButton": "加入",
     "enterButton": "進入",
-    "public": "公開"
+    "public": "公開",
+    "joinToView": "加入後查看",
+    "rentedSince": "租賃於",
+    "unknownListing": "未知租賃",
+    "unknownAgent": "未知 Buddy",
+    "unknownUser": "未知用戶",
+    "justNow": "剛剛",
+    "minutesAgo": "{{count}} 分鐘前",
+    "hoursAgo": "{{count}} 小時前",
+    "daysAgo": "{{count}} 天前",
+    "loadMore": "加載更多...",
+    "noMore": "沒有更多內容了",
+    "emptyTitle": "這裡還沒有內容",
+    "emptyDesc": "成為第一個創建或加入社群的人吧！",
+    "noSearchResults": "未找到結果",
+    "noSearchResultsDesc": "嘗試不同的關鍵詞或篩選條件",
+    "channelBadge": "頻道",
+    "filters": {
+      "all": "全部",
+      "servers": "伺服器",
+      "channels": "頻道",
+      "rentals": "租賃"
+    },
+    "heat": {
+      "hot": "熱門",
+      "trending": "趨勢"
+    },
+    "filter": {
+      "title": "篩選",
+      "searchPlaceholder": "搜尋頻道...",
+      "sortBy": "排序方式",
+      "ascending": "升序",
+      "descending": "降序",
+      "showArchived": "顯示已歸檔",
+      "clear": "清除",
+      "apply": "應用",
+      "sort": {
+        "default": "默認",
+        "lastMessage": "最新消息",
+        "activity": "活躍度",
+        "created": "創建時間",
+        "updated": "更新時間"
+      }
+    },
+    "deviceTier": {
+      "highEnd": "高端",
+      "midRange": "中端",
+      "lowEnd": "低端",
+      "unknown": "未知"
+    }
   },
   "notification": {
     "title": "通知",

@@ -643,15 +643,66 @@
     "acceptInvite": "초대 수락"
   },
   "discover": {
-    "title": "서버 탐색",
-    "subtitle": "관심 있는 커뮤니티를 찾아 참가하세요",
-    "searchPlaceholder": "서버 검색...",
+    "title": "발견",
+    "subtitle": "커뮤니티, 채널, 대여 중인 Buddy 탐색",
+    "searchPlaceholder": "서버, 채널 검색...",
     "noServers": "공개 서버가 없습니다",
+    "noChannels": "활성 채널이 없습니다",
+    "noRentals": "대여 중인 Buddy가 없습니다",
     "noDescription": "설명 없음",
     "members": "멤버",
     "joinButton": "참가",
     "enterButton": "입장",
-    "public": "공개"
+    "public": "공개",
+    "joinToView": "참가하여 보기",
+    "rentedSince": "대여 시작",
+    "unknownListing": "알 수 없는 목록",
+    "unknownAgent": "알 수 없는 Buddy",
+    "unknownUser": "알 수 없는 사용자",
+    "justNow": "방금",
+    "minutesAgo": "{{count}}분 전",
+    "hoursAgo": "{{count}}시간 전",
+    "daysAgo": "{{count}}일 전",
+    "loadMore": "더 불러오기...",
+    "noMore": "더 이상 없음",
+    "emptyTitle": "아직 내용이 없습니다",
+    "emptyDesc": "첫 번째로 커뮤니티를 만들거나 참가하세요!",
+    "noSearchResults": "결과를 찾을 수 없습니다",
+    "noSearchResultsDesc": "다른 키워드나 필터를 시도해 보세요",
+    "channelBadge": "채널",
+    "filters": {
+      "all": "전체",
+      "servers": "서버",
+      "channels": "채널",
+      "rentals": "대여"
+    },
+    "heat": {
+      "hot": "인기",
+      "trending": "트렌드"
+    },
+    "filter": {
+      "title": "필터",
+      "searchPlaceholder": "채널 검색...",
+      "sortBy": "정렬 기준",
+      "ascending": "오름차순",
+      "descending": "내림차순",
+      "showArchived": "보관함 표시",
+      "clear": "지우기",
+      "apply": "적용",
+      "sort": {
+        "default": "기본",
+        "lastMessage": "최근 메시지",
+        "activity": "활동",
+        "created": "생성일",
+        "updated": "업데이트일"
+      }
+    },
+    "deviceTier": {
+      "highEnd": "고사양",
+      "midRange": "중사양",
+      "lowEnd": "저사양",
+      "unknown": "알 수 없음"
+    }
   },
   "notification": {
     "title": "알림",

@@ -643,15 +643,66 @@
     "acceptInvite": "招待を受ける"
   },
   "discover": {
-    "title": "サーバーを探す",
-    "subtitle": "興味のあるコミュニティを見つけて参加",
-    "searchPlaceholder": "サーバーを検索...",
+    "title": "発見",
+    "subtitle": "コミュニティ、チャンネル、レンタル中のBuddyを探索",
+    "searchPlaceholder": "サーバー、チャンネルを検索...",
     "noServers": "公開サーバーはありません",
+    "noChannels": "アクティブなチャンネルはありません",
+    "noRentals": "レンタル中のBuddyはありません",
     "noDescription": "説明なし",
     "members": "メンバー",
     "joinButton": "参加",
     "enterButton": "入る",
-    "public": "公開"
+    "public": "公開",
+    "joinToView": "参加して表示",
+    "rentedSince": "レンタル開始",
+    "unknownListing": "不明なリスト",
+    "unknownAgent": "不明なBuddy",
+    "unknownUser": "不明なユーザー",
+    "justNow": "たった今",
+    "minutesAgo": "{{count}}分前",
+    "hoursAgo": "{{count}}時間前",
+    "daysAgo": "{{count}}日前",
+    "loadMore": "さらに読み込む...",
+    "noMore": "これ以上ありません",
+    "emptyTitle": "まだ何もありません",
+    "emptyDesc": "最初のコミュニティを作成または参加しましょう！",
+    "noSearchResults": "結果が見つかりません",
+    "noSearchResultsDesc": "別のキーワードやフィルターを試してください",
+    "channelBadge": "チャンネル",
+    "filters": {
+      "all": "すべて",
+      "servers": "サーバー",
+      "channels": "チャンネル",
+      "rentals": "レンタル"
+    },
+    "heat": {
+      "hot": "人気",
+      "trending": "トレンド"
+    },
+    "filter": {
+      "title": "フィルター",
+      "searchPlaceholder": "チャンネルを検索...",
+      "sortBy": "並び替え",
+      "ascending": "昇順",
+      "descending": "降順",
+      "showArchived": "アーカイブを表示",
+      "clear": "クリア",
+      "apply": "適用",
+      "sort": {
+        "default": "デフォルト",
+        "lastMessage": "最新メッセージ",
+        "activity": "アクティビティ",
+        "created": "作成日",
+        "updated": "更新日"
+      }
+    },
+    "deviceTier": {
+      "highEnd": "高スペック",
+      "midRange": "中スペック",
+      "lowEnd": "低スペック",
+      "unknown": "不明"
+    }
   },
   "notification": {
     "title": "通知",
