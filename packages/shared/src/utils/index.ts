@@ -22,3 +22,4 @@ export function slugify(text: string): string {
 
 export * from './avatar-generator'
 export * from './pixel-cats'
+export * from './portfolio'
