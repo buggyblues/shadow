@@ -251,7 +251,9 @@
     "unarchiveChannel": "取消归档",
     "unarchiveChannelConfirm": "确定要取消归档此频道吗？",
     "archiveSuccess": "频道已归档",
-    "unarchiveSuccess": "频道已取消归档"
+    "unarchiveSuccess": "频道已取消归档",
+    "archivedNotice": "此频道已归档，无法发送消息",
+    "unarchive": "取消归档"
   },
   "chat": {
     "selectChannel": "选择一个频道开始聊天",

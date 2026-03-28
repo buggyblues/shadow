@@ -444,6 +444,13 @@ export function ChatArea() {
     }
   })
 
+  // Listen for channel updates (archive/unarchive)
+  useSocketEvent('channel:updated', (data: { id: string; isArchived?: boolean }) => {
+    if (data.id === activeChannelId) {
+      queryClient.invalidateQueries({ queryKey: ['channel', activeChannelId] })
+    }
+  })
+
   // Add reaction
   const addReaction = useMutation({
     mutationFn: ({ messageId, emoji }: { messageId: string; emoji: string }) =>
@@ -932,7 +939,7 @@ export function ChatArea() {
               {t('common.cancel')}
             </button>
           </div>
-        ) : channel?.isArchived && messages.length > 0 ? (
+        ) : channel?.isArchived ? (
           <div className="flex items-center justify-center gap-3 px-4 py-3 bg-bg-tertiary border-t border-border-subtle">
             <div className="flex items-center gap-2 text-text-muted">
               <Archive size={18} />

@@ -251,7 +251,9 @@
     "unarchiveChannel": "Unarchive Channel",
     "unarchiveChannelConfirm": "Are you sure you want to unarchive this channel?",
     "archiveSuccess": "Channel archived",
-    "unarchiveSuccess": "Channel unarchived"
+    "unarchiveSuccess": "Channel unarchived",
+    "archivedNotice": "This channel is archived. Messages cannot be sent.",
+    "unarchive": "Unarchive"
   },
   "chat": {
     "selectChannel": "Select a channel to start chatting",
