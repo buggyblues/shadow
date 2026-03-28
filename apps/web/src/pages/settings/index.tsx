@@ -15,7 +15,7 @@ import {
   User,
   Users,
 } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { UserAvatar } from '../../components/common/avatar'
 import { useAppStatus } from '../../hooks/use-app-status'
@@ -141,6 +141,16 @@ export function SettingsPage() {
   )
   const [activeDmChannelId, setActiveDmChannelId] = useState<string | null>(searchParams.dm || null)
   const [collapsed, setCollapsed] = useState(loadCollapsedState)
+
+  // Sync activeTab with URL search params
+  useEffect(() => {
+    if (searchParams.tab) {
+      setActiveTab(searchParams.tab as SettingsTab)
+    }
+    if (searchParams.dm !== undefined) {
+      setActiveDmChannelId(searchParams.dm || null)
+    }
+  }, [searchParams.tab, searchParams.dm])
 
   const toggleSection = useCallback((key: string) => {
     setCollapsed((prev) => {
