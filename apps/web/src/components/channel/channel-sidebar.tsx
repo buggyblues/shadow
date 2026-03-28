@@ -622,7 +622,10 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
                   size={18}
                   className={`shrink-0 ${isActive ? 'opacity-80 text-text-primary' : 'opacity-60 group-hover:text-text-primary'}`}
                 />
-                <span className="truncate">{ch.name}</span>
+                <span className={`truncate ${ch.isArchived ? 'text-text-muted' : ''}`}>
+                  {ch.name}
+                </span>
+                {ch.isArchived && <Archive size={12} className="text-text-muted shrink-0" />}
                 {ch.isPrivate && <Lock size={12} className="text-text-muted shrink-0" />}
                 {ch.isMember === false && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/15 text-primary shrink-0">
