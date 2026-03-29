@@ -50,6 +50,10 @@ let oauthAppId: string
 
 const REDIRECT_URI = 'https://demo-app.shadowob.com/callback'
 
+// Extended scopes for open platform tests
+const ALL_SCOPES =
+  'user:read user:email servers:read servers:write channels:read channels:write messages:read messages:write attachments:read attachments:write workspaces:read workspaces:write buddies:create buddies:manage'
+
 beforeAll(async () => {
   sql = postgres(TEST_DB_URL, { max: 5 })
   db = drizzle(sql, { schema })
@@ -441,5 +445,255 @@ describe('OAuth App Deletion', () => {
     const { status, json } = await api('GET', '/api/oauth/apps', { token: userToken })
     expect(status).toBe(200)
     expect(json.some((a: { id: string }) => a.id === oauthAppId)).toBe(false)
+  })
+})
+
+/* ═══════════════════════════════════════════════════════
+   Open Platform API Tests
+   ═══════════════════════════════════════════════════════ */
+
+describe('OAuth Open Platform — Extended Scopes', () => {
+  let platformAppId: string
+  let platformClientId: string
+  let platformClientSecret: string
+  let oauthAccessToken: string
+let _oauthRefreshToken: string
+
+  // Obtain an access token with all scopes
+  it('creates an OAuth app with all scopes', async () => {
+    const { status, json } = await api('POST', '/api/oauth/apps', {
+      token: userToken,
+      body: {
+        name: 'Platform E2E App',
+        description: 'Tests open platform features',
+        redirectUris: [REDIRECT_URI],
+        homepageUrl: 'https://platform-test.shadowob.com',
+      },
+    })
+    expect(status).toBe(201)
+    platformAppId = json.id
+    platformClientId = json.clientId
+    platformClientSecret = json.clientSecret
+  })
+
+  it('validates new scopes in authorize request', async () => {
+    const { status, json } = await api('GET', '/api/oauth/authorize', {
+      token: endUserToken,
+      query: {
+        response_type: 'code',
+        client_id: platformClientId,
+        redirect_uri: REDIRECT_URI,
+        scope: ALL_SCOPES,
+        state: 'platform-test',
+      },
+    })
+    expect(status).toBe(200)
+    expect(json.scope).toBe(ALL_SCOPES)
+  })
+
+  it('rejects invalid scope', async () => {
+    const { status } = await api('GET', '/api/oauth/authorize', {
+      token: endUserToken,
+      query: {
+        response_type: 'code',
+        client_id: platformClientId,
+        redirect_uri: REDIRECT_URI,
+        scope: 'user:read admin:delete',
+      },
+    })
+    expect(status).toBe(400)
+  })
+
+  it('approves and exchanges for tokens with all scopes', async () => {
+    // Approve
+    const approveRes = await api('POST', '/api/oauth/authorize', {
+      token: endUserToken,
+      body: {
+        clientId: platformClientId,
+        redirectUri: REDIRECT_URI,
+        scope: ALL_SCOPES,
+        state: 'platform-test',
+      },
+    })
+    expect(approveRes.status).toBe(200)
+    const code = new URL(approveRes.json.redirectUrl).searchParams.get('code')!
+
+    // Exchange
+    const tokenRes = await api('POST', '/api/oauth/token', {
+      body: {
+        grant_type: 'authorization_code',
+        code,
+        client_id: platformClientId,
+        client_secret: platformClientSecret,
+        redirect_uri: REDIRECT_URI,
+      },
+    })
+    expect(tokenRes.status).toBe(200)
+    expect(tokenRes.json.scope).toBe(ALL_SCOPES)
+    oauthAccessToken = tokenRes.json.access_token
+    _oauthRefreshToken = tokenRes.json.refresh_token
+  })
+
+  // ─── Scope enforcement ─────────────────────────────
+
+  it('returns user info with extended scopes', async () => {
+    const { status, json } = await api('GET', '/api/oauth/userinfo', {
+      token: oauthAccessToken,
+    })
+    expect(status).toBe(200)
+    expect(json.id).toBe(endUserId)
+    expect(json.email).toBeDefined()
+  })
+
+  // ─── Servers API ───────────────────────────────────
+
+  let createdServerId: string
+
+  it('creates a server via OAuth API', async () => {
+    const { status, json } = await api('POST', '/api/oauth/servers', {
+      token: oauthAccessToken,
+      body: { name: 'OAuth E2E Server', description: 'Created via OAuth API' },
+    })
+    expect(status).toBe(201)
+    expect(json.name).toBe('OAuth E2E Server')
+    expect(json.id).toBeDefined()
+    createdServerId = json.id
+  })
+
+  it('lists servers via OAuth API', async () => {
+    const { status, json } = await api('GET', '/api/oauth/servers', {
+      token: oauthAccessToken,
+    })
+    expect(status).toBe(200)
+    expect(Array.isArray(json)).toBe(true)
+    expect(json.some((s: { id: string }) => s.id === createdServerId)).toBe(true)
+  })
+
+  // ─── Channels API ─────────────────────────────────
+
+  let createdChannelId: string
+
+  it('lists channels for a server', async () => {
+    const { status, json } = await api('GET', `/api/oauth/servers/${createdServerId}/channels`, {
+      token: oauthAccessToken,
+    })
+    expect(status).toBe(200)
+    expect(Array.isArray(json)).toBe(true)
+    // Should have #general by default
+    expect(json.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('creates a channel via OAuth API', async () => {
+    const { status, json } = await api('POST', '/api/oauth/channels', {
+      token: oauthAccessToken,
+      body: { serverId: createdServerId, name: 'oauth-channel', type: 'text' },
+    })
+    expect(status).toBe(201)
+    expect(json.name).toBe('oauth-channel')
+    expect(json.type).toBe('text')
+    createdChannelId = json.id
+  })
+
+  // ─── Messages API ─────────────────────────────────
+
+  it('sends a message via OAuth API', async () => {
+    const { status, json } = await api('POST', `/api/oauth/channels/${createdChannelId}/messages`, {
+      token: oauthAccessToken,
+      body: { content: 'Hello from OAuth API!' },
+    })
+    expect(status).toBe(201)
+    expect(json.content).toBe('Hello from OAuth API!')
+    expect(json.channelId).toBe(createdChannelId)
+  })
+
+  it('reads messages via OAuth API', async () => {
+    const { status, json } = await api('GET', `/api/oauth/channels/${createdChannelId}/messages`, {
+      token: oauthAccessToken,
+    })
+    expect(status).toBe(200)
+    expect(json.messages).toBeDefined()
+    expect(json.messages.length).toBeGreaterThanOrEqual(1)
+    expect(
+      json.messages.some((m: { content: string }) => m.content === 'Hello from OAuth API!'),
+    ).toBe(true)
+  })
+
+  // ─── Scope enforcement tests ───────────────────────
+
+  it('rejects servers:read with only user:read scope', async () => {
+    // Create a limited-scope token
+    const approveRes = await api('POST', '/api/oauth/authorize', {
+      token: endUserToken,
+      body: {
+        clientId: platformClientId,
+        redirectUri: REDIRECT_URI,
+        scope: 'user:read',
+      },
+    })
+    const code = new URL(approveRes.json.redirectUrl).searchParams.get('code')!
+    const tokenRes = await api('POST', '/api/oauth/token', {
+      body: {
+        grant_type: 'authorization_code',
+        code,
+        client_id: platformClientId,
+        client_secret: platformClientSecret,
+        redirect_uri: REDIRECT_URI,
+      },
+    })
+    const limitedToken = tokenRes.json.access_token
+
+    const { status, json } = await api('GET', '/api/oauth/servers', {
+      token: limitedToken,
+    })
+    expect(status).toBe(403)
+    expect(json.error).toBe('insufficient_scope')
+  })
+
+  // ─── Buddies API ───────────────────────────────────
+
+  let buddyId: string
+
+  it('creates a Buddy via OAuth API', async () => {
+    const { status, json } = await api('POST', '/api/oauth/buddies', {
+      token: oauthAccessToken,
+      body: { name: 'E2E Buddy Bot' },
+    })
+    expect(status).toBe(201)
+    expect(json.id).toBeDefined()
+    expect(json.userId).toBeDefined()
+    expect(json.agentId).toBeDefined()
+    buddyId = json.id
+  })
+
+  it('sends a message as Buddy via OAuth API', async () => {
+    // First add the buddy user to the channel
+    const agentService = container.resolve('agentService')
+    const agent = await agentService.getById(buddyId)
+    expect(agent).toBeDefined()
+
+    const oauthAppDao = container.resolve('oauthAppDao')
+    const buddyUserId = await oauthAppDao.getBuddyUserId(buddyId)
+    expect(buddyUserId).toBeDefined()
+
+    // Add buddy to server and channel
+    const channelService = container.resolve('channelService')
+    await channelService.addMember(createdChannelId, buddyUserId!)
+
+    const { status, json } = await api('POST', `/api/oauth/buddies/${buddyId}/messages`, {
+      token: oauthAccessToken,
+      body: { channelId: createdChannelId, content: 'Hello from Buddy!' },
+    })
+    expect(status).toBe(201)
+    expect(json.content).toBe('Hello from Buddy!')
+  })
+
+  // ─── Cleanup ───────────────────────────────────────
+
+  it('deletes the platform OAuth app', async () => {
+    const { status, json } = await api('DELETE', `/api/oauth/apps/${platformAppId}`, {
+      token: userToken,
+    })
+    expect(status).toBe(200)
+    expect(json.ok).toBe(true)
   })
 })

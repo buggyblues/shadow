@@ -4,6 +4,7 @@ import {
   Bell,
   Bot,
   ChevronDown,
+  Code2,
   Link2,
   LogOut,
   MessageCircle,
@@ -27,6 +28,7 @@ import { DmChatView } from '../dm-chat'
 import { FriendsContent } from '../friends'
 import { AccountSettings } from './account'
 import { AppearanceSettings } from './appearance'
+import { DeveloperSettings } from './developer'
 import { InviteSettings } from './invite'
 import { NotificationSettings } from './notification'
 import { ProfileSettings } from './profile'
@@ -44,6 +46,7 @@ type SettingsTab =
   | 'notification'
   | 'friends'
   | 'chat'
+  | 'developer'
 
 interface NavItem {
   id: SettingsTab
@@ -94,6 +97,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { id: 'buddy', icon: Bot, label: 'Buddy 管理' },
       { id: 'invite', icon: Link2, label: '邀请好友' },
+      { id: 'developer', icon: Code2, label: '开发者' },
     ],
   },
 ]
@@ -296,6 +300,7 @@ export function SettingsPage() {
               {activeTab === 'invite' && <InviteSettings />}
               {activeTab === 'tasks' && <TaskSettings />}
               {activeTab === 'buddy' && <BuddyManagementContent />}
+              {activeTab === 'developer' && <DeveloperSettings />}
             </div>
           </div>
         )}

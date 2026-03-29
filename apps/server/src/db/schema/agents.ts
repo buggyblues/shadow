@@ -15,6 +15,8 @@ export const agents = pgTable('agents', {
   ownerId: uuid('owner_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
+  oauthAppId: uuid('oauth_app_id'),
+  buddyUserId: uuid('buddy_user_id'),
   lastHeartbeat: timestamp('last_heartbeat', { withTimezone: true }),
   totalOnlineSeconds: integer('total_online_seconds').default(0).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

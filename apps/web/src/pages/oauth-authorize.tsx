@@ -98,7 +98,37 @@ export function OAuthAuthorizePage() {
       'Read your basic profile (username, display name, avatar)',
     ),
     'user:email': t('oauth.scopeUserEmail', 'Read your email address'),
+    'servers:read': t('oauth.scopeServersRead', 'View your server list'),
+    'servers:write': t('oauth.scopeServersWrite', 'Create servers and invite users'),
+    'channels:read': t('oauth.scopeChannelsRead', 'View channel list'),
+    'channels:write': t('oauth.scopeChannelsWrite', 'Create channels'),
+    'messages:read': t('oauth.scopeMessagesRead', 'Read message history'),
+    'messages:write': t('oauth.scopeMessagesWrite', 'Send messages'),
+    'attachments:read': t('oauth.scopeAttachmentsRead', 'View attachments'),
+    'attachments:write': t('oauth.scopeAttachmentsWrite', 'Upload attachments'),
+    'workspaces:read': t('oauth.scopeWorkspacesRead', 'View workspace information'),
+    'workspaces:write': t('oauth.scopeWorkspacesWrite', 'Modify workspace files'),
+    'buddies:create': t('oauth.scopeBuddiesCreate', 'Create Buddy bots'),
+    'buddies:manage': t('oauth.scopeBuddiesManage', 'Manage Buddy bots and send messages'),
   }
+
+  const scopeGroups: { label: string; scopes: string[] }[] = [
+    { label: t('oauth.groupUserInfo', 'User Info'), scopes: ['user:read', 'user:email'] },
+    { label: t('oauth.groupServers', 'Servers'), scopes: ['servers:read', 'servers:write'] },
+    {
+      label: t('oauth.groupChannelsMessages', 'Channels & Messages'),
+      scopes: ['channels:read', 'channels:write', 'messages:read', 'messages:write'],
+    },
+    {
+      label: t('oauth.groupAttachments', 'Attachments'),
+      scopes: ['attachments:read', 'attachments:write'],
+    },
+    {
+      label: t('oauth.groupWorkspaces', 'Workspaces'),
+      scopes: ['workspaces:read', 'workspaces:write'],
+    },
+    { label: t('oauth.groupBuddy', 'Buddy'), scopes: ['buddies:create', 'buddies:manage'] },
+  ]
 
   if (loading) {
     return (
@@ -153,29 +183,48 @@ export function OAuthAuthorizePage() {
                   'This application requests the following permissions:',
                 )}
               </p>
-              <ul className="space-y-2">
-                {appInfo.scope.split(' ').map((s) => (
-                  <li key={s} className="flex items-center gap-2 text-sm text-text-primary">
-                    <svg
-                      className="w-4 h-4 text-green-400 shrink-0"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      role="img"
-                      aria-label="check"
-                    >
-                      <title>check</title>
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                    {scopeDescriptions[s] ?? s}
-                  </li>
-                ))}
-              </ul>
+              <div className="space-y-3">
+                {(() => {
+                  const requestedScopes = appInfo.scope.split(' ')
+                  return scopeGroups
+                    .filter((group) => group.scopes.some((s) => requestedScopes.includes(s)))
+                    .map((group) => (
+                      <div key={group.label}>
+                        <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-1">
+                          {group.label}
+                        </p>
+                        <ul className="space-y-1">
+                          {group.scopes
+                            .filter((s) => requestedScopes.includes(s))
+                            .map((s) => (
+                              <li
+                                key={s}
+                                className="flex items-center gap-2 text-sm text-text-primary"
+                              >
+                                <svg
+                                  className="w-4 h-4 text-green-400 shrink-0"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  role="img"
+                                  aria-label="check"
+                                >
+                                  <title>check</title>
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M5 13l4 4L19 7"
+                                  />
+                                </svg>
+                                {scopeDescriptions[s] ?? s}
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+                    ))
+                })()}
+              </div>
             </div>
 
             <div className="flex gap-3">

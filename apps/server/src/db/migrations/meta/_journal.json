@@ -225,6 +225,13 @@
       "when": 1774591800000,
       "tag": "0031_add_channel_archive",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1774783200000,
+      "tag": "0032_oauth_open_platform",
+      "breakpoints": true
     }
   ]
 }

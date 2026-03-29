@@ -3,6 +3,10 @@ import { Hono } from 'hono'
 import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
 import {
+  createOAuthAuthMiddleware,
+  oauthScopeMiddleware,
+} from '../middleware/oauth-auth.middleware'
+import {
   authorizeApproveSchema,
   authorizeQuerySchema,
   createOAuthAppSchema,
@@ -13,6 +17,7 @@ import {
 
 export function createOAuthHandler(container: AppContainer) {
   const oauthHandler = new Hono()
+  const oauthAuthMiddleware = createOAuthAuthMiddleware(container)
 
   // ─── App Management (authenticated) ───────────────
 
@@ -173,6 +178,147 @@ export function createOAuthHandler(container: AppContainer) {
       const { appId } = c.req.valid('json')
       await oauthService.revokeConsent(user.userId, appId)
       return c.json({ ok: true })
+    },
+  )
+
+  // ─── OAuth API Endpoints (token-authenticated) ────
+
+  // GET /api/oauth/servers — list user's servers
+  oauthHandler.get(
+    '/servers',
+    oauthAuthMiddleware,
+    oauthScopeMiddleware(['servers:read']),
+    async (c) => {
+      const oauthService = container.resolve('oauthService')
+      const token = c.get('oauthToken')
+      const result = await oauthService.getServers(token.userId)
+      return c.json(result)
+    },
+  )
+
+  // POST /api/oauth/servers — create a server
+  oauthHandler.post(
+    '/servers',
+    oauthAuthMiddleware,
+    oauthScopeMiddleware(['servers:write']),
+    async (c) => {
+      const oauthService = container.resolve('oauthService')
+      const token = c.get('oauthToken')
+      const body = await c.req.json<{ name: string; description?: string }>()
+      const result = await oauthService.createServer(token.userId, body)
+      return c.json(result, 201)
+    },
+  )
+
+  // POST /api/oauth/servers/:id/invite — invite user to server
+  oauthHandler.post(
+    '/servers/:id/invite',
+    oauthAuthMiddleware,
+    oauthScopeMiddleware(['servers:write']),
+    async (c) => {
+      const oauthService = container.resolve('oauthService')
+      const serverId = c.req.param('id')!
+      const body = await c.req.json<{ userId: string }>()
+      const result = await oauthService.inviteToServer(serverId, body.userId)
+      return c.json(result)
+    },
+  )
+
+  // GET /api/oauth/servers/:id/channels — list channels
+  oauthHandler.get(
+    '/servers/:id/channels',
+    oauthAuthMiddleware,
+    oauthScopeMiddleware(['channels:read']),
+    async (c) => {
+      const oauthService = container.resolve('oauthService')
+      const serverId = c.req.param('id')!
+      const result = await oauthService.getChannels(serverId)
+      return c.json(result)
+    },
+  )
+
+  // POST /api/oauth/channels — create a channel
+  oauthHandler.post(
+    '/channels',
+    oauthAuthMiddleware,
+    oauthScopeMiddleware(['channels:write']),
+    async (c) => {
+      const oauthService = container.resolve('oauthService')
+      const token = c.get('oauthToken')
+      const body = await c.req.json<{ serverId: string; name: string; type?: string }>()
+      const result = await oauthService.createChannel(token.userId, body)
+      return c.json(result, 201)
+    },
+  )
+
+  // GET /api/oauth/channels/:id/messages — get message history
+  oauthHandler.get(
+    '/channels/:id/messages',
+    oauthAuthMiddleware,
+    oauthScopeMiddleware(['messages:read']),
+    async (c) => {
+      const oauthService = container.resolve('oauthService')
+      const channelId = c.req.param('id')!
+      const limit = c.req.query('limit') ? Number(c.req.query('limit')) : undefined
+      const cursor = c.req.query('cursor') ?? undefined
+      const result = await oauthService.getMessages(channelId, limit, cursor)
+      return c.json(result)
+    },
+  )
+
+  // POST /api/oauth/channels/:id/messages — send a message
+  oauthHandler.post(
+    '/channels/:id/messages',
+    oauthAuthMiddleware,
+    oauthScopeMiddleware(['messages:write']),
+    async (c) => {
+      const oauthService = container.resolve('oauthService')
+      const token = c.get('oauthToken')
+      const channelId = c.req.param('id')!
+      const body = await c.req.json<{ content: string }>()
+      const result = await oauthService.sendMessage(channelId, token.userId, body)
+      return c.json(result, 201)
+    },
+  )
+
+  // GET /api/oauth/workspaces/:id — get workspace info
+  oauthHandler.get(
+    '/workspaces/:id',
+    oauthAuthMiddleware,
+    oauthScopeMiddleware(['workspaces:read']),
+    async (c) => {
+      const oauthService = container.resolve('oauthService')
+      const workspaceId = c.req.param('id')!
+      const result = await oauthService.getWorkspace(workspaceId)
+      return c.json(result)
+    },
+  )
+
+  // POST /api/oauth/buddies — create a Buddy bot
+  oauthHandler.post(
+    '/buddies',
+    oauthAuthMiddleware,
+    oauthScopeMiddleware(['buddies:create']),
+    async (c) => {
+      const oauthService = container.resolve('oauthService')
+      const token = c.get('oauthToken')
+      const body = await c.req.json<{ name: string; kernelType?: string }>()
+      const result = await oauthService.createBuddy(token.userId, token.appId, body)
+      return c.json(result, 201)
+    },
+  )
+
+  // POST /api/oauth/buddies/:id/messages — Buddy sends a message
+  oauthHandler.post(
+    '/buddies/:id/messages',
+    oauthAuthMiddleware,
+    oauthScopeMiddleware(['buddies:manage']),
+    async (c) => {
+      const oauthService = container.resolve('oauthService')
+      const buddyId = c.req.param('id')!
+      const body = await c.req.json<{ channelId: string; content: string }>()
+      const result = await oauthService.sendBuddyMessage(buddyId, body)
+      return c.json(result, 201)
     },
   )
 

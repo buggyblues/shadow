@@ -1,294 +1,199 @@
 {
-  "project": "Shadow Website & Onboarding Overhaul",
-  "created": "2026-03-28",
-  "updated": "2026-03-29",
-  "tasks": [
+  "title": "OAuth Open Platform - Full Implementation Plan",
+  "version": "1.0.0",
+  "decisionRef": "DEC-001 (docs/decisions/oauth-platform-design.md)",
+  "phases": [
     {
-      "id": 1,
-      "title": "Homepage visual improvements - section rhythm & polish",
-      "status": "completed",
-      "subtasks": [
+      "id": "phase-1",
+      "name": "Scope Expansion & Core Infrastructure",
+      "tasks": [
         {
           "id": "1.1",
-          "title": "Add CSS: section-tinted, gradient-strip, hero-mesh, section-heading-accent, stat-glow",
-          "status": "completed"
+          "title": "Expand scope definitions in shared types",
+          "status": "not-started",
+          "description": "Add all 14 scopes to ShadowOAuthScope type and VALID_SCOPES constant: user:read, user:email, servers:read, servers:write, channels:read, channels:write, messages:read, messages:write, attachments:read, attachments:write, workspaces:read, workspaces:write, buddies:create, buddies:manage",
+          "files": [
+            "packages/oauth/src/types.ts",
+            "apps/server/src/services/oauth.service.ts",
+            "apps/server/src/validators/oauth.schema.ts"
+          ]
         },
         {
           "id": "1.2",
-          "title": "EN index.mdx: alternating tinted sections, gradient dividers, increased spacing",
-          "status": "completed"
+          "title": "Add OAuth token auth middleware",
+          "status": "not-started",
+          "description": "Create oauthAuthMiddleware that validates opaque access tokens (oat_) and sets oauthToken context. Create oauthScopeMiddleware factory function for scope enforcement.",
+          "files": [
+            "apps/server/src/middleware/oauth-auth.middleware.ts"
+          ]
         },
-        { "id": "1.3", "title": "ZH index.mdx: same visual treatment as EN", "status": "completed" }
+        {
+          "id": "1.3",
+          "title": "Extend DB schema for Buddy support",
+          "status": "not-started",
+          "description": "Add oauthAppId and parentUserId to users table. Add oauthAppId and buddyUserId to agents table.",
+          "files": [
+            "apps/server/src/db/schema/users.ts",
+            "apps/server/src/db/schema/agents.ts"
+          ]
+        },
+        {
+          "id": "1.4",
+          "title": "Widen scope column in DB schema",
+          "status": "not-started",
+          "description": "Increase scope varchar length from 255 to 1024 to accommodate multiple new scopes in oauth_authorization_codes, oauth_access_tokens, oauth_consents tables.",
+          "files": [
+            "apps/server/src/db/schema/oauth.ts"
+          ]
+        }
       ]
     },
     {
-      "id": 2,
-      "title": "Placeholder copy & stats consistency",
-      "status": "completed",
-      "subtasks": [
+      "id": "phase-2",
+      "name": "OAuth API Endpoints",
+      "tasks": [
         {
           "id": "2.1",
-          "title": "Remove unimplemented video channel claims (index, features, guide)",
-          "status": "completed"
+          "title": "Implement OAuth servers API",
+          "status": "not-started",
+          "description": "GET /api/oauth/servers (servers:read) - list user's servers. POST /api/oauth/servers (servers:write) - create server. POST /api/oauth/servers/:id/invite (servers:write) - invite user.",
+          "files": [
+            "apps/server/src/handlers/oauth.handler.ts",
+            "apps/server/src/services/oauth.service.ts"
+          ]
         },
         {
           "id": "2.2",
-          "title": "Remove whiteboard/kanban claims that are not yet shipped",
-          "status": "completed"
+          "title": "Implement OAuth channels API",
+          "status": "not-started",
+          "description": "GET /api/oauth/servers/:id/channels (channels:read). POST /api/oauth/channels (channels:write).",
+          "files": [
+            "apps/server/src/handlers/oauth.handler.ts",
+            "apps/server/src/services/oauth.service.ts"
+          ]
         },
         {
           "id": "2.3",
-          "title": "Update comparison table to match product-positioning.md",
-          "status": "not-started"
+          "title": "Implement OAuth messages API",
+          "status": "not-started",
+          "description": "GET /api/oauth/channels/:id/messages (messages:read). POST /api/oauth/channels/:id/messages (messages:write).",
+          "files": [
+            "apps/server/src/handlers/oauth.handler.ts",
+            "apps/server/src/services/oauth.service.ts"
+          ]
         },
         {
           "id": "2.4",
-          "title": "Align testimonials with product-positioning personas",
-          "status": "not-started"
+          "title": "Implement OAuth attachments API",
+          "status": "not-started",
+          "description": "POST /api/oauth/attachments (attachments:write) - upload attachment.",
+          "files": [
+            "apps/server/src/handlers/oauth.handler.ts",
+            "apps/server/src/services/oauth.service.ts"
+          ]
+        },
+        {
+          "id": "2.5",
+          "title": "Implement OAuth workspaces API",
+          "status": "not-started",
+          "description": "GET /api/oauth/workspaces/:id (workspaces:read) - workspace info.",
+          "files": [
+            "apps/server/src/handlers/oauth.handler.ts",
+            "apps/server/src/services/oauth.service.ts"
+          ]
+        },
+        {
+          "id": "2.6",
+          "title": "Implement OAuth buddies API",
+          "status": "not-started",
+          "description": "POST /api/oauth/buddies (buddies:create) - create Buddy bot. POST /api/oauth/buddies/:id/messages (buddies:manage) - Buddy sends message.",
+          "files": [
+            "apps/server/src/handlers/oauth.handler.ts",
+            "apps/server/src/services/oauth.service.ts"
+          ]
         }
       ]
     },
     {
-      "id": 3,
-      "title": "Guide page: expand core concepts with architecture diagrams",
-      "status": "completed",
-      "subtasks": [
+      "id": "phase-3",
+      "name": "OAuth SDK Update",
+      "tasks": [
         {
           "id": "3.1",
-          "title": "Create ArchitectureSvg.tsx bilingual SVG component",
-          "status": "completed"
-        },
-        {
-          "id": "3.2",
-          "title": "Replace old HTML architecture diagram with ArchitectureSvg in EN/ZH guide.mdx",
-          "status": "completed"
-        },
-        {
-          "id": "3.3",
-          "title": "Expand core concept cards with more detail text",
-          "status": "not-started"
+          "title": "Update @shadowob/oauth SDK types and methods",
+          "status": "not-started",
+          "description": "Expand ShadowOAuthScope type with all 14 scopes. Add methods: getServers, createServer, inviteToServer, getChannels, createChannel, getMessages, sendMessage, uploadAttachment, getWorkspace, createBuddy, sendBuddyMessage.",
+          "files": [
+            "packages/oauth/src/types.ts",
+            "packages/oauth/src/client.ts"
+          ]
         }
       ]
     },
     {
-      "id": 4,
-      "title": "Replace ALL emoji with lucide icons across website",
-      "status": "completed",
-      "subtasks": [
+      "id": "phase-4",
+      "name": "Developer Portal & Management UI",
+      "tasks": [
         {
           "id": "4.1",
-          "title": "guide.mdx (EN+ZH): replace emoji with icon components",
-          "status": "completed"
+          "title": "Create OAuth Apps management settings page",
+          "status": "not-started",
+          "description": "Add 'Developer' tab in Settings page with OAuth App CRUD: list apps, create new app (showing clientSecret once), edit, delete, reset secret. Show authorization stats.",
+          "files": [
+            "apps/web/src/pages/settings/developer.tsx",
+            "apps/web/src/pages/settings/index.tsx",
+            "apps/web/src/main.tsx"
+          ]
         },
         {
           "id": "4.2",
-          "title": "tokens.mdx (EN+ZH): replace emoji with icons",
-          "status": "completed"
-        },
-        {
-          "id": "4.3",
-          "title": "buddies.mdx (EN+ZH): replace emoji with icons",
-          "status": "completed"
-        },
-        {
-          "id": "4.4",
-          "title": "index.mdx (EN+ZH): replace emoji with icon",
-          "status": "completed"
-        },
-        {
-          "id": "4.5",
-          "title": "product/*.mdx (EN+ZH): replace all emoji across product pages",
-          "status": "completed"
-        },
-        {
-          "id": "4.6",
-          "title": "Layout.tsx: replace globe emoji with GlobeIcon",
-          "status": "completed"
-        },
-        {
-          "id": "4.7",
-          "title": "ProductComponents.tsx: replace 💡 with icon",
-          "status": "completed"
-        },
-        {
-          "id": "4.8",
-          "title": "Create 29 new icon components in Icons.tsx",
-          "status": "completed"
+          "title": "Update OAuth authorize page for new scopes",
+          "status": "not-started",
+          "description": "Add scope group display and descriptions for all 14 scopes on the authorization consent page.",
+          "files": [
+            "apps/web/src/pages/oauth-authorize.tsx"
+          ]
         }
       ]
     },
     {
-      "id": 5,
-      "title": "Shrimp Coin: use SVG icon instead of 🦐 emoji everywhere",
-      "status": "completed",
-      "subtasks": [
+      "id": "phase-5",
+      "name": "Testing & Validation",
+      "tasks": [
         {
           "id": "5.1",
-          "title": "Create ShrimpCoinIcon SVG component in Icons.tsx",
-          "status": "completed"
+          "title": "Expand E2E tests for all OAuth API endpoints",
+          "status": "not-started",
+          "description": "Add E2E tests for: scope validation, servers CRUD, channels CRUD, messages read/write, attachments, workspaces, buddy creation and messaging, scope enforcement (insufficient_scope errors).",
+          "files": [
+            "apps/server/__tests__/oauth-e2e.test.ts"
+          ]
         },
         {
           "id": "5.2",
-          "title": "Replace all 🦐 emoji with ShrimpCoinIcon across website pages",
-          "status": "completed"
+          "title": "Run full test suite and fix issues",
+          "status": "not-started",
+          "description": "Run vitest for server tests, fix any type errors, lint issues."
+        },
+        {
+          "id": "5.3",
+          "title": "Run typecheck and lint",
+          "status": "not-started",
+          "description": "Ensure biome lint passes and tsc --noEmit passes for all affected packages."
         }
       ]
     },
     {
-      "id": 6,
-      "title": "Rewrite onboarding flow - align with product design docs",
-      "status": "not-started",
-      "subtasks": [
+      "id": "phase-6",
+      "name": "PR Submission",
+      "tasks": [
         {
           "id": "6.1",
-          "title": "Rewrite onboarding-modal.tsx: 3-path split per branding doc",
-          "status": "not-started"
-        },
-        {
-          "id": "6.2",
-          "title": "Rewrite newcomer-guide.tsx: branded slides with product positioning",
-          "status": "not-started"
-        },
-        {
-          "id": "6.3",
-          "title": "Rewrite buddy-onboarding.tsx: desktop download + CLI flow",
-          "status": "not-started"
-        },
-        {
-          "id": "6.4",
-          "title": "Rewrite rental-guide.tsx: marketplace exploration flow",
-          "status": "not-started"
-        },
-        {
-          "id": "6.5",
-          "title": "Auth pages: rebrand login/register (already done)",
-          "status": "completed"
+          "title": "Create feature branch and submit PR",
+          "status": "not-started",
+          "description": "Create branch feat/oauth-open-platform, commit all changes, push, create PR ensuring pr-checks pass."
         }
       ]
-    },
-    {
-      "id": 7,
-      "title": "Dark mode adaptation fixes",
-      "status": "completed",
-      "subtasks": [
-        {
-          "id": "7.1",
-          "title": "Add ~50 CSS dark mode override rules in theme/index.css (bg, gradient, border, text)",
-          "status": "completed"
-        },
-        {
-          "id": "7.2",
-          "title": "Fix faq.mdx and workspace.mdx inline dark: variants (no .shadow-page wrapper)",
-          "status": "completed"
-        }
-      ]
-    },
-    {
-      "id": 8,
-      "title": "Fix product page duplicate titles (SectionHeading + frontmatter h1)",
-      "status": "completed",
-      "subtasks": [
-        {
-          "id": "8.1",
-          "title": "Remove SectionHeading from all 18 product pages (EN+ZH)",
-          "status": "completed"
-        },
-        { "id": "8.2", "title": "Clean up unused SectionHeading imports", "status": "completed" }
-      ]
-    },
-    {
-      "id": 9,
-      "title": "Rewrite all product pages aligned with branding docs",
-      "status": "completed",
-      "subtasks": [
-        {
-          "id": "9.1",
-          "title": "en/product/index.mdx: rewrite Getting Started with 5 steps + 7 feature cards",
-          "status": "completed"
-        },
-        {
-          "id": "9.2",
-          "title": "zh/product/index.mdx: align with EN version",
-          "status": "completed"
-        },
-        {
-          "id": "9.3",
-          "title": "en+zh/product/channels.mdx: add CheckCards, Buddy integration, tips",
-          "status": "completed"
-        },
-        {
-          "id": "9.4",
-          "title": "en+zh/product/ai-assistants.mdx: first-class citizen concept, 4-step guide, 6 capabilities",
-          "status": "completed"
-        },
-        {
-          "id": "9.5",
-          "title": "en+zh/product/communities.mdx: add Buddy as role type",
-          "status": "completed"
-        },
-        {
-          "id": "9.6",
-          "title": "en+zh/product/workspace.mdx: Buddy+Workspace shared context concept",
-          "status": "completed"
-        },
-        {
-          "id": "9.7",
-          "title": "en+zh/product/shop.mdx: 6 product categories from branding doc, fix zh number→num",
-          "status": "completed"
-        },
-        {
-          "id": "9.8",
-          "title": "zh/product/buddy-rental.mdx: full rewrite to match comprehensive EN, fix number→num",
-          "status": "completed"
-        },
-        {
-          "id": "9.9",
-          "title": "en+zh/product/faq.mdx: card format, new Q&As for rental+models",
-          "status": "completed"
-        },
-        {
-          "id": "9.10",
-          "title": "Create en+zh/product/apps.mdx: new Apps page",
-          "status": "completed"
-        }
-      ]
-    },
-    {
-      "id": 10,
-      "title": "Fix rspress build crash (empty imports in faq.mdx)",
-      "status": "completed",
-      "subtasks": [
-        {
-          "id": "10.1",
-          "title": "Remove empty `import { }` from en/product/faq.mdx and zh/product/faq.mdx",
-          "status": "completed"
-        }
-      ]
-    },
-    {
-      "id": 11,
-      "title": "Update comparison table per product-positioning.md",
-      "status": "not-started"
-    },
-    {
-      "id": 12,
-      "title": "Redesign desktop page",
-      "status": "not-started"
-    },
-    {
-      "id": 13,
-      "title": "Redesign homepage left side",
-      "status": "not-started"
-    },
-    {
-      "id": 14,
-      "title": "Update E2E tests to match all changes",
-      "status": "not-started"
-    },
-    {
-      "id": 15,
-      "title": "Docker build verification",
-      "status": "completed"
     }
   ]
 }

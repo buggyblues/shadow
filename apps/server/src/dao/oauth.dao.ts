@@ -7,6 +7,8 @@ import {
   oauthConsents,
   oauthRefreshTokens,
 } from '../db/schema'
+import { agents } from '../db/schema/agents'
+import { users } from '../db/schema/users'
 
 export class OAuthAppDao {
   constructor(private deps: { db: Database }) {}
@@ -206,5 +208,42 @@ export class OAuthAppDao {
     await this.db
       .delete(oauthConsents)
       .where(and(eq(oauthConsents.userId, userId), eq(oauthConsents.appId, appId)))
+  }
+
+  // --- Buddy helpers ---
+
+  async updateBuddyUser(
+    userId: string,
+    data: { isBot: boolean; oauthAppId: string; parentUserId: string },
+  ) {
+    await this.db
+      .update(users)
+      .set({
+        isBot: data.isBot,
+        oauthAppId: data.oauthAppId,
+        parentUserId: data.parentUserId,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+  }
+
+  async updateBuddyAgent(agentId: string, data: { oauthAppId: string; buddyUserId: string }) {
+    await this.db
+      .update(agents)
+      .set({
+        oauthAppId: data.oauthAppId,
+        buddyUserId: data.buddyUserId,
+        updatedAt: new Date(),
+      })
+      .where(eq(agents.id, agentId))
+  }
+
+  async getBuddyUserId(agentId: string): Promise<string | null> {
+    const result = await this.db
+      .select({ buddyUserId: agents.buddyUserId })
+      .from(agents)
+      .where(eq(agents.id, agentId))
+      .limit(1)
+    return result[0]?.buddyUserId ?? null
   }
 }

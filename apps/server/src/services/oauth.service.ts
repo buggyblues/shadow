@@ -7,6 +7,11 @@ import type {
   CreateOAuthAppInput,
   UpdateOAuthAppInput,
 } from '../validators/oauth.schema'
+import type { AgentService } from './agent.service'
+import type { ChannelService } from './channel.service'
+import type { MessageService } from './message.service'
+import type { ServerService } from './server.service'
+import type { WorkspaceService } from './workspace.service'
 
 function generateToken(prefix: string): string {
   return `${prefix}_${randomBytes(32).toString('hex')}`
@@ -28,11 +33,33 @@ const ACCESS_TOKEN_TTL_MS = 60 * 60 * 1000 // 1 hour
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 const AUTH_CODE_TTL_MS = 10 * 60 * 1000 // 10 minutes
 
+export const VALID_OAUTH_SCOPES = [
+  'user:read',
+  'user:email',
+  'servers:read',
+  'servers:write',
+  'channels:read',
+  'channels:write',
+  'messages:read',
+  'messages:write',
+  'attachments:read',
+  'attachments:write',
+  'workspaces:read',
+  'workspaces:write',
+  'buddies:create',
+  'buddies:manage',
+] as const
+
 export class OAuthService {
   constructor(
     private deps: {
       oauthAppDao: OAuthAppDao
       userDao: UserDao
+      serverService: ServerService
+      channelService: ChannelService
+      messageService: MessageService
+      workspaceService: WorkspaceService
+      agentService: AgentService
     },
   ) {}
 
@@ -138,10 +165,9 @@ export class OAuthService {
       throw Object.assign(new Error('Invalid redirect_uri'), { status: 400 })
     }
     // validate scope
-    const validScopes = ['user:read', 'user:email']
     const requestedScopes = scope.split(' ').filter(Boolean)
     for (const s of requestedScopes) {
-      if (!validScopes.includes(s)) {
+      if (!(VALID_OAUTH_SCOPES as readonly string[]).includes(s)) {
         throw Object.assign(new Error(`Invalid scope: ${s}`), { status: 400 })
       }
     }
@@ -362,5 +388,199 @@ export class OAuthService {
     await oauthAppDao.revokeRefreshTokensByAppAndUser(appId, userId)
     await oauthAppDao.deleteAccessTokensByAppAndUser(appId, userId)
     await oauthAppDao.deleteConsent(userId, appId)
+  }
+
+  // ─── OAuth API: Servers ───────────────────────────
+
+  async getServers(userId: string) {
+    const { serverService } = this.deps
+    const servers = await serverService.getUserServers(userId)
+    return servers.map((s) => ({
+      id: s.server.id,
+      name: s.server.name,
+      slug: s.server.slug,
+      iconUrl: s.server.iconUrl,
+      isPublic: s.server.isPublic,
+    }))
+  }
+
+  async createServer(userId: string, input: { name: string; description?: string }) {
+    const { serverService } = this.deps
+    const server = await serverService.create(
+      { name: input.name, description: input.description },
+      userId,
+    )
+    if (!server) {
+      throw Object.assign(new Error('Failed to create server'), { status: 500 })
+    }
+    return {
+      id: server.id,
+      name: server.name,
+      slug: server.slug,
+      iconUrl: server.iconUrl,
+      isPublic: server.isPublic,
+    }
+  }
+
+  async inviteToServer(serverId: string, targetUserId: string) {
+    const { serverService } = this.deps
+    // Get server to verify it exists and get the invite code
+    const server = await serverService.getById(serverId)
+    if (!server) {
+      throw Object.assign(new Error('Server not found'), { status: 404 })
+    }
+    // Add user as a member
+    await serverService.join(server.inviteCode, targetUserId)
+    return { ok: true }
+  }
+
+  // ─── OAuth API: Channels ──────────────────────────
+
+  async getChannels(serverId: string) {
+    const { channelService } = this.deps
+    const channels = await channelService.getByServerId(serverId)
+    return channels.map((ch) => ({
+      id: ch.id,
+      name: ch.name,
+      type: ch.type,
+      topic: ch.topic,
+    }))
+  }
+
+  async createChannel(userId: string, input: { serverId: string; name: string; type?: string }) {
+    const { channelService } = this.deps
+    const channel = await channelService.create(
+      input.serverId,
+      {
+        name: input.name,
+        type: (input.type as 'text' | 'voice' | 'announcement') ?? 'text',
+      },
+      userId,
+    )
+    if (!channel) {
+      throw Object.assign(new Error('Failed to create channel'), { status: 500 })
+    }
+    return {
+      id: channel.id,
+      name: channel.name,
+      type: channel.type,
+      topic: channel.topic,
+    }
+  }
+
+  // ─── OAuth API: Messages ──────────────────────────
+
+  async getMessages(channelId: string, limit?: number, cursor?: string) {
+    const { messageService } = this.deps
+    const result = await messageService.getByChannelId(channelId, limit, cursor)
+    return {
+      messages: result.messages.map((m) => ({
+        id: m.id,
+        content: m.content,
+        channelId: m.channelId,
+        authorId: m.authorId,
+        createdAt: m.createdAt,
+      })),
+      hasMore: result.hasMore,
+    }
+  }
+
+  async sendMessage(channelId: string, authorId: string, input: { content: string }) {
+    const { messageService } = this.deps
+    const message = await messageService.send(channelId, authorId, { content: input.content })
+    return {
+      id: message.id,
+      content: message.content,
+      channelId: message.channelId,
+      authorId: message.authorId,
+      createdAt: message.createdAt,
+    }
+  }
+
+  // ─── OAuth API: Workspaces ────────────────────────
+
+  async getWorkspace(workspaceId: string) {
+    const { workspaceService } = this.deps
+    const workspace = await workspaceService.getById(workspaceId)
+    if (!workspace) {
+      throw Object.assign(new Error('Workspace not found'), { status: 404 })
+    }
+    return {
+      id: workspace.id,
+      name: workspace.name,
+      description: workspace.description,
+      serverId: workspace.serverId,
+    }
+  }
+
+  // ─── OAuth API: Buddies ───────────────────────────
+
+  async createBuddy(userId: string, appId: string, input: { name: string; kernelType?: string }) {
+    const { agentService, userDao } = this.deps
+
+    // Create bot sub-account
+    const botUsername = `buddy_${randomBytes(4).toString('hex')}`
+    const botEmail = `${botUsername}@buddy.shadowob.internal`
+    const botUser = await userDao.create({
+      email: botEmail,
+      username: botUsername,
+      passwordHash: 'oauth-buddy-no-login',
+      displayName: input.name,
+    })
+    if (!botUser) {
+      throw Object.assign(new Error('Failed to create buddy user'), { status: 500 })
+    }
+
+    // Mark as bot with oauth app association (via direct DB update since UserDao.create doesn't support these)
+    const { oauthAppDao } = this.deps
+    await oauthAppDao.updateBuddyUser(botUser.id, {
+      isBot: true,
+      oauthAppId: appId,
+      parentUserId: userId,
+    })
+
+    // Create agent
+    const agent = await agentService.create({
+      name: input.name,
+      username: botUsername,
+      kernelType: input.kernelType ?? 'buddy',
+      config: {},
+      ownerId: userId,
+    })
+
+    // Update agent with buddy fields
+    await oauthAppDao.updateBuddyAgent(agent.id, { oauthAppId: appId, buddyUserId: botUser.id })
+
+    return {
+      id: agent.id,
+      userId: botUser.id,
+      agentId: agent.id,
+    }
+  }
+
+  async sendBuddyMessage(buddyAgentId: string, input: { channelId: string; content: string }) {
+    const { agentService, messageService, oauthAppDao } = this.deps
+
+    // Verify the agent exists and is a buddy
+    const agent = await agentService.getById(buddyAgentId)
+    if (!agent) {
+      throw Object.assign(new Error('Buddy not found'), { status: 404 })
+    }
+
+    const buddyUserId = await oauthAppDao.getBuddyUserId(buddyAgentId)
+    if (!buddyUserId) {
+      throw Object.assign(new Error('Buddy user not found'), { status: 404 })
+    }
+
+    const message = await messageService.send(input.channelId, buddyUserId, {
+      content: input.content,
+    })
+    return {
+      id: message.id,
+      content: message.content,
+      channelId: message.channelId,
+      authorId: message.authorId,
+      createdAt: message.createdAt,
+    }
   }
 }

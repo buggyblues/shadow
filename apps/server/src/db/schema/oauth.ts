@@ -32,7 +32,7 @@ export const oauthAuthorizationCodes = pgTable('oauth_authorization_codes', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   redirectUri: text('redirect_uri').notNull(),
-  scope: varchar('scope', { length: 255 }).notNull().default('user:read'),
+  scope: varchar('scope', { length: 1024 }).notNull().default('user:read'),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   used: boolean('used').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -49,7 +49,7 @@ export const oauthAccessTokens = pgTable('oauth_access_tokens', {
   userId: uuid('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
-  scope: varchar('scope', { length: 255 }).notNull().default('user:read'),
+  scope: varchar('scope', { length: 1024 }).notNull().default('user:read'),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
@@ -83,7 +83,7 @@ export const oauthConsents = pgTable('oauth_consents', {
   appId: uuid('app_id')
     .notNull()
     .references(() => oauthApps.id, { onDelete: 'cascade' }),
-  scope: varchar('scope', { length: 255 }).notNull(),
+  scope: varchar('scope', { length: 1024 }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })
