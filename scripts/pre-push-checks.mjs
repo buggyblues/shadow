@@ -107,12 +107,39 @@ function findFiles(dir, pattern) {
   return results
 }
 
+// 4. Sync skills from project root to openclaw plugin
+function syncSkills() {
+  const skillsSrc = path.join(ROOT, 'skills', 'shadowob-cli', 'SKILL.md')
+  const skillsDest = path.join(ROOT, 'packages', 'openclaw-shadowob', 'skills', 'shadowob', 'SKILL.md')
+
+  if (!fs.existsSync(skillsSrc)) return // No root skills to sync
+
+  const srcContent = fs.readFileSync(skillsSrc, 'utf8')
+  let destContent = ''
+  if (fs.existsSync(skillsDest)) {
+    destContent = fs.readFileSync(skillsDest, 'utf8')
+  }
+
+  if (srcContent !== destContent) {
+    fs.mkdirSync(path.dirname(skillsDest), { recursive: true })
+    fs.writeFileSync(skillsDest, srcContent, 'utf8')
+    // Stage the synced file so it's included in the commit
+    try {
+      execSync(`git add "${path.relative(ROOT, skillsDest)}"`, { cwd: ROOT, stdio: 'pipe' })
+    } catch {
+      // If git add fails (e.g. not in git repo), just warn
+    }
+    warnings.push(`Synced skills/shadowob-cli/SKILL.md → packages/openclaw-shadowob/skills/shadowob/SKILL.md`)
+  }
+}
+
 function main() {
   console.log('Running pre-push checks...\n')
 
   checkTestOnlyDirectives()
   checkDebugArtifacts()
   checkLockfile()
+  syncSkills()
 
   if (warnings.length > 0) {
     console.warn('\x1b[33m⚠ Warnings:\x1b[0m')

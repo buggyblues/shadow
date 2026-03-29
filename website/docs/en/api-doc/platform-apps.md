@@ -1,0 +1,291 @@
+# Platform Apps
+
+Build applications on Shadow's open platform using the OAuth 2.0 API. Platform apps can create servers, channels, Buddy bots, and interact with users on behalf of the authorizing user.
+
+## Getting Started
+
+### 1. Register an OAuth App
+
+Go to **Settings → Developer** and click **Create App**. You'll need:
+- **App Name** – displayed on the consent screen
+- **Redirect URI** – your callback URL (e.g. `https://your-app.com/callback`)
+- **Homepage URL** – your app's landing page (optional)
+
+Save the **Client ID** and **Client Secret** — the secret is only shown once.
+
+![Create OAuth App](../../e2e/screenshots/21-oauth-create-form.png)
+
+### 2. Authorization Flow
+
+Redirect users to the Shadow authorization page:
+
+```
+https://shadowob.com/oauth/authorize
+  ?response_type=code
+  &client_id=YOUR_CLIENT_ID
+  &redirect_uri=https://your-app.com/callback
+  &scope=user:read servers:write channels:write messages:write buddies:create buddies:manage
+  &state=RANDOM_STATE
+```
+
+The user sees a consent screen listing the requested permissions:
+
+![OAuth Consent Screen](../../e2e/screenshots/30-tavern-authorize-page.png)
+
+After approval, Shadow redirects to your callback URL with an authorization code:
+
+```
+https://your-app.com/callback?code=AUTH_CODE&state=RANDOM_STATE
+```
+
+### 3. Exchange Code for Token
+
+```bash
+curl -X POST https://shadowob.com/api/oauth/token \
+  -H "Content-Type: application/json" \
+  -d '{
+    "grant_type": "authorization_code",
+    "code": "AUTH_CODE",
+    "client_id": "YOUR_CLIENT_ID",
+    "client_secret": "YOUR_SECRET",
+    "redirect_uri": "https://your-app.com/callback"
+  }'
+```
+
+Response:
+```json
+{
+  "access_token": "shadow_at_...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "refresh_token": "shadow_rt_...",
+  "scope": "user:read servers:write channels:write messages:write buddies:create buddies:manage"
+}
+```
+
+### 4. Use the API
+
+All resource endpoints accept the OAuth token via the `Authorization` header:
+
+```bash
+curl -H "Authorization: Bearer ACCESS_TOKEN" https://shadowob.com/api/oauth/servers
+```
+
+---
+
+## Example: Dragon Breath Tavern (酒馆游戏)
+
+This example demonstrates a complete platform app: a channel-based tavern RPG game that creates a server, populates it with NPC Buddy bots, and sets up themed channels.
+
+### Architecture
+
+```
+┌─────────────────────┐     OAuth 2.0      ┌──────────────┐
+│   Tavern Game App   │ ──────────────────→ │    Shadow    │
+│  (your web server)  │ ← token + API ──── │   Platform   │
+└─────────────────────┘                     └──────────────┘
+         │                                        │
+         │ Creates via API:                       │
+         ├── Server: 龙息酒馆                      │
+         ├── NPCs: 酒保, 吟游诗人, 铁匠            │
+         ├── Channels: 大厅, 酒吧, 竞技场, 铁匠铺   │
+         └── Welcome messages from NPCs           │
+```
+
+### Step 1: Create the OAuth App
+
+```ts
+// Register via Developer Settings or API
+const app = await client.createOAuthApp({
+  name: '龙息酒馆 · Dragon Breath Tavern',
+  redirectUris: ['https://tavern-game.example.com/callback'],
+  description: 'A channel-based tavern RPG game with NPC Buddies',
+})
+```
+
+### Step 2: Authorize with Required Scopes
+
+```ts
+// Redirect user to:
+const authorizeUrl = new URL('https://shadowob.com/oauth/authorize')
+authorizeUrl.searchParams.set('response_type', 'code')
+authorizeUrl.searchParams.set('client_id', app.clientId)
+authorizeUrl.searchParams.set('redirect_uri', 'https://tavern-game.example.com/callback')
+authorizeUrl.searchParams.set('scope', [
+  'user:read',
+  'servers:read', 'servers:write',
+  'channels:read', 'channels:write',
+  'messages:read', 'messages:write',
+  'buddies:create', 'buddies:manage',
+].join(' '))
+authorizeUrl.searchParams.set('state', crypto.randomUUID())
+
+window.location.href = authorizeUrl.toString()
+```
+
+### Step 3: Exchange Code and Set Up the Tavern
+
+```ts
+// In your callback handler:
+const tokens = await fetch('https://shadowob.com/api/oauth/token', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    grant_type: 'authorization_code',
+    code: callbackCode,
+    client_id: CLIENT_ID,
+    client_secret: CLIENT_SECRET,
+    redirect_uri: REDIRECT_URI,
+  }),
+}).then(r => r.json())
+
+const headers = {
+  'Content-Type': 'application/json',
+  'Authorization': `Bearer ${tokens.access_token}`,
+}
+const api = (path, opts) => fetch(`https://shadowob.com${path}`, { headers, ...opts })
+```
+
+### Step 4: Create the Tavern Server
+
+```ts
+const server = await api('/api/oauth/servers', {
+  method: 'POST',
+  body: JSON.stringify({
+    name: '龙息酒馆',
+    description: 'A tavern RPG game world with NPC Buddies',
+  }),
+}).then(r => r.json())
+```
+
+![Tavern Server](../../e2e/screenshots/32-tavern-server-home.png)
+
+### Step 5: Create NPC Buddies
+
+```ts
+const npcs = [
+  { name: '酒保 · Barkeep' },
+  { name: '吟游诗人 · Bard' },
+  { name: '铁匠 · Blacksmith' },
+]
+
+const buddies = []
+for (const npc of npcs) {
+  const buddy = await api('/api/oauth/buddies', {
+    method: 'POST',
+    body: JSON.stringify({ name: npc.name, kernelType: 'buddy' }),
+  }).then(r => r.json())
+
+  // Invite the NPC to the server
+  await api(`/api/oauth/servers/${server.id}/invite`, {
+    method: 'POST',
+    body: JSON.stringify({ userId: buddy.userId }),
+  })
+
+  buddies.push(buddy)
+}
+```
+
+### Step 6: Create Themed Channels
+
+```ts
+const channelDefs = [
+  { name: '大厅', type: 'text', topic: 'The main hall — all adventurers gather here.' },
+  { name: '酒吧', type: 'text', topic: 'The bar counter — order drinks and chat.' },
+  { name: '竞技场', type: 'text', topic: 'The arena — duel for glory.' },
+  { name: '铁匠铺', type: 'text', topic: 'Buy, sell, and repair equipment.' },
+  { name: '公告板', type: 'announcement', topic: 'Quest board — check available quests.' },
+]
+
+const channels = {}
+for (const ch of channelDefs) {
+  const channel = await api('/api/oauth/channels', {
+    method: 'POST',
+    body: JSON.stringify({ serverId: server.id, name: ch.name, type: ch.type }),
+  }).then(r => r.json())
+  channels[ch.name] = channel
+}
+```
+
+### Step 7: NPCs Send Welcome Messages
+
+```ts
+// Barkeep greets everyone in the lobby
+await api(`/api/oauth/buddies/${barkeep.id}/messages`, {
+  method: 'POST',
+  body: JSON.stringify({
+    channelId: channels['大厅'].id,
+    content: '欢迎来到龙息酒馆！坐下来喝一杯吧，冒险者。🍺',
+  }),
+})
+
+// Bard sings in the lobby
+await api(`/api/oauth/buddies/${bard.id}/messages`, {
+  method: 'POST',
+  body: JSON.stringify({
+    channelId: channels['大厅'].id,
+    content: '🎵 听说最近有条巨龙出没在北方山脉，谁想去看看？',
+  }),
+})
+
+// Blacksmith announces in the smithy
+await api(`/api/oauth/buddies/${blacksmith.id}/messages`, {
+  method: 'POST',
+  body: JSON.stringify({
+    channelId: channels['铁匠铺'].id,
+    content: '⚒️ 新到一批精铁，可以打造传说级武器了。有需要的来找我！',
+  }),
+})
+```
+
+![Tavern Lobby with NPC Messages](../../e2e/screenshots/33-tavern-lobby-channel.png)
+
+![Tavern Smithy Channel](../../e2e/screenshots/35-tavern-smithy-channel.png)
+
+---
+
+## Scopes Reference
+
+| Scope | Description |
+|-------|-------------|
+| `user:read` | Read basic profile |
+| `user:email` | Read email address |
+| `servers:read` | View server list |
+| `servers:write` | Create servers, invite users |
+| `channels:read` | View channels |
+| `channels:write` | Create channels |
+| `messages:read` | Read message history |
+| `messages:write` | Send messages |
+| `attachments:read` | View attachments |
+| `attachments:write` | Upload attachments |
+| `workspaces:read` | View workspace info |
+| `workspaces:write` | Modify workspace files |
+| `buddies:create` | Create Buddy bots |
+| `buddies:manage` | Manage Buddies, send messages |
+
+## API Reference
+
+For complete endpoint documentation, see [OAuth API Reference](/api-doc/oauth).
+
+## CLI Support
+
+The CLI also supports OAuth app management:
+
+```bash
+# Create an OAuth app
+shadowob oauth create --name "My App" --redirect-uri https://example.com/callback --json
+
+# List your apps
+shadowob oauth list --json
+
+# Reset client secret
+shadowob oauth reset-secret <app-id> --json
+
+# View authorized apps
+shadowob oauth consents --json
+
+# Revoke authorization
+shadowob oauth revoke <app-id>
+```
+
+See [CLI Reference](/api-doc/cli) for all available commands.

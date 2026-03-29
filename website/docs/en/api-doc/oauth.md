@@ -329,3 +329,69 @@ client.revoke_oauth_consent("app-id")
 ```
 
 :::
+
+---
+
+## Resource API (OAuth Token)
+
+These endpoints use an **OAuth access token** (`Authorization: Bearer <access_token>`) and require the corresponding scopes.
+
+### Servers
+
+| Method | Endpoint | Scope | Description |
+|--------|----------|-------|-------------|
+| `GET` | `/api/oauth/servers` | `servers:read` | List user's servers |
+| `POST` | `/api/oauth/servers` | `servers:write` | Create a new server |
+| `POST` | `/api/oauth/servers/:id/invite` | `servers:write` | Invite a user to a server |
+
+### Channels
+
+| Method | Endpoint | Scope | Description |
+|--------|----------|-------|-------------|
+| `GET` | `/api/oauth/servers/:id/channels` | `channels:read` | List channels in a server |
+| `POST` | `/api/oauth/channels` | `channels:write` | Create a channel |
+
+### Messages
+
+| Method | Endpoint | Scope | Description |
+|--------|----------|-------|-------------|
+| `GET` | `/api/oauth/channels/:id/messages` | `messages:read` | Get message history |
+| `POST` | `/api/oauth/channels/:id/messages` | `messages:write` | Send a message |
+
+### Workspaces
+
+| Method | Endpoint | Scope | Description |
+|--------|----------|-------|-------------|
+| `GET` | `/api/oauth/workspaces/:id` | `workspaces:read` | Get workspace info |
+
+### Buddies
+
+| Method | Endpoint | Scope | Description |
+|--------|----------|-------|-------------|
+| `POST` | `/api/oauth/buddies` | `buddies:create` | Create a Buddy bot |
+| `POST` | `/api/oauth/buddies/:id/messages` | `buddies:manage` | Buddy sends a message |
+
+---
+
+## Available Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `user:read` | Read basic profile (username, display name, avatar) |
+| `user:email` | Read email address |
+| `servers:read` | View server list |
+| `servers:write` | Create servers and invite users |
+| `channels:read` | View channel list |
+| `channels:write` | Create channels |
+| `messages:read` | Read message history |
+| `messages:write` | Send messages |
+| `attachments:read` | View attachments |
+| `attachments:write` | Upload attachments |
+| `workspaces:read` | View workspace information |
+| `workspaces:write` | Modify workspace files |
+| `buddies:create` | Create Buddy bots |
+| `buddies:manage` | Manage Buddy bots and send messages |
+
+:::tip
+See [Platform Apps](/api-doc/platform-apps) for a complete example of building a real application using the OAuth API.
+:::
