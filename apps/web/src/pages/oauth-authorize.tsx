@@ -13,6 +13,22 @@ interface AuthorizeInfo {
   state?: string
 }
 
+function AuthAppLogo({ url, name }: { url: string | null; name: string }) {
+  const [failed, setFailed] = useState(false)
+
+  if (url && !failed) {
+    return (
+      <img src={url} alt={name} className="w-12 h-12 rounded-lg" onError={() => setFailed(true)} />
+    )
+  }
+
+  return (
+    <div className="w-12 h-12 rounded-lg bg-[#5865F2] flex items-center justify-center text-white font-bold text-lg">
+      {name[0]?.toUpperCase()}
+    </div>
+  )
+}
+
 /**
  * OAuth authorize page — shown when a third-party app requests user authorization
  * URL: /oauth/authorize?response_type=code&client_id=xxx&redirect_uri=xxx&scope=xxx&state=xxx
@@ -157,17 +173,7 @@ export function OAuthAuthorizePage() {
         {appInfo && (
           <>
             <div className="flex items-center gap-3 mb-6 p-4 bg-bg-secondary rounded-md">
-              {appInfo.appLogoUrl ? (
-                <img
-                  src={appInfo.appLogoUrl}
-                  alt={appInfo.appName}
-                  className="w-12 h-12 rounded-lg"
-                />
-              ) : (
-                <div className="w-12 h-12 rounded-lg bg-[#5865F2] flex items-center justify-center text-white font-bold text-lg">
-                  {appInfo.appName[0]?.toUpperCase()}
-                </div>
-              )}
+              <AuthAppLogo url={appInfo.appLogoUrl} name={appInfo.appName} />
               <div>
                 <p className="text-white font-medium">{appInfo.appName}</p>
                 {appInfo.homepageUrl && (

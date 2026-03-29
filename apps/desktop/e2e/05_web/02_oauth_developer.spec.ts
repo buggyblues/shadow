@@ -123,7 +123,7 @@ test.describe
       await expect(page.getByText('开发者设置')).toBeVisible({ timeout: 10_000 })
       await screenshot(page, '20-oauth-developer-empty.png')
 
-      // --- Create an OAuth app ---
+      // --- Create an OAuth app (WITHOUT logo — verify no broken image) ---
       await page.getByText('创建应用').click()
       await page.waitForTimeout(300)
 
@@ -137,10 +137,7 @@ test.describe
       const redirectInput = page.locator('input[placeholder="https://your-app.com/callback"]')
       await redirectInput.fill('https://e2e-test.shadowob.com/callback')
 
-      // Fill in the logo URL using the server's own favicon
-      const logoInput = page.locator('input[placeholder="https://your-app.com/icon.png"]')
-      await logoInput.fill(`${session.origin}/favicon.svg`)
-
+      // Intentionally skip logo — verify the first-letter fallback works
       await screenshot(page, '21-oauth-create-form.png')
 
       // Submit the form (use type=submit to distinguish from the header button)
@@ -159,6 +156,16 @@ test.describe
       await expect(page.getByText('E2E Test OAuth App').first()).toBeVisible()
       await expect(page.getByText('Created by Playwright E2E').first()).toBeVisible()
 
+      // Verify no broken <img> in the app card — the first-letter fallback should show instead
+      const appCardCheck = page
+        .locator('div.bg-bg-secondary')
+        .filter({ hasText: 'E2E Test OAuth App' })
+        .first()
+      // No <img> should exist inside the card logo area (we skipped logo, so it should render a text avatar)
+      await expect(appCardCheck.locator('img').first()).not.toBeVisible()
+      // The first-letter avatar "E" should be visible
+      await expect(appCardCheck.getByText('E').first()).toBeVisible()
+
       // Verify Client ID is visible
       const clientIdEl = page
         .locator('code')
@@ -166,6 +173,49 @@ test.describe
         .first()
       await expect(clientIdEl).toBeVisible()
       await screenshot(page, '23-oauth-app-card.png')
+
+      // --- Edit the app: add a logo URL ---
+      const appCardForEdit = page
+        .locator('div.bg-bg-secondary')
+        .filter({ hasText: 'E2E Test OAuth App' })
+        .first()
+      const editBtn = appCardForEdit.locator('button[title="编辑应用"]')
+      await editBtn.click()
+      await page.waitForTimeout(300)
+
+      // The inline edit form should appear
+      const editForm = appCardForEdit.locator('form')
+      await expect(editForm).toBeVisible()
+
+      // Set a logo URL (use Logo.svg which is served by the web container)
+      const logoInput = editForm.locator('input[placeholder="https://your-app.com/icon.png"]')
+      await logoInput.fill(`${session.origin}/Logo.svg`)
+
+      await screenshot(page, '23b-oauth-edit-form.png')
+
+      // Save the edit and wait for both PATCH response and the subsequent GET refetch
+      const saveBtn = editForm.locator('button[type="submit"]', { hasText: '保存' })
+      const patchPromise = page.waitForResponse(
+        (resp) => resp.url().includes('/api/oauth/apps/') && resp.request().method() === 'PATCH',
+      )
+      const refetchPromise = page.waitForResponse(
+        (resp) =>
+          resp.url().includes('/api/oauth/apps') &&
+          resp.request().method() === 'GET' &&
+          resp.status() === 200,
+      )
+      await saveBtn.click()
+      await patchPromise
+      await refetchPromise
+      await page.waitForTimeout(500)
+
+      // After edit, the app card should now show an <img> with the logo
+      const appCardAfterEdit = page
+        .locator('div.bg-bg-secondary')
+        .filter({ hasText: 'E2E Test OAuth App' })
+        .first()
+      await expect(appCardAfterEdit.locator('img').first()).toBeVisible({ timeout: 10_000 })
+      await screenshot(page, '23c-oauth-app-card-with-logo.png')
 
       // --- Reset secret ---
       const appCardForReset = page

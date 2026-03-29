@@ -188,7 +188,7 @@ test.describe
           description: 'A channel-based tavern RPG game with NPC Buddies',
           redirectUris: [CALLBACK_URL],
           homepageUrl: 'https://tavern-game.example.com',
-          logoUrl: `${session.origin}/favicon.svg`,
+          logoUrl: `${session.origin}/Logo.svg`,
         },
       })
 

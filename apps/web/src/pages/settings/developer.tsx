@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Copy, Eye, EyeOff, Plus, RotateCw, Trash2 } from 'lucide-react'
+import { AlertTriangle, Copy, Eye, EyeOff, Pencil, Plus, RotateCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { fetchApi } from '../../lib/api'
 
@@ -19,12 +19,47 @@ interface CreateAppResult extends OAuthApp {
   clientSecret: string
 }
 
+/** Renders app logo with automatic fallback to first-letter avatar on error */
+function AppLogo({
+  url,
+  name,
+  size = 'w-10 h-10',
+  textSize = 'text-base',
+}: {
+  url: string | null
+  name: string
+  size?: string
+  textSize?: string
+}) {
+  const [failed, setFailed] = useState(false)
+
+  if (url && !failed) {
+    return (
+      <img
+        src={url}
+        alt={name}
+        className={`${size} rounded-lg object-cover`}
+        onError={() => setFailed(true)}
+      />
+    )
+  }
+
+  return (
+    <div
+      className={`${size} rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold ${textSize}`}
+    >
+      {name[0]?.toUpperCase()}
+    </div>
+  )
+}
+
 export function DeveloperSettings() {
   const queryClient = useQueryClient()
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newSecret, setNewSecret] = useState<string | null>(null)
   const [showSecret, setShowSecret] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [editingAppId, setEditingAppId] = useState<string | null>(null)
 
   const { data: apps = [], isLoading } = useQuery({
     queryKey: ['oauth-apps'],
@@ -67,6 +102,26 @@ export function DeveloperSettings() {
     onSuccess: (result) => {
       setNewSecret(result.clientSecret)
       setShowSecret(true)
+    },
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({
+      appId,
+      data,
+    }: {
+      appId: string
+      data: {
+        name?: string
+        description?: string
+        redirectUris?: string[]
+        homepageUrl?: string
+        logoUrl?: string
+      }
+    }) => fetchApi(`/api/oauth/apps/${appId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    onSuccess: () => {
+      setEditingAppId(null)
+      queryClient.invalidateQueries({ queryKey: ['oauth-apps'] })
     },
   })
 
@@ -155,17 +210,7 @@ export function DeveloperSettings() {
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  {app.logoUrl ? (
-                    <img
-                      src={app.logoUrl}
-                      alt={app.name}
-                      className="w-10 h-10 rounded-lg object-cover"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold">
-                      {app.name[0]?.toUpperCase()}
-                    </div>
-                  )}
+                  <AppLogo url={app.logoUrl} name={app.name} />
                   <div>
                     <h3 className="font-semibold text-text-primary">{app.name}</h3>
                     {app.description && (
@@ -174,6 +219,14 @@ export function DeveloperSettings() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setEditingAppId(editingAppId === app.id ? null : app.id)}
+                    className="p-2 text-text-muted hover:text-primary hover:bg-bg-modifier-hover rounded-lg transition"
+                    title="编辑应用"
+                  >
+                    <Pencil size={16} />
+                  </button>
                   <button
                     type="button"
                     onClick={() => resetSecretMutation.mutate(app.id)}
@@ -259,10 +312,68 @@ export function DeveloperSettings() {
                   </div>
                 </div>
               )}
+
+              {/* Inline edit form */}
+              {editingAppId === app.id && (
+                <EditAppForm
+                  app={app}
+                  onSave={(data) => updateMutation.mutate({ appId: app.id, data })}
+                  onCancel={() => setEditingAppId(null)}
+                  isPending={updateMutation.isPending}
+                />
+              )}
             </div>
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+function LogoUploader({
+  value,
+  onChange,
+  name,
+}: {
+  value: string
+  onChange: (v: string) => void
+  name: string
+}) {
+  const [showUrlInput, setShowUrlInput] = useState(!!value)
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-text-secondary mb-1">应用图标</label>
+      <div className="flex items-start gap-4">
+        <button
+          type="button"
+          onClick={() => setShowUrlInput(true)}
+          className="w-16 h-16 rounded-xl border-2 border-dashed border-border-subtle hover:border-primary/50 flex items-center justify-center transition shrink-0 overflow-hidden group"
+          title="设置应用图标"
+        >
+          {value.trim() ? (
+            <AppLogo url={value.trim()} name={name || 'A'} size="w-16 h-16" textSize="text-2xl" />
+          ) : (
+            <span className="text-text-muted text-xs text-center leading-tight group-hover:text-primary transition">
+              点击
+              <br />
+              设置
+            </span>
+          )}
+        </button>
+        {showUrlInput && (
+          <div className="flex-1">
+            <input
+              type="url"
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder="https://your-app.com/icon.png"
+              className="w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50"
+            />
+            <p className="text-xs text-text-muted mt-1">可选，输入图标的 URL 地址</p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -359,28 +470,7 @@ function CreateAppForm({
         />
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-text-secondary mb-1">应用图标 URL</label>
-        <div className="flex items-center gap-3">
-          {logoUrl.trim() && (
-            <img
-              src={logoUrl.trim()}
-              alt="App icon preview"
-              className="w-10 h-10 rounded-lg object-cover border border-border-subtle"
-              onError={(e) => {
-                ;(e.target as HTMLImageElement).style.display = 'none'
-              }}
-            />
-          )}
-          <input
-            type="url"
-            value={logoUrl}
-            onChange={(e) => setLogoUrl(e.target.value)}
-            placeholder="https://your-app.com/icon.png"
-            className="w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50"
-          />
-        </div>
-      </div>
+      <LogoUploader value={logoUrl} onChange={setLogoUrl} name={name} />
 
       <div className="flex gap-2 justify-end">
         <button
@@ -396,6 +486,123 @@ function CreateAppForm({
           className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 transition disabled:opacity-50"
         >
           {isPending ? '创建中...' : '创建应用'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+function EditAppForm({
+  app,
+  onSave,
+  onCancel,
+  isPending,
+}: {
+  app: OAuthApp
+  onSave: (data: {
+    name?: string
+    description?: string
+    redirectUris?: string[]
+    homepageUrl?: string
+    logoUrl?: string
+  }) => void
+  onCancel: () => void
+  isPending: boolean
+}) {
+  const [name, setName] = useState(app.name)
+  const [description, setDescription] = useState(app.description ?? '')
+  const [redirectUri, setRedirectUri] = useState(app.redirectUris[0] ?? '')
+  const [homepageUrl, setHomepageUrl] = useState(app.homepageUrl ?? '')
+  const [logoUrl, setLogoUrl] = useState(app.logoUrl ?? '')
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim() || !redirectUri.trim()) return
+    onSave({
+      name: name.trim(),
+      description: description.trim() || undefined,
+      redirectUris: [redirectUri.trim()],
+      homepageUrl: homepageUrl.trim() || undefined,
+      logoUrl: logoUrl.trim() || undefined,
+    })
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="mt-3 p-3 bg-bg-primary/50 rounded-lg border border-border-subtle space-y-3"
+    >
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-text-muted mb-1">应用名称</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full px-2 py-1.5 bg-bg-primary border border-border-subtle rounded-lg text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50"
+            maxLength={128}
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-text-muted mb-1">应用描述</label>
+          <input
+            type="text"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="w-full px-2 py-1.5 bg-bg-primary border border-border-subtle rounded-lg text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50"
+            maxLength={1024}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-text-muted mb-1">Redirect URI</label>
+          <input
+            type="url"
+            value={redirectUri}
+            onChange={(e) => setRedirectUri(e.target.value)}
+            className="w-full px-2 py-1.5 bg-bg-primary border border-border-subtle rounded-lg text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-text-muted mb-1">Homepage URL</label>
+          <input
+            type="url"
+            value={homepageUrl}
+            onChange={(e) => setHomepageUrl(e.target.value)}
+            className="w-full px-2 py-1.5 bg-bg-primary border border-border-subtle rounded-lg text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-text-muted mb-1">应用图标 URL</label>
+        <div className="flex items-center gap-2">
+          <AppLogo url={logoUrl.trim() || null} name={name || 'A'} size="w-8 h-8" />
+          <input
+            type="url"
+            value={logoUrl}
+            onChange={(e) => setLogoUrl(e.target.value)}
+            placeholder="https://your-app.com/icon.png"
+            className="flex-1 px-2 py-1.5 bg-bg-primary border border-border-subtle rounded-lg text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+        </div>
+      </div>
+      <div className="flex gap-2 justify-end">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary bg-bg-primary rounded-lg transition"
+        >
+          取消
+        </button>
+        <button
+          type="submit"
+          disabled={isPending || !name.trim() || !redirectUri.trim()}
+          className="px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-lg hover:bg-primary/90 transition disabled:opacity-50"
+        >
+          {isPending ? '保存中...' : '保存'}
         </button>
       </div>
     </form>

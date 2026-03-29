@@ -21,6 +21,14 @@
 
 ![OAuth 应用卡片](/screenshots/23-oauth-app-card.png)
 
+*点击铅笔图标可编辑应用 — 支持修改名称、描述、回调地址和图标 URL：*
+
+![编辑 OAuth 应用](/screenshots/23b-oauth-edit-form.png)
+
+*保存后，图标会更新到应用卡片上：*
+
+![带图标的应用卡片](/screenshots/23c-oauth-app-card-with-logo.png)
+
 ### 2. 授权流程
 
 将用户重定向到 Shadow 授权页面：

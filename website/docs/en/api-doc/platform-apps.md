@@ -21,6 +21,14 @@ Save the **Client ID** and **Client Secret** — the secret is only shown once.
 
 ![OAuth app card with Client ID](/screenshots/23-oauth-app-card.png)
 
+*Click the pencil icon to edit — you can update the app name, description, redirect URI, or logo URL:*
+
+![Edit OAuth app form](/screenshots/23b-oauth-edit-form.png)
+
+*After saving, the logo updates on the app card:*
+
+![App card with logo](/screenshots/23c-oauth-app-card-with-logo.png)
+
 ### 2. Authorization Flow
 
 Redirect users to the Shadow authorization page:

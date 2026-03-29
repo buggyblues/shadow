@@ -50,5 +50,8 @@ docs/readme/showcase/demo-frames/
 docs/readme/showcase/gif-frames/
 docs/readme/showcase/gif-frames-zh/
 
+# E2E session data (contains credentials, generated at runtime)
+docs/e2e/session.json
+
 # Expo
 .expo/
