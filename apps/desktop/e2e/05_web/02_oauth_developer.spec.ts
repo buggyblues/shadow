@@ -108,8 +108,13 @@ test.describe
       )
       await cleanupTestData(session.origin, accessToken)
 
-      const ctx = await browser.newContext()
+      const ctx = await browser.newContext({ locale: 'zh-CN' })
       const page = await ctx.newPage()
+
+      // Force locale to zh-CN so i18n renders Chinese text (Docker Chromium defaults to en-US)
+      await page.addInitScript(() => {
+        localStorage.setItem('shadow-lang', 'zh-CN')
+      })
 
       // Login as the owner
       await loginViaUi(page, session.owner)
