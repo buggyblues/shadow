@@ -10,6 +10,7 @@ node_modules
 *.log
 website/doc_build
 docs/e2e
+!docs/e2e/screenshots
 apps/desktop/out
 apps/desktop/playwright-report
 apps/desktop/playwright-report-web
