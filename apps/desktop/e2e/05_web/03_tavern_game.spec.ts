@@ -163,25 +163,17 @@ test.describe
       try {
         // ── Phase 2: UI Authorization Flow ──
 
-        const ctx = await browser.newContext()
+        // Set locale to zh-CN so i18n renders Chinese text for assertions/screenshots
+        const ctx = await browser.newContext({ locale: 'zh-CN' })
         const page = await ctx.newPage()
         await loginViaUi(page, session.owner)
 
-        // Navigate to authorize page with all necessary scopes (full URL to avoid baseURL issues)
+        // Navigate to authorize page with all necessary scopes
         const scopes =
           'user:read servers:read servers:write channels:read channels:write messages:read messages:write buddies:create buddies:manage'
-        const authorizeUrl = `${session.origin}/app/oauth/authorize?response_type=code&client_id=${encodeURIComponent(app.clientId)}&redirect_uri=${encodeURIComponent(CALLBACK_URL)}&scope=${encodeURIComponent(scopes)}&state=tavern_setup`
+        const authorizeUrl = `oauth/authorize?response_type=code&client_id=${encodeURIComponent(app.clientId)}&redirect_uri=${encodeURIComponent(CALLBACK_URL)}&scope=${encodeURIComponent(scopes)}&state=tavern_setup`
 
-        const response = await page.goto(authorizeUrl)
-        console.log('[Tavern E2E] goto status:', response?.status())
-        console.log('[Tavern E2E] page.url():', page.url())
-
-        // Check rendering state
-        const rootLen = await page.evaluate(
-          () => document.getElementById('root')?.innerHTML?.length ?? 0,
-        )
-        const spinnerCount = await page.locator('.animate-spin').count()
-        console.log('[Tavern E2E] React root length:', rootLen, 'spinners:', spinnerCount)
+        await page.goto(authorizeUrl)
 
         // Screenshot: OAuth authorize page with all scope groups
         await expect(page.getByText('授权应用')).toBeVisible({ timeout: 15_000 })
