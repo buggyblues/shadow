@@ -198,6 +198,7 @@ export default defineConfig({
               text: '平台',
               items: [
                 { text: 'OAuth', link: '/zh/api-doc/oauth' },
+                { text: '平台应用', link: '/zh/api-doc/platform-apps' },
                 { text: '应用', link: '/zh/api-doc/apps' },
                 { text: '工作区', link: '/zh/api-doc/workspace' },
                 { text: '搜索', link: '/zh/api-doc/search' },

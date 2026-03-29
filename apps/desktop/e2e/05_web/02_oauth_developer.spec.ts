@@ -74,6 +74,24 @@ async function apiRequest<T = unknown>(
   return text ? JSON.parse(text) : null
 }
 
+/** Clean up leftover test data from previous E2E runs */
+async function cleanupTestData(origin: string, token: string) {
+  // Delete OAuth apps created by THIS test (by name) to avoid interfering with parallel tests
+  const apps = await apiRequest<{ id: string; name: string }[]>(origin, '/api/oauth/apps', {
+    token,
+  })
+  const testAppNames = ['E2E Test OAuth App', 'E2E Auth Flow App']
+  for (const app of apps ?? []) {
+    if (testAppNames.includes(app.name)) {
+      try {
+        await apiRequest(origin, `/api/oauth/apps/${app.id}`, { method: 'DELETE', token })
+      } catch {
+        /* best-effort */
+      }
+    }
+  }
+}
+
 test.describe
   .serial('OAuth Developer Settings — UI', () => {
     test('creates, inspects, and deletes an OAuth app from developer settings', async ({
@@ -81,6 +99,14 @@ test.describe
     }) => {
       await ensureScreenshotDir()
       const session = await readSession()
+
+      // Clean up leftover data from previous E2E runs
+      const { accessToken } = await apiLogin(
+        session.origin,
+        session.owner.email,
+        session.owner.password,
+      )
+      await cleanupTestData(session.origin, accessToken)
 
       const ctx = await browser.newContext()
       const page = await ctx.newPage()
@@ -111,6 +137,10 @@ test.describe
       const redirectInput = page.locator('input[placeholder="https://your-app.com/callback"]')
       await redirectInput.fill('https://e2e-test.shadowob.com/callback')
 
+      // Fill in the logo URL using the server's own favicon
+      const logoInput = page.locator('input[placeholder="https://your-app.com/icon.png"]')
+      await logoInput.fill(`${session.origin}/favicon.svg`)
+
       await screenshot(page, '21-oauth-create-form.png')
 
       // Submit the form (use type=submit to distinguish from the header button)
@@ -126,34 +156,54 @@ test.describe
       await page.waitForTimeout(300)
 
       // Verify the app card appears with the correct name
-      await expect(page.getByText('E2E Test OAuth App')).toBeVisible()
-      await expect(page.getByText('Created by Playwright E2E')).toBeVisible()
+      await expect(page.getByText('E2E Test OAuth App').first()).toBeVisible()
+      await expect(page.getByText('Created by Playwright E2E').first()).toBeVisible()
 
       // Verify Client ID is visible
-      const clientIdEl = page.locator('code').filter({ hasText: /^shadow_/ })
+      const clientIdEl = page
+        .locator('code')
+        .filter({ hasText: /^shadow_/ })
+        .first()
       await expect(clientIdEl).toBeVisible()
       await screenshot(page, '23-oauth-app-card.png')
 
       // --- Reset secret ---
-      const resetBtn = page.locator('button[title="重置 Secret"]')
+      const appCardForReset = page
+        .locator('div.bg-bg-secondary')
+        .filter({ hasText: 'E2E Test OAuth App' })
+        .first()
+      const resetBtn = appCardForReset.locator('button[title="重置 Secret"]')
       await resetBtn.click()
       await expect(page.getByText('Client Secret（仅显示一次）')).toBeVisible({ timeout: 10_000 })
       await screenshot(page, '24-oauth-secret-reset.png')
       await page.getByText('我已保存，关闭提示').click()
 
       // --- Delete the app ---
-      const deleteBtn = page.locator('button[title="删除应用"]')
+      // Find the card that contains "E2E Test OAuth App" and click its delete button
+      const appCard = page
+        .locator('div.bg-bg-secondary')
+        .filter({ hasText: 'E2E Test OAuth App' })
+        .first()
+      const deleteBtn = appCard.locator('button[title="删除应用"]')
       await deleteBtn.click()
 
-      // Confirm deletion
+      // Confirm deletion and wait for the DELETE API call to complete
       await expect(page.getByText('确定要删除此应用吗？此操作不可恢复。')).toBeVisible()
       await screenshot(page, '25-oauth-delete-confirm.png')
+      const deleteResponsePromise = page.waitForResponse(
+        (resp) => resp.url().includes('/api/oauth/apps/') && resp.request().method() === 'DELETE',
+      )
       await page.getByRole('button', { name: '确认删除' }).click()
+      const deleteResponse = await deleteResponsePromise
 
-      // Verify app is gone
-      await page.waitForTimeout(500)
-      await expect(page.getByText('E2E Test OAuth App')).not.toBeVisible()
-      await expect(page.getByText('暂无 OAuth 应用')).toBeVisible()
+      // Wait for UI to update
+      await page.waitForTimeout(1000)
+
+      // Reload the page to verify the app is gone
+      await page.goto('settings?tab=developer')
+      await page.waitForURL(/\/app\/settings/)
+      await page.waitForTimeout(1000)
+      await expect(page.getByText('E2E Test OAuth App')).not.toBeVisible({ timeout: 10_000 })
       await screenshot(page, '26-oauth-developer-after-delete.png')
 
       await ctx.close()
@@ -220,18 +270,19 @@ test.describe
           const state = url.searchParams.get('state') ?? ''
           await route.fulfill({
             status: 200,
-            contentType: 'text/html',
-            body: `<html><body style="background:#1e1e2e;color:#cdd6f4;font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh">
-            <div style="text-align:center;max-width:480px">
-              <div style="font-size:48px;margin-bottom:16px">✅</div>
-              <h1 style="font-size:24px;margin-bottom:8px">Authorization Successful</h1>
-              <p style="color:#a6adc8;margin-bottom:24px">Auth code received.</p>
-              <div style="background:#313244;padding:16px;border-radius:8px;text-align:left;font-size:13px">
-                <p><strong>code:</strong> <code>${capturedCode.slice(0, 8)}...${capturedCode.slice(-8)}</code></p>
-                <p><strong>state:</strong> <code>${state}</code></p>
-              </div>
-            </div>
-          </body></html>`,
+            contentType: 'text/html; charset=utf-8',
+            body: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Authorization Successful</title></head>
+<body style="margin:0;background:#0f0e17;color:#fffffe;font-family:'Courier New',monospace;display:flex;align-items:center;justify-content:center;min-height:100vh">
+<div style="text-align:center;max-width:520px;padding:32px">
+  <div style="font-size:48px;margin-bottom:8px;image-rendering:pixelated">&#x2705;</div>
+  <h1 style="font-size:22px;margin-bottom:6px;letter-spacing:2px;text-transform:uppercase;color:#7f5af0">Authorization Successful</h1>
+  <p style="color:#94a1b2;margin-bottom:24px;font-size:13px">Auth code received. You may close this window.</p>
+  <div style="background:#16161a;border:2px solid #7f5af0;padding:16px;border-radius:8px;text-align:left;font-size:13px;line-height:1.8">
+    <p style="margin:0"><span style="color:#7f5af0;font-weight:bold">code:</span> <code style="color:#2cb67d">${capturedCode.slice(0, 8)}...${capturedCode.slice(-8)}</code></p>
+    <p style="margin:0"><span style="color:#7f5af0;font-weight:bold">state:</span> <code style="color:#2cb67d">${state}</code></p>
+  </div>
+</div>
+</body></html>`,
           })
         })
 

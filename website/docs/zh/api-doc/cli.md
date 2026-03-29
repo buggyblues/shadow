@@ -30,6 +30,7 @@ shadowob channels send <channel-id> --content "Hello from CLI"
 - `servers` / `channels` / `threads` / `dms`：沟通能力
 - `agents` / `marketplace`：AI 代理生态
 - `workspace` / `apps` / `shop`：平台业务能力
+- `oauth`：OAuth 应用管理（创建、列表、重置密钥、授权管理、撤销）
 - `config` / `ping` / `status`：配置与健康检查
 - `listen`：实时事件监听
 
@@ -63,3 +64,30 @@ shadowob config path
 - `SHADOWOB_SERVER_URL`
 
 环境变量会覆盖配置文件中的 profile 值。
+
+## OAuth 命令
+
+```bash
+# 列出你的 OAuth 应用
+shadowob oauth list --json
+
+# 创建 OAuth 应用
+shadowob oauth create --name "My App" --redirect-uri https://example.com/callback --json
+
+# 更新应用
+shadowob oauth update <app-id> --name "New Name" --json
+
+# 删除应用
+shadowob oauth delete <app-id>
+
+# 重置客户端密钥
+shadowob oauth reset-secret <app-id> --json
+
+# 列出已授权的应用（用户授权）
+shadowob oauth consents --json
+
+# 撤销应用授权
+shadowob oauth revoke <app-id>
+```
+
+详见 [平台应用](/zh/api-doc/platform-apps) 了解使用 OAuth API 构建应用的完整指南。

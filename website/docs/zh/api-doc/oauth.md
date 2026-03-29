@@ -329,3 +329,69 @@ client.revoke_oauth_consent("app-id")
 ```
 
 :::
+
+---
+
+## 资源 API（OAuth 令牌）
+
+这些端点使用 **OAuth 访问令牌**（`Authorization: Bearer <access_token>`）并需要对应的权限范围。
+
+### 服务器
+
+| 方法 | 端点 | 权限范围 | 说明 |
+|------|------|---------|------|
+| `GET` | `/api/oauth/servers` | `servers:read` | 列出用户的服务器 |
+| `POST` | `/api/oauth/servers` | `servers:write` | 创建新服务器 |
+| `POST` | `/api/oauth/servers/:id/invite` | `servers:write` | 邀请用户加入服务器 |
+
+### 频道
+
+| 方法 | 端点 | 权限范围 | 说明 |
+|------|------|---------|------|
+| `GET` | `/api/oauth/servers/:id/channels` | `channels:read` | 列出服务器中的频道 |
+| `POST` | `/api/oauth/channels` | `channels:write` | 创建频道 |
+
+### 消息
+
+| 方法 | 端点 | 权限范围 | 说明 |
+|------|------|---------|------|
+| `GET` | `/api/oauth/channels/:id/messages` | `messages:read` | 获取消息历史 |
+| `POST` | `/api/oauth/channels/:id/messages` | `messages:write` | 发送消息 |
+
+### 工作区
+
+| 方法 | 端点 | 权限范围 | 说明 |
+|------|------|---------|------|
+| `GET` | `/api/oauth/workspaces/:id` | `workspaces:read` | 获取工作区信息 |
+
+### Buddy 搭子
+
+| 方法 | 端点 | 权限范围 | 说明 |
+|------|------|---------|------|
+| `POST` | `/api/oauth/buddies` | `buddies:create` | 创建 Buddy 搭子 |
+| `POST` | `/api/oauth/buddies/:id/messages` | `buddies:manage` | Buddy 发送消息 |
+
+---
+
+## 可用权限范围
+
+| 权限范围 | 说明 |
+|---------|------|
+| `user:read` | 读取基本资料（用户名、显示名称、头像） |
+| `user:email` | 读取邮箱地址 |
+| `servers:read` | 查看服务器列表 |
+| `servers:write` | 创建服务器、邀请用户 |
+| `channels:read` | 查看频道列表 |
+| `channels:write` | 创建频道 |
+| `messages:read` | 读取消息历史 |
+| `messages:write` | 发送消息 |
+| `attachments:read` | 查看附件 |
+| `attachments:write` | 上传附件 |
+| `workspaces:read` | 查看工作区信息 |
+| `workspaces:write` | 修改工作区文件 |
+| `buddies:create` | 创建 Buddy 搭子 |
+| `buddies:manage` | 管理搭子、发送消息 |
+
+:::tip
+参阅 [平台应用](/zh/api-doc/platform-apps) 了解使用 OAuth API 构建完整应用的示例。
+:::
