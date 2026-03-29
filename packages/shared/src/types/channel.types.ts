@@ -1,5 +1,21 @@
 export type ChannelType = 'text' | 'voice' | 'announcement'
 
+/** Channel posting rule types */
+export type ChannelPostingRuleType =
+  | 'everyone'
+  | 'humans_only'
+  | 'buddies_only'
+  | 'specific_users'
+  | 'read_only'
+
+/** Channel posting rule configuration */
+export interface ChannelPostingRule {
+  ruleType: ChannelPostingRuleType
+  config?: {
+    allowedUserIds?: string[]
+  }
+}
+
 export interface Channel {
   id: string
   name: string
@@ -11,6 +27,8 @@ export interface Channel {
   updatedAt: string
   /** Last message timestamp for sorting by activity */
   lastMessageAt?: string | null
+  /** Posting rule for the channel */
+  postingRule?: ChannelPostingRule
 }
 
 export interface CreateChannelRequest {

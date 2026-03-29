@@ -11,6 +11,7 @@ import {
   Hash,
   MessageSquare,
   Search,
+  Settings,
   UserPlus,
   Users,
   X,
@@ -1323,6 +1324,13 @@ export default function ChannelViewScreen() {
             style={({ pressed }) => [styles.headerIconBtn, pressed && { opacity: 0.5 }]}
           >
             <Search size={24} color={colors.textMuted} />
+          </Pressable>
+          <Pressable
+            onPress={() => router.push(`/servers/${serverSlug}/channels/${channelId}/settings`)}
+            hitSlop={8}
+            style={({ pressed }) => [styles.headerIconBtn, pressed && { opacity: 0.5 }]}
+          >
+            <Settings size={24} color={colors.textMuted} />
           </Pressable>
         </View>
       </View>

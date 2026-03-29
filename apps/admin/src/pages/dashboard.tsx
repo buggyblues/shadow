@@ -909,8 +909,11 @@ function DashboardContent() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-zinc-400 mb-1">Slug</label>
+                      <label htmlFor="edit-slug" className="block text-xs text-zinc-400 mb-1">
+                        Slug
+                      </label>
                       <input
+                        id="edit-slug"
                         type="text"
                         value={editServerForm.slug}
                         onChange={(e) => setEditServerForm((f) => ({ ...f, slug: e.target.value }))}
@@ -919,8 +922,14 @@ function DashboardContent() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-zinc-400 mb-1">描述</label>
+                      <label
+                        htmlFor="edit-description"
+                        className="block text-xs text-zinc-400 mb-1"
+                      >
+                        描述
+                      </label>
                       <textarea
+                        id="edit-description"
                         value={editServerForm.description}
                         onChange={(e) =>
                           setEditServerForm((f) => ({ ...f, description: e.target.value }))

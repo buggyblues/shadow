@@ -1,5 +1,7 @@
+import type { ChannelPostingRule } from '@shadowob/shared'
 import type { ChannelDao } from '../dao/channel.dao'
 import type { ChannelMemberDao } from '../dao/channel-member.dao'
+import type { ChannelPostingRuleDao } from '../dao/channel-posting-rule.dao'
 import type { ServerDao } from '../dao/server.dao'
 import type { CreateChannelInput, UpdateChannelInput } from '../validators/channel.schema'
 
@@ -8,6 +10,7 @@ export class ChannelService {
     private deps: {
       channelDao: ChannelDao
       channelMemberDao: ChannelMemberDao
+      channelPostingRuleDao: ChannelPostingRuleDao
       serverDao: ServerDao
     },
   ) {}
@@ -72,6 +75,12 @@ export class ChannelService {
       (ch) => !ch.name.startsWith('app:'),
     )
     if (allChannels.length === 0) return []
+
+    // Load posting rules for all channels
+    const postingRules = await Promise.all(
+      allChannels.map((ch) => this.deps.channelPostingRuleDao.findByChannelId(ch.id)),
+    )
+
     try {
       const channelIds = allChannels.map((ch) => ch.id)
       const memberChannelIds = await this.deps.channelMemberDao.getUserChannelIds(
@@ -80,15 +89,23 @@ export class ChannelService {
       )
       // Legacy fallback: if memberships are empty, only expose public channels
       if (memberChannelIds.length === 0) {
-        return allChannels.filter((ch) => !ch.isPrivate).map((ch) => ({ ...ch, isMember: false }))
+        return allChannels
+          .filter((ch) => !ch.isPrivate)
+          .map((ch, idx) => ({ ...ch, isMember: false, postingRule: postingRules[idx] }))
       }
       const memberSet = new Set(memberChannelIds)
       return allChannels
         .filter((ch) => !ch.isPrivate || memberSet.has(ch.id))
-        .map((ch) => ({ ...ch, isMember: memberSet.has(ch.id) }))
+        .map((ch, idx) => ({
+          ...ch,
+          isMember: memberSet.has(ch.id),
+          postingRule: postingRules[idx],
+        }))
     } catch {
       // Table may not exist yet (pre-migration) — do not leak private channels
-      return allChannels.filter((ch) => !ch.isPrivate).map((ch) => ({ ...ch, isMember: false }))
+      return allChannels
+        .filter((ch) => !ch.isPrivate)
+        .map((ch, idx) => ({ ...ch, isMember: false, postingRule: postingRules[idx] }))
     }
   }
 
@@ -97,7 +114,9 @@ export class ChannelService {
     if (!channel) {
       throw Object.assign(new Error('Channel not found'), { status: 404 })
     }
-    return channel
+    // Load posting rule if exists
+    const postingRule = await this.deps.channelPostingRuleDao.findByChannelId(id)
+    return { ...channel, postingRule }
   }
 
   async update(id: string, input: UpdateChannelInput) {

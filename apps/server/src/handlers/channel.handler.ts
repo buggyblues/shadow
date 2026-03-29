@@ -402,5 +402,123 @@ export function createChannelHandler(container: AppContainer) {
     return c.json(channels)
   })
 
+  // GET /api/channels/:id/posting-rule — get posting rule for a channel
+  channelHandler.get('/channels/:id/posting-rule', async (c) => {
+    const channelPostingRuleService = container.resolve('channelPostingRuleService')
+    const channelService = container.resolve('channelService')
+    const id = c.req.param('id')
+
+    // Verify channel exists
+    await channelService.getById(id)
+
+    const rule = await channelPostingRuleService.getRule(id)
+    if (!rule) {
+      return c.json({ ruleType: 'everyone', config: {} })
+    }
+    return c.json(rule)
+  })
+
+  // PUT /api/channels/:id/posting-rule — set posting rule for a channel
+  channelHandler.put('/channels/:id/posting-rule', async (c) => {
+    const channelPostingRuleService = container.resolve('channelPostingRuleService')
+    const channelService = container.resolve('channelService')
+    const serverDao = container.resolve('serverDao')
+    const id = c.req.param('id')
+    const user = c.get('user')
+    const body = await c.req.json<{
+      ruleType: 'everyone' | 'humans_only' | 'buddies_only' | 'specific_users' | 'read_only'
+      config?: { allowedUserIds?: string[] }
+    }>()
+
+    // Verify channel exists
+    const channel = await channelService.getById(id)
+
+    // Check if user is server admin/owner
+    const serverMembers = await serverDao.getMembers(channel.serverId)
+    const requester = serverMembers.find((m) => m.userId === user.userId)
+    const isAdminOrOwner = requester?.role === 'owner' || requester?.role === 'admin'
+    if (!isAdminOrOwner) {
+      return c.json({ error: 'Only server admins can configure posting rules' }, 403)
+    }
+
+    // Validate rule type
+    const validRuleTypes = [
+      'everyone',
+      'humans_only',
+      'buddies_only',
+      'specific_users',
+      'read_only',
+    ]
+    if (!validRuleTypes.includes(body.ruleType)) {
+      return c.json({ error: 'Invalid rule type' }, 400)
+    }
+
+    // Validate config for specific_users rule
+    if (body.ruleType === 'specific_users') {
+      if (!body.config?.allowedUserIds || body.config.allowedUserIds.length === 0) {
+        return c.json({ error: 'allowedUserIds is required for specific_users rule' }, 400)
+      }
+      // Validate that all specified users are server members
+      const allowedIds = body.config.allowedUserIds
+      const memberIds = new Set(serverMembers.map((m) => m.userId))
+      const invalidIds = allowedIds.filter((id) => !memberIds.has(id))
+      if (invalidIds.length > 0) {
+        return c.json({ error: 'Some users are not server members', invalidIds }, 400)
+      }
+    }
+
+    const rule = await channelPostingRuleService.setRule(id, body.ruleType, body.config)
+
+    // Broadcast rule change to channel members
+    try {
+      const io = container.resolve('io')
+      io.to(`channel:${id}`).emit('channel:posting-rule-changed', {
+        channelId: id,
+        ruleType: body.ruleType,
+        config: body.config,
+      })
+    } catch {
+      /* non-critical broadcast failure */
+    }
+
+    return c.json(rule)
+  })
+
+  // DELETE /api/channels/:id/posting-rule — remove posting rule from a channel
+  channelHandler.delete('/channels/:id/posting-rule', async (c) => {
+    const channelPostingRuleService = container.resolve('channelPostingRuleService')
+    const channelService = container.resolve('channelService')
+    const serverDao = container.resolve('serverDao')
+    const id = c.req.param('id')
+    const user = c.get('user')
+
+    // Verify channel exists
+    const channel = await channelService.getById(id)
+
+    // Check if user is server admin/owner
+    const serverMembers = await serverDao.getMembers(channel.serverId)
+    const requester = serverMembers.find((m) => m.userId === user.userId)
+    const isAdminOrOwner = requester?.role === 'owner' || requester?.role === 'admin'
+    if (!isAdminOrOwner) {
+      return c.json({ error: 'Only server admins can configure posting rules' }, 403)
+    }
+
+    await channelPostingRuleService.removeRule(id)
+
+    // Broadcast rule removal to channel members
+    try {
+      const io = container.resolve('io')
+      io.to(`channel:${id}`).emit('channel:posting-rule-changed', {
+        channelId: id,
+        ruleType: 'everyone',
+        config: {},
+      })
+    } catch {
+      /* non-critical broadcast failure */
+    }
+
+    return c.json({ success: true })
+  })
+
   return channelHandler
 }

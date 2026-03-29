@@ -7,6 +7,7 @@ import { AppDao } from './dao/app.dao'
 import { CartDao } from './dao/cart.dao'
 import { ChannelDao } from './dao/channel.dao'
 import { ChannelMemberDao } from './dao/channel-member.dao'
+import { ChannelPostingRuleDao } from './dao/channel-posting-rule.dao'
 import { ClawListingDao } from './dao/claw-listing.dao'
 import { EntitlementDao } from './dao/entitlement.dao'
 import { FriendshipDao } from './dao/friendship.dao'
@@ -41,6 +42,7 @@ import { AppService } from './services/app.service'
 import { AuthService } from './services/auth.service'
 import { CartService } from './services/cart.service'
 import { ChannelService } from './services/channel.service'
+import { ChannelPostingRuleService } from './services/channel-posting-rule.service'
 import { DmService } from './services/dm.service'
 import { EntitlementService } from './services/entitlement.service'
 import { ExternalOAuthService } from './services/external-oauth.service'
@@ -73,6 +75,7 @@ export interface Cradle {
   serverDao: ServerDao
   channelDao: ChannelDao
   channelMemberDao: ChannelMemberDao
+  channelPostingRuleDao: ChannelPostingRuleDao
   messageDao: MessageDao
   notificationDao: NotificationDao
   agentDao: AgentDao
@@ -124,6 +127,7 @@ export interface Cradle {
   externalOAuthService: ExternalOAuthService
   serverService: ServerService
   channelService: ChannelService
+  channelPostingRuleService: ChannelPostingRuleService
   messageService: MessageService
   searchService: SearchService
   notificationService: NotificationService
@@ -166,6 +170,7 @@ export function createAppContainer(db: Database): AppContainer {
     serverDao: asClass(ServerDao).singleton(),
     channelDao: asClass(ChannelDao).singleton(),
     channelMemberDao: asClass(ChannelMemberDao).singleton(),
+    channelPostingRuleDao: asClass(ChannelPostingRuleDao).singleton(),
     messageDao: asClass(MessageDao).singleton(),
     notificationDao: asClass(NotificationDao).singleton(),
     agentDao: asClass(AgentDao).singleton(),
@@ -216,6 +221,7 @@ export function createAppContainer(db: Database): AppContainer {
     externalOAuthService: asClass(ExternalOAuthService).singleton(),
     serverService: asClass(ServerService).singleton(),
     channelService: asClass(ChannelService).singleton(),
+    channelPostingRuleService: asClass(ChannelPostingRuleService).singleton(),
     messageService: asClass(MessageService).singleton(),
     searchService: asClass(SearchService).singleton(),
     notificationService: asClass(NotificationService).singleton(),

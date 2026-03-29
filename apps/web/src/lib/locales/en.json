@@ -27,7 +27,8 @@
     "edit": "Edit",
     "close": "Close",
     "back": "Back",
-    "bot": "Buddy"
+    "bot": "Buddy",
+    "removing": "Removing..."
   },
   "nav": {
     "features": "Features",
@@ -322,7 +323,48 @@
     "archiveSuccess": "Channel archived",
     "unarchiveSuccess": "Channel unarchived",
     "archivedNotice": "This channel is archived. Messages cannot be sent.",
-    "unarchive": "Unarchive"
+    "unarchive": "Unarchive",
+    "channelSettings": "Channel Settings",
+    "basicSettings": "Basic Settings",
+    "postingRules": "Posting Rules",
+    "postingRulesDescription": "Control who can send messages in this channel",
+    "privacy": "Privacy",
+    "public": "Public",
+    "private": "Private",
+    "adminOnly": "Only server admins can configure posting rules",
+    "resetToEveryone": "Reset to Everyone",
+    "currentRule": "Current rule",
+    "channelType": "Channel Type",
+    "textChannel": "Text Channel",
+    "voiceChannel": "Voice Channel",
+    "announcementChannel": "Announcement Channel",
+    "ruleType": "Rule Type",
+    "allowedUsers": "Allowed Users",
+    "selectUsers": "Select Users",
+    "addMoreUsers": "Add More Users",
+    "searchUsers": "Search users...",
+    "noUsersFound": "No users found",
+    "specificUsersRequired": "Please select at least one user",
+    "saveSuccess": "Saved successfully",
+    "resetSuccess": "Reset to everyone",
+    "reset": "Reset",
+    "ruleTypeEveryone": "Everyone",
+    "ruleTypeHumansOnly": "Humans Only",
+    "ruleTypeBuddiesOnly": "Buddies Only",
+    "ruleTypeSpecificUsers": "Specific Users",
+    "ruleTypeReadOnly": "Read Only",
+    "ruleTypeEveryoneDesc": "All server members can post messages",
+    "ruleTypeHumansOnlyDesc": "Only human users can post (bots excluded)",
+    "ruleTypeBuddiesOnlyDesc": "Only buddy agents can post",
+    "ruleTypeSpecificUsersDesc": "Only designated users can post",
+    "ruleTypeReadOnlyDesc": "No one can post (announcements only)",
+    "readOnlyHint": "此频道为只读模式",
+    "ruleHint": {
+      "humans_only": "此频道仅允许人类用户发言",
+      "buddies_only": "此频道仅允许 Buddy 发言",
+      "specific_users": "此频道仅允许指定用户发言"
+    },
+    "ruleChanged": "发言规则已更新"
   },
   "chat": {
     "selectChannel": "Select a channel to start chatting",
@@ -1540,5 +1582,12 @@
     "byLastAccessed": "Last Accessed",
     "filterPlaceholder": "Search channels...",
     "clear": "Clear Filters"
+  },
+  "error": {
+    "POSTING_RULE_VIOLATION": "发言受限",
+    "POSTING_RULE_VIOLATION_humans_only": "此频道仅允许人类用户发言",
+    "POSTING_RULE_VIOLATION_buddies_only": "此频道仅允许 Buddy 发言",
+    "POSTING_RULE_VIOLATION_specific_users": "您不在允许发言的用户列表中",
+    "POSTING_RULE_VIOLATION_read_only": "此频道为只读模式"
   }
 }

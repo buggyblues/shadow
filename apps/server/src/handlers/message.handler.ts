@@ -40,9 +40,24 @@ export function createMessageHandler(container: AppContainer) {
     zValidator('json', sendMessageSchema),
     async (c) => {
       const messageService = container.resolve('messageService')
+      const channelPostingRuleService = container.resolve('channelPostingRuleService')
       const channelId = c.req.param('channelId')
       const input = c.req.valid('json')
       const user = c.get('user')
+
+      // Check posting rules before allowing message
+      const canPost = await channelPostingRuleService.canPost(channelId, user.userId)
+      if (!canPost.allowed) {
+        return c.json(
+          {
+            error: 'POSTING_RULE_VIOLATION',
+            message: canPost.reason || 'Not authorized to post in this channel',
+            ruleType: canPost.ruleType || 'unknown',
+          },
+          403,
+        )
+      }
+
       const message = await messageService.send(channelId, user.userId, input)
 
       // Emit WS event so all connected clients (including bots) see the message
@@ -121,9 +136,17 @@ export function createMessageHandler(container: AppContainer) {
     zValidator('json', createThreadSchema),
     async (c) => {
       const messageService = container.resolve('messageService')
+      const channelPostingRuleService = container.resolve('channelPostingRuleService')
       const channelId = c.req.param('channelId')
       const input = c.req.valid('json')
       const user = c.get('user')
+
+      // Check posting rules before allowing thread creation
+      const canPost = await channelPostingRuleService.canPost(channelId, user.userId)
+      if (!canPost.allowed) {
+        return c.json({ error: canPost.reason || 'Not authorized to post in this channel' }, 403)
+      }
+
       const thread = await messageService.createThread(channelId, user.userId, input)
       return c.json(thread, 201)
     },
@@ -177,9 +200,20 @@ export function createMessageHandler(container: AppContainer) {
   // POST /api/threads/:id/messages
   messageHandler.post('/threads/:id/messages', zValidator('json', sendMessageSchema), async (c) => {
     const messageService = container.resolve('messageService')
+    const channelPostingRuleService = container.resolve('channelPostingRuleService')
     const id = c.req.param('id')
     const input = c.req.valid('json')
     const user = c.get('user')
+
+    // Get thread to find channel ID
+    const thread = await messageService.getThread(id)
+
+    // Check posting rules before allowing message in thread
+    const canPost = await channelPostingRuleService.canPost(thread.channelId, user.userId)
+    if (!canPost.allowed) {
+      return c.json({ error: canPost.reason || 'Not authorized to post in this channel' }, 403)
+    }
+
     const message = await messageService.sendToThread(id, user.userId, {
       content: input.content,
     })

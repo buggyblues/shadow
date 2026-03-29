@@ -1,13 +1,14 @@
-export { agentPolicies } from './agent-policies'
-export { agentStatusEnum, agents } from './agents'
 export {
   agentActivityEvents,
   agentDailyStats,
   agentHourlyStats,
 } from './agent-dashboard'
+export { agentPolicies } from './agent-policies'
+export { agentStatusEnum, agents } from './agents'
 export { appSourceEnum, appStatusEnum, apps } from './apps'
 export { attachments } from './attachments'
 export { channelMembers } from './channel-members'
+export { channelPostingRules } from './channel-posting-rules'
 export { channels, channelTypeEnum } from './channels'
 export { dmAttachments } from './dm-attachments'
 export { dmChannels } from './dm-channels'
