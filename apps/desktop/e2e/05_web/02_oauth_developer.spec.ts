@@ -193,44 +193,18 @@ test.describe
 
       try {
         // Step 3: Login via UI so the browser has a session cookie
-        const ctx = await browser.newContext()
+        // Set locale to zh-CN so i18n renders Chinese text for assertions/screenshots
+        const ctx = await browser.newContext({ locale: 'zh-CN' })
         const page = await ctx.newPage()
         await loginViaUi(page, session.owner)
 
-        // Step 4: Navigate to the OAuth authorize page (use full URL to avoid baseURL issues)
+        // Step 4: Navigate to the OAuth authorize page
         let capturedCode = ''
         const scopes =
           'user:read user:email servers:read servers:write channels:read channels:write'
-        const authorizeUrl = `${session.origin}/app/oauth/authorize?response_type=code&client_id=${encodeURIComponent(app.clientId)}&redirect_uri=${encodeURIComponent(CALLBACK_URL)}&scope=${encodeURIComponent(scopes)}&state=e2e_flow_test`
+        const authorizeUrl = `oauth/authorize?response_type=code&client_id=${encodeURIComponent(app.clientId)}&redirect_uri=${encodeURIComponent(CALLBACK_URL)}&scope=${encodeURIComponent(scopes)}&state=e2e_flow_test`
 
-        // Listen for the API response to diagnose rendering issues
-        const apiResponsePromise = page.waitForResponse(
-          (resp) =>
-            resp.url().includes('/api/oauth/authorize') && resp.request().method() === 'GET',
-          { timeout: 20_000 },
-        )
-        const gotoResp = await page.goto(authorizeUrl)
-        console.log('[OAuth E2E] goto status:', gotoResp?.status())
-        console.log('[OAuth E2E] page.url():', page.url())
-
-        try {
-          const apiResp = await apiResponsePromise
-          console.log('[OAuth E2E] API /api/oauth/authorize status:', apiResp.status())
-          if (apiResp.status() !== 200) {
-            const body = await apiResp.text()
-            console.log('[OAuth E2E] API error body:', body.substring(0, 300))
-          }
-        } catch (e) {
-          console.log('[OAuth E2E] API response not captured:', (e as Error).message)
-        }
-
-        // Check React rendering and page state
-        const rootLen = await page.evaluate(
-          () => document.getElementById('root')?.innerHTML?.length ?? 0,
-        )
-        const spinnerCount = await page.locator('.animate-spin').count()
-        console.log('[OAuth E2E] React root length:', rootLen, 'spinners:', spinnerCount)
-        await screenshot(page, 'debug-authorize-after-goto.png')
+        await page.goto(authorizeUrl)
 
         // Step 5: Screenshot the authorization consent page
         await expect(page.getByText('授权应用')).toBeVisible({ timeout: 15_000 })
