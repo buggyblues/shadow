@@ -15,7 +15,9 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 
 COPY packages/ packages/
 COPY apps/web/ apps/web/
+COPY docs/e2e/screenshots/ /tmp/screenshots/
 COPY website/ website/
+RUN rm -rf website/docs/public/screenshots && cp -r /tmp/screenshots website/docs/public/screenshots
 
 RUN pnpm --filter @shadowob/website build
 RUN pnpm --filter @shadowob/web build
