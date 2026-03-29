@@ -286,6 +286,7 @@ function CreateAppForm({
   const [description, setDescription] = useState('')
   const [redirectUri, setRedirectUri] = useState('')
   const [homepageUrl, setHomepageUrl] = useState('')
+  const [logoUrl, setLogoUrl] = useState('')
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -295,6 +296,7 @@ function CreateAppForm({
       description: description.trim() || undefined,
       redirectUris: [redirectUri.trim()],
       homepageUrl: homepageUrl.trim() || undefined,
+      logoUrl: logoUrl.trim() || undefined,
     })
   }
 
@@ -355,6 +357,29 @@ function CreateAppForm({
           placeholder="https://your-app.com"
           className="w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50"
         />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-text-secondary mb-1">应用图标 URL</label>
+        <div className="flex items-center gap-3">
+          {logoUrl.trim() && (
+            <img
+              src={logoUrl.trim()}
+              alt="App icon preview"
+              className="w-10 h-10 rounded-lg object-cover border border-border-subtle"
+              onError={(e) => {
+                ;(e.target as HTMLImageElement).style.display = 'none'
+              }}
+            />
+          )}
+          <input
+            type="url"
+            value={logoUrl}
+            onChange={(e) => setLogoUrl(e.target.value)}
+            placeholder="https://your-app.com/icon.png"
+            className="w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded-lg text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+        </div>
       </div>
 
       <div className="flex gap-2 justify-end">
