@@ -167,13 +167,14 @@ test.describe
         const page = await ctx.newPage()
         await loginViaUi(page, session.owner)
 
-        // Navigate to authorize page with all necessary scopes
+        // Navigate to authorize page with all necessary scopes (full URL to avoid baseURL issues)
         const scopes =
           'user:read servers:read servers:write channels:read channels:write messages:read messages:write buddies:create buddies:manage'
-        const authorizeUrl = `oauth/authorize?response_type=code&client_id=${encodeURIComponent(app.clientId)}&redirect_uri=${encodeURIComponent(CALLBACK_URL)}&scope=${encodeURIComponent(scopes)}&state=tavern_setup`
+        const authorizeUrl = `${session.origin}/app/oauth/authorize?response_type=code&client_id=${encodeURIComponent(app.clientId)}&redirect_uri=${encodeURIComponent(CALLBACK_URL)}&scope=${encodeURIComponent(scopes)}&state=tavern_setup`
 
-        await page.goto(authorizeUrl)
-        await page.waitForLoadState('networkidle')
+        const response = await page.goto(authorizeUrl)
+        console.log('[Tavern E2E] goto status:', response?.status(), 'url:', response?.url())
+        console.log('[Tavern E2E] page.url():', page.url())
 
         // Screenshot: OAuth authorize page with all scope groups
         await expect(page.getByText('授权应用')).toBeVisible({ timeout: 15_000 })

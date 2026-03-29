@@ -113,8 +113,8 @@ test.describe
 
       await screenshot(page, '21-oauth-create-form.png')
 
-      // Submit the form
-      const submitBtn = page.getByRole('button', { name: /创建应用/ })
+      // Submit the form (use type=submit to distinguish from the header button)
+      const submitBtn = page.locator('button[type="submit"]', { hasText: '创建应用' })
       await submitBtn.click()
 
       // Wait for the secret banner to appear
@@ -197,14 +197,16 @@ test.describe
         const page = await ctx.newPage()
         await loginViaUi(page, session.owner)
 
-        // Step 4: Navigate to the OAuth authorize page
+        // Step 4: Navigate to the OAuth authorize page (use full URL to avoid baseURL issues)
         let capturedCode = ''
         const scopes =
           'user:read user:email servers:read servers:write channels:read channels:write'
-        const authorizeUrl = `oauth/authorize?response_type=code&client_id=${encodeURIComponent(app.clientId)}&redirect_uri=${encodeURIComponent(CALLBACK_URL)}&scope=${encodeURIComponent(scopes)}&state=e2e_flow_test`
+        const authorizeUrl = `${session.origin}/app/oauth/authorize?response_type=code&client_id=${encodeURIComponent(app.clientId)}&redirect_uri=${encodeURIComponent(CALLBACK_URL)}&scope=${encodeURIComponent(scopes)}&state=e2e_flow_test`
 
-        await page.goto(authorizeUrl)
-        await page.waitForLoadState('networkidle')
+        const response = await page.goto(authorizeUrl)
+        console.log('[OAuth E2E] goto status:', response?.status(), 'url:', response?.url())
+        console.log('[OAuth E2E] page.url():', page.url())
+        await screenshot(page, 'debug-authorize-after-goto.png')
 
         // Step 5: Screenshot the authorization consent page
         await expect(page.getByText('授权应用')).toBeVisible({ timeout: 15_000 })
