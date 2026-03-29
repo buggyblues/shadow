@@ -13,8 +13,8 @@ export function createOAuthCommand(): Command {
     .action(async (options: { profile?: string; json?: boolean }) => {
       try {
         const client = await getClient(options.profile)
-        // Note: SDK doesn't have listOAuthApps, using placeholder
-        output([], { json: options.json })
+        const apps = await client.listOAuthApps()
+        output(apps, { json: options.json })
       } catch (error) {
         outputError(error instanceof Error ? error.message : String(error), { json: options.json })
         process.exit(1)
@@ -104,6 +104,57 @@ export function createOAuthCommand(): Command {
         await client.deleteOAuthApp(appId)
         const outputOpts: OutputOptions = { json: options.json }
         outputSuccess('OAuth app deleted', outputOpts)
+      } catch (error) {
+        outputError(error instanceof Error ? error.message : String(error), { json: options.json })
+        process.exit(1)
+      }
+    })
+
+  oauth
+    .command('reset-secret')
+    .description('Reset OAuth app client secret')
+    .argument('<app-id>', 'App ID')
+    .option('--profile <name>', 'Profile to use')
+    .option('--json', 'Output as JSON')
+    .action(async (appId: string, options: { profile?: string; json?: boolean }) => {
+      try {
+        const client = await getClient(options.profile)
+        const result = await client.resetOAuthAppSecret(appId)
+        output(result, { json: options.json })
+      } catch (error) {
+        outputError(error instanceof Error ? error.message : String(error), { json: options.json })
+        process.exit(1)
+      }
+    })
+
+  oauth
+    .command('consents')
+    .description('List OAuth consents (authorized apps)')
+    .option('--profile <name>', 'Profile to use')
+    .option('--json', 'Output as JSON')
+    .action(async (options: { profile?: string; json?: boolean }) => {
+      try {
+        const client = await getClient(options.profile)
+        const consents = await client.listOAuthConsents()
+        output(consents, { json: options.json })
+      } catch (error) {
+        outputError(error instanceof Error ? error.message : String(error), { json: options.json })
+        process.exit(1)
+      }
+    })
+
+  oauth
+    .command('revoke')
+    .description('Revoke OAuth consent for an app')
+    .argument('<app-id>', 'App ID')
+    .option('--profile <name>', 'Profile to use')
+    .option('--json', 'Output as JSON')
+    .action(async (appId: string, options: { profile?: string; json?: boolean }) => {
+      try {
+        const client = await getClient(options.profile)
+        await client.revokeOAuthConsent(appId)
+        const outputOpts: OutputOptions = { json: options.json }
+        outputSuccess('OAuth consent revoked', outputOpts)
       } catch (error) {
         outputError(error instanceof Error ? error.message : String(error), { json: options.json })
         process.exit(1)

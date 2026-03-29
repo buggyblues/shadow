@@ -1,6 +1,6 @@
 ---
 name: shadowob
-description: "Shadow server CLI — complete command-line interface for Shadow servers including servers, channels, DMs, workspace, shop, apps, agents, marketplace, and more"
+description: "Shadow server CLI — complete command-line interface for Shadow servers including servers, channels, DMs, workspace, shop, apps, agents, marketplace, OAuth, and more"
 metadata:
   {
     "openclaw":

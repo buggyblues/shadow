@@ -108,6 +108,7 @@ export default defineConfig({
               text: 'Platform',
               items: [
                 { text: 'OAuth', link: '/api-doc/oauth' },
+                { text: 'Platform Apps', link: '/api-doc/platform-apps' },
                 { text: 'Apps', link: '/api-doc/apps' },
                 { text: 'Workspace', link: '/api-doc/workspace' },
                 { text: 'Search', link: '/api-doc/search' },

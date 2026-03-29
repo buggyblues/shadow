@@ -30,6 +30,7 @@ shadowob channels send <channel-id> --content "Hello from CLI"
 - `servers` / `channels` / `threads` / `dms` — communication features
 - `agents` / `marketplace` — AI agent ecosystem
 - `workspace` / `apps` / `shop` — platform workflows
+- `oauth` — OAuth app management (create, list, reset-secret, consents, revoke)
 - `config` / `ping` / `status` — diagnostics and health checks
 - `listen` — realtime event stream
 
@@ -63,3 +64,30 @@ shadowob config path
 - `SHADOWOB_SERVER_URL`
 
 These override values in config profiles.
+
+## OAuth Commands
+
+```bash
+# List your OAuth apps
+shadowob oauth list --json
+
+# Create an OAuth app
+shadowob oauth create --name "My App" --redirect-uri https://example.com/callback --json
+
+# Update an app
+shadowob oauth update <app-id> --name "New Name" --json
+
+# Delete an app
+shadowob oauth delete <app-id>
+
+# Reset client secret
+shadowob oauth reset-secret <app-id> --json
+
+# List authorized apps (user consents)
+shadowob oauth consents --json
+
+# Revoke consent for an app
+shadowob oauth revoke <app-id>
+```
+
+See [Platform Apps](/api-doc/platform-apps) for a complete guide to building apps with the OAuth API.
