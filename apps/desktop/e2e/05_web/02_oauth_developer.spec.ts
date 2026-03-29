@@ -203,9 +203,33 @@ test.describe
           'user:read user:email servers:read servers:write channels:read channels:write'
         const authorizeUrl = `${session.origin}/app/oauth/authorize?response_type=code&client_id=${encodeURIComponent(app.clientId)}&redirect_uri=${encodeURIComponent(CALLBACK_URL)}&scope=${encodeURIComponent(scopes)}&state=e2e_flow_test`
 
-        const response = await page.goto(authorizeUrl)
-        console.log('[OAuth E2E] goto status:', response?.status(), 'url:', response?.url())
+        // Listen for the API response to diagnose rendering issues
+        const apiResponsePromise = page.waitForResponse(
+          (resp) =>
+            resp.url().includes('/api/oauth/authorize') && resp.request().method() === 'GET',
+          { timeout: 20_000 },
+        )
+        const gotoResp = await page.goto(authorizeUrl)
+        console.log('[OAuth E2E] goto status:', gotoResp?.status())
         console.log('[OAuth E2E] page.url():', page.url())
+
+        try {
+          const apiResp = await apiResponsePromise
+          console.log('[OAuth E2E] API /api/oauth/authorize status:', apiResp.status())
+          if (apiResp.status() !== 200) {
+            const body = await apiResp.text()
+            console.log('[OAuth E2E] API error body:', body.substring(0, 300))
+          }
+        } catch (e) {
+          console.log('[OAuth E2E] API response not captured:', (e as Error).message)
+        }
+
+        // Check React rendering and page state
+        const rootLen = await page.evaluate(
+          () => document.getElementById('root')?.innerHTML?.length ?? 0,
+        )
+        const spinnerCount = await page.locator('.animate-spin').count()
+        console.log('[OAuth E2E] React root length:', rootLen, 'spinners:', spinnerCount)
         await screenshot(page, 'debug-authorize-after-goto.png')
 
         // Step 5: Screenshot the authorization consent page

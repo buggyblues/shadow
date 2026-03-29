@@ -173,8 +173,15 @@ test.describe
         const authorizeUrl = `${session.origin}/app/oauth/authorize?response_type=code&client_id=${encodeURIComponent(app.clientId)}&redirect_uri=${encodeURIComponent(CALLBACK_URL)}&scope=${encodeURIComponent(scopes)}&state=tavern_setup`
 
         const response = await page.goto(authorizeUrl)
-        console.log('[Tavern E2E] goto status:', response?.status(), 'url:', response?.url())
+        console.log('[Tavern E2E] goto status:', response?.status())
         console.log('[Tavern E2E] page.url():', page.url())
+
+        // Check rendering state
+        const rootLen = await page.evaluate(
+          () => document.getElementById('root')?.innerHTML?.length ?? 0,
+        )
+        const spinnerCount = await page.locator('.animate-spin').count()
+        console.log('[Tavern E2E] React root length:', rootLen, 'spinners:', spinnerCount)
 
         // Screenshot: OAuth authorize page with all scope groups
         await expect(page.getByText('授权应用')).toBeVisible({ timeout: 15_000 })
