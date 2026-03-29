@@ -90,7 +90,7 @@ test.describe.serial('OAuth Developer Settings — UI', () => {
     // Navigate to developer settings tab
     await page.goto('settings')
     await page.waitForURL(/\/app\/settings/)
-    const devTab = page.getByText('开发者')
+    const devTab = page.getByText('开发者', { exact: true }).first()
     await devTab.click()
     await page.waitForTimeout(500)
 
@@ -222,7 +222,7 @@ test.describe.serial('OAuth Authorization Flow — Full E2E', () => {
 
       // Step 5: Navigate to the OAuth authorize page
       const scopes = 'user:read user:email servers:read servers:write channels:read channels:write'
-      const authorizeUrl = `/oauth/authorize?response_type=code&client_id=${encodeURIComponent(app.clientId)}&redirect_uri=${encodeURIComponent(CALLBACK_URL)}&scope=${encodeURIComponent(scopes)}&state=e2e_flow_test`
+      const authorizeUrl = `oauth/authorize?response_type=code&client_id=${encodeURIComponent(app.clientId)}&redirect_uri=${encodeURIComponent(CALLBACK_URL)}&scope=${encodeURIComponent(scopes)}&state=e2e_flow_test`
 
       await page.goto(authorizeUrl)
       await page.waitForTimeout(1000)

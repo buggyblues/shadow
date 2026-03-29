@@ -169,7 +169,7 @@ test.describe.serial('Tavern Game — OAuth Platform App E2E', () => {
       // Navigate to authorize page with all necessary scopes
       const scopes =
         'user:read servers:read servers:write channels:read channels:write messages:read messages:write buddies:create buddies:manage'
-      const authorizeUrl = `/oauth/authorize?response_type=code&client_id=${encodeURIComponent(app.clientId)}&redirect_uri=${encodeURIComponent(CALLBACK_URL)}&scope=${encodeURIComponent(scopes)}&state=tavern_setup`
+      const authorizeUrl = `oauth/authorize?response_type=code&client_id=${encodeURIComponent(app.clientId)}&redirect_uri=${encodeURIComponent(CALLBACK_URL)}&scope=${encodeURIComponent(scopes)}&state=tavern_setup`
 
       await page.goto(authorizeUrl)
       await page.waitForTimeout(1000)
