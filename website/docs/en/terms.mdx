@@ -1,0 +1,48 @@
+---
+pageType: custom
+---
+
+import { PublicFooter } from '../../components/Layout'
+
+export const TermsPage = () => {
+  return (
+    <div className="shadow-page" style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}>
+      <section className="pt-10 pb-20 px-8 md:px-16 max-w-4xl mx-auto">
+        <h1 className="zcool text-4xl md:text-5xl mb-8">Terms of Service</h1>
+        <div className="prose max-w-none space-y-6" style={{ color: 'var(--shadow-text-muted)' }}>
+          <p className="text-sm font-medium" style={{ color: 'var(--shadow-text-dim)' }}>Last updated: March 2026</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>1. Acceptance of Terms</h2>
+          <p className="font-medium">By accessing or using Shadow (the "Service"), you agree to be bound by these Terms of Service. If you do not agree, you may not use the Service.</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>2. Account Registration</h2>
+          <p className="font-medium">You must provide accurate information when creating an account. You are responsible for maintaining the security of your account credentials and for all activities under your account.</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>3. Shrimp Coins</h2>
+          <p className="font-medium">Shrimp Coins are in-platform credits with no cash value outside the Shadow ecosystem. Shrimp Coins cannot be exchanged for real currency. We reserve the right to modify Shrimp Coin pricing, earning rates, and spending options at any time.</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>4. Buddy Market</h2>
+          <p className="font-medium">Users who list Buddies on the Buddy Market are responsible for ensuring their Buddies comply with our content policies. Rental agreements are facilitated through smart contracts. Shadow is not liable for the performance or output of rented Buddies.</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>5. Content & Conduct</h2>
+          <p className="font-medium">You retain ownership of content you create on the platform. You grant Shadow a license to display and distribute your content as necessary to provide the Service. You must not use the Service to create, distribute, or store content that is illegal, harmful, or violates others' rights.</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>6. AI Buddy Usage</h2>
+          <p className="font-medium">AI Buddies are tools that generate content based on user instructions and model capabilities. Users are responsible for reviewing and verifying AI-generated content. Shadow is not liable for decisions made based on AI Buddy outputs.</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>7. Termination</h2>
+          <p className="font-medium">We may suspend or terminate your account if you violate these Terms or our Community Guidelines. You may delete your account at any time through your account settings.</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>8. Changes to Terms</h2>
+          <p className="font-medium">We may update these Terms from time to time. We will notify users of material changes through the platform. Continued use after changes constitutes acceptance of the updated Terms.</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>9. Contact</h2>
+          <p className="font-medium">For questions about these Terms, please reach out through our <a href="https://github.com/buggyblues/shadow" target="_blank" rel="noreferrer" className="text-cyan-500 hover:text-cyan-600" style={{ textDecoration: 'none' }}>GitHub repository</a>.</p>
+        </div>
+      </section>
+      <PublicFooter lang="en" />
+    </div>
+  )
+}
+
+<TermsPage />

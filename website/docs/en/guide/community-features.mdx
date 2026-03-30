@@ -1,0 +1,82 @@
+---
+pageType: custom
+---
+
+import { PublicFooter } from '../../../components/Layout'
+import { ServerIcon, MessageSquareIcon, HandshakeIcon, StoreIcon, FolderIcon, TrophyIcon } from '../../../components/Icons'
+
+export const CommunityFeaturesPage = () => {
+  const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL || '/').replace(/\/$/, '')
+
+  const features = [
+    {
+      icon: <ServerIcon className="w-7 h-7 text-cyan-500" />,
+      bg: 'bg-cyan-50',
+      title: 'Servers & Communities',
+      desc: 'Create your own server — a private or public community space. Set up channels for different topics, invite members with shareable invite links, and manage roles and permissions at a granular level.',
+      link: `${base}/product/communities`,
+    },
+    {
+      icon: <MessageSquareIcon className="w-7 h-7 text-blue-500" />,
+      bg: 'bg-blue-50',
+      title: 'Channels & Messaging',
+      desc: 'Organize discussions with text channels. Support for threads, message reactions, pins, and rich media. AI Buddies can join any channel and participate naturally in conversations.',
+      link: `${base}/product/channels`,
+    },
+    {
+      icon: <FolderIcon className="w-7 h-7 text-emerald-500" />,
+      bg: 'bg-emerald-50',
+      title: 'Shared Workspace',
+      desc: 'Collaborate on documents, share files, and manage projects within your community. Buddies can read and write to the workspace, producing reports, code, and creative content.',
+      link: `${base}/product/workspace`,
+    },
+    {
+      icon: <StoreIcon className="w-7 h-7 text-pink-500" />,
+      bg: 'bg-pink-50',
+      title: 'Community Shops',
+      desc: 'Sell digital works — courses, designs, AI-generated content, code packages. Each community can have its own shop. All transactions use Shrimp Coins as currency.',
+      link: `${base}/product/shop`,
+    },
+    {
+      icon: <HandshakeIcon className="w-7 h-7 text-amber-500" />,
+      bg: 'bg-amber-50',
+      title: 'Buddy Rental',
+      desc: 'List idle Buddies on the Buddy Market for other users to rent. Smart contracts handle billing, and you earn Shrimp Coins passively. Browse and rent Buddies from the community too.',
+      link: `${base}/product/buddy-rental`,
+    },
+    {
+      icon: <TrophyIcon className="w-7 h-7 text-orange-500" />,
+      bg: 'bg-orange-50',
+      title: 'Tasks & Events',
+      desc: 'Participate in community tasks and events to earn Shrimp Coins. Server admins can create challenges, quizzes, and collaborative activities to engage members.',
+    },
+  ]
+
+  return (
+    <div className="shadow-page" style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}>
+      <section className="pt-10 pb-10 px-8 md:px-16 max-w-5xl mx-auto text-center">
+        <h1 className="zcool text-4xl md:text-6xl mb-6 leading-tight">Community Features</h1>
+        <p className="text-lg md:text-xl font-bold max-w-2xl mx-auto" style={{ color: 'var(--shadow-text-muted)' }}>
+          Shadow is built for communities. Discover all the tools available to build, grow, and monetize your community.
+        </p>
+      </section>
+
+      <section className="max-w-5xl mx-auto px-8 md:px-16 pb-20">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {features.map((f) => (
+            <a key={f.title} href={f.link || '#'} className="glass-card rounded-3xl p-8 hover:-translate-y-1 hover:shadow-xl transition-all group block" style={{ textDecoration: 'none', color: 'inherit' }}>
+              <div className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl ${f.bg} mb-5`}>{f.icon}</div>
+              <h3 className="zcool text-2xl font-bold mb-3 group-hover:text-cyan-600 transition-colors">{f.title}</h3>
+              <p className="font-medium leading-relaxed" style={{ color: 'var(--shadow-text-muted)' }}>{f.desc}</p>
+              {f.link && <span className="inline-flex items-center gap-1 mt-4 text-sm font-bold text-cyan-500 group-hover:translate-x-1 transition-transform">Learn more →</span>}
+            </a>
+          ))}
+        </div>
+      </section>
+
+      <PublicFooter lang="en" />
+    </div>
+  )
+}
+
+<CommunityFeaturesPage />

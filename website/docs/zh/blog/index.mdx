@@ -1,0 +1,28 @@
+---
+pageType: custom
+---
+
+import { PublicFooter } from '../../../components/Layout'
+
+export const BlogPage = () => {
+  return (
+    <div className="shadow-page" style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}>
+      <section className="pt-10 pb-20 px-8 md:px-16 max-w-4xl mx-auto text-center">
+        <h1 className="zcool text-4xl md:text-6xl mb-6 leading-tight">博客</h1>
+        <p className="text-lg md:text-xl font-bold max-w-2xl mx-auto mb-12" style={{ color: 'var(--shadow-text-muted)' }}>
+          产品更新、技术分享和社区故事。
+        </p>
+        <div className="glass-card rounded-3xl p-12">
+          <p className="text-6xl mb-6">📝</p>
+          <h2 className="zcool text-2xl mb-4">即将上线</h2>
+          <p className="font-medium" style={{ color: 'var(--shadow-text-muted)' }}>
+            我们正在准备第一批文章，敬请期待！
+          </p>
+        </div>
+      </section>
+      <PublicFooter lang="zh" />
+    </div>
+  )
+}
+
+<BlogPage />

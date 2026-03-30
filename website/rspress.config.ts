@@ -37,15 +37,25 @@ export default defineConfig({
         lang: 'en',
         label: 'English',
         nav: [
-          { text: 'Product', link: '/product/' },
-          { text: 'Desktop', link: '/desktop' },
-          { text: 'Buddy Market', link: '/buddies' },
-          { text: 'Guide', link: '/guide' },
-          { text: 'Pricing', link: '/pricing' },
-          { text: 'Shrimp Coins', link: '/tokens' },
+          { text: 'Buddy', link: '/buddy' },
+          { text: 'Guide', link: '/guide/' },
+          { text: 'Docs', link: '/product/' },
           { text: 'API', link: '/api-doc/introduction' },
+          { text: 'Download', link: '/download' },
         ],
         sidebar: {
+          '/guide/': [
+            {
+              text: 'Guide',
+              items: [
+                { text: 'Getting Started', link: '/guide/' },
+                { text: 'Shrimp Coins', link: '/guide/shrimp-coins' },
+                { text: 'Buddy System', link: '/guide/buddy-system' },
+                { text: 'Community Features', link: '/guide/community-features' },
+                { text: 'Advanced Tips', link: '/guide/advanced-tips' },
+              ],
+            },
+          ],
           '/product/': [
             {
               text: 'Product Docs',
@@ -54,11 +64,10 @@ export default defineConfig({
                 { text: 'Communities & Servers', link: '/product/communities' },
                 { text: 'Channels & Messages', link: '/product/channels' },
                 { text: 'AI Assistants', link: '/product/ai-assistants' },
-                { text: 'Community Shop', link: '/product/shop' },
                 { text: 'Buddy Rental', link: '/product/buddy-rental' },
+                { text: 'Community Shop', link: '/product/shop' },
                 { text: 'Shared Workspace', link: '/product/workspace' },
-                { text: 'Shadow Desktop', link: '/product/openclaw' },
-                { text: 'Desktop App', link: '/desktop' },
+                { text: 'OpenClaw Plugin', link: '/product/openclaw' },
                 { text: 'FAQ', link: '/product/faq' },
               ],
             },
@@ -127,15 +136,25 @@ export default defineConfig({
         lang: 'zh',
         label: '中文',
         nav: [
-          { text: '产品', link: '/zh/product/' },
-          { text: '桌面端', link: '/zh/desktop' },
-          { text: 'Buddy 集市', link: '/zh/buddies' },
-          { text: '玩法指南', link: '/zh/guide' },
-          { text: '定价', link: '/zh/pricing' },
-          { text: '虾币', link: '/zh/tokens' },
+          { text: 'Buddy', link: '/zh/buddy' },
+          { text: '玩法指南', link: '/zh/guide/' },
+          { text: '文档', link: '/zh/product/' },
           { text: 'API', link: '/zh/api-doc/introduction' },
+          { text: '下载', link: '/zh/download' },
         ],
         sidebar: {
+          '/zh/guide/': [
+            {
+              text: '玩法指南',
+              items: [
+                { text: '新手入门', link: '/zh/guide/' },
+                { text: '虾币', link: '/zh/guide/shrimp-coins' },
+                { text: 'Buddy 系统', link: '/zh/guide/buddy-system' },
+                { text: '社区玩法', link: '/zh/guide/community-features' },
+                { text: '进阶技巧', link: '/zh/guide/advanced-tips' },
+              ],
+            },
+          ],
           '/zh/product/': [
             {
               text: '产品文档',
@@ -144,11 +163,10 @@ export default defineConfig({
                 { text: '社区与服务器', link: '/zh/product/communities' },
                 { text: '频道与消息', link: '/zh/product/channels' },
                 { text: 'AI 搭子', link: '/zh/product/ai-assistants' },
-                { text: '社区店铺', link: '/zh/product/shop' },
                 { text: 'Buddy 租赁', link: '/zh/product/buddy-rental' },
+                { text: '社区店铺', link: '/zh/product/shop' },
                 { text: '共享工作区', link: '/zh/product/workspace' },
-                { text: 'Shadow 桌面端', link: '/zh/product/openclaw' },
-                { text: '桌面端应用', link: '/zh/desktop' },
+                { text: 'OpenClaw 插件', link: '/zh/product/openclaw' },
                 { text: '常见问题', link: '/zh/product/faq' },
               ],
             },

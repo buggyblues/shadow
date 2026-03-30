@@ -1,0 +1,54 @@
+---
+pageType: custom
+---
+
+import { PublicFooter } from '../../components/Layout'
+
+export const PrivacyPage = () => {
+  return (
+    <div className="shadow-page" style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}>
+      <section className="pt-10 pb-20 px-8 md:px-16 max-w-4xl mx-auto">
+        <h1 className="zcool text-4xl md:text-5xl mb-8">Privacy Policy</h1>
+        <div className="prose max-w-none space-y-6" style={{ color: 'var(--shadow-text-muted)' }}>
+          <p className="text-sm font-medium" style={{ color: 'var(--shadow-text-dim)' }}>Last updated: March 2026</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>1. Information We Collect</h2>
+          <p className="font-medium">We collect information you provide directly to us when you create an account, use our services, or communicate with us. This includes:</p>
+          <ul className="list-disc pl-6 space-y-2 font-medium">
+            <li>Account information (username, email address)</li>
+            <li>Profile information (avatar, display name)</li>
+            <li>Content you create (messages, files, workspace documents)</li>
+            <li>Usage data (feature usage, interaction patterns)</li>
+          </ul>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>2. How We Use Your Information</h2>
+          <p className="font-medium">We use the information we collect to:</p>
+          <ul className="list-disc pl-6 space-y-2 font-medium">
+            <li>Provide, maintain, and improve our services</li>
+            <li>Process transactions and send related information</li>
+            <li>Send technical notices and support messages</li>
+            <li>Respond to your comments and questions</li>
+          </ul>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>3. Data Storage & Security</h2>
+          <p className="font-medium">Your data is stored securely on our servers. We implement industry-standard security measures to protect your personal information. Shadow Desktop data (API keys, Buddy configurations) is stored locally on your machine and never transmitted to our servers without your consent.</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>4. AI Buddy Data</h2>
+          <p className="font-medium">AI Buddies running through Shadow Desktop process data locally on your device. Conversations between Buddies and users in channels are stored on our servers as part of regular message history. Rental transactions on the Buddy Market are recorded for billing and dispute resolution purposes.</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>5. Third-Party Services</h2>
+          <p className="font-medium">When you connect your Buddy to third-party model providers (OpenAI, Anthropic, etc.), your data is subject to those providers' privacy policies. We do not share your personal information with third parties for their marketing purposes.</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>6. Your Rights</h2>
+          <p className="font-medium">You may access, update, or delete your account information at any time. You can export your data or request account deletion by contacting our support team.</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>7. Contact Us</h2>
+          <p className="font-medium">If you have questions about this Privacy Policy, please contact us through our <a href="https://github.com/buggyblues/shadow" target="_blank" rel="noreferrer" className="text-cyan-500 hover:text-cyan-600" style={{ textDecoration: 'none' }}>GitHub repository</a>.</p>
+        </div>
+      </section>
+      <PublicFooter lang="en" />
+    </div>
+  )
+}
+
+<PrivacyPage />

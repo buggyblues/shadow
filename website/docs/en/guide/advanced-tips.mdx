@@ -1,0 +1,115 @@
+---
+pageType: custom
+---
+
+import { PublicFooter } from '../../../components/Layout'
+import { SparkleIcon, BrainIcon, PuzzleIcon, ClockIcon, CodeIcon, LockIcon } from '../../../components/Icons'
+
+export const AdvancedTipsPage = () => {
+  const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL || '/').replace(/\/$/, '')
+
+  const tips = [
+    {
+      icon: <BrainIcon className="w-7 h-7 text-violet-500" />,
+      title: 'Optimize Your Buddy\'s Persona',
+      items: [
+        'Use SOUL.md to define core personality traits and communication style',
+        'Use IDENTITY.md for role-specific knowledge and expertise areas',
+        'Keep personas focused — a specialist Buddy outperforms a generalist',
+        'Test different model providers to find the best fit for your Buddy\'s purpose',
+      ],
+    },
+    {
+      icon: <PuzzleIcon className="w-7 h-7 text-pink-500" />,
+      title: 'Master Skill Composition',
+      items: [
+        'Combine complementary skills for powerful workflows (e.g., web search + summarization)',
+        'Use TOOLS.md to define custom tool configurations for your Buddy',
+        'Install skills from the Skill Hub or create your own with the CLI',
+        'Check the Shadow CLI SKILL.md for detailed skill development guides',
+      ],
+    },
+    {
+      icon: <ClockIcon className="w-7 h-7 text-amber-500" />,
+      title: 'Automate with Cron Tasks',
+      items: [
+        'Schedule daily summaries of channel activity',
+        'Set up automated content generation on a recurring basis',
+        'Use cron tasks for data collection and report generation',
+        'Configure retry policies for reliability in long-running tasks',
+      ],
+    },
+    {
+      icon: <CodeIcon className="w-7 h-7 text-green-500" />,
+      title: 'Leverage the API',
+      items: [
+        'Use the Shadow SDK (TypeScript / Python) for programmatic access',
+        'Build custom integrations with OAuth and Platform Apps',
+        'Automate server management with the REST API',
+        'Connect Buddies to external services via webhooks',
+      ],
+      link: { text: 'API Documentation', href: `${base}/api-doc/introduction` },
+    },
+    {
+      icon: <SparkleIcon className="w-7 h-7 text-purple-500" />,
+      title: 'Multi-Platform Strategy',
+      items: [
+        'Connect your Buddy to multiple IM platforms simultaneously (Telegram, Discord, WeChat, etc.)',
+        'Use platform-specific personas for contextual responses',
+        'Centralize all conversations through your Shadow server',
+        'Monitor cross-platform activity from the Desktop dashboard',
+      ],
+    },
+    {
+      icon: <LockIcon className="w-7 h-7 text-emerald-500" />,
+      title: 'Security Best Practices',
+      items: [
+        'Keep Shadow Desktop updated for the latest security patches',
+        'Use separate API keys for different Buddies',
+        'Review Buddy permissions and channel access regularly',
+        'Enable auto-restart to keep Buddies online 24/7 without manual intervention',
+      ],
+    },
+  ]
+
+  return (
+    <div className="shadow-page" style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}>
+      <section className="pt-10 pb-10 px-8 md:px-16 max-w-5xl mx-auto text-center">
+        <h1 className="zcool text-4xl md:text-6xl mb-6 leading-tight">Advanced Tips</h1>
+        <p className="text-lg md:text-xl font-bold max-w-2xl mx-auto" style={{ color: 'var(--shadow-text-muted)' }}>
+          Level up your Shadow experience with these power-user tips and tricks.
+        </p>
+      </section>
+
+      <section className="max-w-4xl mx-auto px-8 md:px-16 pb-20">
+        <div className="space-y-8">
+          {tips.map((t) => (
+            <div key={t.title} className="glass-card rounded-3xl p-8 hover:shadow-lg transition-all">
+              <div className="flex items-center gap-3 mb-4">
+                {t.icon}
+                <h2 className="zcool text-2xl font-bold">{t.title}</h2>
+              </div>
+              <ul className="space-y-3">
+                {t.items.map((item, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="text-cyan-500 font-bold mt-0.5">→</span>
+                    <span className="font-medium text-sm" style={{ color: 'var(--shadow-text-muted)' }}>{item}</span>
+                  </li>
+                ))}
+              </ul>
+              {t.link && (
+                <a href={t.link.href} className="inline-flex items-center gap-1 mt-4 text-sm font-bold text-cyan-500 hover:text-cyan-600 transition-colors" style={{ textDecoration: 'none' }}>
+                  {t.link.text} →
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <PublicFooter lang="en" />
+    </div>
+  )
+}
+
+<AdvancedTipsPage />

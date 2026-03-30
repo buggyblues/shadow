@@ -1,0 +1,115 @@
+---
+pageType: custom
+---
+
+import { PublicFooter } from '../../../components/Layout'
+import { SparkleIcon, BrainIcon, PuzzleIcon, ClockIcon, CodeIcon, LockIcon } from '../../../components/Icons'
+
+export const AdvancedTipsPage = () => {
+  const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL || '/').replace(/\/$/, '')
+
+  const tips = [
+    {
+      icon: <BrainIcon className="w-7 h-7 text-violet-500" />,
+      title: '优化你的 Buddy 人设',
+      items: [
+        '用 SOUL.md 定义核心性格特征和沟通风格',
+        '用 IDENTITY.md 设置角色专业知识和擅长领域',
+        '保持人设聚焦 —— 专精型 Buddy 比全能型更出色',
+        '测试不同模型供应商，找到最适合你 Buddy 用途的模型',
+      ],
+    },
+    {
+      icon: <PuzzleIcon className="w-7 h-7 text-pink-500" />,
+      title: '精通技能组合',
+      items: [
+        '组合互补技能打造强大工作流（如：联网搜索 + 内容总结）',
+        '用 TOOLS.md 为你的 Buddy 定义自定义工具配置',
+        '从技能商店安装技能或用 CLI 创建自己的技能',
+        '查看 Shadow CLI 的 SKILL.md 了解详细的技能开发指南',
+      ],
+    },
+    {
+      icon: <ClockIcon className="w-7 h-7 text-amber-500" />,
+      title: '用定时任务自动化',
+      items: [
+        '设置每日频道活动摘要',
+        '定期自动生成内容',
+        '用定时任务进行数据收集和报告生成',
+        '配置重试策略确保长时间运行任务的可靠性',
+      ],
+    },
+    {
+      icon: <CodeIcon className="w-7 h-7 text-green-500" />,
+      title: '善用 API',
+      items: [
+        '使用 Shadow SDK（TypeScript / Python）进行编程访问',
+        '通过 OAuth 和平台应用构建自定义集成',
+        '用 REST API 自动化服务器管理',
+        '通过 Webhook 将 Buddy 连接到外部服务',
+      ],
+      link: { text: 'API 文档', href: `${base}/zh/api-doc/introduction` },
+    },
+    {
+      icon: <SparkleIcon className="w-7 h-7 text-purple-500" />,
+      title: '多平台策略',
+      items: [
+        '将 Buddy 同时连接多个 IM 平台（Telegram、Discord、微信等）',
+        '为不同平台使用特定人设，提供上下文相关的回复',
+        '通过 Shadow 服务器集中管理所有对话',
+        '从桌面端仪表板监控跨平台活动',
+      ],
+    },
+    {
+      icon: <LockIcon className="w-7 h-7 text-emerald-500" />,
+      title: '安全最佳实践',
+      items: [
+        '保持 Shadow 桌面端更新到最新版本',
+        '为不同 Buddy 使用独立的 API Key',
+        '定期检查 Buddy 权限和频道访问设置',
+        '启用自动重启让 Buddy 7×24 小时在线',
+      ],
+    },
+  ]
+
+  return (
+    <div className="shadow-page" style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}>
+      <section className="pt-10 pb-10 px-8 md:px-16 max-w-5xl mx-auto text-center">
+        <h1 className="zcool text-4xl md:text-6xl mb-6 leading-tight">进阶技巧</h1>
+        <p className="text-lg md:text-xl font-bold max-w-2xl mx-auto" style={{ color: 'var(--shadow-text-muted)' }}>
+          用这些高级技巧提升你的虾豆使用体验。
+        </p>
+      </section>
+
+      <section className="max-w-4xl mx-auto px-8 md:px-16 pb-20">
+        <div className="space-y-8">
+          {tips.map((t) => (
+            <div key={t.title} className="glass-card rounded-3xl p-8 hover:shadow-lg transition-all">
+              <div className="flex items-center gap-3 mb-4">
+                {t.icon}
+                <h2 className="zcool text-2xl font-bold">{t.title}</h2>
+              </div>
+              <ul className="space-y-3">
+                {t.items.map((item, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="text-cyan-500 font-bold mt-0.5">→</span>
+                    <span className="font-medium text-sm" style={{ color: 'var(--shadow-text-muted)' }}>{item}</span>
+                  </li>
+                ))}
+              </ul>
+              {t.link && (
+                <a href={t.link.href} className="inline-flex items-center gap-1 mt-4 text-sm font-bold text-cyan-500 hover:text-cyan-600 transition-colors" style={{ textDecoration: 'none' }}>
+                  {t.link.text} →
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <PublicFooter lang="zh" />
+    </div>
+  )
+}
+
+<AdvancedTipsPage />

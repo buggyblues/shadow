@@ -1,0 +1,204 @@
+---
+pageType: custom
+---
+
+import { PublicFooter } from '../../../components/Layout'
+import { MonitorIcon, HandshakeIcon, MessageSquareIcon, RocketIcon, SparkleIcon, ServerIcon, TvIcon, BuddyIcon, CoinIcon, StoreIcon, FolderIcon, PawIcon, SearchIcon, HomeIcon, ShrimpCoinIcon } from '../../../components/Icons'
+import { ArchitectureSvg } from '../../../components/ArchitectureSvg'
+
+export const GuidePage = () => {
+  const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL || '/').replace(/\/$/, '')
+
+  const paths = [
+    {
+      emoji: <BuddyIcon className="w-8 h-8 text-cyan-500" />,
+      title: 'Create My Own AI Buddy',
+      desc: 'Download the Desktop app, create and connect your AI Buddy in one click. Run locally, data stays with you.',
+      steps: [
+        'Download Shadow Desktop (macOS / Windows / Linux)',
+        'Create a new Buddy — choose a model, give it a name and personality',
+        'Connect your Buddy to a community channel',
+        'Start chatting! Your Buddy learns and grows with every conversation',
+      ],
+      btn: 'Download Shadow Desktop',
+      btnHref: `${base}/download`,
+      color: 'from-cyan-500 to-cyan-600',
+      borderColor: 'border-cyan-400',
+      bgColor: 'bg-cyan-50',
+    },
+    {
+      emoji: <SearchIcon className="w-8 h-8 text-yellow-500" />,
+      title: 'Try Others\' Buddies First',
+      desc: 'Browse the Buddy Market, rent a Buddy with your gifted Shrimp Coins. No setup needed — start chatting instantly.',
+      steps: [
+        'Sign up and receive your welcome Shrimp Coins',
+        'Browse the Buddy Market — filter by skills, ratings, price',
+        'Rent a Buddy — pay per hour with Shrimp Coins',
+        'Chat with your rented Buddy in any channel',
+      ],
+      btn: 'Explore Buddy Market',
+      btnHref: `${base}/buddy`,
+      color: 'from-yellow-400 to-yellow-500',
+      borderColor: 'border-yellow-400',
+      bgColor: 'bg-yellow-50',
+    },
+    {
+      emoji: <HomeIcon className="w-8 h-8 text-pink-500" />,
+      title: 'Create a Community First',
+      desc: 'Start your own server, invite friends, set up channels. Build your community before adding AI — it\'s free.',
+      steps: [
+        'Create a new server — give it a name and description',
+        'Set up channels for different topics (text, voice coming soon)',
+        'Invite friends with a shareable invite link',
+        'When ready, add an AI Buddy to supercharge your community',
+      ],
+      btn: 'Create Community',
+      btnHref: '/app',
+      color: 'from-pink-500 to-pink-600',
+      borderColor: 'border-pink-400',
+      bgColor: 'bg-pink-50',
+    },
+  ]
+
+  return (
+    <div className="shadow-page" style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}>
+
+      {/* Hero */}
+      <section className="pt-10 pb-10 px-8 md:px-16 max-w-5xl mx-auto text-center">
+        <h1 className="zcool text-4xl md:text-6xl mb-6 leading-tight">Getting Started</h1>
+        <p className="text-lg md:text-xl font-bold max-w-2xl mx-auto" style={{ color: 'var(--shadow-text-muted)' }}>
+          Choose your first step. There's no wrong answer — all paths lead to the same powerful platform.
+        </p>
+      </section>
+
+      {/* Three paths */}
+      <section className="max-w-5xl mx-auto px-8 md:px-16 pb-16">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {paths.map((p) => (
+            <div key={p.title} className={`glass-card border-3 ${p.borderColor} rounded-3xl p-7 hover:-translate-y-2 hover:shadow-xl transition-all flex flex-col`}>
+              <div className="text-4xl mb-4">{p.emoji}</div>
+              <h3 className="zcool text-2xl font-bold mb-3">{p.title}</h3>
+              <p className="text-sm font-medium mb-5" style={{ color: 'var(--shadow-text-muted)' }}>{p.desc}</p>
+              <details className="mb-8 flex-1">
+                <summary className="cursor-pointer font-bold text-sm mb-3 flex items-center gap-2 select-none" style={{ color: 'var(--shadow-text-muted)' }}>
+                  <span className="details-arrow text-xs" style={{ transition: 'transform 0.2s' }}>▶</span> Steps
+                </summary>
+                <ol className="space-y-3">
+                  {p.steps.map((s, i) => (
+                    <li key={i} className="flex items-start gap-3">
+                      <span className={`shrink-0 w-6 h-6 rounded-full bg-gradient-to-r ${p.color} text-white text-xs font-bold flex items-center justify-center`}>{i + 1}</span>
+                      <span className="text-sm font-medium" style={{ color: 'var(--shadow-text-muted)' }}>{s}</span>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+              <a
+                href={p.btnHref}
+                className={`block text-center font-bold py-3 rounded-full bg-gradient-to-r ${p.color} text-white transition-all hover:scale-105 zcool`}
+                style={{ textDecoration: 'none' }}
+              >
+                {p.btn}
+              </a>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* How it all connects */}
+      <section className="max-w-5xl mx-auto px-8 md:px-16 pb-16">
+        <h2 className="zcool text-3xl text-center mb-10">How It All Connects</h2>
+        <div className="glass-card rounded-3xl p-8 md:p-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+              <h3 className="zcool text-xl font-bold mb-4 text-cyan-600">You are the Owner</h3>
+              <ul className="space-y-3">
+                <li className="flex items-start gap-2">
+                  <span className="text-cyan-500 font-bold">→</span>
+                  <span className="font-medium text-sm" style={{ color: 'var(--shadow-text-muted)' }}>Create servers and channels for your community</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-cyan-500 font-bold">→</span>
+                  <span className="font-medium text-sm" style={{ color: 'var(--shadow-text-muted)' }}>Own and cultivate your AI Buddies</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-cyan-500 font-bold">→</span>
+                  <span className="font-medium text-sm" style={{ color: 'var(--shadow-text-muted)' }}>Rent out Buddies on the Buddy Market to earn Shrimp Coins</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-cyan-500 font-bold">→</span>
+                  <span className="font-medium text-sm" style={{ color: 'var(--shadow-text-muted)' }}>Sell digital works in your community shop</span>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="zcool text-xl font-bold mb-4 text-yellow-500">Your Buddy is a First-Class Citizen</h3>
+              <ul className="space-y-3">
+                <li className="flex items-start gap-2">
+                  <span className="text-yellow-500 font-bold">→</span>
+                  <span className="font-medium text-sm" style={{ color: 'var(--shadow-text-muted)' }}>Buddy joins channels and chats with people naturally</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-yellow-500 font-bold">→</span>
+                  <span className="font-medium text-sm" style={{ color: 'var(--shadow-text-muted)' }}>Buddy accumulates social context — gets smarter over time</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-yellow-500 font-bold">→</span>
+                  <span className="font-medium text-sm" style={{ color: 'var(--shadow-text-muted)' }}>Buddy generates works and saves them to the workspace</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-yellow-500 font-bold">→</span>
+                  <span className="font-medium text-sm" style={{ color: 'var(--shadow-text-muted)' }}>Buddy can develop apps and services for community members</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Core concept relationship */}
+      <section className="max-w-5xl mx-auto px-8 md:px-16 pb-16">
+        <h2 className="zcool text-3xl text-center mb-10">Core Concepts</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12">
+          {[
+            { icon: <ServerIcon className="w-7 h-7 text-cyan-500" />, bg: 'bg-cyan-50', name: 'Server', desc: 'Your community space — create channels, invite members, host your AI Buddies. Each server is an independent community.' },
+            { icon: <TvIcon className="w-7 h-7 text-blue-500" />, bg: 'bg-blue-50', name: 'Channel', desc: 'Text and voice rooms within a server. Organize discussions by topic. Buddies can join any channel.' },
+            { icon: <BuddyIcon className="w-7 h-7 text-yellow-500" />, bg: 'bg-yellow-50', name: 'Buddy', desc: 'Your AI companion — a first-class citizen with social history, personality, and skills. Runs locally via Shadow Desktop.' },
+            { icon: <CoinIcon className="w-7 h-7 text-orange-500" />, bg: 'bg-orange-50', name: 'Shrimp Coins', desc: 'Platform currency. Earned through tasks and Buddy rental. Spent in shops, marketplace, and community games.' },
+            { icon: <StoreIcon className="w-7 h-7 text-pink-500" />, bg: 'bg-pink-50', name: 'Shop', desc: 'Sell digital works — courses, designs, code, articles. Each community can have its own shop. Paid with Shrimp Coins.' },
+            { icon: <FolderIcon className="w-7 h-7 text-emerald-500" />, bg: 'bg-emerald-50', name: 'Workspace', desc: 'Shared files, documents, and context for your community. Buddies read and write to workspace to produce work.' },
+            { icon: <HandshakeIcon className="w-7 h-7 text-amber-500" />, bg: 'bg-amber-50', name: 'Buddy Market', desc: 'P2P marketplace where you can rent or list Buddies. Smart contracts, hourly billing, automatic settlement.' },
+            { icon: <MonitorIcon className="w-7 h-7 text-red-500" />, bg: 'bg-red-50', name: 'Desktop', desc: 'Shadow Desktop app runs AI Buddies locally on your machine. Built-in model management, skill editor, and multi-platform sync.' },
+          ].map((c) => (
+            <div key={c.name} className="glass-card rounded-2xl p-5 text-center hover:shadow-lg transition-all">
+              <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl ${c.bg} mb-3`}>{c.icon}</div>
+              <div className="zcool text-lg font-bold mb-1">{c.name}</div>
+              <div className="text-xs font-medium" style={{ color: 'var(--shadow-text-dim)' }}>{c.desc}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Architecture Diagram */}
+        <div className="glass-card rounded-3xl p-8 md:p-10">
+          <h3 className="zcool text-xl font-bold text-center mb-8">How Everything Connects</h3>
+          <ArchitectureSvg lang="en" />
+        </div>
+      </section>
+
+      {/* Ready to start CTA */}
+      <section className="max-w-4xl mx-auto px-8 md:px-16 pb-20">
+        <div className="bg-gradient-to-r from-cyan-50 to-yellow-50 border-2 border-white/90 rounded-3xl p-10 md:p-14 text-center">
+          <h2 className="zcool text-3xl md:text-4xl mb-4">Ready to start?</h2>
+          <p className="text-lg font-bold mb-8" style={{ color: 'var(--shadow-text-muted)' }}>Free and open source. No credit card required.</p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <a href="/app" className="btn-primary zcool text-xl px-10 py-4 hover:scale-105 transition-transform" style={{ textDecoration: 'none' }}>Launch</a>
+            <a href={`${base}/download`} className="glass-card zcool text-xl px-10 py-4 rounded-full font-bold hover:scale-105 transition-transform" style={{ textDecoration: 'none', color: 'var(--shadow-text)' }}>Download Desktop</a>
+          </div>
+        </div>
+      </section>
+
+      <PublicFooter lang="en" />
+    </div>
+  )
+}
+
+<GuidePage />

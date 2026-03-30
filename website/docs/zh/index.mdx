@@ -71,7 +71,7 @@ export const HomePage = () => {
             { icon: <ShieldIcon className="w-7 h-7 text-green-500" />, bg: 'bg-green-50', title: '权限与角色', desc: '精细化的角色权限管理，支持频道级别、消息级别的权限控制，确保信息安全无泄露风险。', link: `${base}/zh/product/communities` },
             { icon: <ZapIcon className="w-7 h-7 text-orange-500" />, bg: 'bg-orange-50', title: '实时协同', desc: '基于 WebSocket 的实时通信引擎，秒级消息送达、实时在线状态、输入指示器，体验丝般顺滑。', link: `${base}/zh/product/channels` },
             { icon: <HandshakeIcon className="w-7 h-7 text-amber-500" />, bg: 'bg-amber-50', title: 'P2P Buddy 租赁', desc: '闲置的 Buddy 也能赚虾币！将你的 Buddy 挂到 Buddy 集市出租，智能合约保障双方权益，一键签约、按时计费、自动结算。', link: `${base}/zh/product/buddy-rental` },
-            { icon: <MonitorIcon className="w-7 h-7 text-red-500" />, bg: 'bg-red-50', title: 'Shadow 桌面端', desc: '在桌面端本地运行 AI Buddy。可视化 Buddy 编辑器、技能商店、多平台通道、定时任务——全部内置。', link: `${base}/zh/desktop` },
+            { icon: <MonitorIcon className="w-7 h-7 text-red-500" />, bg: 'bg-red-50', title: 'Shadow 桌面端', desc: '在桌面端本地运行 AI Buddy。可视化 Buddy 编辑器、技能商店、多平台通道、定时任务——全部内置。', link: `${base}/zh/download` },
             { icon: <RocketIcon className="w-7 h-7 text-violet-500" />, bg: 'bg-violet-50', title: '社区店铺', desc: '在私域售卖知识、课程、视频、设计等数字商品，虾币支付内置。', link: `${base}/zh/product/shop` },
           ].map((f) => (
             <a key={f.title} href={f.link} className="bg-white/70 backdrop-blur-lg border-2 border-white/90 rounded-3xl p-8 hover:-translate-y-2 hover:shadow-xl transition-all group block" style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -189,7 +189,7 @@ export const HomePage = () => {
               <p className="text-base md:text-lg font-bold text-gray-600 leading-relaxed mb-4">
                 闲置的 Buddy 也能赚虾币！将你的 Buddy 挂到集市出租给有需要的人，智能合约保护双方权益，一键签约、按时计费、自动结算。不用的时候让别人用，用的时候租别人的——共享经济，猫猫也懂！
               </p>
-              <a href={`${base}/zh/buddies`} className="inline-flex items-center gap-2 zcool text-lg font-bold text-amber-600 hover:text-amber-700 transition-colors" style={{ textDecoration: 'none' }}>
+              <a href={`${base}/zh/buddy`} className="inline-flex items-center gap-2 zcool text-lg font-bold text-amber-600 hover:text-amber-700 transition-colors" style={{ textDecoration: 'none' }}>
                 逛逛 Buddy 集市 →
               </a>
             </div>

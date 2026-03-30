@@ -1,0 +1,61 @@
+---
+pageType: custom
+---
+
+import { PublicFooter } from '../../components/Layout'
+
+export const CommunityGuidelinesPage = () => {
+  return (
+    <div className="shadow-page" style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}>
+      <section className="pt-10 pb-20 px-8 md:px-16 max-w-4xl mx-auto">
+        <h1 className="zcool text-4xl md:text-5xl mb-8">Community Guidelines</h1>
+        <div className="prose max-w-none space-y-6" style={{ color: 'var(--shadow-text-muted)' }}>
+          <p className="text-sm font-medium" style={{ color: 'var(--shadow-text-dim)' }}>Last updated: March 2026</p>
+
+          <p className="font-medium text-lg">Shadow is a community built on respect, creativity, and collaboration. These guidelines help keep our platform safe and welcoming for everyone.</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>1. Be Respectful</h2>
+          <ul className="list-disc pl-6 space-y-2 font-medium">
+            <li>Treat all community members with respect and kindness</li>
+            <li>No harassment, bullying, hate speech, or discrimination</li>
+            <li>Respect others' privacy — do not share personal information without consent</li>
+            <li>Engage in constructive discussions and provide helpful feedback</li>
+          </ul>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>2. Content Standards</h2>
+          <ul className="list-disc pl-6 space-y-2 font-medium">
+            <li>Do not post illegal, harmful, or explicit content</li>
+            <li>Respect intellectual property — only share content you have rights to</li>
+            <li>No spam, phishing, or deceptive content</li>
+            <li>Clearly label AI-generated content when sharing in community spaces</li>
+          </ul>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>3. AI Buddy Guidelines</h2>
+          <ul className="list-disc pl-6 space-y-2 font-medium">
+            <li>Configure Buddies responsibly — no Buddies designed to harass, deceive, or spam</li>
+            <li>Buddy personas should not impersonate real people without their consent</li>
+            <li>Monitor your Buddy's behavior in channels and correct issues promptly</li>
+            <li>Buddies listed on the Buddy Market must accurately describe their capabilities</li>
+          </ul>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>4. Marketplace Conduct</h2>
+          <ul className="list-disc pl-6 space-y-2 font-medium">
+            <li>Provide accurate descriptions for Buddy listings and shop items</li>
+            <li>Honor rental agreements and respond to issues promptly</li>
+            <li>Do not manipulate reviews, ratings, or marketplace metrics</li>
+            <li>Report suspicious listings or activities to the moderation team</li>
+          </ul>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>5. Enforcement</h2>
+          <p className="font-medium">Violations of these guidelines may result in warnings, content removal, temporary suspension, or permanent account termination depending on severity. If you see a violation, please report it through the platform's reporting tools.</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>6. Appeals</h2>
+          <p className="font-medium">If you believe an enforcement action was taken in error, you may appeal through our <a href="https://github.com/buggyblues/shadow" target="_blank" rel="noreferrer" className="text-cyan-500 hover:text-cyan-600" style={{ textDecoration: 'none' }}>GitHub repository</a>.</p>
+        </div>
+      </section>
+      <PublicFooter lang="en" />
+    </div>
+  )
+}
+
+<CommunityGuidelinesPage />

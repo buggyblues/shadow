@@ -235,22 +235,20 @@ export function PublicNav({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
   const t =
     lang === 'zh'
       ? {
-          buddies: 'Buddy 集市',
-          pricing: '定价',
-          product: '文档',
+          buddy: 'Buddy',
           guide: '玩法指南',
-          tokens: '虾币',
+          product: '文档',
           apiDocs: 'API',
+          download: '下载',
           login: '登录',
           launch: '启动！',
         }
       : {
-          buddies: 'Buddy Market',
-          pricing: 'Pricing',
-          product: 'Docs',
+          buddy: 'Buddy',
           guide: 'Guide',
-          tokens: 'Shrimp Coins',
+          product: 'Docs',
           apiDocs: 'API',
+          download: 'Download',
           login: 'Login',
           launch: 'Launch',
         }
@@ -274,32 +272,18 @@ export function PublicNav({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
       </a>
       <div className="hidden md:flex gap-8 text-base font-bold">
         <a
-          href={`${base}${prefix}/buddies`}
+          href={`${base}${prefix}/buddy`}
           className="hover:text-cyan-600 transition border-b-2 border-transparent hover:border-cyan-500 py-1"
           style={{ textDecoration: 'none', color: 'var(--shadow-text-muted)' }}
         >
-          {t.buddies}
+          {t.buddy}
         </a>
         <a
-          href={`${base}${prefix}/guide`}
+          href={`${base}${prefix}/guide/`}
           className="hover:text-cyan-600 transition border-b-2 border-transparent hover:border-cyan-500 py-1"
           style={{ textDecoration: 'none', color: 'var(--shadow-text-muted)' }}
         >
           {t.guide}
-        </a>
-        <a
-          href={`${base}${prefix}/pricing`}
-          className="hover:text-cyan-600 transition border-b-2 border-transparent hover:border-cyan-500 py-1"
-          style={{ textDecoration: 'none', color: 'var(--shadow-text-muted)' }}
-        >
-          {t.pricing}
-        </a>
-        <a
-          href={`${base}${prefix}/tokens`}
-          className="hover:text-cyan-600 transition border-b-2 border-transparent hover:border-cyan-500 py-1"
-          style={{ textDecoration: 'none', color: 'var(--shadow-text-muted)' }}
-        >
-          {t.tokens}
         </a>
         <a
           href={`${base}${prefix}/product`}
@@ -314,6 +298,13 @@ export function PublicNav({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
           style={{ textDecoration: 'none', color: 'var(--shadow-text-muted)' }}
         >
           {t.apiDocs}
+        </a>
+        <a
+          href={`${base}${prefix}/download`}
+          className="hover:text-cyan-600 transition border-b-2 border-transparent hover:border-cyan-500 py-1"
+          style={{ textDecoration: 'none', color: 'var(--shadow-text-muted)' }}
+        >
+          {t.download}
         </a>
       </div>
       <div className="flex items-center gap-2">
@@ -348,18 +339,18 @@ export function PublicFooter({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
             links: [
               { text: '频道', href: `${base}${prefix}/product/channels` },
               { text: 'AI 搭子', href: `${base}${prefix}/product/ai-assistants` },
-              { text: 'Buddy 集市', href: `${base}${prefix}/buddies` },
+              { text: 'Buddy 集市', href: `${base}${prefix}/buddy` },
               { text: '社区', href: `${base}${prefix}/product/communities` },
               { text: '工作区', href: `${base}${prefix}/product/workspace` },
               { text: '店铺', href: `${base}${prefix}/product/shop` },
-              { text: '桌面端', href: `${base}${prefix}/desktop` },
+              { text: '桌面端', href: `${base}${prefix}/download` },
             ],
           },
           {
             title: '资源',
             links: [
-              { text: '玩法指南', href: `${base}${prefix}/guide` },
-              { text: '虾币', href: `${base}${prefix}/tokens` },
+              { text: '玩法指南', href: `${base}${prefix}/guide/` },
+              { text: '博客', href: `${base}${prefix}/blog/` },
               { text: '产品文档', href: `${base}${prefix}/product` },
               { text: 'API 文档', href: `${base}${prefix}/api-doc/introduction` },
               { text: '定价', href: `${base}${prefix}/pricing` },
@@ -373,6 +364,19 @@ export function PublicFooter({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
               { text: 'Twitter / X', href: '#' },
             ],
           },
+          {
+            title: '法律',
+            links: [
+              { text: 'Privacy', href: `${base}${prefix}/privacy` },
+              { text: 'Terms', href: `${base}${prefix}/terms` },
+              { text: '社区公约', href: `${base}${prefix}/community-guidelines` },
+              {
+                text: 'Skills',
+                href: 'https://github.com/buggyblues/shadow/blob/main/skills/shadowob-cli/SKILL.md',
+                external: true,
+              },
+            ],
+          },
         ]
       : [
           {
@@ -380,18 +384,18 @@ export function PublicFooter({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
             links: [
               { text: 'Channels', href: `${base}${prefix}/product/channels` },
               { text: 'AI Buddies', href: `${base}${prefix}/product/ai-assistants` },
-              { text: 'Buddy Market', href: `${base}${prefix}/buddies` },
+              { text: 'Buddy Market', href: `${base}${prefix}/buddy` },
               { text: 'Communities', href: `${base}${prefix}/product/communities` },
               { text: 'Workspace', href: `${base}${prefix}/product/workspace` },
               { text: 'Shop', href: `${base}${prefix}/product/shop` },
-              { text: 'Desktop', href: `${base}${prefix}/desktop` },
+              { text: 'Desktop', href: `${base}${prefix}/download` },
             ],
           },
           {
             title: 'Resources',
             links: [
-              { text: 'Getting Started', href: `${base}${prefix}/guide` },
-              { text: 'Shrimp Coins', href: `${base}${prefix}/tokens` },
+              { text: 'Guide', href: `${base}${prefix}/guide/` },
+              { text: 'Blog', href: `${base}${prefix}/blog/` },
               { text: 'Product Docs', href: `${base}${prefix}/product` },
               { text: 'API Reference', href: `${base}${prefix}/api-doc/introduction` },
               { text: 'Pricing', href: `${base}${prefix}/pricing` },
@@ -405,6 +409,19 @@ export function PublicFooter({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
               { text: 'Twitter / X', href: '#' },
             ],
           },
+          {
+            title: 'Legal',
+            links: [
+              { text: 'Privacy', href: `${base}${prefix}/privacy` },
+              { text: 'Terms', href: `${base}${prefix}/terms` },
+              { text: 'Community Guidelines', href: `${base}${prefix}/community-guidelines` },
+              {
+                text: 'Skills',
+                href: 'https://github.com/buggyblues/shadow/blob/main/skills/shadowob-cli/SKILL.md',
+                external: true,
+              },
+            ],
+          },
         ]
 
   return (
@@ -413,7 +430,7 @@ export function PublicFooter({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
       style={{ borderColor: 'var(--shadow-card-border)' }}
     >
       <div className="max-w-6xl mx-auto px-8 md:px-16">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-10">
           {/* Brand column */}
           <div>
             <div className="flex items-center gap-2 mb-4">

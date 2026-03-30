@@ -1,0 +1,48 @@
+---
+pageType: custom
+---
+
+import { PublicFooter } from '../../components/Layout'
+
+export const TermsPage = () => {
+  return (
+    <div className="shadow-page" style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}>
+      <section className="pt-10 pb-20 px-8 md:px-16 max-w-4xl mx-auto">
+        <h1 className="zcool text-4xl md:text-5xl mb-8">服务条款</h1>
+        <div className="prose max-w-none space-y-6" style={{ color: 'var(--shadow-text-muted)' }}>
+          <p className="text-sm font-medium" style={{ color: 'var(--shadow-text-dim)' }}>最后更新：2026 年 3 月</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>1. 接受条款</h2>
+          <p className="font-medium">访问或使用虾豆（以下简称"服务"）即表示您同意受本服务条款的约束。如不同意，请勿使用本服务。</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>2. 账号注册</h2>
+          <p className="font-medium">创建账号时须提供准确信息。您有责任维护账号凭据的安全，并对账号下的所有活动负责。</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>3. 虾币</h2>
+          <p className="font-medium">虾币是平台内积分，在虾豆生态外无现金价值。虾币不可兑换为真实货币。我们保留随时修改虾币定价、获取速率和消费选项的权利。</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>4. Buddy 集市</h2>
+          <p className="font-medium">在 Buddy 集市挂单的用户须确保其 Buddy 符合我们的内容政策。租赁协议通过智能合约执行。虾豆不对租用 Buddy 的表现或输出承担责任。</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>5. 内容与行为</h2>
+          <p className="font-medium">您保留在平台上创建内容的所有权。您授予虾豆展示和分发您内容的许可，以提供服务所需为限。您不得使用服务创建、分发或存储违法、有害或侵犯他人权利的内容。</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>6. AI Buddy 使用</h2>
+          <p className="font-medium">AI Buddy 是根据用户指令和模型能力生成内容的工具。用户有责任审查和验证 AI 生成的内容。虾豆不对基于 AI Buddy 输出做出的决策承担责任。</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>7. 终止</h2>
+          <p className="font-medium">如您违反本条款或社区公约，我们可能暂停或终止您的账号。您可以随时通过账号设置删除账号。</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>8. 条款变更</h2>
+          <p className="font-medium">我们可能不时更新本条款。重大变更将通过平台通知用户。变更后继续使用即视为接受更新后的条款。</p>
+
+          <h2 className="zcool text-2xl mt-8 mb-4" style={{ color: 'var(--shadow-text)' }}>9. 联系我们</h2>
+          <p className="font-medium">如对本条款有疑问，请通过我们的 <a href="https://github.com/buggyblues/shadow" target="_blank" rel="noreferrer" className="text-cyan-500 hover:text-cyan-600" style={{ textDecoration: 'none' }}>GitHub 仓库</a>联系我们。</p>
+        </div>
+      </section>
+      <PublicFooter lang="zh" />
+    </div>
+  )
+}
+
+<TermsPage />

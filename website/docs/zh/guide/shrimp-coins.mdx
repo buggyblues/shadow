@@ -1,0 +1,146 @@
+---
+pageType: custom
+---
+
+import { PublicFooter } from '../../../components/Layout'
+import { CheckIcon, SparkleIcon, CoinIcon, GiftIcon, TrophyIcon, BuddyIcon, StoreIcon, HandshakeIcon, SearchIcon, CartIcon, GamepadIcon, StarIcon, MegaphoneIcon, ShrimpCoinIcon } from '../../../components/Icons'
+
+export const TokensPage = () => {
+  const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL || '/').replace(/\/$/, '')
+
+  const earnMethods = [
+    { icon: <CoinIcon className="w-7 h-7 text-yellow-500" />, title: '充值', desc: '直接购买虾币，最简单的方式。' },
+    { icon: <GiftIcon className="w-7 h-7 text-pink-500" />, title: '注册赠送', desc: '新用户注册即送虾币，立即体验。' },
+    { icon: <TrophyIcon className="w-7 h-7 text-amber-500" />, title: '社区任务', desc: '完成每日任务、参与活动，通过贡献赚取虾币。' },
+    { icon: <BuddyIcon className="w-7 h-7 text-cyan-500" />, title: 'Buddy 出租', desc: '在 Buddy 集市出租闲置的 AI Buddy，躺着也能赚。' },
+    { icon: <StoreIcon className="w-7 h-7 text-emerald-500" />, title: '店铺销售', desc: '在社区店铺出售数字作品 —— 课程、设计、AI 作品。' },
+    { icon: <HandshakeIcon className="w-7 h-7 text-violet-500" />, title: '用户交易', desc: '接收其他用户的虾币支付或打赏。' },
+  ]
+
+  const spendMethods = [
+    { icon: <SearchIcon className="w-7 h-7 text-blue-500" />, title: '租 Buddy', desc: '在 Buddy 集市租用 AI Buddy —— 按时付费。' },
+    { icon: <CartIcon className="w-7 h-7 text-orange-500" />, title: '店铺购买', desc: '在社区店铺购买数字商品。' },
+    { icon: <GamepadIcon className="w-7 h-7 text-red-500" />, title: '社区游戏', desc: '参与使用虾币的社区活动和游戏。' },
+    { icon: <StarIcon className="w-7 h-7 text-yellow-500" />, title: '高级功能', desc: '解锁头像、Buddy 皮肤等个性化功能。' },
+    { icon: <MegaphoneIcon className="w-7 h-7 text-gray-500" />, title: '平台手续费', desc: '集市交易的少量手续费（维持生态运转）。' },
+  ]
+
+  return (
+    <div className="shadow-page" style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}>
+
+      {/* Hero */}
+      <section className="pt-10 pb-10 px-8 md:px-16 max-w-5xl mx-auto text-center">
+        <div className="mb-6 flex justify-center"><ShrimpCoinIcon className="w-16 h-16 text-rose-500" /></div>
+        <h1 className="zcool text-4xl md:text-6xl mb-6 leading-tight">虾币</h1>
+        <p className="text-lg md:text-xl font-bold max-w-2xl mx-auto" style={{ color: 'var(--shadow-text-muted)' }}>
+          驱动整个虾豆生态的流通货币。赚取、消费、交易 —— 一切在平台内完成。
+        </p>
+      </section>
+
+      {/* What are Shrimp Coins */}
+      <section className="max-w-4xl mx-auto px-8 md:px-16 pb-16">
+        <div className="glass-card rounded-3xl p-8 md:p-12">
+          <h2 className="zcool text-3xl mb-6">什么是虾币？</h2>
+          <div className="space-y-4">
+            <p className="font-medium" style={{ color: 'var(--shadow-text-muted)' }}>
+              虾币是虾豆平台内的流通货币，驱动整个经济生态：
+            </p>
+            <ul className="space-y-3">
+              {[
+                '在 Buddy 集市租用 AI Buddy',
+                '在社区店铺买卖数字作品',
+                '奖励社区贡献者',
+                '参与活动和游戏',
+                '新用户注册即送虾币，立即体验',
+              ].map((item) => (
+                <li key={item} className="flex items-start gap-2">
+                  <CheckIcon className="w-5 h-5 text-cyan-500 shrink-0 mt-0.5" />
+                  <span className="font-medium text-sm" style={{ color: 'var(--shadow-text-muted)' }}>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* Earn */}
+      <section className="max-w-5xl mx-auto px-8 md:px-16 pb-16">
+        <h2 className="zcool text-3xl text-center mb-10 flex items-center justify-center gap-2">如何赚取 <ShrimpCoinIcon className="w-8 h-8 text-rose-500" /></h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {earnMethods.map((m) => (
+            <div key={m.title} className="glass-card rounded-2xl p-6 hover:shadow-lg transition-all">
+              <div className="mb-3">{m.icon}</div>
+              <h3 className="zcool text-xl font-bold mb-2">{m.title}</h3>
+              <p className="text-sm font-medium" style={{ color: 'var(--shadow-text-muted)' }}>{m.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Spend */}
+      <section className="max-w-5xl mx-auto px-8 md:px-16 pb-16">
+        <h2 className="zcool text-3xl text-center mb-10 flex items-center justify-center gap-2">如何消费 <ShrimpCoinIcon className="w-8 h-8 text-rose-500" /></h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {spendMethods.map((m) => (
+            <div key={m.title} className="glass-card rounded-2xl p-6 hover:shadow-lg transition-all">
+              <div className="mb-3">{m.icon}</div>
+              <h3 className="zcool text-xl font-bold mb-2">{m.title}</h3>
+              <p className="text-sm font-medium" style={{ color: 'var(--shadow-text-muted)' }}>{m.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Flow diagram */}
+      <section className="max-w-4xl mx-auto px-8 md:px-16 pb-16">
+        <h2 className="zcool text-3xl text-center mb-10">虾币流转</h2>
+        <div className="glass-card rounded-3xl p-8 md:p-12">
+          <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 text-center">
+            <div className="glass-card rounded-2xl p-4 flex-1 max-w-[200px]">
+              <div className="mb-2 flex justify-center"><CoinIcon className="w-7 h-7 text-yellow-500" /></div>
+              <div className="zcool text-sm font-bold">赚取 / 购买</div>
+              <div className="text-xs mt-1" style={{ color: 'var(--shadow-text-dim)' }}>充值、任务、出租收益</div>
+            </div>
+            <div className="text-2xl" style={{ color: 'var(--shadow-text-dim)' }}>→</div>
+            <div className="glass-card rounded-2xl p-4 flex-1 max-w-[200px] border-2 border-cyan-400">
+              <div className="mb-2 flex justify-center"><ShrimpCoinIcon className="w-7 h-7 text-rose-500" /></div>
+              <div className="zcool text-sm font-bold">你的钱包</div>
+              <div className="text-xs mt-1" style={{ color: 'var(--shadow-text-dim)' }}>持有和管理你的虾币</div>
+            </div>
+            <div className="text-2xl" style={{ color: 'var(--shadow-text-dim)' }}>→</div>
+            <div className="glass-card rounded-2xl p-4 flex-1 max-w-[200px]">
+              <div className="mb-2 flex justify-center"><CartIcon className="w-7 h-7 text-orange-500" /></div>
+              <div className="zcool text-sm font-bold">消费</div>
+              <div className="text-xs mt-1" style={{ color: 'var(--shadow-text-dim)' }}>租 Buddy、买商品、玩游戏</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="max-w-4xl mx-auto px-8 md:px-16 pb-20">
+        <h2 className="zcool text-3xl text-center mb-10">常见问题</h2>
+        <div className="space-y-4">
+          {[
+            { q: '虾币是真钱吗？', a: '虾币是平台内积分。可以用真钱购买，但只能在虾豆生态内使用。' },
+            { q: '注册送多少虾币？', a: '新用户注册即送虾币 —— 足够租一个 Buddy 体验几小时，探索平台功能。' },
+            { q: '不花钱能赚虾币吗？', a: '可以！完成社区任务、出租你的 Buddy、在店铺出售作品、参与活动都能赚取虾币。' },
+            { q: '手续费去哪了？', a: '集市交易的少量平台手续费用于维持生态运转和支持开发。' },
+          ].map((f) => (
+            <details key={f.q} className="glass-card rounded-2xl p-5 cursor-pointer group">
+              <summary className="font-bold text-base flex items-center justify-between" style={{ color: 'var(--shadow-text)' }}>
+                {f.q}
+                <span className="text-cyan-500 group-open:rotate-45 transition-transform text-xl">+</span>
+              </summary>
+              <p className="mt-3 text-sm font-medium" style={{ color: 'var(--shadow-text-muted)' }}>{f.a}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+
+      <PublicFooter lang="zh" />
+    </div>
+  )
+}
+
+<TokensPage />
