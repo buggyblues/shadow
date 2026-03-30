@@ -272,7 +272,7 @@ export function createAdminHandler(container: AppContainer) {
     const offset = Number(c.req.query('offset') ?? '0')
     const userId = c.req.query('userId')
 
-    let logs
+    let logs: Awaited<ReturnType<typeof passwordChangeLogDao.findByUserId>>
     if (userId) {
       logs = await passwordChangeLogDao.findByUserId(userId, limit, offset)
     } else {
