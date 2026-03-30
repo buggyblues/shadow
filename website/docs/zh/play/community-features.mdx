@@ -3,6 +3,7 @@ pageType: custom
 ---
 
 import { PublicFooter } from '../../../components/Layout'
+import { PlaySubNav } from '../../../components/PlaySubNav'
 import { ServerIcon, MessageSquareIcon, HandshakeIcon, StoreIcon, FolderIcon, TrophyIcon } from '../../../components/Icons'
 
 export const CommunityFeaturesPage = () => {
@@ -14,35 +15,35 @@ export const CommunityFeaturesPage = () => {
       bg: 'bg-cyan-50',
       title: '服务器与社区',
       desc: '创建你自己的服务器 —— 一个私有或公开的社区空间。设置不同主题的频道，通过可分享的邀请链接邀请成员，精细化管理角色和权限。',
-      link: `${base}/zh/product/communities`,
+      link: `${base}/zh/guide/communities`,
     },
     {
       icon: <MessageSquareIcon className="w-7 h-7 text-blue-500" />,
       bg: 'bg-blue-50',
       title: '频道与消息',
       desc: '用文字频道组织讨论。支持线程、消息回应、置顶和富媒体。AI Buddy 可以加入任何频道，自然地参与对话。',
-      link: `${base}/zh/product/channels`,
+      link: `${base}/zh/guide/channels`,
     },
     {
       icon: <FolderIcon className="w-7 h-7 text-emerald-500" />,
       bg: 'bg-emerald-50',
       title: '共享工作区',
       desc: '在社区内协作文档、共享文件、管理项目。Buddy 可以读写工作区，生成报告、代码和创意内容。',
-      link: `${base}/zh/product/workspace`,
+      link: `${base}/zh/guide/workspace`,
     },
     {
       icon: <StoreIcon className="w-7 h-7 text-pink-500" />,
       bg: 'bg-pink-50',
       title: '社区店铺',
       desc: '出售数字作品 —— 课程、设计、AI 生成内容、代码包。每个社区都可以有自己的店铺。所有交易使用虾币结算。',
-      link: `${base}/zh/product/shop`,
+      link: `${base}/zh/guide/shop`,
     },
     {
       icon: <HandshakeIcon className="w-7 h-7 text-amber-500" />,
       bg: 'bg-amber-50',
       title: 'Buddy 租赁',
       desc: '将闲置的 Buddy 挂到 Buddy 集市出租。智能合约处理计费，你可以被动赚取虾币。也可以从社区中浏览和租用 Buddy。',
-      link: `${base}/zh/product/buddy-rental`,
+      link: `${base}/zh/guide/buddy-rental`,
     },
     {
       icon: <TrophyIcon className="w-7 h-7 text-orange-500" />,
@@ -54,6 +55,7 @@ export const CommunityFeaturesPage = () => {
 
   return (
     <div className="shadow-page" style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}>
+      <PlaySubNav lang="zh" />
       <section className="pt-10 pb-10 px-8 md:px-16 max-w-5xl mx-auto text-center">
         <h1 className="zcool text-4xl md:text-6xl mb-6 leading-tight">社区玩法</h1>
         <p className="text-lg md:text-xl font-bold max-w-2xl mx-auto" style={{ color: 'var(--shadow-text-muted)' }}>

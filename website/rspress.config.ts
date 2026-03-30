@@ -38,37 +38,37 @@ export default defineConfig({
         label: 'English',
         nav: [
           { text: 'Buddy', link: '/buddy' },
+          { text: 'Play', link: '/play/' },
           { text: 'Guide', link: '/guide/' },
-          { text: 'Docs', link: '/product/' },
           { text: 'API', link: '/api-doc/introduction' },
           { text: 'Download', link: '/download' },
         ],
         sidebar: {
+          '/play/': [
+            {
+              text: 'Play',
+              items: [
+                { text: 'Getting Started', link: '/play/' },
+                { text: 'Shrimp Coins', link: '/play/shrimp-coins' },
+                { text: 'Buddy System', link: '/play/buddy-system' },
+                { text: 'Community Features', link: '/play/community-features' },
+                { text: 'Advanced Tips', link: '/play/advanced-tips' },
+              ],
+            },
+          ],
           '/guide/': [
             {
               text: 'Guide',
               items: [
                 { text: 'Getting Started', link: '/guide/' },
-                { text: 'Shrimp Coins', link: '/guide/shrimp-coins' },
-                { text: 'Buddy System', link: '/guide/buddy-system' },
-                { text: 'Community Features', link: '/guide/community-features' },
-                { text: 'Advanced Tips', link: '/guide/advanced-tips' },
-              ],
-            },
-          ],
-          '/product/': [
-            {
-              text: 'Product Docs',
-              items: [
-                { text: 'Getting Started', link: '/product/' },
-                { text: 'Communities & Servers', link: '/product/communities' },
-                { text: 'Channels & Messages', link: '/product/channels' },
-                { text: 'AI Assistants', link: '/product/ai-assistants' },
-                { text: 'Buddy Rental', link: '/product/buddy-rental' },
-                { text: 'Community Shop', link: '/product/shop' },
-                { text: 'Shared Workspace', link: '/product/workspace' },
-                { text: 'OpenClaw Plugin', link: '/product/openclaw' },
-                { text: 'FAQ', link: '/product/faq' },
+                { text: 'Communities & Servers', link: '/guide/communities' },
+                { text: 'Channels & Messages', link: '/guide/channels' },
+                { text: 'AI Assistants', link: '/guide/ai-assistants' },
+                { text: 'Buddy Rental', link: '/guide/buddy-rental' },
+                { text: 'Community Shop', link: '/guide/shop' },
+                { text: 'Shared Workspace', link: '/guide/workspace' },
+                { text: 'OpenClaw Plugin', link: '/guide/openclaw' },
+                { text: 'FAQ', link: '/guide/faq' },
               ],
             },
           ],
@@ -137,37 +137,37 @@ export default defineConfig({
         label: '中文',
         nav: [
           { text: 'Buddy', link: '/zh/buddy' },
-          { text: '玩法指南', link: '/zh/guide/' },
-          { text: '文档', link: '/zh/product/' },
+          { text: '玩法', link: '/zh/play/' },
+          { text: '指南', link: '/zh/guide/' },
           { text: 'API', link: '/zh/api-doc/introduction' },
           { text: '下载', link: '/zh/download' },
         ],
         sidebar: {
-          '/zh/guide/': [
+          '/zh/play/': [
             {
-              text: '玩法指南',
+              text: '玩法',
               items: [
-                { text: '新手入门', link: '/zh/guide/' },
-                { text: '虾币', link: '/zh/guide/shrimp-coins' },
-                { text: 'Buddy 系统', link: '/zh/guide/buddy-system' },
-                { text: '社区玩法', link: '/zh/guide/community-features' },
-                { text: '进阶技巧', link: '/zh/guide/advanced-tips' },
+                { text: '新手入门', link: '/zh/play/' },
+                { text: '虾币', link: '/zh/play/shrimp-coins' },
+                { text: 'Buddy 系统', link: '/zh/play/buddy-system' },
+                { text: '社区玩法', link: '/zh/play/community-features' },
+                { text: '进阶技巧', link: '/zh/play/advanced-tips' },
               ],
             },
           ],
-          '/zh/product/': [
+          '/zh/guide/': [
             {
-              text: '产品文档',
+              text: '指南',
               items: [
-                { text: '使用指南', link: '/zh/product/' },
-                { text: '社区与服务器', link: '/zh/product/communities' },
-                { text: '频道与消息', link: '/zh/product/channels' },
-                { text: 'AI 搭子', link: '/zh/product/ai-assistants' },
-                { text: 'Buddy 租赁', link: '/zh/product/buddy-rental' },
-                { text: '社区店铺', link: '/zh/product/shop' },
-                { text: '共享工作区', link: '/zh/product/workspace' },
-                { text: 'OpenClaw 插件', link: '/zh/product/openclaw' },
-                { text: '常见问题', link: '/zh/product/faq' },
+                { text: '使用指南', link: '/zh/guide/' },
+                { text: '社区与服务器', link: '/zh/guide/communities' },
+                { text: '频道与消息', link: '/zh/guide/channels' },
+                { text: 'AI 搭子', link: '/zh/guide/ai-assistants' },
+                { text: 'Buddy 租赁', link: '/zh/guide/buddy-rental' },
+                { text: '社区店铺', link: '/zh/guide/shop' },
+                { text: '共享工作区', link: '/zh/guide/workspace' },
+                { text: 'OpenClaw 插件', link: '/zh/guide/openclaw' },
+                { text: '常见问题', link: '/zh/guide/faq' },
               ],
             },
           ],

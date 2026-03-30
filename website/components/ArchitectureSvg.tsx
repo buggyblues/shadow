@@ -489,7 +489,6 @@ export function ArchitectureSvg({ lang = 'en' }: { lang?: 'en' | 'zh' }) {
       </text>
 
       {/* ===== CONNECTIONS ===== */}
-      {/* All LEFT→CENTER or RIGHT→CENTER — never crossing */}
 
       {/* Owner → creates Server (right) */}
       <line
@@ -519,7 +518,7 @@ export function ArchitectureSvg({ lang = 'en' }: { lang?: 'en' | 'zh' }) {
         {t.owns}
       </text>
 
-      {/* Buddies → Workspace (right) */}
+      {/* Buddies → Workspace (shared context — right into server) */}
       <line
         x1="200"
         y1="150"
@@ -533,7 +532,7 @@ export function ArchitectureSvg({ lang = 'en' }: { lang?: 'en' | 'zh' }) {
         {t.sharedCtx}
       </text>
 
-      {/* Buddies → Channels (right) */}
+      {/* Buddies → Channels (chat — right into server) */}
       <line
         x1="200"
         y1="168"
@@ -547,28 +546,28 @@ export function ArchitectureSvg({ lang = 'en' }: { lang?: 'en' | 'zh' }) {
         {t.dialogue}
       </text>
 
-      {/* Buddies → Apps (develop — below, then right under server) */}
+      {/* Buddies → Apps (develop — route below buddy box, enter server left side, go to Apps) */}
       <path
-        d="M 105 235 L 105 268 Q 105 286 220 286 L 368 215"
+        d="M 105 235 L 105 260 Q 105 270 125 270 L 230 270 L 368 220"
         fill="none"
         stroke="var(--shadow-text-dim, #94a3b8)"
         strokeWidth="1.2"
         markerEnd="url(#arrow)"
       />
-      <text x="200" y="280" fontSize="8" fill="var(--shadow-text-dim, #94a3b8)">
+      <text x="175" y="264" fontSize="8" fill="var(--shadow-text-dim, #94a3b8)">
         {t.develop}
       </text>
 
-      {/* Buddies → Market (list for rent — left side, down, then under to Market) */}
+      {/* Buddies → Market (list for rent — route below server, enter from bottom) */}
       <path
-        d="M 105 235 L 105 390 Q 105 410 220 410 L 430 410 L 430 322"
+        d="M 105 235 L 105 400 Q 105 420 140 420 L 410 420 Q 430 420 430 400 L 430 322"
         fill="none"
         stroke="var(--shadow-text-dim, #94a3b8)"
         strokeWidth="1.2"
         strokeDasharray="4 3"
         markerEnd="url(#arrow)"
       />
-      <text x="270" y="404" fontSize="8" fill="var(--shadow-text-dim, #94a3b8)">
+      <text x="270" y="416" fontSize="8" fill="var(--shadow-text-dim, #94a3b8)">
         {t.listRent}
       </text>
 
@@ -600,79 +599,77 @@ export function ArchitectureSvg({ lang = 'en' }: { lang?: 'en' | 'zh' }) {
         {t.dialogue}
       </text>
 
-      {/* Members → Workspace (left into server) */}
-      <line
-        x1="660"
-        y1="120"
-        x2="442"
-        y2="80"
+      {/* Members → Workspace (route above channels into server) */}
+      <path
+        d="M 660 110 L 642 80 L 442 80"
+        fill="none"
         stroke="var(--shadow-text-dim, #94a3b8)"
         strokeWidth="1.2"
         markerEnd="url(#arrow)"
       />
-      <text x="560" y="92" fontSize="8" fill="var(--shadow-text-dim, #94a3b8)">
+      <text x="560" y="88" fontSize="8" fill="var(--shadow-text-dim, #94a3b8)">
         {t.upload}
       </text>
 
-      {/* Shop → Members (sell — right out of server) */}
+      {/* Shop → Members (sell — exit server right, above market) */}
       <path
-        d="M 360 210 Q 590 200 658 160"
+        d="M 360 205 L 640 205 Q 650 205 650 195 L 650 170 L 658 170"
         fill="none"
         stroke="#eab308"
         strokeWidth="1.5"
         markerEnd="url(#arrowYellow)"
       />
-      <text x="510" y="196" fontSize="8" fill="#eab308">
+      <text x="560" y="198" fontSize="8" fill="#eab308">
         {t.sellWorks}
       </text>
 
-      {/* Apps → Members (provide service — right out of server) */}
+      {/* Apps → Members (provide service — exit server right, below shop arrow) */}
       <path
-        d="M 490 215 Q 590 220 658 188"
+        d="M 490 225 L 640 225 Q 650 225 650 210 L 658 188"
         fill="none"
         stroke="#e94560"
         strokeWidth="1.5"
         markerEnd="url(#arrowRed)"
       />
-      <text x="560" y="226" fontSize="8" fill="#e94560">
+      <text x="560" y="238" fontSize="8" fill="#e94560">
         {t.provideService}
       </text>
 
-      {/* Renters → Market (rent — left into server) */}
+      {/* Renters → Market (rent — enter server from right) */}
       <path
-        d="M 660 320 Q 580 300 522 295"
+        d="M 660 310 L 642 310 Q 640 310 640 300 L 640 295 L 522 295"
         fill="none"
         stroke="#14b8a6"
         strokeWidth="1.5"
         markerEnd="url(#arrowTeal)"
       />
-      <text x="600" y="300" fontSize="8" fill="#14b8a6">
+      <text x="596" y="304" fontSize="8" fill="#14b8a6">
         {t.rent}
       </text>
 
-      {/* Market → Renters (get access — dashed right out of server) */}
+      {/* Market → Renters (get access — exit server right, dashed) */}
       <path
-        d="M 520 300 Q 600 330 658 330"
+        d="M 520 310 L 640 335 Q 642 336 644 336 L 658 336"
         fill="none"
         stroke="#14b8a6"
         strokeWidth="1.2"
         strokeDasharray="4 3"
         markerEnd="url(#arrowTeal)"
       />
-      <text x="586" y="326" fontSize="8" fill="#14b8a6">
+      <text x="586" y="332" fontSize="8" fill="#14b8a6">
         {t.getAccess}
       </text>
 
-      {/* Renter → Buddy (dialogue — bottom path, wraps under everything) */}
+      {/* Renter → Buddy (dialogue — route below server) */}
       <path
-        d="M 660 355 Q 400 440 105 235"
+        d="M 660 360 Q 400 450 105 235"
         fill="none"
         stroke="#22d3ee"
         strokeWidth="1.2"
         strokeDasharray="4 3"
         markerEnd="url(#arrowCyan)"
       />
-      <text x="380" y="420" fontSize="8" fill="#22d3ee">
+      <text x="380" y="430" fontSize="8" fill="#22d3ee">
         {t.dialogue}
       </text>
     </svg>

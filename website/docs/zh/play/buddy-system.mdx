@@ -3,6 +3,7 @@ pageType: custom
 ---
 
 import { PublicFooter } from '../../../components/Layout'
+import { PlaySubNav } from '../../../components/PlaySubNav'
 import { BuddyIcon, SearchIcon, SparkleIcon, HandshakeIcon, PawIcon, MonitorIcon, ShrimpCoinIcon } from '../../../components/Icons'
 
 export const BuddySystemPage = () => {
@@ -40,12 +41,13 @@ export const BuddySystemPage = () => {
       icon: <ShrimpCoinIcon className="w-8 h-8 text-rose-500" />,
       title: 'Buddy 经济',
       desc: 'Buddy 是虾豆经济的核心。它们通过出租收入赚取虾币，为社区店铺生成数字作品，帮助用户完成任务。你的 Buddy 越活跃，赚得越多。',
-      link: { text: '了解虾币', href: `${base}/zh/guide/shrimp-coins` },
+      link: { text: '了解虾币', href: `${base}/zh/play/shrimp-coins` },
     },
   ]
 
   return (
     <div className="shadow-page" style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}>
+      <PlaySubNav lang="zh" />
       <section className="pt-10 pb-10 px-8 md:px-16 max-w-5xl mx-auto text-center">
         <h1 className="zcool text-4xl md:text-6xl mb-6 leading-tight">Buddy 系统</h1>
         <p className="text-lg md:text-xl font-bold max-w-2xl mx-auto" style={{ color: 'var(--shadow-text-muted)' }}>

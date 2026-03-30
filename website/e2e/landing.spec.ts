@@ -15,9 +15,9 @@ test.describe('Landing Page (EN)', () => {
     await expect(launchBtn).toHaveAttribute('href', /\/app/)
   })
 
-  test('secondary CTA links to guide', async ({ page }) => {
-    const guideBtn = page.locator('a:has-text("Getting Started Guide")').first()
-    await expect(guideBtn).toHaveAttribute('href', /\/guide/)
+  test('secondary CTA links to play', async ({ page }) => {
+    const guideBtn = page.locator('a:has-text("Getting Started")').first()
+    await expect(guideBtn).toHaveAttribute('href', /\/play/)
   })
 
   test('value cards display 3 brand values', async ({ page }) => {
@@ -68,18 +68,18 @@ test.describe('Landing Page (ZH)', () => {
   })
 })
 
-test.describe('Guide Page', () => {
-  test('EN guide page loads with 3 paths', async ({ page }) => {
-    await page.goto('/en/guide/')
+test.describe('Play Page', () => {
+  test('EN play page loads with 3 paths', async ({ page }) => {
+    await page.goto('/en/play/')
     await expect(page.locator('h1')).toContainText('Getting Started')
     await expect(page.locator('text=Create My Own AI Buddy')).toBeVisible()
     await expect(page.locator("text=Try Others' Buddies First")).toBeVisible()
     await expect(page.locator('text=Create a Community First')).toBeVisible()
   })
 
-  test('ZH guide page loads with 3 paths', async ({ page }) => {
-    await page.goto('/zh/guide/')
-    await expect(page.locator('h1')).toContainText('玩法指南')
+  test('ZH play page loads with 3 paths', async ({ page }) => {
+    await page.goto('/zh/play/')
+    await expect(page.locator('h1')).toContainText('新手入门')
     await expect(page.locator('text=创建自己的 AI Buddy')).toBeVisible()
     await expect(page.locator('text=先试试别人的 Buddy')).toBeVisible()
     await expect(page.locator('text=先创建一个社区')).toBeVisible()
@@ -88,14 +88,14 @@ test.describe('Guide Page', () => {
 
 test.describe('Shrimp Coins Page', () => {
   test('EN shrimp coins page loads', async ({ page }) => {
-    await page.goto('/en/guide/shrimp-coins')
+    await page.goto('/en/play/shrimp-coins')
     await expect(page.locator('h1')).toContainText('Shrimp Coins')
     await expect(page.locator('text=How to Earn')).toBeVisible()
     await expect(page.locator('text=How to Spend')).toBeVisible()
   })
 
   test('ZH shrimp coins page loads', async ({ page }) => {
-    await page.goto('/zh/guide/shrimp-coins')
+    await page.goto('/zh/play/shrimp-coins')
     await expect(page.locator('h1')).toContainText('虾币')
     await expect(page.locator('text=如何赚取')).toBeVisible()
     await expect(page.locator('text=如何消费')).toBeVisible()
@@ -128,8 +128,8 @@ test.describe('Navigation', () => {
     await page.goto('/en/')
     const nav = page.locator('nav')
     await expect(nav.locator('a:has-text("Buddy")')).toBeVisible()
+    await expect(nav.locator('a:has-text("Play")')).toBeVisible()
     await expect(nav.locator('a:has-text("Guide")')).toBeVisible()
-    await expect(nav.locator('a:has-text("Docs")')).toBeVisible()
     await expect(nav.locator('a:has-text("API")')).toBeVisible()
     await expect(nav.locator('a:has-text("Download")')).toBeVisible()
   })
@@ -138,13 +138,15 @@ test.describe('Navigation', () => {
     await page.goto('/zh/')
     const nav = page.locator('nav')
     await expect(nav.locator('a:has-text("Buddy")')).toBeVisible()
-    await expect(nav.locator('a:has-text("玩法指南")')).toBeVisible()
+    await expect(nav.locator('a:has-text("玩法")')).toBeVisible()
+    await expect(nav.locator('a:has-text("指南")')).toBeVisible()
     await expect(nav.locator('a:has-text("下载")')).toBeVisible()
   })
 
   test('nav links point to correct paths', async ({ page }) => {
     await page.goto('/en/')
-    await expect(page.locator('nav a:has-text("Guide")')).toHaveAttribute('href', /\/guide\//)
+    await expect(page.locator('nav a:has-text("Play")')).toHaveAttribute('href', /\/play\//)
+    await expect(page.locator('nav a:has-text("Guide")')).toHaveAttribute('href', /\/guide/)
     await expect(page.locator('nav a:has-text("Buddy")')).toHaveAttribute('href', /\/buddy/)
     await expect(page.locator('nav a:has-text("Download")')).toHaveAttribute('href', /\/download/)
   })
@@ -191,23 +193,22 @@ test.describe('Language Switching', () => {
 })
 
 test.describe('Landing Flow Integrity', () => {
-  test('EN: landing → guide flow works', async ({ page }) => {
+  test('EN: landing → play flow works', async ({ page }) => {
     await page.goto('/en/')
-    // Click the secondary CTA to go to guide
-    const guideLink = page.locator('a:has-text("Getting Started Guide")').first()
+    const guideLink = page.locator('a:has-text("Getting Started")').first()
     await guideLink.click()
-    await expect(page).toHaveURL(/\/guide\//)
+    await expect(page).toHaveURL(/\/play/)
     await expect(page.locator('h1')).toContainText('Getting Started')
   })
 
-  test('EN: guide → buddy flow works', async ({ page }) => {
-    await page.goto('/en/guide/')
+  test('EN: play → buddy flow works', async ({ page }) => {
+    await page.goto('/en/play/')
     const marketBtn = page.locator('a:has-text("Explore Buddy Market")')
     await expect(marketBtn).toHaveAttribute('href', /\/buddy/)
   })
 
-  test('EN: guide → download flow works', async ({ page }) => {
-    await page.goto('/en/guide/')
+  test('EN: play → download flow works', async ({ page }) => {
+    await page.goto('/en/play/')
     const downloadBtn = page.locator('a:has-text("Download Shadow Desktop")')
     await expect(downloadBtn).toHaveAttribute('href', /\/download/)
   })
