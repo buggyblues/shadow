@@ -1410,8 +1410,6 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
           serverInviteCode={server.inviteCode}
           inviteTargetChannel={inviteTargetChannel}
           inviteInitialTab={inviteInitialTab}
-          copiedInvite={copiedInvite}
-          onCopyInvite={copyInviteCode}
           onClose={() => {
             setShowInvitePanel(false)
             setInviteTargetChannel(null)
@@ -1434,27 +1432,48 @@ interface BuddyAgent {
   } | null
 }
 
+// Shared avatar rendering component
+function UserAvatar({
+  avatarUrl,
+  name,
+  size = 'md',
+}: {
+  avatarUrl: string | null
+  name: string
+  size?: 'sm' | 'md'
+}) {
+  const sizeClasses = size === 'sm' ? 'w-6 h-6 text-[10px]' : 'w-8 h-8 text-xs'
+  return (
+    <div
+      className={`${sizeClasses} rounded-full bg-bg-tertiary overflow-hidden flex items-center justify-center text-text-primary font-bold shrink-0`}
+    >
+      {avatarUrl ? (
+        <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+      ) : (
+        name.charAt(0).toUpperCase()
+      )}
+    </div>
+  )
+}
+
 function InvitePanel({
   serverId,
   serverInviteCode,
   inviteTargetChannel,
   inviteInitialTab,
-  copiedInvite,
-  onCopyInvite,
   onClose,
 }: {
   serverId: string
   serverInviteCode: string
   inviteTargetChannel: Channel | null
   inviteInitialTab: 'members' | 'buddies'
-  copiedInvite: boolean
-  onCopyInvite: () => void
   onClose: () => void
 }) {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'members' | 'buddies'>(inviteInitialTab)
   const [selectedBuddyIds, setSelectedBuddyIds] = useState<Set<string>>(new Set())
   const [addingBuddies, setAddingBuddies] = useState(false)
+  const [copiedInvite, setCopiedInvite] = useState(false)
 
   const { data: serverMembers = [] } = useQuery({
     queryKey: ['server-members', serverId],
@@ -1506,6 +1525,13 @@ function InvitePanel({
       else next.add(id)
       return next
     })
+  }
+
+  const copyInviteCode = async () => {
+    const inviteLink = `${window.location.origin}/app/invite/${serverInviteCode}`
+    await navigator.clipboard.writeText(inviteLink)
+    setCopiedInvite(true)
+    setTimeout(() => setCopiedInvite(false), 2000)
   }
 
   // Add selected buddies to server + channel
@@ -1569,7 +1595,7 @@ function InvitePanel({
             {`${window.location.origin}/app/invite/${serverInviteCode}`}
           </code>
           <button
-            onClick={onCopyInvite}
+            onClick={copyInviteCode}
             className="px-3 py-3 bg-bg-tertiary rounded-lg text-text-muted hover:text-text-primary transition"
             title="复制"
           >
@@ -1630,13 +1656,7 @@ function InvitePanel({
                     key={u.id}
                     className="flex items-center gap-3 px-3 py-2 rounded-lg bg-bg-tertiary/40 border border-border-subtle"
                   >
-                    <div className="w-8 h-8 rounded-full bg-bg-tertiary overflow-hidden flex items-center justify-center text-xs text-text-primary font-bold">
-                      {u.avatarUrl ? (
-                        <img src={u.avatarUrl} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        (u.displayName || u.username).charAt(0).toUpperCase()
-                      )}
-                    </div>
+                    <UserAvatar avatarUrl={u.avatarUrl} name={u.displayName || u.username} />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm text-text-primary truncate">
                         {u.displayName || u.username}
@@ -1688,13 +1708,7 @@ function InvitePanel({
                     {isSelected && <Check size={12} className="text-white" />}
                   </div>
                   {/* Avatar */}
-                  <div className="w-8 h-8 rounded-full bg-bg-tertiary overflow-hidden flex items-center justify-center text-xs text-text-primary font-bold shrink-0">
-                    {u.avatarUrl ? (
-                      <img src={u.avatarUrl} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      (u.displayName || u.username).charAt(0).toUpperCase()
-                    )}
-                  </div>
+                  <UserAvatar avatarUrl={u.avatarUrl} name={u.displayName || u.username} />
                   {/* Info */}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
