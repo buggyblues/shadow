@@ -251,7 +251,8 @@ test.describe('ACP Command Resolution', () => {
       const agents = await (window as any).desktopAPI.agents.getAgents()
       const codex = agents.find((a: any) => a.acpAgentId === 'codex')
 
-      if (!codex) return { error: 'Codex agent not found'
+      if (!codex) return { error: 'Codex agent not found' }
+
       const command = await (window as any).desktopAPI.agents.getACPCommand(codex.id)
       return { command }
     })
