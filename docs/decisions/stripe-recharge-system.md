@@ -332,9 +332,10 @@ iOS/macOS Native App → Apple IAP → Server Verification
 - IAP 定价与 Stripe 保持一致
 - 确保跨平台价格统一，避免用户困惑
 
-**Question 4: Legal Document URLs** ✅ **DECIDED: TBD**
-- 服务条款、虚拟货币协议、隐私政策链接待补充
-- **Action:** 需在实现前提供具体 URL
+**Question 4: Legal Document URLs** ✅ **DECIDED**
+- **隐私政策:** https://shadowob.com/zh/privacy
+- **服务条款:** https://shadowob.com/zh/privacy
+- **虚拟货币协议:** 待 YeeJone 完成后补充链接
 
 **Question 5: Customer Support Contact** ✅ **DECIDED: yeejonexyq@gmail.com**
 - 支付问题联系邮箱：yeejonexyq@gmail.com
