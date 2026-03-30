@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { Check, Copy, Search, Sparkles, UserPlus, X } from 'lucide-react'
+import { Check, Copy, PawPrint, Search, UserPlus, X } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../../lib/api'
@@ -344,11 +344,11 @@ export function InvitePanel({
             onClick={() => setActiveTab('buddies')}
             className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition ${
               activeTab === 'buddies'
-                ? 'bg-bg-secondary text-[#E8403E] shadow-sm'
+                ? 'bg-bg-secondary text-[#FF6B9D] shadow-sm'
                 : 'text-text-muted hover:text-text-secondary'
             }`}
           >
-            <Sparkles size={14} />
+            <PawPrint size={14} />
             Buddy ({buddyCount})
           </button>
         </div>
@@ -489,7 +489,7 @@ export function InvitePanel({
                         onClick={() => toggleBuddy(buddy.id)}
                         className={`flex items-start gap-3 w-full px-3 py-2 rounded-lg text-left transition mb-1 ${
                           isSelected
-                            ? 'bg-[#E8403E]/15 border border-[#E8403E]/30'
+                            ? 'bg-[#FF6B9D]/15 border border-[#FF6B9D]/30'
                             : 'bg-bg-tertiary/40 border border-border-subtle hover:bg-bg-tertiary/60'
                         }`}
                       >
@@ -497,7 +497,7 @@ export function InvitePanel({
                         <div
                           className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${
                             isSelected
-                              ? 'border-[#E8403E] bg-[#E8403E]'
+                              ? 'border-[#FF6B9D] bg-[#FF6B9D]'
                               : 'border-border-dim bg-transparent'
                           }`}
                         >
@@ -509,7 +509,7 @@ export function InvitePanel({
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <p className="text-sm text-text-primary truncate">{name}</p>
-                            <Sparkles size={12} className="text-[#E8403E] shrink-0" />
+                            <PawPrint size={12} className="text-[#FF6B9D] shrink-0" />
                             <span
                               className={`w-2 h-2 rounded-full shrink-0 ${
                                 buddy.status === 'running'
@@ -544,7 +544,7 @@ export function InvitePanel({
                       <button
                         type="button"
                         onClick={handleGoToBuddySettings}
-                        className="text-[#E8403E] hover:underline ml-1"
+                        className="text-[#FF6B9D] hover:underline ml-1"
                       >
                         {t('member.goCreate')}
                       </button>
@@ -574,9 +574,9 @@ export function InvitePanel({
               <button
                 onClick={handleAddBuddiesToServer}
                 disabled={selectedBuddyIds.size === 0 || addingBuddies}
-                className="flex items-center gap-1.5 px-4 py-2 bg-[#E8403E] hover:bg-[#D93540] text-white rounded-lg font-bold text-xs transition disabled:opacity-50"
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#FF6B9D] hover:bg-[#FF4081] text-white rounded-lg font-bold text-xs transition disabled:opacity-50"
               >
-                <Sparkles size={14} />
+                <PawPrint size={14} />
                 {addingBuddies ? t('common.loading') : t('member.addToServer')}
               </button>
             </div>
