@@ -408,7 +408,20 @@
     "policySmartReply": "스마트 답장",
     "policySmartReplyDesc": "명백히 다른 사람을 향한 메시지는 건너뜁니다 (예: 다른 사람만 @하고 자신은 @하지 않음)",
     "notInChannel": "채널 미참여",
-    "inChannel": "채널 참여 중"
+    "inChannel": "채널 참여 중",
+    "members": "멤버",
+    "inviteMembers": "멤버 초대",
+    "inviteToChannelDesc": "서버 멤버를 채널 #{{channel}}에 초대합니다 (알림이 전송됩니다)",
+    "inviteSelectChannelDesc": "채널을 선택하여 멤버를 초대하세요.",
+    "addBuddyToChannelDesc": "Buddy를 서버에 추가하고 채널 #{{channel}}에 자동 참여시킵니다",
+    "addBuddyToServerDesc": "Buddy를 서버에 추가합니다.",
+    "buddiesOnServer": "서버의 Buddy",
+    "myBuddies": "내 Buddy",
+    "noBuddies": "사용 가능한 Buddy가 없습니다",
+    "goCreate": "만들기",
+    "noInvitable": "초대할 수 있는 다른 서버 멤버가 없습니다",
+    "selectedBuddies": "{{count}}명의 Buddy 선택됨",
+    "addToServer": "서버에 추가"
   },
   "features": {
     "pageTitle": "필요한 모든 협업 기능",

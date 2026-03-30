@@ -408,7 +408,20 @@
     "policySmartReply": "智慧回覆",
     "policySmartReplyDesc": "跳過明顯針對其他人的訊息（如 @ 了別人但沒 @ 自己）",
     "notInChannel": "未加入頻道",
-    "inChannel": "已加入頻道"
+    "inChannel": "已加入頻道",
+    "members": "成員",
+    "inviteMembers": "邀請成員",
+    "inviteToChannelDesc": "邀請同伺服器成員加入頻道 #{{channel}}（對方會在通知中心收到）",
+    "inviteSelectChannelDesc": "選擇頻道後，可一鍵邀請同伺服器成員加入該頻道。",
+    "addBuddyToChannelDesc": "新增 Buddy 到伺服器並自動加入頻道 #{{channel}}",
+    "addBuddyToServerDesc": "新增 Buddy 到伺服器。",
+    "buddiesOnServer": "伺服器中的 Buddy",
+    "myBuddies": "我的 Buddy",
+    "noBuddies": "暫無可用 Buddy",
+    "goCreate": "去建立",
+    "noInvitable": "暫無其他伺服器成員可邀請",
+    "selectedBuddies": "已選擇 {{count}} 個 Buddy",
+    "addToServer": "新增到伺服器"
   },
   "features": {
     "pageTitle": "所有你需要的協作功能",
