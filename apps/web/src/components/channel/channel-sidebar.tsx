@@ -19,6 +19,7 @@ import {
   Save,
   Settings,
   ShoppingBag,
+  Sparkles,
   Trash2,
   UserPlus,
   Volume2,
@@ -145,8 +146,8 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
     y: number
     channel: Channel
   } | null>(null)
-  const [showAddAgent, setShowAddAgent] = useState(false)
   const [showInvitePanel, setShowInvitePanel] = useState(false)
+  const [inviteInitialTab, setInviteInitialTab] = useState<'members' | 'buddies'>('members')
   const [inviteTargetChannel, setInviteTargetChannel] = useState<Channel | null>(null)
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null)
   const [editChannelName, setEditChannelName] = useState('')
@@ -1222,12 +1223,18 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
                   label: t('channel.inviteMember'),
                   onClick: () => {
                     setInviteTargetChannel(contextMenu.channel)
+                    setInviteInitialTab('members')
                     setShowInvitePanel(true)
                   },
                 },
                 {
+                  icon: Sparkles,
                   label: t('channel.addAgent'),
-                  onClick: () => setShowAddAgent(true),
+                  onClick: () => {
+                    setInviteTargetChannel(contextMenu.channel)
+                    setInviteInitialTab('buddies')
+                    setShowInvitePanel(true)
+                  },
                 },
               ],
             },
@@ -1353,12 +1360,18 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
                   label: t('channel.inviteMember'),
                   onClick: () => {
                     setInviteTargetChannel(null)
+                    setInviteInitialTab('members')
                     setShowInvitePanel(true)
                   },
                 },
                 {
+                  icon: Sparkles,
                   label: t('channel.addAgent'),
-                  onClick: () => setShowAddAgent(true),
+                  onClick: () => {
+                    setInviteTargetChannel(null)
+                    setInviteInitialTab('buddies')
+                    setShowInvitePanel(true)
+                  },
                 },
               ],
             },
@@ -1396,25 +1409,13 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
           serverId={serverSlug}
           serverInviteCode={server.inviteCode}
           inviteTargetChannel={inviteTargetChannel}
+          inviteInitialTab={inviteInitialTab}
           copiedInvite={copiedInvite}
           onCopyInvite={copyInviteCode}
           onClose={() => {
             setShowInvitePanel(false)
             setInviteTargetChannel(null)
           }}
-        />
-      )}
-
-      {/* Add Agent dialog */}
-      {showAddAgent && (
-        <AddAgentDialog
-          serverId={serverSlug}
-          onClose={() => setShowAddAgent(false)}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['members'] })
-            setShowAddAgent(false)
-          }}
-          t={t}
         />
       )}
     </div>
@@ -1437,6 +1438,7 @@ function InvitePanel({
   serverId,
   serverInviteCode,
   inviteTargetChannel,
+  inviteInitialTab,
   copiedInvite,
   onCopyInvite,
   onClose,
@@ -1444,12 +1446,15 @@ function InvitePanel({
   serverId: string
   serverInviteCode: string
   inviteTargetChannel: Channel | null
+  inviteInitialTab: 'members' | 'buddies'
   copiedInvite: boolean
   onCopyInvite: () => void
   onClose: () => void
 }) {
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<'members' | 'buddies'>('members')
+  const [activeTab, setActiveTab] = useState<'members' | 'buddies'>(inviteInitialTab)
+  const [selectedBuddyIds, setSelectedBuddyIds] = useState<Set<string>>(new Set())
+  const [addingBuddies, setAddingBuddies] = useState(false)
 
   const { data: serverMembers = [] } = useQuery({
     queryKey: ['server-members', serverId],
@@ -1485,19 +1490,6 @@ function InvitePanel({
     },
   })
 
-  // Add buddy to server mutation
-  const addBuddyToServer = useMutation({
-    mutationFn: (agentId: string) =>
-      fetchApi(`/api/servers/${serverId}/agents`, {
-        method: 'POST',
-        body: JSON.stringify({ agentIds: [agentId] }),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['server-members', serverId] })
-      queryClient.invalidateQueries({ queryKey: ['members'] })
-    },
-  })
-
   const joinedUserIds = new Set(channelMembers.map((m) => m.user.id))
   const serverMemberUserIds = new Set(serverMembers.map((m) => m.userId))
   const candidates = serverMembers.filter((m) => !!m.user && !m.user.isBot)
@@ -1506,6 +1498,51 @@ function InvitePanel({
   const availableBuddies = myBuddies.filter(
     (b) => b.botUser && !serverMemberUserIds.has(b.botUser.id),
   )
+
+  const toggleBuddy = (id: string) => {
+    setSelectedBuddyIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  // Add selected buddies to server + channel
+  const handleAddBuddies = async () => {
+    if (selectedBuddyIds.size === 0) return
+    setAddingBuddies(true)
+    try {
+      // Add buddies to server
+      await fetchApi(`/api/servers/${serverId}/agents`, {
+        method: 'POST',
+        body: JSON.stringify({ agentIds: Array.from(selectedBuddyIds) }),
+      })
+      // If there's a target channel, also add them to the channel
+      if (inviteTargetChannel) {
+        const buddyBotUserIds = myBuddies
+          .filter((b) => selectedBuddyIds.has(b.id) && b.botUser)
+          .map((b) => b.botUser!.id)
+        for (const userId of buddyBotUserIds) {
+          await fetchApi(`/api/channels/${inviteTargetChannel.id}/members`, {
+            method: 'POST',
+            body: JSON.stringify({ userId }),
+          })
+        }
+      }
+      queryClient.invalidateQueries({ queryKey: ['server-members', serverId] })
+      queryClient.invalidateQueries({ queryKey: ['members'] })
+      if (inviteTargetChannel) {
+        queryClient.invalidateQueries({ queryKey: ['channel-members', inviteTargetChannel.id] })
+      }
+      setSelectedBuddyIds(new Set())
+      onClose()
+    } catch {
+      /* error handled silently */
+    } finally {
+      setAddingBuddies(false)
+    }
+  }
 
   return (
     <div
@@ -1516,7 +1553,9 @@ function InvitePanel({
     >
       <div className="bg-bg-secondary rounded-xl p-6 w-[520px] border border-border-subtle max-h-[80vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-text-primary">邀请成员</h2>
+          <h2 className="text-lg font-bold text-text-primary">
+            {activeTab === 'members' ? '邀请成员' : '添加 Buddy'}
+          </h2>
           <button onClick={onClose} className="text-text-muted hover:text-text-primary transition">
             <X size={18} />
           </button>
@@ -1538,28 +1577,30 @@ function InvitePanel({
           </button>
         </div>
 
-        {/* Tab switcher */}
+        {/* Tab switcher with icons and colors */}
         <div className="flex items-center gap-1 mb-3 bg-bg-tertiary rounded-lg p-1">
           <button
             type="button"
             onClick={() => setActiveTab('members')}
-            className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition ${
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition ${
               activeTab === 'members'
-                ? 'bg-bg-secondary text-text-primary'
+                ? 'bg-bg-secondary text-[#5865F2] shadow-sm'
                 : 'text-text-muted hover:text-text-secondary'
             }`}
           >
+            <UserPlus size={14} />
             服务器成员 ({candidates.length})
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('buddies')}
-            className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition ${
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition ${
               activeTab === 'buddies'
-                ? 'bg-bg-secondary text-text-primary'
+                ? 'bg-bg-secondary text-[#E8403E] shadow-sm'
                 : 'text-text-muted hover:text-text-secondary'
             }`}
           >
+            <Sparkles size={14} />
             我的 Buddy ({availableBuddies.length})
           </button>
         </div>
@@ -1569,7 +1610,9 @@ function InvitePanel({
             ? inviteTargetChannel
               ? `邀请同服务器成员加入频道 #${inviteTargetChannel.name}（对方会在通知中心收到）`
               : '选择左侧频道后，可一键邀请同服务器成员加入该频道。'
-            : '添加 Buddy 到服务器，添加后会自动加入当前频道。'}
+            : inviteTargetChannel
+              ? `添加 Buddy 到服务器并自动加入频道 #${inviteTargetChannel.name}`
+              : '添加 Buddy 到服务器。'}
         </div>
 
         <div className="flex-1 overflow-y-auto space-y-1 pr-1">
@@ -1604,7 +1647,7 @@ function InvitePanel({
                       type="button"
                       disabled={!inviteTargetChannel || inChannel || inviteToChannel.isPending}
                       onClick={() => inviteToChannel.mutate(u.id)}
-                      className="px-3 py-1.5 text-xs rounded-md bg-primary hover:bg-primary-hover text-white font-bold disabled:opacity-40"
+                      className="px-3 py-1.5 text-xs rounded-md bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold disabled:opacity-40 transition"
                     >
                       {inChannel ? '已在频道中' : '邀请'}
                     </button>
@@ -1615,178 +1658,96 @@ function InvitePanel({
           ) : availableBuddies.length === 0 ? (
             <div className="text-center py-8 text-text-muted text-sm">
               暂无可用 Buddy，
-              <a href="/buddy" className="text-primary hover:underline">
+              <a href="/buddy" className="text-[#E8403E] hover:underline">
                 去创建
               </a>
             </div>
           ) : (
             availableBuddies.map((buddy) => {
               const u = buddy.botUser!
+              const isSelected = selectedBuddyIds.has(buddy.id)
               return (
-                <div
+                <button
                   key={buddy.id}
-                  className="flex items-center gap-3 px-3 py-2 rounded-lg bg-bg-tertiary/40 border border-border-subtle"
+                  type="button"
+                  onClick={() => toggleBuddy(buddy.id)}
+                  className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-left transition ${
+                    isSelected
+                      ? 'bg-[#E8403E]/15 border border-[#E8403E]/30'
+                      : 'bg-bg-tertiary/40 border border-border-subtle hover:bg-bg-tertiary/60'
+                  }`}
                 >
-                  <div className="w-8 h-8 rounded-full bg-bg-tertiary overflow-hidden flex items-center justify-center text-xs text-text-primary font-bold">
+                  {/* Checkbox */}
+                  <div
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${
+                      isSelected
+                        ? 'border-[#E8403E] bg-[#E8403E]'
+                        : 'border-border-dim bg-transparent'
+                    }`}
+                  >
+                    {isSelected && <Check size={12} className="text-white" />}
+                  </div>
+                  {/* Avatar */}
+                  <div className="w-8 h-8 rounded-full bg-bg-tertiary overflow-hidden flex items-center justify-center text-xs text-text-primary font-bold shrink-0">
                     {u.avatarUrl ? (
                       <img src={u.avatarUrl} alt="" className="w-full h-full object-cover" />
                     ) : (
                       (u.displayName || u.username).charAt(0).toUpperCase()
                     )}
                   </div>
+                  {/* Info */}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <p className="text-sm text-text-primary truncate">
                         {u.displayName || u.username}
                       </p>
-                      <img src="/Logo.svg" alt="Buddy" className="w-3.5 h-3.5 opacity-60" />
+                      <Sparkles size={12} className="text-[#E8403E] shrink-0" />
                     </div>
                     <p className="text-xs text-text-muted truncate">@{u.username}</p>
                   </div>
-                  <button
-                    type="button"
-                    disabled={addBuddyToServer.isPending}
-                    onClick={() => addBuddyToServer.mutate(buddy.id)}
-                    className="px-3 py-1.5 text-xs rounded-md bg-primary hover:bg-primary-hover text-white font-bold disabled:opacity-40"
-                  >
-                    {addBuddyToServer.isPending ? '添加中...' : '添加到服务器'}
-                  </button>
-                </div>
-              )
-            })
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* ── Add Agent Dialog ──────────────────────────────────── */
-
-interface AgentOption {
-  id: string
-  userId: string
-  status: string
-  botUser?: {
-    id: string
-    username: string
-    displayName: string | null
-    avatarUrl: string | null
-  } | null
-}
-
-function AddAgentDialog({
-  serverId,
-  onClose,
-  onSuccess,
-  t,
-}: {
-  serverId: string
-  onClose: () => void
-  onSuccess: () => void
-  t: (key: string) => string
-}) {
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [adding, setAdding] = useState(false)
-
-  const { data: agents = [] } = useQuery({
-    queryKey: ['agents'],
-    queryFn: () => fetchApi<AgentOption[]>('/api/agents'),
-  })
-
-  const toggleAgent = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const handleAdd = async () => {
-    if (selectedIds.size === 0) return
-    setAdding(true)
-    try {
-      await fetchApi(`/api/servers/${serverId}/agents`, {
-        method: 'POST',
-        body: JSON.stringify({ agentIds: Array.from(selectedIds) }),
-      })
-      onSuccess()
-    } catch {
-      /* error handled silently */
-    } finally {
-      setAdding(false)
-    }
-  }
-
-  return (
-    <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
-    >
-      <div className="bg-bg-secondary rounded-xl p-6 w-96 max-h-[60vh] flex flex-col border border-border-subtle">
-        <h2 className="text-lg font-bold text-text-primary mb-4">{t('channel.addAgent')}</h2>
-
-        {agents.length === 0 ? (
-          <p className="text-text-muted text-sm py-4">{t('channel.noAgentsAvailable')}</p>
-        ) : (
-          <div className="flex-1 overflow-y-auto space-y-1 mb-4">
-            {agents.map((agent) => {
-              const name = agent.botUser?.displayName ?? agent.botUser?.username ?? 'Buddy'
-              const isSelected = selectedIds.has(agent.id)
-              return (
-                <button
-                  key={agent.id}
-                  type="button"
-                  onClick={() => toggleAgent(agent.id)}
-                  className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm transition ${
-                    isSelected
-                      ? 'bg-primary/20 text-text-primary'
-                      : 'text-text-secondary hover:bg-bg-primary/30'
-                  }`}
-                >
-                  <div
-                    className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
-                      isSelected ? 'border-primary bg-primary' : 'border-border-dim'
-                    }`}
-                  >
-                    {isSelected && <Check size={10} className="text-white" />}
-                  </div>
-                  <span className="truncate">{name}</span>
+                  {/* Status indicator */}
                   <span
-                    className={`ml-auto w-2 h-2 rounded-full ${
-                      agent.status === 'running'
+                    className={`w-2 h-2 rounded-full shrink-0 ${
+                      buddy.status === 'running'
                         ? 'bg-green-400'
-                        : agent.status === 'error'
+                        : buddy.status === 'error'
                           ? 'bg-red-400'
                           : 'bg-zinc-500'
                     }`}
                   />
                 </button>
               )
-            })}
+            })
+          )}
+        </div>
+
+        {/* Bottom action bar for buddies tab */}
+        {activeTab === 'buddies' && availableBuddies.length > 0 && (
+          <div className="flex items-center justify-between pt-3 mt-2 border-t border-border-subtle">
+            <span className="text-xs text-text-muted">
+              已选择 {selectedBuddyIds.size} 个 Buddy
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-text-secondary hover:text-text-primary transition rounded-lg text-xs"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleAddBuddies}
+                disabled={selectedBuddyIds.size === 0 || addingBuddies}
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#E8403E] hover:bg-[#D93540] text-white rounded-lg font-bold text-xs transition disabled:opacity-50"
+              >
+                <Sparkles size={14} />
+                {addingBuddies ? '添加中...' : '添加到服务器'}
+              </button>
+            </div>
           </div>
         )}
-
-        <div className="flex justify-end gap-3 pt-2 border-t border-border-subtle">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-text-secondary hover:text-text-primary transition rounded-lg"
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            onClick={handleAdd}
-            disabled={selectedIds.size === 0 || adding}
-            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg font-bold transition disabled:opacity-50"
-          >
-            <img src="/Logo.svg" alt="Buddy" className="w-4 h-4" />
-            {adding ? t('common.loading') : t('channel.addAgentConfirm')}
-          </button>
-        </div>
       </div>
     </div>
   )
 }
+
+
