@@ -1,10 +1,11 @@
 import { compare, hash } from 'bcryptjs'
 import type { AgentDao } from '../dao/agent.dao'
 import type { InviteCodeDao } from '../dao/invite-code.dao'
+import type { PasswordChangeLogDao } from '../dao/password-change-log.dao'
 import type { UserDao } from '../dao/user.dao'
 import { randomFixedDigits } from '../lib/id'
 import { signAccessToken, signRefreshToken, verifyToken } from '../lib/jwt'
-import type { LoginInput, RegisterInput } from '../validators/auth.schema'
+import type { ChangePasswordInput, LoginInput, RegisterInput } from '../validators/auth.schema'
 import type { TaskCenterService } from './task-center.service'
 
 export class AuthService {
@@ -14,6 +15,7 @@ export class AuthService {
       inviteCodeDao: InviteCodeDao
       agentDao: AgentDao
       taskCenterService: TaskCenterService
+      passwordChangeLogDao: PasswordChangeLogDao
     },
   ) {}
 
@@ -209,5 +211,48 @@ export class AuthService {
       displayName: updated!.displayName,
       avatarUrl: updated!.avatarUrl,
     }
+  }
+
+  async changePassword(
+    userId: string,
+    input: ChangePasswordInput,
+    meta?: { ipAddress?: string; userAgent?: string },
+  ) {
+    const { userDao, passwordChangeLogDao } = this.deps
+
+    const user = await userDao.findById(userId)
+    if (!user) {
+      throw Object.assign(new Error('User not found'), { status: 404 })
+    }
+
+    // Verify old password
+    const valid = await compare(input.oldPassword, user.passwordHash)
+    if (!valid) {
+      // Log failed attempt
+      await passwordChangeLogDao.create({
+        userId,
+        ipAddress: meta?.ipAddress,
+        userAgent: meta?.userAgent,
+        success: false,
+        failureReason: 'Invalid old password',
+      })
+      throw Object.assign(new Error('Current password is incorrect'), { status: 400 })
+    }
+
+    // Hash new password
+    const newPasswordHash = await hash(input.newPassword, 12)
+
+    // Update password
+    await userDao.update(userId, { passwordHash: newPasswordHash })
+
+    // Log successful change
+    await passwordChangeLogDao.create({
+      userId,
+      ipAddress: meta?.ipAddress,
+      userAgent: meta?.userAgent,
+      success: true,
+    })
+
+    return { success: true }
   }
 }

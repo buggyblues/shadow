@@ -232,6 +232,13 @@
       "when": 1774783200000,
       "tag": "0032_oauth_open_platform",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1774869600000,
+      "tag": "0033_add_password_change_logs",
+      "breakpoints": true
     }
   ]
 }

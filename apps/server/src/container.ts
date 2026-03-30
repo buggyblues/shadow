@@ -16,6 +16,7 @@ import { NotificationDao } from './dao/notification.dao'
 import { OAuthAppDao } from './dao/oauth.dao'
 import { OAuthAccountDao } from './dao/oauth-account.dao'
 import { OrderDao } from './dao/order.dao'
+import { PasswordChangeLogDao } from './dao/password-change-log.dao'
 import { ProductDao, ProductMediaDao, SkuDao } from './dao/product.dao'
 import { ProductCategoryDao } from './dao/product-category.dao'
 import { ProfileCommentDao } from './dao/profile-comment.dao'
@@ -114,6 +115,9 @@ export interface Cradle {
   // Profile Comment DAOs
   profileCommentDao: ProfileCommentDao
 
+  // Password Change Log DAOs
+  passwordChangeLogDao: PasswordChangeLogDao
+
   // Services
   authService: AuthService
   oauthService: OAuthService
@@ -202,6 +206,9 @@ export function createAppContainer(db: Database): AppContainer {
 
     // Profile Comment DAOs
     profileCommentDao: asClass(ProfileCommentDao).singleton(),
+
+    // Password Change Log DAOs
+    passwordChangeLogDao: asClass(PasswordChangeLogDao).singleton(),
 
     // Services
     authService: asClass(AuthService).singleton(),

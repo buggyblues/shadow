@@ -264,5 +264,50 @@ export function createAdminHandler(container: AppContainer) {
     return c.json({ success: true })
   })
 
+  // ── Password Change Logs ───────────────────────────
+  adminHandler.get('/password-logs', async (c) => {
+    const passwordChangeLogDao = container.resolve('passwordChangeLogDao')
+    const userDao = container.resolve('userDao')
+    const limit = Number(c.req.query('limit') ?? '50')
+    const offset = Number(c.req.query('offset') ?? '0')
+    const userId = c.req.query('userId')
+
+    let logs
+    if (userId) {
+      logs = await passwordChangeLogDao.findByUserId(userId, limit, offset)
+    } else {
+      logs = await passwordChangeLogDao.findAll(limit, offset)
+    }
+
+    // Enrich with user info
+    const enriched = await Promise.all(
+      logs.map(async (log: { userId: string }) => {
+        const user = await userDao.findById(log.userId)
+        return {
+          ...log,
+          user: user
+            ? {
+                id: user.id,
+                email: user.email,
+                username: user.username,
+                displayName: user.displayName,
+              }
+            : null,
+        }
+      }),
+    )
+
+    return c.json(enriched)
+  })
+
+  adminHandler.get('/password-logs/count', async (c) => {
+    const passwordChangeLogDao = container.resolve('passwordChangeLogDao')
+    const userId = c.req.query('userId')
+    const count = userId
+      ? await passwordChangeLogDao.countByUserId(userId)
+      : await passwordChangeLogDao.count()
+    return c.json({ count })
+  })
+
   return adminHandler
 }

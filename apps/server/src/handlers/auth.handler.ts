@@ -5,7 +5,7 @@ import type { AppContainer } from '../container'
 import { verifyToken } from '../lib/jwt'
 import { logger } from '../lib/logger'
 import { authMiddleware } from '../middleware/auth.middleware'
-import { loginSchema, registerSchema } from '../validators/auth.schema'
+import { changePasswordSchema, loginSchema, registerSchema } from '../validators/auth.schema'
 import { forceDisconnectUser } from '../ws/presence.gateway'
 
 export function createAuthHandler(container: AppContainer) {
@@ -64,6 +64,23 @@ export function createAuthHandler(container: AppContainer) {
       const input = c.req.valid('json')
       const result = await authService.updateProfile(user.userId, input)
       return c.json(result)
+    },
+  )
+
+  // PUT /api/auth/password — change password
+  authHandler.put(
+    '/password',
+    authMiddleware,
+    zValidator('json', changePasswordSchema),
+    async (c) => {
+      const authService = container.resolve('authService')
+      const user = c.get('user')
+      const input = c.req.valid('json')
+      // Extract IP and User-Agent for logging
+      const ipAddress = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? c.req.header('x-real-ip')
+      const userAgent = c.req.header('user-agent')
+      await authService.changePassword(user.userId, input, { ipAddress, userAgent })
+      return c.json({ success: true })
     },
   )
 

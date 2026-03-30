@@ -111,7 +111,7 @@ function StatCard({
 }
 
 /* ── Tabs ────────────────────────────────────────────── */
-type Tab = 'stats' | 'invites' | 'users' | 'servers' | 'agents'
+type Tab = 'stats' | 'invites' | 'users' | 'servers' | 'agents' | 'passwordLogs'
 
 interface Stats {
   totalUsers: number
@@ -195,6 +195,22 @@ interface AdminAgent {
   } | null
 }
 
+interface PasswordChangeLog {
+  id: string
+  userId: string
+  ipAddress: string | null
+  userAgent: string | null
+  success: boolean
+  failureReason: string | null
+  createdAt: string
+  user?: {
+    id: string
+    email: string
+    username: string
+    displayName: string | null
+  } | null
+}
+
 /* ── Dashboard Content ──────────────────────────────── */
 function DashboardContent() {
   const [tab, setTab] = useState<Tab>('stats')
@@ -217,6 +233,7 @@ function DashboardContent() {
     isPublic: boolean
   }>({ name: '', slug: '', description: '', isPublic: false })
   const [adminAgents, setAdminAgents] = useState<AdminAgent[]>([])
+  const [passwordLogs, setPasswordLogs] = useState<PasswordChangeLog[]>([])
 
   const loadStats = async () => {
     try {
@@ -276,6 +293,14 @@ function DashboardContent() {
     }
   }
 
+  const loadPasswordLogs = async () => {
+    try {
+      setPasswordLogs(await apiFetch<PasswordChangeLog[]>('/password-logs'))
+    } catch {
+      /* */
+    }
+  }
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional load on mount
   useEffect(() => {
     loadStats()
@@ -287,6 +312,7 @@ function DashboardContent() {
     if (tab === 'users') loadUsers()
     if (tab === 'servers') loadServers()
     if (tab === 'agents') loadAgents()
+    if (tab === 'passwordLogs') loadPasswordLogs()
   }, [tab])
 
   const generateCodes = async () => {
@@ -391,6 +417,7 @@ function DashboardContent() {
     { key: 'users', label: '👤 用户管理' },
     { key: 'servers', label: '🖥️ 服务器管理' },
     { key: 'agents', label: '🐱 Buddy 管理' },
+    { key: 'passwordLogs', label: '🔐 密码日志' },
   ]
 
   return (
@@ -1032,6 +1059,79 @@ function DashboardContent() {
                       <tr>
                         <td colSpan={6} className="px-4 py-8 text-center text-zinc-500">
                           暂无 Agent
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Password Logs Tab */}
+          {tab === 'passwordLogs' && (
+            <div>
+              <h2 className="text-lg font-bold mb-4">密码修改日志</h2>
+              <p className="text-zinc-400 text-sm mb-4">
+                记录所有用户的密码修改操作，包括成功和失败的尝试。
+              </p>
+              <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-800 text-zinc-400 text-left">
+                      <th className="px-4 py-3">用户</th>
+                      <th className="px-4 py-3">状态</th>
+                      <th className="px-4 py-3">IP 地址</th>
+                      <th className="px-4 py-3">User Agent</th>
+                      <th className="px-4 py-3">时间</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {passwordLogs.map((log) => (
+                      <tr key={log.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
+                        <td className="px-4 py-3">
+                          {log.user ? (
+                            <div>
+                              <p className="font-medium">
+                                {log.user.displayName ?? log.user.username}
+                              </p>
+                              <p className="text-xs text-zinc-500">{log.user.email}</p>
+                            </div>
+                          ) : (
+                            <span className="text-zinc-500">未知用户</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {log.success ? (
+                            <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full">
+                              成功
+                            </span>
+                          ) : (
+                            <div>
+                              <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full">
+                                失败
+                              </span>
+                              {log.failureReason && (
+                                <p className="text-xs text-red-300 mt-1">{log.failureReason}</p>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-zinc-400 font-mono text-xs">
+                          {log.ipAddress ?? '—'}
+                        </td>
+                        <td className="px-4 py-3 text-zinc-500 text-xs max-w-xs truncate">
+                          {log.userAgent ?? '—'}
+                        </td>
+                        <td className="px-4 py-3 text-zinc-500">
+                          {log.createdAt ? new Date(log.createdAt).toLocaleString() : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                    {passwordLogs.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
+                          暂无密码修改记录
                         </td>
                       </tr>
                     )}
