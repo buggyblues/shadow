@@ -242,11 +242,7 @@ export function createInviteHandler(container: AppContainer) {
         if (existing) {
           return c.json({ error: 'Friendship already exists', userId: invite.userId }, 409)
         }
-        await friendshipDao.create({
-          requesterId: user.userId,
-          addresseeId: invite.userId,
-          status: 'pending',
-        })
+        await friendshipDao.create(user.userId, invite.userId)
         return c.json({ success: true, type: 'user', userId: invite.userId })
       }
 
