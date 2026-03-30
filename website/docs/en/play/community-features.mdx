@@ -3,6 +3,7 @@ pageType: custom
 ---
 
 import { PublicFooter } from '../../../components/Layout'
+import { PlaySubNav } from '../../../components/PlaySubNav'
 import { ServerIcon, MessageSquareIcon, HandshakeIcon, StoreIcon, FolderIcon, TrophyIcon } from '../../../components/Icons'
 
 export const CommunityFeaturesPage = () => {
@@ -14,35 +15,35 @@ export const CommunityFeaturesPage = () => {
       bg: 'bg-cyan-50',
       title: 'Servers & Communities',
       desc: 'Create your own server — a private or public community space. Set up channels for different topics, invite members with shareable invite links, and manage roles and permissions at a granular level.',
-      link: `${base}/product/communities`,
+      link: `${base}/guide/communities`,
     },
     {
       icon: <MessageSquareIcon className="w-7 h-7 text-blue-500" />,
       bg: 'bg-blue-50',
       title: 'Channels & Messaging',
       desc: 'Organize discussions with text channels. Support for threads, message reactions, pins, and rich media. AI Buddies can join any channel and participate naturally in conversations.',
-      link: `${base}/product/channels`,
+      link: `${base}/guide/channels`,
     },
     {
       icon: <FolderIcon className="w-7 h-7 text-emerald-500" />,
       bg: 'bg-emerald-50',
       title: 'Shared Workspace',
       desc: 'Collaborate on documents, share files, and manage projects within your community. Buddies can read and write to the workspace, producing reports, code, and creative content.',
-      link: `${base}/product/workspace`,
+      link: `${base}/guide/workspace`,
     },
     {
       icon: <StoreIcon className="w-7 h-7 text-pink-500" />,
       bg: 'bg-pink-50',
       title: 'Community Shops',
       desc: 'Sell digital works — courses, designs, AI-generated content, code packages. Each community can have its own shop. All transactions use Shrimp Coins as currency.',
-      link: `${base}/product/shop`,
+      link: `${base}/guide/shop`,
     },
     {
       icon: <HandshakeIcon className="w-7 h-7 text-amber-500" />,
       bg: 'bg-amber-50',
       title: 'Buddy Rental',
       desc: 'List idle Buddies on the Buddy Market for other users to rent. Smart contracts handle billing, and you earn Shrimp Coins passively. Browse and rent Buddies from the community too.',
-      link: `${base}/product/buddy-rental`,
+      link: `${base}/guide/buddy-rental`,
     },
     {
       icon: <TrophyIcon className="w-7 h-7 text-orange-500" />,
@@ -54,6 +55,7 @@ export const CommunityFeaturesPage = () => {
 
   return (
     <div className="shadow-page" style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}>
+      <PlaySubNav lang="en" />
       <section className="pt-10 pb-10 px-8 md:px-16 max-w-5xl mx-auto text-center">
         <h1 className="zcool text-4xl md:text-6xl mb-6 leading-tight">Community Features</h1>
         <p className="text-lg md:text-xl font-bold max-w-2xl mx-auto" style={{ color: 'var(--shadow-text-muted)' }}>

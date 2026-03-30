@@ -236,8 +236,8 @@ export function PublicNav({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
     lang === 'zh'
       ? {
           buddy: 'Buddy',
-          guide: '玩法指南',
-          product: '文档',
+          guide: '玩法',
+          product: '指南',
           apiDocs: 'API',
           download: '下载',
           login: '登录',
@@ -245,8 +245,8 @@ export function PublicNav({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
         }
       : {
           buddy: 'Buddy',
-          guide: 'Guide',
-          product: 'Docs',
+          guide: 'Play',
+          product: 'Guide',
           apiDocs: 'API',
           download: 'Download',
           login: 'Login',
@@ -279,14 +279,14 @@ export function PublicNav({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
           {t.buddy}
         </a>
         <a
-          href={`${base}${prefix}/guide/`}
+          href={`${base}${prefix}/play/`}
           className="hover:text-cyan-600 transition border-b-2 border-transparent hover:border-cyan-500 py-1"
           style={{ textDecoration: 'none', color: 'var(--shadow-text-muted)' }}
         >
           {t.guide}
         </a>
         <a
-          href={`${base}${prefix}/product`}
+          href={`${base}${prefix}/guide`}
           className="hover:text-cyan-600 transition border-b-2 border-transparent hover:border-cyan-500 py-1"
           style={{ textDecoration: 'none', color: 'var(--shadow-text-muted)' }}
         >
@@ -337,21 +337,21 @@ export function PublicFooter({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
           {
             title: '产品',
             links: [
-              { text: '频道', href: `${base}${prefix}/product/channels` },
-              { text: 'AI 搭子', href: `${base}${prefix}/product/ai-assistants` },
+              { text: '频道', href: `${base}${prefix}/guide/channels` },
+              { text: 'AI 搭子', href: `${base}${prefix}/guide/ai-assistants` },
               { text: 'Buddy 集市', href: `${base}${prefix}/buddy` },
-              { text: '社区', href: `${base}${prefix}/product/communities` },
-              { text: '工作区', href: `${base}${prefix}/product/workspace` },
-              { text: '店铺', href: `${base}${prefix}/product/shop` },
+              { text: '社区', href: `${base}${prefix}/guide/communities` },
+              { text: '工作区', href: `${base}${prefix}/guide/workspace` },
+              { text: '店铺', href: `${base}${prefix}/guide/shop` },
               { text: '桌面端', href: `${base}${prefix}/download` },
             ],
           },
           {
             title: '资源',
             links: [
-              { text: '玩法指南', href: `${base}${prefix}/guide/` },
+              { text: '玩法', href: `${base}${prefix}/play/` },
               { text: '博客', href: `${base}${prefix}/blog/` },
-              { text: '产品文档', href: `${base}${prefix}/product` },
+              { text: '指南', href: `${base}${prefix}/guide` },
               { text: 'API 文档', href: `${base}${prefix}/api-doc/introduction` },
               { text: '定价', href: `${base}${prefix}/pricing` },
             ],
@@ -382,21 +382,21 @@ export function PublicFooter({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
           {
             title: 'Product',
             links: [
-              { text: 'Channels', href: `${base}${prefix}/product/channels` },
-              { text: 'AI Buddies', href: `${base}${prefix}/product/ai-assistants` },
+              { text: 'Channels', href: `${base}${prefix}/guide/channels` },
+              { text: 'AI Buddies', href: `${base}${prefix}/guide/ai-assistants` },
               { text: 'Buddy Market', href: `${base}${prefix}/buddy` },
-              { text: 'Communities', href: `${base}${prefix}/product/communities` },
-              { text: 'Workspace', href: `${base}${prefix}/product/workspace` },
-              { text: 'Shop', href: `${base}${prefix}/product/shop` },
+              { text: 'Communities', href: `${base}${prefix}/guide/communities` },
+              { text: 'Workspace', href: `${base}${prefix}/guide/workspace` },
+              { text: 'Shop', href: `${base}${prefix}/guide/shop` },
               { text: 'Desktop', href: `${base}${prefix}/download` },
             ],
           },
           {
             title: 'Resources',
             links: [
-              { text: 'Guide', href: `${base}${prefix}/guide/` },
+              { text: 'Play', href: `${base}${prefix}/play/` },
               { text: 'Blog', href: `${base}${prefix}/blog/` },
-              { text: 'Product Docs', href: `${base}${prefix}/product` },
+              { text: 'Guide', href: `${base}${prefix}/guide` },
               { text: 'API Reference', href: `${base}${prefix}/api-doc/introduction` },
               { text: 'Pricing', href: `${base}${prefix}/pricing` },
             ],
