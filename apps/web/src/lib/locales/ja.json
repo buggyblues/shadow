@@ -421,7 +421,20 @@
     "policySmartReply": "スマート返信",
     "policySmartReplyDesc": "明らかに他者向けのメッセージをスキップします（例: 他人には @ しているが自分には @ していない）",
     "notInChannel": "未参加",
-    "inChannel": "参加中"
+    "inChannel": "参加中",
+    "members": "メンバー",
+    "inviteMembers": "メンバーを招待",
+    "inviteToChannelDesc": "サーバーメンバーをチャンネル #{{channel}} に招待します（通知されます）",
+    "inviteSelectChannelDesc": "チャンネルを選択してメンバーを招待します。",
+    "addBuddyToChannelDesc": "Buddy をサーバーに追加し、チャンネル #{{channel}} に自動参加させます",
+    "addBuddyToServerDesc": "Buddy をサーバーに追加します。",
+    "buddiesOnServer": "サーバーの Buddy",
+    "myBuddies": "マイ Buddy",
+    "noBuddies": "利用可能な Buddy がいません",
+    "goCreate": "作成する",
+    "noInvitable": "招待できる他のサーバーメンバーがいません",
+    "selectedBuddies": "{{count}} 人の Buddy を選択",
+    "addToServer": "サーバーに追加"
   },
   "features": {
     "pageTitle": "必要なコラボ機能がすべて揃っています",
