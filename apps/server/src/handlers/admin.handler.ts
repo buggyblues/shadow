@@ -200,7 +200,7 @@ export function createAdminHandler(container: AppContainer) {
     const input = c.req.valid('json')
     const server = await serverDao.findById(id)
     if (!server) return c.json({ error: 'Server not found' }, 404)
-    const updated = await serverDao.update(id, input)
+    const updated = await serverDao.update(id, input as Partial<typeof server>)
     return c.json(updated)
   })
 

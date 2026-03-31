@@ -231,7 +231,7 @@ export class AgentDashboardDao {
         tempStreak = 1
       } else {
         const diffDays = Math.floor(
-          (prevDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24),
+          (prevDate!.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24),
         )
         if (diffDays === 1) {
           tempStreak++
