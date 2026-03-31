@@ -239,11 +239,13 @@ Web/Desktop/Mobile (Android) → Stripe
 iOS/macOS Native App → Apple IAP → Server Verification
 ```
 
-**IAP Product IDs:**
-- `com.shadow.coins.1000` - 1,000 shrimp coins
-- `com.shadow.coins.3000` - 3,000 shrimp coins
-- `com.shadow.coins.5000` - 5,000 shrimp coins
-- `com.shadow.coins.custom` - Custom amount (configured in App Store)
+**IAP Product IDs:** ⏸️ **ON HOLD**
+- 暂缓配置，待后续启动 iOS/macOS 开发时再创建
+- 预留产品 ID 格式：
+  - `com.shadow.coins.1000` - 1,000 shrimp coins
+  - `com.shadow.coins.3000` - 3,000 shrimp coins
+  - `com.shadow.coins.5000` - 5,000 shrimp coins
+  - `com.shadow.coins.custom` - Custom amount
 
 ## 4. Open Questions / Pending Decisions
 
@@ -283,12 +285,9 @@ iOS/macOS Native App → Apple IAP → Server Verification
   - C. Real-time - 每笔支付后立即对账
 - **Decision:** 每天凌晨 2:00 执行对账任务
 
-**Question 6: Email Service for Alerts** ✅ **DECIDED: C**
-- **Options:**
-  - A. SendGrid - 专业邮件服务，送达率高
-  - B. AWS SES - 成本低，与 AWS 生态集成
-  - **C. Existing provider - 复用现有邮件服务** ← SELECTED
-- **Decision:** 复用项目现有邮件服务（需在实现时确认具体服务）
+**Question 6: Email Service for Alerts** ⏸️ **ON HOLD**
+- **Status:** 暂缓，待后续确认
+- **Note:** 对账告警功能可先用日志记录，正式环境再接入邮件服务
 
 **Question 7: Notification Channel for Recharge Success** ✅ **DECIDED: C**
 - **Options:**
