@@ -29,15 +29,23 @@
 
 ---
 
-### D3: Waveform Display
+### D3: Voice Message UI
 
-**Decision:** 动态波形图（服务端生成）
+**Decision:** 固定动画（无波形图）
 
 **Rationale:**
-- 服务端上传时自动计算波形峰值数组
-- 存储在 attachment metadata，客户端直接使用
-- 播放时 Canvas 渲染动画，无解码延迟
-- 简化客户端实现（CLI/Web/Mobile 不需波形计算逻辑）
+- 波形图复杂度高（服务端生成/存储/客户端渲染）
+- 简化为固定动画（播放时显示声波动画）
+- 降低实现成本，加快交付
+
+**UI 设计：**
+```
+[播放按钮] [声波动画图标] [时长]
+```
+- 未播放：静态声波图标
+- 播放中：声波动画（CSS/Reanimated 动画）
+- 自己发送：右侧气泡
+- 对方发送：左侧气泡
 
 ---
 
@@ -57,48 +65,44 @@
 
 ---
 
-### D6: Waveform Data Source
+### D6: Duration Storage
 
-**Decision:** 服务端生成并存储在 attachment metadata
+**Decision:** 数据库单独字段存储 duration
+
+**Schema Changes:**
+```sql
+-- attachments 表新增字段
+ALTER TABLE attachments ADD COLUMN voice_duration INTEGER;
+
+-- dm_attachments 表删除，合并到 attachments
+DROP TABLE dm_attachments;
+```
 
 **Rationale:**
-- 服务端使用 ffmpeg 或音频分析库计算波形
-- 上传音频时自动生成，无需客户端计算
-- 存储约 60 个数值点（每秒 1 个）
-- CLI/Web/Mobile 只需上传音频，波形自动返回
-
-**Implementation:**
-- 服务端新增 `WaveformService` 使用 ffmpeg filter 或 Web Audio 解码
-- 上传完成后异步计算波形，更新 metadata
-- 或上传时同步计算（小文件延迟可接受）
+- 单独字段类型安全，查询简单
+- 只存 duration（整数秒），无 waveform
+- 简化存储和检索逻辑
 
 ---
 
-### D7: Waveform Sampling Precision
+### D7: Speech-to-Text Integration
 
-**Decision:** 60 个点（每秒 1 个）
-
-**Rationale:** 60 秒录音对应 60 个点，平衡视觉效果和数据量。
-
----
-
-### D8: Speech-to-Text Integration
-
-**Decision:** 可选转文字
+**Decision:** 可选转文字，客户端识别
 
 **Rationale:**
 - 语音消息有独立切换按钮（类似微信）
 - 用户可选择发送纯语音或语音+文字
-- 客户端识别结果直接发给服务端存储
+- 客户端使用现有 Typeless SDK 识别
+- 后续可升级为服务端识别（OpenAI Whisper 等）
 
 ---
 
-### D9: Message Bubble Layout
+### D8: Message Bubble Layout
 
 **Decision:** 微信风格
 
 ```
-[播放按钮] [波形图] [时长]
+[播放按钮] [声波图标] [时长]
 ```
 
 - 自己发送：右侧气泡
@@ -106,7 +110,7 @@
 
 ---
 
-### D10: Background Playback
+### D9: Background Playback
 
 **Decision:** 支持后台播放
 
@@ -114,7 +118,7 @@
 
 ---
 
-### D11: Audio Cache Strategy
+### D10: Audio Cache Strategy
 
 **Decision:** 本地持久缓存
 
@@ -125,7 +129,7 @@
 
 ---
 
-### D12: Permission Request Timing
+### D11: Permission Request Timing
 
 **Decision:** 点击录音按钮时请求
 
@@ -133,7 +137,7 @@
 
 ---
 
-### D13: Cancel Recording Gesture
+### D12: Cancel Recording Gesture
 
 **Decision:** 完全对标微信
 
@@ -144,7 +148,7 @@
 
 ---
 
-### D14: Minimum Recording Duration
+### D13: Minimum Recording Duration
 
 **Decision:** 1 秒
 
@@ -152,7 +156,7 @@
 
 ---
 
-### D15: Recording UI
+### D14: Recording UI
 
 **Decision:** 遮罩层 + 中央大麦克风动画（微信风格）
 
@@ -164,7 +168,7 @@
 
 ---
 
-### D16: Speech-to-Text Toggle
+### D15: Speech-to-Text Toggle
 
 **Decision:** 录音按钮旁单独切换按钮
 
@@ -175,7 +179,7 @@
 
 ---
 
-### D17: Upload API Flow
+### D16: Upload API Flow
 
 **Decision:** 两步上传（复用现有附件流程）
 
@@ -191,7 +195,7 @@
 
 ---
 
-### D18: Playback Speed Control
+### D17: Playback Speed Control
 
 **Decision:** 不实现
 
@@ -199,28 +203,112 @@
 
 ---
 
-### D19: Attachment Metadata Schema
+### D18: Global Audio Player Singleton
 
-```typescript
-interface AttachmentMetadata {
-  voice?: {
-    duration: number      // 录音时长（秒）
-    waveform: number[]    // 波形峰值数组 [0-1]，最多 60 个点
-    transcript?: string   // 可选：语音转文字结果
-  }
-}
-```
+**Decision:** 全局单例播放器
+
+**Behavior:**
+- 新播放自动停止当前播放
+- 播放状态通过 Zustand/Context 共享
+- 支持后台播放（不随页面切换停止）
 
 ---
 
-### D20: Implementation Order
+### D19: DM Voice Message Support
 
-1. **Phase 1:** 附件 metadata 结构 + 服务端波形生成 + 格式转换
-2. **Phase 2:** 语音消息播放器组件（Web + Mobile）
-3. **Phase 3:** 移动端录音功能（expo-av）
-4. **Phase 4:** Web 端录音功能（MediaRecorder）
-5. **Phase 5:** 本地缓存机制
-6. **Phase 6:** SDK/CLI 支持 + 语音转文字联动
+**Decision:** 支持 DM 语音消息
+
+**Changes:**
+- 删除 `dm_attachments` 表
+- DM 语音消息统一存储到 `attachments` 表
+- 通过 `dmMessageId` 字段关联
+- 播放器组件复用 Channel 的实现
+
+---
+
+### D20: File Size and Compression
+
+**Decision:** 限制时长，自动压缩
+
+| 限制项 | 值 |
+|-------|---|
+| 最大时长 | 60 秒 |
+| 自动压缩 | 是（Opus 32kbps） |
+| 最大文件大小 | ~2MB（压缩后） |
+
+**Rationale:**
+- 只限制时长，不限制原始文件大小
+- 上传前客户端自动压缩
+- 压缩后预计 60 秒 ~240KB
+
+---
+
+### D21: File Storage Path
+
+**Decision:** 按类型分组存储
+
+```
+/shadow/voice/{uuid}.{ext}
+```
+
+**Rationale:**
+- voice 前缀方便清理和管理
+- 不按频道分组（附件跨频道引用场景少）
+
+---
+
+### D22: Error Handling
+
+**Decision:** 优雅降级
+
+| 错误场景 | 处理 |
+|---------|------|
+| 格式转换失败 | 存储原格式，播放器兼容处理 |
+| 音频文件损坏 | 上传时校验 duration > 0，损坏则拒绝 |
+| 上传失败 | 客户端重试机制 |
+
+---
+
+### D23: Audio Compression Implementation
+
+**Decision:** 客户端压缩
+
+| 平台 | 压缩方案 |
+|------|---------|
+| Web | MediaRecorder + Opus 编码 |
+| iOS | expo-av 录制时指定 Opus 格式 |
+| Android | expo-av 录制时指定 Opus 格式 |
+
+**如果客户端无法压缩：**
+- 服务端使用 ffmpeg 压缩
+- 压缩后替换原文件
+
+---
+
+### D24: E2E Test Coverage
+
+| 场景 | 测试 |
+|------|------|
+| 上传音频文件 | ✅ |
+| 发送带语音附件的消息 | ✅ |
+| 获取消息包含 voice duration | ✅ |
+| 权限校验（只有上传者可用） | ✅ |
+| 格式转换（AAC→WebM） | ✅ |
+| 超长音频（>60s）截断 | ✅ |
+| 非音频文件伪装上传 | ✅ |
+| DM 语音消息 | ✅ |
+
+---
+
+### D25: Implementation Order
+
+1. **Phase 1:** 数据库 schema 变更 + 删除 dm_attachments
+2. **Phase 2:** 服务端 duration 提取 + 格式转换
+3. **Phase 3:** 语音消息播放器组件（Web + Mobile）
+4. **Phase 4:** 移动端录音功能（expo-av）
+5. **Phase 5:** Web 端录音功能（MediaRecorder）
+6. **Phase 6:** 本地缓存机制
+7. **Phase 7:** SDK/CLI 支持 + 语音转文字联动
 
 ---
 
@@ -228,19 +316,19 @@ interface AttachmentMetadata {
 
 ### Server Changes
 
-1. **Attachment Metadata Extension**
-   - 扩展 `attachments` 表或使用 JSON metadata 字段
-   - 存储 voice: { duration, waveform, transcript }
+1. **Schema Changes**
+   - `attachments` 表新增 `voice_duration INTEGER` 字段
+   - 删除 `dm_attachments` 表
+   - 迁移现有 DM 附件到 `attachments`
 
-2. **Waveform Generation (NEW)**
-   - 新增 `WaveformService` 使用 ffmpeg 生成波形
-   - 上传音频时自动计算波形和时长
-   - 支持 AAC/MP3/WebM 等多种音频格式
+2. **Duration Extraction**
+   - 使用 `ffprobe` 或 `music-metadata` 提取时长
+   - 上传时自动提取，存储到 `voice_duration`
 
-3. **Format Conversion (NEW)**
+3. **Format Conversion**
    - 新增 `AudioConverterService` 使用 ffmpeg 转换格式
    - iOS AAC → WebM 自动转换
-   - 与波形生成流程集成
+   - 可选：压缩大文件
 
 4. **Upload Permission Check**
    - 确保只有上传者可以使用 attachment 发送消息
@@ -248,277 +336,32 @@ interface AttachmentMetadata {
 ### Web Implementation
 
 1. **Recording:** MediaRecorder API
-2. **Playback:** HTML5 Audio + Canvas 波形动画
+2. **Playback:** HTML5 Audio + 固定声波动画
 3. **Cache:** IndexedDB 或 localStorage 存储音频文件
-4. **Waveform:** 渲染服务端返回的波形数据，无需计算
 
 ### Mobile Implementation
 
 1. **Recording:** expo-av Audio.Recording API
-2. **Playback:** expo-av Audio.Sound API
-3. **Waveform:** React Native Reanimated + Canvas/SVG 渲染
-4. **Cache:** FileSystem + AsyncStorage metadata
-5. **Waveform:** 渲染服务端返回的波形数据，无需计算
+2. **Playback:** expo-av Audio.Sound API + Reanimated 动画
+3. **Cache:** FileSystem + AsyncStorage metadata
 
 ---
 
 ## Files to Modify/Create
 
 ### Server
-- `apps/server/src/db/schema/attachments.ts` - 添加 metadata 字段（如需要）
-- `apps/server/src/services/media.service.ts` - 确保支持 audio/webm
-- `apps/server/src/validators/message.schema.ts` - 验证 voice metadata
-
-### Web
-- `apps/web/src/components/chat/voice-message-bubble.tsx` (NEW)
-- `apps/web/src/components/chat/voice-recorder.tsx` (NEW)
-- `apps/web/src/hooks/use-voice-recorder.ts` (NEW)
-- `apps/web/src/hooks/use-voice-player.ts` (NEW)
-- `apps/web/src/lib/voice-cache.ts` (NEW)
-- `apps/web/src/components/chat/message-input.tsx` - 集成录音按钮
-
-### Mobile
-- `apps/mobile/src/components/chat/voice-message-bubble.tsx` (NEW)
-- `apps/mobile/src/components/chat/voice-recorder-modal.tsx` (NEW)
-- `apps/mobile/src/hooks/use-voice-recording.ts` (NEW)
-- `apps/mobile/src/hooks/use-voice-player.ts` (NEW)
-- `apps/mobile/src/lib/voice-cache.ts` (NEW)
-- `apps/mobile/src/components/chat/chat-composer.tsx` - 集成录音按钮
-
-### Shared
-- `packages/shared/src/types/message.types.ts` - 添加 AttachmentMetadata 类型
-
----
-
-### D21: SDK Type Extension
-
-**Decision:** 扩展 `ShadowAttachment` 类型添加 metadata 字段
-
-```typescript
-// packages/sdk/src/types.ts
-export interface ShadowAttachment {
-  id: string
-  filename: string
-  url: string
-  contentType: string
-  size: number
-  width?: number | null
-  height?: number | null
-  // NEW
-  metadata?: AttachmentMetadata
-}
-
-interface AttachmentMetadata {
-  voice?: {
-    duration: number      // 秒
-    waveform: number[]    // 波形峰值 [0-1]
-    transcript?: string   // 转文字结果
-  }
-}
-```
-
-**Python SDK 同步更新：** `shadowob_sdk/types.py`
-
----
-
-### D22: SDK Convenience Method
-
-**Decision:** 新增 `sendVoiceMessage()` 便捷方法
-
-```typescript
-// packages/sdk/src/client.ts
-async sendVoiceMessage(
-  channelId: string,
-  audioBlob: Blob | ArrayBuffer,
-  options: {
-    duration?: number      // 可选，服务端自动计算
-    transcript?: string    // 可选，语音转文字
-    replyToId?: string
-  }
-): Promise<ShadowMessage>
-```
-
-**Rationale:**
-- 简化语音消息发送流程，封装上传+发送两步操作
-- 波形由服务端自动生成，客户端无需传入
-- duration 可选，服务端从音频文件自动提取
-
----
-
-### D23: CLI Voice Command
-
-**Decision:** 新增 `shadowob voice send` 命令
-
-```bash
-shadowob voice send --channel <id> --file <audio.webm> \
-  [--transcript "语音转文字内容"]
-```
-
-**Rationale:**
-- CLI 场景不需要录制功能（用户已有音频文件）
-- 提供便捷的语音消息发送入口
-- 波形和时长由服务端自动生成，CLI 无需计算
-
----
-
-### D24: API Documentation
-
-**Decision:** 不新增单独页面，分散更新现有文档
-
-| 文档 | 更新内容 |
-|------|---------|
-| `media.md` | 添加 voice metadata 说明，服务端自动生成波形和时长 |
-| `messages.md` | 添加语音消息发送示例 |
-
-**Rationale:** 语音消息是附件功能的扩展，不需要单独文档页面。
-
----
-
-### D25: Metadata Server Generation
-
-**Decision:** 服务端自动生成 metadata
-
-**流程：**
-```
-客户端上传 → POST /api/media/upload
-  body: { file }
-服务端处理 → 
-  1. 存储音频文件
-  2. 使用 ffmpeg 提取时长 duration
-  3. 使用 ffmpeg/音频分析生成波形 waveform
-  4. 存储 metadata = { voice: { duration, waveform } }
-返回 → { id, url, metadata: { voice: { duration, waveform } } }
-```
-
-**Rationale:**
-- 波形和时长由服务端统一计算，保证一致性
-- 简化客户端实现（CLI/Web/Mobile 不需波形计算逻辑）
-- 支持任意音频格式，服务端自动处理转换和计算
-
----
-
-### D26: E2E Test Coverage + Format Conversion
-
-**Decision:** 完整测试覆盖 + 格式转换能力
-
-| 场景 | 测试 |
-|------|------|
-| 上传音频文件 | ✅ |
-| 发送带语音附件的消息 | ✅ |
-| 获取消息包含语音 metadata | ✅ |
-| 波形数据正确存储和返回 | ✅ |
-| 权限校验（只有上传者可用） | ✅ |
-| 格式转换（AAC→WebM） | ✅ |
-
-**格式转换实现：**
-- 服务端使用 `ffmpeg` 或 `fluent-ffmpeg` 进行转换
-- 或客户端上传前自行转换（推荐移动端方案）
-
----
-
-### D27: Python SDK Sync
-
-**Decision:** 同步新增 `send_voice_message()` 方法
-
-```python
-# shadowob_sdk/client.py
-def send_voice_message(
-    self,
-    channel_id: str,
-    audio_path: str,
-    *,
-    duration: float | None = None,  # 可选，服务端自动计算
-    transcript: str | None = None,
-) -> dict[str, Any]:
-    ...
-```
-
-**Rationale:** 波形由服务端生成，客户端只需上传音频文件。
-
----
-
-### D28: OpenAPI Schema Update
-
-**Decision:** 更新 OpenAPI schema
-
-- `Attachment` schema 添加 `metadata` 字段（服务端生成）
-- `MediaUploadResponse` schema 包含 `metadata`（服务端返回）
-- 上传请求无需传入 metadata
-
----
-
-### D29: Desktop App
-
-**Decision:** Desktop 共用 Web renderer，无需特别改动
-
-- Desktop (Electron) 可直接使用 Web 的 MediaRecorder
-- 播放器组件复用 Web 的 `voice-message-bubble.tsx`
-- 无需单独开发 Desktop 录音/播放功能
-
----
-
-### D30: Audio Format Conversion + Waveform Generation
-
-**Decision:** 服务端统一处理格式转换和波形生成
-
-| 平台 | 录制格式 | 服务端处理 |
-|------|---------|---------|
-| Web | WebM (Opus) | 直接生成波形 |
-| iOS | AAC (m4a) | ffmpeg 转换 WebM + 生成波形 |
-| Android | WebM/Opus | 直接生成波形 |
-
-**服务端处理流程：**
-1. 接收音频文件（任意格式）
-2. 使用 `ffprobe` 提取时长
-3. 使用 `ffmpeg` 生成波形数据（60 个采样点）
-4. 如需格式转换，同步转换为 WebM
-5. 更新 attachment.metadata
-
----
-
-### D31: Server Waveform Service
-
-**Decision:** 服务端波形生成服务
-
-```typescript
-// apps/server/src/services/waveform.service.ts
-export class WaveformService {
-  /**
-   * 从音频文件生成波形数据
-   * @param filePath 音频文件路径
-   * @param points 采样点数量（默认 60）
-   */
-  async generateWaveform(
-    filePath: string,
-    points: number = 60
-  ): Promise<{ waveform: number[]; duration: number }>
-}
-```
-
-**实现方案：**
-- 使用 `ffmpeg` 的 ` silencedetect` 或 `volumedetect` filter
-- 或使用 Node.js 音频库如 `node-wav` + 手动采样
-- 返回归一化波形数组 [0-1]
-
----
-
-### D32: New Files Summary (Updated)
-
-### Server
-- `apps/server/src/db/schema/attachments.ts` - 添加 metadata 字段
-- `apps/server/src/services/media.service.ts` - 支持 audio/webm + metadata 存储
-- `apps/server/src/services/waveform.service.ts` (NEW) - 波形生成服务
+- `apps/server/src/db/schema/attachments.ts` - 添加 voice_duration 字段
+- `apps/server/src/db/schema/dm-attachments.ts` - **DELETE**
+- `apps/server/src/services/media.service.ts` - 提取 duration + 格式转换
 - `apps/server/src/services/audio-converter.service.ts` (NEW) - ffmpeg 格式转换
-- `apps/server/src/validators/message.schema.ts` - 验证 voice metadata
+- `apps/server/src/db/migrations/` - 迁移脚本
 - `apps/server/__tests__/voice-message-e2e.test.ts` (NEW) - E2E 测试
 
 ### SDK (TypeScript)
-- `packages/sdk/src/types.ts` - ShadowAttachment 添加 metadata
-- `packages/sdk/src/client.ts` - 新增 sendVoiceMessage()
+- `packages/sdk/src/types.ts` - ShadowAttachment 添加 voiceDuration
 
 ### SDK (Python)
-- `packages/sdk-python/shadowob_sdk/types.py` - Attachment 添加 metadata
-- `packages/sdk-python/shadowob_sdk/client.py` - 新增 send_voice_message()
+- `packages/sdk-python/shadowob_sdk/types.py` - Attachment 添加 voice_duration
 
 ### CLI
 - `packages/cli/src/commands/voice.ts` (NEW) - voice send 命令
@@ -530,6 +373,7 @@ export class WaveformService {
 - `apps/web/src/hooks/use-voice-recorder.ts` (NEW)
 - `apps/web/src/hooks/use-voice-player.ts` (NEW)
 - `apps/web/src/lib/voice-cache.ts` (NEW)
+- `apps/web/src/stores/voice-player.store.ts` (NEW) - 全局播放器状态
 - `apps/web/src/components/chat/message-input.tsx` - 集成录音按钮
 
 ### Mobile
@@ -538,19 +382,20 @@ export class WaveformService {
 - `apps/mobile/src/hooks/use-voice-recording.ts` (NEW)
 - `apps/mobile/src/hooks/use-voice-player.ts` (NEW)
 - `apps/mobile/src/lib/voice-cache.ts` (NEW)
+- `apps/mobile/src/stores/voice-player.store.ts` (NEW) - 全局播放器状态
 - `apps/mobile/src/components/chat/chat-composer.tsx` - 集成录音按钮
 
 ### Desktop
 - 无新增文件，复用 Web 组件
 
 ### Website Docs
-- `website/docs/en/api-doc/media.md` - 添加 voice metadata 说明（服务端生成）
+- `website/docs/en/api-doc/media.md` - 添加 voice duration 说明
 - `website/docs/en/api-doc/messages.md` - 添加语音消息示例
 - `website/docs/zh/api-doc/media.md` - 中文同步
 - `website/docs/zh/api-doc/messages.md` - 中文同步
 
 ### Shared
-- `packages/shared/src/types/message.types.ts` - 添加 AttachmentMetadata 类型
+- `packages/shared/src/types/message.types.ts` - 添加 voiceDuration 类型
 
 ---
 
@@ -559,10 +404,11 @@ export class WaveformService {
 1. 语音消息编辑/撤回后重新录制？
 2. 语音消息转发？
 3. 语音消息下载保存到本地？
+4. 服务端语音转文字？
 
 ---
 
 **Created:** 2024-03-30
 **Updated:** 2024-03-31
-**Status:** Approved
-**Next Step:** Phase 1 Implementation
+**Status:** Approved (Simplified)
+**Next Step:** Phase 1 - Database Schema Changes
