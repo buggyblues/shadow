@@ -377,6 +377,52 @@ export interface ShadowTask {
   claimedAt?: string | null
 }
 
+// ─── Recharge Types ─────────────────────────────────────────────────────────
+
+export interface ShadowRechargeTier {
+  key: string
+  shrimpCoins: number
+  usdCents: number
+  label: string
+}
+
+export interface ShadowRechargeConfig {
+  tiers: ShadowRechargeTier[]
+  customAmountMin: number
+  customAmountMax: number
+  exchangeRate: number
+  stripePublishableKey: string
+}
+
+export interface ShadowRechargeIntent {
+  clientSecret: string
+  paymentIntentId: string
+  orderNo: string
+  amount: {
+    shrimpCoins: number
+    usdCents: number
+  }
+}
+
+export interface ShadowPaymentOrder {
+  id: string
+  orderNo: string
+  shrimpCoinAmount: number
+  usdAmount: number
+  status: string
+  localCurrencyAmount?: number | null
+  localCurrency?: string | null
+  createdAt: string
+  paidAt?: string | null
+}
+
+export interface ShadowRechargeHistory {
+  items: ShadowPaymentOrder[]
+  total: number
+  limit: number
+  offset: number
+}
+
 // ─── App Types ──────────────────────────────────────────────────────────────
 
 export interface ShadowApp {

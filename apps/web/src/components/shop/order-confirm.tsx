@@ -3,6 +3,7 @@ import { ArrowLeft, CheckCircle2, Package, Wallet } from 'lucide-react'
 import { useState } from 'react'
 import { fetchApi } from '../../lib/api'
 import { showToast } from '../../lib/toast'
+import { useRechargeStore } from '../../stores/recharge.store'
 import { useShopStore } from '../../stores/shop.store'
 import type { Product, ProductMediaItem, SkuItem } from './shop-page'
 import { PriceDisplay } from './ui/currency'
@@ -18,6 +19,7 @@ interface OrderConfirmProps {
 export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: OrderConfirmProps) {
   const queryClient = useQueryClient()
   const { setActiveProductId, setOverlay } = useShopStore()
+  const openRecharge = useRechargeStore((s) => s.openModal)
   const [paid, setPaid] = useState(false)
 
   const { data: product } = useQuery({
@@ -186,7 +188,16 @@ export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: O
               </span>
             </div>
             {!sufficient && (
-              <p className="text-xs text-rose-500 mt-2 font-medium">余额不足，请先充值虾币</p>
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-xs text-rose-500 font-medium">余额不足，请先充值虾币</p>
+                <button
+                  type="button"
+                  onClick={openRecharge}
+                  className="text-xs font-bold text-cyan-500 hover:text-cyan-400 transition-colors"
+                >
+                  立即充值 →
+                </button>
+              </div>
             )}
           </div>
         </div>

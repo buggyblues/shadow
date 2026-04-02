@@ -245,6 +245,7 @@
     "tabChat": "Messages",
     "tabNotification": "Notifications",
     "tabTasks": "Tasks",
+    "tabWallet": "Wallet",
     "tabDeveloper": "Developer"
   },
   "server": {
@@ -1540,5 +1541,68 @@
     "byLastAccessed": "Last Accessed",
     "filterPlaceholder": "Search channels...",
     "clear": "Clear Filters"
+  },
+  "recharge": {
+    "title": "Recharge Shrimp Coins",
+    "balance": "Current Balance",
+    "selectTier": "Select Recharge Tier",
+    "starter": "Starter",
+    "bestValue": "Best Value",
+    "premium": "Premium",
+    "custom": "Custom",
+    "customPlaceholder": "Enter coin amount",
+    "coins": "coins",
+    "payAmount": "Pay Amount",
+    "payNow": "Pay Now",
+    "processing": "Processing...",
+    "success": "Recharge Successful!",
+    "successDesc": "{{amount}} shrimp coins have been credited",
+    "failed": "Payment Failed",
+    "failedDesc": "Please try again or use a different payment method",
+    "insufficientBalance": "Insufficient Balance",
+    "insufficientBalanceDesc": "Current balance: {{balance}} coins, required: {{required}} coins",
+    "rechargeNow": "Recharge Now",
+    "history": "Recharge History",
+    "noHistory": "No recharge history",
+    "orderNo": "Order No.",
+    "status": {
+      "pending": "Pending",
+      "processing": "Processing",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "disputed": "Disputed"
+    },
+    "legal": "By paying you agree to the",
+    "tos": "Terms of Service",
+    "privacy": "Privacy Policy",
+    "noRefund": "Virtual currency is non-refundable once purchased",
+    "contact": "For payment issues, contact",
+    "close": "Close",
+    "back": "Back",
+    "viewBalance": "View Balance",
+    "done": "Done"
+  },
+  "wallet": {
+    "title": "Wallet",
+    "balance": "Current Balance",
+    "transactionHistory": "Transaction History",
+    "noTransactions": "No transactions yet",
+    "loadMore": "Load More",
+    "type": {
+      "topup": "Top Up",
+      "purchase": "Purchase",
+      "refund": "Refund",
+      "reward": "Reward",
+      "transfer": "Transfer",
+      "adjustment": "Adjustment",
+      "settlement": "Settlement"
+    },
+    "filterAll": "All",
+    "income": "Income",
+    "expense": "Expense",
+    "transactionNote": "Note",
+    "balanceAfter": "Balance",
+    "rechargeBtn": "Recharge"
   }
 }

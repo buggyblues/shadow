@@ -1,10 +1,10 @@
-export { agentPolicies } from './agent-policies'
-export { agentStatusEnum, agents } from './agents'
 export {
   agentActivityEvents,
   agentDailyStats,
   agentHourlyStats,
 } from './agent-dashboard'
+export { agentPolicies } from './agent-policies'
+export { agentStatusEnum, agents } from './agents'
 export { appSourceEnum, appStatusEnum, apps } from './apps'
 export { attachments } from './attachments'
 export { channelMembers } from './channel-members'
@@ -34,6 +34,12 @@ export {
 export { passwordChangeLogs } from './password-change-logs'
 export { profileCommentReactions, profileComments } from './profile-comments'
 export { reactions } from './reactions'
+export {
+  iapOrderStatusEnum,
+  iapOrders,
+  paymentOrderStatusEnum,
+  paymentOrders,
+} from './recharge'
 export {
   clawListings,
   deviceTierEnum,

@@ -239,6 +239,13 @@
       "when": 1774869600000,
       "tag": "0033_add_password_change_logs",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1775100000000,
+      "tag": "0034_add_recharge_tables",
+      "breakpoints": true
     }
   ]
 }

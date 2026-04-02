@@ -443,6 +443,9 @@ importers:
       socket.io:
         specifier: ^4.8.1
         version: 4.8.3
+      stripe:
+        specifier: ^21.0.1
+        version: 21.0.1(@types/node@25.5.0)
       ws:
         specifier: ^8.19.0
         version: 8.19.0
@@ -495,6 +498,12 @@ importers:
       '@shadowob/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@stripe/react-stripe-js':
+        specifier: ^6.1.0
+        version: 6.1.0(@stripe/stripe-js@9.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@stripe/stripe-js':
+        specifier: ^9.0.1
+        version: 9.0.1
       '@tanstack/react-query':
         specifier: ^5.80.7
         version: 5.90.21(react@19.2.4)
@@ -510,6 +519,9 @@ importers:
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
+      framer-motion:
+        specifier: ^12.38.0
+        version: 12.38.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       hono:
         specifier: ^4.12.8
         version: 4.12.8
@@ -4672,6 +4684,17 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
+  '@stripe/react-stripe-js@6.1.0':
+    resolution: {integrity: sha512-LbKbRv4+wUSHLb5VNxqiYcKaqXPvTju0bJaF0RrzH0h4+aKWDXAk4RzUBcpNxxj8KtjuxICElANs1Li7aTv1IQ==}
+    peerDependencies:
+      '@stripe/stripe-js': '>=9.0.0 <10.0.0'
+      react: '>=16.8.0 <20.0.0'
+      react-dom: '>=16.8.0 <20.0.0'
+
+  '@stripe/stripe-js@9.0.1':
+    resolution: {integrity: sha512-un0URSosrW7wNr7xZ5iI2mC9mdeXZ3KERoVlA2RdmeLXYxHUPXq0yHzir2n/MtyXXEdSaELtz4WXGS6dzPEeKA==}
+    engines: {node: '>=12.16'}
+
   '@swc/helpers@0.5.19':
     resolution: {integrity: sha512-QamiFeIK3txNjgUTNppE6MiG3p7TdninpZu0E0PbqVh1a9FNLT2FRhisaa4NcaX52XVhA5l7Pk58Ft7Sqi/2sA==}
 
@@ -5179,6 +5202,7 @@ packages:
   '@xmldom/xmldom@0.8.11':
     resolution: {integrity: sha512-cQzWCtO6C8TQiYl1ruKNn2U6Ao4o4WBBcbL61yJl84x+j5sOWWFU9X7DpND8XZG3daDppSsigMdfAIl2upQBRw==}
     engines: {node: '>=10.0.0'}
+    deprecated: this version has critical issues, please update to the latest version
 
   '@xtuc/ieee754@1.2.0':
     resolution: {integrity: sha512-DX8nKgqcGwsc0eJSqYt5lwP4DH5FlHnmuWWBRy7X0NcaGR0ZtuyeESgMwTYVEtxmsNGY+qit4QYT/MIYTOTPeA==}
@@ -7227,6 +7251,20 @@ packages:
     resolution: {integrity: sha512-w/XBfkibaTl3YDqASwfDUqkna4Z2p9cFSr1aHDt0WoMTECnRfBOv2WArlZILlqgWlmdIlALXGpM2AOhEk5W3IA==}
     engines: {node: '>=0.8'}
 
+  framer-motion@12.38.0:
+    resolution: {integrity: sha512-rFYkY/pigbcswl1XQSb7q424kSTQ8q6eAC+YUsSKooHQYuLdzdHjrt6uxUC+PRAO++q5IS7+TamgIw1AphxR+g==}
+    peerDependencies:
+      '@emotion/is-prop-valid': '*'
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@emotion/is-prop-valid':
+        optional: true
+      react:
+        optional: true
+      react-dom:
+        optional: true
+
   freeport-async@2.0.0:
     resolution: {integrity: sha512-K7od3Uw45AJg00XUmy15+Hae2hOcgKcmN3/EF6Y7i01O0gaqiRx8sUSpsb9+BRNL8RPBrhzPsVfy8q9ADlJuWQ==}
     engines: {node: '>=8'}
@@ -9105,6 +9143,12 @@ packages:
 
   mlly@1.8.1:
     resolution: {integrity: sha512-SnL6sNutTwRWWR/vcmCYHSADjiEesp5TGQQ0pXyLhW5IoeibRlF/CbSLailbB3CNqJUk9cVJ9dUDnbD7GrcHBQ==}
+
+  motion-dom@12.38.0:
+    resolution: {integrity: sha512-pdkHLD8QYRp8VfiNLb8xIBJis1byQ9gPT3Jnh2jqfFtAsWUA3dEepDlsWe/xMpO8McV+VdpKVcp+E+TGJEtOoA==}
+
+  motion-utils@12.36.0:
+    resolution: {integrity: sha512-eHWisygbiwVvf6PZ1vhaHCLamvkSbPIeAYxWUuL3a2PD/TROgE7FvfHWTIH4vMl798QLfMw15nRqIaRDXTlYRg==}
 
   mri@1.2.0:
     resolution: {integrity: sha512-tzzskb3bG8LvYGFF/mDTpq3jpI6Q9wc3LEmBaghu+DdCssd1FakN7Bc0hVNmEyGq1bq3RgfkCb3cmQLpNPOroA==}
@@ -10991,6 +11035,15 @@ packages:
   strip-outer@1.0.1:
     resolution: {integrity: sha512-k55yxKHwaXnpYGsOzg4Vl8+tDrWylxDEpknGjhTiZB8dFRU5rTo9CAzeycivxV3s+zlTKwrs6WxMxR95n26kwg==}
     engines: {node: '>=0.10.0'}
+
+  stripe@21.0.1:
+    resolution: {integrity: sha512-ocv0j7dWttswDWV2XL/kb6+yiLpDXNXL3RQAOB5OB2kr49z0cEatdQc12+zP/j5nrXk6rAsT4N3y/NUvBbK7Pw==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
 
   strnum@2.2.0:
     resolution: {integrity: sha512-Y7Bj8XyJxnPAORMZj/xltsfo55uOiyHcU2tnAVzHUnSJR/KsEX+9RoDeXEnsXtl/CX4fAcrt64gZ13aGaWPeBg==}
@@ -16958,6 +17011,15 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
+  '@stripe/react-stripe-js@6.1.0(@stripe/stripe-js@9.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+    dependencies:
+      '@stripe/stripe-js': 9.0.1
+      prop-types: 15.8.1
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
+
+  '@stripe/stripe-js@9.0.1': {}
+
   '@swc/helpers@0.5.19':
     dependencies:
       tslib: 2.8.1
@@ -19804,6 +19866,15 @@ snapshots:
 
   frac@1.1.2: {}
 
+  framer-motion@12.38.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+    dependencies:
+      motion-dom: 12.38.0
+      motion-utils: 12.36.0
+      tslib: 2.8.1
+    optionalDependencies:
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
+
   freeport-async@2.0.0: {}
 
   fresh@0.5.2: {}
@@ -22422,6 +22493,12 @@ snapshots:
       pkg-types: 1.3.1
       ufo: 1.6.3
 
+  motion-dom@12.38.0:
+    dependencies:
+      motion-utils: 12.36.0
+
+  motion-utils@12.36.0: {}
+
   mri@1.2.0: {}
 
   mrmime@2.0.1: {}
@@ -24603,6 +24680,10 @@ snapshots:
   strip-outer@1.0.1:
     dependencies:
       escape-string-regexp: 1.0.5
+
+  stripe@21.0.1(@types/node@25.5.0):
+    optionalDependencies:
+      '@types/node': 25.5.0
 
   strnum@2.2.0: {}
 

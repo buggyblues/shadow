@@ -16,7 +16,11 @@ import type {
   ShadowOAuthConsent,
   ShadowOAuthToken,
   ShadowOrder,
+  ShadowPaymentOrder,
   ShadowProduct,
+  ShadowRechargeConfig,
+  ShadowRechargeHistory,
+  ShadowRechargeIntent,
   ShadowRemoteConfig,
   ShadowReview,
   ShadowServer,
@@ -687,11 +691,11 @@ export class ShadowClient {
     messageId?: string,
   ): Promise<{ url: string; key: string; size: number }> {
     // Dynamic imports for Node.js fs/path/os
-    // @ts-expect-error node:fs/promises is available at runtime
+    // @ts-ignore - Dynamic import types may not resolve in Alpine Docker builds
     const { readFile } = await import('node:fs/promises')
-    // @ts-expect-error node:path is available at runtime
+    // @ts-ignore
     const { basename } = await import('node:path')
-    // @ts-expect-error node:os is available at runtime
+    // @ts-ignore
     const { homedir } = await import('node:os')
 
     // Strip MEDIA: prefix used by agent tools to tag media paths
@@ -714,9 +718,9 @@ export class ShadowClient {
       !normalizedUrl.startsWith('https://') &&
       !normalizedUrl.startsWith('//')
     ) {
-      // @ts-expect-error node:fs is available at runtime
+      // @ts-ignore - Dynamic import types may not resolve in Alpine Docker builds
       const { existsSync } = await import('node:fs')
-      // @ts-expect-error node:path is available at runtime
+      // @ts-ignore
       const { resolve } = await import('node:path')
 
       const cwd = (globalThis as Record<string, unknown>).process
@@ -1494,6 +1498,41 @@ export class ShadowClient {
 
   async getWalletTransactions(): Promise<ShadowTransaction[]> {
     return this.request('/api/wallet/transactions')
+  }
+
+  // ── Recharge (Stripe) ───────────────────────────────────────────────
+
+  async getRechargeConfig(): Promise<ShadowRechargeConfig> {
+    return this.request('/api/v1/recharge/config')
+  }
+
+  async createRechargeIntent(params: {
+    tier: '1000' | '3000' | '5000' | 'custom'
+    customAmount?: number
+    currency?: string
+  }): Promise<ShadowRechargeIntent> {
+    return this.request('/api/v1/recharge/create-intent', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    })
+  }
+
+  async getRechargeHistory(params?: {
+    limit?: number
+    offset?: number
+  }): Promise<ShadowRechargeHistory> {
+    const qs = new URLSearchParams()
+    if (params?.limit) qs.set('limit', String(params.limit))
+    if (params?.offset) qs.set('offset', String(params.offset))
+    const query = qs.toString()
+    return this.request(`/api/v1/recharge/history${query ? `?${query}` : ''}`)
+  }
+
+  async confirmRechargePayment(paymentIntentId: string): Promise<ShadowPaymentOrder> {
+    return this.request('/api/v1/recharge/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ paymentIntentId }),
+    })
   }
 
   async getEntitlements(serverId: string): Promise<Record<string, unknown>[]> {

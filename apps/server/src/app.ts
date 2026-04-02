@@ -3,8 +3,8 @@ import { bodyLimit } from 'hono/body-limit'
 import { cors } from 'hono/cors'
 import type { AppContainer } from './container'
 import { createAdminHandler } from './handlers/admin.handler'
-import { createAgentDashboardHandler } from './handlers/agent-dashboard.handler'
 import { createAgentHandler } from './handlers/agent.handler'
+import { createAgentDashboardHandler } from './handlers/agent-dashboard.handler'
 import { createAppHandler } from './handlers/app.handler'
 import { createAuthHandler } from './handlers/auth.handler'
 import { createChannelHandler } from './handlers/channel.handler'
@@ -17,10 +17,12 @@ import { createMessageHandler } from './handlers/message.handler'
 import { createNotificationHandler } from './handlers/notification.handler'
 import { createOAuthHandler } from './handlers/oauth.handler'
 import { createProfileCommentHandler } from './handlers/profile-comment.handler'
+import { createRechargeHandler } from './handlers/recharge.handler'
 import { createRentalHandler } from './handlers/rental.handler'
 import { createSearchHandler } from './handlers/search.handler'
 import { createServerHandler } from './handlers/server.handler'
 import { createShopHandler } from './handlers/shop.handler'
+import { createStripeWebhookHandler } from './handlers/stripe-webhook.handler'
 import { createTaskCenterHandler } from './handlers/task-center.handler'
 import voiceEnhanceHandler from './handlers/voice-enhance.handler'
 import { createWorkspaceHandler } from './handlers/workspace.handler'
@@ -104,6 +106,10 @@ export function createApp(container: AppContainer) {
   app.route('/api', createRentalHandler(container))
   app.route('/api/profile-comments', createProfileCommentHandler(container))
   app.route('/api/voice', voiceEnhanceHandler)
+
+  // Recharge (Stripe) endpoints
+  app.route('/api/v1/recharge', createRechargeHandler(container))
+  app.route('/api/v1/webhooks/stripe', createStripeWebhookHandler(container))
 
   // Discover endpoints (public)
   app.route('/api/discover', createDiscoverHandler(container))

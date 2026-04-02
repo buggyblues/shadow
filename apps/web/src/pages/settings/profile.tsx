@@ -8,6 +8,7 @@ import { LanguageSwitcher } from '../../components/common/language-switcher'
 import { PriceDisplay } from '../../components/shop/ui/currency'
 import { fetchApi } from '../../lib/api'
 import { useAuthStore } from '../../stores/auth.store'
+import { useRechargeStore } from '../../stores/recharge.store'
 
 export function ProfileSettings() {
   const { t } = useTranslation()
@@ -17,6 +18,7 @@ export function ProfileSettings() {
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const openRecharge = useRechargeStore((s) => s.openModal)
 
   const { data: wallet } = useQuery({
     queryKey: ['wallet'],
@@ -75,6 +77,13 @@ export function ProfileSettings() {
               <span className="text-xs text-text-muted">虾币</span>
               <PriceDisplay amount={wallet?.balance ?? 0} size={13} className="ml-0.5" />
             </div>
+            <button
+              type="button"
+              onClick={openRecharge}
+              className="mt-2 ml-2 inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold text-white bg-primary hover:bg-primary-hover transition"
+            >
+              {t('recharge.rechargeNow')}
+            </button>
           </div>
         </div>
       </div>

@@ -9,6 +9,7 @@ import { useAuthStore } from '../../stores/auth.store'
 import { useUIStore } from '../../stores/ui.store'
 import { ConfirmDialog } from '../common/confirm-dialog'
 import { OnboardingModal } from '../onboarding/onboarding-modal'
+import { RechargeModal } from '../recharge/recharge-modal'
 import { ServerSidebar } from '../server/server-sidebar'
 
 export function AppLayout() {
@@ -113,6 +114,7 @@ export function AppLayout() {
       )}
 
       <ConfirmDialog />
+      <RechargeModal />
 
       {/* Onboarding for new users */}
       <OnboardingModal open={showOnboarding} onClose={() => setShowOnboarding(false)} />

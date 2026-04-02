@@ -14,6 +14,7 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { fetchApi } from '../../lib/api'
 import { showToast } from '../../lib/toast'
+import { useRechargeStore } from '../../stores/recharge.store'
 import { useShopStore } from '../../stores/shop.store'
 import { ProductDetail } from './product-detail'
 import { ShopCart } from './shop-cart'
@@ -177,10 +178,16 @@ export function ShopPage({ serverId, isAdmin, onClose }: ShopPageProps) {
 
         {/* Wallet balance */}
         {wallet && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 dark:bg-rose-900/10 rounded-xl border border-rose-100 dark:border-rose-900/20">
+          <button
+            type="button"
+            onClick={() => useRechargeStore.getState().openModal()}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 dark:bg-rose-900/10 rounded-xl border border-rose-100 dark:border-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/20 transition cursor-pointer"
+            title="充值虾币"
+          >
             <Wallet size={14} className="text-rose-400" />
             <PriceDisplay amount={wallet.balance} size={13} />
-          </div>
+            <span className="text-xs text-rose-400 font-bold">+</span>
+          </button>
         )}
 
         {/* Header action icons */}

@@ -245,6 +245,7 @@
     "tabChat": "메시지",
     "tabNotification": "알림",
     "tabTasks": "작업",
+    "tabWallet": "지갑",
     "tabDeveloper": "개발자"
   },
   "server": {
@@ -1540,5 +1541,68 @@
     "timeout": "等待超时",
     "timeoutDesc": "你可以在设置中稍后配置 Buddy",
     "redirecting": "正在跳转到服务器..."
+  },
+  "recharge": {
+    "title": "새우코인 충전",
+    "balance": "현재 잔액",
+    "selectTier": "충전 플랜 선택",
+    "starter": "스타터",
+    "bestValue": "베스트",
+    "premium": "프리미엄",
+    "custom": "커스텀",
+    "customPlaceholder": "코인 수량 입력",
+    "coins": "코인",
+    "payAmount": "결제 금액",
+    "payNow": "지금 결제",
+    "processing": "처리 중...",
+    "success": "충전 성공!",
+    "successDesc": "{{amount}} 새우코인이 입금되었습니다",
+    "failed": "결제 실패",
+    "failedDesc": "다시 시도하거나 다른 결제 방법을 사용해주세요",
+    "insufficientBalance": "잔액 부족",
+    "insufficientBalanceDesc": "현재 잔액: {{balance}} 코인, 필요: {{required}} 코인",
+    "rechargeNow": "지금 충전",
+    "history": "충전 내역",
+    "noHistory": "충전 내역이 없습니다",
+    "orderNo": "주문번호",
+    "status": {
+      "pending": "대기중",
+      "processing": "처리중",
+      "succeeded": "성공",
+      "failed": "실패",
+      "cancelled": "취소됨",
+      "disputed": "분쟁중"
+    },
+    "legal": "결제 시 다음에 동의합니다",
+    "tos": "이용약관",
+    "privacy": "개인정보처리방침",
+    "noRefund": "가상화폐는 구매 후 환불이 불가합니다",
+    "contact": "결제 문의",
+    "close": "닫기",
+    "back": "뒤로",
+    "viewBalance": "잔액 확인",
+    "done": "완료"
+  },
+  "wallet": {
+    "title": "지갑",
+    "balance": "현재 잔액",
+    "transactionHistory": "거래 내역",
+    "noTransactions": "거래 내역이 없습니다",
+    "loadMore": "더 보기",
+    "type": {
+      "topup": "충전",
+      "purchase": "구매",
+      "refund": "환불",
+      "reward": "보상",
+      "transfer": "송금",
+      "adjustment": "조정",
+      "settlement": "정산"
+    },
+    "filterAll": "전체",
+    "income": "수입",
+    "expense": "지출",
+    "transactionNote": "메모",
+    "balanceAfter": "잔액",
+    "rechargeBtn": "충전하기"
   }
 }

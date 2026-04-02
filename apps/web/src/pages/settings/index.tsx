@@ -15,6 +15,7 @@ import {
   Target,
   User,
   Users,
+  Wallet,
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -34,6 +35,7 @@ import { NotificationSettings } from './notification'
 import { ProfileSettings } from './profile'
 import { QuickstartSettings } from './quickstart'
 import { TaskSettings } from './tasks'
+import { WalletSettings } from './wallet'
 
 type SettingsTab =
   | 'quickstart'
@@ -47,6 +49,7 @@ type SettingsTab =
   | 'friends'
   | 'chat'
   | 'developer'
+  | 'wallet'
 
 interface NavItem {
   id: SettingsTab
@@ -111,6 +114,7 @@ const NAV_SECTIONS: NavSection[] = [
         labelFallback: '通知',
       },
       { id: 'tasks', icon: Target, labelKey: 'settings.tabTasks', labelFallback: '任务中心' },
+      { id: 'wallet', icon: Wallet, labelKey: 'settings.tabWallet', labelFallback: '钱包' },
       { id: 'account', icon: Shield, labelKey: 'settings.tabAccount', labelFallback: '账号安全' },
     ],
   },
@@ -325,6 +329,7 @@ export function SettingsPage() {
               {activeTab === 'account' && <AccountSettings />}
               {activeTab === 'invite' && <InviteSettings />}
               {activeTab === 'tasks' && <TaskSettings />}
+              {activeTab === 'wallet' && <WalletSettings />}
               {activeTab === 'buddy' && <BuddyManagementContent />}
               {activeTab === 'developer' && <DeveloperSettings />}
             </div>

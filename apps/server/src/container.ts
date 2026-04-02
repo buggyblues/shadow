@@ -20,6 +20,7 @@ import { PasswordChangeLogDao } from './dao/password-change-log.dao'
 import { ProductDao, ProductMediaDao, SkuDao } from './dao/product.dao'
 import { ProductCategoryDao } from './dao/product-category.dao'
 import { ProfileCommentDao } from './dao/profile-comment.dao'
+import { RechargeDao } from './dao/recharge.dao'
 import { RentalContractDao, RentalUsageDao, RentalViolationDao } from './dao/rental-contract.dao'
 import { ReviewDao } from './dao/review.dao'
 import { ServerDao } from './dao/server.dao'
@@ -52,6 +53,7 @@ import { OAuthService } from './services/oauth.service'
 import { OrderService } from './services/order.service'
 import { PermissionService } from './services/permission.service'
 import { ProductService } from './services/product.service'
+import { RechargeService } from './services/recharge.service'
 import { RentalService } from './services/rental.service'
 import { ReviewService } from './services/review.service'
 import { SearchService } from './services/search.service'
@@ -118,6 +120,9 @@ export interface Cradle {
   // Password Change Log DAOs
   passwordChangeLogDao: PasswordChangeLogDao
 
+  // Recharge DAOs
+  rechargeDao: RechargeDao
+
   // Services
   authService: AuthService
   oauthService: OAuthService
@@ -144,6 +149,7 @@ export interface Cradle {
   workspaceService: WorkspaceService
   rentalService: RentalService
   taskCenterService: TaskCenterService
+  rechargeService: RechargeService
   voiceEnhanceService: VoiceEnhanceService
   agentDashboardService: AgentDashboardService
 }
@@ -210,6 +216,9 @@ export function createAppContainer(db: Database): AppContainer {
     // Password Change Log DAOs
     passwordChangeLogDao: asClass(PasswordChangeLogDao).singleton(),
 
+    // Recharge DAOs
+    rechargeDao: asClass(RechargeDao).singleton(),
+
     // Services
     authService: asClass(AuthService).singleton(),
     oauthService: asClass(OAuthService).singleton(),
@@ -236,6 +245,7 @@ export function createAppContainer(db: Database): AppContainer {
     workspaceService: asClass(WorkspaceService).singleton(),
     rentalService: asClass(RentalService).singleton(),
     taskCenterService: asClass(TaskCenterService).singleton(),
+    rechargeService: asClass(RechargeService).singleton(),
     voiceEnhanceService: asClass(VoiceEnhanceService).singleton(),
     agentDashboardService: asClass(AgentDashboardService).singleton(),
   })

@@ -245,6 +245,7 @@
     "tabChat": "聊天",
     "tabNotification": "通知",
     "tabTasks": "任务中心",
+    "tabWallet": "钱包",
     "tabDeveloper": "开发者"
   },
   "server": {
@@ -1540,5 +1541,68 @@
     "byLastAccessed": "访问时间",
     "filterPlaceholder": "搜索频道...",
     "clear": "清除筛选"
+  },
+  "recharge": {
+    "title": "充值虾币",
+    "balance": "当前余额",
+    "selectTier": "选择充值档位",
+    "starter": "入门",
+    "bestValue": "超值",
+    "premium": "高级",
+    "custom": "自定义",
+    "customPlaceholder": "输入虾币数量",
+    "coins": "虾币",
+    "payAmount": "支付金额",
+    "payNow": "立即支付",
+    "processing": "处理中...",
+    "success": "充值成功！",
+    "successDesc": "{{amount}} 虾币已到账",
+    "failed": "支付失败",
+    "failedDesc": "请重试或更换支付方式",
+    "insufficientBalance": "余额不足",
+    "insufficientBalanceDesc": "当前余额 {{balance}} 虾币，需要 {{required}} 虾币",
+    "rechargeNow": "立即充值",
+    "history": "充值记录",
+    "noHistory": "暂无充值记录",
+    "orderNo": "订单号",
+    "status": {
+      "pending": "待支付",
+      "processing": "处理中",
+      "succeeded": "成功",
+      "failed": "失败",
+      "cancelled": "已取消",
+      "disputed": "争议中"
+    },
+    "legal": "支付即表示同意",
+    "tos": "服务条款",
+    "privacy": "隐私政策",
+    "noRefund": "虚拟货币一经充值不可退款",
+    "contact": "支付问题请联系",
+    "close": "关闭",
+    "back": "返回",
+    "viewBalance": "查看余额",
+    "done": "完成"
+  },
+  "wallet": {
+    "title": "钱包",
+    "balance": "当前余额",
+    "transactionHistory": "交易记录",
+    "noTransactions": "暂无交易记录",
+    "loadMore": "加载更多",
+    "type": {
+      "topup": "充值",
+      "purchase": "购买",
+      "refund": "退款",
+      "reward": "奖励",
+      "transfer": "转账",
+      "adjustment": "调整",
+      "settlement": "结算"
+    },
+    "filterAll": "全部",
+    "income": "收入",
+    "expense": "支出",
+    "transactionNote": "备注",
+    "balanceAfter": "余额",
+    "rechargeBtn": "去充值"
   }
 }

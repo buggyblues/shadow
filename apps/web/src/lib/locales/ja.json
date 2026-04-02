@@ -245,6 +245,7 @@
     "tabChat": "メッセージ",
     "tabNotification": "通知",
     "tabTasks": "タスク",
+    "tabWallet": "ウォレット",
     "tabDeveloper": "開発者"
   },
   "server": {
@@ -1540,5 +1541,68 @@
     "timeout": "等待超时",
     "timeoutDesc": "你可以在设置中稍后配置 Buddy",
     "redirecting": "正在跳转到服务器..."
+  },
+  "recharge": {
+    "title": "エビコインをチャージ",
+    "balance": "現在の残高",
+    "selectTier": "チャージプランを選択",
+    "starter": "スターター",
+    "bestValue": "お得",
+    "premium": "プレミアム",
+    "custom": "カスタム",
+    "customPlaceholder": "コイン数を入力",
+    "coins": "コイン",
+    "payAmount": "支払金額",
+    "payNow": "今すぐ支払う",
+    "processing": "処理中...",
+    "success": "チャージ成功！",
+    "successDesc": "{{amount}} エビコインが入金されました",
+    "failed": "支払い失敗",
+    "failedDesc": "再試行するか、別の支払い方法をお使いください",
+    "insufficientBalance": "残高不足",
+    "insufficientBalanceDesc": "現在の残高: {{balance}} コイン、必要: {{required}} コイン",
+    "rechargeNow": "今すぐチャージ",
+    "history": "チャージ履歴",
+    "noHistory": "チャージ履歴はありません",
+    "orderNo": "注文番号",
+    "status": {
+      "pending": "保留中",
+      "processing": "処理中",
+      "succeeded": "成功",
+      "failed": "失敗",
+      "cancelled": "キャンセル",
+      "disputed": "係争中"
+    },
+    "legal": "支払いにより同意します",
+    "tos": "利用規約",
+    "privacy": "プライバシーポリシー",
+    "noRefund": "仮想通貨は購入後返金不可です",
+    "contact": "お支払いの問題は以下にご連絡ください",
+    "close": "閉じる",
+    "back": "戻る",
+    "viewBalance": "残高を確認",
+    "done": "完了"
+  },
+  "wallet": {
+    "title": "ウォレット",
+    "balance": "現在の残高",
+    "transactionHistory": "取引履歴",
+    "noTransactions": "取引履歴はありません",
+    "loadMore": "もっと読み込む",
+    "type": {
+      "topup": "チャージ",
+      "purchase": "購入",
+      "refund": "返金",
+      "reward": "報酬",
+      "transfer": "送金",
+      "adjustment": "調整",
+      "settlement": "決済"
+    },
+    "filterAll": "すべて",
+    "income": "収入",
+    "expense": "支出",
+    "transactionNote": "メモ",
+    "balanceAfter": "残高",
+    "rechargeBtn": "チャージする"
   }
 }

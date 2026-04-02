@@ -245,6 +245,7 @@
     "tabChat": "聊天",
     "tabNotification": "通知",
     "tabTasks": "任務中心",
+    "tabWallet": "錢包",
     "tabDeveloper": "開發者"
   },
   "server": {
@@ -1540,5 +1541,68 @@
     "timeout": "等待超时",
     "timeoutDesc": "你可以在设置中稍后配置 Buddy",
     "redirecting": "正在跳转到服务器..."
+  },
+  "recharge": {
+    "title": "儲值蝦幣",
+    "balance": "目前餘額",
+    "selectTier": "選擇儲值方案",
+    "starter": "入門",
+    "bestValue": "超值",
+    "premium": "高級",
+    "custom": "自訂",
+    "customPlaceholder": "輸入蝦幣數量",
+    "coins": "蝦幣",
+    "payAmount": "支付金額",
+    "payNow": "立即支付",
+    "processing": "處理中...",
+    "success": "儲值成功！",
+    "successDesc": "{{amount}} 蝦幣已到帳",
+    "failed": "付款失敗",
+    "failedDesc": "請重試或更換付款方式",
+    "insufficientBalance": "餘額不足",
+    "insufficientBalanceDesc": "目前餘額 {{balance}} 蝦幣，需要 {{required}} 蝦幣",
+    "rechargeNow": "立即儲值",
+    "history": "儲值記錄",
+    "noHistory": "暫無儲值記錄",
+    "orderNo": "訂單號",
+    "status": {
+      "pending": "待付款",
+      "processing": "處理中",
+      "succeeded": "成功",
+      "failed": "失敗",
+      "cancelled": "已取消",
+      "disputed": "爭議中"
+    },
+    "legal": "付款即表示同意",
+    "tos": "服務條款",
+    "privacy": "隱私政策",
+    "noRefund": "虛擬貨幣一經儲值不可退款",
+    "contact": "付款問題請聯繫",
+    "close": "關閉",
+    "back": "返回",
+    "viewBalance": "查看餘額",
+    "done": "完成"
+  },
+  "wallet": {
+    "title": "錢包",
+    "balance": "當前餘額",
+    "transactionHistory": "交易記錄",
+    "noTransactions": "暫無交易記錄",
+    "loadMore": "載入更多",
+    "type": {
+      "topup": "充值",
+      "purchase": "購買",
+      "refund": "退款",
+      "reward": "獎勵",
+      "transfer": "轉帳",
+      "adjustment": "調整",
+      "settlement": "結算"
+    },
+    "filterAll": "全部",
+    "income": "收入",
+    "expense": "支出",
+    "transactionNote": "備註",
+    "balanceAfter": "餘額",
+    "rechargeBtn": "去充值"
   }
 }
