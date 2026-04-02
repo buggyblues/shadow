@@ -245,6 +245,7 @@
     "tabChat": "聊天",
     "tabNotification": "通知",
     "tabTasks": "任务中心",
+    "tabWallet": "钱包",
     "tabDeveloper": "开发者"
   },
   "server": {
@@ -1581,5 +1582,27 @@
     "back": "返回",
     "viewBalance": "查看余额",
     "done": "完成"
+  },
+  "wallet": {
+    "title": "钱包",
+    "balance": "当前余额",
+    "transactionHistory": "交易记录",
+    "noTransactions": "暂无交易记录",
+    "loadMore": "加载更多",
+    "type": {
+      "topup": "充值",
+      "purchase": "购买",
+      "refund": "退款",
+      "reward": "奖励",
+      "transfer": "转账",
+      "adjustment": "调整",
+      "settlement": "结算"
+    },
+    "filterAll": "全部",
+    "income": "收入",
+    "expense": "支出",
+    "transactionNote": "备注",
+    "balanceAfter": "余额",
+    "rechargeBtn": "去充值"
   }
 }

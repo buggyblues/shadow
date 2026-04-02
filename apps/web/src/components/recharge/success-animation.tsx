@@ -1,12 +1,23 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { animate, motion } from 'framer-motion'
 import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSocketEvent } from '../../hooks/use-socket'
 import { useRechargeStore } from '../../stores/recharge.store'
 
 export function SuccessAnimation() {
   const { t } = useTranslation()
   const { shrimpCoins, closeModal } = useRechargeStore()
   const counterRef = useRef<HTMLSpanElement>(null)
+  const queryClient = useQueryClient()
+
+  // Listen for webhook-confirmed recharge notification to refresh wallet data
+  useSocketEvent('notification:new', (data: { type?: string }) => {
+    if (data?.type === 'recharge_success') {
+      queryClient.invalidateQueries({ queryKey: ['wallet'] })
+      queryClient.invalidateQueries({ queryKey: ['wallet-transactions'] })
+    }
+  })
 
   // Animate the coin counter rolling up
   useEffect(() => {

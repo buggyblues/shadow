@@ -11,12 +11,14 @@ import {
   stripe,
 } from '../lib/stripe'
 import { pushNotification } from '../ws/notification.gateway'
+import type { NotificationService } from './notification.service'
 
 export class RechargeService {
   constructor(
     private deps: {
       rechargeDao: RechargeDao
       walletDao: WalletDao
+      notificationService: NotificationService
       io: SocketIOServer
     },
   ) {}
@@ -164,6 +166,16 @@ export class RechargeService {
     // Update order status
     await this.deps.rechargeDao.updateStatus(order.id, 'succeeded', {
       paidAt: new Date(),
+    })
+
+    // Persist notification to DB for offline users
+    await this.deps.notificationService.create({
+      userId: order.userId,
+      type: 'system',
+      title: '充值成功',
+      body: `${order.shrimpCoinAmount} 虾币已到账`,
+      referenceId: order.id,
+      referenceType: 'payment_order',
     })
 
     // Send real-time notification via WebSocket

@@ -4,16 +4,47 @@ import {
   useElements,
   useStripe,
 } from '@stripe/react-stripe-js'
+import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { fetchApi } from '../../lib/api'
 import { useRechargeStore } from '../../stores/recharge.store'
 
 export function PaymentForm() {
   const { t } = useTranslation()
   const stripe = useStripe()
   const elements = useElements()
-  const { setStep, setLoading, loading, shrimpCoins } = useRechargeStore()
+  const queryClient = useQueryClient()
+  const { setStep, setLoading, loading, shrimpCoins, paymentIntentId } = useRechargeStore()
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  /** Invalidate wallet-related queries after successful payment */
+  const refreshWalletData = () => {
+    queryClient.invalidateQueries({ queryKey: ['wallet'] })
+    queryClient.invalidateQueries({ queryKey: ['wallet-transactions'] })
+    queryClient.invalidateQueries({ queryKey: ['wallet-transactions-count'] })
+    queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+    queryClient.invalidateQueries({ queryKey: ['notifications'] })
+  }
+
+  /**
+   * After Stripe confirms payment client-side, call the server to verify
+   * the PaymentIntent status and credit the wallet. This ensures the wallet
+   * is updated even when Stripe webhooks can't reach the server (e.g. local dev).
+   */
+  const confirmPaymentOnServer = async () => {
+    if (!paymentIntentId) return
+    try {
+      await fetchApi('/api/v1/recharge/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentIntentId }),
+      })
+    } catch (err) {
+      // Non-fatal: webhook may still handle it; log for debugging
+      console.warn('[Recharge] Server-side confirm failed, webhook will retry:', err)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -34,9 +65,11 @@ export function PaymentForm() {
       setErrorMessage(error.message ?? t('recharge.failedDesc'))
       setLoading(false)
     } else {
-      // Payment succeeded (or no redirect needed)
+      // Payment succeeded client-side — confirm on server to credit wallet
+      await confirmPaymentOnServer()
       setLoading(false)
       setStep('success')
+      refreshWalletData()
     }
   }
 
@@ -55,7 +88,9 @@ export function PaymentForm() {
             if (error) {
               setErrorMessage(error.message ?? t('recharge.failedDesc'))
             } else {
+              await confirmPaymentOnServer()
               setStep('success')
+              refreshWalletData()
             }
           }}
           onClick={({ resolve }) => resolve()}

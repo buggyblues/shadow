@@ -245,6 +245,7 @@
     "tabChat": "メッセージ",
     "tabNotification": "通知",
     "tabTasks": "タスク",
+    "tabWallet": "ウォレット",
     "tabDeveloper": "開発者"
   },
   "server": {
@@ -1581,5 +1582,27 @@
     "back": "戻る",
     "viewBalance": "残高を確認",
     "done": "完了"
+  },
+  "wallet": {
+    "title": "ウォレット",
+    "balance": "現在の残高",
+    "transactionHistory": "取引履歴",
+    "noTransactions": "取引履歴はありません",
+    "loadMore": "もっと読み込む",
+    "type": {
+      "topup": "チャージ",
+      "purchase": "購入",
+      "refund": "返金",
+      "reward": "報酬",
+      "transfer": "送金",
+      "adjustment": "調整",
+      "settlement": "決済"
+    },
+    "filterAll": "すべて",
+    "income": "収入",
+    "expense": "支出",
+    "transactionNote": "メモ",
+    "balanceAfter": "残高",
+    "rechargeBtn": "チャージする"
   }
 }

@@ -245,6 +245,7 @@
     "tabChat": "Messages",
     "tabNotification": "Notifications",
     "tabTasks": "Tasks",
+    "tabWallet": "Wallet",
     "tabDeveloper": "Developer"
   },
   "server": {
@@ -1581,5 +1582,27 @@
     "back": "Back",
     "viewBalance": "View Balance",
     "done": "Done"
+  },
+  "wallet": {
+    "title": "Wallet",
+    "balance": "Current Balance",
+    "transactionHistory": "Transaction History",
+    "noTransactions": "No transactions yet",
+    "loadMore": "Load More",
+    "type": {
+      "topup": "Top Up",
+      "purchase": "Purchase",
+      "refund": "Refund",
+      "reward": "Reward",
+      "transfer": "Transfer",
+      "adjustment": "Adjustment",
+      "settlement": "Settlement"
+    },
+    "filterAll": "All",
+    "income": "Income",
+    "expense": "Expense",
+    "transactionNote": "Note",
+    "balanceAfter": "Balance",
+    "rechargeBtn": "Recharge"
   }
 }

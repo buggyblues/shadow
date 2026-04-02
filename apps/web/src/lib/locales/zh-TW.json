@@ -1581,5 +1581,27 @@
     "back": "返回",
     "viewBalance": "查看餘額",
     "done": "完成"
+  },
+  "wallet": {
+    "title": "錢包",
+    "balance": "當前餘額",
+    "transactionHistory": "交易記錄",
+    "noTransactions": "暫無交易記錄",
+    "loadMore": "載入更多",
+    "type": {
+      "topup": "充值",
+      "purchase": "購買",
+      "refund": "退款",
+      "reward": "獎勵",
+      "transfer": "轉帳",
+      "adjustment": "調整",
+      "settlement": "結算"
+    },
+    "filterAll": "全部",
+    "income": "收入",
+    "expense": "支出",
+    "transactionNote": "備註",
+    "balanceAfter": "餘額",
+    "rechargeBtn": "去充值"
   }
 }

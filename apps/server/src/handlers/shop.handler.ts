@@ -394,6 +394,12 @@ export function createShopHandler(container: AppContainer) {
     return c.json(await walletService.getTransactions(user.userId, limit, offset))
   })
 
+  h.get('/wallet/transactions/count', async (c) => {
+    const user = c.get('user')
+    const walletService = container.resolve('walletService')
+    return c.json({ count: await walletService.getTransactionCount(user.userId) })
+  })
+
   /* ══════════════════════════════════════════
      Entitlements
      ══════════════════════════════════════════ */

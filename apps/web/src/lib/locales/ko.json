@@ -245,6 +245,7 @@
     "tabChat": "메시지",
     "tabNotification": "알림",
     "tabTasks": "작업",
+    "tabWallet": "지갑",
     "tabDeveloper": "개발자"
   },
   "server": {
@@ -1581,5 +1582,27 @@
     "back": "뒤로",
     "viewBalance": "잔액 확인",
     "done": "완료"
+  },
+  "wallet": {
+    "title": "지갑",
+    "balance": "현재 잔액",
+    "transactionHistory": "거래 내역",
+    "noTransactions": "거래 내역이 없습니다",
+    "loadMore": "더 보기",
+    "type": {
+      "topup": "충전",
+      "purchase": "구매",
+      "refund": "환불",
+      "reward": "보상",
+      "transfer": "송금",
+      "adjustment": "조정",
+      "settlement": "정산"
+    },
+    "filterAll": "전체",
+    "income": "수입",
+    "expense": "지출",
+    "transactionNote": "메모",
+    "balanceAfter": "잔액",
+    "rechargeBtn": "충전하기"
   }
 }
