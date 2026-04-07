@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neon Frost: Master Suite (Light)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800;900&family=Noto+Sans+SC:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cyan: #00F3FF;
+    --cyan-strong: #00c6d1;
+    --yellow: #F8E71C;
+    --yellow-strong: #ffb300;
+    --bg-core: #F8FAFC;
+    --text-high: #0F172A;
+    --text-muted: #64748B;
+    --glass-bg: rgba(255, 255, 255, 0.75);
+    --font-sans: 'Nunito', 'Noto Sans SC', sans-serif;
+    --bezier: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; scroll-behavior: smooth; }
+  body { background: var(--bg-core); color: var(--text-high); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; position: relative; overflow-x: hidden; }
+
+  /* Background Orbs with Smoother Animation */
+  .orb { position: absolute; border-radius: 50%; filter: blur(120px); z-index: -1; opacity: 0.5; pointer-events: none; animation: float 25s infinite ease-in-out; }
+  .orb-1 { width: 600px; height: 600px; background: radial-gradient(circle, var(--cyan) 0%, transparent 70%); top: -150px; left: 5%; }
+  .orb-2 { width: 700px; height: 700px; background: radial-gradient(circle, #ff2a55 0%, transparent 70%); top: 25%; right: -150px; animation-delay: -7s; }
+
+  @keyframes float {
+    0%, 100% { transform: translate(0, 0) scale(1) rotate(0deg); }
+    33% { transform: translate(40px, 60px) scale(1.05) rotate(5deg); }
+    66% { transform: translate(-30px, 20px) scale(0.95) rotate(-5deg); }
+  }
+
+  /* Shared Bouncy Class */
+  .bouncy { transition: all 0.5s var(--bezier); cursor: pointer; }
+  .bouncy:hover { transform: translateY(-6px) scale(1.03); }
+  .bouncy:active { transform: translateY(0) scale(0.96); }
+
+  /* Navigation */
+  .nav { position: sticky; top: 16px; z-index: 100; max-width: 1120px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 12px 32px; background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(32px); border-radius: 24px; border: 1px solid rgba(255,255,255,0.8); box-shadow: 0 10px 40px rgba(0,0,0,0.04); }
+  .nav-brand { font-size: 22px; font-weight: 900; color: var(--text-high); text-decoration: none; letter-spacing: -0.02em; }
+  .nav-links { display: flex; gap: 32px; list-style: none; }
+  .nav-links a { text-decoration: none; color: var(--text-muted); font-weight: 800; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; transition: color 0.2s; }
+  .nav-links a:hover { color: var(--cyan-strong); }
+
+  /* Sections */
+  .section { padding: 100px 40px; max-width: 1200px; margin: 0 auto; border-top: 1px solid #E2E8F0; }
+  .section-label { font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.2em; color: var(--cyan-strong); margin-bottom: 12px; display: block; }
+  .section-title { font-size: 44px; font-weight: 900; letter-spacing: -0.02em; margin-bottom: 48px; }
+
+  /* Recovered Jelly Pill Buttons */
+  .jelly-pill { display: inline-flex; align-items: center; padding: 16px 36px; border-radius: 9999px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid rgba(255,255,255,0.5); backdrop-filter: blur(12px); }
+  .btn-cyan { background: linear-gradient(135deg, var(--cyan), var(--cyan-strong)); color: #050508; box-shadow: 0 10px 25px rgba(0, 198, 209, 0.35), inset 0 2px 4px rgba(255,255,255,0.7); }
+  .btn-yellow { background: linear-gradient(135deg, var(--yellow), var(--yellow-strong)); color: #050508; box-shadow: 0 10px 25px rgba(248, 231, 28, 0.35), inset 0 2px 4px rgba(255,255,255,0.7); }
+
+  /* Glass Card */
+  .glass-card { background: var(--glass-bg); backdrop-filter: blur(32px); border-radius: 40px; border: 1px solid #fff; box-shadow: 0 15px 45px rgba(0,0,0,0.04), inset 0 2px 12px rgba(255,255,255,0.9); padding: 40px; }
+
+  /* Message Stream */
+  .message-stream { display: flex; flex-direction: column; gap: 32px; padding: 40px; }
+  .message { display: flex; gap: 20px; }
+  .circle-avatar { width: 56px; height: 56px; border-radius: 50%; background: #eee; flex-shrink: 0; overflow: hidden; border: 2px solid #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+  .msg-content { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .msg-header { display: flex; align-items: baseline; gap: 10px; }
+  .username { font-weight: 900; font-size: 18px; color: var(--text-high); }
+  .timestamp { font-size: 12px; font-weight: 800; text-transform: uppercase; color: var(--text-muted); opacity: 0.5; }
+  .body-text { font-size: 16px; font-weight: 600; line-height: 1.75; letter-spacing: 0.01em; }
+
+  /* Quote Block */
+  .quote { margin-top: 16px; padding: 20px 24px; background: rgba(0,0,0,0.03); border-left: 5px solid var(--cyan-strong); border-radius: 0 20px 20px 0; font-style: italic; color: var(--text-muted); line-height: 1.75; }
+
+  /* Forms */
+  .form-input { width: 100%; padding: 16px 24px; border-radius: 20px; border: 2px solid #F1F5F9; background: #fff; font-family: var(--font-sans); font-weight: 700; font-size: 16px; outline: none; transition: all 0.3s; margin-top: 12px; box-shadow: inset 0 2px 6px rgba(0,0,0,0.02); }
+  .form-input:focus { border-color: var(--cyan-strong); box-shadow: 0 0 0 5px rgba(0, 198, 209, 0.15); }
+
+  /* Hero Section */
+  .hero { text-align: center; padding: 140px 40px 100px; position: relative; z-index: 10; }
+  .hero h1 { font-size: 80px; font-weight: 900; letter-spacing: -0.04em; line-height: 1.05; margin-bottom: 32px; }
+</style>
+</head>
+<body>
+
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+
+<nav class="nav">
+  <div class="nav-brand">Shadow <b>SOFT-POP</b></div>
+  <ul class="nav-links">
+    <li><a href="#tokens">Tokens</a></li>
+    <li><a href="#components">Components</a></li>
+    <li><a href="#stream">Stream</a></li>
+  </ul>
+  <div class="jelly-pill btn-cyan bouncy" style="padding: 12px 28px; font-size: 13px;">Enter App</div>
+</nav>
+
+<main>
+  <section class="hero">
+    <span class="section-label">Soft Pop Glass Master Suite</span>
+    <h1>Luminous Design <br>for Builders</h1>
+    <p style="font-size: 22px; color: var(--text-muted); max-width: 750px; margin: 0 auto 56px; font-weight: 700; line-height: 1.6;">High-density professional communication meets sensory-rich glassmorphism. Optimized for young, energetic developer teams.</p>
+    <div style="display: flex; gap: 20px; justify-content: center;">
+      <div class="jelly-pill btn-cyan bouncy">Launch Workspace</div>
+      <div class="jelly-pill btn-yellow bouncy">Buddy Market</div>
+    </div>
+  </section>
+
+  <!-- TOKENS -->
+  <section id="tokens" class="section">
+    <span class="section-label">01. Design Tokens</span>
+    <h2 class="section-title">Brilliant Palette</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 32px;">
+      <div class="glass-card" style="text-align: center; padding: 24px;"><div style="height: 120px; background: linear-gradient(135deg, var(--cyan), var(--cyan-strong)); border-radius: 24px; margin-bottom: 16px; box-shadow: 0 10px 20px rgba(0,198,209,0.2);"></div><b style="font-size: 18px;">Cyber Cyan</b><div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; font-family: monospace;">#00F3FF</div></div>
+      <div class="glass-card" style="text-align: center; padding: 24px;"><div style="height: 120px; background: linear-gradient(135deg, var(--yellow), var(--yellow-strong)); border-radius: 24px; margin-bottom: 16px; box-shadow: 0 10px 20px rgba(255,179,0,0.2);"></div><b style="font-size: 18px;">Vivid Yellow</b><div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; font-family: monospace;">#F8E71C</div></div>
+      <div class="glass-card" style="text-align: center; padding: 24px;"><div style="height: 120px; background: #FF2A55; border-radius: 24px; margin-bottom: 16px; box-shadow: 0 10px 20px rgba(255,42,85,0.2);"></div><b style="font-size: 18px;">Danger Crimson</b><div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; font-family: monospace;">#FF2A55</div></div>
+    </div>
+  </section>
+
+  <!-- COMPONENTS -->
+  <section id="components" class="section">
+    <span class="section-label">02. Atomic Components</span>
+    <h2 class="section-title">Interactive Showcase</h2>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px;">
+      <div class="glass-card">
+        <h3 style="margin-bottom: 32px; font-weight: 900; font-size: 22px;">User Profile & Security</h3>
+        <div style="display: flex; align-items: center; gap: 20px; padding: 20px; background: rgba(0,0,0,0.02); border-radius: 24px; margin-bottom: 32px; border: 1px solid #F1F5F9;">
+          <div class="circle-avatar" style="width: 64px; height: 64px;"><img src="https://api.dicebear.com/7.x/bottts/svg?seed=Shadow" width="100%"></div>
+          <div style="flex: 1;"><div style="font-weight: 900; font-size: 18px;">Mascot Team</div><div style="font-size: 12px; color: var(--text-muted); font-weight: 800; letter-spacing: 0.1em;">ACTIVE CORE MEMBER</div></div>
+          <div style="width: 14px; height: 14px; background: #00E676; border-radius: 50%; box-shadow: 0 0 15px rgba(0,230,118,0.6); border: 3px solid #fff;"></div>
+        </div>
+        <div class="form-group">
+          <label class="section-label">Username Handle</label>
+          <input type="text" class="form-input" placeholder="@shadow_dev">
+        </div>
+      </div>
+      <div class="glass-card">
+        <h3 style="margin-bottom: 32px; font-weight: 900; font-size: 22px;">Button Physics</h3>
+        <p style="margin-bottom: 40px; font-weight: 600; color: var(--text-muted); font-size: 16px;">Elastic jelly-pill buttons with high-fidelity rim lighting and massive glows.</p>
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="jelly-pill btn-cyan bouncy" style="width: 100%; justify-content: center; font-size: 18px;">Primary Action</div>
+          <div class="jelly-pill bouncy" style="width: 100%; justify-content: center; background: #fff; border: 2px solid #F1F5F9; color: var(--text-high); font-size: 18px;">Secondary Action</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MESSAGE STREAM -->
+  <section id="stream" class="section">
+    <span class="section-label">03. Message Stream</span>
+    <h2 class="section-title">Channel Flow</h2>
+    <div class="glass-card message-stream">
+      <div class="message">
+        <div class="circle-avatar"><img src="https://api.dicebear.com/7.x/bottts/svg?seed=A" width="100%"></div>
+        <div class="msg-content">
+          <div class="msg-header"><span class="username">虾豆 Mascot</span><span class="timestamp">Today at 4:20 PM</span></div>
+          <div class="body-text">Welcome to the optimized channel-style stream. We've increased the line-height to 1.75 for a superior CJK reading experience.</div>
+          <div class="quote">This quote block is built with high-fidelity glass surfaces and a thick cyan marker. 这里的排版间距经过了像素级优化。</div>
+        </div>
+      </div>
+      <div class="message">
+        <div class="circle-avatar" style="background: var(--cyan);"><img src="https://api.dicebear.com/7.x/bottts/svg?seed=B" width="100%"></div>
+        <div class="msg-content">
+          <div class="msg-header"><span class="username">Admin</span><span class="timestamp">Today at 4:21 PM</span></div>
+          <div class="body-text">The "Bouncy" transitions now use a standard 0.5s duration for a more premium, fluid feel. 🚀</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TYPOGRAPHY DEEP DIVE -->
+  <section id="typography" class="section">
+    <span class="section-label">04. Typography</span>
+    <h2 class="section-title">Type Scale & CJK</h2>
+    <div class="glass-card" style="padding: 48px; display: flex; flex-direction: column; gap: 48px;">
+      <!-- Heading Group -->
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <span class="uppercase-label">Heading Group</span>
+        <h1 style="font-size: 64px; font-weight: 900; letter-spacing: -0.02em; line-height: 1.1;">Display Hero</h1>
+        <h2 style="font-size: 44px; font-weight: 900; letter-spacing: -0.01em;">Section Header</h2>
+        <h3 style="font-size: 24px; font-weight: 800;">Module Title</h3>
+      </div>
+
+      <!-- Lorem Ipsum -->
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <span class="uppercase-label">Body Text (Lorem Ipsum)</span>
+        <p style="font-size: 16px; font-weight: 600; line-height: 1.75; color: var(--text-muted); max-width: 800px;">
+          Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
+        </p>
+      </div>
+
+      <!-- CJK Showcase -->
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <span class="uppercase-label">CJK Typography (Noto Sans SC)</span>
+        <div class="cjk-text" style="font-size: 18px; font-weight: 700; color: var(--text-high);">
+          极致的“霓虹冰感”美学。
+        </div>
+        <p class="cjk-text" style="font-size: 15px; font-weight: 500; color: var(--text-muted); max-width: 800px;">
+          霓虹冰感设计系统通过增加 CJK 字符的行高与字间距，有效解决了中文字符在复杂毛玻璃背景下的“视觉粘连”问题。我们坚持使用 Nunito 搭配 Noto Sans SC，在保持专业性的同时注入了极大的亲和力与可读性。
+        </p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer style="padding: 100px 40px; text-align: center; color: var(--text-muted); font-weight: 900; font-size: 14px; text-transform: uppercase; letter-spacing: 0.3em; background: #fff;">
+  © 2026 Shadow Workspace · Neon Frost Design System
+</footer>
+
+</body>
+</html>

@@ -1,4 +1,4 @@
-export { Avatar, AvatarFallback, AvatarImage } from './components/avatar'
-export { Button, type ButtonProps, buttonVariants } from './components/button'
-export { Input } from './components/input'
-export { cn } from './lib/utils'
+export * as Icons from 'lucide-react'
+export * from './components/ui/index'
+export * from './lib/pixel-cats'
+export * from './lib/utils'
