@@ -52,7 +52,7 @@
   --color-divider: #e2e8f0;
 
   --glass-bg: rgba(255, 255, 255, 0.75);
-  --glass-border: rgba(0, 0, 0, 0.05);
+  --glass-border: rgba(255, 255, 255, 1);
 
   --shadow-soft: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
 

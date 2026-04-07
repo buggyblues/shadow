@@ -209,7 +209,7 @@ function App() {
           <div className="grid gap-8 text-left">
             <Card
               variant="glass"
-              className="p-12 space-y-16 border-white/20 dark:border-white/10 glass-surface"
+              className="p-12 space-y-16"
             >
               <div className="space-y-8">
                 <Label className="text-primary-strong dark:text-primary font-black opacity-100 uppercase tracking-widest text-xs">
@@ -358,7 +358,7 @@ function App() {
           <div className="grid lg:grid-cols-2 gap-12 text-left">
             <Card
               variant="glass"
-              className="p-10 space-y-10 border-white/20 dark:border-white/10 glass-surface"
+              className="p-10 space-y-10"
             >
               <ListHeader label="Button States" count={7} />
               <div className="flex flex-wrap gap-6">
@@ -383,7 +383,7 @@ function App() {
 
             <Card
               variant="glass"
-              className="p-10 space-y-10 border-white/20 dark:border-white/10 glass-surface"
+              className="p-10 space-y-10"
             >
               <ListHeader label="Form Controls" />
               <div className="space-y-6">
@@ -426,15 +426,21 @@ function App() {
             description="Modern modal systems and status alerts."
             icon={AlertCircle}
           />
-          <div className="grid lg:grid-cols-3 gap-12 text-left">
-            <Card
-              variant="glass"
-              className="p-8 flex flex-col justify-between gap-6 min-h-[350px] text-center border-border-subtle glass-surface"
-            >
-              <div className="space-y-4 flex-1 flex flex-col justify-center">
+          <div className="grid lg:grid-cols-2 gap-12 text-left">
+            <Card variant="glass" className="p-10 space-y-8">
+              <Typography variant="h3" className="mb-0 text-text-primary font-extrabold">
+                Modal Systems
+              </Typography>
+              <Typography
+                variant="body"
+                className="text-text-muted font-bold leading-relaxed"
+              >
+                Glassmorphic dialogs, slide-over sheets, and destructive confirmation flows.
+              </Typography>
+              <div className="flex flex-col gap-4">
                 <Dialog>
                   <DialogTrigger asChild>
-                    <Button variant="glass" size="lg" className="w-full h-14">
+                    <Button size="lg" className="w-full h-14 justify-center">
                       Open Configuration
                     </Button>
                   </DialogTrigger>
@@ -471,7 +477,7 @@ function App() {
 
                 <Sheet>
                   <SheetTrigger asChild>
-                    <Button variant="secondary" size="lg" className="w-full h-14">
+                    <Button variant="secondary" size="lg" className="w-full h-14 justify-center">
                       View Activity Feed
                     </Button>
                   </SheetTrigger>
@@ -502,7 +508,7 @@ function App() {
                 </Sheet>
               </div>
 
-              <div className="flex flex-wrap gap-4 pt-4 border-t border-border-subtle shrink-0">
+              <div className="flex gap-4 pt-4 border-t border-border-subtle">
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="danger" size="sm" className="flex-1 min-w-0">
@@ -536,11 +542,8 @@ function App() {
               </div>
             </Card>
 
-            <Card
-              variant="glass"
-              className="lg:col-span-2 p-0 overflow-hidden border border-border-subtle glass-surface text-left"
-            >
-              <ScrollArea className="h-[400px]">
+            <Card variant="glass" className="p-0 overflow-hidden text-left">
+              <ScrollArea className="h-[500px]">
                 <div className="p-10 space-y-6">
                   <ListHeader label="Member Feed" count={42} />
                   {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -582,7 +585,7 @@ function App() {
             description="Discord-inspired high-density message vertical."
             icon={MessageCircle}
           />
-          <div className="rounded-[40px] p-0 overflow-hidden border border-border-subtle shadow-[0_15px_45px_rgba(0,0,0,0.04)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.5)] glass-surface text-left">
+          <Card variant="glass" className="p-0 overflow-hidden text-left">
             <div className="p-10 space-y-12">
               <div className="flex gap-6">
                 <Avatar
@@ -647,14 +650,13 @@ function App() {
               </div>
             </div>
 
-            <div className="p-8 bg-black/5 dark:bg-bg-deep/40 border-t border-border-subtle backdrop-blur-md">
+            <div className="p-8 border-t border-border-subtle">
               <Input
                 icon={Plus}
                 placeholder="Message #playground..."
-                className="border-primary/20 rounded-[20px] text-text-primary font-bold"
               />
             </div>
-          </div>
+          </Card>
         </section>
       </PageContainer>
 
