@@ -13,9 +13,9 @@ export function Typography({
   as?: React.ElementType
 }) {
   const variants = {
-    h1: 'text-4xl md:text-6xl font-black font-sans uppercase tracking-tighter leading-none text-text-primary',
-    h2: 'text-2xl md:text-4xl font-black font-sans uppercase tracking-tight leading-none text-text-primary',
-    h3: 'text-xl font-black font-sans uppercase tracking-tight text-text-primary',
+    h1: 'text-4xl md:text-[64px] font-black font-sans tracking-[-0.02em] leading-[1.1] text-text-primary',
+    h2: 'text-2xl md:text-[44px] font-black font-sans tracking-[-0.01em] leading-none text-text-primary',
+    h3: 'text-[24px] font-extrabold font-sans tracking-tight text-text-primary',
     body: 'text-base font-bold text-text-secondary leading-relaxed',
     small: 'text-sm font-bold text-text-muted italic',
     micro: 'text-[10px] font-black font-mono uppercase tracking-[0.2em] text-text-muted/60',

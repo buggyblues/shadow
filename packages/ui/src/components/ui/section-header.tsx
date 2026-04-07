@@ -20,7 +20,7 @@ export function SectionHeader({
         </div>
       )}
       <div className="min-w-0 flex-1 flex flex-col justify-center text-left">
-        <h2 className="text-2xl font-black text-text-primary tracking-tight uppercase leading-none mb-1.5">
+        <h2 className="text-2xl font-black text-text-primary tracking-tight leading-none mb-1.5">
           {title}
         </h2>
         {description && (
