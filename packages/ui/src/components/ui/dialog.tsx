@@ -64,14 +64,14 @@ const DialogContent = React.forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          'fixed left-[50%] top-[50%] z-50 grid w-full translate-x-[-50%] translate-y-[-50%] gap-4 border border-white/10 bg-bg-secondary/60 backdrop-blur-3xl p-10 shadow-[0_32px_120px_rgba(0,0,0,0.5)] duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-[48px]',
+          'fixed left-[50%] top-[50%] z-50 grid w-full translate-x-[-50%] translate-y-[-50%] gap-4 border border-white dark:border-white/10 bg-[rgba(255,255,255,0.85)] dark:bg-bg-secondary/60 backdrop-blur-3xl p-10 shadow-[0_15px_45px_rgba(0,0,0,0.08)] dark:shadow-[0_32px_120px_rgba(0,0,0,0.5)] duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-[48px]',
           contentMaxWidth || 'max-w-lg',
           className,
         )}
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="absolute right-6 top-6 rounded-2xl bg-white/10 p-2 text-text-muted opacity-70 transition-all hover:opacity-100 hover:bg-white/20 focus:outline-none disabled:pointer-events-none active:scale-90 border border-white/10">
+        <DialogPrimitive.Close className="absolute right-6 top-6 rounded-2xl bg-black/5 dark:bg-white/10 p-2 text-text-muted opacity-70 transition-all hover:opacity-100 hover:bg-black/10 dark:hover:bg-white/20 focus:outline-none disabled:pointer-events-none active:scale-90 border border-black/5 dark:border-white/10">
           <X className="h-5 w-5" strokeWidth={3} />
           <span className="sr-only">Close</span>
         </DialogPrimitive.Close>

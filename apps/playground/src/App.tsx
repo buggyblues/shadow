@@ -1,8 +1,4 @@
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
   Alert,
   AlertDescription,
   AlertDialog,
@@ -17,24 +13,8 @@ import {
   AlertTitle,
   Avatar,
   Badge,
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
   Button,
-  ButtonGroup,
   Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-  Checkbox,
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -43,106 +23,33 @@ import {
   DialogTitle,
   DialogTrigger,
   Divider,
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-  Dropdown,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  EmptyState,
-  FormField,
   Indicator,
   Input,
-  InputGroup,
   Kbd,
   Label,
   ListHeader,
-  Menubar,
-  MenubarContent,
-  MenubarItem,
-  MenubarMenu,
-  MenubarSeparator,
-  MenubarShortcut,
-  MenubarTrigger,
   NativeSelect,
-  NavigationMenu,
-  NavigationMenuContent,
-  NavigationMenuItem,
-  NavigationMenuLink,
-  NavigationMenuList,
-  NavigationMenuTrigger,
   PageContainer,
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
   Progress,
-  RadioGroup,
-  RadioGroupItem,
   ScrollArea,
-  Search,
   SectionHeader,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Separator,
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarItem,
-  SidebarSectionLabel,
-  Skeleton,
-  Slider,
-  Spinner,
   Switch,
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-  Textarea,
   Toaster,
-  Toggle,
-  ToggleGroup,
-  ToggleGroupItem,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
   Typography,
 } from '@shadowob/ui'
 import {
   AlertCircle,
-  Bell,
   ChevronRight,
   Github,
   Home,
@@ -154,7 +61,6 @@ import {
   Plus,
   Settings,
   Sun,
-  Target,
   Type,
   Zap,
 } from 'lucide-react'
@@ -164,7 +70,6 @@ import { toast } from 'sonner'
 function App() {
   const [isDark, setIsDark] = useState(true)
   const [toggleEnabled, setToggleEnabled] = useState(false)
-  const [progressValue, setProgressValue] = useState(65)
 
   useEffect(() => {
     if (isDark) {
@@ -195,7 +100,7 @@ function App() {
 
       {/* Floating Capsule Navigation */}
       <div className="fixed top-6 left-0 right-0 z-50 px-4 pointer-events-none flex justify-center">
-        <nav className="w-full max-w-5xl px-6 py-3 bg-white/60 dark:bg-[rgba(5,5,8,0.6)] backdrop-blur-[32px] border border-white/40 dark:border-[rgba(255,255,255,0.08)] rounded-[24px] shadow-[0_10px_40px_rgba(0,0,0,0.04)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex items-center justify-between pointer-events-auto transition-all">
+        <nav className="w-full max-w-5xl px-6 py-3 bg-white/60 dark:bg-[rgba(5,5,8,0.6)] backdrop-blur-[32px] border border-white/80 dark:border-[rgba(255,255,255,0.08)] rounded-[24px] shadow-[0_10px_40px_rgba(0,0,0,0.04)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex items-center justify-between pointer-events-auto transition-all">
           <div className="flex items-center gap-4">
             <img src="/Logo.svg" alt="Shadow Logo" className="w-9 h-9 bouncy" />
             <Typography
@@ -267,10 +172,10 @@ function App() {
           </div>
           <Typography
             variant="h1"
-            className="max-w-5xl mx-auto leading-[1.05] text-6xl md:text-8xl text-text-primary uppercase tracking-tighter font-black"
+            className="max-w-5xl mx-auto leading-[1.05] text-6xl md:text-[80px] text-text-primary tracking-[-0.04em] font-black"
           >
-            BUILD WITH LUMINOUS <br />
-            PRECISION
+            Build with Luminous <br />
+            Precision
           </Typography>
           <Typography
             variant="body"
@@ -304,7 +209,7 @@ function App() {
           <div className="grid gap-8 text-left">
             <Card
               variant="glass"
-              className="p-12 space-y-16 shadow-[0_32px_120px_rgba(0,0,0,0.1)] border-white/20 dark:border-white/10 glass-surface"
+              className="p-12 space-y-16 border-white/20 dark:border-white/10 glass-surface"
             >
               <div className="space-y-8">
                 <Label className="text-primary-strong dark:text-primary font-black opacity-100 uppercase tracking-widest text-xs">
@@ -314,9 +219,9 @@ function App() {
                   <div className="space-y-2">
                     <Typography
                       variant="h1"
-                      className="text-text-primary mb-0 uppercase tracking-tighter font-black"
+                      className="text-text-primary mb-0 tracking-[-0.02em] font-black"
                     >
-                      DISPLAY HERO HEADER
+                      Display Hero Header
                     </Typography>
                     <Typography variant="micro" className="font-mono text-text-muted">
                       80PX / BLACK 900 / -0.04EM
@@ -325,9 +230,9 @@ function App() {
                   <div className="space-y-2">
                     <Typography
                       variant="h2"
-                      className="text-text-primary mb-0 uppercase tracking-tight font-black"
+                      className="text-text-primary mb-0 tracking-[-0.01em] font-black"
                     >
-                      SECTION TITLE HEADER
+                      Section Title Header
                     </Typography>
                     <Typography variant="micro" className="font-mono text-text-muted">
                       44PX / BLACK 900 / -0.02EM
@@ -336,9 +241,9 @@ function App() {
                   <div className="space-y-2">
                     <Typography
                       variant="h3"
-                      className="text-text-primary mb-0 uppercase tracking-tight font-black"
+                      className="text-text-primary mb-0 tracking-tight font-extrabold"
                     >
-                      MODULE TITLE HEADER
+                      Module Title Header
                     </Typography>
                     <Typography variant="micro" className="font-mono text-text-muted">
                       22PX / BLACK 900
@@ -369,7 +274,7 @@ function App() {
                   <div className="space-y-4">
                     <Typography
                       variant="h3"
-                      className="mb-0 text-text-primary font-black uppercase"
+                      className="mb-0 text-text-primary font-extrabold"
                     >
                       极致的“霓虹冰感”美学
                     </Typography>
@@ -453,7 +358,7 @@ function App() {
           <div className="grid lg:grid-cols-2 gap-12 text-left">
             <Card
               variant="glass"
-              className="p-10 space-y-10 shadow-[0_32px_120px_rgba(0,0,0,0.1)] border-white/20 dark:border-white/10 glass-surface"
+              className="p-10 space-y-10 border-white/20 dark:border-white/10 glass-surface"
             >
               <ListHeader label="Button States" count={7} />
               <div className="flex flex-wrap gap-6">
@@ -478,14 +383,14 @@ function App() {
 
             <Card
               variant="glass"
-              className="p-10 space-y-10 shadow-[0_32px_120px_rgba(0,0,0,0.1)] border-white/20 dark:border-white/10 glass-surface"
+              className="p-10 space-y-10 border-white/20 dark:border-white/10 glass-surface"
             >
               <ListHeader label="Form Controls" />
               <div className="space-y-6">
                 <Input label="Username Handle" icon={Mail} placeholder="@shadow_dev" />
                 <div className="grid grid-cols-2 gap-6">
                   <Select>
-                    <SelectTrigger className="h-12 rounded-2xl bg-bg-tertiary border-border-subtle text-text-primary font-bold">
+                    <SelectTrigger>
                       <SelectValue placeholder="Access Level" />
                     </SelectTrigger>
                     <SelectContent>
@@ -493,12 +398,12 @@ function App() {
                       <SelectItem value="user">Standard User</SelectItem>
                     </SelectContent>
                   </Select>
-                  <NativeSelect className="h-12 rounded-2xl">
+                  <NativeSelect>
                     <option>Region: Asia</option>
                     <option>Region: US</option>
                   </NativeSelect>
                 </div>
-                <div className="flex items-center justify-between p-5 bg-bg-tertiary/50 border border-border-subtle rounded-2xl shadow-inner">
+                <div className="flex items-center justify-between p-5 bg-white dark:bg-bg-tertiary/50 border-2 border-[#F1F5F9] dark:border-border-subtle rounded-[20px] shadow-[inset_0_2px_6px_rgba(0,0,0,0.02)] dark:shadow-inner">
                   <div className="flex flex-col text-left">
                     <span className="font-black text-sm uppercase tracking-wide text-text-primary">
                       High Fidelity Mode
@@ -507,7 +412,7 @@ function App() {
                       Enable advanced glass blur
                     </span>
                   </div>
-                  <Switch enabled={toggleEnabled} onChange={setToggleEnabled} />
+                  <Switch checked={toggleEnabled} onCheckedChange={setToggleEnabled} />
                 </div>
               </div>
             </Card>
@@ -524,7 +429,7 @@ function App() {
           <div className="grid lg:grid-cols-3 gap-12 text-left">
             <Card
               variant="glass"
-              className="p-8 flex flex-col justify-between gap-6 min-h-[350px] text-center border-border-subtle shadow-[0_32px_120px_rgba(0,0,0,0.1)] glass-surface"
+              className="p-8 flex flex-col justify-between gap-6 min-h-[350px] text-center border-border-subtle glass-surface"
             >
               <div className="space-y-4 flex-1 flex flex-col justify-center">
                 <Dialog>
@@ -633,7 +538,7 @@ function App() {
 
             <Card
               variant="glass"
-              className="lg:col-span-2 p-0 overflow-hidden border border-border-subtle shadow-[0_32px_120px_rgba(0,0,0,0.1)] glass-surface text-left"
+              className="lg:col-span-2 p-0 overflow-hidden border border-border-subtle glass-surface text-left"
             >
               <ScrollArea className="h-[400px]">
                 <div className="p-10 space-y-6">
@@ -677,7 +582,7 @@ function App() {
             description="Discord-inspired high-density message vertical."
             icon={MessageCircle}
           />
-          <div className="rounded-[40px] p-0 overflow-hidden border border-border-subtle shadow-[0_10px_40px_rgba(0,0,0,0.5)] glass-surface text-left">
+          <div className="rounded-[40px] p-0 overflow-hidden border border-border-subtle shadow-[0_15px_45px_rgba(0,0,0,0.04)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.5)] glass-surface text-left">
             <div className="p-10 space-y-12">
               <div className="flex gap-6">
                 <Avatar
@@ -746,7 +651,7 @@ function App() {
               <Input
                 icon={Plus}
                 placeholder="Message #playground..."
-                className="bg-white/50 dark:bg-bg-deep/60 border-primary/20 h-14 rounded-2xl text-text-primary font-bold"
+                className="border-primary/20 rounded-[20px] text-text-primary font-bold"
               />
             </div>
           </div>
