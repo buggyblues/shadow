@@ -33,7 +33,7 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
 
   return (
     <Dialog isOpen onClose={onClose}>
-      <DialogContent className="!rounded-[24px] !max-w-lg !p-0">
+      <DialogContent className="!rounded-[40px] !max-w-lg !p-0">
         {/* Close button */}
         <Button
           variant="ghost"
@@ -48,9 +48,9 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
           <div className="p-8">
             <div className="text-center mb-8">
               <div className="w-20 h-20 mx-auto mb-6 relative">
-                <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-red-500 animate-pulse opacity-75" />
-                <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/25">
-                  <Bot size={40} class="text-white" />
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-warning via-warning to-danger animate-pulse opacity-75" />
+                <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-br from-warning to-warning flex items-center justify-center shadow-lg shadow-warning/25">
+                  <Bot size={40} className="text-bg-deep" />
                 </div>
               </div>
               <h2 className="text-2xl font-black uppercase tracking-tight text-text-primary mb-2">
@@ -68,12 +68,12 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
               <Card
                 variant="glass"
                 hoverable
-                className="!rounded-[24px] cursor-pointer"
+                className="!rounded-[40px] cursor-pointer"
                 onClick={() => setStep('method')}
               >
                 <div className="flex items-center gap-4 p-4 group">
-                  <div className="w-12 h-12 rounded-[16px] bg-gradient-to-br from-[#F8E71C] to-[#ffb300] flex items-center justify-center shadow-[0_10px_25px_rgba(248,231,28,0.35)]">
-                    <Rocket size={24} className="text-[#050508]" />
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-accent to-accent flex items-center justify-center shadow-lg shadow-accent/25">
+                    <Rocket size={24} className="text-bg-deep" />
                   </div>
                   <div className="flex-1 text-left">
                     <p className="font-black text-text-primary group-hover:text-primary transition">
@@ -117,12 +117,12 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
               <Card
                 variant="glass"
                 hoverable
-                className="!rounded-[24px] cursor-pointer"
+                className="!rounded-[40px] cursor-pointer"
                 onClick={() => setStep('desktop')}
               >
                 <div className="flex items-center gap-4 p-4 group">
-                  <div className="w-12 h-12 rounded-[16px] bg-gradient-to-br from-[#00F3FF] to-[#00c6d1] flex items-center justify-center shadow-[0_10px_25px_rgba(0,243,255,0.3)]">
-                    <Download size={24} className="text-[#050508]" />
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-primary flex items-center justify-center shadow-lg shadow-primary/25">
+                    <Download size={24} className="text-bg-deep" />
                   </div>
                   <div className="flex-1 text-left">
                     <p className="font-black text-text-primary">
@@ -132,7 +132,7 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
                       {t('buddyOnboarding.downloadDesktopDesc', '推荐新手，一键安装并配置')}
                     </p>
                   </div>
-                  <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest bg-primary/10 text-primary rounded-full border border-primary/20">
+                  <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-widest bg-primary/10 text-primary rounded-full border border-primary/20">
                     {t('common.recommended', '推荐')}
                   </span>
                 </div>
@@ -142,12 +142,12 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
               <Card
                 variant="glass"
                 hoverable
-                className="!rounded-[24px] cursor-pointer"
+                className="!rounded-[40px] cursor-pointer"
                 onClick={() => setStep('command')}
               >
                 <div className="flex items-center gap-4 p-4 group">
-                  <div className="w-12 h-12 rounded-[16px] bg-gradient-to-br from-success to-emerald-600 flex items-center justify-center shadow-[0_10px_25px_rgba(87,242,135,0.3)]">
-                    <Terminal size={24} className="text-[#050508]" />
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-success to-success flex items-center justify-center shadow-lg shadow-success/25">
+                    <Terminal size={24} className="text-bg-deep" />
                   </div>
                   <div className="flex-1 text-left">
                     <p className="font-black text-text-primary">
@@ -163,11 +163,11 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
               {/* Option 3: Mobile */}
               <Card
                 variant="glass"
-                className="!rounded-[24px] opacity-60"
+                className="!rounded-[40px] opacity-60"
                 onClick={() => setStep('command')}
               >
                 <div className="flex items-center gap-4 p-4 group">
-                  <div className="w-12 h-12 rounded-[16px] bg-gradient-to-br from-[#7C4DFF] to-[#6200EA] flex items-center justify-center shadow-[0_10px_25px_rgba(124,77,255,0.3)]">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-info to-info flex items-center justify-center shadow-lg shadow-info/25">
                     <Smartphone size={24} className="text-white" />
                   </div>
                   <div className="flex-1 text-left">
@@ -196,8 +196,8 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
         {step === 'desktop' && (
           <div className="p-8">
             <div className="text-center mb-6">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-[16px] bg-gradient-to-br from-[#00F3FF] to-[#00c6d1] flex items-center justify-center shadow-[0_10px_25px_rgba(0,243,255,0.3)]">
-                <Download size={32} className="text-[#050508]" />
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-primary to-primary flex items-center justify-center shadow-lg shadow-primary/25">
+                <Download size={32} className="text-bg-deep" />
               </div>
               <h2 className="text-xl font-black uppercase tracking-tight text-text-primary mb-2">
                 {t('buddyOnboarding.downloadTitle', '下载 OpenClaw 桌面端')}
@@ -211,28 +211,28 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
             <div className="space-y-3 mb-6">
               <a
                 href="https://openclaw.ai/download/windows"
-                className="flex items-center gap-3 p-4 bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] border border-white/10 hover:border-primary/30 rounded-[16px] transition"
+                className="flex items-center gap-3 p-4 bg-bg-tertiary/30 backdrop-blur-xl border border-border-subtle hover:border-primary/30 rounded-2xl transition"
               >
                 <span className="text-2xl">🪟</span>
                 <span className="font-black text-text-primary">Windows 版本</span>
               </a>
               <a
                 href="https://openclaw.ai/download/macos"
-                className="flex items-center gap-3 p-4 bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] border border-white/10 hover:border-primary/30 rounded-[16px] transition"
+                className="flex items-center gap-3 p-4 bg-bg-tertiary/30 backdrop-blur-xl border border-border-subtle hover:border-primary/30 rounded-2xl transition"
               >
                 <span className="text-2xl">🍎</span>
                 <span className="font-black text-text-primary">macOS 版本</span>
               </a>
               <a
                 href="https://openclaw.ai/download/linux"
-                className="flex items-center gap-3 p-4 bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] border border-white/10 hover:border-primary/30 rounded-[16px] transition"
+                className="flex items-center gap-3 p-4 bg-bg-tertiary/30 backdrop-blur-xl border border-border-subtle hover:border-primary/30 rounded-2xl transition"
               >
                 <span className="text-2xl">🐧</span>
                 <span className="font-black text-text-primary">Linux 版本</span>
               </a>
             </div>
 
-            <div className="p-4 bg-warning/10 border border-warning/20 rounded-[16px] mb-4 backdrop-blur-sm">
+            <div className="p-4 bg-warning/10 border border-warning/20 rounded-2xl mb-4 backdrop-blur-sm">
               <p className="text-sm text-warning">
                 💡{' '}
                 {t('buddyOnboarding.installTip', '安装完成后，打开 OpenClaw，点击"添加 Buddy"即可')}
@@ -258,8 +258,8 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
         {step === 'command' && (
           <div className="p-8">
             <div className="text-center mb-6">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-[16px] bg-gradient-to-br from-success to-emerald-600 flex items-center justify-center shadow-[0_10px_25px_rgba(87,242,135,0.3)]">
-                <Terminal size={32} className="text-[#050508]" />
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-success to-success flex items-center justify-center shadow-lg shadow-success/25">
+                <Terminal size={32} className="text-bg-deep" />
               </div>
               <h2 className="text-xl font-black uppercase tracking-tight text-text-primary mb-2">
                 {t('buddyOnboarding.commandTitle', '使用命令绑定')}
@@ -275,7 +275,7 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
                 {t('buddyOnboarding.command', '绑定命令')}
               </label>
               <div className="relative">
-                <code className="block w-full p-4 bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] border border-white/10 rounded-[16px] text-primary font-mono text-sm overflow-x-auto">
+                <code className="block w-full p-4 bg-bg-tertiary/30 backdrop-blur-xl border border-border-subtle rounded-2xl text-primary font-mono text-sm overflow-x-auto">
                   /buddy bind --server {serverId}
                 </code>
                 <Button
@@ -316,7 +316,7 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
         {step === 'add-to-channel' && (
           <div className="p-8">
             <div className="text-center mb-6">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-[16px] bg-gradient-to-br from-[#7C4DFF] to-[#6200EA] flex items-center justify-center shadow-[0_10px_25px_rgba(124,77,255,0.3)]">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-info to-info flex items-center justify-center shadow-lg shadow-info/25">
                 <Plus size={32} className="text-white" />
               </div>
               <h2 className="text-xl font-black uppercase tracking-tight text-text-primary mb-2">
@@ -329,7 +329,7 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
 
             {/* Instructions */}
             <div className="space-y-3 mb-6">
-              <Card variant="glass" className="!rounded-[16px]">
+              <Card variant="glass" className="!rounded-2xl">
                 <div className="flex items-start gap-3 p-4">
                   <span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-black shrink-0">
                     1
@@ -345,7 +345,7 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
                 </div>
               </Card>
 
-              <Card variant="glass" className="!rounded-[16px]">
+              <Card variant="glass" className="!rounded-2xl">
                 <div className="flex items-start gap-3 p-4">
                   <span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-black shrink-0">
                     2
@@ -364,7 +364,7 @@ export function BuddyOnboarding({ serverId, onClose }: BuddyOnboardingProps) {
                 </div>
               </Card>
 
-              <Card variant="glass" className="!rounded-[16px]">
+              <Card variant="glass" className="!rounded-2xl">
                 <div className="flex items-start gap-3 p-4">
                   <span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-black shrink-0">
                     3

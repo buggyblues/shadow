@@ -46,13 +46,13 @@ export function HelpCenterButton({ variant = 'button' }: HelpCenterProps) {
 
   if (variant === 'panel' && open) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-        <div className="w-full max-w-md bg-bg-primary/95 backdrop-blur-xl rounded-[16px] border border-border/10 shadow-xl overflow-hidden">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-deep/60 backdrop-blur-sm">
+        <div className="w-full max-w-md bg-bg-primary/95 backdrop-blur-xl rounded-[24px] border border-border-subtle shadow-[0_16px_64px_rgba(0,0,0,0.4)] overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-border-subtle">
             <div className="flex items-center gap-2">
               <HelpCircle size={20} className="text-primary" />
-              <h2 className="font-semibold text-text-primary">{t('help.title', '帮助中心')}</h2>
+              <h2 className="font-black text-text-primary">{t('help.title', '帮助中心')}</h2>
             </div>
             <Button variant="ghost" size="icon" onClick={() => setOpen(false)}>
               <X size={18} />
@@ -136,7 +136,7 @@ export function HelpTooltip({ content, children }: HelpTooltipProps) {
     >
       {children}
       {show && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-bg-primary/95 backdrop-blur-xl border border-border/10 rounded-[12px] shadow-xl text-sm text-text-primary whitespace-nowrap z-50">
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-bg-primary/95 backdrop-blur-xl border border-border-subtle rounded-2xl shadow-xl text-sm text-text-primary whitespace-nowrap z-50">
           {content}
           <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-bg-secondary" />
         </div>

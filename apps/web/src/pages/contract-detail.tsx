@@ -169,7 +169,7 @@ export function ContractDetailPage() {
         </Link>
 
         {/* Contract Header */}
-        <div className="bg-[var(--glass-bg)] backdrop-blur-[32px] rounded-2xl border border-[var(--glass-border)] shadow-[var(--shadow-soft)] p-8 mb-6">
+        <div className="bg-[var(--glass-bg)] backdrop-blur-xl rounded-2xl border border-[var(--glass-border)] shadow-[var(--shadow-soft)] p-8 mb-6">
           <div className="flex items-start justify-between mb-6">
             <div>
               <div className="flex items-center gap-3 mb-2">
@@ -238,7 +238,7 @@ export function ContractDetailPage() {
 
         {/* Use Claw & Countdown */}
         {isTenant && contract.status === 'active' && (
-          <div className="bg-[var(--glass-bg)] backdrop-blur-[32px] rounded-2xl border border-[var(--glass-border)] shadow-[var(--shadow-soft)] p-8 mb-6">
+          <div className="bg-[var(--glass-bg)] backdrop-blur-xl rounded-2xl border border-[var(--glass-border)] shadow-[var(--shadow-soft)] p-8 mb-6">
             <div className="flex items-center justify-between">
               <div>
                 {contract.expiresAt && <CountdownTimer expiresAt={contract.expiresAt} t={t} />}
@@ -253,7 +253,7 @@ export function ContractDetailPage() {
                   type="button"
                   onClick={() => startChatMutation.mutate(contract.agentUserId!)}
                   disabled={startChatMutation.isPending}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-[#050508] font-bold hover:bg-primary-hover transition-all shadow-[var(--shadow-cyan)] hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-bg-deep font-bold hover:bg-primary-hover transition-all shadow-[var(--shadow-cyan)] hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50"
                   style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
                 >
                   <MessageCircle className="w-4 h-4" />
@@ -271,7 +271,7 @@ export function ContractDetailPage() {
 
         {/* Actions */}
         {canTerminate && (
-          <div className="bg-[var(--glass-bg)] backdrop-blur-[32px] rounded-2xl border border-[var(--glass-border)] shadow-[var(--shadow-soft)] p-8">
+          <div className="bg-[var(--glass-bg)] backdrop-blur-xl rounded-2xl border border-[var(--glass-border)] shadow-[var(--shadow-soft)] p-8">
             <h2
               style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
               className="text-lg font-bold mb-4 flex items-center gap-2"
@@ -294,7 +294,7 @@ export function ContractDetailPage() {
                   value={terminateReason}
                   onChange={(e) => setTerminateReason(e.target.value)}
                   placeholder={t('marketplace.terminateReason', '请输入终止原因...')}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-border-dim font-medium focus:outline-none focus:border-danger/30 focus:ring-2 focus:ring-danger/10 resize-none bg-bg-secondary text-text-primary"
+                  className="w-full px-4 py-3 rounded-xl border-2 border-border-subtle font-medium focus:outline-none focus:border-danger/30 focus:ring-2 focus:ring-danger/10 resize-none bg-bg-secondary text-text-primary"
                   rows={3}
                 />
                 <div className="flex gap-3">
@@ -344,7 +344,7 @@ function ContractInfoSection({ contract, t }: { contract: ContractDetail; t: TFu
   const snapshot = contract.listingSnapshot as Record<string, unknown> | null
 
   return (
-    <div className="bg-[var(--glass-bg)] backdrop-blur-[32px] rounded-2xl border border-[var(--glass-border)] shadow-[var(--shadow-soft)] p-8 mb-6">
+    <div className="bg-[var(--glass-bg)] backdrop-blur-xl rounded-2xl border border-[var(--glass-border)] shadow-[var(--shadow-soft)] p-8 mb-6">
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}

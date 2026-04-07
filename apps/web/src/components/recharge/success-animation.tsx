@@ -43,7 +43,7 @@ export function SuccessAnimation() {
         initial={{ scale: 0, rotate: -180 }}
         animate={{ scale: 1, rotate: 0 }}
         transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-        className="w-24 h-24 rounded-full bg-gradient-to-br from-[#F8E71C] to-[#ffb300] flex items-center justify-center shadow-[0_10px_25px_rgba(248,231,28,0.35)]"
+        className="w-24 h-24 rounded-full bg-gradient-to-br from-accent to-accent flex items-center justify-center shadow-lg shadow-accent/25"
       >
         <span className="text-4xl">🦐</span>
       </motion.div>

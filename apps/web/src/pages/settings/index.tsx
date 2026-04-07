@@ -208,7 +208,7 @@ export function SettingsPage() {
   return (
     <div className="flex-1 flex flex-col md:flex-row bg-bg-deep overflow-hidden">
       {/* Mobile tab bar */}
-      <div className="md:hidden flex overflow-x-auto border-b border-white/10 bg-bg-primary/60 backdrop-blur-xl px-2 py-2 gap-1 shrink-0">
+      <div className="md:hidden flex overflow-x-auto border-b border-border-subtle bg-bg-primary/60 backdrop-blur-xl px-2 py-2 gap-1 shrink-0">
         {NAV_SECTIONS.flatMap((section) => section.items).map(
           ({ id, icon: Icon, labelKey, labelFallback }) => (
             <button
@@ -218,7 +218,7 @@ export function SettingsPage() {
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all',
                 activeTab === id
                   ? 'bg-primary/15 text-primary shadow-sm'
-                  : 'text-text-muted hover:text-text-primary hover:bg-white/5',
+                  : 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary/50',
               )}
             >
               <Icon size={14} />
@@ -229,11 +229,11 @@ export function SettingsPage() {
       </div>
 
       {/* Desktop Sidebar - OpenClaw Style */}
-      <aside className="w-[240px] shrink-0 hidden md:flex flex-col bg-bg-primary/60 backdrop-blur-xl border-r border-white/[0.06] overflow-hidden">
-        <div className="desktop-drag-titlebar h-7 shrink-0 border-b border-white/[0.06]" />
+      <aside className="w-[240px] shrink-0 hidden md:flex flex-col bg-bg-primary/60 backdrop-blur-xl border-r border-border-subtle overflow-hidden">
+        <div className="desktop-drag-titlebar h-7 shrink-0 border-b border-border-subtle" />
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto no-scrollbar">
+        <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto scrollbar-hidden">
           {NAV_SECTIONS.map((section) => {
             const isOpen = !collapsed[section.key]
             const hasActivePage = section.items.some((item) => item.id === activeTab)
@@ -243,7 +243,7 @@ export function SettingsPage() {
                 <button
                   type="button"
                   onClick={() => toggleSection(section.key)}
-                  className="w-full flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.15em] text-text-muted/60 hover:text-text-muted transition-colors cursor-pointer"
+                  className="w-full flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 hover:text-text-muted transition-colors cursor-pointer"
                 >
                   <ChevronDown
                     size={12}
@@ -266,7 +266,7 @@ export function SettingsPage() {
                             'w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-[13px] font-bold transition-all duration-300 group',
                             isActive
                               ? 'bg-primary/15 text-primary'
-                              : 'text-text-secondary hover:bg-white/5 hover:text-text-primary',
+                              : 'text-text-secondary hover:bg-bg-tertiary/50 hover:text-text-primary',
                           )}
                         >
                           <item.icon
@@ -290,10 +290,10 @@ export function SettingsPage() {
 
           {/* Desktop Settings Link */}
           {'desktopAPI' in window && (
-            <div className="mt-4 pt-4 border-t border-white/[0.06]">
+            <div className="mt-4 pt-4 border-t border-border-subtle">
               <button
                 onClick={() => navigate({ to: '/desktop-settings' })}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-[13px] font-bold text-text-secondary hover:bg-white/5 hover:text-text-primary transition-all duration-300 group"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-[13px] font-bold text-text-secondary hover:bg-bg-tertiary/50 hover:text-text-primary transition-all duration-300 group"
               >
                 <Monitor
                   size={18}
@@ -307,11 +307,11 @@ export function SettingsPage() {
         </nav>
 
         {/* Logout Button */}
-        <div className="p-4 border-t border-white/[0.06]">
+        <div className="p-4 border-t border-border-subtle">
           <Button
             variant="ghost"
             onClick={() => handleTabChange('account')}
-            className="w-full justify-start gap-3 px-3.5 py-2.5 h-auto rounded-full text-[13px] font-bold text-danger hover:bg-danger/10 hover:text-danger normal-case tracking-normal"
+            className="w-full justify-start gap-3 px-3.5 py-2.5 h-auto rounded-full text-[13px] font-bold text-danger hover:bg-danger/10 hover:text-danger"
           >
             <LogOut size={18} className="shrink-0" strokeWidth={2.2} />
             <span className="truncate">{t('settings.logout')}</span>
@@ -355,7 +355,7 @@ export function SettingsPage() {
           <div className="flex-1 flex min-h-0 overflow-hidden">
             {/* DM channel list sidebar */}
             <div
-              className={`${activeDmChannelId ? 'hidden md:flex' : 'flex'} w-full md:w-72 lg:w-80 flex-col border-r border-white/[0.06] shrink-0`}
+              className={`${activeDmChannelId ? 'hidden md:flex' : 'flex'} w-full md:w-72 lg:w-80 flex-col border-r border-border-subtle shrink-0`}
             >
               <DmChannelList
                 activeDmChannelId={activeDmChannelId}
@@ -395,7 +395,7 @@ function DmChatEmptyState() {
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
       <MessageCircle size={56} className="text-text-muted/20 mb-4" />
-      <h3 className="text-lg font-semibold text-text-secondary mb-2">
+      <h3 className="text-lg font-black text-text-secondary mb-2">
         {t('dm.selectConversation', '选择一个对话')}
       </h3>
       <p className="text-text-muted text-sm max-w-xs">
@@ -439,8 +439,8 @@ function DmChannelList({
   })
 
   const statusColor: Record<string, string> = {
-    online: 'bg-[#23a559]',
-    idle: 'bg-amber-500',
+    online: 'bg-success',
+    idle: 'bg-warning',
     dnd: 'bg-danger',
     offline: 'bg-text-muted',
   }
@@ -466,7 +466,7 @@ function DmChannelList({
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 md:px-6 py-3 border-b border-white/[0.06] bg-bg-deep/80 backdrop-blur-xl shrink-0">
+      <div className="flex items-center gap-3 px-4 md:px-6 py-3 border-b border-border-subtle bg-bg-deep/80 backdrop-blur-xl shrink-0">
         <MessageCircle size={20} className="text-text-muted" />
         <h2 className="text-base font-bold text-text-primary">{t('dm.chatTitle', '聊天消息')}</h2>
       </div>
@@ -486,7 +486,7 @@ function DmChannelList({
 
       {/* Channel list */}
       <div className="flex-1 overflow-y-auto px-2 md:px-4">
-        <div className="text-[11px] font-black uppercase text-text-muted/60 tracking-[0.15em] px-2 mb-2">
+        <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 px-2 mb-2">
           {t('dm.directMessages', '私信消息')} - {filtered.length}
         </div>
 
@@ -516,8 +516,8 @@ function DmChannelList({
                   }
                 }}
                 className={cn(
-                  'flex items-center gap-3 w-full px-3 py-2.5 rounded-[16px] hover:bg-white/5 transition-all text-left group',
-                  activeDmChannelId === ch.id && 'bg-white/[0.03] border border-white/[0.06]',
+                  'flex items-center gap-3 w-full px-3 py-2.5 rounded-2xl hover:bg-bg-tertiary/50 transition-all text-left group',
+                  activeDmChannelId === ch.id && 'bg-bg-tertiary/30 border border-border-subtle',
                 )}
               >
                 <div className="relative">
@@ -536,11 +536,11 @@ function DmChannelList({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-text-primary text-sm truncate">
+                    <span className="font-black text-text-primary text-sm truncate">
                       {ch.otherUser?.displayName ?? ch.otherUser?.username}
                     </span>
                     {ch.otherUser?.isBot && (
-                      <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-bold">
+                      <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[11px] font-bold">
                         Buddy
                       </span>
                     )}

@@ -560,7 +560,7 @@ export function CreateListingPage() {
                 </span>
               </label>
 
-              <div className="bg-amber-50 rounded-xl p-4 text-xs text-amber-800 leading-relaxed">
+              <div className="bg-warning/10 rounded-xl p-4 text-xs text-warning leading-relaxed">
                 <strong>{t('marketplace.pricingNote', '定价说明：')}</strong>{' '}
                 {t(
                   'marketplace.pricingExplainNew',

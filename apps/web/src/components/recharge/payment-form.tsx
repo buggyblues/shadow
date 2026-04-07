@@ -112,7 +112,7 @@ export function PaymentForm() {
       />
 
       {errorMessage && (
-        <div className="text-sm text-danger bg-danger/10 rounded-[16px] p-3 font-bold backdrop-blur-sm border border-danger/20">
+        <div className="text-sm text-danger bg-danger/10 rounded-2xl p-3 font-bold backdrop-blur-sm border border-danger/20">
           {errorMessage}
         </div>
       )}

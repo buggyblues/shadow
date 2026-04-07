@@ -80,7 +80,7 @@ export function AppLayout() {
       <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute top-[-150px] right-[10%] w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px] animate-float opacity-20" />
         <div
-          className="absolute bottom-[-100px] left-[5%] w-[600px] h-[600px] bg-[#ff2a55]/8 rounded-full blur-[120px] animate-float opacity-15"
+          className="absolute bottom-[-100px] left-[5%] w-[600px] h-[600px] bg-danger/8 rounded-full blur-[120px] animate-float opacity-15"
           style={{ animationDelay: '-8s' }}
         />
       </div>
@@ -100,8 +100,8 @@ export function AppLayout() {
           <div
             className={cn(
               'relative z-10 animate-slide-in-left',
-              'rounded-r-[24px] border-r border-white/[0.06]',
-              'bg-bg-deep/80 backdrop-blur-[32px]',
+              'rounded-r-[24px] border-r border-border-subtle',
+              'bg-bg-deep/80 backdrop-blur-xl',
               'shadow-[0_0_40px_rgba(0,243,255,0.06)]',
             )}
           >
@@ -113,7 +113,7 @@ export function AppLayout() {
       {/* ── Main content area ── */}
       <div className="relative z-10 flex flex-1 flex-col min-w-0 overflow-hidden">
         {isLoadingMe && !me ? (
-          <div className="desktop-loading-state flex-1 bg-bg-deep/60 backdrop-blur-[32px]">
+          <div className="desktop-loading-state flex-1 bg-bg-deep/60 backdrop-blur-xl">
             <div className="inline-flex items-center gap-2 text-sm text-white/50 animate-pulse">
               {t('common.loading')}
             </div>
@@ -131,10 +131,10 @@ export function AppLayout() {
           className={cn(
             'fixed bottom-20 left-4 z-40 md:hidden',
             'h-11 w-11 rounded-full',
-            'bg-[#00F3FF]/20 backdrop-blur-[32px]',
-            'border border-[#00F3FF]/20',
-            'text-[#00F3FF] shadow-[0_0_20px_rgba(0,243,255,0.25)]',
-            'hover:bg-[#00F3FF]/30 hover:shadow-[0_0_28px_rgba(0,243,255,0.35)]',
+            'bg-primary/20 backdrop-blur-xl',
+            'border border-primary/20',
+            'text-primary shadow-[0_0_20px_rgba(0,243,255,0.25)]',
+            'hover:bg-primary/30 hover:shadow-[0_0_28px_rgba(0,243,255,0.35)]',
             'transition-all duration-300',
           )}
         >

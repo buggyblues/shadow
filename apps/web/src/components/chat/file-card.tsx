@@ -29,15 +29,15 @@ function getFileMeta(contentType: string, filename: string) {
 
   // Audio
   if (contentType.startsWith('audio/'))
-    return { icon: FileAudio, color: 'text-orange-400', bg: 'bg-orange-500/15', label: 'Audio' }
+    return { icon: FileAudio, color: 'text-warning', bg: 'bg-warning/15', label: 'Audio' }
 
   // Video
   if (contentType.startsWith('video/'))
-    return { icon: FileVideo, color: 'text-purple-400', bg: 'bg-purple-500/15', label: 'Video' }
+    return { icon: FileVideo, color: 'text-info', bg: 'bg-info/15', label: 'Video' }
 
   // PDF
   if (contentType === 'application/pdf' || ext === 'pdf')
-    return { icon: FileText, color: 'text-red-400', bg: 'bg-red-500/15', label: 'PDF' }
+    return { icon: FileText, color: 'text-danger', bg: 'bg-danger/15', label: 'PDF' }
 
   // Spreadsheet
   if (
@@ -47,14 +47,14 @@ function getFileMeta(contentType: string, filename: string) {
   )
     return {
       icon: FileSpreadsheet,
-      color: 'text-green-400',
-      bg: 'bg-green-500/15',
+      color: 'text-success',
+      bg: 'bg-success/15',
       label: ext.toUpperCase(),
     }
 
   // JSON
   if (contentType === 'application/json' || ext === 'json')
-    return { icon: FileJson, color: 'text-yellow-400', bg: 'bg-yellow-500/15', label: 'JSON' }
+    return { icon: FileJson, color: 'text-accent', bg: 'bg-accent/15', label: 'JSON' }
 
   // Code / script / config
   if (
@@ -101,8 +101,8 @@ function getFileMeta(contentType: string, filename: string) {
   )
     return {
       icon: FileCode,
-      color: 'text-blue-400',
-      bg: 'bg-blue-500/15',
+      color: 'text-primary',
+      bg: 'bg-primary/15',
       label: ext.toUpperCase() || 'Code',
     }
 
@@ -112,20 +112,20 @@ function getFileMeta(contentType: string, filename: string) {
     contentType.includes('html') ||
     contentType.includes('xml')
   )
-    return { icon: Code2, color: 'text-cyan-400', bg: 'bg-cyan-500/15', label: ext.toUpperCase() }
+    return { icon: Code2, color: 'text-primary', bg: 'bg-primary/15', label: ext.toUpperCase() }
 
   // CSS
   if (ext === 'css' || ext === 'scss' || ext === 'less' || contentType === 'text/css')
     return {
       icon: FileType,
-      color: 'text-pink-400',
-      bg: 'bg-pink-500/15',
+      color: 'text-info',
+      bg: 'bg-info/15',
       label: ext.toUpperCase(),
     }
 
   // Markdown
   if (ext === 'md' || ext === 'mdx' || contentType === 'text/markdown')
-    return { icon: FileText, color: 'text-slate-300', bg: 'bg-slate-500/15', label: 'Markdown' }
+    return { icon: FileText, color: 'text-text-muted', bg: 'bg-bg-tertiary', label: 'Markdown' }
 
   // Archives
   if (
@@ -136,8 +136,8 @@ function getFileMeta(contentType: string, filename: string) {
   )
     return {
       icon: FileArchive,
-      color: 'text-amber-400',
-      bg: 'bg-amber-500/15',
+      color: 'text-warning',
+      bg: 'bg-warning/15',
       label: ext.toUpperCase(),
     }
 
@@ -145,16 +145,16 @@ function getFileMeta(contentType: string, filename: string) {
   if (contentType.startsWith('text/') || ext === 'txt' || ext === 'log')
     return {
       icon: FileText,
-      color: 'text-slate-300',
-      bg: 'bg-slate-500/15',
+      color: 'text-text-muted',
+      bg: 'bg-bg-tertiary',
       label: ext.toUpperCase() || 'Text',
     }
 
   // Fallback
   return {
     icon: File,
-    color: 'text-slate-400',
-    bg: 'bg-slate-500/15',
+    color: 'text-text-muted',
+    bg: 'bg-bg-tertiary',
     label: ext.toUpperCase() || 'File',
   }
 }
@@ -178,11 +178,11 @@ export function FileCard({
 
   return (
     <div
-      className="group/fc flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-bg-tertiary border border-white/8 hover:border-white/15 transition cursor-pointer min-w-[240px] max-w-[360px]"
+      className="group/fc flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-bg-tertiary border border-border-subtle hover:border-border-subtle transition cursor-pointer min-w-[240px] max-w-[360px]"
       onClick={onClick}
     >
       {/* File type icon */}
-      <div className={`shrink-0 w-10 h-10 rounded-lg ${meta.bg} flex items-center justify-center`}>
+      <div className={`shrink-0 w-10 h-10 rounded-xl ${meta.bg} flex items-center justify-center`}>
         <Icon size={20} className={meta.color} />
       </div>
 
@@ -204,7 +204,7 @@ export function FileCard({
             e.stopPropagation()
             onSaveToWorkspace()
           }}
-          className="shrink-0 p-1.5 rounded-md text-text-muted hover:text-[#e8a838] hover:bg-[#e8a838]/10 transition opacity-0 group-hover/fc:opacity-100"
+          className="shrink-0 p-1.5 rounded-md text-text-muted hover:text-warning hover:bg-warning/10 transition opacity-0 group-hover/fc:opacity-100"
           title="保存到工作区"
         >
           <FolderPlus size={16} />
@@ -216,7 +216,7 @@ export function FileCard({
         href={url}
         download={filename}
         onClick={(e) => e.stopPropagation()}
-        className="shrink-0 p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-white/10 transition opacity-0 group-hover/fc:opacity-100"
+        className="shrink-0 p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover transition opacity-0 group-hover/fc:opacity-100"
         title="Download"
       >
         <Download size={16} />

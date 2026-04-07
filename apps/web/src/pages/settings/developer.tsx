@@ -149,7 +149,7 @@ export function DeveloperSettings() {
           size="sm"
           type="button"
           onClick={() => setShowCreateForm(true)}
-          className="normal-case tracking-normal"
+          className=""
         >
           <Plus size={16} />
           {t('oauth.createApp', '创建应用')}
@@ -158,7 +158,7 @@ export function DeveloperSettings() {
 
       {/* Secret display banner */}
       {newSecret && (
-        <div className="bg-warning/10 border border-warning/30 rounded-[20px] p-4">
+        <div className="bg-warning/10 border border-warning/30 rounded-[40px] p-4">
           <div className="flex items-start gap-3">
             <AlertTriangle className="text-warning shrink-0 mt-0.5" size={20} />
             <div className="flex-1 min-w-0">
@@ -166,7 +166,7 @@ export function DeveloperSettings() {
                 {t('oauth.secretWarning', 'Client Secret（仅显示一次）')}
               </p>
               <div className="flex items-center gap-2 mt-2">
-                <code className="flex-1 text-xs bg-bg-secondary px-3 py-2 rounded-lg font-mono break-all">
+                <code className="flex-1 text-xs bg-bg-tertiary/50 px-3 py-2 rounded-xl font-mono break-all">
                   {showSecret ? newSecret : '•'.repeat(40)}
                 </code>
                 <button
@@ -221,13 +221,13 @@ export function DeveloperSettings() {
           {apps.map((app) => (
             <div
               key={app.id}
-              className="bg-white/[0.03] backdrop-blur-[32px] rounded-[24px] p-4 border border-white/[0.08]"
+              className="bg-bg-tertiary/30 backdrop-blur-xl rounded-[40px] p-4 border border-border-subtle"
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
                   <AppLogo url={app.logoUrl} name={app.name} />
                   <div>
-                    <h3 className="font-semibold text-text-primary">{app.name}</h3>
+                    <h3 className="font-black text-text-primary">{app.name}</h3>
                     {app.description && (
                       <p className="text-xs text-text-muted mt-0.5">{app.description}</p>
                     )}
@@ -312,7 +312,7 @@ export function DeveloperSettings() {
 
               {/* Delete confirmation */}
               {deleteConfirmId === app.id && (
-                <div className="mt-3 p-3 bg-danger/10 rounded-[16px] border border-danger/20">
+                <div className="mt-3 p-3 bg-danger/10 rounded-2xl border border-danger/20">
                   <p className="text-sm text-danger font-medium">
                     {t('oauth.deleteConfirmMsg', '确定要删除此应用吗？此操作不可恢复。')}
                   </p>
@@ -323,7 +323,7 @@ export function DeveloperSettings() {
                       type="button"
                       onClick={() => deleteMutation.mutate(app.id)}
                       disabled={deleteMutation.isPending}
-                      className="normal-case tracking-normal text-xs"
+                      className="text-xs"
                     >
                       {t('oauth.confirmDelete', '确认删除')}
                     </Button>
@@ -332,7 +332,7 @@ export function DeveloperSettings() {
                       size="sm"
                       type="button"
                       onClick={() => setDeleteConfirmId(null)}
-                      className="normal-case tracking-normal text-xs"
+                      className="text-xs"
                     >
                       {t('common.cancel', '取消')}
                     </Button>
@@ -398,7 +398,7 @@ function LogoUploader({
               value={value}
               onChange={(e) => onChange(e.target.value)}
               placeholder="https://your-app.com/icon.png"
-              className="rounded-[12px] px-3 py-2 text-sm"
+              className="rounded-2xl px-3 py-2 text-sm"
             />
             <p className="text-xs text-text-muted mt-1">
               {t('oauth.iconUrlHint', '可选，输入图标的 URL 地址')}
@@ -448,12 +448,12 @@ function CreateAppForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="bg-white/[0.03] backdrop-blur-[32px] rounded-[24px] p-5 border border-white/[0.08] space-y-4"
+      className="bg-bg-tertiary/30 backdrop-blur-xl rounded-[40px] p-5 border border-border-subtle space-y-4"
     >
       <h3 className="font-black text-text-primary">{t('oauth.createNew', '创建新应用')}</h3>
 
       <div>
-        <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.15em] ml-1 mb-2">
+        <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-2">
           {t('oauth.appName', '应用名称')} *
         </label>
         <Input
@@ -461,14 +461,14 @@ function CreateAppForm({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="My App"
-          className="rounded-[16px] px-4 py-3"
+          className="rounded-2xl px-4 py-3"
           maxLength={128}
           required
         />
       </div>
 
       <div>
-        <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.15em] ml-1 mb-2">
+        <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-2">
           {t('oauth.appDesc', '应用描述')}
         </label>
         <Input
@@ -476,13 +476,13 @@ function CreateAppForm({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder={t('oauth.descPlaceholder', '简要描述你的应用')}
-          className="rounded-[16px] px-4 py-3"
+          className="rounded-2xl px-4 py-3"
           maxLength={1024}
         />
       </div>
 
       <div>
-        <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.15em] ml-1 mb-2">
+        <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-2">
           {t('oauth.redirectUri', 'Redirect URI')} *
         </label>
         <Input
@@ -490,13 +490,13 @@ function CreateAppForm({
           value={redirectUri}
           onChange={(e) => setRedirectUri(e.target.value)}
           placeholder="https://your-app.com/callback"
-          className="rounded-[16px] px-4 py-3"
+          className="rounded-2xl px-4 py-3"
           required
         />
       </div>
 
       <div>
-        <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.15em] ml-1 mb-2">
+        <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-2">
           {t('oauth.homepageUrl', 'Homepage URL')}
         </label>
         <Input
@@ -504,20 +504,14 @@ function CreateAppForm({
           value={homepageUrl}
           onChange={(e) => setHomepageUrl(e.target.value)}
           placeholder="https://your-app.com"
-          className="rounded-[16px] px-4 py-3"
+          className="rounded-2xl px-4 py-3"
         />
       </div>
 
       <LogoUploader value={logoUrl} onChange={setLogoUrl} name={name} t={t} />
 
       <div className="flex gap-2 justify-end">
-        <Button
-          variant="ghost"
-          size="sm"
-          type="button"
-          onClick={onCancel}
-          className="normal-case tracking-normal"
-        >
+        <Button variant="ghost" size="sm" type="button" onClick={onCancel} className="">
           {t('common.cancel', '取消')}
         </Button>
         <Button
@@ -525,7 +519,7 @@ function CreateAppForm({
           size="sm"
           type="submit"
           disabled={isPending || !name.trim() || !redirectUri.trim()}
-          className="normal-case tracking-normal"
+          className=""
         >
           {isPending ? t('oauth.creating', '创建中...') : t('oauth.createApp', '创建应用')}
         </Button>
@@ -574,62 +568,62 @@ function EditAppForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="mt-3 p-3 bg-white/[0.02] rounded-[16px] border border-white/[0.06] space-y-3"
+      className="mt-3 p-3 bg-bg-tertiary/20 rounded-2xl border border-border-subtle space-y-3"
     >
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.15em] mb-1">
+          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
             {t('oauth.appName', '应用名称')}
           </label>
           <Input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="rounded-[12px] px-3 py-2 text-xs h-8"
+            className="rounded-2xl px-3 py-2 text-xs h-8"
             maxLength={128}
             required
           />
         </div>
         <div>
-          <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.15em] mb-1">
+          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
             {t('oauth.appDesc', '应用描述')}
           </label>
           <Input
             type="text"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="rounded-[12px] px-3 py-2 text-xs h-8"
+            className="rounded-2xl px-3 py-2 text-xs h-8"
             maxLength={1024}
           />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.15em] mb-1">
+          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
             {t('oauth.redirectUri', 'Redirect URI')}
           </label>
           <Input
             type="url"
             value={redirectUri}
             onChange={(e) => setRedirectUri(e.target.value)}
-            className="rounded-[12px] px-3 py-2 text-xs h-8"
+            className="rounded-2xl px-3 py-2 text-xs h-8"
             required
           />
         </div>
         <div>
-          <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.15em] mb-1">
+          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
             {t('oauth.homepageUrl', 'Homepage URL')}
           </label>
           <Input
             type="url"
             value={homepageUrl}
             onChange={(e) => setHomepageUrl(e.target.value)}
-            className="rounded-[12px] px-3 py-2 text-xs h-8"
+            className="rounded-2xl px-3 py-2 text-xs h-8"
           />
         </div>
       </div>
       <div>
-        <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.15em] mb-1">
+        <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
           {t('oauth.appIconUrl', '应用图标 URL')}
         </label>
         <div className="flex items-center gap-2">
@@ -639,18 +633,12 @@ function EditAppForm({
             value={logoUrl}
             onChange={(e) => setLogoUrl(e.target.value)}
             placeholder="https://your-app.com/icon.png"
-            className="rounded-[12px] px-3 py-2 text-xs h-8"
+            className="rounded-2xl px-3 py-2 text-xs h-8"
           />
         </div>
       </div>
       <div className="flex gap-2 justify-end">
-        <Button
-          variant="ghost"
-          size="sm"
-          type="button"
-          onClick={onCancel}
-          className="normal-case tracking-normal text-xs"
-        >
+        <Button variant="ghost" size="sm" type="button" onClick={onCancel} className="text-xs">
           {t('common.cancel', '取消')}
         </Button>
         <Button
@@ -658,7 +646,7 @@ function EditAppForm({
           size="sm"
           type="submit"
           disabled={isPending || !name.trim() || !redirectUri.trim()}
-          className="normal-case tracking-normal text-xs"
+          className="text-xs"
         >
           {isPending ? t('common.saving', '保存中...') : t('common.save', '保存')}
         </Button>

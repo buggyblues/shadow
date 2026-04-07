@@ -163,8 +163,8 @@ export function CodeRenderer({ node, serverId }: { node: WorkspaceNode; serverId
       <div className="flex items-center justify-between px-3 py-1.5 bg-bg-tertiary/80 border-b border-border-subtle shrink-0">
         <span className="text-[11px] text-text-muted font-mono">{node.name}</span>
         <div className="flex items-center gap-1.5">
-          {isEditing && isDirty && <span className="text-[11px] text-amber-400">● 未保存</span>}
-          <span className="text-[10px] text-text-muted/70 bg-bg-primary/50 px-1.5 py-0.5 rounded-md">
+          {isEditing && isDirty && <span className="text-[11px] text-warning">● 未保存</span>}
+          <span className="text-[11px] text-text-muted/70 bg-bg-primary/50 px-1.5 py-0.5 rounded-md">
             {language}
           </span>
           <button
@@ -324,8 +324,8 @@ function EmptyFileEditor({
       <div className="flex items-center justify-between px-3 py-1.5 bg-bg-tertiary/80 border-b border-border-subtle shrink-0">
         <span className="text-[11px] text-text-muted font-mono">{node.name}</span>
         <div className="flex items-center gap-1.5">
-          {isDirty && <span className="text-[11px] text-amber-400">● 未保存</span>}
-          <span className="text-[10px] text-text-muted/70 bg-bg-primary/50 px-1.5 py-0.5 rounded-md">
+          {isDirty && <span className="text-[11px] text-warning">● 未保存</span>}
+          <span className="text-[11px] text-text-muted/70 bg-bg-primary/50 px-1.5 py-0.5 rounded-md">
             {language}
           </span>
           <button

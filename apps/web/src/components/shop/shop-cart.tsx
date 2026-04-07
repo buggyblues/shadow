@@ -119,7 +119,7 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
       <div className="flex-1 flex flex-col items-center justify-center p-8 bg-bg-primary h-full">
         <div className="w-32 h-32 mb-6 rounded-full bg-primary/5 flex items-center justify-center relative">
           <ShoppingCart size={48} className="text-primary/30" strokeWidth={1.5} />
-          <div className="absolute w-8 h-8 rounded-full bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] border border-white/10 flex items-center justify-center bottom-2 right-2">
+          <div className="absolute w-8 h-8 rounded-full bg-bg-tertiary/50 backdrop-blur-xl border border-border-subtle flex items-center justify-center bottom-2 right-2">
             <span className="text-text-muted font-black">0</span>
           </div>
         </div>
@@ -134,19 +134,19 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
   return (
     <div className="flex flex-col h-full bg-bg-primary font-sans relative">
       {/* ── Security Banner ── */}
-      <div className="flex items-center justify-center gap-1.5 py-2 bg-success/5 text-success text-[10px] sm:text-xs font-black uppercase tracking-widest">
+      <div className="flex items-center justify-center gap-1.5 py-2 bg-success/5 text-success text-[11px] sm:text-xs font-black uppercase tracking-widest">
         <ShieldCheck size={14} />
         官方担保交易，支付安全无忧
       </div>
 
       {/* ── List Header ── */}
-      <div className="px-5 py-3.5 flex items-center justify-between border-b border-border-subtle bg-[rgba(255,255,255,0.75)] dark:bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] sticky top-0 z-10">
+      <div className="px-5 py-3.5 flex items-center justify-between border-b border-border-subtle bg-bg-tertiary/50 backdrop-blur-xl sticky top-0 z-10">
         <label className="flex items-center gap-2 text-sm font-black text-text-secondary cursor-pointer group">
           <div
             className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
               selectedIds.size === cartItems.length
-                ? 'bg-cyan-500 border-cyan-500 shadow-sm'
-                : 'border-2 border-gray-300 dark:border-border-dim group-hover:border-cyan-400'
+                ? 'bg-primary border-primary shadow-sm'
+                : 'border-2 border-border-subtle group-hover:border-primary'
             }`}
           >
             {selectedIds.size === cartItems.length && (
@@ -167,14 +167,14 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
       </div>
 
       {/* ── Cart Items ── */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hidden">
         {cartItems.map((item) => {
           const isSelected = selectedIds.has(item.id)
           return (
             <Card
               key={item.id}
               variant="glass"
-              className={`!rounded-[24px] transition-all duration-300 ${
+              className={`!rounded-[40px] transition-all duration-300 ${
                 isSelected ? '!border-primary/30 shadow-[0_10px_25px_rgba(0,243,255,0.1)]' : ''
               }`}
             >
@@ -184,8 +184,8 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
                   <div
                     className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
                       isSelected
-                        ? 'bg-cyan-500 border-cyan-500 shadow-sm'
-                        : 'border-2 border-gray-300 dark:border-border-dim hover:border-cyan-400'
+                        ? 'bg-primary border-primary shadow-sm'
+                        : 'border-2 border-border-subtle hover:border-primary'
                     }`}
                   >
                     {isSelected && <div className="w-2.5 h-2.5 bg-white rounded-sm" />}
@@ -199,15 +199,12 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
                 </label>
 
                 {/* Image */}
-                <div className="w-20 h-20 bg-bg-tertiary rounded-[16px] overflow-hidden shrink-0 border border-white/10 relative">
+                <div className="w-20 h-20 bg-bg-tertiary rounded-2xl overflow-hidden shrink-0 border border-border-subtle relative">
                   {item.imageUrl ? (
                     <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <ShoppingBag
-                        size={24}
-                        className="text-gray-300 dark:text-text-muted opacity-30"
-                      />
+                      <ShoppingBag size={24} className="text-text-muted opacity-30" />
                     </div>
                   )}
                 </div>
@@ -229,19 +226,19 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
                     </div>
 
                     {item.sku && item.sku.specValues.length > 0 && (
-                      <div className="inline-flex mt-1.5 px-2 py-0.5 bg-bg-tertiary border border-white/10 rounded-full text-[11px] text-text-muted font-black">
+                      <div className="inline-flex mt-1.5 px-2 py-0.5 bg-bg-tertiary border border-border-subtle rounded-full text-[11px] text-text-muted font-black">
                         {item.sku.specValues.join(' / ')}
                       </div>
                     )}
                   </div>
 
                   <div className="flex items-center justify-between mt-3">
-                    <span className="text-rose-500 dark:text-rose-400 text-base font-black flex items-baseline gap-0.5">
+                    <span className="text-danger text-base font-black flex items-baseline gap-0.5">
                       <PriceDisplay amount={item.unitPrice} />
                     </span>
 
                     {/* Quantity Control */}
-                    <div className="flex items-center bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] rounded-[12px] p-0.5 border border-white/10">
+                    <div className="flex items-center bg-bg-tertiary/50 rounded-2xl p-0.5 border border-border-subtle">
                       <button
                         type="button"
                         onClick={() =>
@@ -251,7 +248,7 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
                             quantity: Math.max(1, item.quantity - 1),
                           })
                         }
-                        className="w-7 h-7 flex items-center justify-center rounded-[8px] bg-[rgba(255,255,255,0.05)] text-text-muted hover:text-primary active:scale-95 transition-all"
+                        className="w-7 h-7 flex items-center justify-center rounded-[8px] bg-bg-modifier-hover text-text-muted hover:text-primary active:scale-95 transition-all"
                       >
                         <Minus size={12} strokeWidth={3} />
                       </button>
@@ -267,7 +264,7 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
                             quantity: Math.min(99, item.quantity + 1),
                           })
                         }
-                        className="w-7 h-7 flex items-center justify-center rounded-[8px] bg-[rgba(255,255,255,0.05)] text-text-muted hover:text-primary active:scale-95 transition-all"
+                        className="w-7 h-7 flex items-center justify-center rounded-[8px] bg-bg-modifier-hover text-text-muted hover:text-primary active:scale-95 transition-all"
                       >
                         <Plus size={12} strokeWidth={3} />
                       </button>
@@ -281,14 +278,14 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
       </div>
 
       {/* ── Bottom Checkout Bar ── */}
-      <div className="shrink-0 p-4 border-t border-border-subtle bg-[rgba(255,255,255,0.75)] dark:bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] flex items-center gap-4 z-20 pb-safe">
+      <div className="shrink-0 p-4 border-t border-border-subtle bg-bg-tertiary/50 backdrop-blur-xl flex items-center gap-4 z-20 pb-safe">
         <div className="flex-1 flex flex-col justify-center">
           <div className="text-xs text-text-muted font-black uppercase tracking-widest mb-0.5">
             已选 {selectedItems.length} 件
           </div>
           <div className="flex items-baseline gap-1">
             <span className="text-sm font-black text-text-primary">合计:</span>
-            <span className="text-rose-500 dark:text-rose-400 font-black text-xl flex items-baseline gap-0.5 tracking-tight">
+            <span className="text-danger font-black text-xl flex items-baseline gap-0.5 tracking-tight">
               <PriceDisplay amount={totalAmount} size={24} />
             </span>
           </div>

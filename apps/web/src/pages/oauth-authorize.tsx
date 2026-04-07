@@ -160,7 +160,7 @@ export function OAuthAuthorizePage() {
       <Card variant="glass" className="w-full max-w-[480px] p-8">
         <div className="text-center mb-6">
           <img src="/Logo.svg" alt="Shadow" className="w-10 h-10 mx-auto mb-3" />
-          <h1 className="text-xl font-semibold text-white mb-2">
+          <h1 className="text-xl font-black text-white mb-2">
             {t('oauth.authorizeTitle', 'Authorize Application')}
           </h1>
         </div>
@@ -197,7 +197,7 @@ export function OAuthAuthorizePage() {
                     .filter((group) => group.scopes.some((s) => requestedScopes.includes(s)))
                     .map((group) => (
                       <div key={group.label}>
-                        <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-1">
+                        <p className="text-xs font-black text-text-muted uppercase tracking-wide mb-1">
                           {group.label}
                         </p>
                         <ul className="space-y-1">
@@ -209,7 +209,7 @@ export function OAuthAuthorizePage() {
                                 className="flex items-center gap-2 text-sm text-text-primary"
                               >
                                 <svg
-                                  className="w-4 h-4 text-green-400 shrink-0"
+                                  className="w-4 h-4 text-success shrink-0"
                                   fill="none"
                                   viewBox="0 0 24 24"
                                   stroke="currentColor"

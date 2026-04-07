@@ -111,14 +111,14 @@ export function WorkspaceContextMenu({
       />
       <div
         ref={menuRef}
-        className="fixed z-[61] bg-[rgba(255,255,255,0.75)] dark:bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] border border-white dark:border-[rgba(255,255,255,0.08)] rounded-[24px] shadow-[0_15px_45px_rgba(0,0,0,0.04),inset_0_2px_12px_rgba(255,255,255,0.9)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.5)] py-2 min-w-[190px] animate-scale-in"
+        className="fixed z-[61] bg-bg-tertiary/50 backdrop-blur-xl border border-border-subtle rounded-[24px] shadow-[0_10px_40px_rgba(0,0,0,0.5)] py-2 min-w-[190px] animate-scale-in"
         style={{ left: position.x, top: position.y }}
       >
         {groups.map((group, gi) => (
           <div key={gi}>
             {gi > 0 && <div className="h-px bg-border-subtle/50 mx-3 my-1" />}
             {group.title && (
-              <div className="px-3 pt-1.5 pb-0.5 text-[10px] font-black uppercase tracking-[0.2em] text-text-muted/60 select-none">
+              <div className="px-3 pt-1.5 pb-0.5 text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 select-none">
                 {group.title}
               </div>
             )}
@@ -133,7 +133,7 @@ export function WorkspaceContextMenu({
                     onClose()
                   }
                 }}
-                className={`flex items-center gap-2 w-full px-3 py-[6px] text-[12px] transition-all duration-200 rounded-[12px] mx-1.5 ${
+                className={`flex items-center gap-2 w-full px-3 py-[6px] text-[12px] transition-all duration-200 rounded-2xl mx-1.5 ${
                   item.disabled
                     ? 'text-text-muted/40 cursor-not-allowed'
                     : item.danger

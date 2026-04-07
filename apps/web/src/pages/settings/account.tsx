@@ -1,65 +1,45 @@
-import { Button, cn, Input } from '@shadowob/ui'
+import { Button, Card, FormField, Input, SectionHeader } from '@shadowob/ui'
+import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { KeyRound, LogOut, Shield } from 'lucide-react'
+import { Check, Key, Lock, LogOut, Mail, Shield, User } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import { disconnectSocket } from '../../lib/socket'
+import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
 
 export function AccountSettings() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { user, logout } = useAuthStore()
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
-  const [showPasswordModal, setShowPasswordModal] = useState(false)
-  const [passwordForm, setPasswordForm] = useState({
-    oldPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  })
-  const [passwordError, setPasswordError] = useState<string | null>(null)
-  const [passwordLoading, setPasswordLoading] = useState(false)
-  const [passwordSuccess, setPasswordSuccess] = useState(false)
+  const [oldPassword, setOldPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
 
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setPasswordError(null)
-    setPasswordSuccess(false)
-
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setPasswordError(t('settings.passwordMismatch'))
-      return
-    }
-
-    if (passwordForm.newPassword.length < 8) {
-      setPasswordError(t('settings.passwordTooShort'))
-      return
-    }
-
-    setPasswordLoading(true)
-    try {
+  const changePasswordMutation = useMutation({
+    mutationFn: async () => {
+      if (newPassword !== confirmPassword) {
+        throw new Error(t('settings.passwordMismatch'))
+      }
+      if (newPassword.length < 8) {
+        throw new Error(t('settings.passwordTooShort'))
+      }
       await fetchApi('/api/auth/password', {
         method: 'PUT',
-        body: JSON.stringify({
-          oldPassword: passwordForm.oldPassword,
-          newPassword: passwordForm.newPassword,
-          confirmPassword: passwordForm.confirmPassword,
-        }),
+        body: JSON.stringify({ oldPassword, newPassword, confirmPassword }),
       })
-      setPasswordSuccess(true)
-      setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' })
-      setTimeout(() => {
-        setShowPasswordModal(false)
-        setPasswordSuccess(false)
-      }, 2000)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to change password'
-      setPasswordError(msg)
-    } finally {
-      setPasswordLoading(false)
-    }
-  }
+    },
+    onSuccess: () => {
+      showToast(t('settings.passwordChangedSuccess', '密码修改成功'), 'success')
+      setOldPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    },
+    onError: (err) => {
+      showToast(err instanceof Error ? err.message : 'Failed to change password', 'error')
+    },
+  })
 
   const handleLogout = () => {
     disconnectSocket()
@@ -70,225 +50,115 @@ export function AccountSettings() {
   if (!user) return null
 
   return (
-    <>
-      <h2 className="text-2xl font-black text-text-primary mb-6">{t('settings.accountTitle')}</h2>
+    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl pb-20">
+      <SectionHeader
+        title={t('settings.accountTitle', '账号设置')}
+        description={t('settings.accountDesc', '管理你的账号信息和安全设置')}
+        icon={Shield}
+      />
 
-      <div className="bg-white/[0.03] backdrop-blur-[32px] rounded-[24px] p-6 space-y-5 border border-white/[0.08]">
-        <div>
-          <p className="text-[11px] font-black uppercase text-text-muted tracking-[0.15em] mb-1">
-            {t('settings.emailLabel')}
-          </p>
-          <p className="text-text-primary">{user.email}</p>
-        </div>
-        <div>
-          <p className="text-[11px] font-black uppercase text-text-muted tracking-[0.15em] mb-1">
-            {t('settings.usernameLabel')}
-          </p>
-          <p className="text-text-primary">@{user.username}</p>
-        </div>
-        <div>
-          <p className="text-[11px] font-black uppercase text-text-muted tracking-[0.15em] mb-1">
-            {t('settings.userIdLabel')}
-          </p>
-          <p className="text-text-muted text-xs font-mono">{user.id}</p>
-        </div>
-      </div>
-
-      {/* Change Password Section */}
-      <div className="mt-6 bg-white/[0.03] backdrop-blur-[32px] rounded-[24px] p-6 border border-white/[0.08]">
-        <h3 className="text-lg font-black text-text-primary mb-2 flex items-center gap-2">
-          <KeyRound size={20} />
-          {t('settings.changePasswordTitle')}
-        </h3>
-        <p className="text-sm text-text-muted mb-4">{t('settings.changePasswordDesc')}</p>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowPasswordModal(true)}
-          className="normal-case tracking-normal"
-        >
-          <KeyRound size={16} />
-          {t('settings.changePassword')}
-        </Button>
-      </div>
-
-      {/* Danger Zone */}
-      <div className="mt-8 p-6 bg-danger/5 rounded-[24px] border border-danger/20">
-        <h3 className="text-lg font-black text-danger mb-2 flex items-center gap-2">
-          <Shield size={20} />
-          {t('settings.dangerTitle')}
-        </h3>
-        <p className="text-sm text-text-muted mb-4">{t('settings.dangerLogoutWarning')}</p>
-        <Button
-          variant="danger"
-          size="sm"
-          onClick={() => setShowLogoutConfirm(true)}
-          className="normal-case tracking-normal"
-        >
-          <LogOut size={16} />
-          {t('settings.logout')}
-        </Button>
-      </div>
-
-      {/* Change Password Modal */}
-      {showPasswordModal && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => !passwordLoading && setShowPasswordModal(false)}
-          onKeyDown={(e) => e.key === 'Escape' && !passwordLoading && setShowPasswordModal(false)}
-        >
-          <div
-            className="bg-bg-secondary rounded-xl p-6 w-full max-w-md mx-4 border border-border-subtle"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            role="document"
-          >
-            <h2 className="text-xl font-black text-text-primary mb-4 flex items-center gap-2">
-              <KeyRound size={20} />
-              {t('settings.changePasswordTitle')}
-            </h2>
-
-            {passwordSuccess && (
-              <div className="mb-4 p-3 bg-success/10 text-success rounded-lg text-sm font-medium">
-                {t('settings.passwordChangedSuccess')}
-              </div>
-            )}
-
-            {passwordError && (
-              <div className="mb-4 p-3 bg-danger/10 text-danger rounded-lg text-sm">
-                {passwordError}
-              </div>
-            )}
-
-            <form onSubmit={handleChangePassword} className="space-y-4">
-              <div>
-                <label
-                  htmlFor="oldPassword"
-                  className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] ml-1 mb-2"
-                >
-                  {t('settings.oldPasswordLabel')}
-                </label>
-                <Input
-                  id="oldPassword"
-                  type="password"
-                  value={passwordForm.oldPassword}
-                  onChange={(e) =>
-                    setPasswordForm({ ...passwordForm, oldPassword: e.target.value })
-                  }
-                  placeholder={t('settings.oldPasswordPlaceholder')}
-                  disabled={passwordLoading}
-                  required
-                  className="rounded-[16px] px-4 py-3"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="newPassword"
-                  className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] ml-1 mb-2"
-                >
-                  {t('settings.newPasswordLabel')}
-                </label>
-                <Input
-                  id="newPassword"
-                  type="password"
-                  value={passwordForm.newPassword}
-                  onChange={(e) =>
-                    setPasswordForm({ ...passwordForm, newPassword: e.target.value })
-                  }
-                  placeholder={t('settings.newPasswordPlaceholder')}
-                  disabled={passwordLoading}
-                  required
-                  minLength={8}
-                  className="rounded-[16px] px-4 py-3"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="confirmPassword"
-                  className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] ml-1 mb-2"
-                >
-                  {t('settings.confirmPasswordLabel')}
-                </label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={passwordForm.confirmPassword}
-                  onChange={(e) =>
-                    setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })
-                  }
-                  placeholder={t('settings.confirmPasswordPlaceholder')}
-                  disabled={passwordLoading}
-                  required
-                  className="rounded-[16px] px-4 py-3"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <Button
-                  variant="ghost"
-                  type="button"
-                  onClick={() => setShowPasswordModal(false)}
-                  disabled={passwordLoading}
-                  className="normal-case tracking-normal"
-                >
-                  {t('common.cancel')}
-                </Button>
-                <Button
-                  variant="primary"
-                  type="submit"
-                  disabled={passwordLoading}
-                  className="normal-case tracking-normal"
-                >
-                  {passwordLoading ? t('settings.changingPassword') : t('settings.changePassword')}
-                </Button>
-              </div>
-            </form>
+      {/* Account Info Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="p-6 group hover:bg-bg-tertiary/50 transition-all">
+          <div className="flex items-center gap-4 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+              <Mail size={20} strokeWidth={2.5} />
+            </div>
+            <span className="text-[11px] font-black uppercase tracking-widest text-text-muted">
+              {t('settings.emailLabel')}
+            </span>
           </div>
-        </div>
-      )}
+          <p className="text-base font-bold text-text-primary">{user.email}</p>
+        </Card>
 
-      {/* Logout confirmation */}
-      {showLogoutConfirm && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setShowLogoutConfirm(false)}
-          onKeyDown={(e) => e.key === 'Escape' && setShowLogoutConfirm(false)}
-        >
-          <div
-            className="bg-bg-secondary rounded-xl p-6 w-full max-w-96 mx-4 border border-border-subtle"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            role="document"
-          >
-            <h2 className="text-xl font-black text-text-primary mb-2">
-              {t('settings.logoutConfirmTitle')}
-            </h2>
-            <p className="text-text-muted text-sm mb-6">{t('settings.logoutConfirmMessage')}</p>
-            <div className="flex justify-end gap-3">
-              <Button
-                variant="ghost"
-                type="button"
-                onClick={() => setShowLogoutConfirm(false)}
-                className="normal-case tracking-normal"
-              >
-                {t('common.cancel')}
-              </Button>
-              <Button
-                variant="danger"
-                type="button"
-                onClick={handleLogout}
-                className="normal-case tracking-normal"
-              >
-                {t('settings.logout')}
-              </Button>
+        <Card className="p-6 group hover:bg-bg-tertiary/50 transition-all">
+          <div className="flex items-center gap-4 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+              <User size={20} strokeWidth={2.5} />
+            </div>
+            <span className="text-[11px] font-black uppercase tracking-widest text-text-muted">
+              {t('settings.usernameLabel')}
+            </span>
+          </div>
+          <p className="text-base font-bold text-text-primary">@{user.username}</p>
+        </Card>
+      </div>
+
+      {/* Change Password - Inline */}
+      <section className="space-y-6">
+        <label className="block text-xs font-black uppercase tracking-widest text-text-muted">
+          {t('settings.changePasswordTitle')}
+        </label>
+
+        <Card className="p-8 space-y-8 shadow-xl">
+          <div className="space-y-6">
+            <FormField label={t('settings.oldPasswordLabel')}>
+              <Input
+                id="old-password"
+                type="password"
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+            </FormField>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField label={t('settings.newPasswordLabel')}>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                />
+              </FormField>
+              <FormField label={t('settings.confirmPasswordLabel')}>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                />
+              </FormField>
             </div>
           </div>
-        </div>
-      )}
-    </>
+
+          <div className="flex justify-end">
+            <Button
+              onClick={() => changePasswordMutation.mutate()}
+              disabled={!oldPassword || !newPassword || !confirmPassword}
+              loading={changePasswordMutation.isPending}
+              icon={Key}
+              size="lg"
+              className="px-10"
+            >
+              {t('settings.changePassword')}
+            </Button>
+          </div>
+        </Card>
+      </section>
+
+      {/* Danger Zone */}
+      <section className="space-y-6 pt-10 border-t border-border-subtle">
+        <label className="block text-xs font-black uppercase tracking-widest text-danger/60">
+          {t('settings.dangerTitle', 'Danger Zone')}
+        </label>
+
+        <Card className="p-8 bg-danger/5 border-danger/20 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="text-center md:text-left">
+            <h4 className="text-lg font-black text-danger mb-1 uppercase">
+              {t('settings.logout')}
+            </h4>
+            <p className="text-sm font-bold text-text-muted italic">
+              {t('settings.dangerLogoutWarning')}
+            </p>
+          </div>
+          <Button variant="danger" size="lg" onClick={handleLogout} icon={LogOut} className="px-10">
+            {t('settings.logout')}
+          </Button>
+        </Card>
+      </section>
+    </div>
   )
 }

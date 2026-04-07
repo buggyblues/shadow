@@ -1,15 +1,14 @@
-import { Button, cn, Input } from '@shadowob/ui'
+import { Avatar, Badge, Button, Card, FormField, Input, SectionHeader } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Save } from 'lucide-react'
+import { Globe, Save, User as UserIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { UserAvatar } from '../../components/common/avatar'
 import { AvatarEditor } from '../../components/common/avatar-editor'
 import { LanguageSwitcher } from '../../components/common/language-switcher'
 import { PriceDisplay } from '../../components/shop/ui/currency'
 import { fetchApi } from '../../lib/api'
+import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
-import { useRechargeStore } from '../../stores/recharge.store'
 
 export function ProfileSettings() {
   const { t } = useTranslation()
@@ -17,9 +16,6 @@ export function ProfileSettings() {
   const { user, setUser } = useAuthStore()
   const [displayName, setDisplayName] = useState(user?.displayName ?? '')
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null)
-  const [message, setMessage] = useState('')
-  const [saveSuccess, setSaveSuccess] = useState(false)
-  const openRecharge = useRechargeStore((s) => s.openModal)
 
   const { data: wallet } = useQuery({
     queryKey: ['wallet'],
@@ -45,102 +41,111 @@ export function ProfileSettings() {
     },
     onSuccess: (result) => {
       setUser({ ...user!, ...result })
-      setMessage(t('common.saveSuccess'))
-      setSaveSuccess(true)
+      showToast(t('common.saveSuccess'), 'success')
       queryClient.invalidateQueries({ queryKey: ['me'] })
     },
     onError: (err) => {
-      setMessage(err instanceof Error ? err.message : t('common.saveFailed'))
-      setSaveSuccess(false)
+      showToast(err instanceof Error ? err.message : t('common.saveFailed'), 'error')
     },
   })
 
   if (!user) return null
 
   return (
-    <>
-      <h2 className="text-2xl font-black text-text-primary mb-6">{t('settings.profileTitle')}</h2>
+    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl">
+      <SectionHeader
+        title={t('settings.tabProfile')}
+        description={t('settings.profileTitle')}
+        icon={UserIcon}
+      />
 
       {/* Preview card */}
-      <div className="bg-white/[0.03] backdrop-blur-[32px] rounded-[24px] p-6 mb-8 border border-white/[0.08]">
-        <div className="flex items-center gap-4">
-          <UserAvatar
-            userId={user.id}
-            avatarUrl={selectedAvatar ?? user.avatarUrl}
-            displayName={displayName || user.username}
-            size="xl"
-          />
-          <div>
-            <h3 className="text-lg font-bold text-text-primary">{displayName || user.username}</h3>
-            <p className="text-sm text-text-muted">@{user.username}</p>
-            <p className="text-xs text-text-muted mt-1">{user.email}</p>
-            <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-white/[0.05] border border-white/[0.08]">
-              <span className="text-xs text-text-muted">虾币</span>
-              <PriceDisplay amount={wallet?.balance ?? 0} size={13} className="ml-0.5" />
+      <Card className="p-8 relative overflow-hidden group border-none bg-gradient-to-br from-bg-secondary to-bg-tertiary shadow-xl">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-primary/10 transition-colors duration-500" />
+
+        <div className="flex flex-col md:flex-row items-center md:items-start gap-8 relative z-10">
+          <div className="relative shrink-0">
+            <Avatar
+              userId={user.id}
+              avatarUrl={selectedAvatar ?? user.avatarUrl}
+              displayName={displayName || user.username}
+              size="xl"
+              className="rounded-[40px] shadow-2xl ring-4 ring-white/5 transition-transform duration-500 group-hover:scale-105"
+            />
+            <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-primary rounded-2xl flex items-center justify-center text-bg-deep shadow-lg border-4 border-bg-secondary">
+              <UserIcon size={20} strokeWidth={3} />
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={openRecharge}
-              className="mt-2 ml-2 text-primary hover:bg-primary/10 normal-case tracking-normal font-bold"
-            >
-              {t('recharge.rechargeNow')}
-            </Button>
+          </div>
+
+          <div className="flex-1 text-center md:text-left pt-2 min-w-0">
+            <h3 className="text-3xl font-black text-text-primary tracking-tight mb-1 truncate uppercase">
+              {displayName || user.username}
+            </h3>
+            <p className="text-lg font-bold text-text-muted mb-4 opacity-60">@{user.username}</p>
+
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-bg-tertiary/50 border border-border-subtle hover:bg-bg-modifier-hover transition-colors shadow-inner">
+                <span className="text-[11px] font-black uppercase tracking-widest text-text-muted">
+                  Balance
+                </span>
+                <PriceDisplay
+                  amount={wallet?.balance ?? 0}
+                  size={14}
+                  className="font-black text-primary"
+                />
+              </div>
+              <Badge variant="success" className="px-4 py-2 rounded-2xl">
+                Active
+              </Badge>
+            </div>
           </div>
         </div>
+      </Card>
+
+      {/* Edit Form */}
+      <div className="space-y-8">
+        <FormField label={t('settings.displayNameLabel')}>
+          <Input
+            type="text"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder={user.username}
+          />
+        </FormField>
+
+        <FormField label={t('settings.avatarLabel')}>
+          <Card className="p-6 bg-bg-tertiary/50 border-dashed border-2 border-border-subtle shadow-none">
+            <AvatarEditor
+              value={selectedAvatar ?? user.avatarUrl ?? undefined}
+              onChange={setSelectedAvatar}
+            />
+          </Card>
+        </FormField>
+
+        <FormField label={t('settings.languageLabel')}>
+          <Card className="p-4 flex items-center gap-4 hover:bg-bg-tertiary/50 transition-all shadow-sm">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0 shadow-inner">
+              <Globe size={20} strokeWidth={2.5} />
+            </div>
+            <div className="flex-1">
+              <LanguageSwitcher />
+            </div>
+          </Card>
+        </FormField>
       </div>
 
-      {/* Display name */}
-      <div className="mb-6">
-        <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] ml-1 mb-2">
-          {t('settings.displayNameLabel')}
-        </label>
-        <Input
-          type="text"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-          placeholder={user.username}
-          className="rounded-[16px] px-4 py-3"
-        />
-      </div>
-
-      {/* Avatar picker */}
-      <div className="mb-8">
-        <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] ml-1 mb-3">
-          {t('settings.avatarLabel')}
-        </label>
-        <AvatarEditor
-          value={selectedAvatar ?? user.avatarUrl ?? undefined}
-          onChange={setSelectedAvatar}
-        />
-      </div>
-
-      {/* Language */}
-      <div className="mb-8">
-        <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] ml-1 mb-3">
-          {t('settings.languageLabel')}
-        </label>
-        <LanguageSwitcher />
-      </div>
-
-      {/* Save */}
-      <div className="flex items-center gap-4">
+      {/* Save Button */}
+      <div className="pt-8 border-t border-border-subtle flex justify-end">
         <Button
-          variant="primary"
+          size="xl"
           onClick={() => updateProfileMutation.mutate()}
-          disabled={updateProfileMutation.isPending}
+          loading={updateProfileMutation.isPending}
+          icon={Save}
+          className="w-full md:w-auto px-12"
         >
-          <Save size={16} />
-          {updateProfileMutation.isPending ? t('common.saving') : t('common.saveChanges')}
+          {t('common.saveChanges')}
         </Button>
-        {message && (
-          <span
-            className={cn('text-sm font-bold', saveSuccess ? 'text-green-400' : 'text-red-400')}
-          >
-            {message}
-          </span>
-        )}
       </div>
-    </>
+    </div>
   )
 }

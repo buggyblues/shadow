@@ -53,7 +53,7 @@ export function AvatarEditor({ value, onChange }: AvatarEditorProps) {
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-4">
         {/* Current Avatar Display */}
-        <div className="w-20 h-20 rounded-[12px] border-4 border-border-subtle bg-bg-secondary overflow-hidden flex items-center justify-center shrink-0">
+        <div className="w-20 h-20 rounded-2xl border-4 border-border-subtle bg-bg-tertiary/50 overflow-hidden flex items-center justify-center shrink-0">
           {value ? (
             <img src={value} alt="Avatar" className="w-full h-full object-cover" />
           ) : (

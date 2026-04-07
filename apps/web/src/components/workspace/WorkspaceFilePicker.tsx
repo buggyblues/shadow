@@ -145,7 +145,7 @@ export function WorkspaceFilePicker({
 
   return (
     <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-[70]"
+      className="fixed inset-0 bg-bg-deep/60 flex items-center justify-center z-[70]"
       onClick={onClose}
     >
       <div
@@ -182,7 +182,7 @@ export function WorkspaceFilePicker({
         </div>
 
         {/* Tree */}
-        <div className="flex-1 overflow-y-auto px-2 pb-2 min-h-[200px] custom-scrollbar">
+        <div className="flex-1 overflow-y-auto px-2 pb-2 min-h-[200px] scrollbar-hidden">
           {isLoading ? (
             <div className="flex items-center justify-center py-12 text-text-muted text-sm">
               加载中...
@@ -204,7 +204,7 @@ export function WorkspaceFilePicker({
                   key={node.id}
                   className={`flex items-center h-8 px-2 rounded cursor-pointer select-none transition-colors text-sm ${
                     selected
-                      ? 'bg-[#5865F2]/20 text-text-primary'
+                      ? 'bg-info/20 text-text-primary'
                       : selectable
                         ? 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary'
                         : 'text-text-muted hover:bg-bg-modifier-hover'
@@ -231,11 +231,11 @@ export function WorkspaceFilePicker({
                   )}
                   <Icon
                     size={16}
-                    className={`shrink-0 mr-1.5 ${node.kind === 'dir' ? 'text-[#e8a838]' : 'text-text-muted'}`}
+                    className={`shrink-0 mr-1.5 ${node.kind === 'dir' ? 'text-accent' : 'text-text-muted'}`}
                   />
                   <span className="flex-1 min-w-0 truncate">{node.name}</span>
                   {node.kind === 'file' && node.sizeBytes != null && (
-                    <span className="text-[10px] text-text-muted ml-2 shrink-0">
+                    <span className="text-[11px] text-text-muted ml-2 shrink-0">
                       {formatFileSize(node.sizeBytes)}
                     </span>
                   )}

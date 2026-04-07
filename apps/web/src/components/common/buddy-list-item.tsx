@@ -49,10 +49,10 @@ interface BuddyListItemProps {
 }
 
 const statusColors: Record<string, string> = {
-  online: 'bg-green-500',
-  idle: 'bg-yellow-500',
-  dnd: 'bg-red-500',
-  offline: 'bg-gray-500',
+  online: 'bg-success',
+  idle: 'bg-warning/100',
+  dnd: 'bg-danger/100',
+  offline: 'bg-text-muted',
 }
 
 /**
@@ -117,9 +117,9 @@ export function BuddyListItem({
           label: t(`member.${buddy.role}`),
           color:
             buddy.role === 'owner'
-              ? 'text-yellow-400'
+              ? 'text-accent'
               : buddy.role === 'admin'
-                ? 'text-blue-400'
+                ? 'text-primary'
                 : 'text-text-muted',
         }
       : null
@@ -150,7 +150,7 @@ export function BuddyListItem({
         onClick={handleClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        className={`flex items-center gap-3 px-2 py-1.5 w-full rounded-md hover:bg-white/5 hover:backdrop-blur-sm transition group text-left ${className}`}
+        className={`flex items-center gap-3 px-2 py-1.5 w-full rounded-md hover:bg-bg-tertiary/50 hover:backdrop-blur-sm transition group text-left ${className}`}
       >
         {/* Avatar with status dot */}
         <div className="relative shrink-0">

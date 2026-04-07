@@ -41,13 +41,13 @@ const TYPE_ICONS: Record<TransactionType, typeof CreditCard> = {
 }
 
 const TYPE_COLORS: Record<TransactionType, string> = {
-  topup: 'text-green-500 bg-green-500/10',
-  purchase: 'text-orange-500 bg-orange-500/10',
-  refund: 'text-blue-500 bg-blue-500/10',
-  reward: 'text-amber-500 bg-amber-500/10',
-  transfer: 'text-purple-500 bg-purple-500/10',
-  adjustment: 'text-gray-500 bg-gray-500/10',
-  settlement: 'text-red-500 bg-red-500/10',
+  topup: 'text-success bg-success/10',
+  purchase: 'text-warning bg-warning/10',
+  refund: 'text-primary bg-primary/10',
+  reward: 'text-warning bg-warning/10',
+  transfer: 'text-info bg-info/10',
+  adjustment: 'text-text-muted bg-text-muted/10',
+  settlement: 'text-danger bg-danger/10',
 }
 
 const PAGE_SIZE = 20
@@ -107,7 +107,7 @@ export function WalletSettings() {
           <div>
             <p className="text-sm text-text-muted mb-1">{t('wallet.balance')}</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold text-text-primary">
+              <span className="text-4xl font-black text-text-primary">
                 {wallet?.balance?.toLocaleString() ?? '—'}
               </span>
               <span className="text-xl">🦐</span>
@@ -123,7 +123,7 @@ export function WalletSettings() {
             size="md"
             type="button"
             onClick={openModal}
-            className="normal-case tracking-normal shadow-lg shadow-primary/25"
+            className="shadow-lg shadow-primary/25"
           >
             {t('wallet.rechargeBtn')}
           </Button>
@@ -135,7 +135,7 @@ export function WalletSettings() {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-black text-text-primary">{t('wallet.transactionHistory')}</h3>
           {/* Filter tabs */}
-          <div className="flex items-center gap-1 bg-white/[0.03] rounded-full p-1">
+          <div className="flex items-center gap-1 bg-bg-tertiary/30 rounded-full p-1">
             {(['all', 'income', 'expense'] as FilterType[]).map((f) => (
               <button
                 key={f}
@@ -145,7 +145,7 @@ export function WalletSettings() {
                   setOffset(0)
                 }}
                 className={cn(
-                  'px-3 py-1 rounded-full text-xs font-bold transition-all',
+                  'px-3 py-1 rounded-full text-xs font-black transition-all',
                   filter === f
                     ? 'bg-primary/15 text-primary shadow-sm'
                     : 'text-text-muted hover:text-text-primary',
@@ -174,13 +174,13 @@ export function WalletSettings() {
           <div className="space-y-2">
             {filteredTransactions.map((tx) => {
               const Icon = TYPE_ICONS[tx.type] ?? RefreshCw
-              const colorClass = TYPE_COLORS[tx.type] ?? 'text-gray-500 bg-gray-500/10'
+              const colorClass = TYPE_COLORS[tx.type] ?? 'text-text-muted bg-text-muted/10'
               const isPositive = tx.amount > 0
 
               return (
                 <div
                   key={tx.id}
-                  className="flex items-center gap-3 p-3 rounded-[16px] bg-white/[0.02] hover:bg-white/[0.04] transition-all"
+                  className="flex items-center gap-3 p-3 rounded-2xl bg-bg-tertiary/20 hover:bg-white/[0.04] transition-all"
                 >
                   {/* Icon */}
                   <div
@@ -192,7 +192,7 @@ export function WalletSettings() {
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-text-primary">
+                      <span className="text-sm font-bold text-text-primary">
                         {t(`wallet.type.${tx.type}`)}
                       </span>
                     </div>
@@ -207,8 +207,8 @@ export function WalletSettings() {
                   {/* Amount */}
                   <div className="text-right shrink-0">
                     <span
-                      className={`text-sm font-bold tabular-nums ${
-                        isPositive ? 'text-green-500' : 'text-text-primary'
+                      className={`text-sm font-black tabular-nums ${
+                        isPositive ? 'text-success' : 'text-text-primary'
                       }`}
                     >
                       {isPositive ? '+' : ''}
@@ -233,7 +233,7 @@ export function WalletSettings() {
               type="button"
               disabled={offset === 0}
               onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-              className="normal-case tracking-normal"
+              className=""
             >
               ← {t('recharge.back')}
             </Button>
@@ -246,7 +246,7 @@ export function WalletSettings() {
                 size="sm"
                 type="button"
                 onClick={() => setOffset(offset + PAGE_SIZE)}
-                className="normal-case tracking-normal"
+                className=""
               >
                 {t('wallet.loadMore')} →
               </Button>

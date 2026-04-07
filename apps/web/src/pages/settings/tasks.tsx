@@ -1,7 +1,16 @@
-import { Button, cn } from '@shadowob/ui'
+import {
+  Accordion,
+  Badge,
+  Button,
+  Card,
+  Divider,
+  EmptyState,
+  ProgressBar,
+  SectionHeader,
+} from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
+import { ExternalLink, HelpCircle, History, Target, Trophy } from 'lucide-react'
 import { PriceDisplay } from '../../components/shop/ui/currency'
 import { fetchApi } from '../../lib/api'
 import { useUIStore } from '../../stores/ui.store'
@@ -29,7 +38,6 @@ export function TaskSettings() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { setPendingAction } = useUIStore()
-  const [expandedTask, setExpandedTask] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['task-center'],
@@ -158,161 +166,157 @@ export function TaskSettings() {
     }
   }
 
+  const completionRate = data ? (data.summary.completedTasks / data.summary.totalTasks) * 100 : 0
+
   return (
-    <>
-      <h2 className="text-2xl font-black text-text-primary mb-2">任务中心</h2>
-      <p className="text-text-muted text-sm mb-6">完成任务赚取虾币，支持一次性任务与活动任务。</p>
+    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl pb-20">
+      <SectionHeader
+        title="任务中心"
+        description="完成任务赚取虾币，支持一次性任务与活动任务。"
+        icon={Target}
+      />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-        <div className="bg-white/[0.03] backdrop-blur-[32px] rounded-[20px] border border-white/[0.08] p-4">
-          <p className="text-[11px] text-text-muted uppercase font-black tracking-[0.15em]">
-            任务总数
-          </p>
-          <p className="text-lg font-extrabold text-text-primary">
-            {data?.summary.totalTasks ?? 0}
-          </p>
-        </div>
-        <div className="bg-white/[0.03] backdrop-blur-[32px] rounded-[20px] border border-white/[0.08] p-4">
-          <p className="text-[11px] text-text-muted uppercase font-black tracking-[0.15em]">
-            可领取
-          </p>
-          <p className="text-lg font-extrabold text-emerald-400">
-            {data?.summary.claimableTasks ?? 0}
-          </p>
-        </div>
-        <div className="bg-white/[0.03] backdrop-blur-[32px] rounded-[20px] border border-white/[0.08] p-4">
-          <p className="text-[11px] text-text-muted uppercase font-black tracking-[0.15em]">
-            已完成
-          </p>
-          <p className="text-lg font-extrabold text-primary">{data?.summary.completedTasks ?? 0}</p>
-        </div>
-      </div>
-
-      <div className="bg-white/[0.03] backdrop-blur-[32px] rounded-[20px] border border-white/[0.08] p-5 mb-6">
-        <p className="text-[11px] text-text-muted uppercase font-black tracking-[0.15em] mb-1">
-          当前虾币
-        </p>
-        <div className="flex items-center gap-2">
-          <PriceDisplay amount={data?.wallet.balance ?? 0} size={20} />
-        </div>
-      </div>
-
-      {isLoading ? (
-        <div className="text-center text-text-muted py-12">加载任务中...</div>
-      ) : (
-        <div className="space-y-3">
-          {data?.tasks.map((task) => (
-            <div
-              key={task.key}
-              className="bg-white/[0.03] backdrop-blur-[32px] rounded-[20px] border border-white/[0.08] p-4"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-text-primary">{task.title}</p>
-                  <p className="text-xs text-text-muted mt-1">{task.description}</p>
-                  <div className="text-xs text-emerald-400 mt-1 inline-flex items-center gap-1">
-                    <span>奖励：</span>
-                    <PriceDisplay amount={task.reward} size={12} />
-                  </div>
-                </div>
-
-                {task.type === 'repeatable' ? (
-                  task.claimedCount > 0 ? (
-                    <span className="text-xs px-2 py-1 rounded bg-emerald-500/15 text-emerald-400">
-                      已完成 {task.claimedCount} 次
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => navigate({ to: '/settings/invite' })}
-                      className="text-xs px-2 py-1 rounded bg-primary/20 hover:bg-primary/30 text-primary"
-                    >
-                      {getActionLabel(task.key)}
-                    </button>
-                  )
-                ) : task.claimable ? (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    type="button"
-                    onClick={() => claimMutation.mutate(task.key)}
-                    disabled={claimMutation.isPending}
-                    className="normal-case tracking-normal"
-                  >
-                    领取
-                  </Button>
-                ) : task.completed ? (
-                  <span className="text-xs px-2 py-1 rounded bg-green-500/15 text-green-400">
-                    已领取
-                  </span>
-                ) : (
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {canNavigate(task.key) && (
-                      <button
-                        type="button"
-                        onClick={() => handleNavigateTask(task.key)}
-                        className="text-xs px-2 py-1 rounded bg-zinc-500/20 hover:bg-zinc-500/30 text-zinc-200"
-                      >
-                        {getActionLabel(task.key)}
-                      </button>
-                    )}
-                    {taskGuides[task.key] && (
-                      <button
-                        type="button"
-                        onClick={() => setExpandedTask(expandedTask === task.key ? null : task.key)}
-                        className={`text-xs px-2 py-1 rounded ${
-                          !canNavigate(task.key)
-                            ? 'bg-primary/20 hover:bg-primary/30 text-primary font-bold'
-                            : 'bg-primary/10 hover:bg-primary/20 text-primary'
-                        }`}
-                      >
-                        {expandedTask === task.key ? '收起' : '查看教程'}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {expandedTask === task.key && taskGuides[task.key] && (
-                <div className="mt-3 pt-3 border-t border-white/[0.06] animate-in slide-in-from-top-2 duration-200">
-                  <div className="bg-white/[0.03] rounded-[14px] p-3">
-                    <p className="text-[11px] font-black text-text-muted uppercase tracking-[0.15em] mb-2">
-                      教程步骤
-                    </p>
-                    <p className="text-xs text-text-secondary whitespace-pre-wrap leading-relaxed">
-                      {taskGuides[task.key]}
-                    </p>
-                  </div>
-                </div>
-              )}
+      {/* Progress Summary */}
+      <Card className="p-8 bg-gradient-to-br from-primary/10 via-bg-secondary to-bg-secondary border-primary/20 relative overflow-hidden group">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-primary/10 transition-colors" />
+        <div className="relative z-10 space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-black text-text-muted uppercase tracking-widest mb-1">
+                总进度
+              </p>
+              <h3 className="text-3xl font-black text-text-primary tracking-tight">
+                {data?.summary.completedTasks ?? 0} / {data?.summary.totalTasks ?? 0}{' '}
+                <span className="text-sm text-text-muted opacity-40 ml-2">已完成</span>
+              </h3>
             </div>
-          ))}
+            <div className="w-16 h-16 rounded-3xl bg-primary/10 flex items-center justify-center text-primary shadow-inner">
+              <Trophy size={32} strokeWidth={2.5} />
+            </div>
+          </div>
+          <ProgressBar value={completionRate} variant="primary" showLabel className="h-3" />
         </div>
-      )}
+      </Card>
 
-      <div className="mt-6 bg-white/[0.03] backdrop-blur-[32px] rounded-[24px] border border-white/[0.08] p-5">
-        <h3 className="text-sm font-black text-text-primary mb-3">奖励记录</h3>
-        {rewardLogs && rewardLogs.length > 0 ? (
-          <div className="space-y-2">
-            {rewardLogs.map((log) => (
-              <div
-                key={log.id}
-                className="flex items-center justify-between rounded-[12px] bg-white/[0.03] px-3 py-2"
-              >
-                <div className="min-w-0">
-                  <p className="text-xs text-text-primary truncate">{log.note || log.rewardKey}</p>
-                  <p className="text-[11px] text-text-muted">
-                    {new Date(log.createdAt).toLocaleString()}
-                  </p>
-                </div>
-                <PriceDisplay amount={log.amount} size={13} />
-              </div>
-            ))}
+      <section className="space-y-6">
+        <Divider label="当前任务" />
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
           </div>
         ) : (
-          <p className="text-xs text-text-muted">暂无奖励记录</p>
+          <div className="space-y-4">
+            {data?.tasks.map((task) => (
+              <Accordion
+                type="single"
+                key={task.key}
+                title={task.title}
+                icon={Target}
+                className={task.completed ? 'opacity-60' : ''}
+              >
+                <div className="flex flex-col md:flex-row md:items-start gap-6">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-2">
+                      {task.type === 'repeatable' && <Badge variant="info">可重复</Badge>}
+                      {task.completed && <Badge variant="success">已完成</Badge>}
+                    </div>
+                    <p className="text-sm font-bold text-text-secondary leading-relaxed mb-4">
+                      {task.description}
+                    </p>
+
+                    <div className="p-4 bg-bg-tertiary/50 rounded-2xl border border-border-subtle">
+                      <p className="text-[11px] font-black uppercase text-text-muted tracking-widest mb-2 flex items-center gap-2">
+                        <HelpCircle size={12} /> 操作教程
+                      </p>
+                      <p className="text-xs font-bold text-text-secondary whitespace-pre-wrap leading-relaxed italic opacity-80">
+                        {taskGuides[task.key] || '暂无教程'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="w-full md:w-48 flex flex-col gap-3 shrink-0">
+                    <Card className="p-4 flex flex-col items-center justify-center text-center bg-bg-tertiary/50 shadow-inner">
+                      <span className="text-[11px] font-black uppercase text-text-muted tracking-widest mb-1">
+                        奖励
+                      </span>
+                      <PriceDisplay
+                        amount={task.reward}
+                        size={20}
+                        className="font-black text-success"
+                      />
+                    </Card>
+
+                    {task.claimable ? (
+                      <Button
+                        variant="primary"
+                        onClick={() => claimMutation.mutate(task.key)}
+                        disabled={claimMutation.isPending}
+                        loading={claimMutation.isPending}
+                        icon={Trophy}
+                        className="w-full"
+                      >
+                        领取奖励
+                      </Button>
+                    ) : task.completed && task.type !== 'repeatable' ? (
+                      <Button variant="ghost" disabled className="w-full">
+                        已领取
+                      </Button>
+                    ) : canNavigate(task.key) ? (
+                      <Button
+                        variant="secondary"
+                        onClick={() => handleNavigateTask(task.key)}
+                        icon={ExternalLink}
+                        className="w-full"
+                      >
+                        {getActionLabel(task.key)}
+                      </Button>
+                    ) : (
+                      <Badge variant="neutral" className="py-3 text-center opacity-50">
+                        暂不可用
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </Accordion>
+            ))}
+          </div>
         )}
-      </div>
-    </>
+      </section>
+
+      <section className="space-y-6 pt-10">
+        <Divider label="奖励记录" />
+
+        <Card className="overflow-hidden bg-transparent border-none">
+          {rewardLogs && rewardLogs.length > 0 ? (
+            <div className="space-y-2">
+              {rewardLogs.map((log) => (
+                <div
+                  key={log.id}
+                  className="flex items-center justify-between p-5 bg-bg-tertiary/50 rounded-2xl hover:bg-bg-modifier-hover transition-colors border border-border-subtle"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-black text-text-primary uppercase tracking-tight truncate">
+                      {log.note || log.rewardKey}
+                    </p>
+                    <p className="text-[11px] font-bold text-text-muted mt-0.5 opacity-60">
+                      {new Date(log.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <PriceDisplay amount={log.amount} size={16} className="font-black text-primary" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="暂无记录"
+              description="完成第一个任务后，奖励记录将显示在这里。"
+              icon={History}
+              className="py-12"
+            />
+          )}
+        </Card>
+      </section>
+    </div>
   )
 }

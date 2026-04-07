@@ -1,17 +1,7 @@
-import { Badge, Button, Card, cn, Input } from '@shadowob/ui'
+import { Badge, Button, Card, cn, EmptyState, Input } from '@shadowob/ui'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import {
-  Flame,
-  Hash,
-  MessageCircle,
-  MoreHorizontal,
-  Search,
-  Server,
-  Shield,
-  Users,
-  Zap,
-} from 'lucide-react'
+import { ArrowRight, Flame, Hash, Search, Server, Users, Zap } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStatus } from '../hooks/use-app-status'
@@ -117,7 +107,6 @@ export function DiscoverPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [isSearching, setIsSearching] = useState(false)
-  const searchInputRef = useRef<HTMLInputElement>(null)
 
   useAppStatus({
     title: t('discover.title'),
@@ -211,115 +200,76 @@ export function DiscoverPage() {
     return () => observerRef.current?.disconnect()
   }, [fetchNextPage, hasNextPage, isFetchingNextPage, isSearching])
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (searchQuery.length >= 2) {
-      setIsSearching(true)
-    }
-  }
-
-  const clearSearch = () => {
-    setSearchQuery('')
-    setIsSearching(false)
-  }
-
-  const formatTimeAgo = (date: string) => {
-    const now = new Date()
-    const then = new Date(date)
-    const diff = now.getTime() - then.getTime()
-    const minutes = Math.floor(diff / 60000)
-    const hours = Math.floor(diff / 3600000)
-    const days = Math.floor(diff / 86400000)
-
-    if (minutes < 1) return t('discover.justNow')
-    if (minutes < 60) return t('discover.minutesAgo', { count: minutes })
-    if (hours < 24) return t('discover.hoursAgo', { count: hours })
-    if (days < 7) return t('discover.daysAgo', { count: days })
-    return then.toLocaleDateString()
-  }
-
-  const getHeatLevel = (score: number) => {
-    if (score >= 100) return { level: 'hot', color: 'text-danger', icon: Flame }
-    if (score >= 50) return { level: 'warm', color: 'text-warning', icon: Zap }
-    return { level: 'normal', color: 'text-text-muted', icon: null }
+  const handleSearch = (value: string) => {
+    setSearchQuery(value)
+    if (value.length >= 2) setIsSearching(true)
+    else setIsSearching(false)
   }
 
   return (
-    <div className="relative flex-1 flex flex-col bg-bg-deep overflow-y-auto">
+    <div className="relative flex-1 flex flex-col bg-bg-deep overflow-y-auto scrollbar-hidden">
       {/* Ambient orb blurs */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden -z-10">
-        <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-primary/10 blur-[180px]" />
-        <div className="absolute bottom-0 right-0 w-[400px] h-[400px] rounded-full bg-secondary/10 blur-[160px]" />
+        <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-primary/5 blur-[180px]" />
+        <div className="absolute bottom-0 right-0 w-[400px] h-[400px] rounded-full bg-accent/5 blur-[160px]" />
       </div>
 
       {/* Header */}
-      <div className="desktop-drag-titlebar border-b border-border-subtle bg-bg-deep/80 backdrop-blur-[32px]">
-        <div className="max-w-5xl mx-auto px-6 py-6">
-          {/* Title */}
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-[0_0_20px_rgba(0,243,255,0.35)]">
-              <Flame size={20} className="text-bg-deep" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black font-[Nunito] text-text-primary tracking-tight">
+      <div className="desktop-drag-titlebar border-b border-border-subtle bg-bg-deep/80 backdrop-blur-xl sticky top-0 z-20">
+        <div className="max-w-5xl mx-auto px-6 py-5">
+          <div className="flex items-center justify-between gap-4 mb-5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Flame size={20} className="text-primary" strokeWidth={2.5} />
+              </div>
+              <h1 className="text-2xl font-black text-text-primary tracking-tight">
                 {t('discover.title')}
               </h1>
-              <p className="text-text-muted text-sm">{t('discover.subtitle')}</p>
+            </div>
+
+            {/* Search on desktop */}
+            <div className="hidden md:block w-72">
+              <div className="relative">
+                <Search
+                  size={16}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted z-10"
+                />
+                <Input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  placeholder={t('discover.searchPlaceholder')}
+                  className="w-full rounded-xl pl-9 pr-3 py-2 text-sm bg-bg-tertiary/50 border-border-subtle"
+                />
+              </div>
             </div>
           </div>
 
-          {/* Search Bar */}
-          <form onSubmit={handleSearch} className="relative mb-4">
-            <div className="relative">
-              <Search
-                size={18}
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted z-10"
-              />
-              <Input
-                ref={searchInputRef}
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onFocus={() => searchQuery.length >= 2 && setIsSearching(true)}
-                placeholder={t('discover.searchPlaceholder')}
-                className="w-full rounded-full pl-12 pr-10 py-3 text-[15px]"
-              />
-              {searchQuery && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  onClick={clearSearch}
-                  className="absolute right-2 top-1/2 -translate-y-1/2"
-                >
-                  ×
-                </Button>
-              )}
-            </div>
-          </form>
-
-          {/* Filter Tabs */}
-          <div className="flex gap-2">
+          {/* Filter Pills */}
+          <div className="flex gap-2 overflow-x-auto scrollbar-hidden">
             {[
               { key: 'all', label: t('discover.filters.all'), icon: Flame },
               { key: 'servers', label: t('discover.filters.servers'), icon: Server },
               { key: 'channels', label: t('discover.filters.channels'), icon: Hash },
               { key: 'rentals', label: t('discover.filters.rentals'), icon: Zap },
             ].map(({ key, label, icon: Icon }) => (
-              <Button
+              <button
                 key={key}
                 type="button"
-                variant={activeFilter === key ? 'primary' : 'glass'}
-                size="sm"
                 onClick={() => {
                   setActiveFilter(key as FilterType)
                   setIsSearching(false)
                 }}
-                className="rounded-full"
+                className={cn(
+                  'flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap active:scale-95',
+                  activeFilter === key
+                    ? 'bg-primary/15 text-primary ring-1 ring-primary/20'
+                    : 'text-text-muted hover:bg-bg-tertiary/50 hover:text-text-primary',
+                )}
               >
-                <Icon size={14} />
+                <Icon size={14} strokeWidth={activeFilter === key ? 3 : 2} />
                 {label}
-              </Button>
+              </button>
             ))}
           </div>
         </div>
@@ -329,11 +279,24 @@ export function DiscoverPage() {
       <div className="flex-1">
         <div className="max-w-5xl mx-auto px-6 py-6">
           {isSearching && searchLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className={neonSpinner} />
+            <div className="flex items-center justify-center py-16">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center animate-bounce">
+                  <div className="w-6 h-6 rounded-full bg-primary" />
+                </div>
+                <span className="text-primary font-black text-xs uppercase tracking-widest animate-pulse">
+                  {t('common.loading')}...
+                </span>
+              </div>
             </div>
           ) : allItems.length === 0 ? (
-            <NeonEmptyState isSearching={isSearching} t={t} />
+            <EmptyState
+              icon={Search}
+              title={isSearching ? t('discover.noSearchResults') : t('discover.emptyTitle')}
+              description={
+                isSearching ? t('discover.noSearchResultsDesc') : t('discover.emptyDesc')
+              }
+            />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {allItems.map((item, index) => (
@@ -344,20 +307,22 @@ export function DiscoverPage() {
                   joinMutation={joinMutation}
                   navigate={navigate}
                   t={t}
-                  formatTimeAgo={formatTimeAgo}
-                  getHeatLevel={getHeatLevel}
                 />
               ))}
 
               {/* Load More Trigger */}
               {!isSearching && (
-                <div ref={loadMoreRef} className="col-span-full py-4 text-center">
+                <div ref={loadMoreRef} className="col-span-full py-6 text-center">
                   {isFetchingNextPage ? (
-                    <div className={cn(neonSpinner, 'w-6 h-6 mx-auto')} />
+                    <div className="w-6 h-6 mx-auto rounded-full border-2 border-primary border-t-transparent animate-spin" />
                   ) : hasNextPage ? (
-                    <span className="text-text-muted text-sm">{t('discover.loadMore')}</span>
+                    <span className="text-text-muted/40 text-xs font-black uppercase tracking-widest">
+                      {t('discover.loadMore')}
+                    </span>
                   ) : (
-                    <span className="text-text-muted text-sm">{t('discover.noMore')}</span>
+                    <span className="text-text-muted/40 text-xs font-black uppercase tracking-widest">
+                      {t('discover.noMore')}
+                    </span>
                   )}
                 </div>
               )}
@@ -369,29 +334,6 @@ export function DiscoverPage() {
   )
 }
 
-// ── Empty State ──
-function NeonEmptyState({
-  isSearching,
-  t,
-}: {
-  isSearching: boolean
-  t: (key: string, options?: Record<string, unknown>) => string
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="w-20 h-20 rounded-full bg-bg-tertiary backdrop-blur-[32px] border border-border-subtle flex items-center justify-center mb-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]">
-        <Search size={32} className="text-primary/40" />
-      </div>
-      <h3 className="text-lg font-black font-[Nunito] text-text-primary mb-2">
-        {isSearching ? t('discover.noSearchResults') : t('discover.emptyTitle')}
-      </h3>
-      <p className="text-muted-foreground text-sm max-w-sm">
-        {isSearching ? t('discover.noSearchResultsDesc') : t('discover.emptyDesc')}
-      </p>
-    </div>
-  )
-}
-
 // ── Feed Card ──
 function FeedCard({
   item,
@@ -399,19 +341,13 @@ function FeedCard({
   joinMutation,
   navigate,
   t,
-  formatTimeAgo,
-  getHeatLevel,
 }: {
   item: FeedItem
   joinedServerIds: Set<string>
   joinMutation: ReturnType<typeof useMutation>
   navigate: ReturnType<typeof useNavigate>
   t: (key: string, options?: Record<string, unknown>) => string
-  formatTimeAgo: (date: string) => string
-  getHeatLevel: (score: number) => { level: string; color: string; icon: typeof Flame | null }
 }) {
-  const heat = getHeatLevel(item.heatScore)
-
   if (item.type === 'server') {
     const server = item.data as ServerData
     const isJoined = joinedServerIds.has(server.id)
@@ -419,6 +355,7 @@ function FeedCard({
     return (
       <Card
         variant="glass"
+        hoverable
         onClick={() => {
           if (isJoined) {
             navigate({
@@ -427,66 +364,63 @@ function FeedCard({
             })
           }
         }}
-        className="rounded-[24px] overflow-hidden cursor-pointer group relative hover:-translate-y-1 hover:shadow-[0_8px_32px_rgba(0,243,255,0.12)] transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
+        className="rounded-[40px] overflow-hidden cursor-pointer group relative"
       >
         {/* Banner */}
-        <div className="h-[120px] bg-gradient-to-br from-primary/15 to-primary/[0.03] relative">
+        <div className="h-28 bg-gradient-to-br from-primary/15 to-primary/[0.03] relative overflow-hidden">
           {server.bannerUrl ? (
             <img
               src={server.bannerUrl}
               alt=""
-              className="w-full h-full object-cover absolute inset-0"
+              className="w-full h-full object-cover absolute inset-0 group-hover:scale-110 transition-transform duration-500"
             />
           ) : null}
-          {server.isPublic && (
+          <div className="absolute bottom-3 right-3 flex items-center gap-1.5 z-10">
             <Badge
               variant="neutral"
               size="sm"
-              className="absolute top-3 right-3 z-10 gap-1 backdrop-blur-md"
+              className="backdrop-blur-md bg-bg-deep/30 border-border-subtle"
             >
-              <Shield size={12} />
-              {t('discover.public')}
+              <Users size={10} />
+              {server.memberCount}
             </Badge>
-          )}
+            {server.isPublic && (
+              <Badge
+                variant="neutral"
+                size="sm"
+                className="backdrop-blur-md bg-bg-deep/30 border-border-subtle"
+              >
+                {t('discover.public')}
+              </Badge>
+            )}
+          </div>
         </div>
 
         {/* Icon overlay */}
-        <div className="absolute top-[92px] left-4 p-1.5 bg-bg-deep group-hover:bg-bg-deep/90 rounded-[18px] transition-colors duration-200 z-20 border border-border-subtle">
-          <div className="w-[48px] h-[48px] rounded-full overflow-hidden bg-bg-tertiary flex items-center justify-center">
+        <div className="absolute top-[84px] left-5 z-20">
+          <div className="w-14 h-14 rounded-xl overflow-hidden bg-bg-deep border-4 border-bg-deep shadow-xl">
             {server.iconUrl ? (
               <img src={server.iconUrl} alt="" className="w-full h-full object-cover" />
             ) : (
-              <img src={getCatAvatar(0)} alt={server.name} className="w-9 h-9" />
+              <img src={getCatAvatar(0)} alt={server.name} className="w-full h-full object-cover" />
             )}
           </div>
         </div>
 
         {/* Content */}
-        <div className="pt-10 p-5 flex flex-col flex-1">
-          <h3 className="font-black font-[Nunito] text-text-primary text-[16px] mb-1 truncate">
+        <div className="pt-10 px-5 pb-5 flex flex-col flex-1">
+          <h3 className="font-black text-text-primary text-base mb-1 truncate tracking-tight">
             {server.name}
           </h3>
-          <p className="text-text-muted text-[14px] mb-4 line-clamp-2 min-h-[2.5rem] flex-1">
+          <p className="text-text-muted text-sm mb-4 line-clamp-2 min-h-[2.5rem] flex-1">
             {server.description ?? t('discover.noDescription')}
           </p>
 
           <div className="flex items-center justify-between mt-auto">
-            <div className="flex items-center gap-2">
-              <span className="flex items-center gap-1.5 text-[12px] font-medium text-text-muted">
-                <div className="w-2 h-2 rounded-full bg-success shadow-[0_0_6px_rgba(0,230,118,0.5)]" />
-                {server.memberCount} {t('discover.members')}
-              </span>
-              {heat.icon && (
-                <span className={cn('flex items-center gap-1 text-[12px]', heat.color)}>
-                  <heat.icon size={12} />
-                  {t('discover.heat.hot')}
-                </span>
-              )}
-            </div>
-
             {isJoined ? (
               <Button
                 type="button"
+                variant="ghost"
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation()
@@ -495,20 +429,22 @@ function FeedCard({
                     params: { serverSlug: server.slug ?? server.id },
                   })
                 }}
-                className="rounded-full"
+                className="rounded-xl"
               >
                 {t('discover.enterButton')}
+                <ArrowRight size={14} />
               </Button>
             ) : (
               <Button
                 type="button"
+                variant="primary"
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation()
                   joinMutation.mutate({ inviteCode: server.inviteCode })
                 }}
                 disabled={joinMutation.isPending}
-                className="rounded-full"
+                className="rounded-xl"
               >
                 {t('discover.joinButton')}
               </Button>
@@ -526,6 +462,7 @@ function FeedCard({
     return (
       <Card
         variant="glass"
+        hoverable
         onClick={() => {
           if (isJoined) {
             navigate({
@@ -542,60 +479,46 @@ function FeedCard({
             })
           }
         }}
-        className="rounded-[24px] overflow-hidden cursor-pointer group relative hover:-translate-y-1 hover:shadow-[0_8px_32px_rgba(0,243,255,0.12)] transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
+        className="rounded-[40px] overflow-hidden cursor-pointer group relative"
       >
-        {/* Header with server icon and channel badge */}
-        <div className="h-[80px] bg-gradient-to-br from-primary/15 to-primary/[0.03] relative p-4">
-          {/* Channel Badge */}
-          <Badge variant="primary" size="sm" className="absolute top-3 right-3 z-10 gap-1">
-            <Hash size={10} />
-            {t('discover.channelBadge')}
-          </Badge>
-
-          {/* Server Info */}
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full overflow-hidden bg-bg-tertiary shrink-0 border-2 border-border-subtle">
-              {channel.server.iconUrl ? (
-                <img src={channel.server.iconUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-lg font-bold text-primary/60 bg-bg-tertiary">
-                  {channel.server.name.charAt(0)}
-                </div>
-              )}
+        <div className="p-5 flex flex-col flex-1">
+          {/* Channel Header */}
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+              <Hash size={18} className="text-primary" strokeWidth={2.5} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-text-muted text-[12px] truncate">{channel.server.name}</p>
-              <div className="flex items-center gap-1">
-                <Hash size={14} className="text-primary" />
-                <span className="font-bold text-text-primary text-[15px] truncate">
-                  {channel.name}
-                </span>
-              </div>
+              <span className="font-black text-text-primary text-base truncate block tracking-tight">
+                {channel.name}
+              </span>
+              <span className="text-text-muted text-xs truncate block">{channel.server.name}</span>
             </div>
+            <ArrowRight
+              size={16}
+              className="text-text-muted/30 group-hover:text-primary group-hover:translate-x-1 transition-all shrink-0"
+            />
           </div>
-        </div>
 
-        {/* Content */}
-        <div className="p-5 flex flex-col flex-1">
           {channel.topic && (
-            <p className="text-text-muted text-[14px] mb-3 line-clamp-2">{channel.topic}</p>
+            <p className="text-text-muted text-sm mb-3 line-clamp-2">{channel.topic}</p>
           )}
 
           {channel.lastMessage && (
-            <div className="bg-bg-tertiary rounded-2xl p-3 mb-3 border border-border-subtle">
-              <p className="text-text-muted text-[13px] line-clamp-2">
-                {channel.lastMessage.content}
-              </p>
-              <p className="text-text-muted/50 text-[11px] mt-1">
-                {formatTimeAgo(channel.lastMessage.createdAt)}
-              </p>
+            <div className="bg-bg-tertiary/50 rounded-2xl p-3 mb-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                <span className="text-[11px] font-black uppercase tracking-widest text-success">
+                  Active
+                </span>
+              </div>
+              <p className="text-text-muted text-xs line-clamp-2">{channel.lastMessage.content}</p>
             </div>
           )}
 
           <div className="flex items-center justify-between mt-auto pt-3 border-t border-border-subtle">
-            <span className="flex items-center gap-1.5 text-[12px] font-medium text-text-muted">
-              <div className="w-2 h-2 rounded-full bg-success shadow-[0_0_6px_rgba(0,230,118,0.5)]" />
-              {channel.memberCount} {t('discover.members')}
+            <span className="flex items-center gap-1.5 text-xs font-bold text-text-muted">
+              <Users size={12} />
+              {channel.memberCount}
             </span>
             {!isJoined ? (
               <Badge variant="neutral" size="sm">
@@ -616,40 +539,29 @@ function FeedCard({
     const rental = item.data as RentalData
 
     return (
-      <Card
-        variant="glass"
-        className="rounded-[24px] p-5 hover:-translate-y-1 hover:shadow-[0_8px_32px_rgba(0,243,255,0.12)] transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
-      >
+      <Card variant="glass" hoverable className="rounded-[40px] p-5">
         <div className="flex gap-4">
           {/* Agent Avatar */}
-          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-accent/20 to-primary/20 flex items-center justify-center shrink-0 border border-border-subtle">
-            <span className="text-2xl">🤖</span>
+          <div className="w-14 h-14 rounded-xl bg-accent/10 flex items-center justify-center shrink-0 border border-accent/20">
+            <Zap size={24} className="text-accent" />
           </div>
 
           {/* Content */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <h3 className="font-black font-[Nunito] text-text-primary text-[16px]">
-                  {rental.listing?.title || t('discover.unknownListing')}
-                </h3>
-                <p className="text-text-muted text-[13px]">
-                  {rental.agent?.name || t('discover.unknownAgent')}
-                </p>
-              </div>
-              <div className="flex items-center gap-1 text-[12px] text-text-muted">
-                <Zap size={12} />
-                {t('discover.rentedSince')} {formatTimeAgo(rental.startedAt)}
-              </div>
-            </div>
+            <h3 className="font-black text-text-primary text-base tracking-tight">
+              {rental.listing?.title || t('discover.unknownListing')}
+            </h3>
+            <p className="text-text-muted text-xs mb-2">
+              {rental.agent?.name || t('discover.unknownAgent')}
+            </p>
 
             {rental.listing?.description && (
-              <p className="text-text-muted text-[13px] mt-2 line-clamp-2">
+              <p className="text-text-muted text-sm mt-2 line-clamp-2">
                 {rental.listing.description}
               </p>
             )}
 
-            <div className="flex flex-wrap gap-2 mt-3">
+            <div className="flex flex-wrap gap-1.5 mt-3">
               {rental.listing?.deviceTier && (
                 <Badge variant="neutral" size="sm">
                   {rental.listing.deviceTier}
@@ -677,7 +589,7 @@ function FeedCard({
             </div>
 
             <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
-              <div className="w-6 h-6 rounded-full bg-bg-tertiary overflow-hidden border border-border-subtle">
+              <div className="w-6 h-6 rounded-lg bg-bg-tertiary/50 overflow-hidden">
                 {rental.tenant?.avatarUrl ? (
                   <img
                     src={rental.tenant.avatarUrl}
@@ -685,16 +597,16 @@ function FeedCard({
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-[10px]">
+                  <div className="w-full h-full flex items-center justify-center text-[11px]">
                     👤
                   </div>
                 )}
               </div>
-              <span className="text-text-muted text-[12px]">
+              <span className="text-text-muted text-xs font-bold">
                 {rental.tenant?.displayName || rental.tenant?.username || t('discover.unknownUser')}
               </span>
-              <span className="text-secondary/60 text-[12px] font-medium">
-                · {rental.listing?.hourlyRate}虾币/h
+              <span className="text-accent text-xs font-black ml-auto">
+                {rental.listing?.hourlyRate}虾币/h
               </span>
             </div>
           </div>

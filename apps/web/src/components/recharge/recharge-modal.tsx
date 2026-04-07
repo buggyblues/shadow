@@ -97,7 +97,7 @@ export function RechargeModal() {
 
   return (
     <Dialog isOpen={isOpen} onClose={closeModal}>
-      <DialogContent className="!rounded-[24px] !max-w-md">
+      <DialogContent className="!rounded-[40px] !max-w-md">
         {/* Header */}
         <DialogHeader className="flex flex-row items-center justify-between">
           {step === 'pay' && (
@@ -117,7 +117,7 @@ export function RechargeModal() {
         <div className="space-y-4">
           {/* Balance display */}
           {step === 'select' && wallet && (
-            <Card variant="glass" className="!rounded-[20px]">
+            <Card variant="glass" className="!rounded-[24px]">
               <div className="flex items-center justify-between p-4">
                 <span className="text-sm text-text-muted font-bold">{t('recharge.balance')}</span>
                 <span className="text-lg font-black text-text-primary">

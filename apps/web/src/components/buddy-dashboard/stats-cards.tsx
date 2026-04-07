@@ -34,22 +34,22 @@ export function StatsCards({ stats }: StatsCardsProps) {
       icon: MessageSquare,
       label: t('buddyDashboard.totalMessages', 'Total Messages'),
       value: stats.totalMessages.toLocaleString(),
-      color: 'text-blue-400',
-      bgColor: 'bg-blue-400/10',
+      color: 'text-primary',
+      bgColor: 'bg-primary/10',
     },
     {
       icon: Clock,
       label: t('buddyDashboard.onlineTime', 'Online Time'),
       value: formatDurationShort(stats.totalOnlineSeconds),
-      color: 'text-green-400',
-      bgColor: 'bg-green-400/10',
+      color: 'text-success',
+      bgColor: 'bg-success/10',
     },
     {
       icon: Calendar,
       label: t('buddyDashboard.activeDays', 'Active Days (30d)'),
       value: stats.activeDays30d.toString(),
-      color: 'text-purple-400',
-      bgColor: 'bg-purple-400/10',
+      color: 'text-accent',
+      bgColor: 'bg-accent/10',
     },
     {
       icon: Flame,
@@ -59,8 +59,8 @@ export function StatsCards({ stats }: StatsCardsProps) {
         stats.longestStreak > 0
           ? `${t('buddyDashboard.best', 'Best')}: ${stats.longestStreak}`
           : undefined,
-      color: 'text-orange-400',
-      bgColor: 'bg-orange-400/10',
+      color: 'text-warning',
+      bgColor: 'bg-warning/10',
     },
   ]
 

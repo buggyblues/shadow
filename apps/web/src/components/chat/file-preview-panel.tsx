@@ -333,7 +333,7 @@ function CSVTable({ text, ext }: { text: string; ext: string }) {
     <div className="overflow-auto flex-1">
       <table className="w-full border-collapse text-[13px]">
         <thead className="sticky top-0 z-10">
-          <tr className="bg-bg-tertiary border-b border-border-dim">
+          <tr className="bg-bg-tertiary border-b border-border-subtle">
             <th className="px-3 py-2 text-[11px] font-bold text-text-muted text-right w-10 border-r border-border-subtle">
               #
             </th>
@@ -369,7 +369,7 @@ function CSVTable({ text, ext }: { text: string; ext: string }) {
           ))}
         </tbody>
       </table>
-      <div className="px-3 py-2 text-[11px] text-text-muted border-t border-white/8">
+      <div className="px-3 py-2 text-[11px] text-text-muted border-t border-border-subtle">
         {rows.length} rows × {headers.length} columns
       </div>
     </div>
@@ -436,7 +436,7 @@ function ExcelTable({ url }: { url: string }) {
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Sheet tabs */}
       {sheets.length > 1 && (
-        <div className="flex items-center gap-0.5 px-2 py-1 border-b border-white/8 overflow-x-auto shrink-0">
+        <div className="flex items-center gap-0.5 px-2 py-1 border-b border-border-subtle overflow-x-auto shrink-0">
           {sheets.map((s, i) => (
             <button
               key={s.name}
@@ -457,7 +457,7 @@ function ExcelTable({ url }: { url: string }) {
       <div className="overflow-auto flex-1">
         <table className="w-full border-collapse text-[13px]">
           <thead className="sticky top-0 z-10">
-            <tr className="bg-bg-tertiary border-b border-border-dim">
+            <tr className="bg-bg-tertiary border-b border-border-subtle">
               <th className="px-3 py-2 text-[11px] font-bold text-text-muted text-right w-10 border-r border-border-subtle">
                 #
               </th>
@@ -493,7 +493,7 @@ function ExcelTable({ url }: { url: string }) {
             ))}
           </tbody>
         </table>
-        <div className="px-3 py-2 text-[11px] text-text-muted border-t border-white/8">
+        <div className="px-3 py-2 text-[11px] text-text-muted border-t border-border-subtle">
           {sheet.rows.length} rows × {sheet.headers.length} columns
           {sheets.length > 1 && ` · Sheet: ${sheet.name}`}
         </div>
@@ -539,7 +539,7 @@ function ZipListing({ url }: { url: string }) {
 
   return (
     <div className="flex-1 overflow-auto">
-      <div className="px-3 py-2 text-[11px] text-text-muted border-b border-white/8 flex items-center gap-2">
+      <div className="px-3 py-2 text-[11px] text-text-muted border-b border-border-subtle flex items-center gap-2">
         <FileArchive size={12} />
         {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
       </div>
@@ -550,12 +550,12 @@ function ZipListing({ url }: { url: string }) {
             className="flex items-center gap-2.5 px-3 py-1.5 text-[13px] hover:bg-white/3 transition-colors"
           >
             {entry.isDirectory ? (
-              <FolderOpen size={14} className="text-yellow-400 shrink-0" />
+              <FolderOpen size={14} className="text-accent shrink-0" />
             ) : (
               <File size={14} className="text-text-muted shrink-0" />
             )}
             <span
-              className={`flex-1 min-w-0 truncate ${entry.isDirectory ? 'text-yellow-400 font-medium' : 'text-text-secondary'}`}
+              className={`flex-1 min-w-0 truncate ${entry.isDirectory ? 'text-accent font-medium' : 'text-text-secondary'}`}
             >
               {entry.name}
             </span>
@@ -644,9 +644,9 @@ function MarkdownPreview({ text }: { text: string }) {
       [&_pre]:bg-bg-tertiary [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:mb-3 [&_pre]:overflow-x-auto [&_pre_code]:bg-transparent [&_pre_code]:p-0
       [&_blockquote]:border-l-2 [&_blockquote]:border-primary/50 [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:text-text-muted [&_blockquote]:my-2
       [&_a]:text-primary [&_a]:underline [&_a]:hover:text-primary-hover
-      [&_hr]:border-border-dim [&_hr]:my-4
+      [&_hr]:border-border-subtle [&_hr]:my-4
       [&_table]:w-full [&_table]:border-collapse [&_table]:my-3
-      [&_th]:px-3 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-semibold [&_th]:text-text-primary [&_th]:border-b [&_th]:border-border-dim [&_th]:text-[13px]
+      [&_th]:px-3 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-semibold [&_th]:text-text-primary [&_th]:border-b [&_th]:border-border-subtle [&_th]:text-[13px]
       [&_td]:px-3 [&_td]:py-1.5 [&_td]:border-b [&_td]:border-border-subtle [&_td]:text-[13px]
       [&_img]:max-w-full [&_img]:rounded-lg [&_img]:my-2
       [&_strong]:text-text-primary [&_strong]:font-semibold
@@ -952,13 +952,13 @@ export function FilePreviewPanel({ attachment, onClose }: FilePreviewPanelProps)
 
   const panelClasses = isFullscreen
     ? 'fixed inset-0 z-50 bg-bg-secondary flex flex-col animate-fade-in'
-    : 'h-full bg-bg-secondary border-l border-white/8 flex flex-col shrink-0 animate-slide-in-right relative'
+    : 'h-full bg-bg-secondary border-l border-border-subtle flex flex-col shrink-0 animate-slide-in-right relative'
 
   return (
     <>
       {/* Fullscreen backdrop */}
       {isFullscreen && (
-        <div className="fixed inset-0 z-40 bg-black/60" onClick={() => setIsFullscreen(false)} />
+        <div className="fixed inset-0 z-40 bg-bg-deep/60" onClick={() => setIsFullscreen(false)} />
       )}
       <div className={panelClasses} style={isFullscreen ? undefined : { width: panelWidth }}>
         {/* Transparent overlay during drag to prevent iframe from capturing mouse events */}
@@ -973,7 +973,7 @@ export function FilePreviewPanel({ attachment, onClose }: FilePreviewPanelProps)
           </div>
         )}
         {/* Header */}
-        <div className="h-12 px-4 flex items-center gap-3 border-b border-white/8 shrink-0">
+        <div className="h-12 px-4 flex items-center gap-3 border-b border-border-subtle shrink-0">
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-text-primary truncate">{attachment.filename}</p>
             <p className="text-[11px] text-text-muted">{formatFileSize(attachment.size)}</p>
@@ -999,7 +999,7 @@ export function FilePreviewPanel({ attachment, onClose }: FilePreviewPanelProps)
           <button
             type="button"
             onClick={() => setIsFullscreen(!isFullscreen)}
-            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-white/10 rounded-md transition"
+            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition"
             title={isFullscreen ? t('chat.exitFullscreen') : t('chat.enterFullscreen')}
           >
             {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
@@ -1007,7 +1007,7 @@ export function FilePreviewPanel({ attachment, onClose }: FilePreviewPanelProps)
           <a
             href={attachment.url}
             download={attachment.filename}
-            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-white/10 rounded-md transition"
+            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition"
             title={t('chat.downloadFile')}
           >
             <Download size={16} />
@@ -1015,7 +1015,7 @@ export function FilePreviewPanel({ attachment, onClose }: FilePreviewPanelProps)
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-white/10 rounded-md transition"
+            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition"
             title={t('common.close')}
           >
             <X size={16} />

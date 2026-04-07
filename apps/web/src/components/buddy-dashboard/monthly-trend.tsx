@@ -60,7 +60,7 @@ export function MonthlyTrend({ data }: MonthlyTrendProps) {
 
   return (
     <div className="bg-bg-secondary rounded-xl p-6 border border-border-subtle">
-      <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider mb-4">
+      <h3 className="text-sm font-bold text-text-primary uppercase tracking-widest mb-4">
         {t('buddyDashboard.monthlyTrend', 'Monthly Trend')}
       </h3>
 
@@ -71,11 +71,7 @@ export function MonthlyTrend({ data }: MonthlyTrendProps) {
           preserveAspectRatio="none"
         >
           {/* Area under the line */}
-          <path
-            d={generateAreaPath()}
-            fill="currentColor"
-            className="text-primary/20"
-          />
+          <path d={generateAreaPath()} fill="currentColor" className="text-primary/20" />
 
           {/* Line */}
           <path
@@ -95,7 +91,8 @@ export function MonthlyTrend({ data }: MonthlyTrendProps) {
             const padding = 5
             const x = padding + (i / (data.length - 1)) * (width - 2 * padding)
             const range = maxCount - minCount || 1
-            const y = height - padding - ((d.messageCount - minCount) / range) * (height - 2 * padding)
+            const y =
+              height - padding - ((d.messageCount - minCount) / range) * (height - 2 * padding)
 
             return (
               <circle
@@ -112,10 +109,12 @@ export function MonthlyTrend({ data }: MonthlyTrendProps) {
         </svg>
 
         {/* Month labels */}
-        <div className="flex justify-between mt-2 text-[10px] text-text-muted">
-          {data.filter((_, i) => i % 3 === 0).map((d, i) => (
-            <span key={i}>{formatMonth(d.month)}</span>
-          ))}
+        <div className="flex justify-between mt-2 text-[11px] text-text-muted">
+          {data
+            .filter((_, i) => i % 3 === 0)
+            .map((d, i) => (
+              <span key={i}>{formatMonth(d.month)}</span>
+            ))}
         </div>
       </div>
     </div>

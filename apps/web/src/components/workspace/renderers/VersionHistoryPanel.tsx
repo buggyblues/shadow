@@ -122,10 +122,10 @@ export function VersionHistoryPanel({ node, onClose, onRestore }: VersionHistory
       {/* Current version label */}
       <div className="px-4 py-2 border-b border-border-subtle bg-bg-secondary/50">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
+          <div className="w-2 h-2 rounded-full bg-success shrink-0" />
           <span className="text-xs font-bold text-text-primary">当前版本</span>
           {node.sizeBytes != null && (
-            <span className="text-[10px] text-text-muted ml-auto">
+            <span className="text-[11px] text-text-muted ml-auto">
               {formatFileSize(node.sizeBytes)}
             </span>
           )}
@@ -133,7 +133,7 @@ export function VersionHistoryPanel({ node, onClose, onRestore }: VersionHistory
       </div>
 
       {/* Version list */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
+      <div className="flex-1 overflow-y-auto scrollbar-hidden">
         {sortedVersions.map((ver, idx) => {
           const versionNumber = versions.length - idx
           const isActive = previewVersion?.savedAt === ver.savedAt
@@ -142,15 +142,15 @@ export function VersionHistoryPanel({ node, onClose, onRestore }: VersionHistory
             <div
               key={ver.savedAt}
               className={`border-b border-border-subtle transition-colors ${
-                isActive ? 'bg-[#5865F2]/10' : 'hover:bg-bg-modifier-hover'
+                isActive ? 'bg-info/10' : 'hover:bg-bg-modifier-hover'
               }`}
             >
               <div className="px-4 py-2.5">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-text-muted/40 shrink-0" />
                   <span className="text-xs font-bold text-text-primary">v{versionNumber}</span>
-                  <span className="text-[10px] text-text-muted">{formatTime(ver.savedAt)}</span>
-                  <span className="text-[10px] text-text-muted ml-auto">
+                  <span className="text-[11px] text-text-muted">{formatTime(ver.savedAt)}</span>
+                  <span className="text-[11px] text-text-muted ml-auto">
                     {formatFileSize(ver.sizeBytes)}
                   </span>
                 </div>
@@ -160,7 +160,7 @@ export function VersionHistoryPanel({ node, onClose, onRestore }: VersionHistory
                     onClick={() => handlePreview(ver)}
                     className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded transition ${
                       isActive
-                        ? 'bg-[#5865F2]/20 text-[#5865F2]'
+                        ? 'bg-info/20 text-info'
                         : 'text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover'
                     }`}
                   >
@@ -170,7 +170,7 @@ export function VersionHistoryPanel({ node, onClose, onRestore }: VersionHistory
                   <button
                     type="button"
                     onClick={() => handleRestore(ver)}
-                    className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded text-text-muted hover:text-yellow-400 hover:bg-yellow-400/10 transition"
+                    className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded text-text-muted hover:text-accent hover:bg-accent/10 transition"
                   >
                     <RotateCcw size={11} />
                     恢复
@@ -184,7 +184,7 @@ export function VersionHistoryPanel({ node, onClose, onRestore }: VersionHistory
                   {loadingPreview ? (
                     <div className="p-4 text-xs text-text-muted animate-pulse">加载中...</div>
                   ) : (
-                    <pre className="p-4 text-xs leading-relaxed text-[#cdd6f4] font-mono overflow-x-auto max-h-60 custom-scrollbar">
+                    <pre className="p-4 text-xs leading-relaxed text-[#cdd6f4] font-mono overflow-x-auto max-h-60 scrollbar-hidden">
                       {previewContent}
                     </pre>
                   )}

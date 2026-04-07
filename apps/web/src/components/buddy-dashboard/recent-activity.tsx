@@ -19,11 +19,11 @@ const EVENT_ICONS: Record<string, typeof MessageSquare> = {
 }
 
 const EVENT_COLORS: Record<string, string> = {
-  message: 'text-blue-400 bg-blue-400/10',
-  status_change: 'text-green-400 bg-green-400/10',
-  rental_start: 'text-purple-400 bg-purple-400/10',
-  rental_end: 'text-orange-400 bg-orange-400/10',
-  policy_update: 'text-gray-400 bg-gray-400/10',
+  message: 'text-primary bg-primary/10',
+  status_change: 'text-success bg-success/10',
+  rental_start: 'text-accent bg-accent/10',
+  rental_end: 'text-warning bg-warning/10',
+  policy_update: 'text-text-muted bg-text-muted/10',
 }
 
 export function RecentActivity({ events }: RecentActivityProps) {
@@ -70,7 +70,7 @@ export function RecentActivity({ events }: RecentActivityProps) {
   if (events.length === 0) {
     return (
       <div className="bg-bg-secondary rounded-xl p-6 border border-border-subtle">
-        <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider mb-4">
+        <h3 className="text-sm font-bold text-text-primary uppercase tracking-widest mb-4">
           {t('buddyDashboard.recentActivity', 'Recent Activity')}
         </h3>
         <div className="text-center text-text-muted py-8">
@@ -82,21 +82,23 @@ export function RecentActivity({ events }: RecentActivityProps) {
 
   return (
     <div className="bg-bg-secondary rounded-xl p-6 border border-border-subtle">
-      <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider mb-4">
+      <h3 className="text-sm font-bold text-text-primary uppercase tracking-widest mb-4">
         {t('buddyDashboard.recentActivity', 'Recent Activity')}
       </h3>
 
       <div className="space-y-3">
         {events.map((event) => {
           const Icon = EVENT_ICONS[event.type] || RefreshCw
-          const colorClass = EVENT_COLORS[event.type] || 'text-gray-400 bg-gray-400/10'
+          const colorClass = EVENT_COLORS[event.type] || 'text-text-muted bg-text-muted/10'
 
           return (
             <div
               key={event.id}
               className="flex items-start gap-3 p-3 rounded-lg hover:bg-bg-modifier-hover transition-colors"
             >
-              <div className={`w-8 h-8 rounded-lg ${colorClass} flex items-center justify-center shrink-0`}>
+              <div
+                className={`w-8 h-8 rounded-lg ${colorClass} flex items-center justify-center shrink-0`}
+              >
                 <Icon className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">

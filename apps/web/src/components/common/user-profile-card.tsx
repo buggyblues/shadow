@@ -26,10 +26,10 @@ interface UserProfileCardProps {
 }
 
 const statusColors: Record<string, string> = {
-  online: 'bg-green-500',
-  idle: 'bg-yellow-500',
-  dnd: 'bg-red-500',
-  offline: 'bg-gray-500',
+  online: 'bg-success',
+  idle: 'bg-warning',
+  dnd: 'bg-danger',
+  offline: 'bg-text-muted',
 }
 
 const statusLabels: Record<string, string> = {
@@ -61,7 +61,7 @@ export function UserProfileCard({
   return (
     <Card
       variant="glass"
-      className={`w-64 overflow-hidden rounded-xl ${className}`}
+      className={`w-64 overflow-hidden rounded-[40px] ${className}`}
       onClick={(e) => e.stopPropagation()}
     >
       {/* Banner */}
@@ -130,7 +130,9 @@ export function UserProfileCard({
 
         {user.isBot && ownerName && (
           <div className="mt-3 pt-3 border-t border-border-subtle">
-            <p className="text-[10px] uppercase tracking-wide text-text-muted mb-1">OWNER / 主人</p>
+            <p className="text-[11px] uppercase tracking-[0.2em] text-text-muted mb-1">
+              OWNER / 主人
+            </p>
             {ownerId ? (
               <button
                 type="button"
@@ -153,7 +155,7 @@ export function UserProfileCard({
 
         {user.isBot && description && (
           <div className="mt-3 pt-3 border-t border-border-subtle">
-            <p className="text-[10px] uppercase tracking-wide text-text-muted">
+            <p className="text-[11px] uppercase tracking-[0.2em] text-text-muted">
               Description / 描述
             </p>
             <p className="text-sm text-text-secondary mt-1 whitespace-pre-wrap break-words line-clamp-4">
@@ -179,12 +181,12 @@ export function UserProfileCard({
       {/* QR Code Business Card Modal */}
       {showQrCard && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-bg-deep/60"
           onClick={() => setShowQrCard(false)}
           onKeyDown={(e) => e.key === 'Escape' && setShowQrCard(false)}
         >
           <div
-            className="bg-bg-primary/95 backdrop-blur-xl rounded-2xl p-8 w-[320px] flex flex-col items-center relative shadow-xl border border-border/10"
+            className="bg-bg-primary/95 backdrop-blur-xl rounded-[40px] p-8 w-[320px] flex flex-col items-center relative shadow-[0_32px_120px_rgba(0,0,0,0.5)] border border-border-subtle"
             onClick={(e) => e.stopPropagation()}
             onKeyDown={() => {}}
           >

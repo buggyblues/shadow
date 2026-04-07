@@ -69,8 +69,8 @@ interface MyListing {
 }
 
 const STATUS_STYLES: Record<string, { labelKey: string; bg: string; text: string }> = {
-  pending: { labelKey: 'marketplace.statusPending', bg: 'bg-yellow-50', text: 'text-yellow-700' },
-  active: { labelKey: 'marketplace.statusActive', bg: 'bg-green-50', text: 'text-green-700' },
+  pending: { labelKey: 'marketplace.statusPending', bg: 'bg-warning/10', text: 'text-warning' },
+  active: { labelKey: 'marketplace.statusActive', bg: 'bg-success/10', text: 'text-success' },
   completed: {
     labelKey: 'marketplace.statusCompleted',
     bg: 'bg-bg-secondary',
@@ -81,20 +81,20 @@ const STATUS_STYLES: Record<string, { labelKey: string; bg: string; text: string
     bg: 'bg-bg-secondary',
     text: 'text-text-muted',
   },
-  violated: { labelKey: 'marketplace.statusViolated', bg: 'bg-red-50', text: 'text-red-700' },
-  disputed: { labelKey: 'marketplace.statusDisputed', bg: 'bg-orange-50', text: 'text-orange-700' },
+  violated: { labelKey: 'marketplace.statusViolated', bg: 'bg-danger/10', text: 'text-danger' },
+  disputed: { labelKey: 'marketplace.statusDisputed', bg: 'bg-warning/10', text: 'text-warning' },
 }
 
 const LISTING_STATUS: Record<string, { labelKey: string; bg: string; text: string }> = {
   draft: { labelKey: 'marketplace.listingDraft', bg: 'bg-bg-secondary', text: 'text-text-muted' },
-  active: { labelKey: 'marketplace.listingActive', bg: 'bg-green-50', text: 'text-green-700' },
-  paused: { labelKey: 'marketplace.listingPaused', bg: 'bg-yellow-50', text: 'text-yellow-700' },
+  active: { labelKey: 'marketplace.listingActive', bg: 'bg-success/10', text: 'text-success' },
+  paused: { labelKey: 'marketplace.listingPaused', bg: 'bg-warning/10', text: 'text-warning' },
   expired: {
     labelKey: 'marketplace.listingExpired',
     bg: 'bg-bg-secondary',
     text: 'text-text-muted',
   },
-  closed: { labelKey: 'marketplace.listingClosed', bg: 'bg-red-50', text: 'text-red-600' },
+  closed: { labelKey: 'marketplace.listingClosed', bg: 'bg-danger/10', text: 'text-danger' },
 }
 
 const DEVICE_TIERS: Record<string, { icon: string; labelKey: string }> = {
@@ -354,7 +354,7 @@ export function MyRentalsPage() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-lg font-bold text-amber-600">{c.totalCost} 🦐</div>
+                          <div className="text-lg font-bold text-warning">{c.totalCost} 🦐</div>
                           <div className="text-xs text-text-muted font-medium">
                             {new Date(c.createdAt).toLocaleDateString()}
                           </div>
@@ -363,7 +363,7 @@ export function MyRentalsPage() {
                     </Link>
                     {/* Countdown + Use button for active tenant contracts */}
                     {isActive && (
-                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-border/10">
+                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-border-subtle">
                         <div>
                           {c.expiresAt ? (
                             <RentalCountdown expiresAt={c.expiresAt} />
@@ -381,7 +381,7 @@ export function MyRentalsPage() {
                               startChatMutation.mutate(c.agentUserId!)
                             }}
                             disabled={startChatMutation.isPending}
-                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-400 to-cyan-500 text-white text-sm font-bold hover:from-cyan-500 hover:to-cyan-600 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-primary to-primary text-white text-sm font-bold hover:from-primary hover:to-primary transition-all shadow-md hover:shadow-lg disabled:opacity-50"
                           >
                             <MessageCircle className="w-3.5 h-3.5" />
                             {t('marketplace.useClaw', '开始使用')}
@@ -527,8 +527,8 @@ function ListingCard({
   if (l.isRented) {
     statusBadge = {
       label: t('marketplace.listingRented', '出租中'),
-      bg: 'bg-amber-50',
-      text: 'text-amber-700',
+      bg: 'bg-warning/10',
+      text: 'text-warning',
     }
   } else if (!l.isListed && l.listingStatus === 'active') {
     statusBadge = {
@@ -554,9 +554,9 @@ function ListingCard({
             {/* Online status indicator */}
             <span className="flex items-center gap-1.5 text-xs">
               <span
-                className={`w-2 h-2 rounded-full ${online ? 'bg-green-500 animate-pulse' : 'bg-text-muted/30'}`}
+                className={`w-2 h-2 rounded-full ${online ? 'bg-success animate-pulse' : 'bg-text-muted/30'}`}
               />
-              <span className={online ? 'text-green-600 font-bold' : 'text-text-muted'}>
+              <span className={online ? 'text-success font-bold' : 'text-text-muted'}>
                 {online ? t('marketplace.online', '在线') : t('marketplace.offline', '离线')}
               </span>
             </span>
@@ -599,7 +599,7 @@ function ListingCard({
                       delistMutation.mutate(l.id)
                     }
                   }}
-                  className="p-2 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                  className="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
                   title={t('marketplace.delistClaw', '下架 Claw')}
                 >
                   <PackageMinus className="w-4 h-4" />
@@ -609,7 +609,7 @@ function ListingCard({
                 <button
                   type="button"
                   onClick={() => relistMutation.mutate(l.id)}
-                  className="p-2 rounded-lg text-green-600 hover:bg-green-50 transition-colors"
+                  className="p-2 rounded-lg text-success hover:bg-success/10 transition-colors"
                   title={t('marketplace.relistClaw', '重新上架')}
                 >
                   <Play className="w-4 h-4" />
@@ -619,7 +619,7 @@ function ListingCard({
                 <button
                   type="button"
                   onClick={() => toggleMutation.mutate({ id: l.id, listingStatus: 'paused' })}
-                  className="p-2 rounded-lg text-yellow-600 hover:bg-yellow-50 transition-colors"
+                  className="p-2 rounded-lg text-warning hover:bg-warning/10 transition-colors"
                   title={t('marketplace.pause', '暂停')}
                 >
                   <Pause className="w-4 h-4" />
@@ -629,7 +629,7 @@ function ListingCard({
                 <button
                   type="button"
                   onClick={() => toggleMutation.mutate({ id: l.id, listingStatus: 'active' })}
-                  className="p-2 rounded-lg text-green-600 hover:bg-green-50 transition-colors"
+                  className="p-2 rounded-lg text-success hover:bg-success/10 transition-colors"
                   title={t('marketplace.resume', '恢复')}
                 >
                   <Play className="w-4 h-4" />
@@ -654,7 +654,7 @@ function ListingCard({
                   deleteMutation.mutate(l.id)
                 }
               }}
-              className="p-2 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+              className="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
               title={t('marketplace.delete', '删除')}
             >
               <Trash2 className="w-4 h-4" />
@@ -681,12 +681,12 @@ function RentalCountdown({ expiresAt }: { expiresAt: string }) {
 
   if (remaining <= 0) {
     return (
-      <span className="text-xs font-bold text-red-500">{t('marketplace.expired', '已到期')}</span>
+      <span className="text-xs font-bold text-danger">{t('marketplace.expired', '已到期')}</span>
     )
   }
 
   return (
-    <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-cyan-700">
+    <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-primary">
       <Clock className="w-3 h-3" />
       {formatCountdown(remaining, t)}
     </span>

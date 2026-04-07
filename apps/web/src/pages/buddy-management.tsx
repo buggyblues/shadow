@@ -241,13 +241,13 @@ export function BuddyManagementPage() {
   const statusColor = (status: string) => {
     switch (status) {
       case 'running':
-        return 'text-green-400'
+        return 'text-success'
       case 'stopped':
-        return 'text-zinc-400'
+        return 'text-text-muted'
       case 'error':
-        return 'text-red-400'
+        return 'text-danger'
       default:
-        return 'text-zinc-400'
+        return 'text-text-muted'
     }
   }
 
@@ -267,7 +267,7 @@ export function BuddyManagementPage() {
   return (
     <div className="flex-1 flex flex-col md:flex-row bg-bg-deep overflow-hidden">
       {/* Mobile header */}
-      <div className="md:hidden flex items-center gap-2 px-4 py-3 bg-bg-deep/80 backdrop-blur-xl border-b border-white/5 shrink-0">
+      <div className="md:hidden flex items-center gap-2 px-4 py-3 bg-bg-deep/80 backdrop-blur-xl border-b border-border-subtle shrink-0">
         {selectedAgent ? (
           <Button
             variant="ghost"
@@ -310,7 +310,7 @@ export function BuddyManagementPage() {
                 setSelectedAgent(agent)
                 setGeneratedToken(null)
               }}
-              className="flex items-center gap-3 w-full px-4 py-3 rounded-[16px] text-[15px] font-medium text-text-secondary hover:bg-primary/10 hover:text-text-primary transition"
+              className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl text-[15px] font-medium text-text-secondary hover:bg-primary/10 hover:text-text-primary transition"
             >
               <UserAvatar
                 userId={agent.botUser?.id ?? agent.userId}
@@ -329,14 +329,14 @@ export function BuddyManagementPage() {
       )}
 
       {/* Desktop Sidebar */}
-      <div className="w-60 bg-bg-deep/50 backdrop-blur-xl border-r border-white/5 hidden md:flex flex-col shrink-0">
-        <div className="p-4 border-b border-white/5">
+      <div className="w-60 bg-bg-deep/50 backdrop-blur-xl border-r border-border-subtle hidden md:flex flex-col shrink-0">
+        <div className="p-4 border-b border-border-subtle">
           <Button variant="ghost" size="sm" onClick={() => navigate({ to: '/' })}>
             <ArrowLeft size={16} />
             {t('common.back')}
           </Button>
         </div>
-        <div className="px-5 py-3 text-[11px] font-black uppercase text-text-muted tracking-[0.2em] mt-2">
+        <div className="px-5 py-3 text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mt-2">
           {t('agentMgmt.title')}
         </div>
 
@@ -351,7 +351,7 @@ export function BuddyManagementPage() {
               }}
               onContextMenu={(e) => handleAgentContextMenu(e, agent)}
               className={cn(
-                'flex items-center gap-3 w-full px-3 py-2.5 rounded-[16px] text-[15px] font-medium transition',
+                'flex items-center gap-3 w-full px-3 py-2.5 rounded-2xl text-[15px] font-medium transition',
                 selectedAgent?.id === agent.id
                   ? 'bg-primary/15 text-text-primary'
                   : 'text-text-secondary hover:bg-primary/10 hover:text-text-primary',
@@ -458,7 +458,7 @@ export function BuddyManagementPage() {
 
       {/* Delete confirmation dialog */}
       <Dialog isOpen={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)}>
-        <DialogContent>
+        <DialogContent className="rounded-[40px] shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
           <DialogHeader>
             <DialogTitle>{t('common.confirm')}</DialogTitle>
           </DialogHeader>
@@ -482,7 +482,7 @@ export function BuddyManagementPage() {
       {/* Agent context menu */}
       {contextMenu && (
         <div
-          className="fixed z-50 bg-bg-deep/90 backdrop-blur-xl border border-white/10 rounded-[16px] shadow-xl py-2 min-w-[180px]"
+          className="fixed z-50 bg-bg-deep/90 backdrop-blur-xl border border-border-subtle rounded-2xl shadow-xl py-2 min-w-[180px]"
           style={{ top: contextMenu.y, left: contextMenu.x }}
         >
           <button
@@ -529,7 +529,7 @@ export function BuddyManagementPage() {
             <Edit2 size={14} />
             {t('common.edit')}
           </button>
-          <div className="h-px bg-white/5 my-1 mx-3" />
+          <div className="h-px bg-bg-tertiary/50 my-1 mx-3" />
           <button
             type="button"
             onClick={() => {
@@ -628,7 +628,7 @@ function AgentDetail({
       <Card variant="glass" className="rounded-[24px] mb-6">
         <CardContent className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] mb-1">
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
               {t('agentMgmt.status')}
             </label>
             <div className="flex items-center gap-2">
@@ -667,7 +667,7 @@ function AgentDetail({
             </div>
           </div>
           <div>
-            <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] mb-1">
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
               {t('agentMgmt.enableDisable')}
             </label>
             <button
@@ -689,7 +689,7 @@ function AgentDetail({
             </button>
           </div>
           <div>
-            <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] mb-1">
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
               {t('agentMgmt.owner')}
             </label>
             <div className="flex items-center gap-2">
@@ -707,7 +707,7 @@ function AgentDetail({
             </div>
           </div>
           <div>
-            <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] mb-1">
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
               {t('agentMgmt.createdAt')}
             </label>
             <p className="text-sm text-text-primary font-bold">
@@ -715,7 +715,7 @@ function AgentDetail({
             </p>
           </div>
           <div>
-            <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] mb-1">
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
               {t('agentMgmt.totalOnlineTime')}
             </label>
             <p className="text-sm text-text-primary font-bold">
@@ -726,7 +726,7 @@ function AgentDetail({
             </p>
           </div>
           <div>
-            <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] mb-1">
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
               {t('agentMgmt.connection')}
             </label>
             {(() => {
@@ -758,7 +758,7 @@ function AgentDetail({
             })()}
           </div>
           <div>
-            <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] mb-1">
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
               {t('agentMgmt.rentalStatus')}
             </label>
             <div className="flex items-center gap-2">
@@ -809,7 +809,7 @@ function AgentDetail({
             if (displayToken) {
               return (
                 <div className="space-y-3">
-                  <div className="bg-bg-deep/50 backdrop-blur-sm rounded-[16px] p-3 break-all font-mono text-xs text-text-secondary border border-white/5">
+                  <div className="bg-bg-deep/50 backdrop-blur-sm rounded-2xl p-3 break-all font-mono text-xs text-text-secondary border border-border-subtle">
                     {displayToken}
                   </div>
                   <div className="flex items-center gap-3">
@@ -836,10 +836,10 @@ function AgentDetail({
 
                   {/* YAML example */}
                   <div className="mt-4">
-                    <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] mb-2">
+                    <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-2">
                       {t('agentMgmt.configExample')}
                     </label>
-                    <pre className="bg-bg-deep/50 backdrop-blur-sm rounded-[16px] p-4 text-xs text-text-secondary border border-white/5 overflow-x-auto">
+                    <pre className="bg-bg-deep/50 backdrop-blur-sm rounded-2xl p-4 text-xs text-text-secondary border border-border-subtle overflow-x-auto">
                       {`{
   "channels": {
     "shadowob": {
@@ -900,20 +900,20 @@ function CopyBlock({
   return (
     <div className="relative group">
       {label && (
-        <p className="text-[11px] font-black uppercase text-text-muted tracking-[0.2em] mb-1">
+        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
           {label}
         </p>
       )}
-      <pre className="bg-bg-deep/50 backdrop-blur-sm rounded-[16px] p-3 pr-10 font-mono text-xs text-text-secondary border border-white/5 overflow-x-auto whitespace-pre-wrap break-all">
+      <pre className="bg-bg-deep/50 backdrop-blur-sm rounded-2xl p-3 pr-10 font-mono text-xs text-text-secondary border border-border-subtle overflow-x-auto whitespace-pre-wrap break-all">
         {content}
       </pre>
       <button
         type="button"
         onClick={handleCopy}
-        className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-white/5 text-text-muted hover:text-text-primary hover:bg-white/10 transition opacity-0 group-hover:opacity-100"
+        className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-bg-tertiary/50 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover transition opacity-0 group-hover:opacity-100"
         title={t('common.copy')}
       >
-        {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+        {copied ? <Check size={12} className="text-success" /> : <Copy size={12} />}
       </button>
     </div>
   )
@@ -991,12 +991,12 @@ function OpenClawSetupGuide({
         </p>
 
         {/* Tab selector — pill-shaped */}
-        <div className="flex gap-1 mb-4 bg-bg-deep/50 backdrop-blur-sm rounded-full p-1 border border-white/5">
+        <div className="flex gap-1 mb-4 bg-bg-deep/50 backdrop-blur-sm rounded-full p-1 border border-border-subtle">
           <button
             type="button"
             onClick={() => setActiveTab('manual')}
             className={cn(
-              'flex items-center gap-1.5 flex-1 px-4 py-2 rounded-full text-xs font-black uppercase tracking-wider transition',
+              'flex items-center gap-1.5 flex-1 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest transition',
               activeTab === 'manual'
                 ? 'bg-primary/15 text-primary shadow-sm'
                 : 'text-text-muted hover:text-text-secondary',
@@ -1009,7 +1009,7 @@ function OpenClawSetupGuide({
             type="button"
             onClick={() => setActiveTab('chat')}
             className={cn(
-              'flex items-center gap-1.5 flex-1 px-4 py-2 rounded-full text-xs font-black uppercase tracking-wider transition',
+              'flex items-center gap-1.5 flex-1 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest transition',
               activeTab === 'chat'
                 ? 'bg-primary/15 text-primary shadow-sm'
                 : 'text-text-muted hover:text-text-secondary',
@@ -1024,18 +1024,18 @@ function OpenClawSetupGuide({
           <>
             {/* Quick bash one-liner */}
             <div className="mb-4">
-              <p className="text-xs font-black text-text-secondary mb-2 uppercase tracking-wider">
+              <p className="text-xs font-black text-text-secondary mb-2 uppercase tracking-widest">
                 {t('agentMgmt.setupBashTitle')}
               </p>
               <CopyBlock content={bashCommand} t={t} />
               {!token && (
-                <p className="text-[10px] text-warning mt-1.5 ml-1 font-bold">
+                <p className="text-[11px] text-warning mt-1.5 ml-1 font-bold">
                   ⚠ {t('agentMgmt.setupTokenWarning')}
                 </p>
               )}
             </div>
 
-            <div className="h-px bg-white/5 my-4" />
+            <div className="h-px bg-bg-tertiary/50 my-4" />
 
             {/* Step-by-step */}
             <p className="text-[11px] font-black text-text-muted uppercase tracking-[0.2em] mb-3">
@@ -1119,7 +1119,7 @@ function OpenClawSetupGuide({
         )}
 
         {/* Capabilities */}
-        <div className="mt-4 pt-4 border-t border-white/5">
+        <div className="mt-4 pt-4 border-t border-border-subtle">
           <p className="text-[11px] font-black text-text-muted uppercase tracking-[0.2em] mb-2">
             {t('docs.openclawCapabilities')}
           </p>
@@ -1137,12 +1137,12 @@ function OpenClawSetupGuide({
         </div>
 
         {/* Link to full docs */}
-        <div className="mt-4 pt-3 border-t border-white/5">
+        <div className="mt-4 pt-3 border-t border-border-subtle">
           <a
             href="/product/index.html"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-primary hover:text-primary-hover font-black flex items-center gap-1 transition uppercase tracking-wider"
+            className="text-xs text-primary hover:text-primary-hover font-black flex items-center gap-1 transition uppercase tracking-widest"
           >
             <BookOpen size={12} />
             {t('agentMgmt.openclawFullDocs')}
@@ -1243,14 +1243,17 @@ function CreateAgentDialog({
 
   return (
     <Dialog isOpen onClose={onClose}>
-      <DialogContent maxWidth="max-w-[480px]">
+      <DialogContent
+        maxWidth="max-w-[480px]"
+        className="rounded-[40px] shadow-[0_32px_120px_rgba(0,0,0,0.5)]"
+      >
         <DialogHeader>
           <DialogTitle>{t('agentMgmt.createTitle')}</DialogTitle>
         </DialogHeader>
 
         {/* Name */}
         <div className="space-y-2">
-          <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] ml-1">
+          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
             {t('agentMgmt.nameLabel')}
           </label>
           <Input
@@ -1263,7 +1266,7 @@ function CreateAgentDialog({
 
         {/* Username */}
         <div className="space-y-2">
-          <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] ml-1">
+          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
             {t('agentMgmt.usernameLabel')}
           </label>
           <Input
@@ -1276,14 +1279,14 @@ function CreateAgentDialog({
 
         {/* Description */}
         <div className="space-y-2">
-          <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] ml-1">
+          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
             {t('agentMgmt.descLabel')}
           </label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder={t('agentMgmt.descPlaceholder')}
-            className="w-full bg-white dark:bg-[rgba(0,0,0,0.3)] border-2 border-[#F1F5F9] dark:border-[rgba(255,255,255,0.1)] text-text-primary rounded-[20px] px-6 py-4 text-base font-bold outline-none transition-all placeholder:text-text-muted/30 focus:border-primary-strong dark:focus:border-primary focus:shadow-[0_0_0_5px_rgba(0,198,209,0.15)] dark:focus:shadow-[0_0_0_5px_rgba(0,198,209,0.1)] resize-none"
+            className="w-full bg-bg-tertiary border-2 border-border-subtle text-text-primary rounded-[24px] px-6 py-4 text-base font-bold outline-none transition-all placeholder:text-text-muted/30 focus:border-primary focus:shadow-[0_0_0_5px_rgba(0,198,209,0.1)] resize-none"
             rows={3}
             maxLength={500}
           />
@@ -1291,7 +1294,7 @@ function CreateAgentDialog({
 
         {/* Avatar picker */}
         <div>
-          <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] ml-1 mb-3">
+          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-3">
             {t('agentMgmt.avatarLabel')}
           </label>
           <AvatarEditor value={selectedAvatar ?? undefined} onChange={setSelectedAvatar} />
@@ -1358,13 +1361,16 @@ function EditAgentDialog({
 
   return (
     <Dialog isOpen onClose={onClose}>
-      <DialogContent maxWidth="max-w-[480px]">
+      <DialogContent
+        maxWidth="max-w-[480px]"
+        className="rounded-[40px] shadow-[0_32px_120px_rgba(0,0,0,0.5)]"
+      >
         <DialogHeader>
           <DialogTitle>{t('agentMgmt.editTitle')}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-2">
-          <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] ml-1">
+          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
             {t('agentMgmt.nameLabel')}
           </label>
           <Input
@@ -1376,21 +1382,21 @@ function EditAgentDialog({
         </div>
 
         <div className="space-y-2">
-          <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] ml-1">
+          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
             {t('agentMgmt.descLabel')}
           </label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder={t('agentMgmt.descPlaceholder')}
-            className="w-full bg-white dark:bg-[rgba(0,0,0,0.3)] border-2 border-[#F1F5F9] dark:border-[rgba(255,255,255,0.1)] text-text-primary rounded-[20px] px-6 py-4 text-base font-bold outline-none transition-all placeholder:text-text-muted/30 focus:border-primary-strong dark:focus:border-primary focus:shadow-[0_0_0_5px_rgba(0,198,209,0.15)] dark:focus:shadow-[0_0_0_5px_rgba(0,198,209,0.1)] resize-none"
+            className="w-full bg-bg-tertiary border-2 border-border-subtle text-text-primary rounded-[24px] px-6 py-4 text-base font-bold outline-none transition-all placeholder:text-text-muted/30 focus:border-primary focus:shadow-[0_0_0_5px_rgba(0,198,209,0.1)] resize-none"
             rows={3}
             maxLength={500}
           />
         </div>
 
         <div>
-          <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] ml-1 mb-3">
+          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-3">
             {t('agentMgmt.avatarLabel')}
           </label>
           <AvatarEditor value={selectedAvatar ?? undefined} onChange={setSelectedAvatar} />
@@ -1499,13 +1505,13 @@ export function BuddyManagementContent() {
   const statusColor = (status: string) => {
     switch (status) {
       case 'running':
-        return 'text-green-400'
+        return 'text-success'
       case 'stopped':
-        return 'text-zinc-400'
+        return 'text-text-muted'
       case 'error':
-        return 'text-red-400'
+        return 'text-danger'
       default:
-        return 'text-zinc-400'
+        return 'text-text-muted'
     }
   }
 
@@ -1579,10 +1585,10 @@ export function BuddyManagementContent() {
                   setGeneratedToken(null)
                 }}
                 className={cn(
-                  'flex items-center gap-3 w-full px-4 py-3 rounded-[16px] text-left transition border',
+                  'flex items-center gap-3 w-full px-4 py-3 rounded-2xl text-left transition border',
                   isSelected
                     ? 'bg-primary/15 border-primary/30 text-text-primary'
-                    : 'bg-white/3 border-white/5 text-text-secondary hover:bg-primary/10 hover:text-text-primary',
+                    : 'bg-bg-tertiary/30 border-border-subtle text-text-secondary hover:bg-primary/10 hover:text-text-primary',
                 )}
               >
                 <UserAvatar
@@ -1593,7 +1599,7 @@ export function BuddyManagementContent() {
                 />
                 <span className="truncate flex-1 font-bold">{name}</span>
                 {(agent.totalOnlineSeconds ?? 0) > 0 && (
-                  <span className="text-[10px] text-text-muted shrink-0 font-bold">
+                  <span className="text-[11px] text-text-muted shrink-0 font-bold">
                     {formatOnlineDuration(
                       agent.totalOnlineSeconds,
                       t as (key: string, defaultValue?: string) => string,
@@ -1661,7 +1667,7 @@ export function BuddyManagementContent() {
 
       {/* Delete confirmation */}
       <Dialog isOpen={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)}>
-        <DialogContent>
+        <DialogContent className="rounded-[40px] shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
           <DialogHeader>
             <DialogTitle>{t('common.confirm')}</DialogTitle>
           </DialogHeader>

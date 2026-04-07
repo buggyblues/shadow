@@ -132,7 +132,7 @@ export function BuddyDashboardPage() {
           {/* Rental Stats */}
           {dashboard.rentalStats && (
             <Card variant="glass" className="p-6">
-              <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider mb-4">
+              <h3 className="text-sm font-bold text-text-primary uppercase tracking-widest mb-4">
                 {t('buddyDashboard.rentalStats', 'Rental Statistics')}
               </h3>
 

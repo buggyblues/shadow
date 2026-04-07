@@ -205,7 +205,7 @@ export function MemberList() {
     const isFlat = opts?.flat ?? false
     return (
       <div className="mb-4">
-        <h4 className="text-[12px] font-bold uppercase text-text-muted px-4 mb-2 tracking-wide">
+        <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted px-4 mb-2">
           {label} — {items.length}
         </h4>
         {(() => {
@@ -285,7 +285,7 @@ export function MemberList() {
                   <div key={member.id}>
                     {renderMemberRow(member)}
                     {children.length > 0 && (
-                      <div className="relative ml-5 border-l border-border-dim">
+                      <div className="relative ml-5 border-l border-border-subtle">
                         {children.map((child) => renderMemberRow(child, { child: true }))}
                       </div>
                     )}
@@ -346,7 +346,7 @@ export function MemberList() {
     <>
       {/* Desktop member list — hidden when file preview panel is open */}
       {!filePreviewOpen && (
-        <div className="w-60 bg-bg-secondary overflow-y-auto shrink-0 pt-4 hidden lg:block h-full">
+        <div className="w-60 bg-bg-primary/80 backdrop-blur-xl overflow-y-auto shrink-0 pt-4 hidden lg:block h-full border-l border-border-subtle">
           {memberContent}
         </div>
       )}
@@ -354,8 +354,8 @@ export function MemberList() {
       {/* Mobile member list overlay */}
       {mobileMemberListOpen && (
         <div className="fixed inset-0 z-50 flex lg:hidden">
-          <div className="absolute inset-0 bg-black/60" onClick={closeMobileMemberList} />
-          <div className="ml-auto relative z-10 w-64 bg-bg-secondary h-full overflow-y-auto animate-slide-in-right">
+          <div className="absolute inset-0 bg-bg-deep/60" onClick={closeMobileMemberList} />
+          <div className="ml-auto relative z-10 w-64 bg-bg-primary/80 backdrop-blur-xl h-full overflow-y-auto animate-slide-in-right">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
               <h3 className="font-bold text-text-primary text-sm">{t('member.groupOnline')}</h3>
               <button
@@ -403,7 +403,7 @@ export function MemberList() {
       {/* Profile panel modal */}
       {profileMember?.user && (
         <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-bg-deep/60 flex items-center justify-center z-50"
           onClick={() => setProfileMember(null)}
         >
           <div onClick={(e) => e.stopPropagation()}>
@@ -609,7 +609,7 @@ function BotContextMenu({
       />
       <div
         ref={menuRef}
-        className="fixed z-[81] bg-bg-tertiary/95 backdrop-blur-md border border-border-dim/60 rounded-xl shadow-xl py-1 min-w-[180px]"
+        className="fixed z-[81] bg-bg-primary/95 backdrop-blur-xl border border-border-subtle rounded-[24px] shadow-[0_16px_64px_rgba(0,0,0,0.4)] py-1.5 min-w-[180px]"
         style={{ left: position.x, top: position.y }}
       >
         {/* View profile — always visible */}
@@ -641,11 +641,11 @@ function BotContextMenu({
               >
                 <MessageSquare size={14} />
                 <span className="flex-1 text-left">{t('member.replyPolicy')}</span>
-                <span className="text-[10px] text-text-muted ml-1">▸</span>
+                <span className="text-[11px] text-text-muted ml-1">▸</span>
               </button>
               {policyOpen && (
                 <div
-                  className="absolute ml-1 bg-bg-tertiary border border-border-dim rounded-lg shadow-xl py-1 min-w-[180px] z-[82]"
+                  className="absolute ml-1 bg-bg-primary/95 backdrop-blur-xl border border-border-subtle rounded-2xl shadow-[0_16px_64px_rgba(0,0,0,0.4)] py-1.5 min-w-[180px] z-[82]"
                   style={getSubmenuStyle()}
                 >
                   {/* Reply All */}
@@ -830,11 +830,11 @@ function BotContextMenu({
         agent &&
         createPortal(
           <div
-            className="fixed inset-0 bg-black/60 flex items-center justify-center z-[90]"
+            className="fixed inset-0 bg-bg-deep/60 flex items-center justify-center z-[90]"
             onClick={() => setCustomPolicyOpen(false)}
           >
             <div
-              className="bg-bg-secondary rounded-xl p-5 w-[420px] max-w-[90vw] border border-border-dim shadow-2xl"
+              className="bg-bg-primary/95 backdrop-blur-xl rounded-[40px] p-5 w-[420px] max-w-[90vw] border border-border-subtle shadow-[0_32px_120px_rgba(0,0,0,0.5)]"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-4">
@@ -857,9 +857,9 @@ function BotContextMenu({
                     type="checkbox"
                     checked={customMentionOnly}
                     onChange={(e) => setCustomMentionOnly(e.target.checked)}
-                    className="w-4 h-4 rounded border-border-dim bg-bg-primary text-primary focus:ring-primary/50"
+                    className="w-4 h-4 rounded border-border-subtle bg-bg-primary text-primary focus:ring-primary/50"
                   />
-                  <span className="text-xs font-semibold text-text-secondary">
+                  <span className="text-xs font-black text-text-secondary">
                     {t('member.policyMentionOnly')}
                   </span>
                 </label>
@@ -870,7 +870,7 @@ function BotContextMenu({
 
               {/* Reply to specific users — multi-select */}
               <div className="mb-4">
-                <label className="block text-xs font-semibold text-text-secondary mb-1.5">
+                <label className="block text-xs font-black text-text-secondary mb-1.5">
                   {t('member.policyReplyToUsers')}
                 </label>
                 <p className="text-[11px] text-text-muted mb-1.5">
@@ -911,19 +911,19 @@ function BotContextMenu({
                   <button
                     type="button"
                     onClick={() => setUserPickerOpen(!userPickerOpen)}
-                    className="w-full bg-bg-primary border border-border-dim rounded-lg px-3 py-2 text-sm text-text-muted hover:border-primary/50 transition text-left"
+                    className="w-full bg-bg-primary border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-muted hover:border-primary/50 transition text-left"
                   >
                     {t('member.policySelectUsers')}
                   </button>
                   {userPickerOpen && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-bg-tertiary border border-border-dim rounded-lg shadow-xl z-10 max-h-[200px] overflow-y-auto">
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-bg-tertiary border border-border-subtle rounded-lg shadow-xl z-10 max-h-[200px] overflow-y-auto">
                       <div className="sticky top-0 bg-bg-tertiary p-1.5 border-b border-border-subtle">
                         <input
                           type="text"
                           value={userPickerSearch}
                           onChange={(e) => setUserPickerSearch(e.target.value)}
                           placeholder={t('member.policySearchUsers')}
-                          className="w-full bg-bg-primary border border-border-dim rounded px-2 py-1 text-xs text-text-primary placeholder:text-text-muted focus:outline-none"
+                          className="w-full bg-bg-primary border border-border-subtle rounded px-2 py-1 text-xs text-text-primary placeholder:text-text-muted focus:outline-none"
                         />
                       </div>
                       {members
@@ -953,7 +953,7 @@ function BotContextMenu({
                             >
                               <div
                                 className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
-                                  selected ? 'bg-primary border-primary' : 'border-border-dim'
+                                  selected ? 'bg-primary border-primary' : 'border-border-subtle'
                                 }`}
                               >
                                 {selected && <Check size={10} className="text-white" />}
@@ -981,7 +981,7 @@ function BotContextMenu({
 
               {/* Keyword triggers */}
               <div className="mb-5">
-                <label className="block text-xs font-semibold text-text-secondary mb-1.5">
+                <label className="block text-xs font-black text-text-secondary mb-1.5">
                   {t('member.policyKeywords')}
                 </label>
                 <p className="text-[11px] text-text-muted mb-1.5">
@@ -991,7 +991,7 @@ function BotContextMenu({
                   value={customKeywords}
                   onChange={(e) => setCustomKeywords(e.target.value)}
                   placeholder={t('member.policyKeywordsPlaceholder')}
-                  className="w-full bg-bg-primary border border-border-dim rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary/50 resize-none"
+                  className="w-full bg-bg-primary border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary/50 resize-none"
                   rows={3}
                 />
               </div>
@@ -1009,9 +1009,9 @@ function BotContextMenu({
                       type="checkbox"
                       checked={customSmartReply}
                       onChange={(e) => setCustomSmartReply(e.target.checked)}
-                      className="w-4 h-4 rounded border-border-dim bg-bg-primary text-primary focus:ring-primary/50"
+                      className="w-4 h-4 rounded border-border-subtle bg-bg-primary text-primary focus:ring-primary/50"
                     />
-                    <span className="text-xs font-semibold text-text-secondary">
+                    <span className="text-xs font-black text-text-secondary">
                       {t('member.policySmartReply')}
                     </span>
                   </label>
@@ -1027,9 +1027,9 @@ function BotContextMenu({
                       type="checkbox"
                       checked={customReplyToBuddy}
                       onChange={(e) => setCustomReplyToBuddy(e.target.checked)}
-                      className="w-4 h-4 rounded border-border-dim bg-bg-primary text-primary focus:ring-primary/50"
+                      className="w-4 h-4 rounded border-border-subtle bg-bg-primary text-primary focus:ring-primary/50"
                     />
-                    <span className="text-xs font-semibold text-text-secondary">
+                    <span className="text-xs font-black text-text-secondary">
                       {t('member.policyReplyToBuddy')}
                     </span>
                   </label>
@@ -1041,7 +1041,7 @@ function BotContextMenu({
                 {/* Max Buddy chain depth */}
                 {customReplyToBuddy && (
                   <div className="ml-6">
-                    <label className="block text-xs font-semibold text-text-secondary mb-1">
+                    <label className="block text-xs font-black text-text-secondary mb-1">
                       {t('member.policyMaxBuddyChainDepth')}
                     </label>
                     <div className="flex items-center gap-2">
@@ -1099,7 +1099,7 @@ function BotContextMenu({
                   )
                 }}
                 disabled={updateBotPolicy.isPending}
-                className="w-full px-4 py-2.5 bg-primary hover:bg-primary/80 text-white rounded-lg transition font-semibold text-sm disabled:opacity-50"
+                className="w-full px-4 py-2.5 bg-primary hover:bg-primary/80 text-white rounded-lg transition font-black text-sm disabled:opacity-50"
               >
                 {t('member.policySave')}
               </button>

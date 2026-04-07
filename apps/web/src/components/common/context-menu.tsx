@@ -117,14 +117,14 @@ export function ContextMenu({ x, y, groups, onClose, minWidth = 180 }: ContextMe
       {/* Menu */}
       <div
         ref={menuRef}
-        className="fixed z-[101] bg-bg-primary/95 backdrop-blur-xl rounded-[16px] border border-border/10 shadow-xl py-1"
+        className="fixed z-[101] bg-bg-primary/95 backdrop-blur-xl rounded-[24px] border border-border-subtle shadow-[0_16px_64px_rgba(0,0,0,0.4)] py-1"
         style={{ left: position.x, top: position.y, minWidth: `${minWidth}px` }}
       >
         {groups.map((group, gi) => (
           <div key={gi}>
             {gi > 0 && <div className="h-px bg-border-subtle mx-2 my-1" />}
             {group.title && (
-              <div className="px-3 pt-1.5 pb-0.5 text-[10px] font-bold uppercase tracking-wider text-text-muted/60 select-none">
+              <div className="px-3 pt-1.5 pb-0.5 text-[11px] font-bold uppercase tracking-widest text-text-muted/60 select-none">
                 {group.title}
               </div>
             )}
@@ -138,7 +138,7 @@ export function ContextMenu({ x, y, groups, onClose, minWidth = 180 }: ContextMe
                   item.disabled
                     ? 'text-text-muted/40 cursor-not-allowed'
                     : item.danger
-                      ? 'text-red-400 hover:bg-red-500/10 hover:text-red-300'
+                      ? 'text-danger hover:bg-danger/10 hover:text-danger'
                       : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary'
                 }`}
                 style={{ width: 'calc(100% - 8px)' }}
@@ -210,7 +210,7 @@ export function ContextMenuWrapper({
       />
       <div
         ref={menuRef}
-        className="fixed z-[101] bg-bg-primary/95 backdrop-blur-xl rounded-[16px] border border-border/10 shadow-xl py-1 min-w-[160px]"
+        className="fixed z-[101] bg-bg-primary/95 backdrop-blur-xl rounded-[24px] border border-border-subtle shadow-[0_16px_64px_rgba(0,0,0,0.4)] py-1 min-w-[160px]"
         style={{ left: position.x, top: position.y }}
       >
         {children}

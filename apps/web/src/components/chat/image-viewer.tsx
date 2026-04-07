@@ -141,7 +141,7 @@ export function ImageViewer({ src, filename, size, onClose }: ImageViewerProps) 
       role="dialog"
       aria-modal="true"
       aria-label={t('chat.imageViewer', 'Image viewer')}
-      className="fixed inset-0 z-50 bg-black/95 flex flex-col"
+      className="fixed inset-0 z-50 bg-bg-deep/95 flex flex-col"
       onClick={(e) => {
         // Close when clicking background
         if (e.target === containerRef.current) {
@@ -159,7 +159,7 @@ export function ImageViewer({ src, filename, size, onClose }: ImageViewerProps) 
       tabIndex={-1}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-black/50 shrink-0">
+      <div className="flex items-center justify-between px-4 py-3 bg-bg-deep/50 shrink-0">
         <div className="flex-1 min-w-0 mr-4">
           {filename && <p className="text-white text-sm font-medium truncate">{filename}</p>}
           {size && <p className="text-white/60 text-xs">{formatSize(size)}</p>}
@@ -169,7 +169,7 @@ export function ImageViewer({ src, filename, size, onClose }: ImageViewerProps) 
           <button
             type="button"
             onClick={handleZoomOut}
-            className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition"
+            className="p-2 text-white/80 hover:text-white hover:bg-bg-modifier-hover rounded-lg transition"
             title={t('common.zoomOut')}
           >
             <ZoomOut size={20} />
@@ -180,7 +180,7 @@ export function ImageViewer({ src, filename, size, onClose }: ImageViewerProps) 
           <button
             type="button"
             onClick={handleZoomIn}
-            className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition"
+            className="p-2 text-white/80 hover:text-white hover:bg-bg-modifier-hover rounded-lg transition"
             title={t('common.zoomIn')}
           >
             <ZoomIn size={20} />
@@ -190,7 +190,7 @@ export function ImageViewer({ src, filename, size, onClose }: ImageViewerProps) 
           <button
             type="button"
             onClick={handleDownload}
-            className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition"
+            className="p-2 text-white/80 hover:text-white hover:bg-bg-modifier-hover rounded-lg transition"
             title={t('common.download')}
           >
             <Download size={20} />
@@ -199,7 +199,7 @@ export function ImageViewer({ src, filename, size, onClose }: ImageViewerProps) 
           <button
             type="button"
             onClick={onClose}
-            className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition"
+            className="p-2 text-white/80 hover:text-white hover:bg-bg-modifier-hover rounded-lg transition"
             title={t('common.close')}
           >
             <X size={24} />
@@ -233,13 +233,13 @@ export function ImageViewer({ src, filename, size, onClose }: ImageViewerProps) 
         />
         {!isLoaded && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <div className="w-8 h-8 border-2 border-border-subtle border-t-white rounded-full animate-spin" />
           </div>
         )}
       </div>
 
       {/* Mobile hint */}
-      <div className="md:hidden px-4 py-2 bg-black/50 text-center">
+      <div className="md:hidden px-4 py-2 bg-bg-deep/50 text-center">
         <p className="text-white/40 text-xs">
           {t('chat.imageViewerHint', 'Swipe down to close · Double tap to zoom')}
         </p>

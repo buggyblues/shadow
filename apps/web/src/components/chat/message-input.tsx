@@ -564,7 +564,7 @@ export function MessageInput({
       {mentionQuery !== null && filteredMembers.length > 0 && (
         <div
           ref={mentionListRef}
-          className="absolute bottom-full left-4 right-4 mb-1 bg-bg-primary/95 backdrop-blur-xl border border-border/10 rounded-[12px] shadow-xl py-1 max-h-[240px] overflow-y-auto z-50"
+          className="absolute bottom-full left-4 right-4 mb-1 bg-bg-primary/95 backdrop-blur-xl border border-border-subtle rounded-[24px] shadow-[0_16px_64px_rgba(0,0,0,0.4)] py-1.5 max-h-[240px] overflow-y-auto z-50"
         >
           {filteredMembers.map((member, i) => (
             <button
@@ -593,7 +593,7 @@ export function MessageInput({
               </span>
               <span className="text-text-muted text-xs">@{member.user?.username}</span>
               {member.user?.isBot && (
-                <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-medium ml-auto">
+                <span className="text-[11px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-medium ml-auto">
                   {t('common.bot')}
                 </span>
               )}
@@ -603,9 +603,9 @@ export function MessageInput({
       )}
       {/* Reply indicator */}
       {replyToId && (
-        <div className="flex items-center justify-between bg-primary/5 rounded-t-[20px] px-4 py-2 text-xs text-text-secondary border-l-2 border-primary">
+        <div className="flex items-center justify-between bg-primary/5 rounded-t-[20px] px-4 py-2 text-xs text-text-secondary border-l-2 border-primary animate-in slide-in-from-top-2 duration-200">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-text-muted">{t('chat.replyingTo')}</span>
+            <span className="font-bold text-text-muted">{t('chat.replyingTo')}</span>
           </div>
           <Button
             variant="ghost"
@@ -622,8 +622,8 @@ export function MessageInput({
       {pendingFiles.length > 0 && (
         <div
           className={cn(
-            'flex flex-wrap gap-2 bg-bg-secondary/80 rounded-[16px] border-b border-border/10 px-4 py-3',
-            replyToId ? '' : 'rounded-t-[20px]',
+            'flex flex-wrap gap-2 bg-bg-secondary/80 rounded-[24px] border-b border-border-subtle px-4 py-3',
+            replyToId ? '' : 'rounded-t-[40px]',
           )}
         >
           {pendingFiles.map((pf, i) => (
@@ -632,12 +632,12 @@ export function MessageInput({
                 <button
                   type="button"
                   onClick={() => setViewingImage(pf)}
-                  className="w-20 h-20 rounded-lg overflow-hidden border border-border/10 hover:border-primary/30 transition cursor-pointer"
+                  className="w-20 h-20 rounded-lg overflow-hidden border border-border-subtle hover:border-primary/30 transition cursor-pointer"
                 >
                   <img src={pf.preview} alt="" className="w-full h-full object-cover" />
                 </button>
               ) : (
-                <div className="w-20 h-20 rounded-lg border border-border/10 bg-bg-secondary/80 flex flex-col items-center justify-center gap-1">
+                <div className="w-20 h-20 rounded-lg border border-border-subtle bg-bg-secondary/80 flex flex-col items-center justify-center gap-1">
                   <FileText size={20} className="text-text-muted" />
                   <span className="text-[9px] text-text-muted truncate max-w-[72px] px-1">
                     {pf.workspaceName ?? pf.file.name}
@@ -664,8 +664,8 @@ export function MessageInput({
 
       <div
         className={cn(
-          'flex items-center gap-1 bg-bg-primary/80 backdrop-blur-xl border border-border/10 px-3 py-1.5 shadow-sm transition-all focus-within:ring-1 focus-within:ring-primary/30 focus-within:border-primary/20',
-          replyToId || pendingFiles.length > 0 ? 'rounded-b-[20px]' : 'rounded-[20px]',
+          'flex items-center gap-1 bg-white/3 backdrop-blur-xl border-2 border-border-subtle px-3 py-1.5 shadow-lg shadow-black/10 transition-all focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/20',
+          replyToId || pendingFiles.length > 0 ? 'rounded-b-[40px]' : 'rounded-[40px]',
         )}
       >
         <Button
@@ -688,7 +688,7 @@ export function MessageInput({
             channelName: channelName ?? t('chat.channelFallback'),
           })}
           rows={1}
-          className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted outline-none resize-none text-[15px] leading-[22px] max-h-[50vh] min-h-[22px] py-[7px]"
+          className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted outline-none resize-none text-[15px] leading-[24px] max-h-[50vh] min-h-[24px] py-[7px]"
         />
 
         <Button
@@ -737,7 +737,7 @@ export function MessageInput({
 
         <Button
           size="icon"
-          className="h-9 w-9 rounded-full bg-primary hover:bg-primary/80 shrink-0 self-end mb-[3px] disabled:opacity-30"
+          className="h-9 w-9 rounded-full bg-primary hover:bg-primary/80 shrink-0 self-end mb-[3px] disabled:opacity-30 shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-shadow"
           onClick={handleSend}
           disabled={(!content.trim() && pendingFiles.length === 0) || uploading}
         >

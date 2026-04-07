@@ -22,31 +22,31 @@ const slides: Slide[] = [
   {
     id: 'slide1',
     icon: BuddyCatSvg,
-    color: 'text-amber-400',
+    color: 'text-warning',
     tags: ['产品定位', '超级社区', '协作空间'],
   },
   {
     id: 'slide2',
     icon: WorkCatSvg,
-    color: 'text-cyan-400',
+    color: 'text-primary',
     tags: ['成员管理', '公开/私密', '社区中枢'],
   },
   {
     id: 'slide3',
     icon: ChannelCatSvg,
-    color: 'text-pink-400',
+    color: 'text-info',
     tags: ['话题分区', '信息沉淀', '高效沟通'],
   },
   {
     id: 'slide4',
     icon: BuddyCatSvg,
-    color: 'text-purple-400',
+    color: 'text-info',
     tags: ['多 Buddy', '自动协作', '持续产出'],
   },
   {
     id: 'slide5',
     icon: WorkCatSvg,
-    color: 'text-blue-400',
+    color: 'text-primary',
     tags: ['创建服务器', '搭建频道', '召唤 Buddy'],
   },
 ]
@@ -74,7 +74,7 @@ export function NewcomerGuide({ onHaveBuddy, onNoBuddy }: NewcomerGuideProps) {
       {/* Background decoration */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none opacity-5">
         <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] rounded-full bg-gradient-to-br from-amber-400 to-purple-500 blur-3xl" />
-        <div className="absolute bottom-[-20%] left-[-10%] w-[400px] h-[400px] rounded-full bg-gradient-to-tr from-cyan-400 to-blue-500 blur-3xl" />
+        <div className="absolute bottom-[-20%] left-[-10%] w-[400px] h-[400px] rounded-full bg-gradient-to-tr from-primary to-primary blur-3xl" />
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center text-center z-10 w-full">
@@ -89,7 +89,7 @@ export function NewcomerGuide({ onHaveBuddy, onNoBuddy }: NewcomerGuideProps) {
                 <div key={idx} className="w-full flex-shrink-0 px-4">
                   <Card
                     variant="glass"
-                    className="!rounded-[24px] p-8 mb-6 flex flex-col items-center min-h-[420px] justify-center"
+                    className="!rounded-[40px] p-8 mb-6 flex flex-col items-center min-h-[420px] justify-center"
                   >
                     <div className="w-48 h-48 mb-6 drop-shadow-md mx-auto transform transition-transform duration-500 hover:scale-105">
                       <slide.icon />
@@ -122,7 +122,7 @@ export function NewcomerGuide({ onHaveBuddy, onNoBuddy }: NewcomerGuideProps) {
           <button
             onClick={prevSlide}
             disabled={currentSlide === 0}
-            className={`absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 md:-translate-x-6 p-2 rounded-full bg-[rgba(255,255,255,0.75)] dark:bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] shadow-md border border-white dark:border-[rgba(255,255,255,0.08)] text-text-secondary transition-all ${
+            className={`absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 md:-translate-x-6 p-2 rounded-full bg-bg-tertiary/50 backdrop-blur-xl shadow-md border border-border-subtle text-text-secondary transition-all ${
               currentSlide === 0 ? 'opacity-0 pointer-events-none' : 'opacity-100 hover:scale-110'
             }`}
           >
@@ -132,7 +132,7 @@ export function NewcomerGuide({ onHaveBuddy, onNoBuddy }: NewcomerGuideProps) {
           <button
             onClick={nextSlide}
             disabled={currentSlide === slides.length - 1}
-            className={`absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 md:translate-x-6 p-2 rounded-full bg-[rgba(255,255,255,0.75)] dark:bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] shadow-md border border-white dark:border-[rgba(255,255,255,0.08)] text-text-secondary transition-all ${
+            className={`absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 md:translate-x-6 p-2 rounded-full bg-bg-tertiary/50 backdrop-blur-xl shadow-md border border-border-subtle text-text-secondary transition-all ${
               currentSlide === slides.length - 1
                 ? 'opacity-0 pointer-events-none'
                 : 'opacity-100 hover:scale-110'
@@ -149,7 +149,7 @@ export function NewcomerGuide({ onHaveBuddy, onNoBuddy }: NewcomerGuideProps) {
               key={idx}
               className={`transition-all duration-300 rounded-full ${
                 currentSlide === idx
-                  ? 'w-8 h-2 bg-gradient-to-r from-cyan-400 to-blue-500'
+                  ? 'w-8 h-2 bg-gradient-to-r from-primary to-primary'
                   : 'w-2 h-2 bg-border-primary hover:bg-text-muted'
               }`}
               onClick={() => setCurrentSlide(idx)}

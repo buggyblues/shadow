@@ -162,11 +162,11 @@ export function ProductDetail({
 
   if (isLoading || !product) {
     return (
-      <div className="flex-1 flex flex-col bg-[#F9FAFB] dark:bg-bg-primary h-full">
+      <div className="flex-1 flex flex-col bg-bg-primary h-full">
         <div className="h-14 flex items-center px-4">
-          <div className="w-8 h-8 rounded-xl bg-gray-200 dark:bg-bg-tertiary animate-pulse" />
+          <div className="w-8 h-8 rounded-xl bg-bg-tertiary animate-pulse" />
         </div>
-        <div className="w-full aspect-square bg-gray-200 dark:bg-bg-tertiary animate-pulse" />
+        <div className="w-full aspect-square bg-bg-tertiary animate-pulse" />
       </div>
     )
   }
@@ -269,28 +269,28 @@ export function ProductDetail({
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-[#F9FAFB] dark:bg-bg-primary overflow-hidden h-full relative z-30 font-sans">
+    <div className="flex-1 flex flex-col bg-bg-primary overflow-hidden h-full relative z-30 font-sans">
       {/* ── Top Header ── */}
-      <div className="flex items-center justify-between p-4 bg-[rgba(255,255,255,0.75)] dark:bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] border-b border-border-subtle shrink-0 sticky top-0 z-50">
+      <div className="flex items-center justify-between p-4 bg-bg-tertiary/50 backdrop-blur-xl border-b border-border-subtle shrink-0 sticky top-0 z-50">
         <Button variant="ghost" size="icon" icon={ArrowLeft} onClick={onBack} />
         <span className="font-black text-text-primary truncate max-w-[200px]">{product.name}</span>
         <div className="flex gap-1 items-center">
           <Button variant="ghost" size="icon" onClick={handleToggleFavorite}>
-            <Heart size={18} className={isFavorite ? 'fill-rose-500 text-rose-500' : ''} />
+            <Heart size={18} className={isFavorite ? 'fill-danger text-danger' : ''} />
           </Button>
           <Button variant="ghost" size="icon" icon={Share} onClick={handleShare} />
         </div>
       </div>
 
       {/* ── Main Content Area ── */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar relative">
+      <div className="flex-1 overflow-y-auto scrollbar-hidden relative">
         <div className="max-w-[1200px] mx-auto w-full pb-28 md:pb-10 pt-0 md:pt-6 md:px-6">
           <div className="flex flex-col md:flex-row gap-0 md:gap-8 lg:gap-12">
             {/* ═══ Left Column: Media Gallery ═══ */}
             <div className="w-full md:w-1/2 lg:w-[45%] shrink-0">
               <div className="md:sticky md:top-6">
                 {media.length > 0 ? (
-                  <div className="relative w-full bg-gray-100 dark:bg-bg-tertiary aspect-square md:rounded-3xl flex items-center justify-center overflow-hidden border border-gray-100 dark:border-border-dim shadow-sm">
+                  <div className="relative w-full bg-bg-tertiary aspect-square md:rounded-3xl flex items-center justify-center overflow-hidden border border-border-subtle shadow-sm">
                     {media[currentMediaIndex]?.type === 'video' ? (
                       <video
                         src={media[currentMediaIndex].url}
@@ -309,7 +309,7 @@ export function ProductDetail({
 
                     {/* Dots indicator */}
                     {media.length > 1 && (
-                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 bg-black/30 backdrop-blur-md rounded-full">
+                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 bg-bg-deep/30 backdrop-blur-xl rounded-full">
                         {media.map((m, i) => (
                           <button
                             key={m.id}
@@ -318,7 +318,7 @@ export function ProductDetail({
                             className={`h-1.5 rounded-full transition-all duration-300 ${
                               i === currentMediaIndex
                                 ? 'w-5 bg-white'
-                                : 'w-1.5 bg-white/50 hover:bg-white/80'
+                                : 'w-1.5 bg-bg-tertiary/500 hover:bg-white/80'
                             }`}
                           />
                         ))}
@@ -326,14 +326,14 @@ export function ProductDetail({
                     )}
                   </div>
                 ) : (
-                  <div className="w-full aspect-square bg-gray-100 dark:bg-bg-tertiary md:rounded-3xl flex items-center justify-center border border-gray-100 dark:border-border-dim shadow-sm">
-                    <span className="text-gray-400">无图片</span>
+                  <div className="w-full aspect-square bg-bg-tertiary md:rounded-3xl flex items-center justify-center border border-border-subtle shadow-sm">
+                    <span className="text-text-muted">无图片</span>
                   </div>
                 )}
 
                 {/* Thumbnails below main image (PC only) */}
                 {media.length > 1 && (
-                  <div className="hidden md:flex gap-3 mt-4 overflow-x-auto pb-2 custom-scrollbar">
+                  <div className="hidden md:flex gap-3 mt-4 overflow-x-auto pb-2 scrollbar-hidden">
                     {media.map((m, i) => (
                       <button
                         type="button"
@@ -341,14 +341,14 @@ export function ProductDetail({
                         onClick={() => goToMedia(i)}
                         className={`w-20 h-20 rounded-xl overflow-hidden shrink-0 border-2 transition-all ${
                           i === currentMediaIndex
-                            ? 'border-cyan-500 p-0.5'
+                            ? 'border-primary p-0.5'
                             : 'border-transparent opacity-70 hover:opacity-100'
                         }`}
                       >
-                        <div className="w-full h-full rounded-lg overflow-hidden bg-gray-100 dark:bg-bg-tertiary">
+                        <div className="w-full h-full rounded-lg overflow-hidden bg-bg-tertiary">
                           {m.type === 'video' ? (
-                            <div className="w-full h-full flex items-center justify-center bg-gray-200 dark:bg-gray-800">
-                              <span className="text-[10px]">VIDEO</span>
+                            <div className="w-full h-full flex items-center justify-center bg-bg-tertiary">
+                              <span className="text-[11px]">VIDEO</span>
                             </div>
                           ) : (
                             <img src={m.url} className="w-full h-full object-cover" alt="" />
@@ -362,19 +362,19 @@ export function ProductDetail({
             </div>
 
             {/* ═══ Right Column: Product Info & Actions ═══ */}
-            <div className="w-full md:w-1/2 lg:w-[55%] flex flex-col border-t md:border-t-0 border-gray-100 dark:border-border-dim bg-white md:bg-transparent dark:bg-bg-primary">
+            <div className="w-full md:w-1/2 lg:w-[55%] flex flex-col border-t md:border-t-0 border-border-subtle bg-bg-primary md:bg-transparent">
               <div className="p-5 md:p-0">
                 <div className="flex flex-col gap-2 mb-4">
                   <div className="flex items-end justify-between">
-                    <span className="text-rose-500 dark:text-rose-400 font-black text-3xl flex items-baseline gap-1">
+                    <span className="text-danger font-black text-3xl flex items-baseline gap-1">
                       <PriceDisplay amount={price} size={32} />
                     </span>
-                    <span className="text-sm text-gray-400 dark:text-text-muted font-medium bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-lg">
+                    <span className="text-sm text-text-muted font-medium bg-bg-tertiary px-2.5 py-1 rounded-lg">
                       已售 {product.salesCount}
                     </span>
                   </div>
                   {product.basePrice !== price && (
-                    <span className="text-gray-400 line-through text-sm flex items-center gap-0.5">
+                    <span className="text-text-muted line-through text-sm flex items-center gap-0.5">
                       <PriceDisplay amount={product.basePrice} size={14} />
                     </span>
                   )}
@@ -385,7 +385,7 @@ export function ProductDetail({
                 </h1>
 
                 {product.summary && (
-                  <p className="text-gray-500 dark:text-gray-400 text-sm md:text-base leading-relaxed mb-5">
+                  <p className="text-text-muted text-sm md:text-base leading-relaxed mb-5">
                     {product.summary}
                   </p>
                 )}
@@ -405,7 +405,7 @@ export function ProductDetail({
                 </div>
 
                 {/* Separator */}
-                <div className="w-full h-px bg-gray-100 dark:bg-border-dim mb-6" />
+                <div className="w-full h-px bg-border-dim mb-6" />
 
                 {/* ═══ SKU Selection ═══ */}
                 {(hasSpecs || true) && (
@@ -419,9 +419,7 @@ export function ProductDetail({
                         ]
                         return (
                           <div key={specName} className="mb-5">
-                            <p className="text-gray-900 dark:text-gray-200 text-sm font-bold mb-3">
-                              {specName}
-                            </p>
+                            <p className="text-text-secondary text-sm font-bold mb-3">{specName}</p>
                             <div className="flex flex-wrap gap-3">
                               {uniqueValues.map((val) => {
                                 const isSelected = selectedSku?.specValues[specIndex] === val
@@ -444,8 +442,8 @@ export function ProductDetail({
                                     }}
                                     className={`px-5 py-2.5 text-sm font-bold rounded-xl transition-all border-2 ${
                                       isSelected
-                                        ? 'bg-cyan-50 dark:bg-cyan-900/20 text-cyan-600 dark:text-cyan-400 border-cyan-500'
-                                        : 'bg-white dark:bg-bg-secondary text-gray-600 dark:text-gray-300 border-gray-200 dark:border-border-dim hover:border-gray-300 dark:hover:border-border-subtle'
+                                        ? 'bg-primary/10 text-primary border-primary'
+                                        : 'bg-bg-secondary text-text-secondary border-border-subtle hover:border-border-subtle'
                                     }`}
                                   >
                                     {val}
@@ -457,31 +455,29 @@ export function ProductDetail({
                         )
                       })}
 
-                    <div className="flex items-center justify-between mt-6 bg-gray-50 dark:bg-bg-tertiary p-4 rounded-2xl border border-gray-100 dark:border-border-dim">
-                      <span className="text-gray-900 dark:text-gray-200 text-sm font-bold">
-                        购买数量
-                      </span>
+                    <div className="flex items-center justify-between mt-6 bg-bg-tertiary p-4 rounded-2xl border border-border-subtle">
+                      <span className="text-text-secondary text-sm font-bold">购买数量</span>
                       <div className="flex items-center gap-4">
-                        <span className="text-[11px] text-gray-400 dark:text-text-muted font-medium">
+                        <span className="text-[11px] text-text-muted font-medium">
                           库存: {stock}件
                         </span>
-                        <div className="flex items-center bg-white dark:bg-bg-secondary rounded-xl p-1 border border-gray-200 dark:border-border-subtle shadow-sm">
+                        <div className="flex items-center bg-bg-secondary rounded-xl p-1 border border-border-subtle shadow-sm">
                           <button
                             type="button"
                             onClick={() => setQuantity(Math.max(1, quantity - 1))}
                             disabled={quantity <= 1}
-                            className="w-8 h-8 flex items-center justify-center text-gray-500 dark:text-text-muted hover:text-gray-900 dark:hover:text-white disabled:opacity-30 rounded-lg transition-all"
+                            className="w-8 h-8 flex items-center justify-center text-text-muted hover:text-white disabled:opacity-30 rounded-lg transition-all"
                           >
                             <Minus size={14} strokeWidth={3} />
                           </button>
-                          <div className="w-10 text-center text-sm font-bold text-gray-900 dark:text-white">
+                          <div className="w-10 text-center text-sm font-bold text-white">
                             {quantity}
                           </div>
                           <button
                             type="button"
                             onClick={() => setQuantity(Math.min(stock, quantity + 1))}
                             disabled={quantity >= stock}
-                            className="w-8 h-8 flex items-center justify-center text-gray-500 dark:text-text-muted hover:text-gray-900 dark:hover:text-white disabled:opacity-30 rounded-lg transition-all"
+                            className="w-8 h-8 flex items-center justify-center text-text-muted hover:text-white disabled:opacity-30 rounded-lg transition-all"
                           >
                             <Plus size={14} strokeWidth={3} />
                           </button>
@@ -501,19 +497,19 @@ export function ProductDetail({
                     const primaryRule = entitlementRules[0]
                     if (!primaryRule) return null
                     return (
-                      <div className="bg-cyan-50/50 dark:bg-cyan-900/10 p-5 rounded-2xl border border-cyan-100/50 dark:border-cyan-900/30 mb-6">
-                        <div className="flex items-center gap-2 text-cyan-800 dark:text-cyan-400 text-sm font-bold mb-3">
-                          <div className="w-6 h-6 rounded-full bg-cyan-100 dark:bg-cyan-900/50 flex items-center justify-center">
+                      <div className="bg-primary/5 p-5 rounded-2xl border border-primary/20 mb-6">
+                        <div className="flex items-center gap-2 text-primary text-sm font-bold mb-3">
+                          <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
                             <Shield size={12} strokeWidth={3} />
                           </div>
                           权益说明
                         </div>
                         {primaryRule.privilegeDescription && (
-                          <p className="text-cyan-700/80 dark:text-cyan-300 text-sm leading-relaxed mb-3">
+                          <p className="text-primary/80 text-sm leading-relaxed mb-3">
                             {primaryRule.privilegeDescription}
                           </p>
                         )}
-                        <div className="flex items-center gap-2 text-cyan-600 dark:text-cyan-500/80 text-sm font-medium border-t border-cyan-200/50 dark:border-cyan-900/30 pt-3">
+                        <div className="flex items-center gap-2 text-primary/80 text-sm font-medium border-t border-primary/20 pt-3">
                           <Clock size={14} />
                           有效期：
                           <span className="font-bold">
@@ -525,7 +521,7 @@ export function ProductDetail({
                           </span>
                         </div>
                         {entitlementRules.length > 1 && (
-                          <p className="text-xs text-cyan-600/80 dark:text-cyan-400/80 mt-2">
+                          <p className="text-xs text-primary/80 mt-2">
                             共包含 {entitlementRules.length} 条权益规则
                           </p>
                         )}
@@ -538,7 +534,7 @@ export function ProductDetail({
                   <button
                     type="button"
                     onClick={() => setSupportOpen(true)}
-                    className="flex flex-col items-center justify-center text-text-muted hover:text-primary w-14 bg-[rgba(255,255,255,0.03)] border border-white/10 rounded-[16px] transition-colors"
+                    className="flex flex-col items-center justify-center text-text-muted hover:text-primary w-14 bg-bg-tertiary/50 border border-border-subtle rounded-2xl transition-colors"
                   >
                     <MessageSquare size={20} />
                     <span className="text-[11px] mt-1 font-black">客服</span>
@@ -571,20 +567,20 @@ export function ProductDetail({
           </div>
 
           {/* ═══ Details & Reviews Tabs ═══ */}
-          <div className="mt-6 md:mt-12 bg-white dark:bg-bg-secondary md:rounded-3xl border-t md:border border-gray-100 dark:border-border-subtle shadow-sm overflow-hidden min-h-[500px]">
-            <div className="flex border-b border-gray-100 dark:border-border-subtle bg-gray-50/50 dark:bg-bg-tertiary/50 backdrop-blur-md px-2 md:px-6">
+          <div className="mt-6 md:mt-12 bg-bg-secondary md:rounded-3xl border-t md:border border-border-subtle shadow-sm overflow-hidden min-h-[500px]">
+            <div className="flex border-b border-border-subtle bg-bg-tertiary/50 backdrop-blur-xl px-2 md:px-6">
               <button
                 type="button"
                 onClick={() => setActiveTab('detail')}
                 className={`px-6 py-4 text-sm md:text-base font-bold transition-all relative ${
                   activeTab === 'detail'
-                    ? 'text-gray-900 dark:text-white'
-                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                    ? 'text-text-primary'
+                    : 'text-text-muted hover:text-text-secondary'
                 }`}
               >
                 商品详情
                 {activeTab === 'detail' && (
-                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-cyan-500 rounded-t-full" />
+                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-primary rounded-t-full" />
                 )}
               </button>
               <button
@@ -592,13 +588,13 @@ export function ProductDetail({
                 onClick={() => setActiveTab('reviews')}
                 className={`px-6 py-4 text-sm md:text-base font-bold transition-all relative ${
                   activeTab === 'reviews'
-                    ? 'text-gray-900 dark:text-white'
-                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                    ? 'text-text-primary'
+                    : 'text-text-muted hover:text-text-secondary'
                 }`}
               >
                 用户评价 <span className="ml-1 text-xs opacity-60">({reviews?.length || 0})</span>
                 {activeTab === 'reviews' && (
-                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-cyan-500 rounded-t-full" />
+                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-primary rounded-t-full" />
                 )}
               </button>
             </div>
@@ -607,12 +603,12 @@ export function ProductDetail({
               {activeTab === 'detail' ? (
                 <div className="prose dark:prose-invert max-w-none">
                   {product.description ? (
-                    <div className="text-gray-700 dark:text-gray-300 text-sm md:text-base leading-relaxed whitespace-pre-wrap">
+                    <div className="text-text-secondary text-sm md:text-base leading-relaxed whitespace-pre-wrap">
                       {product.description}
                     </div>
                   ) : (
-                    <div className="py-20 text-center text-gray-400 dark:text-text-muted flex flex-col items-center gap-4">
-                      <div className="w-20 h-20 rounded-full bg-gray-50 dark:bg-bg-tertiary flex items-center justify-center">
+                    <div className="py-20 text-center text-text-muted flex flex-col items-center gap-4">
+                      <div className="w-20 h-20 rounded-full bg-bg-tertiary flex items-center justify-center">
                         <Heart className="opacity-20" size={32} />
                       </div>
                       <span className="text-lg font-medium">此商品无图文详情</span>
@@ -625,40 +621,40 @@ export function ProductDetail({
                     reviews.map((review) => (
                       <div
                         key={review.id}
-                        className="border-b border-gray-100 dark:border-border-dim pb-8 last:border-0"
+                        className="border-b border-border-subtle pb-8 last:border-0"
                       >
                         <div className="flex items-center gap-3 mb-3">
-                          <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-bg-tertiary" />
+                          <div className="w-10 h-10 rounded-full bg-bg-tertiary" />
                           <div>
-                            <p className="text-sm font-bold text-gray-900 dark:text-white">
+                            <p className="text-sm font-bold text-text-primary">
                               {review.isAnonymous
                                 ? '匿名用户'
                                 : review.authorName || `用户 ${review.userId.slice(0, 6)}`}
                             </p>
-                            <div className="flex text-yellow-400 mt-0.5">
+                            <div className="flex text-warning mt-0.5">
                               {[1, 2, 3, 4, 5].map((star) => (
                                 <Star
                                   key={`${review.id}-${star}`}
                                   size={14}
                                   className={
-                                    star <= review.rating ? 'fill-current' : 'text-gray-200'
+                                    star <= review.rating ? 'fill-current' : 'text-text-muted/30'
                                   }
                                 />
                               ))}
                             </div>
                           </div>
-                          <span className="ml-auto text-xs text-gray-400">
+                          <span className="ml-auto text-xs text-text-muted">
                             {new Date(review.createdAt).toLocaleDateString()}
                           </span>
                         </div>
-                        <p className="text-gray-700 dark:text-gray-300 text-sm md:text-base leading-relaxed pl-13">
+                        <p className="text-text-secondary text-sm md:text-base leading-relaxed pl-13">
                           {review.content}
                         </p>
                       </div>
                     ))
                   ) : (
-                    <div className="py-20 text-center text-gray-400 dark:text-text-muted flex flex-col items-center gap-4">
-                      <div className="w-20 h-20 rounded-full bg-gray-50 dark:bg-bg-tertiary flex items-center justify-center">
+                    <div className="py-20 text-center text-text-muted flex flex-col items-center gap-4">
+                      <div className="w-20 h-20 rounded-full bg-bg-tertiary flex items-center justify-center">
                         <MessageSquare className="opacity-20" size={32} />
                       </div>
                       <span className="text-lg font-medium">暂无评价，购买后即可发表评价哦</span>
@@ -672,7 +668,7 @@ export function ProductDetail({
       </div>
 
       {/* ── Bottom Fixed Action Bar (Mobile Only) ── */}
-      <div className="md:hidden absolute bottom-0 left-0 right-0 bg-[rgba(255,255,255,0.75)] dark:bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] border-t border-border-subtle p-3 pb-safe px-4 z-40">
+      <div className="md:hidden absolute bottom-0 left-0 right-0 bg-bg-tertiary/50 backdrop-blur-xl border-t border-border-subtle p-3 pb-safe px-4 z-40">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 pr-2">
             <button
@@ -681,7 +677,7 @@ export function ProductDetail({
               className="flex flex-col items-center justify-center text-text-muted hover:text-primary w-10"
             >
               <MessageSquare size={18} />
-              <span className="text-[10px] mt-1 font-black">客服</span>
+              <span className="text-[11px] mt-1 font-black">客服</span>
             </button>
             <div className="w-[1px] h-8 bg-border-subtle mx-1" />
           </div>
@@ -707,10 +703,10 @@ export function ProductDetail({
       </div>
 
       {supportOpen && (
-        <div className="absolute inset-0 z-[60] bg-black/40 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4">
+        <div className="absolute inset-0 z-[60] bg-bg-deep/40 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4">
           <Card
             variant="glass"
-            className="w-full md:max-w-lg !rounded-t-[24px] md:!rounded-[24px] !p-5 max-h-[80vh] overflow-y-auto"
+            className="w-full md:max-w-lg !rounded-t-[24px] md:!rounded-[40px] !p-5 max-h-[80vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-black text-text-primary">联系客服</h3>
@@ -722,11 +718,11 @@ export function ProductDetail({
               onChange={(e) => setSupportMessage(e.target.value)}
               placeholder="请详细描述问题，我们会尽快处理"
               rows={4}
-              className="w-full p-3 rounded-xl border border-gray-200 dark:border-border-dim bg-gray-50 dark:bg-bg-tertiary text-sm"
+              className="w-full p-3 rounded-xl border border-border-subtle bg-bg-tertiary text-sm"
             />
 
             <div className="mt-4 space-y-2">
-              <label className="inline-flex items-center gap-2 text-sm font-medium cursor-pointer text-cyan-600">
+              <label className="inline-flex items-center gap-2 text-sm font-medium cursor-pointer text-primary">
                 <Upload size={15} /> 上传问题截图
                 <input
                   type="file"
@@ -739,7 +735,7 @@ export function ProductDetail({
                   }}
                 />
               </label>
-              {uploadingCount > 0 && <div className="text-xs text-gray-500">图片上传中...</div>}
+              {uploadingCount > 0 && <div className="text-xs text-text-muted">图片上传中...</div>}
               {supportImages.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {supportImages.map((url, idx) => (
@@ -747,7 +743,7 @@ export function ProductDetail({
                       <img src={url} alt="support" className="w-full h-full object-cover" />
                       <button
                         type="button"
-                        className="absolute top-0.5 right-0.5 bg-black/50 text-white rounded-full p-0.5"
+                        className="absolute top-0.5 right-0.5 bg-bg-deep/50 text-white rounded-full p-0.5"
                         onClick={() => setSupportImages((prev) => prev.filter((_, i) => i !== idx))}
                       >
                         <X size={10} />

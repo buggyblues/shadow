@@ -22,9 +22,9 @@ interface Listing {
 }
 
 const TIER_CONFIG = {
-  high_end: { icon: Zap, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-  mid_range: { icon: Cpu, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-  low_end: { icon: Monitor, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+  high_end: { icon: Zap, color: 'text-warning', bg: 'bg-warning/10' },
+  mid_range: { icon: Cpu, color: 'text-primary', bg: 'bg-primary/10' },
+  low_end: { icon: Monitor, color: 'text-success', bg: 'bg-success/10' },
 }
 
 export function RentalGuide({ onRentSuccess, onBack }: RentalGuideProps) {
@@ -76,7 +76,7 @@ export function RentalGuide({ onRentSuccess, onBack }: RentalGuideProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto px-1 -mx-4 md:-mx-8 md:px-8">
-        <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4 flex items-center gap-2">
+        <h3 className="text-sm font-black text-text-muted uppercase tracking-widest mb-4 flex items-center gap-2">
           <Info size={16} />
           {t('onboarding.rental.recommend')}
         </h3>
@@ -99,11 +99,11 @@ export function RentalGuide({ onRentSuccess, onBack }: RentalGuideProps) {
                   key={listing.id}
                   variant="glass"
                   hoverable
-                  className="!rounded-[24px] flex flex-col group relative overflow-hidden"
+                  className="!rounded-[40px] flex flex-col group relative overflow-hidden"
                 >
                   <div className="p-5 flex flex-col flex-1">
                     <div className="flex items-start justify-between mb-4">
-                      <div className={`p-3 rounded-[16px] ${tierBg} ${tierColor}`}>
+                      <div className={`p-3 rounded-2xl ${tierBg} ${tierColor}`}>
                         <TierIcon size={24} />
                       </div>
                       <div className="text-right">

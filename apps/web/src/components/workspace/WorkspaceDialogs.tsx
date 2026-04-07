@@ -39,7 +39,7 @@ export function WorkspaceDialogs({ dialog, onClose, onSubmit, isPending }: Works
 
   return (
     <Dialog isOpen onClose={onClose}>
-      <DialogContent className="!rounded-[24px]">
+      <DialogContent className="!rounded-[40px]">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>

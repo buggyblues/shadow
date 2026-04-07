@@ -135,7 +135,7 @@ export function NotificationBell() {
       >
         <Bell size={18} />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-danger rounded-full text-white text-[10px] font-bold flex items-center justify-center px-1">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-danger rounded-full text-white text-[11px] font-bold flex items-center justify-center px-1">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
@@ -155,7 +155,7 @@ export function NotificationBell() {
           />
 
           {/* Panel */}
-          <div className="absolute top-full right-0 mt-2 w-80 bg-bg-secondary border border-border-dim rounded-xl shadow-xl z-50 overflow-hidden">
+          <div className="absolute top-full right-0 mt-2 w-80 bg-bg-primary/95 backdrop-blur-xl border border-border-subtle rounded-[24px] shadow-[0_16px_64px_rgba(0,0,0,0.4)] z-50 overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
               <h3 className="font-bold text-text-primary text-sm">{t('notification.title')}</h3>
@@ -188,7 +188,7 @@ export function NotificationBell() {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') handleNotificationClick(n)
                     }}
-                    className={`px-4 py-3 border-b border-border-subtle last:border-0 hover:bg-bg-modifier-hover transition cursor-pointer ${
+                    className={`px-4 py-3 border-b border-border-subtle last:border-0 hover:bg-bg-tertiary/50 transition cursor-pointer ${
                       !n.isRead ? 'bg-primary/5' : ''
                     }`}
                   >
@@ -198,7 +198,7 @@ export function NotificationBell() {
                         {n.body && (
                           <p className="text-xs text-text-muted mt-0.5 line-clamp-2">{n.body}</p>
                         )}
-                        <p className="text-[10px] text-text-muted mt-1">
+                        <p className="text-[11px] text-text-muted mt-1">
                           {new Date(n.createdAt).toLocaleString()}
                         </p>
                       </div>

@@ -478,7 +478,7 @@ export function MarketplaceDetailPage() {
                     max={8760}
                     value={durationHours}
                     onChange={(e) => setDurationHours(Math.max(1, Number(e.target.value)))}
-                    className="w-full px-4 py-2.5 rounded-xl border-2 border-border-dim bg-bg-secondary font-bold text-center text-text-primary focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    className="w-full px-4 py-2.5 rounded-xl border-2 border-border-subtle bg-bg-secondary font-bold text-center text-text-primary focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                   />
                 </label>
                 <div className="flex gap-2 mt-2">
@@ -490,7 +490,7 @@ export function MarketplaceDetailPage() {
                       className={`flex-1 py-1 text-xs font-bold rounded-lg border transition-all ${
                         durationHours === h
                           ? 'bg-primary/10 border-primary text-primary'
-                          : 'border-border-dim text-text-muted hover:border-border-dim'
+                          : 'border-border-subtle text-text-muted hover:border-border-subtle'
                       }`}
                     >
                       {h === 1 ? '1h' : h === 24 ? '1d' : h === 168 ? '1w' : '1m'}
@@ -626,7 +626,7 @@ export function MarketplaceDetailPage() {
       {/* Contract Modal */}
       {showContract && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-bg-deep/50 backdrop-blur-sm p-4"
           onClick={handleModalBackdropClick}
           onKeyDown={() => {}}
         >
@@ -812,7 +812,7 @@ export function MarketplaceDetailPage() {
                   type="checkbox"
                   checked={agreedToTerms}
                   onChange={(e) => setAgreedToTerms(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 rounded border-border-dim text-accent focus:ring-accent/30"
+                  className="mt-0.5 w-4 h-4 rounded border-border-subtle text-accent focus:ring-accent/30"
                 />
                 <span className="text-xs text-amber-900/80 font-medium leading-relaxed">
                   {t(
@@ -835,7 +835,7 @@ export function MarketplaceDetailPage() {
                         t('marketplace.ownerSignature', '出租方')}
                     </span>
                   </div>
-                  <p className="text-center text-[10px] text-amber-900/60 mt-1.5 uppercase tracking-widest font-semibold">
+                  <p className="text-center text-[11px] text-amber-900/60 mt-1.5 uppercase tracking-widest font-semibold">
                     {t('marketplace.ownerSignatureLabel', '出租方签名')}
                   </p>
                 </div>
@@ -866,7 +866,7 @@ export function MarketplaceDetailPage() {
                       </span>
                     </div>
                   )}
-                  <p className="text-center text-[10px] text-amber-900/60 mt-1.5 uppercase tracking-widest font-semibold">
+                  <p className="text-center text-[11px] text-amber-900/60 mt-1.5 uppercase tracking-widest font-semibold">
                     {t('marketplace.tenantSignatureLabel', '使用方签名')}
                   </p>
                 </div>

@@ -273,7 +273,7 @@ export function WorkspaceTree({
       <span className="w-3.5 h-3.5 flex items-center justify-center shrink-0 mr-0.5">
         <ChevronDown size={12} className="text-text-muted" />
       </span>
-      <FolderClosed size={14} className="shrink-0 mr-1.5 text-[#e8a838]" />
+      <FolderClosed size={14} className="shrink-0 mr-1.5 text-accent" />
       <span className="flex-1 min-w-0 truncate font-medium text-[12px] uppercase tracking-wide text-text-muted">
         {workspaceName || '工作区'}
       </span>
@@ -345,7 +345,7 @@ export function WorkspaceTree({
   return (
     <div
       ref={treeContainerRef}
-      className="flex-1 overflow-y-auto overflow-x-hidden py-1 scroll-smooth custom-scrollbar relative"
+      className="flex-1 overflow-y-auto overflow-x-hidden py-1 scroll-smooth scrollbar-hidden relative"
       onContextMenu={onBlankContextMenu}
       onDragEnter={handleTreeDragEnter}
       onDragLeave={handleTreeDragLeavePanel}
@@ -535,7 +535,7 @@ function TreeRow({
 
       <Icon
         size={15}
-        className={`shrink-0 mr-1.5 ${node.kind === 'dir' ? 'text-[#e8a838]' : 'text-text-muted'}`}
+        className={`shrink-0 mr-1.5 ${node.kind === 'dir' ? 'text-accent' : 'text-text-muted'}`}
       />
 
       {isRenaming ? (
@@ -563,7 +563,7 @@ function TreeRow({
         <>
           <span className="flex-1 min-w-0 truncate">{node.name}</span>
           {node.kind === 'file' && node.sizeBytes != null && (
-            <span className="text-[10px] text-text-muted ml-1.5 shrink-0 opacity-0 group-hover:opacity-70 transition-opacity">
+            <span className="text-[11px] text-text-muted ml-1.5 shrink-0 opacity-0 group-hover:opacity-70 transition-opacity">
               {formatFileSize(node.sizeBytes)}
             </span>
           )}

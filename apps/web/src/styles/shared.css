@@ -476,3 +476,76 @@ textarea.form-input {
 .animate-float {
   animation: float 25s infinite ease-in-out;
 }
+
+/* Vibrant shadow utilities */
+.vibrant-shadow {
+  box-shadow:
+    0 10px 25px rgba(0, 198, 209, 0.35),
+    inset 0 1px 2px rgba(255, 255, 255, 0.15);
+}
+.vibrant-shadow-accent {
+  box-shadow:
+    0 10px 25px rgba(248, 231, 28, 0.3),
+    inset 0 1px 2px rgba(255, 255, 255, 0.15);
+}
+
+/* Glass card utility */
+.glass-card {
+  background-color: var(--glass-bg);
+  backdrop-filter: blur(32px);
+  border-radius: 40px;
+  border: 1px solid var(--glass-border);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Standardized app header */
+.app-header {
+  height: 3.5rem;
+  background: rgba(10, 10, 15, 0.4);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  flex-shrink: 0;
+}
+:root.light .app-header {
+  background: rgba(255, 255, 255, 0.7);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* Uppercase label utility */
+.text-xs-caps {
+  font-size: 0.6875rem; /* 11px — matches design system label size */
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
+/* Spring-in animation */
+@keyframes spring-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.animate-spring-in {
+  animation: spring-in 0.5s var(--bezier-bouncy) both;
+}
+
+/* Blob button (press animation) */
+.blob-button {
+  transition: all 0.5s var(--bezier-bouncy);
+}
+.blob-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 10px 25px rgba(0, 243, 255, 0.3);
+}
+.blob-button:active {
+  transform: scale(0.95) translateY(2px);
+}

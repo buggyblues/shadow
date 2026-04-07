@@ -33,8 +33,8 @@ export function AppearanceSettings() {
       <h2 className="text-2xl font-black text-text-primary mb-2">{t('settings.tabAppearance')}</h2>
       <p className="text-text-muted text-sm mb-6">{t('settings.appearanceDesc')}</p>
 
-      <div className="bg-white/[0.03] backdrop-blur-[32px] rounded-[24px] border border-white/[0.08] p-6">
-        <label className="block text-[11px] font-black uppercase text-text-muted tracking-[0.2em] ml-1 mb-4">
+      <div className="bg-bg-tertiary/30 backdrop-blur-xl rounded-[24px] border border-border-subtle p-6">
+        <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-4">
           {t('settings.themeLabel')}
         </label>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -44,16 +44,16 @@ export function AppearanceSettings() {
               type="button"
               onClick={() => setTheme(value)}
               className={cn(
-                'relative flex flex-col items-center gap-2 p-4 rounded-[20px] border-2 transition-all duration-300',
+                'relative flex flex-col items-center gap-2 p-4 rounded-[24px] border-2 transition-all duration-300',
                 theme === value
                   ? 'border-primary bg-primary/10 shadow-[0_0_20px_rgba(0,198,209,0.15)]'
-                  : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04]',
+                  : 'border-border-subtle bg-bg-tertiary/20 hover:border-border-subtle hover:bg-white/[0.04]',
               )}
             >
               <Icon size={28} className={theme === value ? 'text-primary' : 'text-text-muted'} />
               <span
                 className={cn(
-                  'text-sm font-bold',
+                  'text-sm font-black',
                   theme === value ? 'text-primary' : 'text-text-primary',
                 )}
               >

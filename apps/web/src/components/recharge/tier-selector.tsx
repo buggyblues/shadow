@@ -35,7 +35,7 @@ export function TierSelector() {
             variant="glass"
             active={selectedTier === tier.key}
             hoverable
-            className="!rounded-[24px] relative cursor-pointer"
+            className="!rounded-[40px] relative cursor-pointer"
             onClick={() => setTier(tier.key)}
           >
             <div className="flex flex-col items-center gap-1 p-4">
@@ -61,7 +61,7 @@ export function TierSelector() {
         variant="glass"
         active={selectedTier === 'custom'}
         hoverable
-        className="!rounded-[24px] cursor-pointer"
+        className="!rounded-[40px] cursor-pointer"
         onClick={() => setTier('custom')}
       >
         <div className="flex items-center gap-3 p-3">
@@ -77,7 +77,7 @@ export function TierSelector() {
               }
               onClick={(e) => e.stopPropagation()}
               placeholder={t('recharge.customPlaceholder')}
-              className="flex-1 bg-white/50 dark:bg-[rgba(0,0,0,0.3)] backdrop-blur-sm border-2 border-border-subtle rounded-[16px] px-4 py-2 text-sm text-text-primary font-bold placeholder-text-muted/30 outline-none focus:border-primary focus:shadow-[0_0_0_5px_rgba(0,198,209,0.15)] transition-all"
+              className="flex-1 bg-bg-tertiary border-2 border-border-subtle rounded-2xl px-4 py-2 text-sm text-text-primary font-bold placeholder-text-muted/30 outline-none focus:border-primary focus:shadow-[0_0_0_5px_rgba(0,198,209,0.1)] transition-all"
             />
           )}
           {selectedTier === 'custom' && customAmount >= 100 && (

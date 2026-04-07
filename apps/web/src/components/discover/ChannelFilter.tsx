@@ -79,7 +79,7 @@ export function ChannelFilter({ filters, onChange, onClear }: ChannelFilterProps
           className={['transition-transform', isOpen ? 'rotate-180' : ''].join(' ')}
         />
         {hasActiveFilters && (
-          <span className="ml-1 w-4 h-4 rounded-full bg-primary text-white text-[10px] flex items-center justify-center">
+          <span className="ml-1 w-4 h-4 rounded-full bg-primary text-white text-[11px] flex items-center justify-center">
             !
           </span>
         )}
@@ -95,7 +95,7 @@ export function ChannelFilter({ filters, onChange, onClear }: ChannelFilterProps
           <div className="absolute top-full right-0 mt-2 w-80 bg-bg-secondary rounded-xl border border-bg-tertiary shadow-xl z-50 overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-bg-tertiary">
-              <h3 className="font-semibold text-text-primary text-[14px]">
+              <h3 className="font-black text-text-primary text-[14px]">
                 {t('discover.filter.title')}
               </h3>
               <button
@@ -136,7 +136,7 @@ export function ChannelFilter({ filters, onChange, onClear }: ChannelFilterProps
             {/* Sort Options */}
             <div className="p-4 border-b border-bg-tertiary">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-text-secondary text-[12px] font-medium uppercase tracking-wider">
+                <span className="text-text-secondary text-[12px] font-medium uppercase tracking-widest">
                   {t('discover.filter.sortBy')}
                 </span>
                 {/* Sort Order Toggle */}

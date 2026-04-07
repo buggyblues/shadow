@@ -465,7 +465,7 @@ document.addEventListener('click', function(e) {
           </button>
         )}
         <Home size={16} className="mr-2 text-text-muted" />
-        <h2 className="font-semibold text-text-primary text-sm truncate flex-1">{server.name}</h2>
+        <h2 className="font-black text-text-primary text-sm truncate flex-1">{server.name}</h2>
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -473,7 +473,7 @@ document.addEventListener('click', function(e) {
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-lg transition"
             title={t('common.copy')}
           >
-            {copied ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
+            {copied ? <Check size={16} className="text-success" /> : <Copy size={16} />}
           </button>
           <button
             type="button"

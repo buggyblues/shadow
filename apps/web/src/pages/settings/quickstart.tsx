@@ -1,298 +1,196 @@
-import { Button, cn } from '@shadowob/ui'
+import { Badge, Breadcrumbs, BuddyIcon, Button, Card, PageContainer } from '@shadowob/ui'
 import { useNavigate } from '@tanstack/react-router'
-import {
-  BookOpen,
-  Bot,
-  ChevronRight,
-  Compass,
-  ExternalLink,
-  Heart,
-  HelpCircle,
-  Home,
-  MessageCircle,
-  Plus,
-  Sparkles,
-  User,
-  Zap,
-} from 'lucide-react'
+import { ArrowRight, Compass, HelpCircle, Home, LayoutGrid, Monitor, User } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 export function QuickstartSettings() {
   const { t } = useTranslation()
   const navigate = useNavigate()
 
-  const quickActions = [
-    {
-      icon: Compass,
-      title: t('guide.discoverTitle'),
-      desc: t('guide.discoverDesc'),
-      color: 'text-emerald-400',
-      bgColor: 'bg-emerald-500/10',
-      action: () => navigate({ to: '/discover' }),
-    },
-    {
-      icon: Bot,
-      title: 'Buddy 管理',
-      desc: '创建和配置你的 AI 搭子',
-      color: 'text-cyan-400',
-      bgColor: 'bg-cyan-500/10',
-      action: () => navigate({ to: '/settings/buddy' }),
-    },
-    {
-      icon: Sparkles,
-      title: 'Buddy 集市',
-      desc: '浏览和租赁 AI 搭子',
-      color: 'text-amber-400',
-      bgColor: 'bg-amber-500/10',
-      action: () => {
-        window.location.href = '/buddies'
-      },
-    },
-  ]
-
-  const guideSteps = [
-    {
-      step: 1,
-      title: '创建或加入服务器',
-      desc: '服务器是你的社群空间。你可以创建自己的服务器，或通过邀请链接加入他人的服务器。',
-      icon: Plus,
-      action: () => navigate({ to: '/discover' }),
-      actionLabel: '发现服务器',
-    },
-    {
-      step: 2,
-      title: '设置个人资料',
-      desc: '上传头像、设置昵称，让其他人更容易认识你。',
-      icon: User,
-      action: () => navigate({ to: '/settings/profile' }),
-      actionLabel: '编辑资料',
-    },
-    {
-      step: 3,
-      title: '开始聊天',
-      desc: '在服务器的频道中发消息，或与好友进行私信交流。支持文字、图片、文件等多种格式。',
-      icon: MessageCircle,
-      action: () => navigate({ to: '/settings/friends' }),
-      actionLabel: '开始聊天',
-    },
-  ]
-
-  const buddySteps = [
-    {
-      step: 1,
-      title: '创建 Buddy',
-      desc: 'Buddy 是你的 AI 搭子。在「Buddy 管理」中创建一个新 Buddy，设置名称和描述。',
-    },
-    {
-      step: 2,
-      title: '配置技能',
-      desc: '为 Buddy 安装技能，让它具备各种能力：搜索网页、控制设备、处理文件等。',
-    },
-    {
-      step: 3,
-      title: '连接 Shadow 桌面端',
-      desc: '下载 Shadow 桌面端，用它可以连接你的 Buddy 并在本地运行。',
-    },
-    {
-      step: 4,
-      title: '上架集市（可选）',
-      desc: '将你的 Buddy 上架到集市，让其他人也可以租赁使用。',
-    },
-  ]
-
   return (
-    <div className="space-y-8">
-      {/* Hero Section */}
-      <div className="text-center py-8">
-        <div className="inline-flex items-center justify-center w-20 h-20 rounded-[24px] bg-white/[0.03] backdrop-blur-[32px] border border-white/[0.08] mb-4">
-          <img src="/Logo.svg" alt="Shadow" className="w-12 h-12 opacity-90" />
+    <PageContainer className="mx-auto space-y-12">
+      <div className="space-y-6">
+        <Breadcrumbs
+          items={[
+            {
+              label: t('settings.sidebarTitle', '设置'),
+              icon: Home,
+              onClick: () => navigate({ to: '/settings' } as any),
+            },
+            { label: t('settings.tabQuickStart') },
+          ]}
+        />
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+          <div className="space-y-2">
+            <h1 className="text-4xl font-black text-text-primary tracking-tight uppercase leading-none">
+              {t('common.welcomeTitle', 'Welcome to')} <span className="text-primary">Shadow</span>
+            </h1>
+            <p className="text-lg font-bold text-text-muted italic opacity-80">
+              {t('common.welcomeDesc')}
+            </p>
+          </div>
         </div>
-        <h1 className="text-2xl font-black text-text-primary mb-2">{t('common.welcomeTitle')}</h1>
-        <p className="text-text-secondary text-[15px] max-w-md mx-auto">
-          {t('common.welcomeDesc')}
-        </p>
       </div>
 
-      {/* Quick Actions */}
-      <section>
-        <h2 className="text-lg font-black text-text-primary mb-4 flex items-center gap-2">
-          <Zap size={18} className="text-amber-400" />
-          快速开始
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {quickActions.map((item, idx) => (
-            <button
-              key={idx}
-              onClick={item.action}
-              className="group relative bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] rounded-[20px] p-5 text-left transition-all duration-300 hover:border-primary/30 hover:shadow-[0_10px_30px_rgba(0,198,209,0.1)]"
-            >
-              <div
-                className={`inline-flex items-center justify-center w-10 h-10 rounded-lg ${item.bgColor} mb-3`}
-              >
-                <item.icon size={20} className={item.color} />
-              </div>
-              <h3 className="font-bold text-text-primary text-[15px] mb-1 group-hover:text-primary transition-colors">
-                {item.title}
-              </h3>
-              <p className="text-text-muted text-[13px]">{item.desc}</p>
-              <ChevronRight
-                size={16}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted opacity-0 group-hover:opacity-100 transition-opacity"
-              />
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* New User Guide */}
-      <section>
-        <h2 className="text-lg font-black text-text-primary mb-4 flex items-center gap-2">
-          <Sparkles size={18} className="text-primary" />
-          新手指南
-        </h2>
-        <div className="bg-white/[0.03] backdrop-blur-[32px] rounded-[24px] border border-white/[0.08] overflow-hidden">
-          {guideSteps.map((step, idx) => (
-            <div
-              key={step.step}
-              className={`flex items-start gap-4 p-5 ${idx < guideSteps.length - 1 ? 'border-b border-white/[0.06]' : ''}`}
-            >
-              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm shrink-0">
-                {step.step}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <h3 className="font-semibold text-text-primary text-[14px] mb-1">
-                      {step.title}
-                    </h3>
-                    <p className="text-text-muted text-[13px] leading-relaxed">{step.desc}</p>
-                  </div>
-                  <button
-                    onClick={step.action}
-                    className="shrink-0 px-3 py-1.5 rounded-full bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition"
-                  >
-                    {step.actionLabel}
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Buddy Guide */}
-      <section>
-        <h2 className="text-lg font-black text-text-primary mb-4 flex items-center gap-2">
-          <Bot size={18} className="text-cyan-400" />
-          Buddy 入门
-        </h2>
-        <div className="bg-white/[0.03] backdrop-blur-[32px] rounded-[24px] border border-white/[0.08] p-5">
-          <div className="flex items-start gap-4 mb-4">
-            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-cyan-500/10 shrink-0">
-              <Bot size={20} className="text-cyan-400" />
+      {/* Primary Action Blobs */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <Card
+          hoverable
+          onClick={() => navigate({ to: '/settings', search: { tab: 'profile' } } as any)}
+          className="p-10 relative overflow-hidden group border-none bg-gradient-to-br from-primary/20 via-bg-secondary to-bg-tertiary shadow-2xl blob-button"
+        >
+          <div className="absolute top-0 right-0 w-48 h-48 bg-primary/10 rounded-full blur-[80px] -mr-24 -mt-24 group-hover:bg-primary/20 transition-all duration-700" />
+          <div className="relative z-10 flex flex-col gap-6">
+            <div className="w-20 h-20 rounded-[40px] bg-primary/10 flex items-center justify-center text-primary shadow-inner border border-primary/10 group-hover:scale-110 transition-transform duration-500">
+              <User size={40} strokeWidth={2.5} />
             </div>
             <div>
-              <h3 className="font-semibold text-text-primary mb-1">什么是 Buddy？</h3>
-              <p className="text-text-muted text-[13px] leading-relaxed">
-                Buddy 是你的个人 AI
-                助手。它可以帮你搜索信息、处理文档、控制设备，甚至可以作为智能客服为你服务。
+              <h3 className="text-2xl font-black text-text-primary uppercase tracking-tight mb-2">
+                {t('settings.profileTitle', '个人资料')}
+              </h3>
+              <p className="text-base font-bold text-text-muted leading-relaxed opacity-80 mb-6 max-w-xs">
+                {t('guide.profileDesc', '设置你的头像、昵称和个人信息')}
               </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-            {buddySteps.map((step) => (
-              <div
-                key={step.step}
-                className="flex items-start gap-3 p-3 rounded-[14px] bg-white/[0.03]"
-              >
-                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-cyan-500/10 text-cyan-400 font-bold text-xs shrink-0">
-                  {step.step}
-                </div>
-                <div>
-                  <h4 className="font-medium text-text-primary text-[13px] mb-0.5">{step.title}</h4>
-                  <p className="text-text-muted text-[12px]">{step.desc}</p>
-                </div>
+              <div className="inline-flex items-center gap-2 text-primary font-black uppercase tracking-widest text-xs">
+                {t('settings.profileTitle', '个人资料')}{' '}
+                <ArrowRight
+                  size={16}
+                  strokeWidth={3}
+                  className="group-hover:translate-x-2 transition-transform"
+                />
               </div>
-            ))}
+            </div>
           </div>
+        </Card>
 
-          <div className="flex items-center gap-3 mt-4 pt-4 border-t border-white/[0.06]">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => navigate({ to: '/settings/buddy' })}
-              className="flex-1 normal-case tracking-normal"
-            >
-              <Bot size={16} className="mr-1" />
-              创建 Buddy
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              asChild
-              className="flex-1 normal-case tracking-normal"
-            >
-              <a href="/buddies">
-                <ExternalLink size={16} />
-                浏览集市
-              </a>
-            </Button>
+        <Card
+          hoverable
+          onClick={() => window.open('/download', '_blank')}
+          className="p-10 relative overflow-hidden group border-none bg-gradient-to-br from-accent/20 via-bg-secondary to-bg-tertiary shadow-2xl blob-button"
+        >
+          <div className="absolute top-0 right-0 w-48 h-48 bg-accent/10 rounded-full blur-[80px] -mr-24 -mt-24 group-hover:bg-accent/20 transition-all duration-700" />
+          <div className="relative z-10 flex flex-col gap-6">
+            <div className="w-20 h-20 rounded-[40px] bg-accent/10 flex items-center justify-center text-accent shadow-inner border border-accent/10 group-hover:scale-110 transition-transform duration-500">
+              <Monitor size={40} strokeWidth={2.5} />
+            </div>
+            <div>
+              <h3 className="text-2xl font-black text-text-primary uppercase tracking-tight mb-2">
+                {t('guide.desktopTitle', '下载桌面端')}
+              </h3>
+              <p className="text-base font-bold text-text-muted leading-relaxed opacity-80 mb-6 max-w-xs">
+                {t('guide.desktopDesc', '连接你的 Buddy 并在本地运行')}
+              </p>
+              <div className="inline-flex items-center gap-2 text-accent font-black uppercase tracking-widest text-xs">
+                {t('common.download', 'Download')}{' '}
+                <ArrowRight
+                  size={16}
+                  strokeWidth={3}
+                  className="group-hover:translate-x-2 transition-transform"
+                />
+              </div>
+            </div>
           </div>
-        </div>
-      </section>
-
-      {/* Help Section */}
-      <section>
-        <h2 className="text-lg font-black text-text-primary mb-4 flex items-center gap-2">
-          <HelpCircle size={18} className="text-violet-400" />
-          需要帮助？
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <a
-            href="/product/index.html"
-            className="flex items-center gap-4 p-4 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] rounded-[20px] transition-all duration-300 group"
-          >
-            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-violet-500/10">
-              <BookOpen size={20} className="text-violet-400" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-bold text-text-primary text-[14px] group-hover:text-primary transition-colors">
-                文档中心
-              </h3>
-              <p className="text-text-muted text-[12px]">查看详细使用教程和 API 文档</p>
-            </div>
-            <ExternalLink
-              size={16}
-              className="text-text-muted group-hover:text-primary transition-colors"
-            />
-          </a>
-          <a
-            href="/?forceHome=true"
-            className="flex items-center gap-4 p-4 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] rounded-[20px] transition-all duration-300 group"
-          >
-            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-amber-500/10">
-              <Home size={20} className="text-amber-400" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-bold text-text-primary text-[14px] group-hover:text-primary transition-colors">
-                返回官网
-              </h3>
-              <p className="text-text-muted text-[12px]">访问 Shadow 官方首页</p>
-            </div>
-            <ExternalLink
-              size={16}
-              className="text-text-muted group-hover:text-primary transition-colors"
-            />
-          </a>
-        </div>
-      </section>
-
-      {/* Footer Tips */}
-      <div className="flex items-center justify-center gap-2 py-4 text-text-muted text-xs">
-        <Heart size={12} className="text-pink-400" />
-        <span>遇到问题？在任意频道中 @管理员 获取帮助</span>
+        </Card>
       </div>
-    </div>
+
+      {/* Discovery Grid - Modern Circles */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 pt-4">
+        {[
+          {
+            icon: Compass,
+            label: t('guide.discoverTitle', '探索'),
+            to: '/discover',
+            color: 'text-success',
+            bg: 'bg-success/10',
+            border: 'border-success/20',
+          },
+          {
+            icon: BuddyIcon,
+            label: t('guide.marketTitle', 'Buddy 集市'),
+            to: '/buddies' as const,
+            color: 'text-primary',
+            bg: 'bg-primary/10',
+            border: 'border-primary/20',
+          },
+          {
+            icon: LayoutGrid,
+            label: t('guide.buddyMgmtTitle', 'Buddy 管理'),
+            to: '/settings/buddy' as const,
+            color: 'text-info',
+            bg: 'bg-info/10',
+            border: 'border-info/20',
+          },
+          {
+            icon: HelpCircle,
+            label: t('guide.helpTitle', '帮助'),
+            href: '/product/index.html',
+            color: 'text-info',
+            bg: 'bg-info/10',
+            border: 'border-info/20',
+          },
+        ].map((link, i) => (
+          <Card
+            key={i}
+            hoverable
+            onClick={() => {
+              if ('to' in link && link.to) {
+                navigate({ to: link.to } as any)
+              } else if ('href' in link && link.href) {
+                window.open(link.href, '_blank')
+              }
+            }}
+            className="p-8 flex flex-col items-center gap-5 text-center group transition-all duration-500"
+          >
+            <div
+              className={`w-16 h-16 rounded-[24px] ${link.bg} flex items-center justify-center ${link.color} shadow-inner group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 border ${link.border}`}
+            >
+              <link.icon size={32} strokeWidth={2.5} />
+            </div>
+            <div className="space-y-1">
+              <div className="font-black text-[13px] text-text-primary uppercase tracking-widest group-hover:text-primary transition-colors">
+                {link.label}
+              </div>
+              <div className="h-1 w-4 bg-primary/20 mx-auto rounded-full group-hover:w-8 group-hover:bg-primary transition-all" />
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      {/* Footer Info */}
+      <div className="pt-12 flex flex-col md:flex-row items-center justify-between gap-6 border-t border-border-subtle opacity-60">
+        <div className="flex items-center gap-8">
+          <a
+            href="/terms"
+            className="text-[11px] font-black uppercase tracking-[0.2em] hover:text-primary transition-colors text-text-muted"
+          >
+            Terms
+          </a>
+          <a
+            href="/privacy"
+            className="text-[11px] font-black uppercase tracking-[0.2em] hover:text-primary transition-colors text-text-muted"
+          >
+            Privacy
+          </a>
+          <a
+            href="/support"
+            className="text-[11px] font-black uppercase tracking-[0.2em] hover:text-primary transition-colors text-text-muted"
+          >
+            Support
+          </a>
+        </div>
+        <div className="flex items-center gap-3">
+          <Badge
+            variant="neutral"
+            className="bg-bg-tertiary border-none px-3 py-1 text-[11px] opacity-50"
+          >
+            v2.4.0-nightly
+          </Badge>
+          <span className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
+            © 2026 SHADOW
+          </span>
+        </div>
+      </div>
+    </PageContainer>
   )
 }

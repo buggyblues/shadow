@@ -36,7 +36,7 @@ export function EmojiPicker({ onSelect, onClose, position = 'top' }: EmojiPicker
   return (
     <div
       ref={containerRef}
-      className={`absolute z-50 ${position === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'} right-0 bg-bg-primary/95 backdrop-blur-xl rounded-[16px] border border-border/10 shadow-xl overflow-hidden`}
+      className={`absolute z-50 ${position === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'} right-0 bg-bg-primary/95 backdrop-blur-xl rounded-[24px] border border-border-subtle shadow-[0_16px_64px_rgba(0,0,0,0.4)] overflow-hidden`}
     >
       <Picker
         data={data}

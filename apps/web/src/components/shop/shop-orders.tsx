@@ -217,7 +217,7 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
   return (
     <div className="flex flex-col h-full bg-bg-primary font-sans relative">
       {/* ── Status Filter Tabs ── */}
-      <div className="flex px-4 py-2 bg-[rgba(255,255,255,0.75)] dark:bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] sticky top-0 z-10 gap-2 overflow-x-auto no-scrollbar border-b border-border-subtle">
+      <div className="flex px-4 py-2 bg-bg-tertiary/50 backdrop-blur-xl sticky top-0 z-10 gap-2 overflow-x-auto scrollbar-hidden border-b border-border-subtle">
         {statusTabs.map((tab) => (
           <Button
             key={tab.key ?? 'all'}
@@ -232,7 +232,7 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
       </div>
 
       {/* ── Order List ── */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hidden">
         {orders.length === 0 && statusFilter ? (
           <div className="py-20 text-center text-text-muted text-sm font-bold italic">
             该状态下暂无订单
@@ -249,13 +249,13 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
               <Card
                 key={order.id}
                 variant="glass"
-                className="!rounded-[24px] hover:shadow-[0_10px_25px_rgba(0,243,255,0.08)] transition-all duration-300"
+                className="!rounded-[40px] hover:shadow-[0_10px_25px_rgba(0,243,255,0.08)] transition-all duration-300"
               >
                 {/* Order Header */}
                 <button
                   type="button"
                   onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
-                  className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
+                  className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-bg-modifier-hover transition-colors"
                 >
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center gap-2">
@@ -263,11 +263,11 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
                         <StatusIcon size={10} strokeWidth={3} className="mr-1" />
                         {statusCfg.label}
                       </Badge>
-                      <span className="text-text-muted text-[11px] font-black tracking-wider">
+                      <span className="text-text-muted text-[11px] font-black tracking-widest">
                         #{order.orderNo.slice(-8).toUpperCase()}
                       </span>
                     </div>
-                    <span className="text-text-muted text-[10px]">
+                    <span className="text-text-muted text-[11px]">
                       {new Date(order.createdAt).toLocaleString(undefined, {
                         month: 'short',
                         day: 'numeric',
@@ -279,7 +279,7 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
 
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <p className="text-[10px] text-text-muted mb-0.5">合计 {totalQuantity} 件</p>
+                      <p className="text-[11px] text-text-muted mb-0.5">合计 {totalQuantity} 件</p>
                       <span className="text-text-primary text-sm font-black flex items-baseline justify-end gap-0.5">
                         <PriceDisplay amount={order.totalAmount} />
                       </span>
@@ -295,7 +295,7 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
                 <div className="px-5 pb-4 pt-2">
                   {order.items.slice(0, isExpanded ? undefined : 1).map((item) => (
                     <div key={item.id} className="flex items-start gap-3 mt-4 first:mt-2">
-                      <div className="w-16 h-16 bg-bg-tertiary rounded-[16px] overflow-hidden shrink-0 border border-white/10">
+                      <div className="w-16 h-16 bg-bg-tertiary rounded-2xl overflow-hidden shrink-0 border border-border-subtle">
                         {item.imageUrl ? (
                           <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
                         ) : (
@@ -310,7 +310,7 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
                           {item.productName}
                         </p>
                         {item.specValues?.length > 0 && (
-                          <p className="text-text-muted text-[11px] mt-1 font-black bg-bg-tertiary inline-block px-1.5 py-0.5 rounded-full border border-white/10">
+                          <p className="text-text-muted text-[11px] mt-1 font-black bg-bg-tertiary inline-block px-1.5 py-0.5 rounded-full border border-border-subtle">
                             {item.specValues.join(' / ')}
                           </p>
                         )}
@@ -328,7 +328,7 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
 
                   {!isExpanded && order.items.length > 1 && (
                     <div className="mt-3 text-center">
-                      <p className="text-text-muted text-[11px] font-black bg-bg-tertiary py-1 rounded-[12px] border border-white/10">
+                      <p className="text-text-muted text-[11px] font-black bg-bg-tertiary py-1 rounded-2xl border border-border-subtle">
                         以及其他 {order.items.length - 1} 件商品...
                       </p>
                     </div>
@@ -365,7 +365,7 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
                   </div>
 
                   {isExpanded && (orderReviews[order.id]?.length || 0) > 0 && (
-                    <div className="mt-4 p-3 rounded-[16px] bg-success/5 border border-success/20 space-y-2 backdrop-blur-sm">
+                    <div className="mt-4 p-3 rounded-2xl bg-success/5 border border-success/20 space-y-2 backdrop-blur-sm">
                       <p className="text-xs font-black uppercase tracking-widest text-success">
                         我的评价
                       </p>
@@ -373,14 +373,14 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
                         <div key={rv.id} className="text-xs text-success">
                           <span className="font-black">评分 {rv.rating} 星：</span>
                           <span>{rv.content || '（未填写文字）'}</span>
-                          {rv.isAnonymous ? <span className="ml-2 text-[10px]">匿名</span> : null}
+                          {rv.isAnonymous ? <span className="ml-2 text-[11px]">匿名</span> : null}
                         </div>
                       ))}
                     </div>
                   )}
 
                   {isExpanded && (
-                    <div className="mt-4 p-3 rounded-[16px] bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] border border-white/10 text-xs space-y-1 text-text-muted">
+                    <div className="mt-4 p-3 rounded-2xl bg-bg-tertiary/50 border border-border-subtle text-xs space-y-1 text-text-muted">
                       <p>订单号：{order.orderNo}</p>
                       {order.trackingNo ? <p>物流单号：{order.trackingNo}</p> : null}
                       {order.buyerNote ? <p>买家备注：{order.buyerNote}</p> : null}
@@ -402,7 +402,7 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
 
                   {/* Inline Review Form */}
                   {reviewingOrder === order.id && (
-                    <div className="mt-4 p-4 bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] border border-white/10 rounded-[24px] animate-in slide-in-from-top-2 duration-200">
+                    <div className="mt-4 p-4 bg-bg-tertiary/50 border border-border-subtle rounded-[24px] animate-in slide-in-from-top-2 duration-200">
                       {/* Product selector for multi-item orders */}
                       {order.items.length > 1 && (
                         <div className="mb-3">
@@ -418,7 +418,7 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
                                 className={`px-3 py-1.5 text-xs font-black rounded-full transition-all border ${
                                   (reviewProductId || order.items[0]?.productId) === item.productId
                                     ? 'border-primary bg-primary/10 text-primary'
-                                    : 'border-white/10 text-text-muted hover:border-primary/30'
+                                    : 'border-border-subtle text-text-muted hover:border-primary/30'
                                 }`}
                               >
                                 {item.productName}
@@ -441,9 +441,7 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
                             <Star
                               size={22}
                               className={
-                                i < reviewRating
-                                  ? 'text-[#F8E71C] fill-[#F8E71C]'
-                                  : 'text-text-muted'
+                                i < reviewRating ? 'text-warning fill-warning' : 'text-text-muted'
                               }
                             />
                           </button>
@@ -453,7 +451,7 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
                         value={reviewContent}
                         onChange={(e) => setReviewContent(e.target.value)}
                         placeholder="商品满足您的期待吗？说说您的真实感受..."
-                        className="w-full h-24 p-3 bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] text-text-primary text-sm rounded-[16px] border-2 border-white/10 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none transition-all"
+                        className="w-full h-24 p-3 bg-bg-tertiary/50 text-text-primary text-sm rounded-2xl border-2 border-border-subtle focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none transition-all"
                       />
                       <label className="mt-3 flex items-center gap-2 text-xs text-text-muted font-black">
                         <input

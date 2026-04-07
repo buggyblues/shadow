@@ -380,7 +380,7 @@ export function WorkspacePage({ serverId, onClose, onPublishAsApp }: WorkspacePa
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <div
-          className="flex flex-col w-60 shrink-0 overflow-hidden border-r border-white/10 bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px]"
+          className="flex flex-col w-60 shrink-0 overflow-hidden border-r border-border-subtle bg-bg-tertiary/30 backdrop-blur-xl"
           onContextMenu={handleBlankContextMenu}
         >
           <WorkspaceTree
@@ -409,7 +409,7 @@ export function WorkspacePage({ serverId, onClose, onPublishAsApp }: WorkspacePa
           />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-text-muted gap-3">
-            <div className="w-16 h-16 rounded-[24px] bg-[rgba(255,255,255,0.03)] backdrop-blur-sm border border-white/10 flex items-center justify-center">
+            <div className="w-16 h-16 rounded-[24px] bg-bg-tertiary/30 backdrop-blur-sm border border-border-subtle flex items-center justify-center">
               <Eye size={28} strokeWidth={1} className="opacity-30" />
             </div>
             <p className="text-[13px] text-text-muted/70 font-bold italic">选择文件以预览</p>

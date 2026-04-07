@@ -99,19 +99,21 @@ export function AppPage({ serverId, isAdmin, onClose }: AppPageProps) {
   return (
     <div className="flex-1 flex flex-col h-full bg-bg-primary overflow-hidden">
       {/* Header */}
-      <div className="desktop-drag-titlebar h-12 px-4 flex items-center gap-3 border-b border-border-subtle bg-bg-secondary/50 shrink-0">
+      <div className="desktop-drag-titlebar app-header px-6 flex items-center gap-3">
         {onClose && (
           <button
             type="button"
             onClick={onClose}
-            className="text-text-muted hover:text-text-primary transition"
+            className="w-8 h-8 rounded-xl bg-bg-tertiary/50 flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover transition-all shadow-inner"
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={16} strokeWidth={2.5} />
           </button>
         )}
-        <AppWindow size={18} className="text-text-muted" />
-        <h2 className="font-bold text-text-primary text-sm">应用中心</h2>
-        <span className="text-text-muted text-xs">
+        <div className="w-8 h-8 rounded-xl bg-bg-tertiary/50 flex items-center justify-center text-primary shrink-0 shadow-inner">
+          <AppWindow size={16} strokeWidth={2.5} />
+        </div>
+        <h2 className="font-black text-text-primary text-sm uppercase tracking-wide">应用中心</h2>
+        <span className="text-text-muted text-xs font-bold">
           {appsData ? `${appsData.total} 个应用` : ''}
         </span>
         <div className="flex-1" />
@@ -122,9 +124,9 @@ export function AppPage({ serverId, isAdmin, onClose }: AppPageProps) {
               setEditingApp(null)
               setOverlay('create')
             }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md bg-primary text-white hover:bg-primary/90 transition"
+            className="flex items-center gap-2 px-5 py-2 bg-primary text-bg-deep rounded-2xl font-black text-xs uppercase tracking-wide transition-all hover:scale-105 active:scale-95 shadow-lg shadow-primary/20"
           >
-            <Plus size={14} />
+            <Plus size={14} strokeWidth={3} />
             添加应用
           </button>
         )}
@@ -137,10 +139,12 @@ export function AppPage({ serverId, isAdmin, onClose }: AppPageProps) {
             <Loader2 size={20} className="animate-spin" />
           </div>
         ) : apps.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-40 text-text-muted gap-2">
-            <AppWindow size={32} className="opacity-40" />
-            <p className="text-sm">暂无应用</p>
-            {isAdmin && <p className="text-xs">点击「添加应用」发布第一个应用</p>}
+          <div className="flex flex-col items-center justify-center h-40 text-text-muted gap-4">
+            <div className="w-20 h-20 rounded-[40px] bg-bg-tertiary/50 flex items-center justify-center shadow-inner">
+              <AppWindow size={32} className="opacity-40" />
+            </div>
+            <p className="text-sm font-bold">暂无应用</p>
+            {isAdmin && <p className="text-xs opacity-60">点击「添加应用」发布第一个应用</p>}
           </div>
         ) : (
           <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-4">
@@ -257,7 +261,7 @@ function AppIcon({
           </span>
         )}
         {app.status !== 'active' && (
-          <span className="absolute bottom-0 inset-x-0 text-center text-[8px] font-bold bg-black/50 text-white py-0.5">
+          <span className="absolute bottom-0 inset-x-0 text-center text-[8px] font-bold bg-bg-deep/50 text-white py-0.5">
             {app.status === 'draft' ? '草稿' : '归档'}
           </span>
         )}
@@ -334,7 +338,7 @@ function AppContextMenu({
       />
       <div
         ref={menuRef}
-        className="fixed z-[61] bg-bg-tertiary/95 backdrop-blur-md border border-border-dim/60 rounded-xl shadow-2xl py-1 min-w-[160px] animate-scale-in"
+        className="fixed z-[61] bg-bg-tertiary/95 backdrop-blur-xl border border-border-subtle rounded-[24px] shadow-[0_20px_60px_rgba(0,0,0,0.4)] py-2 min-w-[180px] animate-scale-in"
         style={{ left: pos.x, top: pos.y }}
       >
         {items.map((item) => (
@@ -342,12 +346,11 @@ function AppContextMenu({
             key={item.label}
             type="button"
             onClick={item.onClick}
-            className={`flex items-center gap-2 w-full px-2.5 py-[5px] text-[12px] transition-all duration-100 rounded-md mx-1 ${
+            className={`flex items-center gap-2 w-[calc(100%-16px)] mx-2 px-4 py-3 text-[13px] font-black transition-all duration-200 rounded-2xl ${
               item.danger
-                ? 'text-red-400 hover:bg-red-500/10 hover:text-red-300'
-                : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary'
+                ? 'text-danger hover:bg-danger/10'
+                : 'text-text-secondary hover:bg-bg-tertiary/50 hover:text-text-primary'
             }`}
-            style={{ width: 'calc(100% - 8px)' }}
           >
             <item.icon size={14} className="shrink-0" />
             <span className="flex-1 text-left">{item.label}</span>
@@ -465,24 +468,26 @@ function AppViewer({
 
   return (
     <div ref={containerRef} className="flex-1 flex flex-col h-full bg-bg-primary overflow-hidden">
-      <div className="desktop-drag-titlebar h-12 px-3 flex items-center gap-2 border-b border-border-subtle bg-bg-secondary/50 shrink-0">
+      <div className="desktop-drag-titlebar app-header px-4 flex items-center gap-3">
         <button
           type="button"
           onClick={onBack}
-          className="text-text-muted hover:text-text-primary transition"
+          className="w-8 h-8 rounded-xl bg-bg-tertiary/50 flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover transition-all shadow-inner"
         >
-          <ArrowLeft size={16} />
+          <ArrowLeft size={16} strokeWidth={2.5} />
         </button>
-        {currentApp.iconUrl && <img src={currentApp.iconUrl} alt="" className="w-5 h-5 rounded" />}
-        <span className="font-medium text-text-primary text-sm truncate">{currentApp.name}</span>
+        {currentApp.iconUrl && (
+          <img src={currentApp.iconUrl} alt="" className="w-6 h-6 rounded-lg" />
+        )}
+        <span className="font-bold text-text-primary text-sm truncate">{currentApp.name}</span>
         {currentApp.version && (
-          <span className="text-[11px] text-text-muted">v{currentApp.version}</span>
+          <span className="text-[11px] text-text-muted font-bold">v{currentApp.version}</span>
         )}
         <div className="flex-1" />
         <button
           type="button"
           onClick={toggleFullscreen}
-          className="p-1 text-text-muted hover:text-text-primary transition"
+          className="w-8 h-8 rounded-xl bg-bg-tertiary/50 flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover transition-all shadow-inner"
           title={isFullscreen ? '退出全屏' : '全屏'}
         >
           {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
@@ -690,30 +695,34 @@ function CreateEditOverlay({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      className="fixed inset-0 bg-bg-deep/80 backdrop-blur-md flex items-center justify-center z-50"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-bg-secondary rounded-xl border border-border-subtle w-full max-w-md p-5 shadow-xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-text-primary">{isEdit ? '编辑应用' : '添加应用'}</h3>
+      <div className="bg-bg-secondary rounded-[40px] border border-border-subtle w-full max-w-md p-8 shadow-[0_32px_120px_rgba(0,0,0,0.5)] max-h-[90vh] overflow-y-auto animate-scale-in">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="font-black text-text-primary text-lg uppercase tracking-tight">
+            {isEdit ? '编辑应用' : '添加应用'}
+          </h3>
           <button
             type="button"
             onClick={onClose}
-            className="text-text-muted hover:text-text-primary"
+            className="w-10 h-10 rounded-2xl bg-bg-tertiary/50 flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover transition-all"
           >
             <X size={16} />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-4">
           {errorMessage && (
-            <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+            <div className="rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-xs text-danger font-bold">
               {errorMessage}
             </div>
           )}
 
           {/* Icon upload */}
           <div>
-            <label className="block text-xs text-text-muted mb-1">应用图标</label>
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-2">
+              应用图标
+            </label>
             <div className="flex items-center gap-3">
               <div className="relative w-14 h-14 rounded-2xl overflow-hidden shadow-md shrink-0">
                 {iconUrl ? (
@@ -728,7 +737,7 @@ function CreateEditOverlay({
                 )}
               </div>
               <div className="flex flex-col gap-1">
-                <label className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md bg-bg-modifier-hover text-text-secondary hover:text-text-primary hover:bg-bg-modifier-active transition cursor-pointer">
+                <label className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-2xl bg-bg-tertiary/50 text-text-secondary hover:text-text-primary hover:bg-bg-modifier-hover transition-all cursor-pointer">
                   <Upload size={12} />
                   {isUploadingIcon ? '上传中...' : '上传图标'}
                   <input
@@ -755,46 +764,54 @@ function CreateEditOverlay({
           </div>
 
           <div>
-            <label className="block text-xs text-text-muted mb-1">应用名称 *</label>
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-2">
+              应用名称 *
+            </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              className="w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded-lg text-sm text-text-primary outline-none focus:ring-1 focus:ring-primary"
+              className="w-full px-4 py-3 bg-bg-tertiary/50 border-2 border-border-subtle rounded-2xl text-sm text-text-primary font-bold outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary/40 transition-all"
               placeholder="我的应用"
             />
           </div>
           <div>
-            <label className="block text-xs text-text-muted mb-1">Slug（可选 URL 标识符）</label>
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-2">
+              Slug（可选 URL 标识符）
+            </label>
             <input
               type="text"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
-              className="w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded-lg text-sm text-text-primary outline-none focus:ring-1 focus:ring-primary"
+              className="w-full px-4 py-3 bg-bg-tertiary/50 border-2 border-border-subtle rounded-2xl text-sm text-text-primary font-bold outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary/40 transition-all"
               placeholder="my-app"
             />
           </div>
           <div>
-            <label className="block text-xs text-text-muted mb-1">描述</label>
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-2">
+              描述
+            </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded-lg text-sm text-text-primary outline-none focus:ring-1 focus:ring-primary resize-none"
+              className="w-full px-4 py-3 bg-bg-tertiary/50 border-2 border-border-subtle rounded-2xl text-sm text-text-primary font-bold outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary/40 transition-all resize-none"
               rows={2}
               placeholder="简要描述应用功能..."
             />
           </div>
           <div>
-            <label className="block text-xs text-text-muted mb-1">来源类型</label>
-            <div className="flex gap-2">
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-2">
+              来源类型
+            </label>
+            <div className="flex gap-2 bg-bg-tertiary/50 rounded-[24px] border border-border-subtle p-1.5 shadow-inner">
               <button
                 type="button"
                 onClick={() => setSourceType('url')}
-                className={`flex-1 py-2 text-sm rounded-lg border transition ${
+                className={`flex-1 py-2.5 text-sm font-bold rounded-[24px] transition-all duration-500 ${
                   sourceType === 'url'
-                    ? 'bg-primary/10 border-primary text-primary'
-                    : 'bg-bg-primary border-border-subtle text-text-muted hover:text-text-primary'
+                    ? 'bg-bg-primary text-primary shadow-2xl ring-1 ring-black/5'
+                    : 'text-text-muted hover:text-text-primary'
                 }`}
               >
                 <Globe size={14} className="inline mr-1" />
@@ -803,10 +820,10 @@ function CreateEditOverlay({
               <button
                 type="button"
                 onClick={() => setSourceType('zip')}
-                className={`flex-1 py-2 text-sm rounded-lg border transition ${
+                className={`flex-1 py-2.5 text-sm font-bold rounded-[24px] transition-all duration-500 ${
                   sourceType === 'zip'
-                    ? 'bg-primary/10 border-primary text-primary'
-                    : 'bg-bg-primary border-border-subtle text-text-muted hover:text-text-primary'
+                    ? 'bg-bg-primary text-primary shadow-2xl ring-1 ring-black/5'
+                    : 'text-text-muted hover:text-text-primary'
                 }`}
               >
                 <Package size={14} className="inline mr-1" />
@@ -818,21 +835,23 @@ function CreateEditOverlay({
           {/* Source input */}
           {sourceType === 'url' ? (
             <div>
-              <label className="block text-xs text-text-muted mb-1">Web URL *</label>
+              <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-2">
+                Web URL *
+              </label>
               <input
                 type="text"
                 value={sourceUrl}
                 onChange={(e) => setSourceUrl(e.target.value)}
                 required
-                className="w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded-lg text-sm text-text-primary outline-none focus:ring-1 focus:ring-primary"
+                className="w-full px-4 py-3 bg-bg-tertiary/50 border-2 border-border-subtle rounded-2xl text-sm text-text-primary font-bold outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary/40 transition-all"
                 placeholder="https://shadowob.com"
               />
-              <label className="mt-2 flex items-center gap-2 cursor-pointer">
+              <label className="mt-3 flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={proxyEnabled}
                   onChange={(e) => setProxyEnabled(e.target.checked)}
-                  className="rounded border-border-subtle"
+                  className="rounded-lg border-border-subtle"
                 />
                 <span className="text-xs text-text-secondary">
                   通过子域名代理访问（支持绝对路径、SSE、WebSocket）
@@ -841,14 +860,16 @@ function CreateEditOverlay({
             </div>
           ) : (
             <div className="space-y-2">
-              <label className="block text-xs text-text-muted mb-1">Zip / HTML 文件 *</label>
+              <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-2">
+                Zip / HTML 文件 *
+              </label>
               {/* Upload file */}
-              <label className="bg-bg-tertiary border-2 border-dashed border-border-subtle hover:border-primary/50 rounded-lg p-3 flex items-center gap-3 transition-colors cursor-pointer group">
-                <span className="w-8 h-8 rounded-full bg-bg-secondary group-hover:bg-primary/20 flex items-center justify-center transition">
+              <label className="bg-bg-tertiary/50 border-2 border-dashed border-border-subtle hover:border-primary/50 rounded-2xl p-4 flex items-center gap-3 transition-all cursor-pointer group">
+                <span className="w-8 h-8 rounded-2xl bg-bg-tertiary/50 group-hover:bg-primary/20 flex items-center justify-center transition">
                   <Upload size={16} className="text-text-primary" />
                 </span>
                 <span className="flex-1 min-w-0">
-                  <span className="block text-sm text-text-primary font-medium">
+                  <span className="block text-sm text-text-primary font-bold">
                     {isUploading ? '上传中...' : '点击上传 Zip / HTML 文件'}
                   </span>
                   <span className="block text-xs text-text-muted truncate">
@@ -869,7 +890,7 @@ function CreateEditOverlay({
               <button
                 type="button"
                 onClick={() => setShowFilePicker(true)}
-                className="flex items-center gap-2 w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded-lg text-sm text-text-muted hover:text-text-primary hover:border-primary/30 transition"
+                className="flex items-center gap-2 w-full px-4 py-3 bg-bg-tertiary/50 border-2 border-border-subtle rounded-2xl text-sm text-text-muted hover:text-text-primary hover:border-primary/30 transition-all font-bold"
               >
                 <Package size={14} />
                 从工作区选择文件
@@ -892,7 +913,7 @@ function CreateEditOverlay({
               {/* Show selected info */}
               {(sourceUrl || selectedFileName) && (
                 <p className="text-xs text-text-muted flex items-center gap-1">
-                  <CheckCircle2 size={12} className="text-emerald-400" />
+                  <CheckCircle2 size={12} className="text-success" />
                   已选择: {selectedFileName || sourceUrl}
                 </p>
               )}
@@ -900,12 +921,14 @@ function CreateEditOverlay({
           )}
 
           <div>
-            <label className="block text-xs text-text-muted mb-1">版本号</label>
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-2">
+              版本号
+            </label>
             <input
               type="text"
               value={version}
               onChange={(e) => setVersion(e.target.value)}
-              className="w-full px-3 py-2 bg-bg-primary border border-border-subtle rounded-lg text-sm text-text-primary outline-none focus:ring-1 focus:ring-primary"
+              className="w-full px-4 py-3 bg-bg-tertiary/50 border-2 border-border-subtle rounded-2xl text-sm text-text-primary font-bold outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary/40 transition-all"
               placeholder="1.0.0"
             />
           </div>
@@ -914,14 +937,14 @@ function CreateEditOverlay({
               type="checkbox"
               checked={isHomepage}
               onChange={(e) => setIsHomepage(e.target.checked)}
-              className="rounded border-border-subtle"
+              className="rounded-lg border-border-subtle"
             />
-            <span className="text-sm text-text-secondary">设为服务器首页</span>
+            <span className="text-sm text-text-secondary font-bold">设为服务器首页</span>
           </label>
           <button
             type="submit"
             disabled={!canSubmit}
-            className="w-full py-2.5 bg-primary text-white font-medium text-sm rounded-lg hover:bg-primary/90 disabled:opacity-50 transition"
+            className="w-full py-3.5 bg-primary text-bg-deep font-black text-sm uppercase tracking-wide rounded-2xl hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 transition-all duration-500 shadow-lg shadow-primary/20"
           >
             {isPending ? '处理中...' : isEdit ? '保存修改' : '创建应用'}
           </button>

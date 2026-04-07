@@ -165,7 +165,7 @@ function CodeBlockWithCopy({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="relative group bg-bg-deep rounded-xl border border-border/10">
+    <div className="relative group bg-bg-deep rounded-xl border border-border-subtle">
       <pre>{children}</pre>
       <Button
         variant="ghost"
@@ -445,7 +445,7 @@ export function MessageBubble({
     <div
       ref={messageRef}
       id={`msg-${message.id}`}
-      className={`group relative flex gap-4 px-4 py-1.5 message-row hover:bg-white/[0.02] ${isDmOwn ? 'flex-row-reverse' : ''} ${highlight ? 'bg-primary/10 animate-pulse' : 'mt-[2px]'} ${isSelected ? 'bg-primary/10' : ''} ${selectionMode ? 'cursor-pointer' : ''}`}
+      className={`group relative flex gap-4 px-4 py-1.5 message-row hover:bg-bg-tertiary/20 ${isDmOwn ? 'flex-row-reverse' : ''} ${highlight ? 'bg-primary/10 animate-pulse' : 'mt-[2px]'} ${isSelected ? 'bg-primary/10' : ''} ${selectionMode ? 'cursor-pointer' : ''}`}
       onMouseEnter={activateHover}
       onMouseLeave={deactivateHover}
       onClick={selectionMode ? () => onToggleSelect?.(message.id) : undefined}
@@ -524,7 +524,7 @@ export function MessageBubble({
             {author?.displayName ?? author?.username ?? t('common.unknownUser')}
           </span>
           {author?.isBot && (
-            <span className="text-[10px] bg-primary/10 text-primary rounded-full px-2 py-0.5 font-semibold flex items-center gap-1">
+            <span className="text-[11px] bg-primary/10 text-primary rounded-full px-2 py-0.5 font-black uppercase tracking-widest flex items-center gap-1">
               <Check size={8} />
               {t('common.bot')}
             </span>
@@ -532,7 +532,7 @@ export function MessageBubble({
           <span className="text-xs text-text-muted ml-0.5">{time}</span>
           {message.isEdited && (
             <span
-              className="text-[10px] text-text-muted cursor-help"
+              className="text-[11px] text-text-muted cursor-help"
               title={format(new Date(message.updatedAt ?? message.createdAt), 'PPpp', {
                 locale: dateFnsLocaleMap[i18n.language] ?? zhCN,
               })}
@@ -562,7 +562,7 @@ export function MessageBubble({
                   setIsEditing(false)
                 }
               }}
-              className="w-full bg-bg-tertiary text-text-primary rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary resize-none"
+              className="w-full bg-bg-secondary/80 text-text-primary rounded-2xl px-3 py-2 text-sm outline-none border-2 border-border-subtle focus:ring-2 focus:ring-primary/20 resize-none"
               rows={Math.min(editContent.split('\n').length + 1, 8)}
             />
             <div className="flex items-center gap-2 mt-1 text-xs text-text-muted">
@@ -631,7 +631,7 @@ export function MessageBubble({
                       )
                     }
                     return (
-                      <code className="bg-white/10 rounded px-1.5" {...props}>
+                      <code className="bg-bg-modifier-hover rounded px-1.5" {...props}>
                         {children}
                       </code>
                     )
@@ -655,7 +655,7 @@ export function MessageBubble({
                     href={att.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block max-w-xs rounded-lg overflow-hidden border border-border-dim"
+                    className="block max-w-xs rounded-xl overflow-hidden border border-border-subtle"
                     onContextMenu={(e) => {
                       e.preventDefault()
                       setImageContextMenu({ x: e.clientX, y: e.clientY, att })
@@ -717,7 +717,7 @@ export function MessageBubble({
 
         {/* Send status indicator — only show on failure */}
         {message.sendStatus === 'failed' && (
-          <div className="flex items-center gap-1.5 mt-1 text-xs text-red-500">
+          <div className="flex items-center gap-1.5 mt-1 text-xs text-danger">
             <AlertCircle size={12} />
             <span>{t('chat.sendFailed', '发送失败')}</span>
             <button
@@ -773,7 +773,7 @@ export function MessageBubble({
                   )
                 })
               }}
-              className="ml-1 px-2 py-0.5 bg-red-500/10 hover:bg-red-500/20 rounded text-red-500 text-xs font-medium transition"
+              className="ml-1 px-2 py-0.5 bg-danger/10 hover:bg-danger/20 rounded text-danger text-xs font-medium transition"
             >
               {t('chat.retry', '重试')}
             </button>
@@ -807,7 +807,7 @@ export function MessageBubble({
               : { top: rect.top - 6, right: window.innerWidth - rect.right + 16 }
             return (
               <div
-                className="fixed flex items-center bg-bg-primary/90 backdrop-blur-md rounded-[12px] border border-border/10 shadow-lg z-[70]"
+                className="fixed flex items-center bg-bg-primary/90 backdrop-blur-md rounded-2xl border border-border-subtle shadow-lg z-[70]"
                 style={posStyle}
                 onMouseEnter={activateHover}
                 onMouseLeave={deactivateHover}
@@ -842,7 +842,7 @@ export function MessageBubble({
                   </Button>
                   {/* More dropdown menu */}
                   {showMoreMenu && (
-                    <div className="absolute top-full right-0 mt-1 bg-bg-primary/95 backdrop-blur-xl rounded-[16px] border border-border/10 shadow-xl py-1 min-w-[160px] z-50">
+                    <div className="absolute top-full right-0 mt-1 bg-bg-primary/95 backdrop-blur-xl rounded-[24px] border border-border-subtle shadow-[0_16px_64px_rgba(0,0,0,0.4)] py-1.5 min-w-[160px] z-50">
                       {isOwn && (
                         <Button
                           variant="ghost"
@@ -893,7 +893,7 @@ export function MessageBubble({
                             variant="ghost"
                             size="sm"
                             onClick={handleDelete}
-                            className="!w-full !justify-start !rounded-none !font-normal !normal-case !tracking-normal !px-3 !py-2 !text-sm !h-auto text-red-400 hover:!bg-red-500/10"
+                            className="!w-full !justify-start !rounded-none !font-normal !normal-case !tracking-normal !px-3 !py-2 !text-sm !h-auto text-danger hover:!bg-danger/10"
                           >
                             <Trash2 size={14} />
                             {t('chat.deleteMessage')}
@@ -920,7 +920,7 @@ export function MessageBubble({
               : { top: rect.top - 34, right: window.innerWidth - rect.right + 16 }
             return (
               <div
-                className="fixed flex items-center gap-1 bg-bg-primary/90 backdrop-blur-md rounded-[12px] border border-border/10 shadow-lg p-1 z-[70]"
+                className="fixed flex items-center gap-1 bg-bg-primary/90 backdrop-blur-md rounded-2xl border border-border-subtle shadow-lg p-1 z-[70]"
                 style={emojiPosStyle}
                 onMouseEnter={activateHover}
                 onMouseLeave={() => {
@@ -1035,7 +1035,7 @@ export function MessageBubble({
         author &&
         createPortal(
           <div
-            className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+            className="fixed inset-0 bg-bg-deep/60 flex items-center justify-center z-50"
             onClick={closeAvatarCard}
           >
             <div onClick={(e) => e.stopPropagation()}>
@@ -1067,7 +1067,7 @@ export function MessageBubble({
               }}
             />
             <div
-              className="fixed z-[61] bg-bg-primary/95 backdrop-blur-xl rounded-[16px] border border-border/10 shadow-xl py-1 min-w-[160px]"
+              className="fixed z-[61] bg-bg-primary/95 backdrop-blur-xl rounded-[24px] border border-border-subtle shadow-[0_16px_64px_rgba(0,0,0,0.4)] py-1.5 min-w-[160px]"
               style={{ left: avatarContextMenu.x, top: avatarContextMenu.y }}
             >
               <Button
@@ -1108,7 +1108,7 @@ export function MessageBubble({
                       }
                       setAvatarContextMenu(null)
                     }}
-                    className="!w-full !justify-start !rounded-none !font-normal !normal-case !tracking-normal !px-3 !py-2 !text-sm !h-auto text-red-400 hover:!bg-red-500/10"
+                    className="!w-full !justify-start !rounded-none !font-normal !normal-case !tracking-normal !px-3 !py-2 !text-sm !h-auto text-danger hover:!bg-danger/10"
                   >
                     {author?.isBot ? t('member.removeBot') : t('member.kickMember')}
                   </Button>
@@ -1278,7 +1278,7 @@ function MentionSpan({ mention, label }: { mention: string; label?: string }) {
         user &&
         createPortal(
           <div
-            className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+            className="fixed inset-0 bg-bg-deep/60 flex items-center justify-center z-50"
             onClick={handleClose}
           >
             <div onClick={(e) => e.stopPropagation()}>
@@ -1310,7 +1310,7 @@ function MentionSpan({ mention, label }: { mention: string; label?: string }) {
               }}
             />
             <div
-              className="fixed z-[61] bg-bg-primary/95 backdrop-blur-xl rounded-[16px] border border-border/10 shadow-xl py-1 min-w-[160px]"
+              className="fixed z-[61] bg-bg-primary/95 backdrop-blur-xl rounded-[24px] border border-border-subtle shadow-[0_16px_64px_rgba(0,0,0,0.4)] py-1.5 min-w-[160px]"
               style={{ left: ctxMenu.x, top: ctxMenu.y }}
             >
               <Button
@@ -1351,7 +1351,7 @@ function MentionSpan({ mention, label }: { mention: string; label?: string }) {
                       }
                       setCtxMenu(null)
                     }}
-                    className="!w-full !justify-start !rounded-none !font-normal !normal-case !tracking-normal !px-3 !py-2 !text-sm !h-auto text-red-400 hover:!bg-red-500/10"
+                    className="!w-full !justify-start !rounded-none !font-normal !normal-case !tracking-normal !px-3 !py-2 !text-sm !h-auto text-danger hover:!bg-danger/10"
                   >
                     {user?.isBot ? t('member.removeBot') : t('member.kickMember')}
                   </Button>

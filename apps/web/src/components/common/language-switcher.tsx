@@ -62,7 +62,7 @@ export function LanguageSwitcher({ compact = false }: LanguageSwitcherProps) {
         <div
           role="listbox"
           aria-label="Language"
-          className="absolute right-0 top-full mt-2 bg-bg-primary/95 backdrop-blur-xl rounded-[16px] border border-border/10 shadow-xl py-1 min-w-[160px] z-50"
+          className="absolute right-0 top-full mt-2 bg-bg-primary/95 backdrop-blur-xl rounded-[24px] border border-border-subtle shadow-[0_16px_64px_rgba(0,0,0,0.4)] py-1.5 min-w-[160px] z-50"
         >
           {supportedLanguages.map((lang) => (
             <button
@@ -71,7 +71,7 @@ export function LanguageSwitcher({ compact = false }: LanguageSwitcherProps) {
               role="option"
               aria-selected={lang.code === i18n.language}
               onClick={() => handleChange(lang.code)}
-              className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 hover:bg-white/5 transition ${
+              className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 hover:bg-bg-tertiary/50 transition ${
                 lang.code === i18n.language
                   ? 'text-primary font-bold bg-primary/10'
                   : 'text-text-secondary font-medium'

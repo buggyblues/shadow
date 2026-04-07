@@ -17,7 +17,7 @@ export function ProductCard({ product, onClick, onAddToCart }: ProductCardProps)
     <Card
       variant="glass"
       hoverable
-      className="group flex flex-col cursor-pointer !rounded-[24px]"
+      className="group flex flex-col cursor-pointer !rounded-[40px]"
       onClick={() => onClick(product.id)}
     >
       {/* Image container */}

@@ -42,8 +42,8 @@ export function WorkspaceToolbar({
           <ArrowLeft size={16} />
         </button>
       )}
-      <FolderClosed size={16} className="text-[#e8a838] shrink-0" />
-      <h2 className="font-semibold text-text-primary text-[13px] truncate">
+      <FolderClosed size={16} className="text-accent shrink-0" />
+      <h2 className="font-black text-text-primary text-[13px] truncate">
         {workspaceName || '工作区'}
       </h2>
       <div className="flex-1" />

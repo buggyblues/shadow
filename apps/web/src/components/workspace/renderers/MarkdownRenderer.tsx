@@ -145,7 +145,7 @@ export function MarkdownRenderer({ node, serverId }: { node: WorkspaceNode; serv
       <div className="flex items-center justify-between px-3 py-1.5 bg-bg-tertiary/80 border-b border-border-subtle shrink-0">
         <span className="text-[11px] text-text-muted font-mono">{node.name}</span>
         <div className="flex items-center gap-1.5">
-          {isEditing && isDirty && <span className="text-[11px] text-amber-400">● 未保存</span>}
+          {isEditing && isDirty && <span className="text-[11px] text-warning">● 未保存</span>}
           <button
             type="button"
             onClick={() => setShowVersions(!showVersions)}
@@ -205,7 +205,7 @@ export function MarkdownRenderer({ node, serverId }: { node: WorkspaceNode; serv
             <div className="flex flex-1 min-h-0">
               {/* Editor */}
               <div className="flex-1 flex flex-col border-r border-border-subtle">
-                <div className="px-3 py-1 text-[10px] text-text-muted/70 bg-bg-secondary/60 border-b border-border-subtle flex items-center gap-1">
+                <div className="px-3 py-1 text-[11px] text-text-muted/70 bg-bg-secondary/60 border-b border-border-subtle flex items-center gap-1">
                   <Edit3 size={9} />
                   编辑
                 </div>
@@ -223,7 +223,7 @@ export function MarkdownRenderer({ node, serverId }: { node: WorkspaceNode; serv
               </div>
               {/* Live preview */}
               <div className="flex-1 flex flex-col overflow-hidden">
-                <div className="px-3 py-1 text-[10px] text-text-muted/70 bg-bg-secondary/60 border-b border-border-subtle flex items-center gap-1">
+                <div className="px-3 py-1 text-[11px] text-text-muted/70 bg-bg-secondary/60 border-b border-border-subtle flex items-center gap-1">
                   <Eye size={9} />
                   预览
                 </div>
@@ -411,7 +411,7 @@ function EmptyMarkdownEditor({ node, serverId }: { node: WorkspaceNode; serverId
       <div className="flex items-center justify-between px-3 py-1.5 bg-bg-tertiary/80 border-b border-border-subtle shrink-0">
         <span className="text-[11px] text-text-muted font-mono">{node.name}</span>
         <div className="flex items-center gap-1.5">
-          {isDirty && <span className="text-[11px] text-amber-400">● 未保存</span>}
+          {isDirty && <span className="text-[11px] text-warning">● 未保存</span>}
           <button
             type="button"
             onClick={handleSave}

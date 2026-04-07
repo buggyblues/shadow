@@ -13,10 +13,10 @@ type ActivityLevel = 0 | 1 | 2 | 3 | 4
 
 const LEVEL_COLORS: Record<ActivityLevel, string> = {
   0: 'bg-transparent',
-  1: 'bg-green-900/30',
-  2: 'bg-green-700/50',
-  3: 'bg-green-500/70',
-  4: 'bg-green-400',
+  1: 'bg-success/20',
+  2: 'bg-success/40',
+  3: 'bg-success/60',
+  4: 'bg-success/80',
 }
 
 const LEVEL_LABELS: Record<ActivityLevel, string> = {
@@ -84,7 +84,7 @@ export function ActivityHeatmap({ data }: ActivityHeatmapProps) {
 
   return (
     <div className="bg-bg-secondary rounded-xl p-6 border border-border-subtle">
-      <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider mb-4">
+      <h3 className="text-sm font-bold text-text-primary uppercase tracking-widest mb-4">
         {t('buddyDashboard.activityHeatmap', 'Activity Heatmap')}
       </h3>
 

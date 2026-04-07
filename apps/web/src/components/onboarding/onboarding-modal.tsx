@@ -56,25 +56,25 @@ const features = [
     icon: MessageCircle,
     titleKey: 'onboarding.featureChat',
     descKey: 'onboarding.featureChatDesc',
-    color: 'text-cyan-400',
+    color: 'text-primary',
   },
   {
     icon: Rocket,
     titleKey: 'onboarding.featureAI',
     descKey: 'onboarding.featureAIDesc',
-    color: 'text-amber-400',
+    color: 'text-warning',
   },
   {
     icon: Globe,
     titleKey: 'onboarding.featureCommunity',
     descKey: 'onboarding.featureCommunityDesc',
-    color: 'text-purple-400',
+    color: 'text-info',
   },
   {
     icon: Hash,
     titleKey: 'onboarding.featureChannels',
     descKey: 'onboarding.featureChannelsDesc',
-    color: 'text-pink-400',
+    color: 'text-info',
   },
 ]
 
@@ -214,16 +214,16 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-colors ${
                       isCompleted
-                        ? 'bg-primary text-[#050508]'
+                        ? 'bg-primary text-bg-deep'
                         : isCurrent
                           ? 'bg-primary/20 text-primary border-2 border-primary'
-                          : 'bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] border border-white/10 text-text-muted'
+                          : 'bg-bg-tertiary/30 backdrop-blur-xl border border-border-subtle text-text-muted'
                     }`}
                   >
                     {isCompleted ? <Check size={14} /> : idx + 1}
                   </div>
                   <span
-                    className={`text-[10px] mt-1 hidden md:block font-black uppercase tracking-widest ${
+                    className={`text-[11px] mt-1 hidden md:block font-black uppercase tracking-widest ${
                       isCurrent ? 'text-primary' : 'text-text-muted'
                     }`}
                   >
@@ -247,7 +247,7 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
 
   return (
     <Dialog isOpen={open} onClose={onClose}>
-      <DialogContent className="!rounded-[24px] !max-w-3xl !p-0 !max-h-[90vh] overflow-hidden">
+      <DialogContent className="!rounded-[40px] !max-w-3xl !p-0 !max-h-[90vh] overflow-hidden">
         {/* Close button */}
         <Button
           variant="ghost"
@@ -315,9 +315,9 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
             <div className="p-8">
               <div className="text-center mb-8">
                 <div className="w-24 h-24 mx-auto mb-6 relative">
-                  <div className="absolute inset-0 rounded-[16px] bg-gradient-to-br from-[#00F3FF] via-primary to-[#7C4DFF] animate-pulse opacity-75" />
-                  <div className="relative w-24 h-24 rounded-[16px] bg-gradient-to-br from-[#00F3FF] to-primary flex items-center justify-center shadow-[0_10px_25px_rgba(0,243,255,0.3)]">
-                    <Server size={48} className="text-[#050508]" />
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary via-primary to-info animate-pulse opacity-75" />
+                  <div className="relative w-24 h-24 rounded-2xl bg-gradient-to-br from-primary to-primary flex items-center justify-center shadow-lg shadow-primary/25">
+                    <Server size={48} className="text-bg-deep" />
                   </div>
                 </div>
                 <h1 className="text-2xl font-black uppercase tracking-tight text-text-primary mb-2">
@@ -343,7 +343,7 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
                     >
                       {features.map((feature, idx) => (
                         <div key={idx} className="w-full flex-shrink-0 px-4">
-                          <Card variant="glass" className="!rounded-[24px]">
+                          <Card variant="glass" className="!rounded-[40px]">
                             <div className="p-6 text-center">
                               <feature.icon size={32} className={`mx-auto mb-3 ${feature.color}`} />
                               <h3 className="font-black text-text-primary mb-1">
@@ -377,7 +377,7 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
               {!isMobile && (
                 <div className="grid grid-cols-2 gap-3 mb-8">
                   {features.map((feature, idx) => (
-                    <Card key={idx} variant="glass" hoverable className="!rounded-[24px]">
+                    <Card key={idx} variant="glass" hoverable className="!rounded-[40px]">
                       <div className="p-4 text-center">
                         <feature.icon size={24} className={`mx-auto mb-2 ${feature.color}`} />
                         <h3 className="font-black text-text-primary text-sm">
@@ -420,8 +420,8 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
               />
 
               <div className="text-center mb-6">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-[16px] bg-gradient-to-br from-success to-emerald-600 flex items-center justify-center shadow-[0_10px_25px_rgba(87,242,135,0.3)]">
-                  <Plus size={32} className="text-[#050508]" />
+                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-success to-success flex items-center justify-center shadow-lg shadow-success/25">
+                  <Plus size={32} className="text-bg-deep" />
                 </div>
                 <h2 className="text-xl font-black uppercase tracking-tight text-text-primary mb-2">
                   {t('onboarding.createServer', '创建你的服务器')}
@@ -476,7 +476,7 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
               />
 
               <div className="text-center mb-6">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-[16px] bg-gradient-to-br from-[#7C4DFF] to-[#6200EA] flex items-center justify-center shadow-[0_10px_25px_rgba(124,77,255,0.3)]">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-info to-info flex items-center justify-center shadow-lg shadow-info/25">
                   <Search size={32} className="text-white" />
                 </div>
                 <h2 className="text-xl font-black uppercase tracking-tight text-text-primary mb-2">
@@ -519,9 +519,9 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
                       key={server.id}
                       type="button"
                       onClick={() => joinServer.mutate(server.id)}
-                      className="w-full flex items-center gap-3 p-3 bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] border border-white/10 hover:border-primary/30 rounded-[16px] transition text-left"
+                      className="w-full flex items-center gap-3 p-3 bg-bg-tertiary/30 backdrop-blur-xl border border-border-subtle hover:border-primary/30 rounded-2xl transition text-left"
                     >
-                      <div className="w-10 h-10 rounded-[12px] bg-gradient-to-br from-[#00F3FF] to-primary flex items-center justify-center text-[#050508] font-black">
+                      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary to-primary flex items-center justify-center text-bg-deep font-black">
                         {server.name.charAt(0)}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -583,8 +583,8 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
           {/* Complete step */}
           {step === 'complete' && (
             <div className="p-8 text-center">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-success to-emerald-600 flex items-center justify-center shadow-[0_10px_25px_rgba(87,242,135,0.3)]">
-                <Check size={40} className="text-[#050508]" />
+              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-success to-success flex items-center justify-center shadow-lg shadow-success/25">
+                <Check size={40} className="text-bg-deep" />
               </div>
               <h2 className="text-2xl font-black uppercase tracking-tight text-text-primary mb-2">
                 {t('onboarding.allSet', '一切就绪！')}
@@ -675,8 +675,8 @@ function CreateBuddyStep({
   return (
     <div className="p-8">
       <div className="text-center mb-6">
-        <div className="w-16 h-16 mx-auto mb-4 rounded-[16px] bg-gradient-to-br from-[#F8E71C] to-[#ffb300] flex items-center justify-center shadow-[0_10px_25px_rgba(248,231,28,0.35)]">
-          <Bot size={32} className="text-[#050508]" />
+        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-accent to-accent flex items-center justify-center shadow-lg shadow-accent/25">
+          <Bot size={32} className="text-bg-deep" />
         </div>
         <h2 className="text-xl font-black uppercase tracking-tight text-text-primary mb-2">
           {t('buddyOnboarding.createTitle', '创建你的 AI 搭子')}
@@ -711,7 +711,7 @@ function CreateBuddyStep({
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-danger/10 border border-danger/20 rounded-[16px] text-sm text-danger font-black backdrop-blur-sm">
+        <div className="mb-4 p-3 bg-danger/10 border border-danger/20 rounded-2xl text-sm text-danger font-black backdrop-blur-sm">
           {error}
         </div>
       )}
@@ -782,7 +782,7 @@ function BuddyConfigStep({
           {t('buddyOnboarding.yourToken', '你的 Token')}
         </label>
         <div className="flex items-center gap-2">
-          <code className="flex-1 p-3 bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] border border-white/10 rounded-[16px] text-primary font-mono text-sm overflow-x-auto scrollbar-thin">
+          <code className="flex-1 p-3 bg-bg-tertiary/30 backdrop-blur-xl border border-border-subtle rounded-2xl text-primary font-mono text-sm overflow-x-auto scrollbar-thin">
             {token}
           </code>
           <Button
@@ -797,7 +797,7 @@ function BuddyConfigStep({
 
       <div className="grid grid-cols-2 gap-4 mb-6">
         {/* Method 1: Download desktop */}
-        <Card variant="glass" className="!rounded-[24px]">
+        <Card variant="glass" className="!rounded-[40px]">
           <div className="p-4">
             <h3 className="text-sm font-black text-text-primary mb-3 flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-black">
@@ -809,7 +809,7 @@ function BuddyConfigStep({
               href="https://github.com/buggyblues/shadow/releases"
               target="_blank"
               rel="noopener noreferrer"
-              className="block text-center p-3 bg-[rgba(255,255,255,0.03)] border border-white/10 hover:border-primary/30 rounded-[16px] transition mb-2"
+              className="block text-center p-3 bg-bg-tertiary/30 border border-border-subtle hover:border-primary/30 rounded-2xl transition mb-2"
             >
               <Download size={20} className="mx-auto mb-1 text-primary" />
               <span className="text-xs font-black text-text-primary">
@@ -820,7 +820,7 @@ function BuddyConfigStep({
         </Card>
 
         {/* Method 2: Command */}
-        <Card variant="glass" className="!rounded-[24px]">
+        <Card variant="glass" className="!rounded-[40px]">
           <div className="p-4">
             <h3 className="text-sm font-black text-text-primary mb-3 flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-black">
@@ -828,8 +828,8 @@ function BuddyConfigStep({
               </span>
               {t('buddyOnboarding.method2', '使用命令')}
             </h3>
-            <div className="p-2 bg-[rgba(255,255,255,0.03)] border border-white/10 rounded-[12px] mb-2 flex items-center gap-2">
-              <code className="flex-1 text-[10px] text-text-secondary font-mono truncate">
+            <div className="p-2 bg-bg-tertiary/30 border border-border-subtle rounded-2xl mb-2 flex items-center gap-2">
+              <code className="flex-1 text-[11px] text-text-secondary font-mono truncate">
                 {bindCommand}
               </code>
               <button
@@ -969,8 +969,8 @@ function WaitingBuddyStep({
     <div className="p-8 text-center">
       {status === 'waiting' && (
         <>
-          <div className="w-16 h-16 mx-auto mb-4 rounded-[16px] bg-gradient-to-br from-[#00F3FF] to-[#00c6d1] flex items-center justify-center shadow-[0_10px_25px_rgba(0,243,255,0.3)]">
-            <Loader2 size={32} className="text-[#050508] animate-spin" />
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-primary to-primary flex items-center justify-center shadow-lg shadow-primary/25">
+            <Loader2 size={32} className="text-bg-deep animate-spin" />
           </div>
           <h2 className="text-xl font-black text-text-primary mb-2">
             {t('buddyOnboarding.waiting', '等待 Buddy 上线...')}
@@ -979,7 +979,7 @@ function WaitingBuddyStep({
             {t('buddyOnboarding.waitingDesc', '请在 Shadow 桌面端完成配置')}
           </p>
           <div className="text-3xl font-black text-primary mb-4">{countdown}s</div>
-          <div className="w-full bg-[rgba(255,255,255,0.03)] border border-white/10 rounded-full h-2 mb-4">
+          <div className="w-full bg-bg-tertiary/30 border border-border-subtle rounded-full h-2 mb-4">
             <div
               className="bg-primary h-2 rounded-full transition-all duration-1000"
               style={{ width: `${((30 - countdown) / 30) * 100}%` }}
@@ -990,8 +990,8 @@ function WaitingBuddyStep({
 
       {status === 'adding' && (
         <>
-          <div className="w-16 h-16 mx-auto mb-4 rounded-[16px] bg-gradient-to-br from-success to-emerald-600 flex items-center justify-center shadow-[0_10px_25px_rgba(16,185,129,0.3)]">
-            <Loader2 size={32} className="text-[#050508] animate-spin" />
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-success to-success flex items-center justify-center shadow-lg shadow-success/25">
+            <Loader2 size={32} className="text-bg-deep animate-spin" />
           </div>
           <h2 className="text-xl font-black text-text-primary mb-2">
             {t('buddyOnboarding.adding', '正在添加 Buddy 到服务器...')}
@@ -1001,7 +1001,7 @@ function WaitingBuddyStep({
 
       {status === 'sending' && (
         <>
-          <div className="w-16 h-16 mx-auto mb-4 rounded-[16px] bg-gradient-to-br from-[#7C4DFF] to-[#6200EA] flex items-center justify-center shadow-[0_10px_25px_rgba(124,77,255,0.3)]">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-info to-info flex items-center justify-center shadow-lg shadow-info/25">
             <MessageCircle size={32} className="text-white" />
           </div>
           <h2 className="text-xl font-black text-text-primary mb-2">
@@ -1012,8 +1012,8 @@ function WaitingBuddyStep({
 
       {status === 'done' && (
         <>
-          <div className="w-16 h-16 mx-auto mb-4 rounded-[16px] bg-gradient-to-br from-success to-emerald-600 flex items-center justify-center shadow-[0_10px_25px_rgba(16,185,129,0.3)]">
-            <Check size={32} className="text-[#050508]" />
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-success to-success flex items-center justify-center shadow-lg shadow-success/25">
+            <Check size={32} className="text-bg-deep" />
           </div>
           <h2 className="text-xl font-black text-text-primary mb-2">
             {t('buddyOnboarding.ready', 'Buddy 已就绪！')}
@@ -1023,8 +1023,8 @@ function WaitingBuddyStep({
 
       {status === 'timeout' && (
         <>
-          <div className="w-16 h-16 mx-auto mb-4 rounded-[16px] bg-gradient-to-br from-[#F8E71C] to-[#ffb300] flex items-center justify-center shadow-[0_10px_25px_rgba(248,231,28,0.3)]">
-            <Server size={32} className="text-[#050508]" />
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-accent to-accent flex items-center justify-center shadow-lg shadow-accent/25">
+            <Server size={32} className="text-bg-deep" />
           </div>
           <h2 className="text-xl font-black text-text-primary mb-2">
             {t('buddyOnboarding.timeout', '等待超时')}

@@ -59,8 +59,8 @@ export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: O
 
   if (!product) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[#F9FAFB] dark:bg-bg-primary h-full">
-        <div className="animate-pulse text-gray-400 dark:text-text-muted font-bold">加载中...</div>
+      <div className="flex-1 flex items-center justify-center bg-bg-primary h-full">
+        <div className="animate-pulse text-text-muted font-bold">加载中...</div>
       </div>
     )
   }
@@ -81,7 +81,7 @@ export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: O
   // Show success state
   if (paid) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-[#F9FAFB] dark:bg-bg-primary h-full gap-6">
+      <div className="flex-1 flex flex-col items-center justify-center bg-bg-primary h-full gap-6">
         <div className="w-20 h-20 rounded-full bg-success/10 flex items-center justify-center animate-in zoom-in duration-300">
           <CheckCircle2 className="w-10 h-10 text-success" />
         </div>
@@ -96,9 +96,9 @@ export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: O
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-[#F9FAFB] dark:bg-bg-primary overflow-hidden h-full font-sans">
+    <div className="flex-1 flex flex-col bg-bg-primary overflow-hidden h-full font-sans">
       {/* Header */}
-      <div className="flex items-center gap-3 p-4 bg-[rgba(255,255,255,0.75)] dark:bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] border-b border-white/10 shrink-0 sticky top-0 z-50">
+      <div className="flex items-center gap-3 p-4 bg-bg-tertiary/50 backdrop-blur-xl border-b border-border-subtle shrink-0 sticky top-0 z-50">
         <Button
           variant="ghost"
           size="icon"
@@ -110,20 +110,20 @@ export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: O
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
+      <div className="flex-1 overflow-y-auto scrollbar-hidden">
         <div className="max-w-2xl mx-auto p-6 space-y-6">
           {/* Product info card */}
-          <Card variant="glass" className="!rounded-[24px] !p-5">
+          <Card variant="glass" className="!rounded-[40px] !p-5">
             <h3 className="text-sm font-black uppercase tracking-widest text-text-muted mb-4 flex items-center gap-2">
               <Package size={14} />
               商品明细
             </h3>
             <div className="flex gap-4">
-              <div className="w-20 h-20 rounded-[16px] bg-bg-tertiary shrink-0 overflow-hidden border border-white/10">
+              <div className="w-20 h-20 rounded-2xl bg-bg-tertiary shrink-0 overflow-hidden border border-border-subtle">
                 {imageUrl ? (
                   <img src={imageUrl} alt={product.name} className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-300 dark:text-text-muted text-xs">
+                  <div className="w-full h-full flex items-center justify-center text-text-muted text-xs">
                     无图
                   </div>
                 )}
@@ -135,7 +135,7 @@ export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: O
                     {selectedSku.specValues.map((v) => (
                       <span
                         key={v}
-                        className="text-xs bg-bg-tertiary text-text-muted px-2 py-0.5 rounded-full border border-white/10"
+                        className="text-xs bg-bg-tertiary text-text-muted px-2 py-0.5 rounded-full border border-border-subtle"
                       >
                         {v}
                       </span>
@@ -151,7 +151,7 @@ export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: O
           </Card>
 
           {/* Price breakdown */}
-          <Card variant="glass" className="!rounded-[24px] !p-5">
+          <Card variant="glass" className="!rounded-[40px] !p-5">
             <h3 className="text-sm font-black uppercase tracking-widest text-text-muted mb-4 flex items-center gap-2">
               <Wallet size={14} />
               费用详情
@@ -167,7 +167,7 @@ export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: O
               </div>
               <div className="border-t border-border-subtle pt-3 flex items-center justify-between">
                 <span className="text-base font-black text-text-primary">应付总额</span>
-                <span className="text-xl font-black text-rose-500 dark:text-rose-400">
+                <span className="text-xl font-black text-danger">
                   <PriceDisplay amount={totalAmount} size={22} />
                 </span>
               </div>
@@ -175,7 +175,7 @@ export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: O
           </Card>
 
           {/* Wallet balance */}
-          <Card variant="glass" className="!rounded-[24px] !p-5">
+          <Card variant="glass" className="!rounded-[40px] !p-5">
             <div className="flex items-center justify-between">
               <span className="text-sm text-text-secondary">钱包余额</span>
               <PriceDisplay amount={balance} size={14} />
@@ -199,11 +199,11 @@ export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: O
       </div>
 
       {/* Bottom pay bar */}
-      <div className="shrink-0 border-t border-border-subtle bg-[rgba(255,255,255,0.75)] dark:bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] p-4">
+      <div className="shrink-0 border-t border-border-subtle bg-bg-tertiary/50 backdrop-blur-xl p-4">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-4">
           <div>
             <span className="text-sm text-text-muted">合计：</span>
-            <span className="text-xl font-black text-rose-500 dark:text-rose-400 ml-1">
+            <span className="text-xl font-black text-danger ml-1">
               <PriceDisplay amount={totalAmount} size={22} />
             </span>
           </div>

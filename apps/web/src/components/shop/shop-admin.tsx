@@ -72,15 +72,15 @@ export function ShopAdmin({ serverId, onBack }: ShopAdminProps) {
   ]
 
   return (
-    <div className="flex-1 flex flex-col bg-[#F9FAFB] dark:bg-bg-primary overflow-hidden h-full font-sans">
+    <div className="flex-1 flex flex-col bg-bg-primary overflow-hidden h-full font-sans">
       {/* ── Header ── */}
-      <div className="h-14 px-5 flex items-center bg-[rgba(255,255,255,0.75)] dark:bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] border-b border-border-subtle shrink-0 gap-3 z-20 transition-colors">
+      <div className="h-14 px-5 flex items-center bg-bg-tertiary/50 backdrop-blur-xl border-b border-border-subtle shrink-0 gap-3 z-20 transition-colors">
         <Button variant="ghost" size="icon" icon={ArrowLeft} onClick={onBack} className="-ml-2" />
         <h2 className="font-black text-text-primary text-base">店铺管理</h2>
       </div>
 
       {/* ── Section Tabs ── */}
-      <div className="flex bg-[rgba(255,255,255,0.03)] backdrop-blur-md px-3 py-2 sticky top-0 z-10 shadow-sm border-b border-border-subtle gap-1 overflow-x-auto no-scrollbar">
+      <div className="flex bg-bg-tertiary/50 backdrop-blur-xl px-3 py-2 sticky top-0 z-10 shadow-sm border-b border-border-subtle gap-1 overflow-x-auto scrollbar-hidden">
         {sections.map((s) => (
           <Button
             key={s.key}
@@ -96,7 +96,7 @@ export function ShopAdmin({ serverId, onBack }: ShopAdminProps) {
       </div>
 
       {/* ── Section Content ── */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
+      <div className="flex-1 overflow-y-auto scrollbar-hidden">
         <div className="max-w-4xl mx-auto w-full">
           {section === 'products' && <ProductManager serverId={serverId} />}
           {section === 'categories' && <CategoryManager serverId={serverId} />}
@@ -176,7 +176,7 @@ function ProductManager({ serverId }: { serverId: string }) {
             placeholder="搜索已有商品..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-[rgba(255,255,255,0.03)] border border-white/10 text-text-primary text-sm rounded-[20px] focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-text-muted transition-all font-black shadow-sm"
+            className="w-full pl-10 pr-4 py-3 bg-bg-tertiary/50 border border-border-subtle text-text-primary text-sm rounded-[24px] focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-text-muted transition-all font-black shadow-sm"
           />
         </div>
         <Button variant="primary" icon={Plus} onClick={() => setIsCreating(true)}>
@@ -186,11 +186,11 @@ function ProductManager({ serverId }: { serverId: string }) {
 
       {/* Product list */}
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-32 text-gray-400 dark:text-text-muted">
-          <div className="w-24 h-24 mb-6 rounded-full bg-white dark:bg-bg-secondary flex items-center justify-center shadow-sm">
-            <Package size={48} className="text-gray-300 dark:text-gray-600" strokeWidth={1.5} />
+        <div className="flex flex-col items-center justify-center py-32 text-text-muted">
+          <div className="w-24 h-24 mb-6 rounded-full bg-bg-secondary flex items-center justify-center shadow-sm">
+            <Package size={48} className="text-text-muted/40" strokeWidth={1.5} />
           </div>
-          <p className="text-base font-bold text-gray-900 dark:text-text-primary mb-1">暂无商品</p>
+          <p className="text-base font-bold text-text-primary mb-1">暂无商品</p>
           <p className="text-sm">点击"添加商品"开始上架您的第一件商品</p>
         </div>
       ) : (
@@ -199,10 +199,10 @@ function ProductManager({ serverId }: { serverId: string }) {
             <Card
               key={product.id}
               variant="glass"
-              className="!rounded-[24px] flex items-center gap-4 !p-4 group"
+              className="!rounded-[40px] flex items-center gap-4 !p-4 group"
             >
               {/* Thumbnail */}
-              <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-50 dark:bg-bg-tertiary shrink-0 border border-gray-100 dark:border-border-dim border">
+              <div className="w-16 h-16 rounded-xl overflow-hidden bg-bg-tertiary shrink-0 border border-border-subtle">
                 {product.media?.[0]?.url ? (
                   <img
                     src={product.media[0].url}
@@ -210,7 +210,7 @@ function ProductManager({ serverId }: { serverId: string }) {
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-300 dark:text-gray-600">
+                  <div className="w-full h-full flex items-center justify-center text-text-muted/40">
                     <Package size={24} />
                   </div>
                 )}
@@ -219,7 +219,7 @@ function ProductManager({ serverId }: { serverId: string }) {
               {/* Info */}
               <div className="flex-1 min-w-0 flex flex-col justify-center">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-gray-900 dark:text-text-primary text-sm font-bold truncate">
+                  <span className="text-text-primary text-sm font-bold truncate">
                     {product.name}
                   </span>
                   <StatusBadge status={product.status} />
@@ -229,8 +229,8 @@ function ProductManager({ serverId }: { serverId: string }) {
                     </Badge>
                   )}
                 </div>
-                <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-text-muted font-medium">
-                  <span className="text-rose-500 dark:text-rose-400 font-bold flex items-baseline gap-0.5">
+                <div className="flex items-center gap-4 text-xs text-text-muted font-medium">
+                  <span className="text-danger font-bold flex items-baseline gap-0.5">
                     <PriceDisplay amount={product.basePrice} />
                   </span>
                   <span className="flex items-center gap-1">
@@ -502,7 +502,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Form header */}
-      <div className="flex items-center justify-between bg-[rgba(255,255,255,0.75)] dark:bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] p-4 rounded-[24px] border border-white/10 sticky top-2 z-20">
+      <div className="flex items-center justify-between bg-bg-tertiary/50 backdrop-blur-xl p-4 rounded-[24px] border border-border-subtle sticky top-2 z-20">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" icon={ArrowLeft} onClick={onCancel} />
           <h3 className="text-text-primary font-black text-lg">
@@ -521,7 +521,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
       </div>
 
       {saveMutation.isError && (
-        <div className="p-4 bg-danger/10 border border-danger/20 rounded-[16px] text-danger text-sm flex items-center gap-2 font-black">
+        <div className="p-4 bg-danger/10 border border-danger/20 rounded-2xl text-danger text-sm flex items-center gap-2 font-black">
           <XCircle size={18} />
           保存失败：{(saveMutation.error as Error).message}
         </div>
@@ -537,7 +537,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="例如：高级会员 / 限定手办"
-                className="w-full p-3 bg-gray-50 dark:bg-bg-tertiary text-gray-900 dark:text-white text-sm rounded-xl border border-gray-200 dark:border-border-dim focus:outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 transition-all font-medium"
+                className="w-full p-3 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all font-medium"
               />
             </FormField>
 
@@ -547,7 +547,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
                 placeholder="将自动生成 (如 vip-1)"
-                className="w-full p-3 bg-gray-50 dark:bg-bg-tertiary text-gray-900 dark:text-white text-sm rounded-xl border border-gray-200 dark:border-border-dim focus:outline-none focus:border-cyan-500 transition-all font-mono"
+                className="w-full p-3 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all font-mono"
               />
             </FormField>
 
@@ -556,7 +556,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                 <select
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
-                  className="w-full p-3 pr-10 bg-gray-50 dark:bg-bg-tertiary text-gray-900 dark:text-white text-sm rounded-xl border border-gray-200 dark:border-border-dim focus:outline-none focus:border-cyan-500 transition-all appearance-none"
+                  className="w-full p-3 pr-10 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all appearance-none"
                 >
                   <option value="">未分类 (设为默认)</option>
                   {categories.map((c) => (
@@ -565,9 +565,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                     </option>
                   ))}
                 </select>
-                <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-gray-400">
-                  <ChevronDown size={14} />
-                </div>
+                <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-text-muted"></div>
               </div>
             </FormField>
 
@@ -580,8 +578,8 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                     onClick={() => setType(t)}
                     className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all border-2 ${
                       type === t
-                        ? 'border-cyan-500 bg-cyan-50 text-cyan-600 dark:bg-cyan-900/20 dark:text-cyan-400'
-                        : 'border-transparent bg-gray-50 text-gray-500 hover:bg-gray-100 dark:bg-bg-tertiary dark:text-text-muted dark:hover:bg-bg-modifier-hover'
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-transparent bg-bg-tertiary text-text-muted hover:bg-bg-modifier-hover'
                     }`}
                   >
                     {t === 'physical' ? '实物商品' : '虚拟权益'}
@@ -591,7 +589,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
             </FormField>
 
             <FormField label="上架状态">
-              <div className="flex gap-2 bg-gray-50 dark:bg-bg-tertiary p-1.5 rounded-2xl border border-gray-200 dark:border-border-dim">
+              <div className="flex gap-2 bg-bg-tertiary p-1.5 rounded-2xl border border-border-subtle">
                 {(
                   [
                     { value: 'active', label: '上架展示', icon: <Eye size={14} /> },
@@ -605,8 +603,8 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                     onClick={() => setStatus(s.value)}
                     className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 text-xs font-bold rounded-xl transition-all ${
                       status === s.value
-                        ? 'bg-white dark:bg-bg-secondary text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-border-dim'
-                        : 'text-gray-500 dark:text-text-muted hover:text-gray-700 dark:hover:text-text-primary'
+                        ? 'bg-bg-secondary text-white shadow-sm ring-1 ring-border-dim'
+                        : 'text-text-muted hover:text-text-primary'
                     }`}
                   >
                     {s.icon}
@@ -624,21 +622,21 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
             <FormField label="商品底价 (美元 / 虾币)">
               <div className="relative">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
-                  <ShrimpCoinIcon className="w-4 h-4 text-rose-400" />
+                  <ShrimpCoinIcon className="w-4 h-4 text-danger" />
                 </div>
                 <input
                   type="number"
                   min="0"
                   value={basePrice}
                   onChange={(e) => setBasePrice(e.target.value)}
-                  className="w-full p-3 pl-9 bg-gray-50 dark:bg-bg-tertiary text-rose-500 dark:text-rose-400 text-lg font-black rounded-xl border border-gray-200 dark:border-border-dim focus:outline-none focus:border-cyan-500 transition-all font-mono"
+                  className="w-full p-3 pl-9 bg-bg-tertiary text-danger text-lg font-black rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all font-mono"
                 />
               </div>
             </FormField>
 
             <FormField label="搜索标签 (用逗号分隔)">
               <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted">
                   <Tag size={16} />
                 </span>
                 <input
@@ -646,7 +644,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                   value={tags}
                   onChange={(e) => setTags(e.target.value)}
                   placeholder="例如: 热门, 新品, 游戏"
-                  className="w-full p-3 pl-10 bg-gray-50 dark:bg-bg-tertiary text-gray-900 dark:text-white text-sm rounded-xl border border-gray-200 dark:border-border-dim focus:outline-none focus:border-cyan-500 transition-all"
+                  className="w-full p-3 pl-10 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all"
                 />
               </div>
             </FormField>
@@ -659,7 +657,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
               onChange={(e) => setSummary(e.target.value)}
               placeholder="一句话吸引顾客的简短描述"
               maxLength={100}
-              className="w-full p-3 bg-gray-50 dark:bg-bg-tertiary text-gray-900 dark:text-white text-sm rounded-xl border border-gray-200 dark:border-border-dim focus:outline-none focus:border-cyan-500 transition-all"
+              className="w-full p-3 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all"
             />
           </FormField>
 
@@ -669,7 +667,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
               onChange={(e) => setDescription(e.target.value)}
               placeholder="详细介绍该商品的特色、规格、使用说明等..."
               rows={5}
-              className="w-full p-3 bg-gray-50 dark:bg-bg-tertiary text-gray-900 dark:text-white text-sm rounded-xl border border-gray-200 dark:border-border-dim focus:outline-none focus:border-cyan-500 transition-all resize-y"
+              className="w-full p-3 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all resize-y"
             />
           </FormField>
         </FormSection>
@@ -680,13 +678,13 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
             {mediaUrls.map((url, idx) => (
               <div
                 key={idx}
-                className="relative w-24 h-24 rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-border-dim bg-gray-50 dark:bg-bg-tertiary group"
+                className="relative w-24 h-24 rounded-2xl overflow-hidden shadow-sm border border-border-subtle bg-bg-tertiary group"
               >
                 <img src={url} alt="" className="w-full h-full object-cover" />
                 <button
                   type="button"
                   onClick={() => setMediaUrls(mediaUrls.filter((_, i) => i !== idx))}
-                  className="absolute top-1 right-1 p-1 bg-black/50 backdrop-blur-sm rounded-full text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-500"
+                  className="absolute top-1 right-1 p-1 bg-bg-deep/50 backdrop-blur-sm rounded-full text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-danger"
                 >
                   <X size={14} />
                 </button>
@@ -698,7 +696,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
               className="w-24 h-24"
             />
           </div>
-          <p className="text-xs text-gray-400 dark:text-text-muted">
+          <p className="text-xs text-text-muted ">
             首张图片将作为商品的默认封面，建议使用 4:5 或正方形比例的高清套图。
           </p>
         </FormSection>
@@ -711,26 +709,26 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
               value={specNames}
               onChange={(e) => setSpecNames(e.target.value)}
               placeholder="例如: 颜色, 尺码"
-              className="w-full p-3 bg-gray-50 dark:bg-bg-tertiary text-gray-900 dark:text-white text-sm rounded-xl border border-gray-200 dark:border-border-dim focus:outline-none focus:border-cyan-500 transition-all"
+              className="w-full p-3 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all"
             />
           </FormField>
 
           {skus.length > 0 && (
-            <div className="mb-3 p-1 rounded-xl bg-gray-50 dark:bg-bg-tertiary border border-gray-100 dark:border-border-dim overflow-x-auto">
+            <div className="mb-3 p-1 rounded-xl bg-bg-tertiary border border-border-subtle overflow-x-auto">
               <table className="w-full text-left border-collapse text-sm">
                 <thead>
-                  <tr className="text-gray-500 dark:text-text-muted text-xs border-b border-gray-200 dark:border-border-dim">
-                    <th className="py-2 px-3 font-semibold w-[40%]">规格值组合</th>
-                    <th className="py-2 px-3 font-semibold">价格</th>
-                    <th className="py-2 px-3 font-semibold">库存数</th>
-                    <th className="py-2 px-3 font-semibold w-10 text-center">操作</th>
+                  <tr className="text-text-muted text-xs border-b border-border-subtle">
+                    <th className="py-2 px-3 font-black w-[40%]">规格值组合</th>
+                    <th className="py-2 px-3 font-black">价格</th>
+                    <th className="py-2 px-3 font-black">库存数</th>
+                    <th className="py-2 px-3 font-black w-10 text-center">操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {skus.map((sku, idx) => (
                     <tr
                       key={idx}
-                      className="group transition-colors rounded-lg overflow-hidden border-b last:border-0 border-gray-200/50 dark:border-border-subtle/50"
+                      className="group transition-colors rounded-lg overflow-hidden border-b last:border-0 border-border-subtle/50"
                     >
                       <td className="py-1.5 px-2">
                         <input
@@ -745,7 +743,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                             setSkus(updated)
                           }}
                           placeholder="如: 白色, XL"
-                          className="bg-white dark:bg-bg-secondary w-full p-2 text-sm rounded-lg border border-gray-200 dark:border-border-dim focus:outline-none focus:border-cyan-500"
+                          className="bg-bg-secondary w-full p-2 text-sm rounded-lg border border-border-subtle focus:outline-none focus:border-primary"
                         />
                       </td>
                       <td className="py-1.5 px-2">
@@ -757,7 +755,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                             updated[idx] = { ...sku, price: e.target.value }
                             setSkus(updated)
                           }}
-                          className="bg-white dark:bg-bg-secondary w-full p-2 text-sm rounded-lg border border-gray-200 dark:border-border-dim focus:outline-none focus:border-cyan-500 font-mono"
+                          className="bg-bg-secondary w-full p-2 text-sm rounded-lg border border-border-subtle focus:outline-none focus:border-primary font-mono"
                         />
                       </td>
                       <td className="py-1.5 px-2">
@@ -769,14 +767,14 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                             updated[idx] = { ...sku, stock: e.target.value }
                             setSkus(updated)
                           }}
-                          className="bg-white dark:bg-bg-secondary w-full p-2 text-sm rounded-lg border border-gray-200 dark:border-border-dim focus:outline-none focus:border-cyan-500 font-mono"
+                          className="bg-bg-secondary w-full p-2 text-sm rounded-lg border border-border-subtle focus:outline-none focus:border-primary font-mono"
                         />
                       </td>
                       <td className="py-1 px-2 text-center">
                         <button
                           type="button"
                           onClick={() => setSkus(skus.filter((_, i) => i !== idx))}
-                          className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors inline-flex"
+                          className="p-2 text-text-muted hover:text-danger hover:bg-danger/10 rounded-lg transition-colors inline-flex"
                         >
                           <Trash2 size={16} />
                         </button>
@@ -796,7 +794,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                 { specValues: [], price: basePrice || '0', stock: '99', skuCode: '' },
               ])
             }
-            className="flex items-center justify-center gap-2 w-full py-3 text-sm font-bold text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/10 hover:bg-cyan-100 dark:hover:bg-cyan-900/30 border border-dashed border-cyan-200 dark:border-cyan-800 rounded-xl transition-all"
+            className="flex items-center justify-center gap-2 w-full py-3 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 border border-dashed border-primary/30 rounded-xl transition-all"
           >
             <Plus size={16} strokeWidth={3} />
             创建一组 SKU 款式
@@ -810,7 +808,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
               {entitlementRules.map((rule, idx) => (
                 <div
                   key={idx}
-                  className="grid grid-cols-1 md:grid-cols-2 gap-5 p-4 rounded-2xl border border-gray-200 dark:border-border-dim bg-gray-50/60 dark:bg-bg-tertiary/60"
+                  className="grid grid-cols-1 md:grid-cols-2 gap-5 p-4 rounded-2xl border border-border-subtle bg-bg-tertiary/60"
                 >
                   <FormField label="权益类型">
                     <div className="relative">
@@ -821,7 +819,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                           next[idx] = { ...rule, type: e.target.value as EntitlementRule['type'] }
                           setEntitlementRules(next)
                         }}
-                        className="w-full p-3 pr-10 bg-gray-50 dark:bg-bg-tertiary text-gray-900 dark:text-white text-sm rounded-xl border border-gray-200 dark:border-border-dim focus:outline-none focus:border-cyan-500 transition-all appearance-none font-medium"
+                        className="w-full p-3 pr-10 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all appearance-none font-medium"
                       >
                         <option value="channel_access">解锁私密频道访问</option>
                         <option value="channel_speak">授予特定频道发言权</option>
@@ -829,7 +827,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                         <option value="custom_role">自动授予专属身份组</option>
                         <option value="custom">自定义投递</option>
                       </select>
-                      <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-gray-400">
+                      <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-text-muted">
                         <ChevronDown size={14} />
                       </div>
                     </div>
@@ -845,13 +843,13 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                         setEntitlementRules(next)
                       }}
                       placeholder="例如频道或角色的数字 ID"
-                      className="w-full p-3 bg-gray-50 dark:bg-bg-tertiary text-gray-900 dark:text-white text-sm rounded-xl border border-gray-200 dark:border-border-dim focus:outline-none focus:border-cyan-500 transition-all font-mono"
+                      className="w-full p-3 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all font-mono"
                     />
                   </FormField>
 
                   <FormField label="生效时长 (秒)">
                     <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted">
                         <Clock size={16} />
                       </span>
                       <input
@@ -863,7 +861,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                           setEntitlementRules(next)
                         }}
                         placeholder="留空即表示永久有效"
-                        className="w-full p-3 pl-10 bg-gray-50 dark:bg-bg-tertiary text-gray-900 dark:text-white text-sm rounded-xl border border-gray-200 dark:border-border-dim focus:outline-none focus:border-cyan-500 transition-all font-mono"
+                        className="w-full p-3 pl-10 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all font-mono"
                       />
                     </div>
                   </FormField>
@@ -878,7 +876,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                         setEntitlementRules(next)
                       }}
                       placeholder="例：付款后自动拥有 VIP 大群浏览发言权限"
-                      className="w-full p-3 bg-gray-50 dark:bg-bg-tertiary text-gray-900 dark:text-white text-sm rounded-xl border border-gray-200 dark:border-border-dim focus:outline-none focus:border-cyan-500 transition-all"
+                      className="w-full p-3 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all"
                     />
                   </FormField>
 
@@ -890,7 +888,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                         setEntitlementRules(entitlementRules.filter((_, i) => i !== idx))
                       }}
                       disabled={entitlementRules.length === 1}
-                      className="px-3 py-1.5 text-xs font-bold text-rose-500 bg-rose-50 dark:bg-rose-900/20 rounded-lg border border-rose-200 dark:border-rose-900/40 disabled:opacity-50"
+                      className="px-3 py-1.5 text-xs font-bold text-danger bg-danger/10 rounded-lg border border-danger/20 disabled:opacity-50"
                     >
                       删除该规则
                     </button>
@@ -911,7 +909,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                     },
                   ])
                 }
-                className="flex items-center justify-center gap-2 w-full py-3 text-sm font-bold text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/10 hover:bg-cyan-100 dark:hover:bg-cyan-900/30 border border-dashed border-cyan-200 dark:border-cyan-800 rounded-xl transition-all"
+                className="flex items-center justify-center gap-2 w-full py-3 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 border border-dashed border-primary/30 rounded-xl transition-all"
               >
                 <Plus size={16} strokeWidth={3} />
                 新增权益规则
@@ -987,10 +985,10 @@ function CategoryManager({ serverId }: { serverId: string }) {
       {/* ── Add New Area ── */}
       <Card
         variant="glass"
-        className="!rounded-[24px] !p-5 flex flex-col md:flex-row items-end md:items-center gap-4"
+        className="!rounded-[40px] !p-5 flex flex-col md:flex-row items-end md:items-center gap-4"
       >
         <div className="flex-1 w-full relative">
-          <span className="text-[10px] font-bold text-gray-500 uppercase block mb-1.5">
+          <span className="text-[11px] font-bold text-text-muted uppercase block mb-1.5">
             分类展示名
           </span>
           <input
@@ -998,11 +996,11 @@ function CategoryManager({ serverId }: { serverId: string }) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="如：数字设备"
-            className="w-full p-2.5 bg-gray-50 dark:bg-bg-tertiary text-gray-900 dark:text-white text-sm rounded-xl border border-gray-200 dark:border-border-dim focus:outline-none focus:border-cyan-500 transition-all font-bold"
+            className="w-full p-2.5 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all font-bold"
           />
         </div>
         <div className="w-full md:w-48 relative">
-          <span className="text-[10px] font-bold text-gray-500 uppercase block mb-1.5">
+          <span className="text-[11px] font-bold text-text-muted uppercase block mb-1.5">
             代码标识 (Slug)
           </span>
           <input
@@ -1010,7 +1008,7 @@ function CategoryManager({ serverId }: { serverId: string }) {
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
             placeholder="如：digital"
-            className="w-full p-2.5 bg-gray-50 dark:bg-bg-tertiary text-gray-900 dark:text-white text-sm rounded-xl border border-gray-200 dark:border-border-dim focus:outline-none focus:border-cyan-500 transition-all font-mono"
+            className="w-full p-2.5 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all font-mono"
           />
         </div>
         <Button
@@ -1026,22 +1024,22 @@ function CategoryManager({ serverId }: { serverId: string }) {
       </Card>
 
       {/* ── List Area ── */}
-      <Card variant="glass" className="!rounded-[24px] !p-0 overflow-hidden">
+      <Card variant="glass" className="!rounded-[40px] !p-0 overflow-hidden">
         {categories.length === 0 ? (
-          <div className="py-20 text-center text-gray-400">
+          <div className="py-20 text-center text-text-muted">
             <Layers size={32} className="mx-auto mb-3 opacity-20" />
             空空如也，先建个类目吧
           </div>
         ) : (
-          <div className="divide-y divide-gray-100 dark:divide-border-dim">
+          <div className="divide-y divide-border-dim">
             {categories.map((cat) => {
               const isEdit = editingId === cat.id
               return (
                 <div
                   key={cat.id}
-                  className="p-4 flex items-center gap-4 hover:bg-gray-50 dark:hover:bg-bg-tertiary/50 transition-colors group"
+                  className="p-4 flex items-center gap-4 hover:bg-bg-tertiary/50 transition-colors group"
                 >
-                  <div className="w-10 h-10 rounded-full bg-cyan-50 dark:bg-cyan-900/10 flex items-center justify-center text-cyan-600 dark:text-cyan-400 shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
                     <Layers size={18} />
                   </div>
                   {isEdit ? (
@@ -1049,7 +1047,7 @@ function CategoryManager({ serverId }: { serverId: string }) {
                       <input
                         type="text"
                         defaultValue={cat.name}
-                        className="w-1/2 p-2 bg-white dark:bg-bg-secondary text-gray-900 dark:text-white text-sm rounded-lg border border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                        className="w-1/2 p-2 bg-bg-secondary text-white text-sm rounded-lg border border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             updateMutation.mutate({
@@ -1065,10 +1063,10 @@ function CategoryManager({ serverId }: { serverId: string }) {
                     </div>
                   ) : (
                     <div className="flex-1">
-                      <div className="text-sm font-bold text-gray-900 dark:text-white leading-none mb-1.5">
+                      <div className="text-sm font-bold text-white leading-none mb-1.5">
                         {cat.name}
                       </div>
-                      <div className="text-[11px] font-mono text-gray-400 bg-gray-100 dark:bg-border-dim inline-block px-1.5 py-0.5 rounded leading-none">
+                      <div className="text-[11px] font-mono text-text-muted bg-border-dim inline-block px-1.5 py-0.5 rounded leading-none">
                         {cat.slug}
                       </div>
                     </div>
@@ -1077,7 +1075,7 @@ function CategoryManager({ serverId }: { serverId: string }) {
                     <button
                       type="button"
                       onClick={() => setEditingId(isEdit ? null : cat.id)}
-                      className="p-2 text-gray-400 hover:text-cyan-600 dark:hover:bg-cyan-900/20 rounded-lg transition-colors"
+                      className="p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
                     >
                       <Edit3 size={16} />
                     </button>
@@ -1092,7 +1090,7 @@ function CategoryManager({ serverId }: { serverId: string }) {
                         })
                         if (ok) deleteMutation.mutate(cat.id)
                       }}
-                      className="p-2 text-gray-400 hover:text-rose-600 dark:hover:bg-rose-900/20 rounded-lg transition-colors"
+                      className="p-2 text-text-muted hover:text-danger hover:bg-danger/10 rounded-lg transition-colors"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -1185,29 +1183,27 @@ function OrderManager({ serverId }: { serverId: string }) {
 
       <div className="space-y-4 pt-2">
         {orders.length === 0 ? (
-          <div className="py-24 text-center text-gray-400 bg-white dark:bg-bg-secondary rounded-2xl border border-gray-100 dark:border-border-subtle shadow-sm flex flex-col items-center">
-            <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-3 text-cyan-500">
+          <div className="py-24 text-center text-text-muted bg-bg-secondary rounded-2xl border border-border-subtle shadow-sm flex flex-col items-center">
+            <div className="w-16 h-16 rounded-full bg-bg-tertiary flex items-center justify-center mb-3 text-primary">
               <CheckCircle size={24} className="opacity-20" />
             </div>
             当前暂无相关订单记录
           </div>
         ) : (
           orders.map((order) => (
-            <Card key={order.id} variant="glass" className="!rounded-[24px] !p-4">
-              <div className="flex items-start justify-between border-b border-gray-100 dark:border-border-dim pb-4 mb-4">
+            <Card key={order.id} variant="glass" className="!rounded-[40px] !p-4">
+              <div className="flex items-start justify-between border-b border-border-subtle pb-4 mb-4">
                 <div>
-                  <div className="text-xs font-bold text-gray-500 mb-1">
+                  <div className="text-xs font-bold text-text-muted mb-1">
                     {new Date(order.createdAt).toLocaleString()}
                   </div>
-                  <div className="text-sm font-mono font-bold text-gray-900 dark:text-white">
-                    # {order.orderNo}
-                  </div>
+                  <div className="text-sm font-mono font-bold text-white"># {order.orderNo}</div>
                 </div>
                 <div className="text-right flex flex-col items-end gap-1">
-                  <span className="text-lg font-black text-rose-500 dark:text-rose-400 block">
+                  <span className="text-lg font-black text-danger block">
                     <PriceDisplay amount={order.totalAmount} />
                   </span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-gray-100 dark:bg-bg-tertiary">
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-bg-tertiary">
                     状态: {order.status}
                   </span>
                 </div>
@@ -1216,7 +1212,7 @@ function OrderManager({ serverId }: { serverId: string }) {
               <div className="space-y-3">
                 {order.items.map((item) => (
                   <div key={item.id} className="flex gap-3 items-center">
-                    <div className="w-12 h-12 rounded-lg bg-gray-50 dark:bg-bg-tertiary overflow-hidden border border-gray-100 dark:border-border-dim shrink-0">
+                    <div className="w-12 h-12 rounded-lg bg-bg-tertiary overflow-hidden border border-border-subtle shrink-0">
                       {item.imageUrl ? (
                         <img
                           src={item.imageUrl}
@@ -1228,20 +1224,18 @@ function OrderManager({ serverId }: { serverId: string }) {
                       )}
                     </div>
                     <div className="flex-1">
-                      <div className="text-sm font-bold text-gray-900 dark:text-white">
-                        {item.productName}
-                      </div>
+                      <div className="text-sm font-bold text-white">{item.productName}</div>
                       {item.specValues?.length > 0 && (
-                        <div className="text-xs text-gray-500">{item.specValues.join('/')}</div>
+                        <div className="text-xs text-text-muted">{item.specValues.join('/')}</div>
                       )}
                     </div>
-                    <div className="text-sm font-bold text-gray-500">x{item.quantity}</div>
+                    <div className="text-sm font-bold text-text-muted">x{item.quantity}</div>
                   </div>
                 ))}
               </div>
 
               {nextActions(order.status).length > 0 && (
-                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-border-dim flex flex-wrap gap-2">
+                <div className="mt-4 pt-4 border-t border-border-subtle flex flex-wrap gap-2">
                   <input
                     type="text"
                     placeholder="补充物流单号（可选）"
@@ -1249,7 +1243,7 @@ function OrderManager({ serverId }: { serverId: string }) {
                     onChange={(e) =>
                       setTrackingInputs((prev) => ({ ...prev, [order.id]: e.target.value }))
                     }
-                    className="w-full p-2 text-xs rounded-lg border border-gray-200 dark:border-border-dim bg-gray-50 dark:bg-bg-tertiary"
+                    className="w-full p-2 text-xs rounded-lg border border-border-subtle bg-bg-tertiary"
                   />
                   <textarea
                     placeholder="订单流转备注（可选）"
@@ -1258,7 +1252,7 @@ function OrderManager({ serverId }: { serverId: string }) {
                       setSellerNotes((prev) => ({ ...prev, [order.id]: e.target.value }))
                     }
                     rows={2}
-                    className="w-full p-2 text-xs rounded-lg border border-gray-200 dark:border-border-dim bg-gray-50 dark:bg-bg-tertiary"
+                    className="w-full p-2 text-xs rounded-lg border border-border-subtle bg-bg-tertiary"
                   />
                   {nextActions(order.status).map((action) => (
                     <Button
@@ -1355,7 +1349,7 @@ function ShopSettings({ serverId }: { serverId: string }) {
     <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-6">
       <Card
         variant="glass"
-        className="!rounded-[24px] !p-6 animate-in fade-in slide-in-from-bottom-4 duration-500"
+        className="!rounded-[40px] !p-6 animate-in fade-in slide-in-from-bottom-4 duration-500"
       >
         <h4 className="text-xl font-black text-text-primary mb-6">店铺基础视觉设置</h4>
 
@@ -1366,7 +1360,7 @@ function ShopSettings({ serverId }: { serverId: string }) {
               value={shopName}
               onChange={(e) => setShopName(e.target.value)}
               placeholder="给店铺起个响亮的名字"
-              className="w-full p-3 bg-gray-50 dark:bg-bg-tertiary text-gray-900 dark:text-white text-lg rounded-xl border border-gray-200 dark:border-border-dim focus:outline-none focus:border-cyan-500 transition-all font-bold"
+              className="w-full p-3 bg-bg-tertiary text-white text-lg rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all font-bold"
             />
           </FormField>
 
@@ -1376,7 +1370,7 @@ function ShopSettings({ serverId }: { serverId: string }) {
               onChange={(e) => setShopDesc(e.target.value)}
               placeholder="向顾客传达核心理念或活动大促信息"
               rows={3}
-              className="w-full p-3 bg-gray-50 dark:bg-bg-tertiary text-gray-900 dark:text-white text-sm rounded-xl border border-gray-200 dark:border-border-dim focus:outline-none focus:border-cyan-500 transition-all resize-none"
+              className="w-full p-3 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all resize-none"
             />
           </FormField>
 
@@ -1390,7 +1384,7 @@ function ShopSettings({ serverId }: { serverId: string }) {
                     className="w-24 h-24"
                     previewUrl={logoUrl}
                   />
-                  <div className="text-[11px] text-gray-400 mt-1 leading-tight">
+                  <div className="text-[11px] text-text-muted mt-1 leading-tight">
                     建议正方形图片。
                     <br />
                     将在首页左上角展示。
@@ -1408,7 +1402,7 @@ function ShopSettings({ serverId }: { serverId: string }) {
                     className="w-full h-32 md:h-28 aspect-[21/9]"
                     previewUrl={bannerUrl}
                   />
-                  <div className="text-[11px] text-gray-400 mt-2">
+                  <div className="text-[11px] text-text-muted mt-2">
                     推荐宽图，将会自适应拉伸填充顶部背景。
                   </div>
                 </div>
@@ -1417,16 +1411,16 @@ function ShopSettings({ serverId }: { serverId: string }) {
           </div>
         </div>
 
-        <div className="mt-6 p-4 rounded-2xl border border-gray-100 dark:border-border-dim bg-gray-50 dark:bg-bg-tertiary">
-          <p className="text-sm font-bold text-gray-900 dark:text-white mb-2">客服 Buddy 配置</p>
-          <p className="text-xs text-gray-500 dark:text-text-muted mb-3">
+        <div className="mt-6 p-4 rounded-2xl border border-border-subtle bg-bg-tertiary">
+          <p className="text-sm font-bold text-white mb-2">客服 Buddy 配置</p>
+          <p className="text-xs text-text-muted  mb-3">
             设置后，买家在商品详情页点击客服时会自动创建私有客服频道并拉入该 Buddy。
           </p>
           <div className="relative">
             <select
               value={supportBuddyUserId}
               onChange={(e) => setSupportBuddyUserId(e.target.value)}
-              className="w-full p-3 pr-10 bg-white dark:bg-bg-secondary text-sm rounded-xl border border-gray-200 dark:border-border-dim appearance-none"
+              className="w-full p-3 pr-10 bg-bg-secondary text-sm rounded-xl border border-border-subtle appearance-none"
             >
               <option value="">不指定 Buddy（仅店主/管理员接待）</option>
               {members.map((m) => (
@@ -1437,16 +1431,16 @@ function ShopSettings({ serverId }: { serverId: string }) {
                 </option>
               ))}
             </select>
-            <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-gray-400">
+            <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-text-muted">
               <ChevronDown size={14} />
             </div>
           </div>
         </div>
 
-        <div className="mt-8 pt-6 border-t border-gray-100 dark:border-border-dim flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="mt-8 pt-6 border-t border-border-subtle flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex-1">
             {updateMutation.isSuccess && (
-              <span className="text-emerald-500 font-bold text-sm bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 animate-pulse">
+              <span className="text-success font-bold text-sm bg-success/10 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 animate-pulse">
                 <CheckCircle size={14} /> 设置已生效并保存
               </span>
             )}
@@ -1472,7 +1466,7 @@ function ShopSettings({ serverId }: { serverId: string }) {
 
 function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <Card variant="glass" className="!rounded-[24px] !p-5 md:!p-6">
+    <Card variant="glass" className="!rounded-[40px] !p-5 md:!p-6">
       <h4 className="text-text-primary text-sm font-black mb-5 tracking-widest uppercase flex items-center gap-2">
         <span className="w-1.5 h-4 bg-primary rounded-full block"></span>
         {title}
@@ -1495,10 +1489,10 @@ function FormField({
 }) {
   return (
     <label className={`block ${className || ''} group`}>
-      <span className="text-gray-600 dark:text-text-secondary text-[11px] font-bold mb-1.5 block uppercase tracking-wider group-focus-within:text-cyan-600 transition-colors">
+      <span className="text-text-secondary text-[11px] font-bold mb-1.5 block uppercase tracking-widest group-focus-within:text-primary transition-colors">
         {label}
         {required && (
-          <span className="text-rose-500 ml-1 text-base leading-none relative top-1">*</span>
+          <span className="text-danger ml-1 text-base leading-none relative top-1">*</span>
         )}
       </span>
       {children}
@@ -1549,7 +1543,7 @@ function ImageUploadInput({
   return (
     <button
       type="button"
-      className={`relative bg-gray-50 hover:bg-gray-100 dark:bg-bg-tertiary dark:hover:bg-bg-modifier-hover border-2 border-dashed border-gray-200 dark:border-border-dim hover:border-cyan-400 focus-within:border-cyan-500 focus-within:ring-2 focus-within:ring-cyan-500/20 overflow-hidden flex flex-col items-center justify-center transition-all cursor-pointer group ${shape === 'circle' ? 'rounded-full' : 'rounded-2xl'} ${className || ''}`}
+      className={`relative bg-bg-tertiary hover:bg-bg-modifier-hover border-2 border-dashed border-border-subtle hover:border-primary focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 overflow-hidden flex flex-col items-center justify-center transition-all cursor-pointer group ${shape === 'circle' ? 'rounded-full' : 'rounded-2xl'} ${className || ''}`}
       onClick={() => fileInputRef.current?.click()}
     >
       {previewUrl && !isUploading ? (
@@ -1559,16 +1553,16 @@ function ImageUploadInput({
             alt="已上传图片"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <span className="text-white text-xs font-bold bg-black/50 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 backdrop-blur-sm">
+          <div className="absolute inset-0 bg-bg-deep/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className="text-white text-xs font-bold bg-bg-deep/50 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 backdrop-blur-sm">
               <Edit3 size={14} /> 更换
             </span>
           </div>
         </>
       ) : (
-        <div className="flex flex-col items-center opacity-50 group-hover:opacity-100 group-focus-within:opacity-100 group-hover:text-cyan-600 transition-all p-2 text-center">
+        <div className="flex flex-col items-center opacity-50 group-hover:opacity-100 group-focus-within:opacity-100 group-hover:text-primary transition-all p-2 text-center">
           {isUploading ? (
-            <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
           ) : (
             <Upload size={shape === 'circle' ? 24 : 28} strokeWidth={1.5} className="mb-2" />
           )}

@@ -321,8 +321,8 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
   }, [fetchNextPage, hasNextPage, isFetchingNextPage])
 
   const statusColor: Record<string, string> = {
-    online: 'bg-[#23a559]',
-    idle: 'bg-amber-500',
+    online: 'bg-success',
+    idle: 'bg-warning',
     dnd: 'bg-danger',
     offline: 'bg-text-muted',
   }
@@ -330,7 +330,7 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
   return (
     <div className="flex-1 flex flex-col bg-bg-primary min-h-0">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border/10 bg-bg-primary/80 backdrop-blur-xl shrink-0 shadow-sm">
+      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border-subtle bg-bg-primary/80 backdrop-blur-xl shrink-0 shadow-sm">
         <Button
           variant="ghost"
           size="icon"
@@ -352,11 +352,11 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
           />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-text-primary text-sm truncate">
+          <h3 className="font-black text-text-primary text-sm truncate">
             {otherUser?.displayName ?? otherUser?.username ?? t('friends.chat', '聊天')}
           </h3>
           {otherUser?.isBot && (
-            <span className="text-[10px] font-bold text-primary bg-primary/10 rounded px-1 py-0.5">
+            <span className="text-[11px] font-black text-primary bg-primary/10 rounded-full px-1.5 py-0.5">
               Buddy
             </span>
           )}
@@ -471,7 +471,7 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
           const dismissed = localStorage.getItem(tipKey) === '1'
           if (dismissed) return null
           return (
-            <div className="mx-4 mb-1 flex items-center justify-between gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+            <div className="mx-4 mb-1 flex items-center justify-between gap-2 px-3 py-2 bg-warning/5 border border-warning/40 rounded-lg text-xs text-warning">
               <span>
                 {t(
                   'dm.rentalCostTip',
@@ -490,7 +490,7 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
                   localStorage.setItem(tipKey, '1')
                   queryClient.invalidateQueries({ queryKey: ['agent-chat-status', otherUser?.id] })
                 }}
-                className="shrink-0 text-amber-600 hover:text-amber-800 font-bold"
+                className="shrink-0 text-warning hover:text-warning/80 font-bold"
               >
                 ×
               </button>
@@ -501,7 +501,7 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
       {/* Message input */}
       <div className="px-4 pb-4 pt-1 shrink-0">
         {chatDisabled ? (
-          <div className="flex items-center justify-center gap-2 px-4 py-3 bg-bg-secondary rounded-lg border border-border-subtle text-text-muted text-sm">
+          <div className="flex items-center justify-center gap-2 px-4 py-3 bg-bg-tertiary/50 backdrop-blur-md rounded-xl border border-border-subtle text-text-muted text-sm">
             <span>
               {agentChatStatus?.reason === 'rented_out'
                 ? t('dm.chatDisabledRentedOut', '该 Buddy 已出租给其他用户，暂时无法聊天')
@@ -544,7 +544,7 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
                 {pendingFiles.map((file, i) => (
                   <div
                     key={i}
-                    className="relative group bg-bg-secondary/80 rounded-[16px] p-2 flex items-center gap-2 text-xs text-text-secondary"
+                    className="relative group bg-bg-secondary/80 rounded-2xl p-2 flex items-center gap-2 text-xs text-text-secondary"
                   >
                     {file.type.startsWith('image/') ? (
                       <img
@@ -582,7 +582,7 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
                 }
               }}
             />
-            <div className="flex items-end gap-2 bg-bg-primary/80 backdrop-blur-xl rounded-[20px] border border-border/10 focus-within:ring-1 focus-within:ring-primary/30">
+            <div className="flex items-end gap-2 bg-bg-primary/80 backdrop-blur-xl rounded-[24px] border border-border-subtle focus-within:ring-1 focus-within:ring-primary/30">
               <Button
                 variant="ghost"
                 size="icon"

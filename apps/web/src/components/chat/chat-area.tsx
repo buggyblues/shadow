@@ -689,7 +689,7 @@ export function ChatArea() {
 
   if (!activeChannelId) {
     return (
-      <div className="flex-1 flex items-center justify-center text-muted-foreground bg-bg-primary">
+      <div className="flex-1 flex items-center justify-center text-text-muted bg-bg-primary">
         <Loader2 size={16} className="animate-spin text-primary opacity-60" />
       </div>
     )
@@ -708,42 +708,44 @@ export function ChatArea() {
         {/* Drag overlay */}
         {isDragOver && (
           <div className="absolute inset-0 z-40 bg-primary/10 border-2 border-dashed border-primary rounded-lg flex items-center justify-center pointer-events-none">
-            <div className="bg-bg-secondary px-6 py-4 rounded-xl shadow-lg text-text-primary font-bold text-lg">
+            <div className="bg-bg-secondary px-6 py-4 rounded-xl shadow-lg text-text-primary font-black text-lg">
               {t('chat.dropFilesHere', 'Drop files here to upload')}
             </div>
           </div>
         )}
         {/* Channel header */}
-        <div className="desktop-drag-titlebar h-12 px-4 flex items-center gap-2 border-b border-border/10 shrink-0 z-10 bg-bg-primary/80 backdrop-blur-xl">
+        <div className="desktop-drag-titlebar app-header px-6 flex items-center gap-3">
           {/* Mobile back button */}
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setMobileView('channels')}
-            className="md:hidden shrink-0 -ml-1 mr-1 h-8 w-8"
+            className="md:hidden shrink-0 -ml-1 mr-1 h-8 w-8 rounded-full"
           >
             <ArrowLeft size={20} />
           </Button>
-          <Hash size={24} className="text-text-muted shrink-0" />
-          <h3 className="font-bold text-text-primary text-[15px] truncate">
+          <div className="w-8 h-8 rounded-full bg-bg-tertiary/50 flex items-center justify-center text-primary shrink-0 shadow-inner">
+            <Hash size={16} strokeWidth={2.5} />
+          </div>
+          <h3 className="font-black text-text-primary text-[15px] truncate uppercase tracking-tight">
             {channel?.name ?? '...'}
           </h3>
           {channel?.topic && (
             <>
-              <div className="w-[1px] h-6 bg-white/10 mx-2 hidden sm:block shrink-0" />
-              <p className="text-sm text-text-secondary truncate hidden sm:block font-medium">
+              <div className="w-[1px] h-6 bg-bg-modifier-hover mx-2 hidden sm:block shrink-0" />
+              <p className="text-sm text-text-secondary truncate hidden sm:block font-bold opacity-60">
                 {channel.topic}
               </p>
             </>
           )}
           {/* Right side: members toggle + notification bell */}
-          <div className="flex items-center gap-3 ml-auto shrink-0">
+          <div className="flex items-center gap-2 ml-auto shrink-0">
             <NotificationBell />
             <Button
               variant="ghost"
               size="icon"
               onClick={() => useUIStore.getState().toggleMobileMemberList()}
-              className="lg:hidden h-8 w-8"
+              className="lg:hidden h-8 w-8 rounded-full"
               title={t('member.toggleList')}
             >
               <Users size={20} />
@@ -812,7 +814,7 @@ export function ChatArea() {
                     {lastReadCount > 0 && index === lastReadCount && (
                       <div className="flex items-center gap-2 px-4 my-2">
                         <div className="flex-1 h-px bg-danger/60" />
-                        <span className="text-xs text-danger font-semibold px-2">
+                        <span className="text-xs text-danger font-black px-2">
                           {t('chat.newMessages')}
                         </span>
                         <div className="flex-1 h-px bg-danger/60" />
@@ -823,12 +825,12 @@ export function ChatArea() {
                         <Badge
                           variant="neutral"
                           size="md"
-                          className="bg-white/5 backdrop-blur-sm rounded-full border-white/10 gap-1.5 font-normal normal-case tracking-normal"
+                          className="bg-bg-tertiary/50 backdrop-blur-sm rounded-full border-border-subtle gap-1.5 font-normal"
                         >
                           {item.data.type === 'joined' ? (
-                            <LogIn size={14} className="text-green-400" />
+                            <LogIn size={14} className="text-success" />
                           ) : (
-                            <LogOut size={14} className="text-red-400" />
+                            <LogOut size={14} className="text-danger" />
                           )}
                           <span>
                             {item.data.isBot ? 'Buddy · ' : ''}
@@ -924,7 +926,7 @@ export function ChatArea() {
 
         {/* Message input or selection toolbar */}
         {selectionMode ? (
-          <div className="px-4 py-3 bg-bg-secondary border-t border-border-subtle flex items-center gap-3">
+          <div className="px-6 py-3 bg-bg-secondary/50 backdrop-blur-md border-t border-border-subtle flex items-center gap-3">
             <span className="text-sm text-text-secondary font-medium">
               {t('chat.selectedCount', {
                 count: selectedMessageIds.size,
@@ -946,8 +948,8 @@ export function ChatArea() {
             </Button>
           </div>
         ) : channel?.isArchived && messages.length > 0 ? (
-          <div className="flex items-center justify-center gap-3 px-4 py-3 bg-bg-deep border-t border-border/10">
-            <div className="flex items-center gap-2 text-muted-foreground">
+          <div className="flex items-center justify-center gap-3 px-4 py-3 bg-bg-deep border-t border-border-subtle">
+            <div className="flex items-center gap-2 text-text-muted">
               <Archive size={18} />
               <span>{t('channel.archivedNotice')}</span>
             </div>
@@ -1020,14 +1022,14 @@ function EmptyChannelState({
 
   return (
     <>
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground px-4">
+      <div className="flex flex-col items-center justify-center h-full text-text-muted px-4">
         <Hash size={48} className="mb-4 opacity-30" />
         <p className="text-lg font-bold text-primary mb-2">
           {t('chat.welcomeChannel', {
             channelName: channelName ?? t('chat.channelFallback'),
           })}
         </p>
-        <p className="text-sm text-muted-foreground mb-6">{t('chat.welcomeStart')}</p>
+        <p className="text-sm text-text-muted mb-6">{t('chat.welcomeStart')}</p>
         {isArchived ? (
           <div className="flex flex-col items-center gap-4">
             <div className="flex items-center gap-2 text-text-muted">

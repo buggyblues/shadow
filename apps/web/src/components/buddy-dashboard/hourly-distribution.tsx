@@ -24,7 +24,7 @@ export function HourlyDistribution({ data }: HourlyDistributionProps) {
 
   return (
     <div className="bg-bg-secondary rounded-xl p-6 border border-border-subtle">
-      <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider mb-4">
+      <h3 className="text-sm font-bold text-text-primary uppercase tracking-widest mb-4">
         {t('buddyDashboard.hourlyDistribution', 'Hourly Distribution')}
       </h3>
 
@@ -34,10 +34,7 @@ export function HourlyDistribution({ data }: HourlyDistributionProps) {
           const opacity = Math.max(0.1, intensity)
 
           return (
-            <div
-              key={hour.hour}
-              className="flex flex-col items-center gap-1"
-            >
+            <div key={hour.hour} className="flex flex-col items-center gap-1">
               <div className="flex-1 w-full flex items-end">
                 <div
                   className="w-full bg-primary rounded-sm transition-all hover:ring-2 hover:ring-primary/50 cursor-pointer"
@@ -49,7 +46,7 @@ export function HourlyDistribution({ data }: HourlyDistributionProps) {
                 />
               </div>
               {showLabel(hour.hour) && (
-                <span className="text-[10px] text-text-muted">{formatHour(hour.hour)}</span>
+                <span className="text-[11px] text-text-muted">{formatHour(hour.hour)}</span>
               )}
             </div>
           )

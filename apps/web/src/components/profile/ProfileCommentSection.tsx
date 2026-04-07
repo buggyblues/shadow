@@ -188,7 +188,7 @@ export function ProfileCommentSection({ profileUserId }: ProfileCommentSectionPr
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
                 placeholder={t('profile.commentPlaceholder', '写下你的留言...')}
-                className="flex-1 px-4 py-2 bg-bg-tertiary border border-border-dim rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary"
+                className="flex-1 px-4 py-2 bg-bg-tertiary border border-border-subtle rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary"
                 maxLength={500}
               />
               <Button
@@ -309,7 +309,7 @@ function CommentItem({
                 {comment.author.displayName}
               </span>
               {comment.author.isBot && (
-                <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-medium">
+                <span className="text-[11px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-medium">
                   Buddy
                 </span>
               )}
@@ -331,14 +331,14 @@ function CommentItem({
                   <MoreHorizontal className="w-4 h-4" />
                 </button>
                 {showMenu && (
-                  <div className="absolute right-0 top-6 z-10 bg-bg-secondary border border-border-dim rounded-lg shadow-lg overflow-hidden min-w-[80px]">
+                  <div className="absolute right-0 top-6 z-10 bg-bg-secondary border border-border-subtle rounded-lg shadow-lg overflow-hidden min-w-[80px]">
                     <button
                       type="button"
                       onClick={() => {
                         onDelete(comment.id)
                         setShowMenu(false)
                       }}
-                      className="flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 w-full whitespace-nowrap"
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-danger/10 w-full whitespace-nowrap"
                     >
                       <Trash2 className="w-4 h-4" />
                       {t('common.delete', '删除')}
@@ -366,7 +366,7 @@ function CommentItem({
                   +😊
                 </button>
                 {showEmojiPicker && (
-                  <div className="absolute left-0 top-6 z-10 bg-bg-secondary border border-border-dim rounded-lg p-2 shadow-lg">
+                  <div className="absolute left-0 top-6 z-10 bg-bg-secondary border border-border-subtle rounded-lg p-2 shadow-lg">
                     <div className="flex gap-1">
                       {ALLOWED_EMOJIS.map((emoji) => (
                         <button
@@ -446,7 +446,7 @@ function CommentItem({
                     value={replyContent}
                     onChange={(e) => setReplyContent(e.target.value)}
                     placeholder={`${t('profile.replyTo', '回复')} ${comment.author.displayName}...`}
-                    className="flex-1 px-3 py-1.5 text-sm bg-bg-tertiary border border-border-dim rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary"
+                    className="flex-1 px-3 py-1.5 text-sm bg-bg-tertiary border border-border-subtle rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary"
                     maxLength={500}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
@@ -480,7 +480,7 @@ function CommentItem({
 
           {/* Replies */}
           {showReplies && replies.length > 0 && (
-            <div className="mt-3 space-y-3 pl-4 border-l-2 border-border-dim">
+            <div className="mt-3 space-y-3 pl-4 border-l-2 border-border-subtle">
               {replies.map((reply) => (
                 <ReplyItem
                   key={reply.id}
@@ -537,7 +537,7 @@ function ReplyItem({ reply, currentUserId, onToggleReaction, onDelete }: ReplyIt
               {reply.author.displayName}
             </span>
             {reply.author.isBot && (
-              <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-medium">
+              <span className="text-[11px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-medium">
                 Buddy
               </span>
             )}
@@ -559,14 +559,14 @@ function ReplyItem({ reply, currentUserId, onToggleReaction, onDelete }: ReplyIt
                 <MoreHorizontal className="w-3 h-3" />
               </button>
               {showMenu && (
-                <div className="absolute right-0 top-5 z-10 bg-bg-secondary border border-border-dim rounded-lg shadow-lg overflow-hidden">
+                <div className="absolute right-0 top-5 z-10 bg-bg-secondary border border-border-subtle rounded-lg shadow-lg overflow-hidden">
                   <button
                     type="button"
                     onClick={() => {
                       onDelete(reply.id)
                       setShowMenu(false)
                     }}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 w-full whitespace-nowrap"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-danger/10 w-full whitespace-nowrap"
                   >
                     <Trash2 className="w-3 h-3" />
                     {t('common.delete', '删除')}

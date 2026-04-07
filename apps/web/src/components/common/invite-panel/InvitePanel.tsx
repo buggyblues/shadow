@@ -71,10 +71,10 @@ function UserAvatar({
   name: string
   size?: 'sm' | 'md'
 }) {
-  const sizeClasses = size === 'sm' ? 'w-6 h-6 text-[10px]' : 'w-8 h-8 text-xs'
+  const sizeClasses = size === 'sm' ? 'w-6 h-6 text-[11px]' : 'w-8 h-8 text-xs'
   return (
     <div
-      className={`${sizeClasses} rounded-full bg-bg-tertiary overflow-hidden flex items-center justify-center text-text-primary font-bold shrink-0`}
+      className={`${sizeClasses} rounded-full bg-bg-tertiary/50 overflow-hidden flex items-center justify-center text-text-primary font-bold shrink-0`}
     >
       {avatarUrl ? (
         <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
@@ -288,12 +288,12 @@ export function InvitePanel({
 
   return (
     <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+      className="fixed inset-0 bg-bg-deep/60 flex items-center justify-center z-50"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div className="bg-bg-primary/95 backdrop-blur-xl rounded-[16px] border border-border/10 shadow-xl p-6 w-[520px] max-h-[80vh] overflow-hidden flex flex-col">
+      <div className="bg-bg-primary/95 backdrop-blur-xl rounded-[40px] border border-border-subtle shadow-[0_32px_120px_rgba(0,0,0,0.5)] p-6 w-[520px] max-h-[80vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-text-primary">
@@ -305,11 +305,11 @@ export function InvitePanel({
         </div>
 
         {/* Invite Link */}
-        <label className="block text-xs font-bold uppercase text-text-secondary mb-2">
+        <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-secondary mb-2">
           {t('channel.inviteLink')}
         </label>
         <div className="flex items-center gap-2 mb-4">
-          <code className="flex-1 bg-bg-tertiary text-text-primary rounded-lg px-4 py-3 font-mono text-xs truncate">
+          <code className="flex-1 bg-bg-tertiary/50 text-text-primary rounded-xl px-4 py-3 font-mono text-xs truncate">
             {server?.inviteCode
               ? `${window.location.origin}/app/invite/${server.inviteCode}`
               : '...'}
@@ -326,13 +326,13 @@ export function InvitePanel({
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex items-center gap-1 mb-3 bg-bg-tertiary rounded-lg p-1">
+        <div className="flex items-center gap-1 mb-3 bg-bg-tertiary/50 rounded-xl p-1">
           <button
             type="button"
             onClick={() => setActiveTab('members')}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition ${
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full transition ${
               activeTab === 'members'
-                ? 'bg-bg-secondary text-primary shadow-sm'
+                ? 'bg-bg-modifier-hover text-primary shadow-sm'
                 : 'text-text-muted hover:text-text-secondary'
             }`}
           >
@@ -342,9 +342,9 @@ export function InvitePanel({
           <button
             type="button"
             onClick={() => setActiveTab('buddies')}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition ${
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full transition ${
               activeTab === 'buddies'
-                ? 'bg-bg-secondary text-accent shadow-sm'
+                ? 'bg-bg-modifier-hover text-accent shadow-sm'
                 : 'text-text-muted hover:text-text-secondary'
             }`}
           >
@@ -393,7 +393,7 @@ export function InvitePanel({
                 return (
                   <div
                     key={u.id}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg bg-bg-tertiary/40 border border-border-subtle"
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg bg-bg-tertiary/50 border border-border-subtle"
                   >
                     <UserAvatar avatarUrl={u.avatarUrl} name={u.displayName || u.username} />
                     <div className="min-w-0 flex-1">
@@ -420,7 +420,7 @@ export function InvitePanel({
               {/* Server bots not in channel */}
               {filteredServerBots.length > 0 && (
                 <div className="mb-2">
-                  <p className="text-[10px] font-bold uppercase text-text-muted mb-1 px-1">
+                  <p className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1 px-1">
                     {t('member.buddiesOnServer')}
                   </p>
                   {filteredServerBots.map((m) => {
@@ -433,13 +433,13 @@ export function InvitePanel({
                     return (
                       <div
                         key={u.id}
-                        className="flex items-start gap-3 px-3 py-2 rounded-lg bg-bg-tertiary/40 border border-border-subtle mb-1"
+                        className="flex items-start gap-3 px-3 py-2 rounded-lg bg-bg-tertiary/50 border border-border-subtle mb-1"
                       >
                         <UserAvatar avatarUrl={u.avatarUrl} name={name} />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <p className="text-sm text-text-primary truncate">{name}</p>
-                            <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-[3px] font-semibold flex items-center gap-0.5 shrink-0">
+                            <span className="text-[11px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-[3px] font-black flex items-center gap-0.5 shrink-0">
                               <Check size={8} className="text-white" />
                               Buddy
                             </span>
@@ -471,7 +471,7 @@ export function InvitePanel({
               {filteredMyBuddies.length > 0 && (
                 <div>
                   {filteredServerBots.length > 0 && (
-                    <p className="text-[10px] font-bold uppercase text-text-muted mb-1 px-1">
+                    <p className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1 px-1">
                       {t('member.myBuddies')}
                     </p>
                   )}
@@ -494,7 +494,7 @@ export function InvitePanel({
                         className={`flex items-start gap-3 w-full px-3 py-2 rounded-lg text-left transition mb-1 ${
                           isSelected
                             ? 'bg-accent/15 border border-accent/30'
-                            : 'bg-bg-tertiary/40 border border-border-subtle hover:bg-bg-tertiary/60'
+                            : 'bg-bg-tertiary/50 border border-border-subtle hover:bg-bg-modifier-hover'
                         }`}
                       >
                         {/* Checkbox */}
@@ -502,7 +502,7 @@ export function InvitePanel({
                           className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${
                             isSelected
                               ? 'border-accent bg-accent'
-                              : 'border-border-dim bg-transparent'
+                              : 'border-border-subtle bg-transparent'
                           }`}
                         >
                           {isSelected && <Check size={12} className="text-white" />}
@@ -517,10 +517,10 @@ export function InvitePanel({
                             <span
                               className={`w-2 h-2 rounded-full shrink-0 ${
                                 buddy.status === 'running'
-                                  ? 'bg-green-400'
+                                  ? 'bg-success'
                                   : buddy.status === 'error'
-                                    ? 'bg-red-400'
-                                    : 'bg-zinc-500'
+                                    ? 'bg-danger'
+                                    : 'bg-text-muted'
                               }`}
                             />
                           </div>

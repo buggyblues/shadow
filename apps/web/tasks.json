@@ -1,0 +1,214 @@
+{
+  "name": "Neon Frost Design System Unification — Phase 2",
+  "description": "Deep refactor: 200+ violations across 35+ files. Radius, tokens, component reuse, onboarding rewrite.",
+  "tasks": [
+    {
+      "id": 1,
+      "title": "Global sed: bg-white/* → semantic tokens",
+      "files": ["all src/**/*.tsx"],
+      "details": "bg-white/5→bg-bg-tertiary/50, bg-white/10→bg-bg-modifier-hover, bg-white/[0.03]→bg-bg-tertiary/30, hover:bg-white/*→hover:bg-bg-modifier-hover",
+      "status": "not-started"
+    },
+    {
+      "id": 2,
+      "title": "Global sed: border-border-dim → border-border-subtle",
+      "files": ["product-detail.tsx", "shop-cart.tsx", "shop-orders.tsx", "shop-admin.tsx"],
+      "status": "not-started"
+    },
+    {
+      "id": 3,
+      "title": "Global sed: backdrop-blur-[32px] → backdrop-blur-xl",
+      "files": [
+        "onboarding-modal.tsx",
+        "shop-cart.tsx",
+        "shop-orders.tsx",
+        "shop-admin.tsx",
+        "product-detail.tsx"
+      ],
+      "status": "not-started"
+    },
+    {
+      "id": 4,
+      "title": "Global sed: !rounded-[24px] → !rounded-[40px] on cards",
+      "files": [
+        "onboarding-modal.tsx",
+        "buddy-onboarding.tsx",
+        "newcomer-guide.tsx",
+        "rental-guide.tsx",
+        "shop-cart.tsx",
+        "shop-orders.tsx",
+        "shop-admin.tsx"
+      ],
+      "status": "not-started"
+    },
+    {
+      "id": 5,
+      "title": "Global sed: scrollbar-none → scrollbar-hidden",
+      "files": ["discover.tsx", "user-profile.tsx"],
+      "status": "not-started"
+    },
+    {
+      "id": 6,
+      "title": "Global sed: text-muted-foreground → text-text-muted",
+      "files": ["channel-sidebar.tsx", "chat-area.tsx"],
+      "status": "not-started"
+    },
+    {
+      "id": 7,
+      "title": "file-card.tsx: replace 19 raw colors with semantic map",
+      "files": ["apps/web/src/components/chat/file-card.tsx"],
+      "details": "Map file types to semantic tokens: audio→warning, video→accent, pdf→danger, code→primary, etc. Fix icon container rounded-lg→rounded-xl",
+      "status": "not-started"
+    },
+    {
+      "id": 8,
+      "title": "user-profile-card.tsx: status colors + card radius",
+      "files": ["apps/web/src/components/common/user-profile-card.tsx"],
+      "details": "yellow-500→warning, red-500→danger, gray-500→text-muted. Card rounded-xl→rounded-[40px]. QR modal rounded-[32px]→rounded-[40px]. Labels text-[10px]→text-[11px] tracking-wide→tracking-[0.2em]",
+      "status": "not-started"
+    },
+    {
+      "id": 9,
+      "title": "InvitePanel.tsx: remove local UserAvatar, fix tokens",
+      "files": ["apps/web/src/components/common/invite-panel/InvitePanel.tsx"],
+      "details": "Remove duplicate UserAvatar (use shared). bg-white/*→tokens. rounded-[32px]→rounded-[40px]. Tab rounded-md→rounded-full. Labels font-bold→font-black tracking-[0.2em]",
+      "status": "not-started"
+    },
+    {
+      "id": 10,
+      "title": "discover.tsx: header h-14.sticky, pills rounded-full, cards rounded-[40px]",
+      "files": ["apps/web/src/pages/discover.tsx"],
+      "details": "bg-bg-deep→bg-bg-primary. Filter pills rounded-xl→rounded-full. Enter/Join buttons rounded-xl→rounded-full. FeedCards rounded-[28px]→rounded-[40px]. Icon container rounded-2xl→rounded-xl. Input rounded-xl→rounded-2xl",
+      "status": "not-started"
+    },
+    {
+      "id": 11,
+      "title": "dm-chat.tsx: sticky header h-14, amber→warning tokens, font-black",
+      "files": ["apps/web/src/pages/dm-chat.tsx"],
+      "details": "Header missing h-14+sticky. amber-*→warning tokens. font-semibold→font-black. Badge rounded→rounded-full. Messages area add scrollbar-hidden",
+      "status": "not-started"
+    },
+    {
+      "id": 12,
+      "title": "user-profile.tsx: bg-white/*→tokens, icon containers, labels text-[11px]",
+      "files": ["apps/web/src/pages/user-profile.tsx"],
+      "details": "8+ bg-white/* violations. rounded-[32px]→rounded-[40px] on about/buddies sections. Icon containers w-8 rounded-lg→w-10 rounded-xl bg-primary/10. Labels text-[10px]→text-[11px] tracking-[0.2em]",
+      "status": "not-started"
+    },
+    {
+      "id": 13,
+      "title": "product-detail.tsx: border-dim, backdrop-blur, card radius, button pills",
+      "files": ["apps/web/src/components/shop/product-detail.tsx"],
+      "details": "6x border-border-dim→subtle. 2x backdrop-blur-[32px]→xl. Cards md:rounded-3xl→rounded-[40px]. SKU buttons rounded-xl→rounded-full. Tab font-bold→font-black. Header missing h-14",
+      "status": "not-started"
+    },
+    {
+      "id": 14,
+      "title": "shop-cart.tsx + shop-orders.tsx: radius, border-dim, blur",
+      "files": ["shop-cart.tsx", "shop-orders.tsx"],
+      "details": "Cards !rounded-[24px]→!rounded-[40px]. border-border-dim→subtle. backdrop-blur-[32px]→xl. Quantity buttons rounded-[8px]→rounded-full. bg-white→bg-on-primary",
+      "status": "not-started"
+    },
+    {
+      "id": 15,
+      "title": "shop-admin.tsx: 15 raw inputs → <Input>, border-dim, text-white",
+      "files": ["apps/web/src/components/shop/shop-admin.tsx"],
+      "details": "Replace ~15 raw <input>/<textarea>/<select> with UI components. border-border-dim→subtle. text-white→text-text-primary. Cards !rounded-[24px]→!rounded-[40px]. Header needs sticky+backdrop-blur-xl",
+      "status": "not-started"
+    },
+    {
+      "id": 16,
+      "title": "channel-sidebar.tsx: muted-foreground, tracking, normal-case buttons",
+      "files": ["apps/web/src/components/channel/channel-sidebar.tsx"],
+      "details": "8x text-muted-foreground→text-text-muted. tracking-[0.1em]→tracking-[0.2em]. Remove normal-case tracking-normal on buttons. bg-white/10→bg-primary/10. bg-black/*→bg-bg-deep/*",
+      "status": "not-started"
+    },
+    {
+      "id": 17,
+      "title": "server-sidebar.tsx: Dialog component, raw RGBA shadows, button pills",
+      "files": ["apps/web/src/components/server/server-sidebar.tsx"],
+      "details": "Create/Join dialogs: replace inline fixed overlay with <Dialog>. Raw RGBA shadows→design tokens. Buttons rounded-2xl→rounded-full. bg-border/20→bg-border-subtle. Dialog rounded-[32px]→rounded-[40px]",
+      "status": "not-started"
+    },
+    {
+      "id": 18,
+      "title": "settings/index.tsx: font-bold→black, input radius, hover tokens",
+      "files": ["apps/web/src/pages/settings/index.tsx"],
+      "details": "6x font-bold/semibold→font-black. hover:bg-white/5→bg-modifier-hover. Input rounded-xl→rounded-2xl. Inline badge→<Badge>. normal-case on logout→remove. DM header needs h-14",
+      "status": "not-started"
+    },
+    {
+      "id": 19,
+      "title": "Settings detail pages: p-8→p-6, label tracking, raw white",
+      "files": ["profile.tsx", "account.tsx", "tasks.tsx", "quickstart.tsx", "developer.tsx"],
+      "details": "Cards p-8→p-6. bg-white/5→tokens. Label text-xs→text-[11px] tracking-widest→tracking-[0.2em]. quickstart raw pink-/violet-→semantic tokens",
+      "status": "not-started"
+    },
+    {
+      "id": 20,
+      "title": "developer.tsx: Card variant=glass, SectionHeader, input radius",
+      "files": ["apps/web/src/pages/settings/developer.tsx"],
+      "details": "OAuth app cards: raw div→<Card variant='glass'>. Header: raw h2→<SectionHeader>. rounded-[24px]→rounded-[40px]. 15+ input rounded-[12px]/[16px]→rounded-2xl. 6x normal-case tracking-normal→remove",
+      "status": "not-started"
+    },
+    {
+      "id": 21,
+      "title": "Onboarding: full rewrite per 6092b0f + Neon Frost",
+      "files": [
+        "onboarding-modal.tsx",
+        "buddy-onboarding.tsx",
+        "newcomer-guide.tsx",
+        "rental-guide.tsx"
+      ],
+      "details": "50+ raw hex colors→tokens. Match 6092b0f structure with Neon Frost tokens. Extract Timeline. bg-[rgba...]→bg-glass token. text-[#050508]→text-bg-deep. All gradients use semantic tokens. Extract BuddyMethodPicker shared component",
+      "status": "not-started"
+    },
+    {
+      "id": 22,
+      "title": "app-layout.tsx: FAB raw hex → primary tokens",
+      "files": ["apps/web/src/components/layout/app-layout.tsx"],
+      "details": "6x raw #00F3FF→primary token. Raw RGBA shadows→shadow-primary/*. bg-[#ff2a55]/8→bg-danger/8",
+      "status": "not-started"
+    },
+    {
+      "id": 23,
+      "title": "app-page.tsx: tokens, i18n, Button components",
+      "files": ["apps/web/src/components/app/app-page.tsx"],
+      "details": "10+ bg-white/*→tokens. Buttons rounded-xl→rounded-full. Context menu rounded-[24px]→rounded-[40px]. Raw RGBA shadows. Add useTranslation for Chinese strings. Native confirm()→ConfirmDialog",
+      "status": "not-started"
+    },
+    {
+      "id": 24,
+      "title": "buddy-management.tsx: context menu radius, Switch component",
+      "files": ["apps/web/src/pages/buddy-management.tsx"],
+      "details": "Context menu rounded-[16px]→rounded-[40px]. Cards rounded-[24px]→rounded-[40px]. Hand-rolled toggle→<Switch>. Inline style→Tailwind",
+      "status": "not-started"
+    },
+    {
+      "id": 25,
+      "title": "help-center.tsx: use Dialog, fix radius",
+      "files": ["apps/web/src/components/common/help-center.tsx"],
+      "details": "Replace manual overlay with <Dialog>. rounded-[20px]→rounded-[40px]. font-semibold→font-black. article links rounded-xl→rounded-2xl. Fix border-t-bg-secondary arrow token",
+      "status": "not-started"
+    },
+    {
+      "id": 26,
+      "title": "member-list.tsx: scrollbar, button radius",
+      "files": ["apps/web/src/components/member/member-list.tsx"],
+      "details": "2x missing scrollbar-hidden. Action buttons rounded-md→rounded-full. Mobile close button needs type='button'",
+      "status": "not-started"
+    },
+    {
+      "id": 27,
+      "title": "chat-area.tsx: icon container, scrollbar, muted-foreground",
+      "files": ["apps/web/src/components/chat/chat-area.tsx"],
+      "details": "Channel icon w-8 rounded-full bg-white/5→w-10 rounded-xl bg-primary/10. text-muted-foreground→text-text-muted. Messages scrollbar-thin. bg-white/10→bg-border-subtle",
+      "status": "not-started"
+    },
+    {
+      "id": 28,
+      "title": "Final: tsc --noEmit, fix regressions, commit",
+      "status": "not-started"
+    }
+  ]
+}

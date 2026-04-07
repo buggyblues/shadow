@@ -88,7 +88,7 @@ export function ImageContextMenu({
       />
       <div
         ref={menuRef}
-        className="fixed z-[81] bg-bg-tertiary/95 backdrop-blur-md border border-border-dim/60 rounded-xl shadow-2xl py-1.5 min-w-[180px]"
+        className="fixed z-[81] bg-bg-primary/95 backdrop-blur-xl border border-border-subtle rounded-[24px] shadow-[0_16px_64px_rgba(0,0,0,0.4)] py-1.5 min-w-[180px]"
         style={{ left: position.x, top: position.y }}
       >
         {items.map((item) => (

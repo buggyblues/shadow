@@ -19,7 +19,7 @@ export function WeeklyActivityChart({ data }: WeeklyActivityChartProps) {
 
   return (
     <div className="bg-bg-secondary rounded-xl p-6 border border-border-subtle">
-      <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider mb-4">
+      <h3 className="text-sm font-bold text-text-primary uppercase tracking-widest mb-4">
         {t('buddyDashboard.weeklyActivity', 'Weekly Activity')}
       </h3>
 

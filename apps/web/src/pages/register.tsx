@@ -174,7 +174,7 @@ export function RegisterPage() {
                 onChange={(e) => setInviteCode(e.target.value)}
                 required
                 placeholder={t('auth.inviteCodePlaceholder')}
-                className="font-mono tracking-wider"
+                className="font-mono tracking-widest"
               />
               <p className="text-[11px] text-white/30 mt-1 ml-1">{t('auth.inviteCodeHint')}</p>
             </div>

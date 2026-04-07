@@ -4,6 +4,8 @@ import {
   AvatarImage,
   Button,
   cn,
+  Input,
+  Switch,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -92,8 +94,8 @@ function ServerItem({
             className={cn(
               'w-12 h-12 transition-all duration-200 flex items-center justify-center overflow-hidden',
               isActive
-                ? 'rounded-[16px] bg-primary/20 ring-1 ring-primary/30 shadow-[0_0_12px_rgba(0,243,255,0.15)]'
-                : 'rounded-[24px] hover:rounded-[16px] bg-white/5 hover:bg-primary/10',
+                ? 'rounded-2xl bg-primary/20 ring-1 ring-primary/30 shadow-[0_0_12px_rgba(0,243,255,0.15)]'
+                : 'rounded-[24px] hover:rounded-2xl bg-bg-tertiary/50 hover:bg-bg-modifier-hover',
             )}
           >
             <Avatar className="w-12 h-12 rounded-[inherit]">
@@ -106,7 +108,7 @@ function ServerItem({
                   className="w-10 h-10 m-auto"
                 />
               )}
-              <AvatarFallback className="rounded-[inherit] bg-white/10 text-text-primary font-bold text-[15px]">
+              <AvatarFallback className="rounded-[inherit] bg-bg-tertiary/50 text-text-primary font-bold text-[15px]">
                 {server.name.charAt(0).toUpperCase()}
               </AvatarFallback>
             </Avatar>
@@ -299,7 +301,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="w-[72px] bg-bg-deep/90 backdrop-blur-xl border-r border-border/10 flex flex-col items-center py-3 shrink-0 h-full">
+      <div className="w-[72px] bg-bg-deep/90 backdrop-blur-xl border-r border-border-subtle flex flex-col items-center py-3 shrink-0 h-full">
         {/* User avatar → settings/profile */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -350,7 +352,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
               <Button
                 variant="glass"
                 size="icon"
-                className="rounded-[16px]"
+                className="rounded-2xl"
                 onClick={() => setShowCreate(!showCreate)}
               >
                 <Plus size={24} />
@@ -365,7 +367,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
               <Button
                 variant="glass"
                 size="icon"
-                className="rounded-[16px]"
+                className="rounded-2xl"
                 onClick={() => setShowJoin(!showJoin)}
               >
                 <UserPlus size={20} />
@@ -380,7 +382,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
               <Button
                 variant="glass"
                 size="icon"
-                className="rounded-[16px]"
+                className="rounded-2xl"
                 onClick={() => navigate({ to: '/discover' })}
               >
                 <Compass size={24} className="opacity-90" />
@@ -396,7 +398,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="rounded-[16px] hover:scale-105"
+                  className="rounded-2xl hover:scale-105"
                   onClick={() => navigate({ to: '/openclaw' })}
                 >
                   <svg
@@ -483,17 +485,17 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
         {/* Simple create dialog */}
         {showCreate && (
           <div
-            className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+            className="fixed inset-0 bg-bg-deep/80 backdrop-blur-xl flex items-center justify-center z-50"
             onClick={() => setShowCreate(false)}
           >
             <div
-              className="bg-bg-secondary rounded-xl p-6 w-96 border border-border-subtle"
+              className="bg-bg-secondary rounded-[40px] p-8 w-96 border border-border-subtle shadow-[0_32px_120px_rgba(0,0,0,0.5)] animate-scale-in"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 className="text-xl font-bold text-text-primary mb-4">
+              <h2 className="text-xl font-black text-text-primary mb-6 uppercase tracking-tight">
                 {t('server.createServer')}
               </h2>
-              <input
+              <Input
                 type="text"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
@@ -510,12 +512,12 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                   }
                 }}
                 placeholder={t('server.serverName')}
-                className="w-full bg-bg-tertiary text-text-primary rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-primary mb-4"
+                className="w-full rounded-2xl px-5 py-3.5 font-bold mb-5"
               />
               {/* Public/Private toggle */}
-              <div className="flex items-center justify-between mb-4 p-3 bg-bg-tertiary rounded-lg">
+              <div className="flex items-center justify-between mb-6 p-4 bg-bg-tertiary/50 rounded-2xl border border-border-subtle">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-bg-primary flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-2xl bg-bg-tertiary/50 flex items-center justify-center shadow-inner">
                     {isPublic ? (
                       <Globe size={16} className="text-text-primary" />
                     ) : (
@@ -523,31 +525,20 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                     )}
                   </div>
                   <div>
-                    <div className="text-text-primary font-medium text-sm">
+                    <div className="text-text-primary font-bold text-sm">
                       {isPublic ? t('server.publicServer') : t('server.privateServer')}
                     </div>
-                    <div className="text-text-muted text-xs">
+                    <div className="text-text-muted text-xs font-bold opacity-60">
                       {isPublic ? t('server.publicServerDesc') : t('server.privateServerDesc')}
                     </div>
                   </div>
                 </div>
-                <button
-                  onClick={() => setIsPublic(!isPublic)}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${
-                    isPublic ? 'bg-primary' : 'bg-bg-primary'
-                  }`}
-                >
-                  <span
-                    className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                      isPublic ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
+                <Switch checked={isPublic} onCheckedChange={setIsPublic} />
               </div>
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setShowCreate(false)}
-                  className="px-4 py-2 text-text-secondary hover:text-text-primary transition rounded-lg"
+                  className="px-5 py-2.5 text-text-secondary hover:text-text-primary transition-all rounded-2xl font-bold"
                 >
                   {t('common.cancel')}
                 </button>
@@ -556,7 +547,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                     newName.trim() && createServer.mutate({ name: newName.trim(), isPublic })
                   }
                   disabled={!newName.trim() || createServer.isPending}
-                  className="px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg transition disabled:opacity-50 font-bold"
+                  className="px-5 py-2.5 bg-primary text-bg-deep rounded-2xl transition-all disabled:opacity-50 font-black uppercase tracking-wide hover:scale-105 active:scale-95 shadow-lg shadow-primary/20"
                 >
                   {t('common.create')}
                 </button>
@@ -568,16 +559,20 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
         {/* Join server dialog */}
         {showJoin && (
           <div
-            className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+            className="fixed inset-0 bg-bg-deep/80 backdrop-blur-xl flex items-center justify-center z-50"
             onClick={() => setShowJoin(false)}
           >
             <div
-              className="bg-bg-secondary rounded-xl p-6 w-96 border border-border-subtle"
+              className="bg-bg-secondary rounded-[40px] p-8 w-96 border border-border-subtle shadow-[0_32px_120px_rgba(0,0,0,0.5)] animate-scale-in"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 className="text-xl font-bold text-text-primary mb-2">{t('server.joinServer')}</h2>
-              <p className="text-text-muted text-sm mb-4">{t('server.joinServerDesc')}</p>
-              <input
+              <h2 className="text-xl font-black text-text-primary mb-2 uppercase tracking-tight">
+                {t('server.joinServer')}
+              </h2>
+              <p className="text-text-muted text-sm mb-6 font-bold opacity-60">
+                {t('server.joinServerDesc')}
+              </p>
+              <Input
                 type="text"
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value)}
@@ -595,19 +590,19 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                 }}
                 placeholder={t('server.inviteCodePlaceholder')}
                 maxLength={8}
-                className="w-full bg-bg-tertiary text-text-primary rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-primary mb-4 font-mono text-center text-lg tracking-widest"
+                className="w-full rounded-2xl px-5 py-3.5 font-mono text-center text-lg tracking-widest mb-6"
               />
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setShowJoin(false)}
-                  className="px-4 py-2 text-text-secondary hover:text-text-primary transition rounded-lg"
+                  className="px-5 py-2.5 text-text-secondary hover:text-text-primary transition-all rounded-2xl font-bold"
                 >
                   {t('common.cancel')}
                 </button>
                 <button
                   onClick={() => joinCode.trim() && joinServer.mutate(joinCode.trim())}
                   disabled={joinCode.trim().length !== 8 || joinServer.isPending}
-                  className="px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg transition disabled:opacity-50 font-bold"
+                  className="px-5 py-2.5 bg-primary text-bg-deep rounded-2xl transition-all disabled:opacity-50 font-black uppercase tracking-wide hover:scale-105 active:scale-95 shadow-lg shadow-primary/20"
                 >
                   {t('server.joinButton')}
                 </button>

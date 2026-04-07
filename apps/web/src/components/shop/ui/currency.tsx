@@ -14,7 +14,7 @@ export function ShrimpCoinIcon({
       height={size}
       viewBox="0 0 24 24"
       fill="currentColor"
-      className={`shrink-0 text-rose-500 dark:text-rose-400 ${className}`}
+      className={`shrink-0 text-danger ${className}`}
       aria-hidden="true"
     >
       {/* Left pincer */}
@@ -61,7 +61,7 @@ export function PriceDisplay({
 
   return (
     <span
-      className={`inline-flex items-baseline gap-[2px] text-rose-500 dark:text-rose-400 font-black tracking-tight ${className}`}
+      className={`inline-flex items-baseline gap-[2px] text-danger font-black tracking-tight ${className}`}
     >
       <ShrimpCoinIcon size={size * 0.9} className="relative top-[2px]" />
       <span style={{ fontSize: size, lineHeight: 1 }}>{amount.toLocaleString()}</span>
