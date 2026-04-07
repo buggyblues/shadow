@@ -15,7 +15,7 @@ test.afterAll(async () => {
 })
 
 test('app uses hash-based routing (not browser history)', async () => {
-  const url = page.url()
+  const _url = page.url()
   // In production Electron, URL is file:// with hash
   // In dev, URL is http://localhost:3100 with hash
   // Either way, after router init the URL should have a hash fragment

@@ -74,8 +74,10 @@ function App() {
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.remove('light')
+      document.documentElement.classList.add('dark')
     } else {
       document.documentElement.classList.add('light')
+      document.documentElement.classList.remove('dark')
     }
   }, [isDark])
 

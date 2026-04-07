@@ -39,6 +39,7 @@ test('sandbox is enabled', async () => {
 test('renderer cannot access Node.js APIs', async () => {
   const hasProcess = await page.evaluate(() => {
     try {
+      // biome-ignore lint/suspicious/noExplicitAny: testing unknown runtime environment
       return typeof (globalThis as any).process?.versions?.node === 'string'
     } catch {
       return false
@@ -51,6 +52,7 @@ test('renderer cannot access Node.js APIs', async () => {
 test('renderer cannot require Node.js modules', async () => {
   const canRequire = await page.evaluate(() => {
     try {
+      // biome-ignore lint/suspicious/noExplicitAny: testing unknown runtime environment
       return typeof (globalThis as any).require === 'function'
     } catch {
       return false
