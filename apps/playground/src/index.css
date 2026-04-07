@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+@source "../../../packages/ui/src";
+
+@theme {
+  --font-sans: "Nunito", "Noto Sans SC", sans-serif;
+  --font-mono: "Inter", sans-serif;
+
+  --color-primary: #00f3ff;
+  --color-primary-strong: #00c6d1;
+  --color-accent: #f8e71c;
+  --color-accent-strong: #ffb300;
+  --color-success: #00e676;
+  --color-warning: #ff9100;
+  --color-danger: #ff2a55;
+
+  /* Neutral Dark Theme Colors (Default) */
+  --color-bg-deep: #050508;
+  --color-bg-primary: #0a0a0a;
+  --color-bg-secondary: #12121a;
+  --color-bg-tertiary: #1a1a24;
+
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #a1a1aa;
+  --color-text-muted: #94a3b8;
+
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-border-dim: rgba(255, 255, 255, 0.1);
+  --color-divider: #272733;
+
+  /* Glassmorphism */
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.08);
+
+  --shadow-soft: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
+  --shadow-cyan: 0 10px 25px rgba(0, 243, 255, 0.4);
+}
+
+/* Light Theme Overrides */
+:root.light {
+  --color-bg-deep: #f8fafc;
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f8fafc;
+  --color-bg-tertiary: #e2e8f0;
+
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #334155;
+  --color-text-muted: #64748b;
+
+  --color-border-subtle: rgba(0, 0, 0, 0.08);
+  --color-border-dim: rgba(0, 0, 0, 0.15);
+  --color-divider: #e2e8f0;
+
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(0, 0, 0, 0.05);
+
+  --shadow-soft: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
+
+  /* NOTE: We DO NOT overwrite the base --color-primary/accent tokens here, 
+     otherwise backgrounds (like swatches/buttons) become dark and muddy. 
+     Instead, we use targeted utility classes below for TEXT readability. */
+}
+
+@layer base {
+  *,
+  ::after,
+  ::before {
+    border-color: var(--color-border-subtle);
+  }
+
+  body {
+    background-color: var(--color-bg-deep);
+    color: var(--color-text-primary);
+    @apply antialiased transition-colors duration-300;
+  }
+
+  /* Specific Text Overrides for Light Mode Readability */
+  :root.light .text-primary,
+  :root.light .text-primary-strong {
+    color: #0891b2 !important;
+  }
+  :root.light .text-accent,
+  :root.light .text-accent-strong {
+    color: #b45309 !important;
+  }
+  :root.light .text-success {
+    color: #15803d !important;
+  }
+  :root.light .text-danger {
+    color: #be123c !important;
+  }
+}
+
+@layer utilities {
+  .glass-surface {
+    background-color: var(--glass-bg);
+    backdrop-filter: blur(32px);
+    border: 1px solid var(--glass-border);
+  }
+
+  .quote {
+    @apply mt-4 p-5 bg-black/5 dark:bg-white/5 border-l-[5px] border-primary rounded-r-[20px] italic leading-relaxed transition-all shadow-sm;
+    color: var(--color-text-secondary);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--color-bg-tertiary);
+    border-radius: 4px;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  33% {
+    transform: translate(40px, 60px) scale(1.05) rotate(5deg);
+  }
+  66% {
+    transform: translate(-30px, 20px) scale(0.95) rotate(-5deg);
+  }
+}
+
+.animate-float {
+  animation: float 25s infinite ease-in-out;
+}
