@@ -179,10 +179,9 @@
   "settings": {
     "back": "戻る",
     "sidebarTitle": "ユーザー設定",
-    "tabQuickStart": "クイックスタート",
-    "tabProfile": "プロフィール",
-    "tabAccount": "アカウント",
-    "tabBuddy": "Buddy 管理",
+    "tabProfile": "プロフィール編集",
+    "tabAccount": "アカウントとセキュリティ",
+    "tabBuddy": "Buddy",
     "logout": "ログアウト",
     "profileTitle": "プロフィール",
     "displayNameLabel": "表示名",
@@ -209,11 +208,6 @@
     "passwordTooShort": "パスワードは8文字以上必要です",
     "passwordChangedSuccess": "パスワードが変更されました！",
     "changingPassword": "変更中...",
-    "quickLinks": "クイックリンク",
-    "goHome": "ホームに戻る",
-    "goHomeDesc": "Shadow 公式サイトにアクセス",
-    "goBuddyMarket": "Buddyマーケット",
-    "goBuddyMarketDesc": "AI Buddyを閲覧・レンタル",
     "tabInvite": "招待リンク",
     "inviteTitle": "招待リンク",
     "inviteDesc": "招待リンクを作成して、他の人をプラットフォームに招待しましょう。",
@@ -236,17 +230,19 @@
     "themeDarkDesc": "目に優しい",
     "themeSystem": "システム",
     "themeSystemDesc": "OSの設定に従う",
-    "sectionStart": "クイックスタート",
-    "sectionSocial": "ソーシャル",
-    "sectionPersonal": "個人設定",
-    "sectionWork": "仕事とセキュリティ",
-    "sectionEcosystem": "エコシステム",
+    "sectionBasic": "基本",
+    "sectionActivity": "アクティビティ",
+    "sectionSettings": "設定",
+    "sectionDM": "ダイレクトメッセージ",
+    "sectionAccountPayment": "アカウントとお支払い",
+    "tabDM": "メッセージ",
     "tabFriends": "フレンド",
-    "tabChat": "メッセージ",
+    "tabChat": "DM",
     "tabNotification": "通知",
     "tabTasks": "タスク",
     "tabWallet": "ウォレット",
-    "tabDeveloper": "開発者"
+    "tabDeveloper": "開発者",
+    "viewProfile": "プロフィールを見る"
   },
   "server": {
     "home": "ホーム",
@@ -1118,7 +1114,8 @@
     "requestSent": "フレンドリクエストを送信しました！",
     "requestSentSuccess": "フレンドリクエストが送信されました！承認後にチャットを開始できます。",
     "otherWays": "他の方法でフレンドを作る",
-    "otherWaysDesc": "サーバーで他のユーザーを見つけ、プロフィールからフレンドリクエストを送ることもできます。"
+    "otherWaysDesc": "サーバーで他のユーザーを見つけ、プロフィールからフレンドリクエストを送ることもできます。",
+    "pendingRequests": "フレンドリクエスト"
   },
   "dm": {
     "chatTitle": "メッセージ",
@@ -1134,7 +1131,18 @@
     "chatDisabledRentedOut": "このBuddyは他のユーザーに貸し出されており、一時的に利用できません",
     "chatDisabledListed": "このBuddyはマーケットに出品中で、一時的に利用できません",
     "rentalCostTip": "🦐 本日の費用リマインダー：基本日額 {{baseDailyRate}}🦐 + メッセージ料金 {{messageFee}}🦐/通、累計 {{totalCost}}🦐、{{messageCount}}通送信済み",
-    "chatDisabledExpired": "使用権が期限切れです。継続するにはレンタルを更新してください"
+    "chatDisabledExpired": "使用権が期限切れです。継続するにはレンタルを更新してください",
+    "searchContacts": "連絡先を検索",
+    "recentContacts": "最近の連絡",
+    "noContactFound": "\"{{query}}\" が見つかりません",
+    "addAsContact": "フレンドリクエストを送信",
+    "emptyContacts": "ユーザー名で検索するか + をタップして連絡先を追加",
+    "defaultTitle": "メッセージ",
+    "defaultDesc": "リストから連絡先を選択して会話を開始するか、ユーザー名で検索",
+    "tipSearch": "検索",
+    "tipSearchDesc": "ユーザー名で連絡先をすばやく検索",
+    "tipAdd": "追加",
+    "tipAddDesc": "+ アイコンをタップしてユーザー名でフレンドを追加"
   },
   "openclaw": {
     "nav": {

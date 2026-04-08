@@ -179,10 +179,9 @@
   "settings": {
     "back": "Back",
     "sidebarTitle": "User Settings",
-    "tabQuickStart": "Quick Start",
-    "tabProfile": "Profile",
-    "tabAccount": "Account",
-    "tabBuddy": "Buddy Management",
+    "tabProfile": "Edit Profile",
+    "tabAccount": "Account & Security",
+    "tabBuddy": "Buddy",
     "logout": "Log Out",
     "profileTitle": "Profile",
     "displayNameLabel": "Display Name",
@@ -231,22 +230,19 @@
     "themeDarkDesc": "Easy on the eyes",
     "themeSystem": "System",
     "themeSystemDesc": "Follow OS setting",
-    "quickLinks": "Quick Links",
-    "goHome": "Go Home",
-    "goHomeDesc": "Visit Shadow homepage",
-    "goBuddyMarket": "Buddy Market",
-    "goBuddyMarketDesc": "Browse and rent AI Buddies",
-    "sectionStart": "Quick Start",
-    "sectionSocial": "Social",
-    "sectionPersonal": "Personal",
-    "sectionWork": "Work & Security",
-    "sectionEcosystem": "Ecosystem",
+    "sectionBasic": "Basic",
+    "sectionActivity": "Activity",
+    "sectionSettings": "Settings",
+    "sectionDM": "Direct Messages",
+    "sectionAccountPayment": "Account & Payment",
+    "tabDM": "Messages",
     "tabFriends": "Friends",
-    "tabChat": "Messages",
+    "tabChat": "DMs",
     "tabNotification": "Notifications",
     "tabTasks": "Tasks",
     "tabWallet": "Wallet",
-    "tabDeveloper": "Developer"
+    "tabDeveloper": "Developer",
+    "viewProfile": "View Profile"
   },
   "server": {
     "home": "Home",
@@ -1108,7 +1104,8 @@
     "requestSent": "Friend request sent!",
     "requestSentSuccess": "Friend request sent successfully! You can start chatting once they accept.",
     "otherWays": "Other Ways to Make Friends",
-    "otherWaysDesc": "You can also find users in servers and send friend requests from their profile page."
+    "otherWaysDesc": "You can also find users in servers and send friend requests from their profile page.",
+    "pendingRequests": "Friend Requests"
   },
   "dm": {
     "chatTitle": "Messages",
@@ -1124,7 +1121,18 @@
     "chatDisabledRentedOut": "This Buddy is rented by another user and temporarily unavailable",
     "chatDisabledListed": "This Buddy is listed on the marketplace and temporarily unavailable",
     "rentalCostTip": "🦐 Daily cost reminder: Base fee {{baseDailyRate}}🦐 + Message fee {{messageFee}}🦐/msg, total spent {{totalCost}}🦐, {{messageCount}} messages sent",
-    "chatDisabledExpired": "Your usage rights have expired. Please renew your rental to continue."
+    "chatDisabledExpired": "Your usage rights have expired. Please renew your rental to continue.",
+    "searchContacts": "Search contacts",
+    "recentContacts": "Recent",
+    "noContactFound": "No results for \"{{query}}\"",
+    "addAsContact": "Send friend request",
+    "emptyContacts": "Search by username or tap + to add contacts",
+    "defaultTitle": "Messages",
+    "defaultDesc": "Select a contact from the list to start a conversation, or search by username",
+    "tipSearch": "Search",
+    "tipSearchDesc": "Type a username to quickly find contacts",
+    "tipAdd": "Add",
+    "tipAddDesc": "Tap the + icon to add friends by username"
   },
   "openclaw": {
     "nav": {

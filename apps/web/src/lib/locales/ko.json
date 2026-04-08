@@ -179,10 +179,9 @@
   "settings": {
     "back": "뒤로",
     "sidebarTitle": "사용자 설정",
-    "tabQuickStart": "빠른 시작",
-    "tabProfile": "프로필",
-    "tabAccount": "계정",
-    "tabBuddy": "Buddy 관리",
+    "tabProfile": "프로필 수정",
+    "tabAccount": "계정 및 보안",
+    "tabBuddy": "Buddy",
     "logout": "로그아웃",
     "profileTitle": "프로필",
     "displayNameLabel": "표시 이름",
@@ -209,11 +208,6 @@
     "passwordTooShort": "비밀번호는 8자 이상이어야 합니다",
     "passwordChangedSuccess": "비밀번호가 변경되었습니다!",
     "changingPassword": "변경 중...",
-    "quickLinks": "빠른 링크",
-    "goHome": "홈으로",
-    "goHomeDesc": "Shadow 홈페이지 방문",
-    "goBuddyMarket": "Buddy 마켓",
-    "goBuddyMarketDesc": "AI Buddy 탐색 및 임대",
     "tabInvite": "초대 링크",
     "inviteTitle": "초대 링크",
     "inviteDesc": "초대 링크를 만들어 다른 사람을 플랫폼에 초대하세요.",
@@ -236,17 +230,19 @@
     "themeDarkDesc": "눈에 편안한",
     "themeSystem": "시스템",
     "themeSystemDesc": "OS 설정을 따름",
-    "sectionStart": "빠른 시작",
-    "sectionSocial": "소셜",
-    "sectionPersonal": "개인 설정",
-    "sectionWork": "업무 및 보안",
-    "sectionEcosystem": "생태계",
+    "sectionBasic": "기본",
+    "sectionActivity": "활동",
+    "sectionSettings": "설정",
+    "sectionDM": "다이렉트 메시지",
+    "sectionAccountPayment": "계정 및 결제",
+    "tabDM": "메시지",
     "tabFriends": "친구",
-    "tabChat": "메시지",
+    "tabChat": "DM",
     "tabNotification": "알림",
     "tabTasks": "작업",
     "tabWallet": "지갑",
-    "tabDeveloper": "개발자"
+    "tabDeveloper": "개발자",
+    "viewProfile": "프로필 보기"
   },
   "server": {
     "home": "홈",
@@ -1118,7 +1114,8 @@
     "requestSent": "친구 요청이 전송되었습니다!",
     "requestSentSuccess": "친구 요청이 성공적으로 전송되었습니다! 상대방이 수락하면 채팅을 시작할 수 있습니다.",
     "otherWays": "다른 방법으로 친구 만들기",
-    "otherWaysDesc": "서버에서 다른 사용자를 찾아 프로필에서 친구 요청을 보낼 수도 있습니다."
+    "otherWaysDesc": "서버에서 다른 사용자를 찾아 프로필에서 친구 요청을 보낼 수도 있습니다.",
+    "pendingRequests": "친구 요청"
   },
   "dm": {
     "chatTitle": "메시지",
@@ -1134,7 +1131,18 @@
     "chatDisabledRentedOut": "이 Buddy는 다른 사용자에게 대여되어 일시적으로 사용할 수 없습니다",
     "chatDisabledListed": "이 Buddy는 마켓플레이스에 등록되어 일시적으로 사용할 수 없습니다",
     "rentalCostTip": "🦐 오늘의 비용 알림: 기본 일액 {{baseDailyRate}}🦐 + 메시지 요금 {{messageFee}}🦐/건, 누적 {{totalCost}}🦐, {{messageCount}}건 전송",
-    "chatDisabledExpired": "사용권이 만료되었습니다. 계속하려면 대여를 갱신해 주세요."
+    "chatDisabledExpired": "사용권이 만료되었습니다. 계속하려면 대여를 갱신해 주세요.",
+    "searchContacts": "연락처 검색",
+    "recentContacts": "최근 연락",
+    "noContactFound": "\"{{query}}\" 결과 없음",
+    "addAsContact": "친구 요청 보내기",
+    "emptyContacts": "사용자 이름으로 검색하거나 +를 눌러 연락처 추가",
+    "defaultTitle": "메시지",
+    "defaultDesc": "목록에서 연락처를 선택하여 대화를 시작하거나 사용자 이름으로 검색",
+    "tipSearch": "검색",
+    "tipSearchDesc": "사용자 이름으로 빠르게 연락처 찾기",
+    "tipAdd": "추가",
+    "tipAddDesc": "+ 아이콘을 눌러 사용자 이름으로 친구 추가"
   },
   "openclaw": {
     "nav": {

@@ -1,7 +1,8 @@
 import { cn } from '@shadowob/ui'
-import { Check, Monitor, Moon, Sun } from 'lucide-react'
+import { Check, Monitor, Moon, Paintbrush, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { type ThemeMode, useUIStore } from '../../stores/ui.store'
+import { SettingsCard, SettingsHeader, SettingsPanel } from './_shared'
 
 export function AppearanceSettings() {
   const { t } = useTranslation()
@@ -29,14 +30,19 @@ export function AppearanceSettings() {
   ]
 
   return (
-    <>
-      <h2 className="text-2xl font-black text-text-primary mb-2">{t('settings.tabAppearance')}</h2>
-      <p className="text-text-muted text-sm mb-6">{t('settings.appearanceDesc')}</p>
+    <SettingsPanel>
+      <SettingsHeader
+        titleKey="settings.tabAppearance"
+        titleFallback="外观"
+        descKey="settings.appearanceDesc"
+        descFallback="自定义你的界面外观"
+        icon={Paintbrush}
+      />
 
-      <div className="bg-bg-tertiary/30 backdrop-blur-xl rounded-[24px] border border-border-subtle p-6">
-        <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-4">
+      <SettingsCard>
+        <span className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 mb-4">
           {t('settings.themeLabel')}
-        </label>
+        </span>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {options.map(({ value, icon: Icon, label, desc }) => (
             <button
@@ -44,10 +50,10 @@ export function AppearanceSettings() {
               type="button"
               onClick={() => setTheme(value)}
               className={cn(
-                'relative flex flex-col items-center gap-2 p-4 rounded-[24px] border-2 transition-all duration-300',
+                'relative flex flex-col items-center gap-2 p-4 rounded-3xl border-2 transition-all duration-300',
                 theme === value
                   ? 'border-primary bg-primary/10 shadow-[0_0_20px_rgba(0,198,209,0.15)]'
-                  : 'border-border-subtle bg-bg-tertiary/20 hover:border-border-subtle hover:bg-white/[0.04]',
+                  : 'border-border-subtle bg-bg-tertiary/20 hover:border-border-dim hover:bg-bg-modifier-hover',
               )}
             >
               <Icon size={28} className={theme === value ? 'text-primary' : 'text-text-muted'} />
@@ -68,7 +74,7 @@ export function AppearanceSettings() {
             </button>
           ))}
         </div>
-      </div>
-    </>
+      </SettingsCard>
+    </SettingsPanel>
   )
 }

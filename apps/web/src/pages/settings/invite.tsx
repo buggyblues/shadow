@@ -1,12 +1,12 @@
 import { Button, cn, Input } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Copy, Link2, Plus, Trash2, UserPlus, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { UserAvatar } from '../../components/common/avatar'
-import { PriceDisplay } from '../../components/shop/ui/currency'
 import { fetchApi } from '../../lib/api'
 import { copyToClipboardSilent } from '../../lib/clipboard'
+import { SettingsCard, SettingsHeader, SettingsPanel } from './_shared'
 
 interface InviteCode {
   id: string
@@ -101,28 +101,32 @@ export function InviteSettings() {
   }
 
   return (
-    <>
-      <div className="bg-gradient-to-r from-primary/15 to-emerald-500/15 border border-primary/20 rounded-[24px] p-4 mb-6">
+    <SettingsPanel>
+      <SettingsHeader
+        titleKey="settings.inviteTitle"
+        titleFallback="邀请链接"
+        descKey="settings.inviteDesc"
+        descFallback="创建邀请链接，邀请他人加入平台。"
+        icon={Link2}
+      />
+
+      {/* Referral banner */}
+      <SettingsCard className="bg-gradient-to-r from-primary/10 to-success/10 border-primary/20">
         <p className="text-sm font-black text-text-primary">
           {referralSummary?.campaignText ?? '邀请好友完成注册登录，你和好友均可获得 500 虾币'}
         </p>
         <p className="text-xs text-text-muted mt-1">
-          已成功邀请 {referralSummary?.successfulInvites ?? 0} 人，累计获得{' '}
-          {referralSummary?.totalInviteRewards ?? 0} 虾币
+          {t('invite.stats', {
+            defaultValue: '已成功邀请 {{count}} 人，累计获得 {{total}} 虾币',
+            count: referralSummary?.successfulInvites ?? 0,
+            total: referralSummary?.totalInviteRewards ?? 0,
+          })}
         </p>
-      </div>
+      </SettingsCard>
 
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-black text-text-primary">{t('settings.inviteTitle')}</h2>
-          <p className="text-sm text-text-muted mt-1">{t('settings.inviteDesc')}</p>
-        </div>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => setShowCreateForm(!showCreateForm)}
-          className=""
-        >
+      {/* Create bar */}
+      <div className="flex items-center justify-end">
+        <Button variant="primary" size="sm" onClick={() => setShowCreateForm(!showCreateForm)}>
           {showCreateForm ? (
             <>
               <X size={16} className="mr-1" />
@@ -138,7 +142,7 @@ export function InviteSettings() {
       </div>
 
       {showCreateForm && (
-        <div className="bg-bg-tertiary/30 backdrop-blur-xl rounded-[24px] p-4 mb-6 border border-border-subtle">
+        <SettingsCard>
           <div className="flex gap-3">
             <Input
               type="text"
@@ -151,28 +155,28 @@ export function InviteSettings() {
                 }
               }}
               placeholder={t('settings.inviteNotePlaceholder')}
-              className="flex-1 rounded-[14px] px-4 py-2.5 text-sm h-10"
+              className="flex-1 rounded-2xl px-4 py-2.5 text-sm h-10"
             />
             <Button
               variant="primary"
               size="sm"
               onClick={() => createMutation.mutate()}
               disabled={createMutation.isPending}
-              className=""
             >
               {createMutation.isPending ? t('common.loading') : t('settings.inviteGenerate')}
             </Button>
           </div>
-        </div>
+        </SettingsCard>
       )}
 
+      {/* Code list */}
       {isLoading ? (
         <div className="text-center text-text-muted py-12">{t('common.loading')}</div>
       ) : codes.length === 0 ? (
-        <div className="text-center text-text-muted py-12 bg-bg-tertiary/30 backdrop-blur-xl rounded-[24px] border border-border-subtle">
-          <Link2 size={40} className="mx-auto mb-3 opacity-40" />
-          <p className="text-sm">{t('settings.inviteEmpty')}</p>
-        </div>
+        <SettingsCard className="text-center py-12">
+          <Link2 size={40} className="mx-auto mb-3 opacity-40 text-text-muted" />
+          <p className="text-sm text-text-muted">{t('settings.inviteEmpty')}</p>
+        </SettingsCard>
       ) : (
         <div className="space-y-2">
           {codes.map((code) => {
@@ -180,13 +184,7 @@ export function InviteSettings() {
             const isActive = code.isActive && !isUsed
 
             return (
-              <div
-                key={code.id}
-                className={cn(
-                  'bg-bg-tertiary/30 backdrop-blur-xl rounded-[24px] p-4 border transition-all',
-                  isActive ? 'border-border-subtle' : 'border-border-subtle opacity-60',
-                )}
-              >
+              <SettingsCard key={code.id} className={cn(!isActive && 'opacity-60')}>
                 <div className="flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
@@ -194,17 +192,17 @@ export function InviteSettings() {
                         {code.code}
                       </span>
                       {isUsed && (
-                        <span className="text-[11px] px-1.5 py-0.5 bg-success/10 text-success rounded font-medium">
+                        <span className="text-[11px] px-1.5 py-0.5 bg-success/10 text-success rounded-full font-medium">
                           {t('settings.inviteUsed')}
                         </span>
                       )}
                       {!isActive && !isUsed && (
-                        <span className="text-[11px] px-1.5 py-0.5 bg-accent/10 text-accent rounded font-medium">
+                        <span className="text-[11px] px-1.5 py-0.5 bg-accent/10 text-accent rounded-full font-medium">
                           {t('settings.inviteInactive')}
                         </span>
                       )}
                       {isActive && (
-                        <span className="text-[11px] px-1.5 py-0.5 bg-primary/10 text-primary rounded font-medium">
+                        <span className="text-[11px] px-1.5 py-0.5 bg-primary/10 text-primary rounded-full font-medium">
                           {t('settings.inviteActive')}
                         </span>
                       )}
@@ -239,7 +237,7 @@ export function InviteSettings() {
                         onClick={() =>
                           handleAddFriend(code.usedByUser!.username, code.usedByUser!.id)
                         }
-                        className="p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded-lg transition"
+                        className="p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded-xl transition"
                         title={t('friends.addFriend', '添加好友')}
                       >
                         <UserPlus size={15} />
@@ -253,7 +251,7 @@ export function InviteSettings() {
                     {isActive && (
                       <button
                         onClick={() => copyCode(code.code, code.id)}
-                        className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-modifier-active rounded-lg transition"
+                        className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-modifier-active rounded-xl transition"
                         title={t('settings.inviteCopyLink')}
                       >
                         {copiedId === code.id ? (
@@ -267,7 +265,7 @@ export function InviteSettings() {
                       <button
                         onClick={() => deactivateMutation.mutate(code.id)}
                         disabled={deactivateMutation.isPending}
-                        className="p-2 text-text-muted hover:text-accent hover:bg-accent/10 rounded-lg transition"
+                        className="p-2 text-text-muted hover:text-accent hover:bg-accent/10 rounded-xl transition"
                         title={t('settings.inviteDeactivate')}
                       >
                         <X size={15} />
@@ -276,18 +274,18 @@ export function InviteSettings() {
                     <button
                       onClick={() => deleteMutation.mutate(code.id)}
                       disabled={deleteMutation.isPending}
-                      className="p-2 text-text-muted hover:text-danger hover:bg-danger/10 rounded-lg transition"
+                      className="p-2 text-text-muted hover:text-danger hover:bg-danger/10 rounded-xl transition"
                       title={t('common.delete')}
                     >
                       <Trash2 size={15} />
                     </button>
                   </div>
                 </div>
-              </div>
+              </SettingsCard>
             )
           })}
         </div>
       )}
-    </>
+    </SettingsPanel>
   )
 }
