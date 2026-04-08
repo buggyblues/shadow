@@ -1,8 +1,18 @@
 import { Button, cn } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowDownLeft, ArrowUpRight, CreditCard, Filter, RefreshCw, Wallet } from 'lucide-react'
+import { useNavigate } from '@tanstack/react-router'
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  CreditCard,
+  Filter,
+  RefreshCw,
+  Target,
+  Wallet,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ShrimpCoinIcon } from '../../components/shop/ui/currency'
 import { fetchApi } from '../../lib/api'
 import { useRechargeStore } from '../../stores/recharge.store'
 import { SettingsCard, SettingsHeader, SettingsPanel } from './_shared'
@@ -56,6 +66,7 @@ const PAGE_SIZE = 20
 export function WalletSettings() {
   const { t } = useTranslation()
   const { openModal } = useRechargeStore()
+  const navigate = useNavigate()
   const [filter, setFilter] = useState<FilterType>('all')
   const [offset, setOffset] = useState(0)
 
@@ -99,32 +110,52 @@ export function WalletSettings() {
     <SettingsPanel>
       <SettingsHeader titleKey="wallet.title" titleFallback="钱包" icon={Wallet} />
 
-      {/* Balance Card */}
-      <SettingsCard className="bg-gradient-to-br from-primary/15 via-primary/5 to-transparent border-primary/20">
-        <div className="flex items-center justify-between">
+      {/* Balance Card — Brand Gradient */}
+      <SettingsCard className="relative overflow-hidden bg-gradient-to-br from-primary/20 via-primary/10 to-success/5 border-primary/20">
+        <div className="absolute top-0 right-0 w-40 h-40 bg-primary/10 rounded-full blur-3xl -mr-16 -mt-16" />
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-success/10 rounded-full blur-3xl -ml-10 -mb-10" />
+        <div className="relative z-10 flex items-center justify-between">
           <div>
-            <p className="text-sm text-text-muted mb-1">{t('wallet.balance')}</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 mb-1">
+              {t('wallet.balance')}
+            </p>
             <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-black text-text-primary">
+              <span className="text-4xl font-black text-text-primary tabular-nums">
                 {wallet?.balance?.toLocaleString() ?? '—'}
               </span>
-              <span className="text-xl">🦐</span>
+              <ShrimpCoinIcon size={24} />
             </div>
             {(wallet?.frozenAmount ?? 0) > 0 && (
-              <p className="text-xs text-text-muted mt-1">
-                {t('wallet.frozen', '冻结')}: {wallet?.frozenAmount?.toLocaleString()} 🦐
+              <p className="text-xs text-text-muted mt-1 inline-flex items-center gap-1">
+                {t('wallet.frozen', '冻结')}: {wallet?.frozenAmount?.toLocaleString()}{' '}
+                <ShrimpCoinIcon size={12} />
               </p>
             )}
           </div>
-          <Button
-            variant="primary"
-            size="md"
-            type="button"
-            onClick={openModal}
-            className="shadow-lg shadow-primary/25"
-          >
-            {t('wallet.rechargeBtn')}
-          </Button>
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="primary"
+              size="md"
+              type="button"
+              onClick={openModal}
+              className="shadow-lg shadow-primary/25"
+            >
+              {t('wallet.rechargeBtn')}
+            </Button>
+            {(wallet?.balance ?? 0) < 100 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                type="button"
+                onClick={() =>
+                  navigate({ to: '/settings', search: { tab: 'tasks' }, replace: true })
+                }
+                icon={Target}
+              >
+                {t('wallet.earnByTasks', '做任务赚虾币')}
+              </Button>
+            )}
+          </div>
         </div>
       </SettingsCard>
 
@@ -202,12 +233,15 @@ export function WalletSettings() {
 
                   <div className="text-right shrink-0">
                     <span
-                      className={`text-sm font-black tabular-nums ${
-                        isPositive ? 'text-success' : 'text-text-primary'
-                      }`}
+                      className={cn(
+                        'text-sm font-black tabular-nums inline-flex items-center gap-1',
+                        isPositive
+                          ? 'text-success bg-success/10 px-2 py-0.5 rounded-full'
+                          : 'text-text-secondary',
+                      )}
                     >
                       {isPositive ? '+' : ''}
-                      {tx.amount.toLocaleString()} 🦐
+                      {tx.amount.toLocaleString()} <ShrimpCoinIcon size={14} />
                     </span>
                     <p className="text-[11px] text-text-muted/60 mt-0.5">
                       {t('wallet.balanceAfter')}: {tx.balanceAfter.toLocaleString()}

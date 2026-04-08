@@ -1,118 +1,38 @@
 import { cn } from '@shadowob/ui'
+import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearch } from '@tanstack/react-router'
-import {
-  Bell,
-  Bot,
-  Code2,
-  Link2,
-  LogOut,
-  MessageCircle,
-  Monitor,
-  Paintbrush,
-  Shield,
-  Target,
-  User,
-  Wallet,
-} from 'lucide-react'
+import { Bot, Gift, MessageCircle, Monitor, Settings, Target, Wallet } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { UserAvatar } from '../../components/common/avatar'
+import { ShrimpCoinIcon } from '../../components/shop/ui/currency'
 import { useAppStatus } from '../../hooks/use-app-status'
 import { useUnreadCount } from '../../hooks/use-unread-count'
 import { fetchApi } from '../../lib/api'
-import { disconnectSocket } from '../../lib/socket'
 import { useAuthStore } from '../../stores/auth.store'
 import { BuddyManagementContent } from '../buddy-management'
 import { DmChatView } from '../dm-chat'
 import { UnifiedContactSidebar } from '../friends'
-import { AccountSettings } from './account'
-import { AppearanceSettings } from './appearance'
-import { DeveloperSettings } from './developer'
 import { InviteSettings } from './invite'
-import { NotificationSettings } from './notification'
-import { ProfileSettings } from './profile'
+import { SettingsModal } from './settings-modal'
 import { TaskSettings } from './tasks'
 import { WalletSettings } from './wallet'
 
-type SettingsTab =
-  | 'profile'
-  | 'account'
-  | 'invite'
-  | 'tasks'
-  | 'buddy'
-  | 'appearance'
-  | 'notification'
-  | 'dm'
-  | 'developer'
-  | 'wallet'
+type SettingsTab = 'dm' | 'buddy' | 'tasks' | 'wallet' | 'invite'
 
 interface NavItem {
   id: SettingsTab
-  icon: typeof User
+  icon: typeof Bot
   labelKey: string
   labelFallback: string
 }
 
-interface NavSection {
-  key: string
-  labelKey: string
-  labelFallback: string
-  items: NavItem[]
-}
-
-const NAV_SECTIONS: NavSection[] = [
-  {
-    key: 'basic',
-    labelKey: 'settings.sectionBasic',
-    labelFallback: '基本',
-    items: [
-      { id: 'buddy', icon: Bot, labelKey: 'settings.tabBuddy', labelFallback: 'Buddy' },
-      { id: 'dm', icon: MessageCircle, labelKey: 'settings.tabDM', labelFallback: '私信' },
-    ],
-  },
-  {
-    key: 'activity',
-    labelKey: 'settings.sectionActivity',
-    labelFallback: '活动',
-    items: [
-      { id: 'tasks', icon: Target, labelKey: 'settings.tabTasks', labelFallback: '任务中心' },
-      { id: 'invite', icon: Link2, labelKey: 'settings.tabInvite', labelFallback: '邀请链接' },
-    ],
-  },
-  {
-    key: 'settings',
-    labelKey: 'settings.sectionSettings',
-    labelFallback: '设置',
-    items: [
-      {
-        id: 'appearance',
-        icon: Paintbrush,
-        labelKey: 'settings.tabAppearance',
-        labelFallback: '外观',
-      },
-      {
-        id: 'notification',
-        icon: Bell,
-        labelKey: 'settings.tabNotification',
-        labelFallback: '通知',
-      },
-    ],
-  },
-  {
-    key: 'accountPayment',
-    labelKey: 'settings.sectionAccountPayment',
-    labelFallback: '账号与支付',
-    items: [
-      {
-        id: 'account',
-        icon: Shield,
-        labelKey: 'settings.tabAccount',
-        labelFallback: '账号与安全',
-      },
-      { id: 'wallet', icon: Wallet, labelKey: 'settings.tabWallet', labelFallback: '钱包' },
-      { id: 'developer', icon: Code2, labelKey: 'settings.tabDeveloper', labelFallback: '开发者' },
-    ],
-  },
+const NAV_ITEMS: NavItem[] = [
+  { id: 'dm', icon: MessageCircle, labelKey: 'settings.tabDM', labelFallback: '消息' },
+  { id: 'buddy', icon: Bot, labelKey: 'settings.tabBuddy', labelFallback: '我的 Buddy' },
+  { id: 'tasks', icon: Target, labelKey: 'settings.tabTasks', labelFallback: '赚取虾币' },
+  { id: 'wallet', icon: Wallet, labelKey: 'settings.tabWallet', labelFallback: '钱包' },
+  { id: 'invite', icon: Gift, labelKey: 'settings.tabInvite', labelFallback: '邀请返利' },
 ]
 
 export function SettingsPage() {
@@ -120,7 +40,7 @@ export function SettingsPage() {
   const navigate = useNavigate()
   const unreadCount = useUnreadCount()
   const searchParams = useSearch({ strict: false }) as { tab?: string; dm?: string }
-  const { user, logout } = useAuthStore()
+  const { user } = useAuthStore()
 
   useAppStatus({
     title: t('settings.sidebarTitle'),
@@ -129,20 +49,39 @@ export function SettingsPage() {
     variant: 'workspace',
   })
 
+  const MODAL_TABS = ['profile', 'account', 'appearance', 'notification', 'developer'] as const
+  const initialModalTab = MODAL_TABS.includes(searchParams.tab as (typeof MODAL_TABS)[number])
+    ? (searchParams.tab as (typeof MODAL_TABS)[number])
+    : undefined
+
   const [activeTab, setActiveTab] = useState<SettingsTab>(
-    (searchParams.tab as SettingsTab) || 'profile',
+    initialModalTab ? 'dm' : (searchParams.tab as SettingsTab) || 'dm',
   )
   const [activeDmChannelId, setActiveDmChannelId] = useState<string | null>(searchParams.dm || null)
+  const [settingsModalOpen, setSettingsModalOpen] = useState(!!initialModalTab)
+
+  // Fetch wallet balance for nav display
+  const { data: wallet } = useQuery({
+    queryKey: ['wallet'],
+    queryFn: () => fetchApi<{ id: string; balance: number; frozenAmount: number }>('/api/wallet'),
+  })
 
   // Sync activeTab with URL search params
+  const isModalTab = searchParams.tab
+    ? MODAL_TABS.includes(searchParams.tab as (typeof MODAL_TABS)[number])
+    : false
   useEffect(() => {
     if (searchParams.tab) {
-      setActiveTab(searchParams.tab as SettingsTab)
+      if (isModalTab) {
+        setSettingsModalOpen(true)
+      } else {
+        setActiveTab(searchParams.tab as SettingsTab)
+      }
     }
     if (searchParams.dm !== undefined) {
       setActiveDmChannelId(searchParams.dm || null)
     }
-  }, [searchParams.tab, searchParams.dm])
+  }, [searchParams.tab, searchParams.dm, isModalTab])
 
   const handleTabChange = (tab: SettingsTab) => {
     setActiveTab(tab)
@@ -151,12 +90,6 @@ export function SettingsPage() {
       search: { tab, ...(tab === 'dm' && activeDmChannelId ? { dm: activeDmChannelId } : {}) },
       replace: true,
     })
-  }
-
-  const handleLogout = () => {
-    disconnectSocket()
-    logout()
-    navigate({ to: '/login' })
   }
 
   if (!user) return null
@@ -171,37 +104,40 @@ export function SettingsPage() {
 
       {/* Mobile tab bar */}
       <div className="md:hidden flex overflow-x-auto border-b border-border-subtle bg-[var(--glass-bg)] backdrop-blur-2xl px-2 gap-1 shrink-0 relative z-10">
-        {NAV_SECTIONS.flatMap((section) => section.items).map(
-          ({ id, icon: Icon, labelKey, labelFallback }) => (
-            <button
-              key={id}
-              onClick={() => handleTabChange(id)}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all',
-                activeTab === id
-                  ? 'bg-primary/15 text-primary shadow-sm'
-                  : 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary/50',
-              )}
-            >
-              <Icon size={14} />
-              {t(labelKey, labelFallback)}
-            </button>
-          ),
-        )}
+        {NAV_ITEMS.map(({ id, icon: Icon, labelKey, labelFallback }) => (
+          <button
+            type="button"
+            key={id}
+            onClick={() => handleTabChange(id)}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all',
+              activeTab === id
+                ? 'bg-primary/15 text-primary shadow-sm'
+                : 'text-text-muted hover:text-text-primary hover:bg-bg-tertiary/50',
+            )}
+          >
+            <Icon size={14} />
+            {t(labelKey, labelFallback)}
+          </button>
+        ))}
+        {/* Settings gear → opens modal */}
+        <button
+          type="button"
+          onClick={() => setSettingsModalOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap text-text-muted hover:text-text-primary hover:bg-bg-tertiary/50 transition-all"
+        >
+          <Settings size={14} />
+          {t('settings.sectionSettings', '设置')}
+        </button>
       </div>
 
       {/* Desktop Sidebar — Glassmorphism */}
       <aside className="w-[240px] shrink-0 hidden md:flex flex-col bg-[var(--glass-bg)] backdrop-blur-2xl border-r border-[var(--glass-border)] overflow-hidden relative z-10">
-        <div className="desktop-drag-titlebar h-7 shrink-0" />
-
-        {/* Account info header — click to go to profile */}
+        {/* Account info header — click opens settings modal */}
         <button
           type="button"
-          onClick={() => handleTabChange('profile')}
-          className={cn(
-            'flex items-center gap-3 px-4 py-3 mx-3 mt-1 mb-1 rounded-2xl transition-all duration-200 group cursor-pointer',
-            activeTab === 'profile' ? 'bg-primary/15' : 'hover:bg-bg-tertiary/50',
-          )}
+          onClick={() => setSettingsModalOpen(true)}
+          className="flex items-center gap-3 px-4 py-3 mx-3 mt-1 mb-1 rounded-2xl transition-all duration-200 group cursor-pointer hover:bg-bg-tertiary/50"
         >
           <UserAvatar
             userId={user.id}
@@ -210,72 +146,65 @@ export function SettingsPage() {
             size="sm"
           />
           <div className="flex-1 min-w-0 text-left">
-            <p
-              className={cn(
-                'text-[13px] font-bold truncate transition-colors',
-                activeTab === 'profile'
-                  ? 'text-primary'
-                  : 'text-text-primary group-hover:text-primary',
-              )}
-            >
+            <p className="text-[13px] font-bold truncate transition-colors text-text-primary group-hover:text-primary">
               {user.displayName ?? user.username}
             </p>
             <p className="text-[11px] text-text-muted truncate">@{user.username}</p>
           </div>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              handleLogout()
-            }}
-            className="p-1.5 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-colors shrink-0"
-            title={t('settings.logout')}
-          >
-            <LogOut size={14} strokeWidth={2.2} />
-          </button>
+          <Settings
+            size={16}
+            className="shrink-0 text-text-muted group-hover:text-primary transition-colors"
+            strokeWidth={2.2}
+          />
         </button>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto scrollbar-hidden">
-          {NAV_SECTIONS.map((section) => (
-            <div key={section.key}>
-              <span className="block px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60">
-                {t(section.labelKey, section.labelFallback)}
-              </span>
-              <div className="mt-0.5 space-y-0.5">
-                {section.items.map((item) => {
-                  const isActive = activeTab === item.id
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => handleTabChange(item.id)}
-                      className={cn(
-                        'w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-[13px] font-bold transition-all duration-300 group',
-                        isActive
-                          ? 'bg-primary/15 text-primary'
-                          : 'text-text-secondary hover:bg-bg-tertiary/50 hover:text-text-primary',
-                      )}
-                    >
-                      <item.icon
-                        className={cn(
-                          'w-[18px] h-[18px] shrink-0 transition-colors',
-                          isActive ? 'text-primary' : 'text-text-muted group-hover:text-primary',
-                        )}
-                        strokeWidth={2.2}
-                      />
-                      <span className="truncate">{t(item.labelKey, item.labelFallback)}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          ))}
+        {/* Navigation — flat list of 5 high-frequency items */}
+        <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto scrollbar-hidden">
+          {NAV_ITEMS.map((item) => {
+            const isActive = activeTab === item.id
+            const isAsset = item.id === 'tasks' || item.id === 'wallet'
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handleTabChange(item.id)}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-[13px] font-bold transition-all duration-300 group',
+                  isActive
+                    ? 'bg-primary/15 text-primary'
+                    : isAsset
+                      ? 'text-text-secondary hover:bg-primary/8 hover:text-text-primary'
+                      : 'text-text-secondary hover:bg-bg-tertiary/50 hover:text-text-primary',
+                )}
+              >
+                <item.icon
+                  className={cn(
+                    'w-[18px] h-[18px] shrink-0 transition-colors',
+                    isActive
+                      ? 'text-primary'
+                      : isAsset
+                        ? 'text-warning/70 group-hover:text-primary'
+                        : 'text-text-muted group-hover:text-primary',
+                  )}
+                  strokeWidth={2.2}
+                />
+                <span className="truncate">{t(item.labelKey, item.labelFallback)}</span>
+                {/* Show wallet balance inline with highlight */}
+                {item.id === 'wallet' && wallet?.balance != null && (
+                  <span className="ml-auto text-[11px] font-black tabular-nums text-warning bg-warning/10 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                    {wallet.balance.toLocaleString()}{' '}
+                    <ShrimpCoinIcon size={12} className="text-warning" />
+                  </span>
+                )}
+              </button>
+            )
+          })}
 
           {/* Desktop Settings Link */}
           {'desktopAPI' in window && (
             <div className="mt-4 pt-4 border-t border-border-subtle">
               <button
+                type="button"
                 onClick={() => navigate({ to: '/desktop-settings' })}
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-[13px] font-bold text-text-secondary hover:bg-bg-tertiary/50 hover:text-text-primary transition-all duration-300 group"
               >
@@ -296,15 +225,10 @@ export function SettingsPage() {
         {activeTab !== 'dm' && (
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-3xl mx-auto p-4 md:p-8">
-              {activeTab === 'profile' && <ProfileSettings />}
-              {activeTab === 'appearance' && <AppearanceSettings />}
-              {activeTab === 'notification' && <NotificationSettings />}
-              {activeTab === 'account' && <AccountSettings />}
               {activeTab === 'invite' && <InviteSettings />}
               {activeTab === 'tasks' && <TaskSettings />}
               {activeTab === 'wallet' && <WalletSettings />}
               {activeTab === 'buddy' && <BuddyManagementContent />}
-              {activeTab === 'developer' && <DeveloperSettings />}
             </div>
           </div>
         )}
@@ -359,6 +283,13 @@ export function SettingsPage() {
           </div>
         )}
       </main>
+
+      {/* Aggregated settings modal */}
+      <SettingsModal
+        open={settingsModalOpen}
+        onClose={() => setSettingsModalOpen(false)}
+        initialTab={initialModalTab}
+      />
     </div>
   )
 }

@@ -45,12 +45,12 @@ export function SettingsHeader({
   return (
     <div className="flex items-center gap-4">
       {Icon && (
-        <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
-          <Icon size={20} strokeWidth={2.5} />
+        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+          <Icon size={40} strokeWidth={1} />
         </div>
       )}
       <div className="min-w-0">
-        <h2 className="text-2xl font-black text-text-primary tracking-tight leading-none">
+        <h2 className="text-xl font-black text-text-primary tracking-tight leading-none">
           {t(titleKey, titleFallback)}
         </h2>
         {descKey && (

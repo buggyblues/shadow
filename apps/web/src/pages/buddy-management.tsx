@@ -16,6 +16,7 @@ import { useNavigate } from '@tanstack/react-router'
 import {
   ArrowLeft,
   BookOpen,
+  Bot,
   Check,
   CheckCircle,
   ClipboardCopy,
@@ -24,6 +25,8 @@ import {
   Key,
   MessageSquare,
   Plus,
+  ShieldCheck,
+  ShoppingCart,
   Terminal,
   Trash2,
   XCircle,
@@ -1200,15 +1203,17 @@ function CreateAgentDialog({
   onSuccess,
   onError,
   t,
+  initialData,
 }: {
   onClose: () => void
   onSuccess: (agent: Agent) => void
   onError: (message?: string) => void
   t: (key: string) => string
+  initialData?: { name?: string; username?: string; description?: string }
 }) {
-  const [name, setName] = useState('')
-  const [username, setUsername] = useState('')
-  const [description, setDescription] = useState('')
+  const [name, setName] = useState(initialData?.name ?? '')
+  const [username, setUsername] = useState(initialData?.username ?? '')
+  const [description, setDescription] = useState(initialData?.description ?? '')
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null)
 
   const createMutation = useMutation({
@@ -1433,7 +1438,11 @@ export function BuddyManagementContent() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
-  const [showCreate, setShowCreate] = useState(false)
+  const [showCreate, setShowCreate] = useState<{
+    name?: string
+    username?: string
+    description?: string
+  } | null>(null)
   const [showEdit, setShowEdit] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [generatedToken, setGeneratedToken] = useState<string | null>(null)
@@ -1446,7 +1455,7 @@ export function BuddyManagementContent() {
   const setPendingAction = useUIStore((s) => s.setPendingAction)
   useEffect(() => {
     if (pendingAction === 'create-buddy') {
-      setShowCreate(true)
+      setShowCreate({})
       setPendingAction(null)
     }
   }, [pendingAction, setPendingAction])
@@ -1530,21 +1539,118 @@ export function BuddyManagementContent() {
 
   return (
     <>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-black text-text-primary uppercase tracking-tight">
-          {t('agentMgmt.title')}
-        </h2>
-        <Button
-          variant="primary"
-          size="sm"
-          className="rounded-full"
-          onClick={() => setShowCreate(true)}
-        >
-          <Plus size={14} />
-          {t('agentMgmt.newAgent')}
-        </Button>
+      {/* Hero Banner */}
+      <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-primary/20 via-primary/5 to-transparent border border-primary/20 p-6 mb-6">
+        <div className="absolute top-0 right-0 w-40 h-40 bg-primary/10 rounded-full blur-3xl -mr-10 -mt-10" />
+        <div className="relative z-10">
+          <h2 className="text-2xl font-black text-text-primary tracking-tight mb-1">
+            {t('agentMgmt.title')}
+          </h2>
+          <p className="text-sm text-text-muted max-w-md">
+            {t(
+              'agentMgmt.heroDesc',
+              '创建、管理和部署你的 AI Buddy，让它们在 Shadow 世界为你工作。',
+            )}
+          </p>
+        </div>
       </div>
+
+      {/* Primary Creation CTA (only when no agents) */}
+      {!isLoading && agents.length === 0 && (
+        <div className="space-y-6 mb-6">
+          <button
+            type="button"
+            onClick={() => setShowCreate({})}
+            className="w-full rounded-3xl border border-primary/40 bg-primary/10 hover:bg-primary/15 hover:border-primary/60 transition-all duration-300 p-8 text-center group cursor-pointer shadow-sm"
+          >
+            <div className="w-14 h-14 rounded-2xl bg-primary/15 flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+              <Plus size={28} className="text-primary" />
+            </div>
+            <p className="text-base font-black text-text-primary mb-1">
+              {t('agentMgmt.createFirst', '创建你的第一个 Buddy')}
+            </p>
+            <p className="text-sm text-text-muted">
+              {t('agentMgmt.createFirstDesc', '点击开始，几分钟内即可拥有你的 AI 助手')}
+            </p>
+          </button>
+
+          {/* Template Gallery — quick start */}
+          <div>
+            <span className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 mb-3">
+              {t('agentMgmt.templateGallery', '快速开始模板')}
+            </span>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {(
+                [
+                  {
+                    icon: MessageSquare,
+                    name: t('agentMgmt.templateChatName', 'QA 问答助手'),
+                    username: 'qa-helper',
+                    desc: t(
+                      'agentMgmt.templateChatDesc',
+                      '自动回答频道内的常见问题，支持上下文多轮对话',
+                    ),
+                  },
+                  {
+                    icon: ShieldCheck,
+                    name: t('agentMgmt.templateModName', '社区守卫'),
+                    username: 'community-guard',
+                    desc: t(
+                      'agentMgmt.templateModDesc',
+                      '自动检测违规内容、垃圾广告，维护社区秩序',
+                    ),
+                  },
+                  {
+                    icon: ShoppingCart,
+                    name: t('agentMgmt.templateShopName', '导购客服'),
+                    username: 'shop-assistant',
+                    desc: t('agentMgmt.templateShopDesc', '商品推荐、库存查询、订单跟踪一站式服务'),
+                  },
+                ] as const
+              ).map((tmpl) => (
+                <button
+                  key={tmpl.username}
+                  type="button"
+                  onClick={() =>
+                    setShowCreate({
+                      name: tmpl.name,
+                      username: tmpl.username,
+                      description: tmpl.desc,
+                    })
+                  }
+                  className="rounded-2xl border border-border-subtle bg-[var(--glass-bg)] backdrop-blur-xl p-4 text-left hover:bg-bg-modifier-hover hover:border-primary/30 transition-all group cursor-pointer"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center mb-2 group-hover:bg-primary/20 transition-colors">
+                    <tmpl.icon size={18} className="text-primary" />
+                  </div>
+                  <p className="text-sm font-black text-text-primary group-hover:text-primary transition-colors">
+                    {tmpl.name}
+                  </p>
+                  <p className="text-xs text-text-muted mt-0.5 line-clamp-2">{tmpl.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header with create button (when agents exist) */}
+      {agents.length > 0 && (
+        <div className="flex items-center justify-between mb-6">
+          <span className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60">
+            {t('agentMgmt.myBuddies', '我的 Buddy')}
+          </span>
+          <Button
+            variant="primary"
+            size="sm"
+            className="rounded-full"
+            onClick={() => setShowCreate({})}
+          >
+            <Plus size={14} />
+            {t('agentMgmt.newAgent')}
+          </Button>
+        </div>
+      )}
 
       {/* Message */}
       {message && (
@@ -1563,57 +1669,50 @@ export function BuddyManagementContent() {
         <div className="text-center text-text-muted font-bold italic py-8">
           {t('common.loading')}
         </div>
-      ) : agents.length === 0 ? (
-        <Card variant="glass" className="rounded-[24px] text-center py-12">
-          <CardContent>
-            <img src="/Logo.svg" alt="Buddy" className="w-16 h-16 mx-auto mb-3 opacity-30" />
-            <p className="text-sm text-text-muted font-bold italic">
-              {t('agentMgmt.noAgentsDesc')}
-            </p>
-          </CardContent>
-        </Card>
       ) : (
-        <div className="space-y-2 mb-6">
-          {agents.map((agent) => {
-            const name = agent.botUser?.displayName ?? agent.botUser?.username ?? 'Buddy'
-            const isSelected = selectedAgent?.id === agent.id
-            return (
-              <button
-                key={agent.id}
-                onClick={() => {
-                  setSelectedAgent(isSelected ? null : agent)
-                  setGeneratedToken(null)
-                }}
-                className={cn(
-                  'flex items-center gap-3 w-full px-4 py-3 rounded-2xl text-left transition border',
-                  isSelected
-                    ? 'bg-primary/15 border-primary/30 text-text-primary'
-                    : 'bg-bg-tertiary/30 border-border-subtle text-text-secondary hover:bg-primary/10 hover:text-text-primary',
-                )}
-              >
-                <UserAvatar
-                  userId={agent.botUser?.id ?? agent.userId}
-                  avatarUrl={agent.botUser?.avatarUrl}
-                  displayName={agent.botUser?.displayName ?? undefined}
-                  size="sm"
-                />
-                <span className="truncate flex-1 font-bold">{name}</span>
-                {(agent.totalOnlineSeconds ?? 0) > 0 && (
-                  <span className="text-[11px] text-text-muted shrink-0 font-bold">
-                    {formatOnlineDuration(
-                      agent.totalOnlineSeconds,
-                      t as (key: string, defaultValue?: string) => string,
-                    )}
-                  </span>
-                )}
-                <AgentListingBadge agent={agent} />
-                <span
-                  className={`w-2 h-2 rounded-full shrink-0 ${getAgentOnlineDotClass(agent)}`}
-                />
-              </button>
-            )
-          })}
-        </div>
+        agents.length > 0 && (
+          <div className="space-y-2 mb-6">
+            {agents.map((agent) => {
+              const name = agent.botUser?.displayName ?? agent.botUser?.username ?? 'Buddy'
+              const isSelected = selectedAgent?.id === agent.id
+              return (
+                <button
+                  key={agent.id}
+                  onClick={() => {
+                    setSelectedAgent(isSelected ? null : agent)
+                    setGeneratedToken(null)
+                  }}
+                  className={cn(
+                    'flex items-center gap-3 w-full px-4 py-3 rounded-2xl text-left transition border',
+                    isSelected
+                      ? 'bg-primary/15 border-primary/30 text-text-primary'
+                      : 'bg-bg-tertiary/30 border-border-subtle text-text-secondary hover:bg-primary/10 hover:text-text-primary',
+                  )}
+                >
+                  <UserAvatar
+                    userId={agent.botUser?.id ?? agent.userId}
+                    avatarUrl={agent.botUser?.avatarUrl}
+                    displayName={agent.botUser?.displayName ?? undefined}
+                    size="sm"
+                  />
+                  <span className="truncate flex-1 font-bold">{name}</span>
+                  {(agent.totalOnlineSeconds ?? 0) > 0 && (
+                    <span className="text-[11px] text-text-muted shrink-0 font-bold">
+                      {formatOnlineDuration(
+                        agent.totalOnlineSeconds,
+                        t as (key: string, defaultValue?: string) => string,
+                      )}
+                    </span>
+                  )}
+                  <AgentListingBadge agent={agent} />
+                  <span
+                    className={`w-2 h-2 rounded-full shrink-0 ${getAgentOnlineDotClass(agent)}`}
+                  />
+                </button>
+              )
+            })}
+          </div>
+        )
       )}
 
       {/* Selected agent detail */}
@@ -1637,15 +1736,16 @@ export function BuddyManagementContent() {
       {/* Create dialog */}
       {showCreate && (
         <CreateAgentDialog
-          onClose={() => setShowCreate(false)}
+          onClose={() => setShowCreate(null)}
           onSuccess={(agent) => {
             queryClient.invalidateQueries({ queryKey: ['agents'] })
-            setShowCreate(false)
+            setShowCreate(null)
             setSelectedAgent(agent)
             showMsg(t('agentMgmt.createSuccess'), true)
           }}
           onError={() => showMsg(t('agentMgmt.createFailed'), false)}
           t={t}
+          initialData={showCreate}
         />
       )}
 

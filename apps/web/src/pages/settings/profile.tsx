@@ -1,7 +1,7 @@
 import { Button, FormField, Input } from '@shadowob/ui'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { ExternalLink, Globe, Save, User as UserIcon } from 'lucide-react'
+import { ExternalLink, Save, User as UserIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AvatarEditor } from '../../components/common/avatar-editor'
@@ -58,14 +58,6 @@ export function ProfileSettings() {
           descFallback="修改你的头像、昵称和语言偏好"
           icon={UserIcon}
         />
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={ExternalLink}
-          onClick={() => navigate({ to: '/profile/$userId', params: { userId: user.id } })}
-        >
-          {t('settings.viewProfile', '查看主页')}
-        </Button>
       </div>
 
       {/* Edit Form */}
@@ -90,15 +82,18 @@ export function ProfileSettings() {
           </FormField>
 
           <FormField label={t('settings.languageLabel')}>
-            <div className="flex items-center gap-4 p-4 rounded-2xl hover:bg-bg-modifier-hover transition-all">
-              <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shrink-0 shadow-inner">
-                <Globe size={20} strokeWidth={2.5} />
-              </div>
-              <div className="flex-1">
-                <LanguageSwitcher />
-              </div>
-            </div>
+            <LanguageSwitcher />
           </FormField>
+        </div>
+        <div className="mt-6 text-sm text-text-muted flex justify-end">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={ExternalLink}
+            onClick={() => navigate({ to: '/profile/$userId', params: { userId: user.id } })}
+          >
+            {t('settings.viewProfile', '主页')}
+          </Button>
         </div>
       </SettingsCard>
 

@@ -74,6 +74,7 @@ export function DeveloperSettings() {
   const [showSecret, setShowSecret] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [editingAppId, setEditingAppId] = useState<string | null>(null)
+  const [visibleClientIds, setVisibleClientIds] = useState<Set<string>>(new Set())
 
   const { data: apps = [], isLoading } = useQuery({
     queryKey: ['oauth-apps'],
@@ -145,14 +146,15 @@ export function DeveloperSettings() {
 
   return (
     <SettingsPanel>
-      <div className="flex items-center justify-between">
-        <SettingsHeader
-          titleKey="oauth.developerTitle"
-          titleFallback="开发者设置"
-          descKey="oauth.developerDesc"
-          descFallback="管理你的 OAuth 应用，接入 Shadow 开放平台"
-          icon={Code2}
-        />
+      <SettingsHeader
+        titleKey="oauth.developerTitle"
+        titleFallback="开发者设置"
+        descKey="oauth.developerDesc"
+        descFallback="管理你的 OAuth 应用，接入 Shadow 开放平台"
+        icon={Code2}
+      />
+
+      <div className="flex justify-end -mt-2">
         <Button variant="primary" size="sm" type="button" onClick={() => setShowCreateForm(true)}>
           <Plus size={16} />
           {t('oauth.createApp', '创建应用')}
@@ -267,8 +269,29 @@ export function DeveloperSettings() {
                     {t('oauth.clientId', 'Client ID')}
                   </span>
                   <code className="bg-bg-tertiary/50 px-2 py-1 rounded font-mono text-text-secondary flex-1 truncate">
-                    {app.clientId}
+                    {visibleClientIds.has(app.id)
+                      ? app.clientId
+                      : `${app.clientId.slice(0, 6)}${'•'.repeat(20)}`}
                   </code>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setVisibleClientIds((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(app.id)) next.delete(app.id)
+                        else next.add(app.id)
+                        return next
+                      })
+                    }
+                    className="p-1 hover:bg-bg-modifier-hover rounded transition"
+                    title={
+                      visibleClientIds.has(app.id)
+                        ? t('oauth.hide', '隐藏')
+                        : t('oauth.show', '显示')
+                    }
+                  >
+                    {visibleClientIds.has(app.id) ? <EyeOff size={12} /> : <Eye size={12} />}
+                  </button>
                   <button
                     type="button"
                     onClick={() => copyToClipboard(app.clientId)}
