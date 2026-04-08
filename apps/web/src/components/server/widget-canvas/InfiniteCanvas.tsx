@@ -1,16 +1,19 @@
 /* ─────────────────────────────────────────────────────────────────────────────
- *  Shadow OS — Infinite Canvas
+ *  Shadow OS — Infinite Canvas (v2 — Depth / Ambience)
  *
- *  A pannable, zoomable infinite canvas that hosts widget instances.
- *  Supports:
- *   - Mouse/trackpad pan (middle-click drag or space+drag)
- *   - Pinch-to-zoom and scroll-wheel zoom
- *   - Canvas-space grid dots background
- *   - Widget selection, drag-to-move, and resize handles in edit mode
+ *  A pannable, zoomable infinite canvas with layered depth:
+ *   Layer 0  — Ambient background (blurred gradient orbs, follows theme)
+ *   Layer 1  — Widget layer (transform group)
+ *   Layer 2  — HUD (controls, edit mode indicator, always screen-space)
+ *
+ *  Interactions:
+ *   - Trackpad scroll → pan,  ctrl/meta + scroll → zoom
+ *   - Middle-click drag → pan,  Space + left-click drag → pan
+ *   - Edit-mode grid (subtle, only when editing)
  * ───────────────────────────────────────────────────────────────────────────── */
 
 import { cn } from '@shadowob/ui'
-import { Grip, Maximize2, Minimize2, RotateCcw } from 'lucide-react'
+import { Maximize2, Minimize2, RotateCcw } from 'lucide-react'
 import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
@@ -56,19 +59,15 @@ export function InfiniteCanvas({ children, className }: InfiniteCanvasProps) {
     }
   }, [])
 
-  /* ── Wheel zoom ── */
+  /* ── Wheel zoom / pan ── */
   const onWheel = useCallback(
     (e: ReactWheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
-        // Pinch / ctrl+scroll → zoom
         e.preventDefault()
         const rect = canvasRef.current?.getBoundingClientRect()
         if (!rect) return
-        const cx = e.clientX - rect.left
-        const cy = e.clientY - rect.top
-        zoom(-e.deltaY * 0.002, cx, cy)
+        zoom(-e.deltaY * 0.002, e.clientX - rect.left, e.clientY - rect.top)
       } else {
-        // Normal scroll → pan
         pan(-e.deltaX, -e.deltaY)
       }
     },
@@ -78,7 +77,6 @@ export function InfiniteCanvas({ children, className }: InfiniteCanvasProps) {
   /* ── Pointer pan ── */
   const onPointerDown = useCallback(
     (e: ReactPointerEvent) => {
-      // Middle button OR space held → start pan
       if (e.button === 1 || (spaceHeld && e.button === 0)) {
         e.preventDefault()
         setIsPanning(true)
@@ -104,7 +102,7 @@ export function InfiniteCanvas({ children, className }: InfiniteCanvasProps) {
     setIsPanning(false)
   }, [])
 
-  /* ── Grid pattern ── */
+  /* ── Edit-mode grid ── */
   const gridSize = 40 * viewport.zoom
   const gridOffsetX = ((viewport.panX % gridSize) + gridSize) % gridSize
   const gridOffsetY = ((viewport.panY % gridSize) + gridSize) % gridSize
@@ -123,17 +121,36 @@ export function InfiniteCanvas({ children, className }: InfiniteCanvasProps) {
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
     >
-      {/* Grid dots background */}
-      <div
-        className="absolute inset-0 pointer-events-none opacity-20"
-        style={{
-          backgroundImage: 'radial-gradient(circle, var(--color-text-muted) 1px, transparent 1px)',
-          backgroundSize: `${gridSize}px ${gridSize}px`,
-          backgroundPosition: `${gridOffsetX}px ${gridOffsetY}px`,
-        }}
-      />
+      {/* ── Layer 0: Ambient background ── */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {/* Parallax orbs — move at half the pan speed for depth */}
+        <div
+          className="absolute inset-[-200px]"
+          style={{
+            transform: `translate(${viewport.panX * 0.15}px, ${viewport.panY * 0.15}px)`,
+            willChange: 'transform',
+          }}
+        >
+          <div className="absolute top-[10%] left-[15%] w-[500px] h-[500px] rounded-full bg-primary/[0.07] blur-[120px] animate-pulse" />
+          <div className="absolute top-[50%] right-[10%] w-[400px] h-[400px] rounded-full bg-accent/[0.06] blur-[100px] animate-pulse [animation-delay:2s]" />
+          <div className="absolute bottom-[15%] left-[40%] w-[350px] h-[350px] rounded-full bg-info/[0.05] blur-[100px] animate-pulse [animation-delay:4s]" />
+        </div>
+      </div>
 
-      {/* Transform layer — all widgets live here */}
+      {/* ── Edit grid (only visible in edit mode) ── */}
+      {isEditing && (
+        <div
+          className="absolute inset-0 pointer-events-none opacity-[0.08] transition-opacity duration-500"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle, var(--color-text-muted) 1px, transparent 1px)',
+            backgroundSize: `${gridSize}px ${gridSize}px`,
+            backgroundPosition: `${gridOffsetX}px ${gridOffsetY}px`,
+          }}
+        />
+      )}
+
+      {/* ── Layer 1: Widget transform group ── */}
       <div
         className="absolute origin-top-left"
         style={{
@@ -144,45 +161,37 @@ export function InfiniteCanvas({ children, className }: InfiniteCanvasProps) {
         {children}
       </div>
 
-      {/* Viewport controls (bottom-right) */}
-      <div className="absolute bottom-4 right-4 flex items-center gap-1 bg-bg-primary/80 backdrop-blur-xl rounded-2xl border border-border-subtle p-1 shadow-lg z-50">
+      {/* ── Layer 2: HUD — viewport controls ── */}
+      <div className="absolute bottom-3 right-3 flex items-center gap-0.5 bg-bg-primary/60 backdrop-blur-2xl rounded-2xl border border-white/[0.06] px-1 py-0.5 shadow-xl z-50">
         <button
           type="button"
           onClick={() => zoom(-0.2, 0, 0)}
-          className="p-1.5 rounded-xl text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover transition"
+          className="p-1.5 rounded-xl text-text-muted hover:text-text-primary hover:bg-white/[0.06] transition"
           title="Zoom out"
         >
-          <Minimize2 size={14} />
+          <Minimize2 size={13} />
         </button>
-        <span className="text-[10px] font-black text-text-muted min-w-[36px] text-center tabular-nums">
+        <span className="text-[10px] font-black text-text-muted/60 min-w-[32px] text-center tabular-nums">
           {Math.round(viewport.zoom * 100)}%
         </span>
         <button
           type="button"
           onClick={() => zoom(0.2, 0, 0)}
-          className="p-1.5 rounded-xl text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover transition"
+          className="p-1.5 rounded-xl text-text-muted hover:text-text-primary hover:bg-white/[0.06] transition"
           title="Zoom in"
         >
-          <Maximize2 size={14} />
+          <Maximize2 size={13} />
         </button>
-        <div className="w-px h-4 bg-border-subtle" />
+        <div className="w-px h-3.5 bg-white/[0.06]" />
         <button
           type="button"
           onClick={resetViewport}
-          className="p-1.5 rounded-xl text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover transition"
+          className="p-1.5 rounded-xl text-text-muted hover:text-text-primary hover:bg-white/[0.06] transition"
           title="Reset view"
         >
-          <RotateCcw size={14} />
+          <RotateCcw size={13} />
         </button>
       </div>
-
-      {/* Edit mode indicator */}
-      {isEditing && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-accent/90 text-bg-deep px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest shadow-lg z-50 flex items-center gap-2">
-          <Grip size={12} />
-          Canvas Edit Mode
-        </div>
-      )}
     </div>
   )
 }

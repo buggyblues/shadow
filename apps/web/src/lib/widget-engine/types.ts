@@ -82,6 +82,8 @@ export interface WidgetManifest {
   canBeBackground?: boolean
   /** Tags for the widget marketplace / picker filtering */
   tags?: string[]
+  /** Tailwind gradient classes for the picker preview card */
+  previewGradient?: string
 }
 
 /* ── Widget Instance ── */

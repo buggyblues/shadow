@@ -1,16 +1,18 @@
 /* ─────────────────────────────────────────────────────────────────────────────
- *  Shadow OS — Widget Shell
+ *  Shadow OS — Widget Shell  (v2 — Borderless-first)
  *
- *  The visual wrapper for each widget on the canvas. Handles:
- *  - Borderless vs contained mode
- *  - Drag-to-move in edit mode
- *  - Resize handles in edit mode
- *  - Selection highlight / chrome
- *  - Glass-morphism default container style
+ *  Visual wrapper for each widget instance on the canvas.
+ *
+ *  Design principles:
+ *   1. Borderless by default — no card chrome. Content "floats" on canvas.
+ *   2. In edit mode, a subtle dashed outline + corner handles appear.
+ *   3. "Contained" widgets get a frosted-glass capsule (no title bar).
+ *   4. Double-click → open widget micro-settings.
+ *   5. Drag-to-move via pointer capture (edit mode only).
  * ───────────────────────────────────────────────────────────────────────────── */
 
 import { cn } from '@shadowob/ui'
-import { GripVertical, Maximize2, Settings2, Trash2 } from 'lucide-react'
+import { Move, Settings2, Trash2 } from 'lucide-react'
 import { type PointerEvent as ReactPointerEvent, useCallback, useRef, useState } from 'react'
 import type { WidgetAppearance, WidgetInstance, WidgetManifest } from '../../../lib/widget-engine'
 import { useWidgetEngine } from '../../../lib/widget-engine'
@@ -29,7 +31,6 @@ export function WidgetShell({ instance, manifest, children }: WidgetShellProps) 
   const [isDragging, setIsDragging] = useState(false)
   const dragStart = useRef({ x: 0, y: 0, origX: 0, origY: 0 })
 
-  // Merge manifest defaults with instance overrides
   const appearance: WidgetAppearance = {
     borderless: false,
     transparent: false,
@@ -38,9 +39,10 @@ export function WidgetShell({ instance, manifest, children }: WidgetShellProps) 
     ...instance.appearance,
   }
 
-  const radius = appearance.radius ?? 28
+  const isBorderless = appearance.borderless || appearance.transparent
+  const radius = isBorderless ? 0 : (appearance.radius ?? 24)
 
-  /* ── Drag to move ── */
+  /* ── Drag to move (edit mode) ── */
   const onDragStart = useCallback(
     (e: ReactPointerEvent) => {
       if (!isEditing) return
@@ -78,11 +80,9 @@ export function WidgetShell({ instance, manifest, children }: WidgetShellProps) 
     setIsDragging(false)
   }, [])
 
-  /* ── Click to select (non-edit mode still allows click-through) ── */
+  /* ── Select on click in edit mode ── */
   const handleClick = useCallback(() => {
-    if (isEditing) {
-      selectWidget(instance.instanceId)
-    }
+    if (isEditing) selectWidget(instance.instanceId)
   }, [isEditing, instance.instanceId, selectWidget])
 
   if (!instance.visible) return null
@@ -91,13 +91,15 @@ export function WidgetShell({ instance, manifest, children }: WidgetShellProps) 
     <div
       ref={shellRef}
       className={cn(
-        'absolute transition-shadow duration-300',
-        !appearance.borderless &&
-          !appearance.transparent &&
-          'bg-[var(--glass-bg)] backdrop-blur-2xl border border-[var(--glass-border)] border-t-white/10 shadow-[var(--shadow-soft)]',
-        isEditing && 'ring-1 ring-primary/20 hover:ring-primary/40',
-        isSelected && isEditing && 'ring-2 ring-primary shadow-lg shadow-primary/10',
-        isDragging && 'opacity-90 scale-[1.01]',
+        'absolute group transition-all duration-300',
+        /* Contained mode: frosted glass capsule */
+        !isBorderless &&
+          'bg-[var(--glass-bg)] backdrop-blur-2xl border border-white/[0.06] shadow-[0_8px_32px_-8px_rgba(0,0,0,0.3)]',
+        /* Edit mode: selection ring */
+        isEditing && !isBorderless && 'ring-1 ring-dashed ring-primary/20',
+        isEditing && isBorderless && isSelected && 'ring-1 ring-dashed ring-primary/40',
+        isSelected && isEditing && 'ring-2 ring-primary/60',
+        isDragging && 'scale-[1.005] transition-none',
       )}
       style={{
         left: instance.rect.x,
@@ -105,8 +107,8 @@ export function WidgetShell({ instance, manifest, children }: WidgetShellProps) 
         width: instance.rect.w || undefined,
         height: instance.rect.h || undefined,
         zIndex: instance.rect.z,
-        borderRadius: appearance.borderless ? 0 : radius,
-        overflow: appearance.borderless ? 'visible' : 'hidden',
+        borderRadius: radius,
+        overflow: isBorderless ? 'visible' : 'hidden',
       }}
       onClick={handleClick}
       onKeyDown={
@@ -120,67 +122,51 @@ export function WidgetShell({ instance, manifest, children }: WidgetShellProps) 
       }
       tabIndex={isEditing ? 0 : undefined}
     >
-      {/* Drag handle (edit mode only) */}
+      {/* ── Edit-mode floating toolbar (appears on hover / selection) ── */}
       {isEditing && (
         <div
-          className="absolute -top-0.5 left-1/2 -translate-x-1/2 -translate-y-full flex items-center gap-1 bg-bg-primary/90 backdrop-blur-xl rounded-t-xl px-2 py-1 border border-b-0 border-border-subtle z-50 opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ opacity: isSelected || isDragging ? 1 : undefined }}
+          className={cn(
+            'absolute -top-9 left-1/2 -translate-x-1/2 flex items-center gap-0.5',
+            'bg-bg-deep/90 backdrop-blur-2xl rounded-xl px-1.5 py-1 border border-white/[0.08]',
+            'shadow-xl z-50 transition-all duration-200',
+            isSelected || isDragging
+              ? 'opacity-100 translate-y-0'
+              : 'opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0',
+          )}
           onPointerDown={onDragStart}
           onPointerMove={onDragMove}
           onPointerUp={onDragEnd}
         >
-          <GripVertical size={12} className="text-text-muted cursor-grab active:cursor-grabbing" />
-          <span className="text-[9px] font-black text-text-muted uppercase tracking-widest truncate max-w-[100px]">
-            {manifest?.name ?? instance.widgetId}
-          </span>
-          <div className="flex items-center gap-0.5 ml-1">
-            <button
-              type="button"
-              className="p-0.5 rounded text-text-muted hover:text-primary transition"
-              title="Settings"
-            >
-              <Settings2 size={10} />
-            </button>
-            <button
-              type="button"
-              className="p-0.5 rounded text-text-muted hover:text-primary transition"
-              title="Maximize"
-            >
-              <Maximize2 size={10} />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                removeWidget(instance.instanceId)
-              }}
-              className="p-0.5 rounded text-text-muted hover:text-danger transition"
-              title="Remove"
-            >
-              <Trash2 size={10} />
-            </button>
-          </div>
+          <Move size={11} className="text-text-muted/60 cursor-grab active:cursor-grabbing mr-1" />
+          <button
+            type="button"
+            className="p-1 rounded-lg text-text-muted hover:text-primary hover:bg-white/[0.06] transition"
+            title="Settings"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Settings2 size={11} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              removeWidget(instance.instanceId)
+            }}
+            className="p-1 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition"
+            title="Remove"
+          >
+            <Trash2 size={11} />
+          </button>
         </div>
       )}
 
-      {/* Widget content */}
-      <div className={cn('w-full h-full', !appearance.borderless && 'p-5')}>{children}</div>
+      {/* ── Widget content ── */}
+      <div className={cn('w-full h-full', !isBorderless && 'p-4')}>{children}</div>
 
-      {/* Resize handle (edit mode + selected) */}
+      {/* ── Resize corner (edit + selected) ── */}
       {isEditing && isSelected && (
-        <div className="absolute bottom-0 right-0 w-5 h-5 cursor-se-resize z-50 flex items-end justify-end p-0.5">
-          <svg
-            width="8"
-            height="8"
-            viewBox="0 0 8 8"
-            className="text-primary/40"
-            role="img"
-            aria-label="Resize"
-          >
-            <title>Resize</title>
-            <path d="M8 0L8 8L0 8" fill="none" stroke="currentColor" strokeWidth="1.5" />
-            <path d="M8 4L8 8L4 8" fill="none" stroke="currentColor" strokeWidth="1.5" />
-          </svg>
+        <div className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize z-50">
+          <div className="absolute bottom-1 right-1 w-2 h-2 rounded-sm bg-primary/60" />
         </div>
       )}
     </div>
