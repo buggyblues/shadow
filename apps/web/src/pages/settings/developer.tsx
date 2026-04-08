@@ -1,10 +1,21 @@
-import { Button, cn, Input } from '@shadowob/ui'
+import { Button, Input } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
-import { AlertTriangle, Copy, Eye, EyeOff, Pencil, Plus, RotateCw, Trash2 } from 'lucide-react'
+import {
+  AlertTriangle,
+  Code2,
+  Copy,
+  Eye,
+  EyeOff,
+  Pencil,
+  Plus,
+  RotateCw,
+  Trash2,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
+import { SettingsCard, SettingsHeader, SettingsPanel } from './_shared'
 
 interface OAuthApp {
   id: string
@@ -22,7 +33,6 @@ interface CreateAppResult extends OAuthApp {
   clientSecret: string
 }
 
-/** Renders app logo with automatic fallback to first-letter avatar on error */
 function AppLogo({
   url,
   name,
@@ -41,7 +51,7 @@ function AppLogo({
       <img
         src={url}
         alt={name}
-        className={`${size} rounded-lg object-cover`}
+        className={`${size} rounded-xl object-cover`}
         onError={() => setFailed(true)}
       />
     )
@@ -49,7 +59,7 @@ function AppLogo({
 
   return (
     <div
-      className={`${size} rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold ${textSize}`}
+      className={`${size} rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold ${textSize}`}
     >
       {name[0]?.toUpperCase()}
     </div>
@@ -134,23 +144,16 @@ export function DeveloperSettings() {
   }
 
   return (
-    <div className="space-y-6">
+    <SettingsPanel>
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-black text-text-primary">
-            {t('oauth.developerTitle', '开发者设置')}
-          </h2>
-          <p className="text-sm text-text-muted mt-1">
-            {t('oauth.developerDesc', '管理你的 OAuth 应用，接入 Shadow 开放平台')}
-          </p>
-        </div>
-        <Button
-          variant="primary"
-          size="sm"
-          type="button"
-          onClick={() => setShowCreateForm(true)}
-          className=""
-        >
+        <SettingsHeader
+          titleKey="oauth.developerTitle"
+          titleFallback="开发者设置"
+          descKey="oauth.developerDesc"
+          descFallback="管理你的 OAuth 应用，接入 Shadow 开放平台"
+          icon={Code2}
+        />
+        <Button variant="primary" size="sm" type="button" onClick={() => setShowCreateForm(true)}>
           <Plus size={16} />
           {t('oauth.createApp', '创建应用')}
         </Button>
@@ -158,7 +161,7 @@ export function DeveloperSettings() {
 
       {/* Secret display banner */}
       {newSecret && (
-        <div className="bg-warning/10 border border-warning/30 rounded-[40px] p-4">
+        <SettingsCard className="bg-warning/10 border-warning/30">
           <div className="flex items-start gap-3">
             <AlertTriangle className="text-warning shrink-0 mt-0.5" size={20} />
             <div className="flex-1 min-w-0">
@@ -172,14 +175,14 @@ export function DeveloperSettings() {
                 <button
                   type="button"
                   onClick={() => setShowSecret(!showSecret)}
-                  className="p-2 hover:bg-bg-modifier-hover rounded-lg transition"
+                  className="p-2 hover:bg-bg-modifier-hover rounded-xl transition"
                 >
                   {showSecret ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
                 <button
                   type="button"
                   onClick={() => copyToClipboard(newSecret)}
-                  className="p-2 hover:bg-bg-modifier-hover rounded-lg transition"
+                  className="p-2 hover:bg-bg-modifier-hover rounded-xl transition"
                 >
                   <Copy size={16} />
                 </button>
@@ -193,7 +196,7 @@ export function DeveloperSettings() {
               </button>
             </div>
           </div>
-        </div>
+        </SettingsCard>
       )}
 
       {/* Create app form */}
@@ -210,19 +213,16 @@ export function DeveloperSettings() {
       {isLoading ? (
         <div className="text-center text-text-muted py-8">{t('common.loading', '加载中...')}</div>
       ) : apps.length === 0 ? (
-        <div className="text-center text-text-muted py-12">
-          <p className="text-lg mb-2">{t('oauth.noApps', '暂无 OAuth 应用')}</p>
-          <p className="text-sm">
+        <SettingsCard className="text-center py-12">
+          <p className="text-lg mb-2 text-text-muted">{t('oauth.noApps', '暂无 OAuth 应用')}</p>
+          <p className="text-sm text-text-muted">
             {t('oauth.noAppsHint', '创建你的第一个应用，开始接入 Shadow 开放平台')}
           </p>
-        </div>
+        </SettingsCard>
       ) : (
         <div className="space-y-4">
           {apps.map((app) => (
-            <div
-              key={app.id}
-              className="bg-bg-tertiary/30 backdrop-blur-xl rounded-[40px] p-4 border border-border-subtle"
-            >
+            <SettingsCard key={app.id}>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
                   <AppLogo url={app.logoUrl} name={app.name} />
@@ -237,7 +237,7 @@ export function DeveloperSettings() {
                   <button
                     type="button"
                     onClick={() => setEditingAppId(editingAppId === app.id ? null : app.id)}
-                    className="p-2 text-text-muted hover:text-primary hover:bg-bg-modifier-hover rounded-lg transition"
+                    className="p-2 text-text-muted hover:text-primary hover:bg-bg-modifier-hover rounded-xl transition"
                     title={t('oauth.editApp', '编辑应用')}
                   >
                     <Pencil size={16} />
@@ -245,7 +245,7 @@ export function DeveloperSettings() {
                   <button
                     type="button"
                     onClick={() => resetSecretMutation.mutate(app.id)}
-                    className="p-2 text-text-muted hover:text-primary hover:bg-bg-modifier-hover rounded-lg transition"
+                    className="p-2 text-text-muted hover:text-primary hover:bg-bg-modifier-hover rounded-xl transition"
                     title={t('oauth.resetSecret', '重置 Secret')}
                   >
                     <RotateCw size={16} />
@@ -253,7 +253,7 @@ export function DeveloperSettings() {
                   <button
                     type="button"
                     onClick={() => setDeleteConfirmId(app.id)}
-                    className="p-2 text-text-muted hover:text-danger hover:bg-danger/10 rounded-lg transition"
+                    className="p-2 text-text-muted hover:text-danger hover:bg-danger/10 rounded-xl transition"
                     title={t('oauth.deleteApp', '删除应用')}
                   >
                     <Trash2 size={16} />
@@ -266,7 +266,7 @@ export function DeveloperSettings() {
                   <span className="text-text-muted w-20 shrink-0">
                     {t('oauth.clientId', 'Client ID')}
                   </span>
-                  <code className="bg-bg-primary px-2 py-1 rounded font-mono text-text-secondary flex-1 truncate">
+                  <code className="bg-bg-tertiary/50 px-2 py-1 rounded font-mono text-text-secondary flex-1 truncate">
                     {app.clientId}
                   </code>
                   <button
@@ -350,11 +350,11 @@ export function DeveloperSettings() {
                   isPending={updateMutation.isPending}
                 />
               )}
-            </div>
+            </SettingsCard>
           ))}
         </div>
       )}
-    </div>
+    </SettingsPanel>
   )
 }
 
@@ -448,7 +448,7 @@ function CreateAppForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="bg-bg-tertiary/30 backdrop-blur-xl rounded-[40px] p-5 border border-border-subtle space-y-4"
+      className="rounded-3xl border border-border-subtle bg-[var(--glass-bg)] backdrop-blur-2xl p-6 shadow-[var(--shadow-soft)] space-y-4"
     >
       <h3 className="font-black text-text-primary">{t('oauth.createNew', '创建新应用')}</h3>
 
@@ -511,7 +511,7 @@ function CreateAppForm({
       <LogoUploader value={logoUrl} onChange={setLogoUrl} name={name} t={t} />
 
       <div className="flex gap-2 justify-end">
-        <Button variant="ghost" size="sm" type="button" onClick={onCancel} className="">
+        <Button variant="ghost" size="sm" type="button" onClick={onCancel}>
           {t('common.cancel', '取消')}
         </Button>
         <Button
@@ -519,7 +519,6 @@ function CreateAppForm({
           size="sm"
           type="submit"
           disabled={isPending || !name.trim() || !redirectUri.trim()}
-          className=""
         >
           {isPending ? t('oauth.creating', '创建中...') : t('oauth.createApp', '创建应用')}
         </Button>
@@ -568,7 +567,7 @@ function EditAppForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="mt-3 p-3 bg-bg-tertiary/20 rounded-2xl border border-border-subtle space-y-3"
+      className="mt-3 p-4 bg-bg-tertiary/20 rounded-2xl border border-border-subtle space-y-3"
     >
       <div className="grid grid-cols-2 gap-3">
         <div>

@@ -179,10 +179,9 @@
   "settings": {
     "back": "返回",
     "sidebarTitle": "用户设置",
-    "tabQuickStart": "快速开始",
-    "tabProfile": "个人资料",
-    "tabAccount": "账号安全",
-    "tabBuddy": "Buddy 管理",
+    "tabProfile": "修改资料",
+    "tabAccount": "账号与安全",
+    "tabBuddy": "Buddy",
     "logout": "退出登录",
     "profileTitle": "个人资料",
     "displayNameLabel": "显示名称",
@@ -209,11 +208,6 @@
     "passwordTooShort": "密码至少需要 8 个字符",
     "passwordChangedSuccess": "密码修改成功！",
     "changingPassword": "修改中...",
-    "quickLinks": "快捷链接",
-    "goHome": "返回官网",
-    "goHomeDesc": "访问 Shadow 官方首页",
-    "goBuddyMarket": "Buddy 集市",
-    "goBuddyMarketDesc": "浏览和租赁 AI Buddy",
     "tabInvite": "邀请链接",
     "inviteTitle": "邀请链接",
     "inviteDesc": "创建邀请链接，邀请他人加入平台。",
@@ -236,17 +230,19 @@
     "themeDarkDesc": "护眼模式",
     "themeSystem": "跟随系统",
     "themeSystemDesc": "跟随操作系统设置",
-    "sectionStart": "快速开始",
-    "sectionSocial": "社交",
-    "sectionPersonal": "个人设置",
-    "sectionWork": "工作与安全",
-    "sectionEcosystem": "生态与邀请",
+    "sectionBasic": "基本",
+    "sectionActivity": "活动",
+    "sectionSettings": "设置",
+    "sectionDM": "私信",
+    "sectionAccountPayment": "账号与支付",
+    "tabDM": "私信",
     "tabFriends": "好友",
-    "tabChat": "聊天",
+    "tabChat": "私聊",
     "tabNotification": "通知",
     "tabTasks": "任务中心",
     "tabWallet": "钱包",
-    "tabDeveloper": "开发者"
+    "tabDeveloper": "开发者",
+    "viewProfile": "查看主页"
   },
   "server": {
     "home": "首页",
@@ -1108,7 +1104,8 @@
     "requestSent": "好友请求已发送！",
     "requestSentSuccess": "好友请求已成功发送！等待对方确认后即可开始聊天。",
     "otherWays": "其他添加好友的方式",
-    "otherWaysDesc": "你也可以在服务器中找到其他用户，通过他们的个人资料页面发起好友请求。"
+    "otherWaysDesc": "你也可以在服务器中找到其他用户，通过他们的个人资料页面发起好友请求。",
+    "pendingRequests": "好友请求"
   },
   "dm": {
     "chatTitle": "聊天消息",
@@ -1124,7 +1121,18 @@
     "chatDisabledRentedOut": "该 Buddy 已出租给其他用户，暂时无法聊天",
     "chatDisabledListed": "该 Buddy 已在集市挂单中，暂时无法聊天",
     "rentalCostTip": "🦐 今日费用提醒：基础日费 {{baseDailyRate}}🦐 + 消息费 {{messageFee}}🦐/条，累计花费 {{totalCost}}🦐，已发送 {{messageCount}} 条消息",
-    "chatDisabledExpired": "使用权已到期，请续租后再使用"
+    "chatDisabledExpired": "使用权已到期，请续租后再使用",
+    "searchContacts": "搜索联系人",
+    "recentContacts": "最近联系",
+    "noContactFound": "未找到「{{query}}」",
+    "addAsContact": "发送好友请求",
+    "emptyContacts": "搜索用户名或点击 + 添加联系人",
+    "defaultTitle": "私信",
+    "defaultDesc": "从左侧选择联系人开始对话，或搜索用户名直接触达",
+    "tipSearch": "搜索",
+    "tipSearchDesc": "输入用户名快速定位联系人",
+    "tipAdd": "添加",
+    "tipAddDesc": "点击 + 图标通过用户名添加好友"
   },
   "openclaw": {
     "nav": {

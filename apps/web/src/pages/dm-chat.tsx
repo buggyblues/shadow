@@ -371,36 +371,18 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
           </div>
         )}
 
-        {/* DM Welcome  */}
-        {!hasNextPage && otherUser && (
-          <div className="mb-8 pt-8">
-            <UserAvatar
-              userId={otherUser.id}
-              avatarUrl={otherUser.avatarUrl}
-              displayName={otherUser.displayName ?? otherUser.username}
-              size="xl"
-            />
-            <h2 className="text-xl font-bold text-primary mt-3">
-              {otherUser.displayName ?? otherUser.username}
-            </h2>
-            <p className="text-text-muted text-sm mt-1">{otherUser.username}</p>
-            <p className="text-text-secondary text-sm mt-2">
-              {t(
-                'dm.welcomeMessage',
-                `这是你与 ${otherUser.displayName ?? otherUser.username} 的聊天记录的开始。`,
-              )}
-            </p>
-            <div className="w-full h-px bg-border-subtle mt-6" />
-          </div>
-        )}
-
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-16">
             <Loader2 size={32} className="animate-spin text-primary" />
           </div>
         ) : allMessages.length === 0 ? (
-          <div className="text-center py-8 text-text-muted text-sm">
-            {t('dm.noMessages', '还没有消息，发送第一条消息开始聊天吧！')}
+          <div className="flex flex-col items-center justify-center py-16 text-text-muted">
+            <div className="w-12 h-12 rounded-2xl bg-bg-tertiary/60 flex items-center justify-center mb-3">
+              <Send size={20} className="text-text-muted/60" />
+            </div>
+            <p className="text-sm">
+              {t('dm.noMessages', '还没有消息，发送第一条消息开始聊天吧！')}
+            </p>
           </div>
         ) : (
           <div className="space-y-0.5">

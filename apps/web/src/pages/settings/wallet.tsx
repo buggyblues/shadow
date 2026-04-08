@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import { useRechargeStore } from '../../stores/recharge.store'
+import { SettingsCard, SettingsHeader, SettingsPanel } from './_shared'
 
 type TransactionType =
   | 'topup'
@@ -95,14 +96,11 @@ export function WalletSettings() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-xl font-black text-text-primary">{t('wallet.title')}</h2>
-      </div>
+    <SettingsPanel>
+      <SettingsHeader titleKey="wallet.title" titleFallback="钱包" icon={Wallet} />
 
       {/* Balance Card */}
-      <div className="bg-gradient-to-br from-primary/20 via-primary/10 to-transparent rounded-[24px] p-6 border border-primary/20">
+      <SettingsCard className="bg-gradient-to-br from-primary/15 via-primary/5 to-transparent border-primary/20">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-text-muted mb-1">{t('wallet.balance')}</p>
@@ -128,13 +126,14 @@ export function WalletSettings() {
             {t('wallet.rechargeBtn')}
           </Button>
         </div>
-      </div>
+      </SettingsCard>
 
       {/* Transaction History */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-black text-text-primary">{t('wallet.transactionHistory')}</h3>
-          {/* Filter tabs */}
+          <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60">
+            {t('wallet.transactionHistory')}
+          </h3>
           <div className="flex items-center gap-1 bg-bg-tertiary/30 rounded-full p-1">
             {(['all', 'income', 'expense'] as FilterType[]).map((f) => (
               <button
@@ -160,7 +159,6 @@ export function WalletSettings() {
           </div>
         </div>
 
-        {/* Transaction list */}
         {isLoading ? (
           <div className="flex justify-center py-12">
             <RefreshCw size={24} className="animate-spin text-text-muted" />
@@ -180,16 +178,14 @@ export function WalletSettings() {
               return (
                 <div
                   key={tx.id}
-                  className="flex items-center gap-3 p-3 rounded-2xl bg-bg-tertiary/20 hover:bg-white/[0.04] transition-all"
+                  className="flex items-center gap-3 p-3 rounded-2xl bg-[var(--glass-bg)] backdrop-blur-xl border border-border-subtle hover:bg-bg-modifier-hover transition-all"
                 >
-                  {/* Icon */}
                   <div
                     className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${colorClass}`}
                   >
                     <Icon size={18} />
                   </div>
 
-                  {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold text-text-primary">
@@ -204,7 +200,6 @@ export function WalletSettings() {
                     </p>
                   </div>
 
-                  {/* Amount */}
                   <div className="text-right shrink-0">
                     <span
                       className={`text-sm font-black tabular-nums ${
@@ -233,7 +228,6 @@ export function WalletSettings() {
               type="button"
               disabled={offset === 0}
               onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-              className=""
             >
               ← {t('recharge.back')}
             </Button>
@@ -246,7 +240,6 @@ export function WalletSettings() {
                 size="sm"
                 type="button"
                 onClick={() => setOffset(offset + PAGE_SIZE)}
-                className=""
               >
                 {t('wallet.loadMore')} →
               </Button>
@@ -254,6 +247,6 @@ export function WalletSettings() {
           </div>
         )}
       </div>
-    </div>
+    </SettingsPanel>
   )
 }

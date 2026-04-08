@@ -1,8 +1,9 @@
-import { Card, cn, SectionHeader } from '@shadowob/ui'
+import { cn } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AtSign, Bell, BellOff, Check, Settings2 } from 'lucide-react'
+import { AtSign, Bell, BellOff, Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
+import { SettingsCard, SettingsHeader, SettingsPanel } from './_shared'
 
 const strategies = [
   {
@@ -57,50 +58,52 @@ export function NotificationSettings() {
     },
   })
 
+  const current = preference?.strategy ?? 'all'
+
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <SectionHeader
-        title={t('settings.notificationTitle', '通知设置')}
-        description={t('settings.notificationDesc', '管理通知策略')}
+    <SettingsPanel>
+      <SettingsHeader
+        titleKey="settings.notificationTitle"
+        titleFallback="通知设置"
+        descKey="settings.notificationDesc"
+        descFallback="管理通知策略"
         icon={Bell}
       />
 
-      {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-24 rounded-[24px] bg-bg-tertiary/50 animate-pulse" />
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {strategies.map((item) => {
-            const Icon = item.icon
-            const checked = (preference?.strategy ?? 'all') === item.value
-            return (
-              <Card
-                key={item.value}
-                variant="glass"
-                hoverable
-                active={checked}
-                className={cn(
-                  'cursor-pointer transition-all duration-300',
-                  checked && 'ring-1 ring-primary/30',
-                )}
-                onClick={() => updateMutation.mutate({ strategy: item.value })}
-              >
-                <div className="flex items-center gap-4 p-5">
+      <SettingsCard>
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-16 rounded-2xl bg-bg-tertiary/50 animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {strategies.map((item) => {
+              const checked = current === item.value
+              const Icon = item.icon
+              return (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => updateMutation.mutate({ strategy: item.value })}
+                  className={cn(
+                    'w-full flex items-center gap-4 p-4 rounded-2xl transition-all duration-200',
+                    checked ? 'bg-primary/10' : 'hover:bg-bg-modifier-hover',
+                  )}
+                >
                   <div
                     className={cn(
-                      'w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-colors',
+                      'w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 transition-colors',
                       checked ? 'bg-primary/20 text-primary' : 'bg-bg-tertiary/50 text-text-muted',
                     )}
                   >
-                    <Icon size={22} strokeWidth={2.5} />
+                    <Icon size={18} strokeWidth={2.5} />
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 text-left">
                     <p
                       className={cn(
-                        'text-sm font-black',
+                        'text-sm font-bold',
                         checked ? 'text-primary' : 'text-text-primary',
                       )}
                     >
@@ -111,33 +114,20 @@ export function NotificationSettings() {
                     </p>
                   </div>
                   {checked && (
-                    <div className="w-8 h-8 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
-                      <Check size={16} className="text-primary" strokeWidth={3} />
+                    <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                      <Check size={14} className="text-primary" strokeWidth={3} />
                     </div>
                   )}
-                </div>
-              </Card>
-            )
-          })}
-        </div>
-      )}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </SettingsCard>
 
-      {/* Desktop Preferences */}
-      <Card variant="surface" className="p-6">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-bg-tertiary/50 flex items-center justify-center shrink-0">
-            <Settings2 size={22} className="text-text-muted" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-black text-text-primary">
-              {t('settings.desktopNotifications', '桌面通知偏好')}
-            </p>
-            <p className="text-xs text-text-muted mt-0.5">
-              {t('settings.desktopNotificationsDesc', '频道静音可在频道列表右键菜单中设置。')}
-            </p>
-          </div>
-        </div>
-      </Card>
-    </div>
+      <p className="text-xs text-text-muted px-1">
+        {t('settings.desktopNotificationsDesc', '频道静音可在频道列表右键菜单中设置。')}
+      </p>
+    </SettingsPanel>
   )
 }

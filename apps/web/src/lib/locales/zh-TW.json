@@ -179,10 +179,9 @@
   "settings": {
     "back": "返回",
     "sidebarTitle": "使用者設定",
-    "tabQuickStart": "快速開始",
-    "tabProfile": "個人資料",
-    "tabAccount": "帳號安全",
-    "tabBuddy": "Buddy 管理",
+    "tabProfile": "修改資料",
+    "tabAccount": "帳號與安全",
+    "tabBuddy": "Buddy",
     "logout": "登出",
     "profileTitle": "個人資料",
     "displayNameLabel": "顯示名稱",
@@ -209,11 +208,6 @@
     "passwordTooShort": "密碼至少需要 8 個字元",
     "passwordChangedSuccess": "密碼修改成功！",
     "changingPassword": "修改中...",
-    "quickLinks": "快捷連結",
-    "goHome": "返回官網",
-    "goHomeDesc": "訪問 Shadow 官方首頁",
-    "goBuddyMarket": "Buddy 集市",
-    "goBuddyMarketDesc": "瀏覽和租賃 AI Buddy",
     "tabInvite": "邀請連結",
     "inviteTitle": "邀請連結",
     "inviteDesc": "建立邀請連結，邀請他人加入平台。",
@@ -236,17 +230,19 @@
     "themeDarkDesc": "護眼模式",
     "themeSystem": "跟隨系統",
     "themeSystemDesc": "跟隨作業系統設定",
-    "sectionStart": "快速開始",
-    "sectionSocial": "社交",
-    "sectionPersonal": "個人設定",
-    "sectionWork": "工作與安全",
-    "sectionEcosystem": "生態與邀請",
+    "sectionBasic": "基本",
+    "sectionActivity": "活動",
+    "sectionSettings": "設定",
+    "sectionDM": "私訊",
+    "sectionAccountPayment": "帳號與支付",
+    "tabDM": "私訊",
     "tabFriends": "好友",
-    "tabChat": "聊天",
+    "tabChat": "私聊",
     "tabNotification": "通知",
     "tabTasks": "任務中心",
     "tabWallet": "錢包",
-    "tabDeveloper": "開發者"
+    "tabDeveloper": "開發者",
+    "viewProfile": "查看主頁"
   },
   "server": {
     "home": "首頁",
@@ -1118,7 +1114,8 @@
     "requestSent": "好友請求已發送！",
     "requestSentSuccess": "好友請求已成功發送！等待對方確認後即可開始聊天。",
     "otherWays": "其他新增好友的方式",
-    "otherWaysDesc": "你也可以在伺服器中找到其他使用者，透過他們的個人資料頁面發起好友請求。"
+    "otherWaysDesc": "你也可以在伺服器中找到其他使用者，透過他們的個人資料頁面發起好友請求。",
+    "pendingRequests": "好友請求"
   },
   "dm": {
     "chatTitle": "聊天訊息",
@@ -1134,7 +1131,18 @@
     "chatDisabledRentedOut": "該 Buddy 已出租給其他用戶，暫時無法聊天",
     "chatDisabledListed": "該 Buddy 已在集市掛單中，暫時無法聊天",
     "rentalCostTip": "🦐 今日費用提醒：基礎日費 {{baseDailyRate}}🦐 + 訊息費 {{messageFee}}🦐/條，累計花費 {{totalCost}}🦐，已發送 {{messageCount}} 條訊息",
-    "chatDisabledExpired": "使用權已到期，請續租後再使用"
+    "chatDisabledExpired": "使用權已到期，請續租後再使用",
+    "searchContacts": "搜尋聯絡人",
+    "recentContacts": "最近聯繫",
+    "noContactFound": "未找到「{{query}}」",
+    "addAsContact": "發送好友請求",
+    "emptyContacts": "搜尋使用者名稱或點擊 + 新增聯絡人",
+    "defaultTitle": "私訊",
+    "defaultDesc": "從左側選擇聯絡人開始對話，或搜尋使用者名稱直接觸達",
+    "tipSearch": "搜尋",
+    "tipSearchDesc": "輸入使用者名稱快速定位聯絡人",
+    "tipAdd": "新增",
+    "tipAddDesc": "點擊 + 圖示透過使用者名稱新增好友"
   },
   "openclaw": {
     "nav": {

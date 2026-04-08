@@ -1,19 +1,13 @@
-import {
-  Accordion,
-  Badge,
-  Button,
-  Card,
-  Divider,
-  EmptyState,
-  ProgressBar,
-  SectionHeader,
-} from '@shadowob/ui'
+import { Badge, Button, EmptyState, ProgressBar } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { ExternalLink, HelpCircle, History, Target, Trophy } from 'lucide-react'
+import { ChevronDown, ExternalLink, HelpCircle, History, Target, Trophy } from 'lucide-react'
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { PriceDisplay } from '../../components/shop/ui/currency'
 import { fetchApi } from '../../lib/api'
 import { useUIStore } from '../../stores/ui.store'
+import { SettingsCard, SettingsGroup, SettingsHeader, SettingsPanel } from './_shared'
 
 const taskGuides: Record<string, string> = {
   create_server:
@@ -35,9 +29,11 @@ const taskGuides: Record<string, string> = {
 }
 
 export function TaskSettings() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { setPendingAction } = useUIStore()
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
 
   const { data, isLoading } = useQuery({
     queryKey: ['task-center'],
@@ -102,23 +98,23 @@ export function TaskSettings() {
   const getActionLabel = (taskKey: string) => {
     switch (taskKey) {
       case 'create_server':
-        return '去创建服务器'
+        return t('tasks.goCreateServer', '去创建服务器')
       case 'create_channel':
-        return '去创建频道'
+        return t('tasks.goCreateChannel', '去创建频道')
       case 'first_message':
-        return '去发消息'
+        return t('tasks.goSendMessage', '去发消息')
       case 'create_buddy':
-        return '去创建 Buddy'
+        return t('tasks.goCreateBuddy', '去创建 Buddy')
       case 'list_buddy':
-        return '去挂单 Buddy'
+        return t('tasks.goListBuddy', '去挂单 Buddy')
       case 'rent_buddy':
-        return '去租赁 Buddy'
+        return t('tasks.goRentBuddy', '去租赁 Buddy')
       case 'list_product':
-        return '去上架商品'
+        return t('tasks.goListProduct', '去上架商品')
       case 'invite_signup':
-        return '去邀请好友'
+        return t('tasks.goInvite', '去邀请好友')
       default:
-        return '去完成'
+        return t('tasks.goComplete', '去完成')
     }
   }
 
@@ -167,156 +163,184 @@ export function TaskSettings() {
   }
 
   const completionRate = data ? (data.summary.completedTasks / data.summary.totalTasks) * 100 : 0
+  const totalEarned = rewardLogs?.reduce((sum, log) => sum + log.amount, 0) ?? 0
 
   return (
-    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl pb-20">
-      <SectionHeader
-        title="任务中心"
-        description="完成任务赚取虾币，支持一次性任务与活动任务。"
+    <SettingsPanel>
+      <SettingsHeader
+        titleKey="settings.tabTasks"
+        titleFallback="任务中心"
+        descKey="tasks.desc"
+        descFallback="完成任务赚取虾币，支持一次性任务与活动任务。"
         icon={Target}
       />
 
       {/* Progress Summary */}
-      <Card className="p-8 bg-gradient-to-br from-primary/10 via-bg-secondary to-bg-secondary border-primary/20 relative overflow-hidden group">
+      <SettingsCard className="relative overflow-hidden group bg-gradient-to-br from-primary/10 via-[var(--glass-bg)] to-[var(--glass-bg)] border-primary/20">
         <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-primary/10 transition-colors" />
         <div className="relative z-10 space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-black text-text-muted uppercase tracking-widest mb-1">
-                总进度
+              <p className="text-[11px] font-black text-text-muted uppercase tracking-[0.2em] mb-1">
+                {t('tasks.totalProgress', '总进度')}
               </p>
               <h3 className="text-3xl font-black text-text-primary tracking-tight">
                 {data?.summary.completedTasks ?? 0} / {data?.summary.totalTasks ?? 0}{' '}
-                <span className="text-sm text-text-muted opacity-40 ml-2">已完成</span>
+                <span className="text-sm text-text-muted opacity-40 ml-2">
+                  {t('tasks.completed', '已完成')}
+                </span>
               </h3>
             </div>
-            <div className="w-16 h-16 rounded-3xl bg-primary/10 flex items-center justify-center text-primary shadow-inner">
-              <Trophy size={32} strokeWidth={2.5} />
+            <div className="text-right">
+              <p className="text-[11px] font-black text-text-muted uppercase tracking-[0.2em] mb-0.5">
+                {t('tasks.totalEarned', '已赚取')}
+              </p>
+              <PriceDisplay amount={totalEarned} size={20} className="font-black text-success" />
             </div>
           </div>
           <ProgressBar value={completionRate} variant="primary" showLabel className="h-3" />
         </div>
-      </Card>
+      </SettingsCard>
 
-      <section className="space-y-6">
-        <Divider label="当前任务" />
-
+      {/* Tasks */}
+      <SettingsGroup labelKey="tasks.currentTasks" labelFallback="当前任务">
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
           </div>
         ) : (
-          <div className="space-y-4">
-            {data?.tasks.map((task) => (
-              <Accordion
-                type="single"
-                key={task.key}
-                title={task.title}
-                icon={Target}
-                className={task.completed ? 'opacity-60' : ''}
-              >
-                <div className="flex flex-col md:flex-row md:items-start gap-6">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-2">
-                      {task.type === 'repeatable' && <Badge variant="info">可重复</Badge>}
-                      {task.completed && <Badge variant="success">已完成</Badge>}
+          <div className="space-y-2">
+            {data?.tasks.map((task) => {
+              const isExpanded = expandedTasks.has(task.key)
+              return (
+                <SettingsCard
+                  key={task.key}
+                  className={task.completed && !task.claimable ? 'opacity-60' : ''}
+                >
+                  {/* Collapsed header — always visible */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExpandedTasks((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(task.key)) next.delete(task.key)
+                        else next.add(task.key)
+                        return next
+                      })
+                    }}
+                    className="w-full flex items-center gap-3 cursor-pointer"
+                  >
+                    <div className="flex-1 min-w-0 flex items-center gap-2 text-left">
+                      <h4 className="text-sm font-black text-text-primary uppercase tracking-tight truncate">
+                        {task.title}
+                      </h4>
+                      {task.type === 'repeatable' && (
+                        <Badge variant="info">{t('tasks.repeatable', '可重复')}</Badge>
+                      )}
+                      {task.completed && (
+                        <Badge variant="success">{t('tasks.done', '已完成')}</Badge>
+                      )}
+                      {task.claimable && (
+                        <Badge variant="warning">{t('tasks.claimable', '可领取')}</Badge>
+                      )}
                     </div>
-                    <p className="text-sm font-bold text-text-secondary leading-relaxed mb-4">
-                      {task.description}
-                    </p>
+                    <PriceDisplay
+                      amount={task.reward}
+                      size={14}
+                      className="font-bold text-success shrink-0"
+                    />
+                    <ChevronDown
+                      size={16}
+                      className={`text-text-muted shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                    />
+                  </button>
 
-                    <div className="p-4 bg-bg-tertiary/50 rounded-2xl border border-border-subtle">
-                      <p className="text-[11px] font-black uppercase text-text-muted tracking-widest mb-2 flex items-center gap-2">
-                        <HelpCircle size={12} /> 操作教程
+                  {/* Expanded detail */}
+                  {isExpanded && (
+                    <div className="mt-4 pt-4 border-t border-border-subtle space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <p className="text-sm font-bold text-text-secondary leading-relaxed">
+                        {task.description}
                       </p>
-                      <p className="text-xs font-bold text-text-secondary whitespace-pre-wrap leading-relaxed italic opacity-80">
-                        {taskGuides[task.key] || '暂无教程'}
-                      </p>
+
+                      {taskGuides[task.key] && (
+                        <div className="p-3 bg-bg-tertiary/50 rounded-xl border border-border-subtle">
+                          <p className="text-[11px] font-black uppercase text-text-muted tracking-widest mb-1.5 flex items-center gap-1.5">
+                            <HelpCircle size={11} /> {t('tasks.tutorial', '操作教程')}
+                          </p>
+                          <p className="text-xs font-bold text-text-secondary whitespace-pre-wrap leading-relaxed italic opacity-80">
+                            {taskGuides[task.key]}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="flex justify-end">
+                        {task.claimable ? (
+                          <Button
+                            variant="primary"
+                            onClick={() => claimMutation.mutate(task.key)}
+                            disabled={claimMutation.isPending}
+                            loading={claimMutation.isPending}
+                            icon={Trophy}
+                          >
+                            {t('tasks.claimReward', '领取奖励')}
+                          </Button>
+                        ) : task.completed && task.type !== 'repeatable' ? (
+                          <Button variant="ghost" disabled>
+                            {t('tasks.claimed', '已领取')}
+                          </Button>
+                        ) : canNavigate(task.key) ? (
+                          <Button
+                            variant="secondary"
+                            onClick={() => handleNavigateTask(task.key)}
+                            icon={ExternalLink}
+                          >
+                            {getActionLabel(task.key)}
+                          </Button>
+                        ) : (
+                          <Badge variant="neutral" className="py-2 opacity-50">
+                            {t('tasks.unavailable', '暂不可用')}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="w-full md:w-48 flex flex-col gap-3 shrink-0">
-                    <Card className="p-4 flex flex-col items-center justify-center text-center bg-bg-tertiary/50 shadow-inner">
-                      <span className="text-[11px] font-black uppercase text-text-muted tracking-widest mb-1">
-                        奖励
-                      </span>
-                      <PriceDisplay
-                        amount={task.reward}
-                        size={20}
-                        className="font-black text-success"
-                      />
-                    </Card>
-
-                    {task.claimable ? (
-                      <Button
-                        variant="primary"
-                        onClick={() => claimMutation.mutate(task.key)}
-                        disabled={claimMutation.isPending}
-                        loading={claimMutation.isPending}
-                        icon={Trophy}
-                        className="w-full"
-                      >
-                        领取奖励
-                      </Button>
-                    ) : task.completed && task.type !== 'repeatable' ? (
-                      <Button variant="ghost" disabled className="w-full">
-                        已领取
-                      </Button>
-                    ) : canNavigate(task.key) ? (
-                      <Button
-                        variant="secondary"
-                        onClick={() => handleNavigateTask(task.key)}
-                        icon={ExternalLink}
-                        className="w-full"
-                      >
-                        {getActionLabel(task.key)}
-                      </Button>
-                    ) : (
-                      <Badge variant="neutral" className="py-3 text-center opacity-50">
-                        暂不可用
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </Accordion>
-            ))}
+                  )}
+                </SettingsCard>
+              )
+            })}
           </div>
         )}
-      </section>
+      </SettingsGroup>
 
-      <section className="space-y-6 pt-10">
-        <Divider label="奖励记录" />
-
-        <Card className="overflow-hidden bg-transparent border-none">
-          {rewardLogs && rewardLogs.length > 0 ? (
-            <div className="space-y-2">
-              {rewardLogs.map((log) => (
-                <div
-                  key={log.id}
-                  className="flex items-center justify-between p-5 bg-bg-tertiary/50 rounded-2xl hover:bg-bg-modifier-hover transition-colors border border-border-subtle"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-black text-text-primary uppercase tracking-tight truncate">
-                      {log.note || log.rewardKey}
-                    </p>
-                    <p className="text-[11px] font-bold text-text-muted mt-0.5 opacity-60">
-                      {new Date(log.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-                  <PriceDisplay amount={log.amount} size={16} className="font-black text-primary" />
+      {/* Reward History */}
+      <SettingsGroup labelKey="tasks.rewardHistory" labelFallback="奖励记录">
+        {rewardLogs && rewardLogs.length > 0 ? (
+          <div className="space-y-2">
+            {rewardLogs.map((log) => (
+              <div
+                key={log.id}
+                className="flex items-center justify-between p-4 rounded-2xl bg-[var(--glass-bg)] backdrop-blur-xl border border-border-subtle hover:bg-bg-modifier-hover transition-colors"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-black text-text-primary uppercase tracking-tight truncate">
+                    {log.note || log.rewardKey}
+                  </p>
+                  <p className="text-[11px] font-bold text-text-muted mt-0.5 opacity-60">
+                    {new Date(log.createdAt).toLocaleString()}
+                  </p>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              title="暂无记录"
-              description="完成第一个任务后，奖励记录将显示在这里。"
-              icon={History}
-              className="py-12"
-            />
-          )}
-        </Card>
-      </section>
-    </div>
+                <PriceDisplay amount={log.amount} size={16} className="font-black text-primary" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            title={t('tasks.noHistory', '暂无记录')}
+            description={t('tasks.noHistoryDesc', '完成第一个任务后，奖励记录将显示在这里。')}
+            icon={History}
+            className="py-12"
+          />
+        )}
+      </SettingsGroup>
+    </SettingsPanel>
   )
 }
