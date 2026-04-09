@@ -1,28 +1,49 @@
 import type { Socket, Server as SocketIOServer } from 'socket.io'
 import type { AppContainer } from '../container'
+import { logger } from '../lib/logger'
+import type { RedisClientType } from 'redis'
+import { presenceKeys } from '../lib/redis'
 
-const onlineUsers = new Map<string, Set<string>>() // userId -> Set<socketId>
+const ACTIVITY_TTL = 60 // seconds — auto-expire safety net
 
-/** In-memory activity status: userId → { activity, channelId, expiresAt } */
-const userActivities = new Map<
-  string,
-  { activity: string; channelId: string; timer: ReturnType<typeof setTimeout> }
->()
-
-export function setupPresenceGateway(io: SocketIOServer, container: AppContainer): void {
+export function setupPresenceGateway(
+  io: SocketIOServer,
+  container: AppContainer,
+  redis: RedisClientType | null,
+): void {
   io.on('connection', (socket: Socket) => {
     const userId = socket.data.userId as string | undefined
     if (!userId) return
 
     // Track online user
-    if (!onlineUsers.has(userId)) {
-      onlineUsers.set(userId, new Set())
-      // Broadcast online status
-      const userDao = container.resolve('userDao')
-      void userDao.updateStatus(userId, 'online')
-      io.emit('presence:change', { userId, status: 'online' })
-    }
-    onlineUsers.get(userId)!.add(socket.id)
+    socket.on('connect', async () => {
+      if (redis) {
+        await redis.sAdd(presenceKeys.onlineSockets(userId), socket.id)
+        const wasEmpty = (await redis.sCard(presenceKeys.onlineSockets(userId))) === 1
+        if (wasEmpty) {
+          const userDao = container.resolve('userDao')
+          void userDao.updateStatus(userId, 'online')
+          io.emit('presence:change', { userId, status: 'online' })
+        }
+      }
+    })
+
+    // Run immediately for already-connected socket
+    ;(async () => {
+      try {
+        if (redis) {
+          await redis.sAdd(presenceKeys.onlineSockets(userId), socket.id)
+          const size = await redis.sCard(presenceKeys.onlineSockets(userId))
+          if (size === 1) {
+            const userDao = container.resolve('userDao')
+            void userDao.updateStatus(userId, 'online')
+            io.emit('presence:change', { userId, status: 'online' })
+          }
+        }
+      } catch (err) {
+        logger.warn({ err, userId }, 'Failed to track online presence in Redis')
+      }
+    })()
 
     // presence:update
     socket.on(
@@ -37,25 +58,21 @@ export function setupPresenceGateway(io: SocketIOServer, container: AppContainer
     // presence:activity — agent/user activity status (thinking, working, etc.)
     socket.on(
       'presence:activity',
-      ({ channelId, activity }: { channelId: string; activity: string | null }) => {
-        // Clear any existing auto-expire timer
-        const existing = userActivities.get(userId)
-        if (existing?.timer) clearTimeout(existing.timer)
-
-        if (activity) {
-          // Set activity with auto-expire (60s safety net)
-          const timer = setTimeout(() => {
-            userActivities.delete(userId)
-            io.to(`channel:${channelId}`).emit('presence:activity', {
-              userId,
-              channelId,
-              activity: null,
-            })
-          }, 60_000)
-
-          userActivities.set(userId, { activity, channelId, timer })
-        } else {
-          userActivities.delete(userId)
+      async ({ channelId, activity }: { channelId: string; activity: string | null }) => {
+        try {
+          if (redis) {
+            if (activity) {
+              await redis.set(
+                presenceKeys.userActivity(userId),
+                JSON.stringify({ activity, channelId }),
+                { EX: ACTIVITY_TTL },
+              )
+            } else {
+              await redis.del(presenceKeys.userActivity(userId))
+            }
+          }
+        } catch (err) {
+          logger.warn({ err, userId }, 'Failed to update presence activity in Redis')
         }
 
         // Broadcast to channel room
@@ -68,66 +85,60 @@ export function setupPresenceGateway(io: SocketIOServer, container: AppContainer
     )
 
     // Disconnect
-    socket.on('disconnect', () => {
-      const sockets = onlineUsers.get(userId)
-      if (sockets) {
-        sockets.delete(socket.id)
-        if (sockets.size === 0) {
-          onlineUsers.delete(userId)
-          const userDao = container.resolve('userDao')
-          void userDao.updateStatus(userId, 'offline')
-          io.emit('presence:change', { userId, status: 'offline' })
-
-          // Clear activity on disconnect
-          const act = userActivities.get(userId)
-          if (act) {
-            clearTimeout(act.timer)
-            userActivities.delete(userId)
-            io.to(`channel:${act.channelId}`).emit('presence:activity', {
-              userId,
-              channelId: act.channelId,
-              activity: null,
-            })
+    socket.on('disconnect', async () => {
+      try {
+        if (redis) {
+          await redis.sRem(presenceKeys.onlineSockets(userId), socket.id)
+          const size = await redis.sCard(presenceKeys.onlineSockets(userId))
+          if (size === 0) {
+            await redis.del(presenceKeys.onlineSockets(userId))
+            await redis.del(presenceKeys.userActivity(userId))
+            const userDao = container.resolve('userDao')
+            void userDao.updateStatus(userId, 'offline')
+            io.emit('presence:change', { userId, status: 'offline' })
           }
         }
+      } catch (err) {
+        logger.warn({ err, userId }, 'Failed to clean up presence on disconnect')
       }
     })
   })
 }
 
-/** Get online user IDs */
-export function getOnlineUserIds(): string[] {
-  return Array.from(onlineUsers.keys())
+/** Get online user IDs — Redis-backed, multi-instance safe */
+export async function getOnlineUserIds(redis: RedisClientType | null): Promise<string[]> {
+  if (!redis) return []
+  const keys = await redis.keys('presence:online:*')
+  const onlineUsers: string[] = []
+
+  for (const key of keys) {
+    const size = await redis.sCard(key)
+    if (size > 0) {
+      // Extract userId from key: presence:online:{userId}
+      const userId = key.replace('presence:online:', '')
+      onlineUsers.push(userId)
+    }
+  }
+
+  return onlineUsers
 }
 
 /** Force-disconnect a user by userId (e.g. on page close via sendBeacon) */
-export function forceDisconnectUser(
+export async function forceDisconnectUser(
   userId: string,
   io: import('socket.io').Server,
   container: AppContainer,
-): void {
-  const sockets = onlineUsers.get(userId)
-  if (sockets) {
-    // Disconnect all sockets for this user
-    for (const socketId of sockets) {
-      const s = io.sockets.sockets.get(socketId)
-      if (s) s.disconnect(true)
+  redis: RedisClientType | null,
+): Promise<void> {
+  try {
+    if (redis) {
+      await redis.del(presenceKeys.onlineSockets(userId))
+      await redis.del(presenceKeys.userActivity(userId))
     }
-    onlineUsers.delete(userId)
     const userDao = container.resolve('userDao')
     void userDao.updateStatus(userId, 'offline')
     io.emit('presence:change', { userId, status: 'offline' })
-
-    // Clear activity
-    const act = userActivities.get(userId)
-    if (act) {
-      clearTimeout(act.timer)
-      userActivities.delete(userId)
-      io.to(`channel:${act.channelId}`).emit('presence:activity', {
-        userId,
-        channelId: act.channelId,
-        activity: null,
-      })
-    }
+  } catch (err) {
+    logger.warn({ err, userId }, 'Failed to force-disconnect user')
   }
 }

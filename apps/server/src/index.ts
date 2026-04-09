@@ -223,10 +223,12 @@ async function main() {
   startScheduledJobs(container)
 
   // Graceful shutdown
-  const gracefulShutdown = () => {
+  const gracefulShutdown = async () => {
     logger.info('Shutting down gracefully...')
     stopScheduledJobs()
     io.close()
+    const { closeRedisClient } = await import('./lib/redis')
+    await closeRedisClient()
     process.exit(0)
   }
 
