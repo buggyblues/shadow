@@ -101,6 +101,8 @@ export interface MessageBubbleProps {
   isSelected?: boolean
   onToggleSelect?: (messageId: string) => void
   onEnterSelectionMode?: (messageId: string) => void
+  /** When true, this message is grouped with the previous message (same author, within 1 min) — hide avatar & name */
+  isGrouped?: boolean
 }
 
 const quickEmojis = ['👍', '❤️', '😂', '🎉', '🤔', '👀']
@@ -198,6 +200,7 @@ export function MessageBubble({
   isSelected,
   onToggleSelect,
   onEnterSelectionMode,
+  isGrouped = false,
 }: MessageBubbleProps) {
   const { t, i18n } = useTranslation()
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
@@ -445,7 +448,7 @@ export function MessageBubble({
     <div
       ref={messageRef}
       id={`msg-${message.id}`}
-      className={`group relative flex gap-4 px-4 py-1.5 message-row hover:bg-bg-tertiary/20 ${isDmOwn ? 'flex-row-reverse' : ''} ${highlight ? 'bg-primary/10 animate-pulse' : 'mt-[2px]'} ${isSelected ? 'bg-primary/10' : ''} ${selectionMode ? 'cursor-pointer' : ''}`}
+      className={`group relative flex gap-4 px-4 ${isGrouped ? 'py-0.5 pl-[72px]' : 'py-2'} mx-1 message-row hover:bg-bg-tertiary/20 ${isDmOwn ? 'flex-row-reverse' : ''} ${highlight ? 'bg-primary/10 animate-pulse' : 'mt-[2px]'} ${isSelected ? 'bg-primary/10' : ''} ${selectionMode ? 'cursor-pointer' : ''}`}
       onMouseEnter={activateHover}
       onMouseLeave={deactivateHover}
       onClick={selectionMode ? () => onToggleSelect?.(message.id) : undefined}
@@ -477,22 +480,24 @@ export function MessageBubble({
           )}
         </div>
       )}
-      {/* Avatar container */}
-      <div
-        ref={avatarRef}
-        className={`flex-shrink-0 ${replyToMessage ? 'mt-6' : 'mt-0.5'} cursor-pointer`}
-        onMouseEnter={handleAvatarMouseEnter}
-        onMouseLeave={handleAvatarMouseLeave}
-        onClick={handleAvatarClick}
-        onContextMenu={handleAvatarContextMenu}
-      >
-        <UserAvatar
-          userId={author?.id}
-          avatarUrl={author?.avatarUrl}
-          displayName={author?.displayName ?? author?.username}
-          size="md"
-        />
-      </div>
+      {/* Avatar container — hidden in grouped mode */}
+      {!isGrouped && (
+        <div
+          ref={avatarRef}
+          className={`flex-shrink-0 ${replyToMessage ? 'mt-6' : 'mt-0.5'} cursor-pointer`}
+          onMouseEnter={handleAvatarMouseEnter}
+          onMouseLeave={handleAvatarMouseLeave}
+          onClick={handleAvatarClick}
+          onContextMenu={handleAvatarContextMenu}
+        >
+          <UserAvatar
+            userId={author?.id}
+            avatarUrl={author?.avatarUrl}
+            displayName={author?.displayName ?? author?.username}
+            size="md"
+          />
+        </div>
+      )}
 
       {/* Content */}
       <div className={`flex-1 min-w-0 ${isDmOwn ? 'text-right' : ''}`}>
@@ -515,32 +520,35 @@ export function MessageBubble({
             <span className="truncate max-w-[300px] opacity-70">{replyToMessage.content}</span>
           </button>
         )}
-        <div
-          className={`flex items-baseline gap-2 leading-none mb-1 ${isDmOwn ? 'flex-row-reverse' : ''}`}
-        >
-          <span
-            className={`font-medium text-[15px] hover:underline cursor-pointer ${author?.isBot ? 'text-primary' : 'text-text-primary'}`}
+        {/* Author line — hidden in grouped mode */}
+        {!isGrouped && (
+          <div
+            className={`flex items-baseline gap-2 leading-none mb-1 ${isDmOwn ? 'flex-row-reverse' : ''}`}
           >
-            {author?.displayName ?? author?.username ?? t('common.unknownUser')}
-          </span>
-          {author?.isBot && (
-            <span className="text-[11px] bg-primary/10 text-primary rounded-full px-2 py-0.5 font-black uppercase tracking-widest flex items-center gap-1">
-              <Check size={8} />
-              {t('common.bot')}
-            </span>
-          )}
-          <span className="text-xs text-text-muted ml-0.5">{time}</span>
-          {message.isEdited && (
             <span
-              className="text-[11px] text-text-muted cursor-help"
-              title={format(new Date(message.updatedAt ?? message.createdAt), 'PPpp', {
-                locale: dateFnsLocaleMap[i18n.language] ?? zhCN,
-              })}
+              className={`font-bold text-[15px] hover:underline cursor-pointer ${author?.isBot ? 'text-primary' : 'text-text-primary'}`}
             >
-              {t('chat.edited')}
+              {author?.displayName ?? author?.username ?? t('common.unknownUser')}
             </span>
-          )}
-        </div>
+            {author?.isBot && (
+              <span className="text-[11px] bg-primary/10 text-primary rounded-full px-2 py-0.5 font-black uppercase tracking-widest flex items-center gap-1">
+                <Check size={8} />
+                {t('common.bot')}
+              </span>
+            )}
+            <span className="text-xs text-text-muted ml-0.5">{time}</span>
+            {message.isEdited && (
+              <span
+                className="text-[11px] text-text-muted cursor-help"
+                title={format(new Date(message.updatedAt ?? message.createdAt), 'PPpp', {
+                  locale: dateFnsLocaleMap[i18n.language] ?? zhCN,
+                })}
+              >
+                {t('chat.edited')}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Inline edit mode */}
         {isEditing ? (
@@ -591,7 +599,7 @@ export function MessageBubble({
           /* Markdown content — hide zero-width space placeholder for file-only messages */
           message.content &&
           message.content !== '\u200B' && (
-            <div className="text-[15px] text-text-primary leading-[1.375] break-words msg-markdown pt-[2px]">
+            <div className="text-[15px] text-text-primary leading-[1.6] tracking-[0.01em] break-words msg-markdown pt-[2px]">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{

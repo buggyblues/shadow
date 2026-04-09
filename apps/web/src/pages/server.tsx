@@ -88,12 +88,12 @@ export function ServerLayout() {
   }
 
   return (
-    <div className="flex flex-1 min-w-0 overflow-hidden h-full bg-bg-tertiary">
+    <div className="flex flex-1 min-w-0 overflow-hidden h-full gap-3 bg-transparent">
       {/* Channel sidebar */}
       <div
         className={`${
           mobileView === 'channels' ? 'flex absolute inset-0 z-20 md:relative' : 'hidden'
-        } md:flex flex-col w-full md:w-60 flex-shrink-0 transition-transform duration-300 ease-in-out`}
+        } md:flex flex-col w-full md:w-[240px] flex-shrink-0 transition-transform duration-300 ease-in-out`}
       >
         <ChannelSidebar serverSlug={serverSlug} />
       </div>
@@ -102,7 +102,7 @@ export function ServerLayout() {
       <div
         className={`${
           mobileView === 'chat' ? 'flex absolute inset-0 z-10 md:relative md:z-auto' : 'hidden'
-        } md:flex flex-1 min-w-0 overflow-hidden transition-all duration-300 ease-in-out`}
+        } md:flex flex-1 min-w-0 overflow-hidden transition-all duration-300 ease-in-out gap-3`}
       >
         <Outlet />
       </div>

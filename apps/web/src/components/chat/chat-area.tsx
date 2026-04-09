@@ -689,7 +689,7 @@ export function ChatArea() {
 
   if (!activeChannelId) {
     return (
-      <div className="flex-1 flex items-center justify-center text-text-muted bg-bg-primary">
+      <div className="flex-1 flex items-center justify-center text-text-muted bg-bg-primary/70 backdrop-blur-xl">
         <Loader2 size={16} className="animate-spin text-primary opacity-60" />
       </div>
     )
@@ -700,7 +700,7 @@ export function ChatArea() {
   return (
     <div className="flex-1 flex min-w-0 h-full">
       <div
-        className="flex-1 flex flex-col bg-bg-primary min-w-0 h-full relative"
+        className="flex-1 flex flex-col glass-panel overflow-hidden min-w-0 h-full relative"
         onDrop={handleAreaDrop}
         onDragOver={handleAreaDragOver}
         onDragLeave={handleAreaDragLeave}
@@ -848,28 +848,44 @@ export function ChatArea() {
                         </Badge>
                       </div>
                     ) : (
-                      <MessageBubble
-                        message={item.data}
-                        currentUserId={user?.id ?? ''}
-                        onReply={(id) => setReplyToId(id)}
-                        onReact={handleReact}
-                        onMessageUpdate={handleMessageUpdate}
-                        onMessageDelete={handleMessageDelete}
-                        onPreviewFile={(att) => setPreviewFile(att)}
-                        onSaveToWorkspace={
-                          activeServerId ? (att) => setSaveToWorkspaceFile(att) : undefined
-                        }
-                        highlight={highlightMsgId === item.data.id}
-                        replyToMessage={
-                          item.data.replyToId
-                            ? (messages.find((m) => m.id === item.data.replyToId) ?? null)
-                            : null
-                        }
-                        selectionMode={selectionMode}
-                        isSelected={selectedMessageIds.has(item.data.id)}
-                        onToggleSelect={handleToggleSelect}
-                        onEnterSelectionMode={handleEnterSelectionMode}
-                      />
+                      (() => {
+                        // Message grouping: hide avatar/name for consecutive same-author messages within 1 minute
+                        const prevItem = index > 0 ? timeline[index - 1] : undefined
+                        const isGrouped =
+                          prevItem?.kind === 'message' &&
+                          prevItem.data.authorId === item.data.authorId &&
+                          !item.data.replyToId &&
+                          Math.abs(
+                            new Date(item.data.createdAt).getTime() -
+                              new Date(prevItem.data.createdAt).getTime(),
+                          ) < 60_000
+
+                        return (
+                          <MessageBubble
+                            message={item.data}
+                            currentUserId={user?.id ?? ''}
+                            isGrouped={isGrouped}
+                            onReply={(id) => setReplyToId(id)}
+                            onReact={handleReact}
+                            onMessageUpdate={handleMessageUpdate}
+                            onMessageDelete={handleMessageDelete}
+                            onPreviewFile={(att) => setPreviewFile(att)}
+                            onSaveToWorkspace={
+                              activeServerId ? (att) => setSaveToWorkspaceFile(att) : undefined
+                            }
+                            highlight={highlightMsgId === item.data.id}
+                            replyToMessage={
+                              item.data.replyToId
+                                ? (messages.find((m) => m.id === item.data.replyToId) ?? null)
+                                : null
+                            }
+                            selectionMode={selectionMode}
+                            isSelected={selectedMessageIds.has(item.data.id)}
+                            onToggleSelect={handleToggleSelect}
+                            onEnterSelectionMode={handleEnterSelectionMode}
+                          />
+                        )
+                      })()
                     )}
                   </div>
                 )
@@ -1022,7 +1038,7 @@ function EmptyChannelState({
 
   return (
     <>
-      <div className="flex flex-col items-center justify-center h-full text-text-muted px-4">
+      <div className="flex flex-col items-center justify-center h-full text-text-muted px-4 mb-16">
         <Hash size={48} className="mb-4 opacity-30" />
         <p className="text-lg font-bold text-primary mb-2">
           {t('chat.welcomeChannel', {
@@ -1043,30 +1059,25 @@ function EmptyChannelState({
             )}
           </div>
         ) : (
-          <div className="flex items-center gap-3">
-            <Button
-              variant="accent"
-              size="sm"
-              className="rounded-full"
-              onClick={() => {
-                setInviteInitialTab('members')
-                setShowInvitePanel(true)
-              }}
-              icon={UserPlus}
-            >
-              {t('channel.inviteMember')}
-            </Button>
+          <div className="flex items-center justify-center">
             <Button
               variant="secondary"
               size="sm"
-              className="rounded-full"
+              className="rounded-full bouncy border px-8 py-[14px] text-[13px] font-black uppercase tracking-[0.05em]"
+              style={{
+                background: 'linear-gradient(135deg, #F8E71C, #ffb300)',
+                border: '1px solid rgba(255,255,255,0.5)',
+                boxShadow: '0 10px 25px rgba(248, 231, 28, 0.35), inset 0 2px 4px rgba(255, 255, 255, 0.7)',
+                color: '#050508',
+                backdropFilter: 'blur(12px)',
+              }}
               onClick={() => {
                 setInviteInitialTab('buddies')
                 setShowInvitePanel(true)
               }}
               icon={PawPrint}
             >
-              {t('channel.addAgent')}
+              <span className="uppercase">{t('channel.addAgent')}</span>
             </Button>
           </div>
         )}
