@@ -1,7 +1,5 @@
-import AgoraRTC from 'agora-rtc-sdk-ng'
 import { Mic, MicOff, Monitor, MonitorOff, PhoneOff, Volume2 } from 'lucide-react'
-import { useEffect } from 'react'
-import { useSocketEvent } from '@/hooks/use-socket'
+import { useVoiceBridge } from '@/hooks/useVoiceBridge'
 import { useVoiceStore } from '@/stores/voice.store'
 
 // Threshold for "speaking" state based on Agora volume indicator (0-100)
@@ -16,80 +14,16 @@ const SPEAKING_THRESHOLD = 20
  * - Bottom control bar: Mic, Screen Share, Disconnect
  *
  * Design: Neon Frost + Discord UX patterns, supports light/dark mode.
+ *
+ * Architecture:
+ * - useVoiceBridge watches store.activeChannelId and automatically
+ *   joins/leaves Agora RTC when the user joins/leaves a voice channel.
+ * - Socket.IO event listeners live in useVoiceBridge (single source).
  */
 export function VoiceChannel() {
   const { activeChannelId, activeChannelName, members, isMuted, isScreenSharing, error } =
     useVoiceStore()
-  const leaveChannel = useVoiceStore((s) => s.leaveChannel)
-  const setMuted = useVoiceStore((s) => s.setMuted)
-  const setScreenSharing = useVoiceStore((s) => s.setScreenSharing)
-  const updateVolume = useVoiceStore((s) => s.updateVolume)
-
-  // ── Socket.IO event listeners ────────────────────────────────────
-  useSocketEvent(
-    'voice:user-joined',
-    (data: { userId: string; username: string; displayName: string }) => {
-      const state = useVoiceStore.getState()
-      state.updateMembers([
-        ...state.members,
-        {
-          userId: data.userId,
-          username: data.username,
-          displayName: data.displayName,
-          muted: false,
-          screenSharing: false,
-          joinedAt: new Date().toISOString(),
-          volume: 0,
-        },
-      ])
-    },
-  )
-
-  useSocketEvent('voice:user-left', (data: { userId: string }) => {
-    const state = useVoiceStore.getState()
-    state.updateMembers(state.members.filter((m) => m.userId !== data.userId))
-  })
-
-  useSocketEvent('voice:user-muted', (data: { userId: string; muted: boolean }) => {
-    const state = useVoiceStore.getState()
-    state.updateMembers(
-      state.members.map((m) => (m.userId === data.userId ? { ...m, muted: data.muted } : m)),
-    )
-  })
-
-  useSocketEvent('voice:screenshare-started', (data: { userId: string }) => {
-    const state = useVoiceStore.getState()
-    state.updateMembers(
-      state.members.map((m) => (m.userId === data.userId ? { ...m, screenSharing: true } : m)),
-    )
-  })
-
-  useSocketEvent('voice:screenshare-stopped', (data: { userId: string }) => {
-    const state = useVoiceStore.getState()
-    state.updateMembers(
-      state.members.map((m) => (m.userId === data.userId ? { ...m, screenSharing: false } : m)),
-    )
-  })
-
-  // ── Agora volume indicator for speaking ring animation ───────────
-  // Listens to AgoraRTC global volume indicator and updates store.
-  // NOTE: Do NOT override AgoraRTC.onMicrophoneChanged here — the
-  // useVoiceChannel hook manages device hot-plug via that callback.
-  useEffect(() => {
-    const handler = (volumes: { uid: number; level: number }[]) => {
-      for (const v of volumes) {
-        if (v.uid !== 0) {
-          updateVolume(v.uid, v.level)
-        }
-      }
-    }
-
-    AgoraRTC.on('volume-indicator', handler)
-
-    return () => {
-      AgoraRTC.off('volume-indicator', handler)
-    }
-  }, [updateVolume])
+  const { leaveAgora, toggleMute, toggleScreenShare } = useVoiceBridge()
 
   if (!activeChannelId) return null
 
@@ -190,7 +124,7 @@ export function VoiceChannel() {
           {/* Mic toggle */}
           <button
             type="button"
-            onClick={() => setMuted(!isMuted)}
+            onClick={toggleMute}
             className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 ${
               isMuted
                 ? 'bg-[#FF2A55]/20 text-[#FF2A55] hover:bg-[#FF2A55]/30 dark:bg-[#FF2A55]/15 dark:hover:bg-[#FF2A55]/25'
@@ -204,7 +138,7 @@ export function VoiceChannel() {
           {/* Screen share toggle */}
           <button
             type="button"
-            onClick={() => setScreenSharing(!isScreenSharing)}
+            onClick={toggleScreenShare}
             className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 ${
               isScreenSharing
                 ? 'bg-[#00F3FF]/20 text-[#00F3FF] hover:bg-[#00F3FF]/30 dark:bg-[#00F3FF]/15 dark:hover:bg-[#00F3FF]/25'
@@ -218,7 +152,7 @@ export function VoiceChannel() {
           {/* Disconnect */}
           <button
             type="button"
-            onClick={leaveChannel}
+            onClick={leaveAgora}
             className="w-9 h-9 rounded-full flex items-center justify-center bg-[#FF2A55]/15 text-[#FF2A55]/80 hover:bg-[#FF2A55]/25 hover:text-[#FF2A55] transition-all duration-200 active:scale-95 dark:bg-[#FF2A55]/10 dark:hover:bg-[#FF2A55]/20"
             title="断开连接"
           >

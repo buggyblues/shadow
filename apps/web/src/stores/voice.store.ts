@@ -24,7 +24,7 @@ interface VoiceChannelState {
   /** Map of uid → userId for volume indicator lookup */
   uidToUserId: Map<number, string>
 
-  joinChannel: (channelId: string, channelName: string, agoraUid?: number) => void
+  joinChannel: (channelId: string, channelName: string, agoraUid?: number) => Promise<void>
   leaveChannel: () => void
   setMuted: (muted: boolean) => void
   setScreenSharing: (sharing: boolean) => void
@@ -44,26 +44,30 @@ export const useVoiceStore = create<VoiceChannelState>((set, get) => ({
   agoraUid: 0,
   uidToUserId: new Map(),
 
-  joinChannel: (channelId: string, channelName: string, agoraUid = 0) => {
+  joinChannel: async (channelId: string, channelName: string, agoraUid = 0) => {
     const socket = getSocket()
-    socket.emit(
-      'voice:join',
-      { channelId, agoraUid },
-      (res: { ok: boolean; state?: { members: VoiceChannelMember[] }; error?: string }) => {
-        if (res.ok && res.state) {
-          set({
-            activeChannelId: channelId,
-            activeChannelName: channelName,
-            members: res.state.members.map((m) => ({ ...m, volume: 0 })),
-            agoraUid,
-            error: null,
-            uidToUserId: new Map([[agoraUid, 'local']]),
-          })
-        } else {
-          set({ error: res.error ?? 'Failed to join voice channel' })
-        }
-      },
-    )
+    return new Promise<void>((resolve, reject) => {
+      socket.emit(
+        'voice:join',
+        { channelId, agoraUid },
+        (res: { ok: boolean; state?: { members: VoiceChannelMember[] }; error?: string }) => {
+          if (res.ok && res.state) {
+            set({
+              activeChannelId: channelId,
+              activeChannelName: channelName,
+              members: res.state.members.map((m) => ({ ...m, volume: 0 })),
+              agoraUid,
+              error: null,
+              uidToUserId: new Map([[agoraUid, 'local']]),
+            })
+            resolve()
+          } else {
+            set({ error: res.error ?? 'Failed to join voice channel' })
+            reject(new Error(res.error ?? 'Failed to join voice channel'))
+          }
+        },
+      )
+    })
   },
 
   leaveChannel: () => {
