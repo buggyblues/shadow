@@ -372,15 +372,8 @@ export function createChannelHandler(container: AppContainer) {
   channelHandler.post('/channels/:channelId/rtc-join', async (c) => {
     const voiceService = container.resolve('voiceService')
     const channelService = container.resolve('channelService')
-    const agentService = container.resolve('agentService')
     const user = c.get('user')
     const channelId = c.req.param('channelId')
-
-    // Verify this is an agent/bot user
-    const agent = await agentService.findByUserId(user.userId)
-    if (!agent) {
-      return c.json({ error: 'Only agents can request RTC connection info' }, 403)
-    }
 
     // Verify channel exists and is a voice channel
     const channel = await channelService.getById(channelId)
