@@ -1,4 +1,9 @@
-import { RtcRole, RtcTokenBuilder } from 'agora-access-token'
+import { createRequire } from 'node:module'
+
+const require = createRequire(import.meta.url)
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const agoraPkg = require('agora-access-token')
+const { RtcRole, RtcTokenBuilder } = agoraPkg
 
 export interface RtcConnectionInfo {
   appId: string
