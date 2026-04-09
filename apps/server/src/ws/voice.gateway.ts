@@ -118,7 +118,10 @@ export function setupVoiceGateway(io: SocketIOServer, container: AppContainer): 
           }
 
           logger.info({ userId, channelId, socketId: socket.id }, 'Joined voice channel')
-          ack?.({ ok: true, state })
+          ack?.({
+            ok: true,
+            state: { ...state, members: state.members.filter((m) => m.userId !== userId) },
+          })
         } catch (error) {
           const msg = error instanceof Error ? error.message : 'Failed to join voice channel'
           logger.error({ err: error, userId, channelId }, 'voice:join error')

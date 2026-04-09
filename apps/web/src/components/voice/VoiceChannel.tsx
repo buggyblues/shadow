@@ -15,7 +15,7 @@ const SPEAKING_THRESHOLD = 20
  * - Member list with avatars, speaking indicators (green ring), and status icons
  * - Bottom control bar: Mic, Screen Share, Disconnect
  *
- * Design: Neon Frost + Discord UX patterns
+ * Design: Neon Frost + Discord UX patterns, supports light/dark mode.
  */
 export function VoiceChannel() {
   const { activeChannelId, activeChannelName, members, isMuted, isScreenSharing, error } =
@@ -72,23 +72,18 @@ export function VoiceChannel() {
   })
 
   // ── Agora volume indicator for speaking ring animation ───────────
-  // Listens to AgoraRTC global volume indicator and updates store
+  // Listens to AgoraRTC global volume indicator and updates store.
+  // NOTE: Do NOT override AgoraRTC.onMicrophoneChanged here — the
+  // useVoiceChannel hook manages device hot-plug via that callback.
   useEffect(() => {
-    const handleVolumeIndicator = (volumes: { uid: number; level: number }[]) => {
+    const handler = (volumes: { uid: number; level: number }[]) => {
       for (const v of volumes) {
         if (v.uid !== 0) {
-          // uid 0 is local user, skip for remote detection
           updateVolume(v.uid, v.level)
         }
       }
     }
 
-    // Register global listener
-    const handler = (volumes: { uid: number; level: number }[]) => {
-      handleVolumeIndicator(volumes)
-    }
-
-    AgoraRTC.onMicrophoneChanged = undefined
     AgoraRTC.on('volume-indicator', handler)
 
     return () => {
@@ -99,51 +94,51 @@ export function VoiceChannel() {
   if (!activeChannelId) return null
 
   return (
-    <div className="border-t border-white/5 bg-[#0a0a0f]/80 backdrop-blur-xl">
+    <div className="border-t border-border-subtle bg-bg-secondary/80 backdrop-blur-xl dark:bg-bg-secondary/60">
       {/* Error banner */}
       {error && (
-        <div className="px-3 py-1.5 text-xs text-[#FF2A55] bg-[#FF2A55]/5 border-b border-[#FF2A55]/10">
+        <div className="px-3 py-1.5 text-xs text-[#FF2A55] bg-[#FF2A55]/5 border-b border-[#FF2A55]/10 dark:border-[#FF2A55]/20">
           {error}
         </div>
       )}
 
       {/* Channel header — glass surface */}
-      <div className="px-3 py-2.5 border-b border-white/5">
+      <div className="px-3 py-2.5 border-b border-border-subtle">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-full bg-[#00F3FF]/10 flex items-center justify-center">
             <Volume2 className="h-3.5 w-3.5 text-[#00F3FF]" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-bold text-white truncate">{activeChannelName}</p>
-            <p className="text-[11px] text-white/40">{members.length + 1} 人已连接</p>
+            <p className="text-[13px] font-bold text-text-primary truncate">{activeChannelName}</p>
+            <p className="text-[11px] text-text-muted">{members.length + 1} 人已连接</p>
           </div>
         </div>
       </div>
 
       {/* Member list — Discord style */}
-      <div className="px-2 py-1.5 max-h-[160px] overflow-y-auto space-y-0.5 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+      <div className="px-2 py-1.5 max-h-[160px] overflow-y-auto space-y-0.5 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent dark:scrollbar-thumb-white/5">
         {/* Current user (self) */}
-        <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors group">
+        <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-bg-tertiary/50 transition-colors group">
           <div className="relative">
             <div
               className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all duration-150 ${
                 !isMuted
-                  ? 'bg-gradient-to-br from-[#00F3FF]/30 to-[#00c6d1]/20 text-[#00F3FF]'
-                  : 'bg-white/5 text-white/30'
+                  ? 'bg-gradient-to-br from-[#00F3FF]/30 to-[#00c6d1]/20 text-[#00F3FF] dark:from-[#00F3FF]/25 dark:to-[#00c6d1]/15'
+                  : 'bg-bg-tertiary text-text-muted'
               }`}
             >
               我
             </div>
             <div
-              className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0a0a0f] ${
-                isMuted ? 'bg-white/20' : 'bg-[#00E676]'
+              className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-bg-secondary ${
+                isMuted ? 'bg-text-muted/30' : 'bg-[#00E676]'
               }`}
             />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[12px] font-medium text-white truncate">你</p>
+            <p className="text-[12px] font-medium text-text-primary truncate">你</p>
           </div>
-          {isMuted && <MicOff className="h-3 w-3 text-white/30" />}
+          {isMuted && <MicOff className="h-3 w-3 text-text-muted/50" />}
           {isScreenSharing && <Monitor className="h-3 w-3 text-[#00F3FF]/60" />}
         </div>
 
@@ -155,34 +150,34 @@ export function VoiceChannel() {
           return (
             <div
               key={m.userId}
-              className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
+              className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-bg-tertiary/50 transition-colors"
             >
               <div className="relative">
                 <div
                   className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all duration-150 ${
                     isSpeaking
-                      ? 'bg-gradient-to-br from-[#00E676]/30 to-[#00E676]/10 text-[#00E676] ring-2 ring-[#00E676]/40'
-                      : 'bg-white/5 text-white/40'
+                      ? 'bg-gradient-to-br from-[#00E676]/30 to-[#00E676]/10 text-[#00E676] ring-2 ring-[#00E676]/40 dark:from-[#00E676]/25 dark:to-[#00E676]/5 dark:ring-[#00E676]/30'
+                      : 'bg-bg-tertiary text-text-muted/50'
                   }`}
                 >
                   {initials}
                 </div>
                 <div
-                  className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0a0a0f] ${
-                    m.muted ? 'bg-white/20' : 'bg-[#00E676]'
+                  className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-bg-secondary ${
+                    m.muted ? 'bg-text-muted/30' : 'bg-[#00E676]'
                   }`}
                 />
               </div>
               <div className="flex-1 min-w-0">
                 <p
                   className={`text-[12px] font-medium truncate transition-colors ${
-                    isSpeaking ? 'text-white' : 'text-white/50'
+                    isSpeaking ? 'text-text-primary' : 'text-text-muted/70'
                   }`}
                 >
                   {m.displayName || m.username}
                 </p>
               </div>
-              {m.muted && <MicOff className="h-3 w-3 text-white/30" />}
+              {m.muted && <MicOff className="h-3 w-3 text-text-muted/50" />}
               {m.screenSharing && <Monitor className="h-3 w-3 text-[#00F3FF]/60" />}
             </div>
           )
@@ -190,7 +185,7 @@ export function VoiceChannel() {
       </div>
 
       {/* Control bar — Discord style */}
-      <div className="px-2 py-2 border-t border-white/5">
+      <div className="px-2 py-2 border-t border-border-subtle">
         <div className="flex items-center justify-center gap-1.5">
           {/* Mic toggle */}
           <button
@@ -198,8 +193,8 @@ export function VoiceChannel() {
             onClick={() => setMuted(!isMuted)}
             className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 ${
               isMuted
-                ? 'bg-[#FF2A55]/20 text-[#FF2A55] hover:bg-[#FF2A55]/30'
-                : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+                ? 'bg-[#FF2A55]/20 text-[#FF2A55] hover:bg-[#FF2A55]/30 dark:bg-[#FF2A55]/15 dark:hover:bg-[#FF2A55]/25'
+                : 'bg-bg-tertiary/60 text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
             }`}
             title={isMuted ? '取消静音' : '静音'}
           >
@@ -212,8 +207,8 @@ export function VoiceChannel() {
             onClick={() => setScreenSharing(!isScreenSharing)}
             className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 ${
               isScreenSharing
-                ? 'bg-[#00F3FF]/20 text-[#00F3FF] hover:bg-[#00F3FF]/30'
-                : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+                ? 'bg-[#00F3FF]/20 text-[#00F3FF] hover:bg-[#00F3FF]/30 dark:bg-[#00F3FF]/15 dark:hover:bg-[#00F3FF]/25'
+                : 'bg-bg-tertiary/60 text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
             }`}
             title={isScreenSharing ? '停止共享' : '共享屏幕'}
           >
@@ -224,7 +219,7 @@ export function VoiceChannel() {
           <button
             type="button"
             onClick={leaveChannel}
-            className="w-9 h-9 rounded-full flex items-center justify-center bg-[#FF2A55]/15 text-[#FF2A55]/80 hover:bg-[#FF2A55]/25 hover:text-[#FF2A55] transition-all duration-200 active:scale-95"
+            className="w-9 h-9 rounded-full flex items-center justify-center bg-[#FF2A55]/15 text-[#FF2A55]/80 hover:bg-[#FF2A55]/25 hover:text-[#FF2A55] transition-all duration-200 active:scale-95 dark:bg-[#FF2A55]/10 dark:hover:bg-[#FF2A55]/20"
             title="断开连接"
           >
             <PhoneOff className="h-4 w-4" />

@@ -8,6 +8,7 @@ import AgoraRTC, {
 } from 'agora-rtc-sdk-ng'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RTC_APP_ID, RTC_ENABLED } from '@/lib/rtc.config'
+import { useVoiceStore } from '@/stores/voice.store'
 
 export interface VoiceChannelUser {
   uid: UID
@@ -241,6 +242,12 @@ export function useVoiceChannel(options: UseVoiceChannelOptions = {}) {
         // Enable volume indicator for speaking detection
         client.enableAudioVolumeIndicator()
         client.on('volume-indicator', (volumes) => {
+          for (const v of volumes) {
+            if (v.uid !== 0) {
+              const store = useVoiceStore.getState()
+              store.updateVolume(Number(v.uid), v.level)
+            }
+          }
           // volumes: Array<{ uid, level, speechLevel }>
           // level: 0-100, can be used for speaking ring animation
         })
