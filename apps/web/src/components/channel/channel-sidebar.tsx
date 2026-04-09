@@ -10,10 +10,9 @@ import {
   DialogTitle,
   Input,
   Switch,
-  Textarea,
 } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useLocation, useNavigate } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import {
   Archive,
   Check,
@@ -21,22 +20,16 @@ import {
   ChevronRight,
   Copy,
   Edit3,
-  FolderClosed,
   Hash,
-  Home,
-  ImageIcon,
   Lock,
   Megaphone,
   Menu,
   PawPrint,
   Plus,
-  Save,
   Settings,
-  ShoppingBag,
   Trash2,
   UserPlus,
   Volume2,
-  X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -44,12 +37,13 @@ import { useChannelSort } from '../../hooks/use-channel-sort'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
 import { joinChannel } from '../../lib/socket'
-import { useAuthStore } from '../../stores/auth.store'
+
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { ContextMenu } from '../common/context-menu'
 import { InvitePanel } from '../common/invite-panel'
+import { ServerSettingsModal } from '../server/server-settings-modal'
 import { ChannelSortFilterButton } from './channel-sort-button'
 
 interface Channel {
@@ -110,10 +104,8 @@ const channelIcons = {
 export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const location = useLocation()
   const queryClient = useQueryClient()
   const { activeChannelId, setActiveChannel } = useChatStore()
-  const _currentUser = useAuthStore((s) => s.user)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const [showCreate, setShowCreate] = useState(false)
   const [showServerEdit, setShowServerEdit] = useState(false)
@@ -131,30 +123,6 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
     }
   }, [pendingAction, setPendingAction])
 
-  // Server settings dialog state
-  const [bannerUploading, setBannerUploading] = useState(false)
-  const [iconUploading, setIconUploading] = useState(false)
-  const [serverEditTab, setServerEditTab] = useState<'basic' | 'advanced'>('basic')
-
-  // Server edit form state - centralized draft state
-  const [serverFormDraft, setServerFormDraft] = useState<{
-    name: string
-    description: string
-    slug: string
-    isPublic: boolean
-    homepageHtml: string
-    iconUrl: string | null
-    bannerUrl: string | null
-  }>({
-    name: '',
-    description: '',
-    slug: '',
-    isPublic: false,
-    homepageHtml: '',
-    iconUrl: null,
-    bannerUrl: null,
-  })
-  const [copiedInvite, setCopiedInvite] = useState(false)
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
@@ -269,145 +237,8 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
     [queryClient],
   )
 
-  const updateServer = useMutation({
-    mutationFn: (data: {
-      name?: string
-      description?: string | null
-      slug?: string
-      iconUrl?: string | null
-      bannerUrl?: string | null
-      homepageHtml?: string | null
-      isPublic?: boolean
-    }) =>
-      fetchApi<Server>(`/api/servers/${serverSlug}`, {
-        method: 'PATCH',
-        body: JSON.stringify(data),
-      }),
-    onSuccess: (updatedServer) => {
-      // Invalidate queries with both old and new slug to ensure consistency
-      queryClient.invalidateQueries({ queryKey: ['server', serverSlug] })
-      if (updatedServer.slug !== serverSlug) {
-        queryClient.invalidateQueries({ queryKey: ['server', updatedServer.slug] })
-      }
-      queryClient.invalidateQueries({ queryKey: ['servers'] })
-      queryClient.invalidateQueries({ queryKey: ['discover-servers'] })
-      // Redirect to slug-based URL if slug changed
-      if (updatedServer.slug !== serverSlug) {
-        navigate({ to: '/servers/$serverSlug', params: { serverSlug: updatedServer.slug } })
-      }
-    },
-  })
-
-  const deleteServer = useMutation({
-    mutationFn: () => fetchApi(`/api/servers/${serverSlug}`, { method: 'DELETE' }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['servers'] })
-      navigate({ to: '/' })
-    },
-  })
-
   const openServerEdit = () => {
-    // Initialize draft state from current server data
-    setServerFormDraft({
-      name: server?.name ?? '',
-      description: server?.description ?? '',
-      slug: server?.slug ?? '',
-      isPublic: server?.isPublic ?? false,
-      homepageHtml: server?.homepageHtml ?? '',
-      iconUrl: server?.iconUrl ?? null,
-      bannerUrl: server?.bannerUrl ?? null,
-    })
-    setServerEditTab('basic')
     setShowServerEdit(true)
-  }
-
-  // Update draft field helper
-  const updateDraftField = <K extends keyof typeof serverFormDraft>(
-    field: K,
-    value: (typeof serverFormDraft)[K],
-  ) => {
-    setServerFormDraft((prev) => ({ ...prev, [field]: value }))
-  }
-
-  // Check if draft has changes compared to server data
-  const hasDraftChanges = () => {
-    if (!server) return false
-    return (
-      serverFormDraft.name !== server.name ||
-      serverFormDraft.description !== (server.description ?? '') ||
-      serverFormDraft.slug !== (server.slug ?? '') ||
-      serverFormDraft.isPublic !== server.isPublic ||
-      serverFormDraft.homepageHtml !== (server.homepageHtml ?? '') ||
-      serverFormDraft.iconUrl !== server.iconUrl ||
-      serverFormDraft.bannerUrl !== server.bannerUrl
-    )
-  }
-
-  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setBannerUploading(true)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      const result = await fetchApi<{ url: string }>('/api/media/upload', {
-        method: 'POST',
-        body: formData,
-      })
-      // Update draft state only - don't save to server yet
-      updateDraftField('bannerUrl', result.url)
-    } catch {
-      /* upload failed */
-    } finally {
-      setBannerUploading(false)
-    }
-  }
-
-  const handleIconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setIconUploading(true)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      const result = await fetchApi<{ url: string }>('/api/media/upload', {
-        method: 'POST',
-        body: formData,
-      })
-      // Update draft state only - don't save to server yet
-      updateDraftField('iconUrl', result.url)
-    } catch {
-      /* upload failed */
-    } finally {
-      setIconUploading(false)
-    }
-  }
-
-  // Save all draft changes to server
-  const saveServerChanges = () => {
-    if (!serverFormDraft.name.trim()) return
-
-    updateServer.mutate(
-      {
-        name: serverFormDraft.name.trim(),
-        description: serverFormDraft.description.trim() || null,
-        slug: serverFormDraft.slug.trim() || undefined,
-        isPublic: serverFormDraft.isPublic,
-        homepageHtml: serverFormDraft.homepageHtml.trim() || null,
-        iconUrl: serverFormDraft.iconUrl,
-        bannerUrl: serverFormDraft.bannerUrl,
-      },
-      {
-        onSuccess: () => {
-          setShowServerEdit(false)
-        },
-      },
-    )
-  }
-
-  // Discard draft and close dialog
-  const discardChanges = () => {
-    setShowServerEdit(false)
   }
 
   const deleteChannel = useMutation({
@@ -481,15 +312,6 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
     }
   }, [contextMenu])
 
-  const copyInviteCode = async () => {
-    if (server?.inviteCode) {
-      const inviteLink = `${window.location.origin}/app/invite/${server.inviteCode}`
-      await navigator.clipboard.writeText(inviteLink)
-      setCopiedInvite(true)
-      setTimeout(() => setCopiedInvite(false), 2000)
-    }
-  }
-
   const { setMobileView, openMobileServerSidebar } = useUIStore()
 
   const handleSelectChannel = useCallback(
@@ -543,11 +365,6 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
   const textChannels = channels.filter((c) => c.type === 'text')
   const voiceChannels = channels.filter((c) => c.type === 'voice')
   const announcementChannels = channels.filter((c) => c.type === 'announcement')
-  const isInShop = /\/servers\/[^/]+\/shop(?:\/|$)/.test(location.pathname)
-  const isInWorkspace = /\/servers\/[^/]+\/workspace(?:\/|$)/.test(location.pathname)
-  const isInApps = /\/servers\/[^/]+\/apps(?:\/|$)/.test(location.pathname)
-  const isInChannel = /\/servers\/[^/]+\/channels\//.test(location.pathname)
-  const isHomeActive = !isInChannel && !isInShop && !isInWorkspace && !isInApps
 
   const renderChannelGroup = (label: string, items: Channel[]) => {
     if (items.length === 0) return null
@@ -720,75 +537,6 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
           setBlankContextMenu({ x: e.clientX, y: e.clientY })
         }}
       >
-        {/* Navigation Row - Home, Shop, Workspace */}
-        <div className="px-3 mb-4 flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              navigate({
-                to: '/servers/$serverSlug',
-                params: { serverSlug: server?.slug ?? serverSlug },
-              })
-              requestMarkScopeRead({ serverId: server?.id ?? serverSlug })
-              setMobileView('chat')
-            }}
-            className={`group flex-1 flex flex-col items-center gap-1.5 py-2.5 rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] ${
-              isHomeActive
-                ? 'bg-primary/10 text-primary ring-1 ring-primary/20'
-                : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary'
-            }`}
-          >
-            <Home size={16} strokeWidth={isHomeActive ? 3 : 2.5} />
-            <span className="text-[11px] font-black uppercase tracking-widest leading-none">
-              {t('server.home')}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              navigate({
-                to: '/servers/$serverSlug/shop',
-                params: { serverSlug: server?.slug ?? serverSlug },
-              })
-              requestMarkScopeRead({ serverId: server?.id ?? serverSlug })
-              setMobileView('chat')
-            }}
-            className={`group flex-1 flex flex-col items-center gap-1.5 py-2.5 rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] ${
-              isInShop
-                ? 'bg-accent/10 text-accent ring-1 ring-accent/20'
-                : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary'
-            }`}
-          >
-            <ShoppingBag size={16} strokeWidth={isInShop ? 3 : 2.5} />
-            <span className="text-[11px] font-black uppercase tracking-widest leading-none">
-              {t('serverHome.shop', 'Store')}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              navigate({
-                to: '/servers/$serverSlug/workspace',
-                params: { serverSlug: server?.slug ?? serverSlug },
-              })
-              requestMarkScopeRead({ serverId: server?.id ?? serverSlug })
-              setMobileView('chat')
-            }}
-            className={`group flex-1 flex flex-col items-center gap-1.5 py-2.5 rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] ${
-              isInWorkspace
-                ? 'bg-primary/10 text-primary ring-1 ring-primary/20'
-                : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary'
-            }`}
-          >
-            <FolderClosed size={16} strokeWidth={isInWorkspace ? 3 : 2.5} />
-            <span className="text-[11px] font-black uppercase tracking-widest leading-none">
-              {t('serverHome.workspace', 'Work')}
-            </span>
-          </button>
-        </div>
-
         {/* Channel filter and sort bar */}
         {server?.id && (
           <div className="flex items-center justify-between px-5 py-2 mb-2">
@@ -917,276 +665,13 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
         </DialogContent>
       </Dialog>
 
-      {/* Server edit dialog */}
-      <Dialog isOpen={showServerEdit} onClose={() => setShowServerEdit(false)}>
-        <DialogContent className="max-w-[520px] max-h-[90vh] overflow-y-auto rounded-[40px] shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
-          <DialogHeader>
-            <DialogTitle>{t('channel.serverSettings')}</DialogTitle>
-          </DialogHeader>
-
-          {/* Tab Navigation */}
-          <div className="flex gap-1 bg-bg-tertiary/50 rounded-xl p-1 border border-border-subtle">
-            <button
-              onClick={() => setServerEditTab('basic')}
-              className={cn(
-                'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all',
-                serverEditTab === 'basic'
-                  ? 'bg-primary/15 text-primary shadow-sm'
-                  : 'text-text-muted hover:text-foreground',
-              )}
-            >
-              <ImageIcon size={16} />
-              基础设置
-            </button>
-            <button
-              onClick={() => setServerEditTab('advanced')}
-              className={cn(
-                'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all',
-                serverEditTab === 'advanced'
-                  ? 'bg-primary/15 text-primary shadow-sm'
-                  : 'text-text-muted hover:text-foreground',
-              )}
-            >
-              <Settings size={16} />
-              进阶设置
-            </button>
-          </div>
-
-          {/* Basic Settings Tab */}
-          {serverEditTab === 'basic' && (
-            <div className="space-y-5">
-              {/* Hero Section - Banner + Icon */}
-              <div className="relative">
-                {/* Banner upload - show draft state */}
-                <div className="relative h-32 bg-gradient-to-br from-primary/20 to-primary/5 rounded-xl overflow-hidden group/banner border border-border-subtle">
-                  {serverFormDraft.bannerUrl && (
-                    <img
-                      src={serverFormDraft.bannerUrl}
-                      alt=""
-                      className="w-full h-full object-cover absolute inset-0"
-                    />
-                  )}
-                  <label className="absolute inset-0 flex items-center justify-center bg-bg-deep/40 opacity-0 group-hover/banner:opacity-100 transition cursor-pointer">
-                    <span className="text-white text-sm font-medium flex items-center gap-2">
-                      {bannerUploading ? (
-                        <span className="animate-pulse">{t('common.loading')}</span>
-                      ) : (
-                        <>
-                          <ImageIcon size={16} />
-                          {serverFormDraft.bannerUrl ? '更换横幅' : '添加横幅'}
-                        </>
-                      )}
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleBannerUpload}
-                      className="hidden"
-                      disabled={bannerUploading}
-                    />
-                  </label>
-                </div>
-
-                {/* Server icon upload */}
-                <div className="absolute -bottom-6 left-6">
-                  <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-bg-tertiary/50 border-4 border-bg-primary shadow-lg group/icon">
-                    {serverFormDraft.iconUrl ? (
-                      <img
-                        src={serverFormDraft.iconUrl}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-3xl font-bold text-text-muted">
-                        {serverFormDraft.name?.[0]?.toUpperCase() ?? '?'}
-                      </div>
-                    )}
-                    <label className="absolute inset-0 flex items-center justify-center bg-bg-deep/50 opacity-0 group-hover/icon:opacity-100 transition cursor-pointer">
-                      <span className="text-white text-xs font-medium">
-                        {iconUploading ? '...' : <ImageIcon size={14} />}
-                      </span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleIconUpload}
-                        className="hidden"
-                        disabled={iconUploading}
-                      />
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              {/* Server name */}
-              <div className="mt-8">
-                <Input
-                  label={t('channel.editServerName')}
-                  value={serverFormDraft.name}
-                  onChange={(e) => updateDraftField('name', e.target.value)}
-                  placeholder="输入服务器名称"
-                  className="!rounded-2xl !py-3 !bg-bg-tertiary/50 !border-2 !border-border-subtle focus:!ring-4 focus:!ring-primary/10"
-                />
-              </div>
-
-              {/* Server description */}
-              <div>
-                <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-2">
-                  {t('channel.editServerDescription')}
-                </label>
-                <Textarea
-                  value={serverFormDraft.description}
-                  onChange={(e) => updateDraftField('description', e.target.value)}
-                  rows={3}
-                  placeholder={t('channel.descriptionPlaceholder')}
-                  className="!min-h-0 resize-none"
-                />
-              </div>
-
-              {/* Public toggle */}
-              <div className="bg-bg-tertiary/50 rounded-xl p-4 border border-border-subtle">
-                <label className="flex items-center justify-between cursor-pointer">
-                  <div>
-                    <span className="text-sm font-bold text-foreground">
-                      {t('channel.publicServer')}
-                    </span>
-                    <p className="text-xs text-text-muted mt-0.5">
-                      {t('channel.publicServerDesc')}
-                    </p>
-                  </div>
-                  <Switch
-                    checked={serverFormDraft.isPublic}
-                    onCheckedChange={(val) => updateDraftField('isPublic', val)}
-                  />
-                </label>
-              </div>
-            </div>
-          )}
-
-          {/* Advanced Settings Tab */}
-          {serverEditTab === 'advanced' && (
-            <div className="space-y-5">
-              {/* Server slug */}
-              <div>
-                <Input
-                  label={t('channel.serverSlug')}
-                  value={serverFormDraft.slug}
-                  onChange={(e) => updateDraftField('slug', e.target.value)}
-                  placeholder={t('channel.slugPlaceholder')}
-                  className="!rounded-2xl !py-3 !bg-bg-tertiary/50 !border-2 !border-border-subtle focus:!ring-4 focus:!ring-primary/10 font-mono text-sm"
-                />
-                <p className="text-xs text-text-muted mt-1 ml-1">{t('channel.slugDesc')}</p>
-              </div>
-
-              {/* Homepage HTML */}
-              <div>
-                <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-2">
-                  {t('channel.homepageHtml')}
-                </label>
-                <Textarea
-                  value={serverFormDraft.homepageHtml}
-                  onChange={(e) => updateDraftField('homepageHtml', e.target.value)}
-                  rows={8}
-                  placeholder={t('channel.homepageHtmlPlaceholder')}
-                  className="resize-y font-mono text-xs"
-                />
-                <p className="text-xs text-text-muted mt-1 ml-1">{t('channel.homepageHtmlDesc')}</p>
-              </div>
-
-              {/* Invite Link */}
-              {server?.inviteCode && (
-                <div className="bg-bg-tertiary/50 rounded-xl p-4 border border-border-subtle">
-                  <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-2">
-                    {t('channel.inviteLink')}
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 bg-bg-deep/20 text-foreground rounded-xl px-4 py-3 font-mono text-xs truncate border border-border-subtle">
-                      {`${window.location.origin}/app/invite/${server.inviteCode}`}
-                    </code>
-                    <Button
-                      variant="glass"
-                      size="xs"
-                      onClick={copyInviteCode}
-                      title={t('channel.copyInviteCode')}
-                      className="h-10 w-10 p-0"
-                    >
-                      {copiedInvite ? (
-                        <Check size={16} className="text-success" />
-                      ) : (
-                        <Copy size={16} />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {/* Server ID */}
-              <div className="bg-bg-tertiary/50 rounded-xl p-4 border border-border-subtle">
-                <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-2">
-                  服务器 ID
-                </label>
-                <code className="text-text-muted text-xs font-mono">{server?.id}</code>
-              </div>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex justify-between gap-3 pt-4 border-t border-border-subtle">
-            <div>
-              {_currentUser?.id === server?.ownerId && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={async () => {
-                    const ok = await useConfirmStore.getState().confirm({
-                      title: t('channel.deleteServer'),
-                      message: t('channel.deleteServerConfirm'),
-                    })
-                    if (ok) {
-                      deleteServer.mutate()
-                    }
-                  }}
-                  disabled={deleteServer.isPending}
-                  className="text-danger hover:bg-danger/10 uppercase tracking-widest font-black"
-                >
-                  <Trash2 size={14} />
-                  {t('channel.deleteServer')}
-                </Button>
-              )}
-            </div>
-            <div className="flex items-center gap-3">
-              {/* Unsaved changes indicator */}
-              {hasDraftChanges() && !updateServer.isPending && (
-                <span className="text-xs text-warning">有未保存的更改</span>
-              )}
-              {updateServer.isPending && (
-                <span className="text-xs text-text-muted animate-pulse">保存中...</span>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={discardChanges}
-                disabled={updateServer.isPending}
-                className="uppercase tracking-widest font-black"
-              >
-                {t('common.cancel')}
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={saveServerChanges}
-                disabled={
-                  !serverFormDraft.name.trim() || updateServer.isPending || !hasDraftChanges()
-                }
-                loading={updateServer.isPending}
-                icon={Save}
-                className="uppercase tracking-widest font-black"
-              >
-                {updateServer.isPending ? t('common.saving') : t('common.save')}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Server settings modal */}
+      <ServerSettingsModal
+        open={showServerEdit}
+        onClose={() => setShowServerEdit(false)}
+        server={server}
+        serverSlug={serverSlug}
+      />
 
       {/* Channel context menu */}
       {contextMenu && (

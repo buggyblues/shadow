@@ -4,6 +4,11 @@ import {
   AvatarImage,
   Button,
   cn,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   Input,
   Switch,
   Tooltip,
@@ -30,12 +35,35 @@ import { useTranslation } from 'react-i18next'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
 import { getLastChannelId } from '../../lib/last-channel'
-import { getCatAvatar } from '../../lib/pixel-cats'
 import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { ContextMenu } from '../common/context-menu'
+
+/** Deterministic color for server avatar fallback based on name */
+const SERVER_AVATAR_COLORS = [
+  'bg-rose-500',
+  'bg-orange-500',
+  'bg-amber-500',
+  'bg-emerald-500',
+  'bg-teal-500',
+  'bg-cyan-500',
+  'bg-blue-500',
+  'bg-indigo-500',
+  'bg-violet-500',
+  'bg-purple-500',
+  'bg-fuchsia-500',
+  'bg-pink-500',
+] as const
+
+function getServerAvatarColor(name: string): string {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return SERVER_AVATAR_COLORS[Math.abs(hash) % SERVER_AVATAR_COLORS.length]!
+}
 
 interface ServerEntry {
   server: {
@@ -53,7 +81,6 @@ interface ServerEntry {
 function ServerItem({
   server,
   member,
-  index,
   isActive,
   unreadCount,
   isMuted,
@@ -62,7 +89,6 @@ function ServerItem({
 }: {
   server: ServerEntry['server']
   member: ServerEntry['member']
-  index: number
   isActive: boolean
   unreadCount: number
   isMuted: boolean
@@ -95,23 +121,31 @@ function ServerItem({
               'w-12 h-12 transition-all duration-200 flex items-center justify-center overflow-hidden',
               isActive
                 ? 'rounded-2xl bg-primary/20 ring-1 ring-primary/30 shadow-[0_0_12px_rgba(0,243,255,0.15)]'
-                : 'rounded-[24px] hover:rounded-2xl bg-bg-tertiary/50 hover:bg-bg-modifier-hover',
+                : 'rounded-2xl hover:rounded-xl bg-bg-tertiary/50 hover:bg-bg-modifier-hover',
             )}
           >
-            <Avatar className="w-12 h-12 rounded-[inherit]">
-              {server.iconUrl ? (
+            {server.iconUrl ? (
+              <Avatar className="w-12 h-12 rounded-[inherit]">
                 <AvatarImage src={server.iconUrl} alt={server.name} className="object-cover" />
-              ) : (
-                <AvatarImage
-                  src={getCatAvatar(index)}
-                  alt={server.name}
-                  className="w-10 h-10 m-auto"
-                />
-              )}
-              <AvatarFallback className="rounded-[inherit] bg-bg-tertiary/50 text-text-primary font-bold text-[15px]">
+                <AvatarFallback
+                  className={cn(
+                    'rounded-[inherit] text-white font-bold text-[15px]',
+                    getServerAvatarColor(server.name),
+                  )}
+                >
+                  {server.name.charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+            ) : (
+              <div
+                className={cn(
+                  'w-12 h-12 rounded-[inherit] flex items-center justify-center text-white font-bold text-[18px]',
+                  getServerAvatarColor(server.name),
+                )}
+              >
                 {server.name.charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+              </div>
+            )}
           </button>
         </TooltipTrigger>
         <TooltipContent side="right">{server.name}</TooltipContent>
@@ -329,12 +363,11 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
 
         {/* Scrollable server list */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col items-center gap-2 min-h-0 py-1 scrollbar-hidden">
-          {servers.map((s, i) => (
+          {servers.map((s) => (
             <ServerItem
               key={s.server.id}
               server={s.server}
               member={s.member}
-              index={i}
               isActive={activeServerId === s.server.id}
               unreadCount={scopedUnread?.serverUnread?.[s.server.id] ?? 0}
               isMuted={notificationPreference?.mutedServerIds?.includes(s.server.id) ?? false}
@@ -483,18 +516,12 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
         </div>
 
         {/* Simple create dialog */}
-        {showCreate && (
-          <div
-            className="fixed inset-0 bg-bg-deep/80 backdrop-blur-xl flex items-center justify-center z-50"
-            onClick={() => setShowCreate(false)}
-          >
-            <div
-              className="bg-bg-secondary rounded-[40px] p-8 w-96 border border-border-subtle shadow-[0_32px_120px_rgba(0,0,0,0.5)] animate-scale-in"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h2 className="text-xl font-black text-text-primary mb-6 uppercase tracking-tight">
-                {t('server.createServer')}
-              </h2>
+        <Dialog isOpen={showCreate} onClose={() => setShowCreate(false)}>
+          <DialogContent className="max-w-sm rounded-[40px] shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
+            <DialogHeader>
+              <DialogTitle>{t('server.createServer')}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-5">
               <Input
                 type="text"
                 value={newName}
@@ -512,10 +539,10 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                   }
                 }}
                 placeholder={t('server.serverName')}
-                className="w-full rounded-2xl px-5 py-3.5 font-bold mb-5"
+                className="w-full rounded-2xl px-5 py-3.5 font-bold"
               />
               {/* Public/Private toggle */}
-              <div className="flex items-center justify-between mb-6 p-4 bg-bg-tertiary/50 rounded-2xl border border-border-subtle">
+              <div className="flex items-center justify-between p-4 bg-bg-tertiary/50 rounded-2xl border border-border-subtle">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-2xl bg-bg-tertiary/50 flex items-center justify-center shadow-inner">
                     {isPublic ? (
@@ -535,81 +562,79 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                 </div>
                 <Switch checked={isPublic} onCheckedChange={setIsPublic} />
               </div>
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setShowCreate(false)}
-                  className="px-5 py-2.5 text-text-secondary hover:text-text-primary transition-all rounded-2xl font-bold"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  onClick={() =>
-                    newName.trim() && createServer.mutate({ name: newName.trim(), isPublic })
-                  }
-                  disabled={!newName.trim() || createServer.isPending}
-                  className="px-5 py-2.5 bg-primary text-bg-deep rounded-2xl transition-all disabled:opacity-50 font-black uppercase tracking-wide hover:scale-105 active:scale-95 shadow-lg shadow-primary/20"
-                >
-                  {t('common.create')}
-                </button>
-              </div>
             </div>
-          </div>
-        )}
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                onClick={() => setShowCreate(false)}
+                className="uppercase tracking-widest font-black"
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() =>
+                  newName.trim() && createServer.mutate({ name: newName.trim(), isPublic })
+                }
+                disabled={!newName.trim() || createServer.isPending}
+                loading={createServer.isPending}
+                className="uppercase tracking-widest font-black"
+              >
+                {t('common.create')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Join server dialog */}
-        {showJoin && (
-          <div
-            className="fixed inset-0 bg-bg-deep/80 backdrop-blur-xl flex items-center justify-center z-50"
-            onClick={() => setShowJoin(false)}
-          >
-            <div
-              className="bg-bg-secondary rounded-[40px] p-8 w-96 border border-border-subtle shadow-[0_32px_120px_rgba(0,0,0,0.5)] animate-scale-in"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h2 className="text-xl font-black text-text-primary mb-2 uppercase tracking-tight">
-                {t('server.joinServer')}
-              </h2>
-              <p className="text-text-muted text-sm mb-6 font-bold opacity-60">
-                {t('server.joinServerDesc')}
-              </p>
-              <Input
-                type="text"
-                value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value)}
-                onKeyDown={(e) => {
-                  if (
-                    e.key === 'Enter' &&
-                    !e.shiftKey &&
-                    !e.nativeEvent.isComposing &&
-                    e.keyCode !== 229 &&
-                    joinCode.trim().length === 8
-                  ) {
-                    e.preventDefault()
-                    joinServer.mutate(joinCode.trim())
-                  }
-                }}
-                placeholder={t('server.inviteCodePlaceholder')}
-                maxLength={8}
-                className="w-full rounded-2xl px-5 py-3.5 font-mono text-center text-lg tracking-widest mb-6"
-              />
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setShowJoin(false)}
-                  className="px-5 py-2.5 text-text-secondary hover:text-text-primary transition-all rounded-2xl font-bold"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  onClick={() => joinCode.trim() && joinServer.mutate(joinCode.trim())}
-                  disabled={joinCode.trim().length !== 8 || joinServer.isPending}
-                  className="px-5 py-2.5 bg-primary text-bg-deep rounded-2xl transition-all disabled:opacity-50 font-black uppercase tracking-wide hover:scale-105 active:scale-95 shadow-lg shadow-primary/20"
-                >
-                  {t('server.joinButton')}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <Dialog isOpen={showJoin} onClose={() => setShowJoin(false)}>
+          <DialogContent className="max-w-sm rounded-[40px] shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
+            <DialogHeader>
+              <DialogTitle>{t('server.joinServer')}</DialogTitle>
+            </DialogHeader>
+            <p className="text-text-muted text-sm font-bold opacity-60">
+              {t('server.joinServerDesc')}
+            </p>
+            <Input
+              type="text"
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value)}
+              onKeyDown={(e) => {
+                if (
+                  e.key === 'Enter' &&
+                  !e.shiftKey &&
+                  !e.nativeEvent.isComposing &&
+                  e.keyCode !== 229 &&
+                  joinCode.trim().length === 8
+                ) {
+                  e.preventDefault()
+                  joinServer.mutate(joinCode.trim())
+                }
+              }}
+              placeholder={t('server.inviteCodePlaceholder')}
+              maxLength={8}
+              className="w-full rounded-2xl px-5 py-3.5 font-mono text-center text-lg tracking-widest"
+            />
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                onClick={() => setShowJoin(false)}
+                className="uppercase tracking-widest font-black"
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => joinCode.trim() && joinServer.mutate(joinCode.trim())}
+                disabled={joinCode.trim().length !== 8 || joinServer.isPending}
+                loading={joinServer.isPending}
+                className="uppercase tracking-widest font-black"
+              >
+                {t('server.joinButton')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Server context menu */}
         {contextMenu && (

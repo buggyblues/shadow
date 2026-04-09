@@ -247,7 +247,7 @@
     "viewProfile": "查看主页"
   },
   "server": {
-    "home": "首页",
+    "home": "大厅",
     "createServer": "创建服务器",
     "settings": "设置",
     "serverName": "服务器名称",
@@ -266,7 +266,13 @@
     "publicServer": "公开服务器",
     "privateServer": "私有服务器",
     "publicServerDesc": "所有人都可以在探索页面发现",
-    "privateServerDesc": "仅通过邀请码加入"
+    "privateServerDesc": "仅通过邀请码加入",
+    "settingsBasic": "基础设置",
+    "settingsAdvanced": "进阶设置",
+    "settingsShop": "店铺",
+    "settingsWorkspace": "工作区",
+    "unsavedChanges": "有未保存的更改",
+    "serverId": "服务器 ID"
   },
   "channel": {
     "serverSettings": "服务器设置",

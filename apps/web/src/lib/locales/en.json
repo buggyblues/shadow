@@ -247,7 +247,7 @@
     "viewProfile": "View Profile"
   },
   "server": {
-    "home": "Home",
+    "home": "Lobby",
     "createServer": "Create Server",
     "settings": "Settings",
     "serverName": "Server Name",
@@ -266,7 +266,13 @@
     "publicServer": "Public Server",
     "privateServer": "Private Server",
     "publicServerDesc": "Discoverable by everyone on the Discover page",
-    "privateServerDesc": "Join by invite code only"
+    "privateServerDesc": "Join by invite code only",
+    "settingsBasic": "Basic",
+    "settingsAdvanced": "Advanced",
+    "settingsShop": "Shop",
+    "settingsWorkspace": "Workspace",
+    "unsavedChanges": "Unsaved changes",
+    "serverId": "Server ID"
   },
   "channel": {
     "serverSettings": "Server Settings",

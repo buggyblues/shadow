@@ -247,7 +247,7 @@
     "viewProfile": "プロフィールを見る"
   },
   "server": {
-    "home": "ホーム",
+    "home": "ロビー",
     "createServer": "サーバー作成",
     "settings": "設定",
     "serverName": "サーバー名",
@@ -266,7 +266,13 @@
     "publicServer": "公開サーバー",
     "privateServer": "非公開サーバー",
     "publicServerDesc": "誰でも探索ページで発見できます",
-    "privateServerDesc": "招待コードでのみ参加可能"
+    "privateServerDesc": "招待コードでのみ参加可能",
+    "settingsBasic": "基本設定",
+    "settingsAdvanced": "詳細設定",
+    "settingsShop": "ストア",
+    "settingsWorkspace": "ワークスペース",
+    "unsavedChanges": "未保存の変更があります",
+    "serverId": "サーバーID"
   },
   "channel": {
     "serverSettings": "サーバー設定",

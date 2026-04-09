@@ -247,7 +247,7 @@
     "viewProfile": "查看主頁"
   },
   "server": {
-    "home": "首頁",
+    "home": "大廳",
     "createServer": "建立伺服器",
     "settings": "設定",
     "serverName": "伺服器名稱",
@@ -266,7 +266,13 @@
     "publicServer": "公開伺服器",
     "privateServer": "私有伺服器",
     "publicServerDesc": "所有人都可以在探索頁面發現",
-    "privateServerDesc": "僅透過邀請碼加入"
+    "privateServerDesc": "僅透過邀請碼加入",
+    "settingsBasic": "基礎設定",
+    "settingsAdvanced": "進階設定",
+    "settingsShop": "店鋪",
+    "settingsWorkspace": "工作區",
+    "unsavedChanges": "有未儲存的變更",
+    "serverId": "伺服器 ID"
   },
   "channel": {
     "serverSettings": "伺服器設定",
