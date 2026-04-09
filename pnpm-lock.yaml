@@ -257,8 +257,8 @@ importers:
         specifier: ^55.0.10
         version: 55.0.10(expo@54.0.33)
       expo-document-picker:
-        specifier: ~14.0.8
-        version: 14.0.8(expo@54.0.33)
+        specifier: ~55.0.9
+        version: 55.0.9(expo@54.0.33)
       expo-file-system:
         specifier: ^19.0.21
         version: 19.0.21(expo@54.0.33)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))
@@ -8006,8 +8006,8 @@ packages:
     peerDependencies:
       expo: '*'
 
-  expo-document-picker@14.0.8:
-    resolution: {integrity: sha512-3tyQKpPqWWFlI8p9RiMX1+T1Zge5mEKeBuXWp1h8PEItFMUDSiOJbQ112sfdC6Hxt8wSxreV9bCRl/NgBdt+fA==}
+  expo-document-picker@55.0.9:
+    resolution: {integrity: sha512-XtkhmZ9alOj1n2Ok782lK9qtfk9TbaBoOJotSDK0pvq5oa+3UyHlLLTUmnC5UPMmFKoLGLJC3R2fLBFEiN5jCQ==}
     peerDependencies:
       expo: '*'
 
@@ -21758,7 +21758,7 @@ snapshots:
     dependencies:
       expo: 54.0.33(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(react-native-webview@13.16.1(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4))(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)
 
-  expo-document-picker@14.0.8(expo@54.0.33):
+  expo-document-picker@55.0.9(expo@54.0.33):
     dependencies:
       expo: 54.0.33(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(react-native-webview@13.16.1(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4))(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)
 
