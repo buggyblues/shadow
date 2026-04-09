@@ -420,6 +420,19 @@ export class ShadowClient {
     return this.request(`/api/channels/${channelId}/buddy-policy`)
   }
 
+  // ── Voice Channels ──────────────────────────────────────────────
+
+  async getRtcJoinInfo(channelId: string): Promise<{
+    appId: string
+    channelName: string
+    uid: number
+    token: string
+    expireAt: number
+    policy: Record<string, unknown>
+  }> {
+    return this.request(`/api/channels/${channelId}/rtc-join`, { method: 'POST' })
+  }
+
   // ── Messages ──────────────────────────────────────────────────────────
 
   async sendMessage(
@@ -1557,40 +1570,6 @@ export class ShadowClient {
     rewards: { amount: number; reason: string; createdAt: string }[]
   }> {
     return this.request('/api/tasks/rewards')
-  }
-
-  // ── Voice Channels ──────────────────────────────────────────────
-
-  async getVoiceChannelState(channelId: string): Promise<{
-    channelId: string
-    members: Array<{
-      userId: string
-      username: string
-      displayName: string
-      muted: boolean
-      screenSharing: boolean
-      joinedAt: string
-    }>
-  } | null> {
-    return this.request(`/api/voice-channels/${channelId}/state`)
-  }
-
-  async getBuddyPolicyVoice(channelId: string): Promise<{
-    buddyUserId: string | null
-    listen: boolean
-    config: Record<string, unknown>
-  } | null> {
-    return this.request(`/api/channels/${channelId}/buddy-policy-voice`)
-  }
-
-  async setBuddyPolicyVoice(
-    channelId: string,
-    data: { buddyUserId: string; listen?: boolean; config?: Record<string, unknown> },
-  ): Promise<{ success: boolean }> {
-    return this.request(`/api/channels/${channelId}/buddy-policy-voice`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    })
   }
 
   // ── Server Apps ───────────────────────────────────────────────────────

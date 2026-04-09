@@ -22,6 +22,7 @@
     "@shadowob/sdk": "workspace:*",
     "@shadowob/shared": "workspace:*",
     "@types/archiver": "^7.0.0",
+    "agora-access-token": "^2.0.4",
     "archiver": "^7.0.1",
     "awilix": "^13.0.3",
     "bcryptjs": "^3.0.2",
