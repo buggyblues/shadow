@@ -1,8 +1,9 @@
 import { Button, cn } from '@shadowob/ui'
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { useNavigate, useParams } from '@tanstack/react-router'
 import { ArrowLeft, Loader2, Paperclip, Reply, Send, Smile, X } from 'lucide-react'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type Message, MessageBubble, type ReactionGroup } from '../components/chat/message-bubble'
 import { UserAvatar } from '../components/common/avatar'
@@ -91,6 +92,7 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
   const [replyToId, setReplyToId] = useState<string | null>(null)
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const lastTypingSent = useRef(0)
+  const initialScrollDoneRef = useRef(false)
 
   // Fetch DM channel info (includes otherUser)
   const { data: dmChannels = [] } = useQuery({
@@ -142,7 +144,54 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
     },
   })
 
-  const allMessages = (messagesData?.pages.flat() ?? []).slice().reverse()
+  // Messages in chronological order (oldest to newest)
+  const allMessages = useMemo(() => {
+    if (!messagesData) return []
+    return [...messagesData.pages].reverse().flatMap((p) => p)
+  }, [messagesData])
+
+  // Convert to Message objects for MessageBubble
+  const messageList = useMemo(() => allMessages.map(toMessage), [allMessages])
+
+  // O(1) lookup map for replyToMessage
+  const messageMap = useMemo(() => {
+    const map = new Map<string, Message>()
+    for (const m of messageList) map.set(m.id, m)
+    return map
+  }, [messageList])
+
+  // Pre-compute grouping info
+  const timelineItems = useMemo(() => {
+    return messageList.map((msg, idx) => {
+      const prev = idx > 0 ? messageList[idx - 1] : undefined
+      const isGrouped =
+        prev !== undefined &&
+        prev.authorId === msg.authorId &&
+        !msg.replyToId &&
+        Math.abs(new Date(msg.createdAt).getTime() - new Date(prev.createdAt).getTime()) < 60_000
+      return { message: msg, isGrouped }
+    })
+  }, [messageList])
+
+  // Virtual list setup
+  const virtualizer = useVirtualizer({
+    count: timelineItems.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: (index) => {
+      const item = timelineItems[index]
+      if (!item) return 80
+      const msg = item.message
+      let base = 60
+      if (msg.replyToId) base += 36
+      if (msg.attachments && msg.attachments.length > 0) {
+        base += msg.attachments.length * 120
+      }
+      const lineCount = (msg.content.match(/\n/g) || []).length
+      if (lineCount > 3) base += (lineCount - 3) * 20
+      return Math.min(base, 400)
+    },
+    overscan: 5,
+  })
 
   // Join/leave DM socket room
   useLayoutEffect(() => {
@@ -195,10 +244,6 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
     if (msg.authorId !== user?.id) {
       playReceiveSound()
     }
-    // Auto-scroll to bottom
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
-    })
   })
 
   // Listen for DM message updates (edit)
@@ -238,14 +283,31 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
     typingTimeoutRef.current = setTimeout(() => setTypingUsers([]), 3000)
   })
 
-  // Scroll to bottom on initial load
-  useEffect(() => {
-    if (!isLoading && allMessages.length > 0) {
-      requestAnimationFrame(() => {
-        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
-      })
+  // Scroll to bottom on initial load using virtualizer
+  useLayoutEffect(() => {
+    if (timelineItems.length > 0 && !initialScrollDoneRef.current && !isLoading) {
+      initialScrollDoneRef.current = true
+      virtualizer.scrollToIndex(timelineItems.length - 1, { align: 'end' })
     }
-  }, [isLoading, allMessages.length])
+  }, [timelineItems.length, virtualizer, isLoading])
+
+  // Reset scroll flag on channel change
+  useEffect(() => {
+    initialScrollDoneRef.current = false
+  }, [dmChannelId])
+
+  // Load more on scroll to top
+  useEffect(() => {
+    const scrollEl = scrollRef.current
+    if (!scrollEl) return
+    const handleScroll = () => {
+      if (scrollEl.scrollTop < 200 && hasNextPage && !isFetchingNextPage) {
+        fetchNextPage()
+      }
+    }
+    scrollEl.addEventListener('scroll', handleScroll, { passive: true })
+    return () => scrollEl.removeEventListener('scroll', handleScroll)
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage])
 
   // Send message (with optional attachments)
   const handleSend = useCallback(async () => {
@@ -308,24 +370,14 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
     }
   }, [dmChannelId])
 
-  // Load more on scroll to top
-  const handleScroll = useCallback(() => {
-    if (
-      scrollRef.current &&
-      scrollRef.current.scrollTop < 200 &&
-      hasNextPage &&
-      !isFetchingNextPage
-    ) {
-      fetchNextPage()
-    }
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage])
-
   const statusColor: Record<string, string> = {
     online: 'bg-success',
     idle: 'bg-warning',
     dnd: 'bg-danger',
     offline: 'bg-text-muted',
   }
+
+  const virtualItems = virtualizer.getVirtualItems()
 
   return (
     <div className="flex-1 flex flex-col bg-bg-primary min-h-0">
@@ -363,8 +415,8 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
         </div>
       </div>
 
-      {/* Messages Area */}
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-4">
+      {/* Messages Area — virtual list */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
         {isFetchingNextPage && (
           <div className="flex justify-center py-3">
             <Loader2 size={20} className="animate-spin text-primary" />
@@ -385,52 +437,70 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
             </p>
           </div>
         ) : (
-          <div className="space-y-0.5">
-            {allMessages.map((raw, idx) => {
-              const msg = toMessage(raw)
+          <div
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {virtualItems.map((virtualItem) => {
+              const { message: msg, isGrouped } = timelineItems[virtualItem.index]!
 
               return (
-                <MessageBubble
+                <div
                   key={msg.id}
-                  message={msg}
-                  currentUserId={user?.id ?? ''}
-                  variant="dm"
-                  onReply={(id) => {
-                    setReplyToId(id)
-                    inputRef.current?.focus()
+                  data-index={virtualItem.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualItem.start}px)`,
                   }}
-                  onReact={(messageId, emoji) => {
-                    addDmReaction({ dmChannelId, dmMessageId: messageId, emoji })
-                  }}
-                  onMessageUpdate={(updated) => {
-                    // Convert back to DmMessageRaw for cache
-                    const rawUpdated: DmMessageRaw = {
-                      ...raw,
-                      content: updated.content,
-                      isEdited: updated.isEdited,
-                      updatedAt: updated.updatedAt,
+                >
+                  <MessageBubble
+                    message={msg}
+                    currentUserId={user?.id ?? ''}
+                    variant="dm"
+                    isGrouped={isGrouped}
+                    onReply={(id) => {
+                      setReplyToId(id)
+                      inputRef.current?.focus()
+                    }}
+                    onReact={(messageId, emoji) => {
+                      addDmReaction({ dmChannelId, dmMessageId: messageId, emoji })
+                    }}
+                    onMessageUpdate={(updated) => {
+                      const rawUpdated: DmMessageRaw = {
+                        ...allMessages.find((m) => m.id === msg.id)!,
+                        content: updated.content,
+                        isEdited: updated.isEdited,
+                        updatedAt: updated.updatedAt,
+                      }
+                      updateMessageInCache(rawUpdated)
+                    }}
+                    onMessageDelete={(id) => removeMessageFromCache(id)}
+                    editApi={async (messageId, content) => {
+                      const res = await fetchApi<DmMessageRaw>(
+                        `/api/dm/channels/${dmChannelId}/messages/${messageId}`,
+                        { method: 'PATCH', body: JSON.stringify({ content }) },
+                      )
+                      return toMessage(res)
+                    }}
+                    deleteApi={async (messageId) => {
+                      await fetchApi(`/api/dm/channels/${dmChannelId}/messages/${messageId}`, {
+                        method: 'DELETE',
+                      })
+                    }}
+                    replyToMessage={
+                      msg.replyToId
+                        ? (messageMap.get(msg.replyToId) ?? null)
+                        : null
                     }
-                    updateMessageInCache(rawUpdated)
-                  }}
-                  onMessageDelete={(id) => removeMessageFromCache(id)}
-                  editApi={async (messageId, content) => {
-                    const res = await fetchApi<DmMessageRaw>(
-                      `/api/dm/channels/${dmChannelId}/messages/${messageId}`,
-                      { method: 'PATCH', body: JSON.stringify({ content }) },
-                    )
-                    return toMessage(res)
-                  }}
-                  deleteApi={async (messageId) => {
-                    await fetchApi(`/api/dm/channels/${dmChannelId}/messages/${messageId}`, {
-                      method: 'DELETE',
-                    })
-                  }}
-                  replyToMessage={
-                    msg.replyToId
-                      ? (allMessages.map(toMessage).find((m) => m.id === msg.replyToId) ?? null)
-                      : null
-                  }
-                />
+                  />
+                </div>
               )
             })}
           </div>
@@ -457,7 +527,7 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
               <span>
                 {t(
                   'dm.rentalCostTip',
-                  '🦐 今日费用提醒：基础日费 {{baseDailyRate}}🦐 + 消息费 {{messageFee}}🦐/条，累计花费 {{totalCost}}🦐，已发送 {{messageCount}} 条消息',
+                  '🦐 今日费用警：基础日费 {{baseDailyRate}}🦐 + 消息费 {{messageFee}}🦐/条，累计花费 {{totalCost}}🦐，已发送 {{messageCount}} 条消息',
                   {
                     baseDailyRate: rental.baseDailyRate,
                     messageFee: rental.messageFee,
@@ -497,7 +567,7 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
             {/* Reply preview */}
             {replyToId &&
               (() => {
-                const replyMsg = allMessages.find((m) => m.id === replyToId)
+                const replyMsg = messageMap.get(replyToId)
                 return (
                   <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-primary/5 border-l-2 border-primary rounded-lg text-xs">
                     <Reply size={14} className="text-primary shrink-0" />

@@ -101,6 +101,23 @@ interface SystemEvent {
   timestamp: number
 }
 
+/** Pre-computed timeline item with grouping info */
+type TimelineItem = { kind: 'message'; data: Message; isGrouped: boolean } | { kind: 'system'; data: SystemEvent }
+
+/** Estimated height by content type — used for virtualizer initial estimates */
+function estimateItemSize(item: TimelineItem): number {
+  if (item.kind === 'system') return 40
+  const msg = item.data
+  let base = 60
+  if (msg.replyToId) base += 36
+  if (msg.attachments && msg.attachments.length > 0) {
+    base += msg.attachments.length * 120
+  }
+  const lineCount = (msg.content.match(/\n/g) || []).length
+  if (lineCount > 3) base += (lineCount - 3) * 20
+  return Math.min(base, 400) // cap to avoid extreme estimates
+}
+
 export function ChatArea() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -121,7 +138,6 @@ export function ChatArea() {
     { userId: string; username: string; activity: string }[]
   >([])
   const initialScrollDoneRef = useRef(false)
-  const isLoadingOlderRef = useRef(false)
   const prevMessageCountRef = useRef(0)
   const shouldStickToBottomRef = useRef(true)
   const [previewFile, setPreviewFile] = useState<{
@@ -198,14 +214,29 @@ export function ChatArea() {
     return [...data.pages].reverse().flatMap((p) => p.messages)
   }, [data])
 
-  // Merge system events into message timeline as virtual items
-  type TimelineItem = { kind: 'message'; data: Message } | { kind: 'system'; data: SystemEvent }
+  // O(1) message lookup map — avoids O(n) .find() for replyToMessage
+  const messageMap = useMemo(() => {
+    const map = new Map<string, Message>()
+    for (const m of messages) map.set(m.id, m)
+    return map
+  }, [messages])
 
+  // Build timeline with pre-computed grouping — avoids per-render calculation
   const timeline = useMemo<TimelineItem[]>(() => {
-    const items: TimelineItem[] = messages.map((m) => ({ kind: 'message' as const, data: m }))
+    const items: TimelineItem[] = []
+    for (let i = 0; i < messages.length; i++) {
+      const m = messages[i]
+      const prev = i > 0 ? messages[i - 1] : undefined
+      const isGrouped =
+        prev !== undefined &&
+        prev.authorId === m.authorId &&
+        !m.replyToId &&
+        Math.abs(new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime()) < 60_000
+      items.push({ kind: 'message' as const, data: m, isGrouped })
+    }
+
     // Insert system events at the correct position based on timestamp
     for (const evt of systemEvents) {
-      // Find insertion index: first message with createdAt > evt.timestamp
       let insertIdx = items.length
       for (let i = items.length - 1; i >= 0; i--) {
         const item = items[i]!
@@ -463,12 +494,12 @@ export function ChatArea() {
       }),
   })
 
-  // Virtual list setup
+  // Virtual list setup with dynamic size estimation
   const virtualizer = useVirtualizer({
     count: timeline.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 72,
-    overscan: 10,
+    estimateSize: (index) => estimateItemSize(timeline[index] ?? { kind: 'message' as const, data: { content: '', createdAt: '', authorId: '', channelId: '', replyToId: null, isEdited: false, isPinned: false, id: '' } as Message, isGrouped: false }),
+    overscan: 5,
   })
 
   const scrollToBottom = useCallback(
@@ -483,51 +514,52 @@ export function ChatArea() {
     [timeline.length, virtualizer],
   )
 
-  // Initial scroll to bottom after first load
+  // Single consolidated scroll-position effect — avoids conflicts from multiple useLayoutEffects
   useLayoutEffect(() => {
-    if (timeline.length > 0 && !initialScrollDoneRef.current) {
-      initialScrollDoneRef.current = true
-      virtualizer.scrollToIndex(timeline.length - 1, { align: 'end' })
-    }
-  }, [timeline.length, virtualizer])
+    const prevCount = prevMessageCountRef.current
+    const currentCount = timeline.length
 
-  // Reset initial scroll flag on channel change
+    if (currentCount === 0) return
+
+    if (!initialScrollDoneRef.current) {
+      // First load: scroll to bottom immediately
+      initialScrollDoneRef.current = true
+      prevMessageCountRef.current = currentCount
+      virtualizer.scrollToIndex(currentCount - 1, { align: 'end' })
+      return
+    }
+
+    if (currentCount > prevCount) {
+      const addedCount = currentCount - prevCount
+      const scrollEl = parentRef.current
+      if (scrollEl && addedCount > 0) {
+        // Check if new messages were prepended (loading older) or appended (new messages)
+        // Heuristic: if we were loading older messages, the new items are at the beginning
+        // For new messages at the end, auto-scroll only if user was near bottom
+        if (shouldStickToBottomRef.current) {
+          // User was at bottom — scroll to new bottom
+          scrollToBottom('smooth')
+          // Track read count
+          setLastReadCount(currentCount)
+        } else {
+          // User was reading older messages — show indicator but don't auto-scroll
+        }
+      }
+    }
+
+    prevMessageCountRef.current = currentCount
+  }, [timeline.length, virtualizer, scrollToBottom])
+
+  // Reset scroll state on channel change
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset on channel switch
   useEffect(() => {
     initialScrollDoneRef.current = false
     prevMessageCountRef.current = 0
     shouldStickToBottomRef.current = true
+    setLastReadCount(0)
   }, [activeChannelId])
 
-  // Maintain scroll position after loading older messages (prepend)
-  useLayoutEffect(() => {
-    const prevCount = prevMessageCountRef.current
-    const currentCount = timeline.length
-
-    if (prevCount > 0 && currentCount > prevCount && isLoadingOlderRef.current) {
-      // Items were prepended — scroll to maintain position
-      const addedCount = currentCount - prevCount
-      const scrollEl = parentRef.current
-      if (scrollEl) {
-        // Jump to where the old first item now is
-        virtualizer.scrollToIndex(addedCount, { align: 'start' })
-      }
-      isLoadingOlderRef.current = false
-    } else if (prevCount > 0 && currentCount > prevCount && !isLoadingOlderRef.current) {
-      // New messages appended at the end — auto-scroll if near bottom
-      if (shouldStickToBottomRef.current) {
-        scrollToBottom('smooth')
-      }
-      // Track read count
-      if (lastReadCount > 0 && lastReadCount < currentCount && shouldStickToBottomRef.current) {
-        setLastReadCount(currentCount)
-      }
-    }
-
-    prevMessageCountRef.current = currentCount
-  }, [timeline.length, virtualizer, lastReadCount, scrollToBottom])
-
-  // Load older messages when scrolling near top
+  // Scroll event handler — load older messages + track stick-to-bottom
   useEffect(() => {
     const scrollEl = parentRef.current
     if (!scrollEl) return
@@ -535,26 +567,16 @@ export function ChatArea() {
     const handleScroll = () => {
       // Load more when near the top
       if (scrollEl.scrollTop < 200 && hasNextPage && !isFetchingNextPage) {
-        isLoadingOlderRef.current = true
         void fetchNextPage()
       }
       // Update read count when near bottom
       const isNearBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 80
       shouldStickToBottomRef.current = isNearBottom
-      if (isNearBottom && lastReadCount > 0 && lastReadCount < timeline.length) {
-        setLastReadCount(timeline.length)
-      }
     }
 
     scrollEl.addEventListener('scroll', handleScroll, { passive: true })
     return () => scrollEl.removeEventListener('scroll', handleScroll)
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage, lastReadCount, timeline.length])
-
-  // Reset read count when channel changes
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional trigger on channel change
-  useEffect(() => {
-    setLastReadCount(0)
-  }, [activeChannelId])
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
   // Track read count for new message line (only set once on initial load)
   useEffect(() => {
@@ -796,7 +818,6 @@ export function ChatArea() {
 
               {virtualItems.map((virtualItem) => {
                 const item = timeline[virtualItem.index]!
-                const index = virtualItem.index
 
                 return (
                   <div
@@ -811,7 +832,7 @@ export function ChatArea() {
                       transform: `translateY(${virtualItem.start}px)`,
                     }}
                   >
-                    {lastReadCount > 0 && index === lastReadCount && (
+                    {lastReadCount > 0 && virtualItem.index === lastReadCount && (
                       <div className="flex items-center gap-2 px-4 my-2">
                         <div className="flex-1 h-px bg-danger/60" />
                         <span className="text-xs text-danger font-black px-2">
@@ -848,44 +869,29 @@ export function ChatArea() {
                         </Badge>
                       </div>
                     ) : (
-                      (() => {
-                        // Message grouping: hide avatar/name for consecutive same-author messages within 1 minute
-                        const prevItem = index > 0 ? timeline[index - 1] : undefined
-                        const isGrouped =
-                          prevItem?.kind === 'message' &&
-                          prevItem.data.authorId === item.data.authorId &&
-                          !item.data.replyToId &&
-                          Math.abs(
-                            new Date(item.data.createdAt).getTime() -
-                              new Date(prevItem.data.createdAt).getTime(),
-                          ) < 60_000
-
-                        return (
-                          <MessageBubble
-                            message={item.data}
-                            currentUserId={user?.id ?? ''}
-                            isGrouped={isGrouped}
-                            onReply={(id) => setReplyToId(id)}
-                            onReact={handleReact}
-                            onMessageUpdate={handleMessageUpdate}
-                            onMessageDelete={handleMessageDelete}
-                            onPreviewFile={(att) => setPreviewFile(att)}
-                            onSaveToWorkspace={
-                              activeServerId ? (att) => setSaveToWorkspaceFile(att) : undefined
-                            }
-                            highlight={highlightMsgId === item.data.id}
-                            replyToMessage={
-                              item.data.replyToId
-                                ? (messages.find((m) => m.id === item.data.replyToId) ?? null)
-                                : null
-                            }
-                            selectionMode={selectionMode}
-                            isSelected={selectedMessageIds.has(item.data.id)}
-                            onToggleSelect={handleToggleSelect}
-                            onEnterSelectionMode={handleEnterSelectionMode}
-                          />
-                        )
-                      })()
+                      <MessageBubble
+                        message={item.data}
+                        currentUserId={user?.id ?? ''}
+                        isGrouped={item.isGrouped}
+                        onReply={(id) => setReplyToId(id)}
+                        onReact={handleReact}
+                        onMessageUpdate={handleMessageUpdate}
+                        onMessageDelete={handleMessageDelete}
+                        onPreviewFile={(att) => setPreviewFile(att)}
+                        onSaveToWorkspace={
+                          activeServerId ? (att) => setSaveToWorkspaceFile(att) : undefined
+                        }
+                        highlight={highlightMsgId === item.data.id}
+                        replyToMessage={
+                          item.data.replyToId
+                            ? (messageMap.get(item.data.replyToId) ?? null)
+                            : null
+                        }
+                        selectionMode={selectionMode}
+                        isSelected={selectedMessageIds.has(item.data.id)}
+                        onToggleSelect={handleToggleSelect}
+                        onEnterSelectionMode={handleEnterSelectionMode}
+                      />
                     )}
                   </div>
                 )

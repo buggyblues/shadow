@@ -16,7 +16,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
@@ -107,31 +107,6 @@ export interface MessageBubbleProps {
 
 const quickEmojis = ['👍', '❤️', '😂', '🎉', '🤔', '👀']
 
-/**
- * Global active message id — ensures only one message toolbar is shown at a time.
- * When a message becomes hovered, it sets itself as active and the others read
- * this value to know they should hide.
- */
-let _globalActiveMessageId: string | null = null
-const _globalListeners = new Set<() => void>()
-function setGlobalActiveMessage(id: string | null) {
-  _globalActiveMessageId = id
-  for (const fn of _globalListeners) fn()
-}
-function useGlobalActiveMessage(messageId: string) {
-  const [isActive, setIsActive] = useState(false)
-  useEffect(() => {
-    const handler = () => setIsActive(_globalActiveMessageId === messageId)
-    _globalListeners.add(handler)
-    // sync immediately
-    handler()
-    return () => {
-      _globalListeners.delete(handler)
-    }
-  }, [messageId])
-  return isActive
-}
-
 function isImageType(contentType: string): boolean {
   return contentType.startsWith('image/')
 }
@@ -140,9 +115,7 @@ function CodeBlockWithCopy({ children }: { children: React.ReactNode }) {
   const [copied, setCopied] = useState(false)
 
   const handleCopyCode = () => {
-    // Extract text content from the code element inside pre
     const _codeEl = document.createElement('div')
-    // Use a temporary container approach to get inner text
     let text = ''
     const extractText = (node: React.ReactNode): string => {
       if (typeof node === 'string') return node
@@ -182,7 +155,7 @@ function CodeBlockWithCopy({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function MessageBubble({
+function MessageBubbleInner({
   message,
   currentUserId,
   variant = 'channel',
@@ -209,6 +182,7 @@ export function MessageBubble({
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState('')
   const [copied, setCopied] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
   const editInputRef = useRef<HTMLTextAreaElement>(null)
   const avatarRef = useRef<HTMLDivElement>(null)
   const messageRef = useRef<HTMLDivElement>(null)
@@ -224,10 +198,9 @@ export function MessageBubble({
   const avatarHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const actionsRef = useRef<HTMLDivElement>(null)
 
-  // Global active message tracking — only one toolbar visible at a time
-  const isGlobalActive = useGlobalActiveMessage(message.id)
-  const showActions = isGlobalActive
+  const showActions = isHovered && !selectionMode
 
   // Close all menus on scroll (find nearest scrollable ancestor)
   useEffect(() => {
@@ -237,7 +210,6 @@ export function MessageBubble({
     ) as HTMLElement | null
     if (!scrollParent) return
     const handleScroll = () => {
-      setGlobalActiveMessage(null)
       setShowEmojiPicker(false)
       setShowFullPicker(false)
       setShowMoreMenu(false)
@@ -248,19 +220,17 @@ export function MessageBubble({
 
   const activateHover = useCallback(() => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
-    setGlobalActiveMessage(message.id)
-  }, [message.id])
+    setIsHovered(true)
+  }, [])
 
   const deactivateHover = useCallback(() => {
     if (showMoreMenu || showEmojiPicker || showFullPicker) return
     hoverTimeoutRef.current = setTimeout(() => {
-      if (_globalActiveMessageId === message.id) {
-        setGlobalActiveMessage(null)
-      }
+      setIsHovered(false)
       setShowEmojiPicker(false)
       setShowFullPicker(false)
     }, 150)
-  }, [message.id, showMoreMenu, showEmojiPicker, showFullPicker])
+  }, [showMoreMenu, showEmojiPicker, showFullPicker])
 
   const isOwn = message.authorId === currentUserId
   const currentUser = useAuthStore((s) => s.user)
@@ -420,7 +390,7 @@ export function MessageBubble({
   )
 
   /**
-   * Process React children to highlight @username mention patterns.
+   * Process react children to highlight @username mention patterns.
    */
   const renderMentions = (children: React.ReactNode): React.ReactNode => {
     if (!children) return children
@@ -454,7 +424,7 @@ export function MessageBubble({
       onClick={selectionMode ? () => onToggleSelect?.(message.id) : undefined}
       onTouchStart={() => {
         longPressTimerRef.current = setTimeout(() => {
-          setGlobalActiveMessage(message.id)
+          setIsHovered(true)
         }, 500)
       }}
       onTouchEnd={() => {
@@ -609,7 +579,6 @@ export function MessageBubble({
                     </a>
                   ),
                   a: ({ href, children }) => {
-                    // Handle plain URLs in message content that aren't already markdown links
                     const handleClick = (e: React.MouseEvent) => {
                       e.preventDefault()
                       if (href) {
@@ -731,7 +700,6 @@ export function MessageBubble({
             <button
               type="button"
               onClick={() => {
-                // Retry: remove failed message and re-send via REST
                 const channelId = message.channelId ?? message.dmChannelId
                 if (!channelId) return
                 queryClient.setQueryData<InfiniteData<MessagesPage>>(
@@ -747,7 +715,6 @@ export function MessageBubble({
                     }
                   },
                 )
-                // Re-insert as optimistic and retry via REST
                 const tempId = `temp-${Date.now()}`
                 const retryMsg = { ...message, id: tempId, sendStatus: 'sending' as const }
                 queryClient.setQueryData<InfiniteData<MessagesPage>>(
@@ -789,196 +756,166 @@ export function MessageBubble({
         )}
       </div>
 
-      {/* Hover actions (portal to avoid virtual list clipping) */}
-      {/* Click-outside backdrop to close More menu */}
-      {showMoreMenu &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[69]"
-            onClick={() => {
-              setShowMoreMenu(false)
-              setGlobalActiveMessage(null)
-              setShowEmojiPicker(false)
-              setShowFullPicker(false)
-            }}
-          />,
-          document.body,
-        )}
-
-      {showActions &&
-        messageRef.current &&
-        createPortal(
-          (() => {
-            const rect = messageRef.current!.getBoundingClientRect()
-            const posStyle = isDmOwn
-              ? { top: rect.top - 6, left: rect.left + 16 }
-              : { top: rect.top - 6, right: window.innerWidth - rect.right + 16 }
-            return (
-              <div
-                className="fixed flex items-center bg-bg-primary/90 backdrop-blur-md rounded-2xl border border-border-subtle shadow-lg z-[70]"
-                style={posStyle}
-                onMouseEnter={activateHover}
-                onMouseLeave={deactivateHover}
-              >
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                  className="!p-1.5 !h-auto !w-auto !rounded-lg !font-normal !normal-case !tracking-normal"
-                  title={t('chat.addEmoji')}
-                >
-                  <Smile size={16} />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => onReply?.(message.id)}
-                  className="!p-1.5 !h-auto !w-auto !rounded-lg !font-normal !normal-case !tracking-normal"
-                  title={t('chat.reply')}
-                >
-                  <Reply size={16} />
-                </Button>
-                <div className="relative">
+      {/* Hover actions — positioned absolutely within the message row to follow scroll */}
+      {showActions && (
+        <div
+          ref={actionsRef}
+          className="absolute flex items-center bg-bg-primary/90 backdrop-blur-md rounded-2xl border border-border-subtle shadow-lg z-[10]"
+          style={
+            isDmOwn
+              ? { top: '-6px', left: '16px' }
+              : { top: '-6px', right: '16px' }
+          }
+          onMouseEnter={activateHover}
+          onMouseLeave={deactivateHover}
+        >
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            className="!p-1.5 !h-auto !w-auto !rounded-lg !font-normal !normal-case !tracking-normal"
+            title={t('chat.addEmoji')}
+          >
+            <Smile size={16} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => onReply?.(message.id)}
+            className="!p-1.5 !h-auto !w-auto !rounded-lg !font-normal !normal-case !tracking-normal"
+            title={t('chat.reply')}
+          >
+            <Reply size={16} />
+          </Button>
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => setShowMoreMenu(!showMoreMenu)}
+              className="!p-1.5 !h-auto !w-auto !rounded-lg !font-normal !normal-case !tracking-normal"
+              title={t('chat.more')}
+            >
+              <MoreHorizontal size={16} />
+            </Button>
+            {/* More dropdown menu */}
+            {showMoreMenu && (
+              <div className="absolute top-full right-0 mt-1 bg-bg-primary/95 backdrop-blur-xl rounded-[24px] border border-border-subtle shadow-[0_16px_64px_rgba(0,0,0,0.4)] py-1.5 min-w-[160px] z-50">
+                {isOwn && (
                   <Button
                     variant="ghost"
-                    size="xs"
-                    onClick={() => setShowMoreMenu(!showMoreMenu)}
-                    className="!p-1.5 !h-auto !w-auto !rounded-lg !font-normal !normal-case !tracking-normal"
-                    title={t('chat.more')}
+                    size="sm"
+                    onClick={handleEdit}
+                    className="!w-full !justify-start !rounded-none !font-normal !normal-case !tracking-normal !px-3 !py-2 !text-sm !h-auto text-text-secondary hover:text-text-primary"
                   >
-                    <MoreHorizontal size={16} />
+                    <Pencil size={14} />
+                    {t('chat.editMessage')}
                   </Button>
-                  {/* More dropdown menu */}
-                  {showMoreMenu && (
-                    <div className="absolute top-full right-0 mt-1 bg-bg-primary/95 backdrop-blur-xl rounded-[24px] border border-border-subtle shadow-[0_16px_64px_rgba(0,0,0,0.4)] py-1.5 min-w-[160px] z-50">
-                      {isOwn && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={handleEdit}
-                          className="!w-full !justify-start !rounded-none !font-normal !normal-case !tracking-normal !px-3 !py-2 !text-sm !h-auto text-text-secondary hover:text-text-primary"
-                        >
-                          <Pencil size={14} />
-                          {t('chat.editMessage')}
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleCopy}
-                        className="!w-full !justify-start !rounded-none !font-normal !normal-case !tracking-normal !px-3 !py-2 !text-sm !h-auto text-text-secondary hover:text-text-primary"
-                      >
-                        <Copy size={14} />
-                        {copied ? t('common.copied') : t('chat.copyMessage')}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleShareLink}
-                        className="!w-full !justify-start !rounded-none !font-normal !normal-case !tracking-normal !px-3 !py-2 !text-sm !h-auto text-text-secondary hover:text-text-primary"
-                      >
-                        <ExternalLink size={14} />
-                        {t('chat.shareLink')}
-                      </Button>
-                      {onEnterSelectionMode && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setShowMoreMenu(false)
-                            onEnterSelectionMode(message.id)
-                          }}
-                          className="!w-full !justify-start !rounded-none !font-normal !normal-case !tracking-normal !px-3 !py-2 !text-sm !h-auto text-text-secondary hover:text-text-primary"
-                        >
-                          <CheckSquare size={14} />
-                          {t('chat.selectMessages', '多选消息')}
-                        </Button>
-                      )}
-                      {canDelete && (
-                        <>
-                          <div className="h-px bg-border-subtle my-1" />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleDelete}
-                            className="!w-full !justify-start !rounded-none !font-normal !normal-case !tracking-normal !px-3 !py-2 !text-sm !h-auto text-danger hover:!bg-danger/10"
-                          >
-                            <Trash2 size={14} />
-                            {t('chat.deleteMessage')}
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })(),
-          document.body,
-        )}
-
-      {/* Quick emoji picker (portal) */}
-      {showEmojiPicker &&
-        messageRef.current &&
-        createPortal(
-          (() => {
-            const rect = messageRef.current!.getBoundingClientRect()
-            const emojiPosStyle = isDmOwn
-              ? { top: rect.top - 34, left: rect.left + 16 }
-              : { top: rect.top - 34, right: window.innerWidth - rect.right + 16 }
-            return (
-              <div
-                className="fixed flex items-center gap-1 bg-bg-primary/90 backdrop-blur-md rounded-2xl border border-border-subtle shadow-lg p-1 z-[70]"
-                style={emojiPosStyle}
-                onMouseEnter={activateHover}
-                onMouseLeave={() => {
-                  hoverTimeoutRef.current = setTimeout(() => {
-                    if (_globalActiveMessageId === message.id) {
-                      setGlobalActiveMessage(null)
-                    }
-                    setShowEmojiPicker(false)
-                  }, 150)
-                }}
-              >
-                {quickEmojis.map((emoji) => (
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCopy}
+                  className="!w-full !justify-start !rounded-none !font-normal !normal-case !tracking-normal !px-3 !py-2 !text-sm !h-auto text-text-secondary hover:text-text-primary"
+                >
+                  <Copy size={14} />
+                  {copied ? t('common.copied') : t('chat.copyMessage')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleShareLink}
+                  className="!w-full !justify-start !rounded-none !font-normal !normal-case !tracking-normal !px-3 !py-2 !text-sm !h-auto text-text-secondary hover:text-text-primary"
+                >
+                  <ExternalLink size={14} />
+                  {t('chat.shareLink')}
+                </Button>
+                {onEnterSelectionMode && (
                   <Button
                     variant="ghost"
-                    size="xs"
-                    key={emoji}
+                    size="sm"
                     onClick={() => {
-                      onReact?.(message.id, emoji)
-                      setShowEmojiPicker(false)
+                      setShowMoreMenu(false)
+                      onEnterSelectionMode(message.id)
                     }}
-                    className="!w-8 !h-8 !rounded !px-0 !font-normal !normal-case !tracking-normal text-lg"
+                    className="!w-full !justify-start !rounded-none !font-normal !normal-case !tracking-normal !px-3 !py-2 !text-sm !h-auto text-text-secondary hover:text-text-primary"
                   >
-                    {emoji}
+                    <CheckSquare size={14} />
+                    {t('chat.selectMessages', '多选消息')}
                   </Button>
-                ))}
-                <div className="w-px h-6 bg-border-dim mx-0.5" />
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => {
-                    setShowEmojiPicker(false)
-                    setShowFullPicker(true)
-                  }}
-                  className="!w-8 !h-8 !rounded !px-0 !font-normal !normal-case !tracking-normal text-sm"
-                  title={t('chat.addEmoji')}
-                >
-                  +
-                </Button>
+                )}
+                {canDelete && (
+                  <>
+                    <div className="h-px bg-border-subtle my-1" />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleDelete}
+                      className="!w-full !justify-start !rounded-none !font-normal !normal-case !tracking-normal !px-3 !py-2 !text-sm !h-auto text-danger hover:!bg-danger/10"
+                    >
+                      <Trash2 size={14} />
+                      {t('chat.deleteMessage')}
+                    </Button>
+                  </>
+                )}
               </div>
-            )
-          })(),
-          document.body,
-        )}
+            )}
+          </div>
+        </div>
+      )}
 
-      {/* Full emoji picker (portal) */}
+      {/* Quick emoji picker — positioned absolutely within message row */}
+      {showEmojiPicker && (
+        <div
+          className="absolute flex items-center gap-1 bg-bg-primary/90 backdrop-blur-md rounded-2xl border border-border-subtle shadow-lg p-1 z-[10]"
+          style={
+            isDmOwn
+              ? { top: '-34px', left: '16px' }
+              : { top: '-34px', right: '16px' }
+          }
+          onMouseEnter={activateHover}
+          onMouseLeave={() => {
+            hoverTimeoutRef.current = setTimeout(() => {
+              setIsHovered(false)
+              setShowEmojiPicker(false)
+            }, 150)
+          }}
+        >
+          {quickEmojis.map((emoji) => (
+            <Button
+              variant="ghost"
+              size="xs"
+              key={emoji}
+              onClick={() => {
+                onReact?.(message.id, emoji)
+                setShowEmojiPicker(false)
+              }}
+              className="!w-8 !h-8 !rounded !px-0 !font-normal !normal-case !tracking-normal text-lg"
+            >
+              {emoji}
+            </Button>
+          ))}
+          <div className="w-px h-6 bg-border-dim mx-0.5" />
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => {
+              setShowEmojiPicker(false)
+              setShowFullPicker(true)
+            }}
+            className="!w-8 !h-8 !rounded !px-0 !font-normal !normal-case !tracking-normal text-sm"
+            title={t('chat.addEmoji')}
+          >
+            +
+          </Button>
+        </div>
+      )}
+
+      {/* Full emoji picker — still needs portal due to size and overflow */}
       {showFullPicker &&
         messageRef.current &&
         createPortal(
           (() => {
-            const rect = messageRef.current!.getBoundingClientRect()
+            const rect = messageRef.current.getBoundingClientRect()
             const top = Math.max(8, rect.top - 440)
             const fullPickerPosStyle = isDmOwn
               ? { top, left: rect.left + 16 }
@@ -990,9 +927,7 @@ export function MessageBubble({
                 onMouseLeave={() => {
                   setShowFullPicker(false)
                   hoverTimeoutRef.current = setTimeout(() => {
-                    if (_globalActiveMessageId === message.id) {
-                      setGlobalActiveMessage(null)
-                    }
+                    setIsHovered(false)
                   }, 150)
                 }}
               >
@@ -1129,6 +1064,53 @@ export function MessageBubble({
     </div>
   )
 }
+
+/** Memoized MessageBubble — prevents unnecessary re-renders when props haven't changed. */
+export const MessageBubble = React.memo(MessageBubbleInner, (prev, next) => {
+  // Shallow compare all props. For stable references from parent (useCallback),
+  // this prevents re-rendering when sibling messages update.
+  if (prev.message.id !== next.message.id) return false
+  if (prev.message.content !== next.message.content) return false
+  if (prev.message.isEdited !== next.message.isEdited) return false
+  if (prev.message.sendStatus !== next.message.sendStatus) return false
+  if (prev.message.updatedAt !== next.message.updatedAt) return false
+  if (prev.currentUserId !== next.currentUserId) return false
+  if (prev.variant !== next.variant) return false
+  if (prev.highlight !== next.highlight) return false
+  if (prev.isGrouped !== next.isGrouped) return false
+  if (prev.selectionMode !== next.selectionMode) return false
+  if (prev.isSelected !== next.isSelected) return false
+
+  // Deep compare reactions (frequently updated via WS)
+  const prevReactions = prev.message.reactions
+  const nextReactions = next.message.reactions
+  if (prevReactions?.length !== nextReactions?.length) return false
+  if (prevReactions) {
+    for (let i = 0; i < prevReactions.length; i++) {
+      if (prevReactions[i]?.emoji !== nextReactions[i]?.emoji) return false
+      if (prevReactions[i]?.count !== nextReactions[i]?.count) return false
+    }
+  }
+
+  // Deep compare replyToMessage
+  if (prev.replyToMessage?.id !== next.replyToMessage?.id) return false
+  if (prev.replyToMessage?.content !== next.replyToMessage?.content) return false
+
+  // Deep compare attachments
+  const prevAtt = prev.message.attachments
+  const nextAtt = next.message.attachments
+  if (prevAtt?.length !== nextAtt?.length) return false
+  if (prevAtt) {
+    for (let i = 0; i < prevAtt.length; i++) {
+      if (prevAtt[i]?.id !== nextAtt[i]?.id) return false
+      if (prevAtt[i]?.url !== nextAtt[i]?.url) return false
+    }
+  }
+
+  return true
+})
+
+MessageBubble.displayName = 'MessageBubble'
 
 /* ── MentionSpan — @username with hover card ──────────────── */
 
