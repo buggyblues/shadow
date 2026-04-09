@@ -80,6 +80,10 @@ services:
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      # ── Voice Channel (Agora RTC) ─────────────────
+      RTC_APP_ID: ${RTC_APP_ID:-}
+      RTC_APP_CERTIFICATE: ${RTC_APP_CERTIFICATE:-}
+      RTC_TOKEN_EXPIRE_SECONDS: ${RTC_TOKEN_EXPIRE_SECONDS:-3600}
     depends_on:
       postgres:
         condition: service_healthy
