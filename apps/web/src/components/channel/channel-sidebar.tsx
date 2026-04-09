@@ -47,7 +47,7 @@ import { useConfirmStore } from '../common/confirm-dialog'
 import { ContextMenu } from '../common/context-menu'
 import { InvitePanel } from '../common/invite-panel'
 import { ServerSettingsModal } from '../server/server-settings-modal'
-import { VoiceChannelPanel } from '../voice/VoiceChannelPanel'
+import { VoiceChannel as VoiceChannelPanel } from '../voice/VoiceChannel'
 import { ChannelSortFilterButton } from './channel-sort-button'
 
 interface Channel {
@@ -369,6 +369,10 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
   const textChannels = channels.filter((c) => c.type === 'text')
   const voiceChannels = channels.filter((c) => c.type === 'voice')
   const announcementChannels = channels.filter((c) => c.type === 'announcement')
+
+  // Track which voice channels have connected members (from voice store)
+  const voiceStoreMembers = useVoiceStore((s) => s.members)
+  const voiceStoreActiveId = useVoiceStore((s) => s.activeChannelId)
 
   const renderChannelGroup = (label: string, items: Channel[]) => {
     if (items.length === 0) return null
@@ -900,119 +904,8 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
         />
       )}
 
-      {/* Voice Channel Panel */}
-      <VoiceChannel />
-    </div>
-  )
-}
-
-/**
- * Voice Channel Panel — shown at the bottom when user is in a voice channel.
- */
-function VoiceChannel() {
-  const { t } = useTranslation()
-  const { activeChannelId, activeChannelName, members, isMuted, isScreenSharing, error } =
-    useVoiceStore()
-  const leaveChannel = useVoiceStore((s) => s.leaveChannel)
-  const setMuted = useVoiceStore((s) => s.setMuted)
-  const setScreenSharing = useVoiceStore((s) => s.setScreenSharing)
-  useSocket()
-
-  // Listen for voice channel events
-  useSocketEvent(
-    'voice:user-joined',
-    (data: { userId: string; username: string; displayName: string }) => {
-      const state = useVoiceStore.getState()
-      state.updateMembers([
-        ...state.members,
-        {
-          userId: data.userId,
-          username: data.username,
-          displayName: data.displayName,
-          muted: false,
-          screenSharing: false,
-          joinedAt: new Date().toISOString(),
-        },
-      ])
-    },
-  )
-
-  useSocketEvent('voice:user-left', (data: { userId: string }) => {
-    const state = useVoiceStore.getState()
-    state.updateMembers(state.members.filter((m) => m.userId !== data.userId))
-  })
-
-  useSocketEvent('voice:user-muted', (data: { userId: string; muted: boolean }) => {
-    const state = useVoiceStore.getState()
-    state.updateMembers(
-      state.members.map((m) => (m.userId === data.userId ? { ...m, muted: data.muted } : m)),
-    )
-  })
-
-  useSocketEvent('voice:screenshare-started', (data: { userId: string }) => {
-    const state = useVoiceStore.getState()
-    state.updateMembers(
-      state.members.map((m) => (m.userId === data.userId ? { ...m, screenSharing: true } : m)),
-    )
-  })
-
-  useSocketEvent('voice:screenshare-stopped', (data: { userId: string }) => {
-    const state = useVoiceStore.getState()
-    state.updateMembers(
-      state.members.map((m) => (m.userId === data.userId ? { ...m, screenSharing: false } : m)),
-    )
-  })
-
-  if (!activeChannelId) return null
-
-  return (
-    <div className="border-t bg-muted/30">
-      {error && <div className="px-3 py-1.5 text-xs text-destructive">{error}</div>}
-
-      <div className="flex items-center gap-2 px-3 py-1.5">
-        <Volume2 className="h-4 w-4 text-green-500" />
-        <span className="text-sm font-medium truncate">{activeChannelName}</span>
-      </div>
-
-      <div className="px-3 pb-1.5">
-        <div className="text-xs text-muted-foreground mb-1">
-          {members.length} {t('voice.inChannel', { defaultValue: '人在频道' })}
-        </div>
-        <div className="space-y-0.5 max-h-24 overflow-y-auto">
-          {members.map((m) => (
-            <div key={m.userId} className="flex items-center gap-1.5 text-xs">
-              <div
-                className={`h-1.5 w-1.5 rounded-full ${m.muted ? 'bg-muted' : 'bg-green-500'}`}
-              />
-              <span className="truncate">{m.displayName || m.username}</span>
-              {m.screenSharing && <span className="text-muted-foreground">🖥</span>}
-              {m.muted && <span className="text-muted-foreground">🔇</span>}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-1 px-3 pb-3">
-        <Button
-          variant={isMuted ? 'danger' : 'secondary'}
-          size="xs"
-          onClick={() => setMuted(!isMuted)}
-          className="h-7 w-7 p-0"
-        >
-          <MicOff size={14} />
-        </Button>
-        <Button
-          variant={isScreenSharing ? 'primary' : 'secondary'}
-          size="xs"
-          onClick={() => setScreenSharing(!isScreenSharing)}
-          className="h-7 w-7 p-0"
-        >
-          <Monitor size={14} />
-        </Button>
-        <Button variant="danger" size="xs" onClick={leaveChannel} className="ml-auto h-7 px-3">
-          {t('voice.leave', { defaultValue: '离开' })}
-        </Button>
-      </div>
+      {/* Voice Channel Panel — Discord-style bottom bar */}
+      <VoiceChannelPanel />
     </div>
   )
 }
