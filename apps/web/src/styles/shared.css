@@ -100,7 +100,112 @@
   color: var(--color-text-muted);
 }
 :root.light .message-row:hover {
-  background-color: rgba(0, 0, 0, 0.03);
+  background-color: rgba(0, 0, 0, 0.025);
+}
+
+/* ─── CJK Typography Enhancements ─── */
+.cjk-enhanced {
+  line-height: 1.7;
+  letter-spacing: 0.04em;
+}
+
+/* Global CJK body text optimization — apply to CJK content areas */
+:lang(zh),
+:lang(ja),
+:lang(ko) {
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+}
+
+/* Active channel pill — jelly pill with cyan inner glow */
+.channel-pill-active {
+  background: rgba(0, 243, 255, 0.12);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.15),
+    0 0 12px rgba(0, 243, 255, 0.1);
+}
+:root.light .channel-pill-active {
+  background: rgba(0, 198, 209, 0.1);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.6),
+    0 0 12px rgba(0, 198, 209, 0.08);
+}
+
+/* Input valley — inset shadow for "sunken" feel */
+.input-valley {
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px solid var(--color-border-subtle);
+  backdrop-filter: blur(24px);
+  transition: all 0.3s ease;
+}
+:root.light .input-valley {
+  background: #ffffff;
+  border: 2px solid #F1F5F9;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.02);
+}
+.input-valley:focus-within {
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.5),
+    0 0 0 3px rgba(0, 243, 255, 0.12);
+  border-color: rgba(0, 243, 255, 0.2);
+}
+:root.light .input-valley:focus-within {
+  border-color: var(--color-primary-strong);
+  box-shadow: 0 0 0 5px rgba(0, 198, 209, 0.15);
+}
+
+/* Glass panel — reusable for sidebars and content areas */
+.glass-panel {
+  background: rgba(18, 18, 26, 0.6);
+  backdrop-filter: blur(32px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.1), 0 10px 40px -10px rgba(0, 0, 0, 0.5);
+  border-radius: 24px;
+  overflow: hidden;
+}
+:root.light .glass-panel {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(32px);
+  border: 1px solid rgba(255, 255, 255, 1);
+  box-shadow: 0 15px 45px rgba(0,0,0,0.04), inset 0 2px 12px rgba(255, 255, 255, 0.9);
+  border-radius: 24px;
+  overflow: hidden;
+}
+
+/* Glass card — aggressive rounding with top-edge reflection */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(32px);
+  border-radius: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+}
+:root.light .glass-card {
+  border: 1px solid rgba(255, 255, 255, 1);
+  box-shadow:
+    0 15px 45px rgba(0, 0, 0, 0.04),
+    inset 0 2px 12px rgba(255, 255, 255, 0.9);
+}
+
+/* Glass surface — for inline containers (quotes, etc.) */
+.glass-surface {
+  background: var(--glass-bg);
+  backdrop-filter: blur(32px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+:root.light .glass-surface {
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* Vibrant shadow — cyan glow for primary CTAs */
+.vibrant-shadow {
+  box-shadow:
+    0 10px 25px rgba(0, 198, 209, 0.35),
+    inset 0 2px 4px rgba(255, 255, 255, 0.3);
 }
 
 @layer base {
@@ -117,6 +222,8 @@ body {
   color: var(--color-text-primary);
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
 }
 
 #root {
@@ -188,8 +295,8 @@ body {
 }
 .msg-markdown pre {
   background: var(--color-bg-tertiary);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
   padding: 0.75rem 1rem;
   margin: 0.5rem 0;
   overflow-x: auto;
@@ -207,10 +314,12 @@ body {
   opacity: 0.8;
 }
 .msg-markdown blockquote {
-  border-left: 3px solid var(--color-primary);
-  padding-left: 0.75rem;
-  margin: 0.25rem 0;
+  border-left: 4px solid var(--color-primary);
+  padding: 0.5rem 0.75rem;
+  margin: 0.375rem 0;
   color: var(--color-text-muted);
+  background: var(--glass-bg);
+  border-radius: 0 16px 16px 0;
 }
 .msg-markdown ul,
 .msg-markdown ol {
@@ -328,49 +437,54 @@ body {
 
 /* ─── Hover Enhancements ─── */
 
-/* Sidebar items */
+/* Sidebar items — bouncy physics */
 .sidebar-item {
   transition:
-    background-color 0.15s ease,
-    color 0.15s ease,
-    transform 0.1s ease;
+    background-color 0.4s var(--bezier-bouncy, cubic-bezier(0.34, 1.56, 0.64, 1)),
+    color 0.25s ease,
+    transform 0.4s var(--bezier-bouncy, cubic-bezier(0.34, 1.56, 0.64, 1)),
+    box-shadow 0.4s var(--bezier-bouncy, cubic-bezier(0.34, 1.56, 0.64, 1));
 }
 .sidebar-item:hover {
   transform: translateX(2px);
 }
 .sidebar-item:active {
-  transform: translateX(0) scale(0.98);
+  transform: translateX(0) scale(0.97);
 }
 
-/* Buttons with scale feedback */
+/* Buttons with scale feedback — bouncy physics */
 .btn-press {
   transition:
-    transform 0.1s ease,
-    box-shadow 0.15s ease;
+    transform 0.4s var(--bezier-bouncy, cubic-bezier(0.34, 1.56, 0.64, 1)),
+    box-shadow 0.4s var(--bezier-bouncy, cubic-bezier(0.34, 1.56, 0.64, 1));
 }
 .btn-press:hover {
-  box-shadow: 0 2px 8px rgba(0, 200, 214, 0.15);
+  box-shadow: 0 4px 16px rgba(0, 243, 255, 0.2);
 }
 .btn-press:active {
-  transform: scale(0.97);
+  transform: scale(0.95);
 }
 
-/* Message row hover */
+/* Message row hover — subtle glass lift */
 .message-row {
-  transition: background-color 0.12s ease;
+  transition: background-color 0.3s ease;
+  border-radius: 12px;
 }
 .message-row:hover {
-  background-color: rgba(0, 0, 0, 0.08);
+  background-color: rgba(255, 255, 255, 0.02);
+}
+:root.light .message-row:hover {
+  background-color: rgba(0, 0, 0, 0.025);
 }
 
-/* Avatar online indicator pulse */
+/* Avatar online indicator pulse — Success Emerald */
 @keyframes online-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(87, 242, 135, 0.4);
+    box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.4);
   }
   50% {
-    box-shadow: 0 0 0 4px rgba(87, 242, 135, 0);
+    box-shadow: 0 0 0 4px rgba(0, 230, 118, 0);
   }
 }
 
@@ -382,16 +496,16 @@ body {
 .msg-markdown img {
   max-width: 100%;
   max-height: 400px;
-  border-radius: 0.5rem;
+  border-radius: 16px;
   cursor: pointer;
   transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
+    transform 0.4s var(--bezier-bouncy, ease),
+    box-shadow 0.3s ease;
   object-fit: contain;
 }
 .msg-markdown img:hover {
   transform: scale(1.02);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 /* Mobile optimizations */

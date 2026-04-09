@@ -41,20 +41,20 @@ import { useUIStore } from '../../stores/ui.store'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { ContextMenu } from '../common/context-menu'
 
-/** Deterministic color for server avatar fallback based on name */
+/** Deterministic color for server avatar fallback based on name — Neon Frost palette (Cyan/Yellow core) */
 const SERVER_AVATAR_COLORS = [
-  'bg-rose-500',
-  'bg-orange-500',
-  'bg-amber-500',
-  'bg-emerald-500',
-  'bg-teal-500',
-  'bg-cyan-500',
-  'bg-blue-500',
-  'bg-indigo-500',
-  'bg-violet-500',
-  'bg-purple-500',
-  'bg-fuchsia-500',
-  'bg-pink-500',
+  'bg-[#00c6d1]', // Primary Cyan
+  'bg-[#0891b2]', // Cyan Deep
+  'bg-[#06b6d4]', // Cyan Bright
+  'bg-[#00a3b0]', // Cyan Muted
+  'bg-[#ffb300]', // Accent Yellow
+  'bg-[#e0a800]', // Yellow Muted
+  'bg-[#1565c0]', // Deep Blue
+  'bg-[#0d47a1]', // Navy
+  'bg-[#00897B]', // Teal Muted
+  'bg-[#FF2A55]', // Danger Crimson
+  'bg-[#37474f]', // Slate
+  'bg-[#455a64]', // Blue Grey
 ] as const
 
 function getServerAvatarColor(name: string): string {
@@ -95,6 +95,8 @@ function ServerItem({
   onSelect: (id: string, slug?: string | null) => void
   onContextMenu: (e: React.MouseEvent, serverEntry: ServerEntry) => void
 }) {
+  const { activeServerId } = useChatStore()
+
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
       onContextMenu(e, { server, member })
@@ -103,14 +105,7 @@ function ServerItem({
   )
 
   return (
-    <div className="relative shrink-0 flex items-center">
-      {/* Active indicator pill */}
-      <div
-        className={cn(
-          'absolute -left-1 w-1 rounded-r-full bg-primary transition-all duration-200',
-          isActive ? 'h-10' : unreadCount > 0 && !isMuted ? 'h-2' : 'h-0 group-hover/item:h-5',
-        )}
-      />
+    <div className="relative shrink-0 flex items-center justify-center group/item w-[56px] h-[56px]">
       <Tooltip>
         <TooltipTrigger asChild>
           <button
@@ -118,18 +113,18 @@ function ServerItem({
             onClick={() => onSelect(server.id, server.slug)}
             onContextMenu={handleContextMenu}
             className={cn(
-              'w-12 h-12 transition-all duration-200 flex items-center justify-center overflow-hidden',
-              isActive
-                ? 'rounded-2xl bg-primary/20 ring-1 ring-primary/30 shadow-[0_0_12px_rgba(0,243,255,0.15)]'
-                : 'rounded-2xl hover:rounded-xl bg-bg-tertiary/50 hover:bg-bg-modifier-hover',
+              'w-[56px] h-[56px] transition-all duration-300 flex items-center justify-center overflow-visible bouncy',
+              activeServerId === null
+                ? 'rounded-full ring-[3px] ring-primary ring-offset-2 ring-offset-bg-deep shadow-[0_0_24px_rgba(0,243,255,0.4)] scale-105'
+                : 'rounded-full ring-0 hover:ring-[3px] hover:ring-primary/50 hover:shadow-[0_0_16px_rgba(0,243,255,0.15)] opacity-80 hover:opacity-100',
             )}
-          >
+            >
             {server.iconUrl ? (
-              <Avatar className="w-12 h-12 rounded-[inherit]">
+              <Avatar className="w-[56px] h-[56px] rounded-[inherit]">
                 <AvatarImage src={server.iconUrl} alt={server.name} className="object-cover" />
                 <AvatarFallback
                   className={cn(
-                    'rounded-[inherit] text-white font-bold text-[15px]',
+                    'rounded-[inherit] text-[#050508] font-bold text-[18px]',
                     getServerAvatarColor(server.name),
                   )}
                 >
@@ -139,16 +134,17 @@ function ServerItem({
             ) : (
               <div
                 className={cn(
-                  'w-12 h-12 rounded-[inherit] flex items-center justify-center text-white font-bold text-[18px]',
+                  'w-[56px] h-[56px] rounded-[inherit] flex items-center justify-center text-[#050508] font-bold text-[22px]',
                   getServerAvatarColor(server.name),
                 )}
               >
                 {server.name.charAt(0).toUpperCase()}
               </div>
-            )}
-          </button>
+            )}          </button>
         </TooltipTrigger>
-        <TooltipContent side="right">{server.name}</TooltipContent>
+        <TooltipContent side="right" className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4">
+          {server.name}
+        </TooltipContent>
       </Tooltip>
       {server.isPublic === false && (
         <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-bg-deep/80 backdrop-blur flex items-center justify-center shadow-sm">
@@ -156,7 +152,7 @@ function ServerItem({
         </span>
       )}
       {unreadCount > 0 && !isMuted && (
-        <span className="absolute -top-0.5 -right-0.5 min-w-[8px] h-2 rounded-full bg-primary shadow-[0_0_6px_rgba(0,243,255,0.5)]" />
+        <span className="absolute top-0 right-0 min-w-[12px] h-3 rounded-full border-2 border-[#12121a] bg-primary shadow-[0_0_6px_rgba(0,243,255,0.5)] z-10" />
       )}
     </div>
   )
@@ -335,7 +331,9 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="w-[72px] bg-bg-deep/90 backdrop-blur-xl border-r border-border-subtle flex flex-col items-center py-3 shrink-0 h-full">
+      <div
+        className="w-[88px] glass-panel !overflow-visible flex flex-col items-center py-4 shrink-0 h-full z-50"
+      >
         {/* User avatar → settings/profile */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -343,9 +341,9 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
               variant="ghost"
               size="icon"
               onClick={() => navigate({ to: '/settings' })}
-              className="w-12 h-12 rounded-full p-0 overflow-hidden hover:ring-2 hover:ring-primary/40 transition-all"
+              className="w-[56px] h-[56px] rounded-full p-0 overflow-visible hover:ring-[3px] hover:ring-primary hover:shadow-[0_0_24px_rgba(0,243,255,0.4)] transition-all duration-300 flex items-center justify-center relative bouncy"
             >
-              <Avatar className="w-12 h-12">
+              <Avatar className="w-[56px] h-[56px]">
                 <AvatarImage
                   src={user?.avatarUrl ?? undefined}
                   alt={user?.displayName || user?.username}
@@ -356,13 +354,13 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
               </Avatar>
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="right">{user?.displayName || user?.username}</TooltipContent>
+          <TooltipContent side="right" className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4">{user?.displayName || user?.username}</TooltipContent>
         </Tooltip>
 
         <div className="w-8 h-0.5 bg-border/20 rounded-full my-1 shrink-0" />
 
         {/* Scrollable server list */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col items-center gap-2 min-h-0 py-1 scrollbar-hidden">
+        <div className="flex-1 overflow-y-auto overflow-x-visible px-4 flex flex-col items-center gap-3 min-h-0 py-2 scrollbar-hidden w-full">
           {servers.map((s) => (
             <ServerItem
               key={s.server.id}
@@ -385,13 +383,13 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
               <Button
                 variant="glass"
                 size="icon"
-                className="rounded-2xl"
+                className="w-[56px] h-[56px] rounded-full bouncy"
                 onClick={() => setShowCreate(!showCreate)}
               >
                 <Plus size={24} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right">{t('server.createServer')}</TooltipContent>
+            <TooltipContent side="right" className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4">{t('server.createServer')}</TooltipContent>
           </Tooltip>
 
           {/* Join server */}
@@ -400,13 +398,13 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
               <Button
                 variant="glass"
                 size="icon"
-                className="rounded-2xl"
+                className="w-[56px] h-[56px] rounded-full bouncy"
                 onClick={() => setShowJoin(!showJoin)}
               >
                 <UserPlus size={20} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right">{t('server.joinServer')}</TooltipContent>
+            <TooltipContent side="right" className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4">{t('server.joinServer')}</TooltipContent>
           </Tooltip>
 
           {/* Discover servers */}
@@ -415,13 +413,13 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
               <Button
                 variant="glass"
                 size="icon"
-                className="rounded-2xl"
+                className="w-[56px] h-[56px] rounded-full bouncy"
                 onClick={() => navigate({ to: '/discover' })}
               >
                 <Compass size={24} className="opacity-90" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right">{t('server.discover')}</TooltipContent>
+            <TooltipContent side="right" className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4">{t('server.discover')}</TooltipContent>
           </Tooltip>
 
           {/* OpenClaw — desktop only */}
@@ -431,7 +429,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="rounded-2xl hover:scale-105"
+                  className="w-[56px] h-[56px] rounded-full hover:scale-105 bouncy"
                   onClick={() => navigate({ to: '/openclaw' })}
                 >
                   <svg
@@ -510,7 +508,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                   </svg>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="right">OpenClaw</TooltipContent>
+              <TooltipContent side="right" className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4">OpenClaw</TooltipContent>
             </Tooltip>
           )}
         </div>
@@ -691,26 +689,26 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
               },
               ...(user?.id !== contextMenu.server.server.ownerId
                 ? [
-                    {
-                      items: [
-                        {
-                          icon: LogOut,
-                          label: t('server.leaveServer'),
-                          danger: true,
-                          onClick: async () => {
-                            const name = contextMenu.server.server.name
-                            const ok = await useConfirmStore.getState().confirm({
-                              title: t('server.leaveServer'),
-                              message: t('server.leaveConfirm', { name }),
-                            })
-                            if (ok) {
-                              leaveServer.mutate(contextMenu.server.server.id)
-                            }
-                          },
+                  {
+                    items: [
+                      {
+                        icon: LogOut,
+                        label: t('server.leaveServer'),
+                        danger: true,
+                        onClick: async () => {
+                          const name = contextMenu.server.server.name
+                          const ok = await useConfirmStore.getState().confirm({
+                            title: t('server.leaveServer'),
+                            message: t('server.leaveConfirm', { name }),
+                          })
+                          if (ok) {
+                            leaveServer.mutate(contextMenu.server.server.id)
+                          }
                         },
-                      ],
-                    },
-                  ]
+                      },
+                    ],
+                  },
+                ]
                 : []),
             ]}
           />

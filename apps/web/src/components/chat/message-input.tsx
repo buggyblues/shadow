@@ -645,7 +645,7 @@ export function MessageInput({
                 </div>
               )}
               {pf.workspaceUrl && (
-                <span className="absolute bottom-0.5 left-0.5 text-[8px] bg-primary/80 text-white px-1 py-0.5 rounded">
+                <span className="absolute bottom-0.5 left-0.5 text-[8px] bg-primary/80 text-bg-deep px-1 py-0.5 rounded">
                   工作区
                 </span>
               )}
@@ -664,8 +664,8 @@ export function MessageInput({
 
       <div
         className={cn(
-          'flex items-center gap-1 bg-white/3 backdrop-blur-xl border-2 border-border-subtle px-3 py-1.5 shadow-lg shadow-black/10 transition-all focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/20',
-          replyToId || pendingFiles.length > 0 ? 'rounded-b-[40px]' : 'rounded-[40px]',
+          'flex items-center gap-2 px-4 py-2 input-valley',
+          replyToId || pendingFiles.length > 0 ? 'rounded-b-[20px]' : 'rounded-[20px]',
         )}
       >
         <Button
@@ -737,11 +737,11 @@ export function MessageInput({
 
         <Button
           size="icon"
-          className="h-9 w-9 rounded-full bg-primary hover:bg-primary/80 shrink-0 self-end mb-[3px] disabled:opacity-30 shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-shadow"
+          className="h-9 w-9 rounded-full shrink-0 self-end mb-0.5 disabled:opacity-30 transition-all duration-300 bg-primary hover:bg-primary-strong text-white border-none shadow-none"
           onClick={handleSend}
           disabled={(!content.trim() && pendingFiles.length === 0) || uploading}
         >
-          <Send size={20} />
+          <Send size={16} className="text-white ml-0.5" />
         </Button>
       </div>
 

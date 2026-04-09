@@ -307,30 +307,24 @@ export function MemberList() {
     <>
       {/* Action buttons - hidden when channel is archived */}
       {!channel?.isArchived && (
-        <div className="px-2 pb-2 flex gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              setInviteInitialTab('members')
-              setShowInvitePanel(true)
-            }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-text-muted hover:text-text-primary hover:bg-bg-primary/30 transition flex-1"
-            title={t('channel.inviteMember')}
-          >
-            <UserPlus size={13} />
-            <span className="truncate">{t('channel.inviteMember')}</span>
-          </button>
+        <div className="px-4 pb-4 pt-2 flex flex-col gap-3">
           <button
             type="button"
             onClick={() => {
               setInviteInitialTab('buddies')
               setShowInvitePanel(true)
             }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-accent hover:text-accent hover:bg-accent/10 transition flex-1"
+            className="flex items-center justify-center gap-2 px-4 py-[14px] rounded-full text-[13px] font-black text-[#050508] uppercase tracking-[0.05em] transition-all duration-500 w-full bouncy"
+            style={{
+              background: 'linear-gradient(135deg, #F8E71C, #ffb300)',
+              border: '1px solid rgba(255,255,255,0.5)',
+              boxShadow: '0 10px 25px rgba(248, 231, 28, 0.35), inset 0 2px 4px rgba(255, 255, 255, 0.7)',
+              backdropFilter: 'blur(12px)',
+            }}
             title={t('channel.addAgent')}
           >
-            <PawPrint size={14} />
-            <span className="truncate">{t('channel.addAgent')}</span>
+            <PawPrint size={14} className="text-[#050508]" />
+            <span className="truncate uppercase tracking-widest">{t('channel.addAgent')}</span>
           </button>
         </div>
       )}
@@ -346,7 +340,7 @@ export function MemberList() {
     <>
       {/* Desktop member list — hidden when file preview panel is open */}
       {!filePreviewOpen && (
-        <div className="w-60 bg-bg-primary/80 backdrop-blur-xl overflow-y-auto shrink-0 pt-4 hidden lg:block h-full border-l border-border-subtle">
+        <div className="w-[240px] glass-panel overflow-hidden overflow-y-auto shrink-0 pt-4 hidden lg:block h-full scrollbar-hidden">
           {memberContent}
         </div>
       )}
@@ -354,9 +348,12 @@ export function MemberList() {
       {/* Mobile member list overlay */}
       {mobileMemberListOpen && (
         <div className="fixed inset-0 z-50 flex lg:hidden">
-          <div className="absolute inset-0 bg-bg-deep/60" onClick={closeMobileMemberList} />
-          <div className="ml-auto relative z-10 w-64 bg-bg-primary/80 backdrop-blur-xl h-full overflow-y-auto animate-slide-in-right">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
+          <div
+            className="absolute inset-0 bg-bg-deep/60 backdrop-blur-sm"
+            onClick={closeMobileMemberList}
+          />
+          <div className="ml-auto relative z-10 w-64 glass-panel h-full overflow-y-auto animate-slide-in-right scrollbar-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle backdrop-blur-xl">
               <h3 className="font-bold text-text-primary text-sm">{t('member.groupOnline')}</h3>
               <button
                 onClick={closeMobileMemberList}

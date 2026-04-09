@@ -13,7 +13,7 @@ const buttonVariants = cva(
         secondary:
           'bg-gradient-to-br from-[#F8E71C] to-[#ffb300] text-[#050508] border-none shadow-[0_10px_25px_rgba(248,231,28,0.35),inset_0_2px_4px_rgba(255,255,255,0.7)] dark:shadow-[0_10px_25px_rgba(248,231,28,0.3),inset_0_2px_4px_rgba(255,255,255,0.5)] hover:shadow-[0_12px_32px_rgba(248,231,28,0.5),inset_0_2px_4px_rgba(255,255,255,0.7)] dark:hover:shadow-[0_12px_32px_rgba(248,231,28,0.5),inset_0_2px_4px_rgba(255,255,255,0.5)] hover:-translate-y-1',
         accent:
-          'bg-gradient-to-br from-[#7C4DFF] to-[#6200EA] text-white border-none shadow-[0_10px_25px_rgba(124,77,255,0.4),inset_0_2px_4px_rgba(255,255,255,0.3)] hover:shadow-[0_12px_32px_rgba(124,77,255,0.6),inset_0_2px_4px_rgba(255,255,255,0.3)] hover:-translate-y-1',
+          'bg-gradient-to-br from-[#00F3FF] to-[#00a3b0] text-[#050508] border-none shadow-[0_10px_25px_rgba(0,198,209,0.4),inset_0_2px_4px_rgba(255,255,255,0.5)] hover:shadow-[0_12px_32px_rgba(0,243,255,0.6),inset_0_2px_4px_rgba(255,255,255,0.5)] hover:-translate-y-1',
         danger:
           'bg-gradient-to-br from-[#FF2A55] to-[#E11D48] text-white border-none shadow-[0_10px_25px_rgba(255,42,85,0.4),inset_0_2px_4px_rgba(255,255,255,0.3)] hover:shadow-[0_12px_32px_rgba(255,42,85,0.6),inset_0_2px_4px_rgba(255,255,255,0.3)] hover:-translate-y-1',
         glass:
