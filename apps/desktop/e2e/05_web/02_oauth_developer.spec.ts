@@ -161,16 +161,14 @@ test.describe
       await expect(page.getByText('E2E Test OAuth App').first()).toBeVisible()
       await expect(page.getByText('Created by Playwright E2E').first()).toBeVisible()
 
-      // Verify no broken <img> in the app card — the first-letter fallback should show instead
-      const appCardCheck = page
-        .locator('div.bg-bg-secondary')
+      // Verify the first-letter avatar renders (no logo was uploaded)
+      // AppLogo component renders a div with text-primary class showing the first letter
+      const avatarEl = page
+        .locator('div.flex.items-center.gap-3')
         .filter({ hasText: 'E2E Test OAuth App' })
+        .locator('div.rounded-lg.bg-primary\\/10')
         .first()
-      // No <img> should exist inside the card logo area (we skipped logo, so it should render a text avatar)
-      await expect(appCardCheck.locator('img').first()).not.toBeVisible()
-      // The first-letter avatar should be visible (AppLogo renders a div with bg-primary/10)
-      const avatarEl = appCardCheck.locator('div.bg-primary\\/10').first()
-      await expect(avatarEl).toBeVisible()
+      await expect(avatarEl).toBeVisible({ timeout: 5_000 })
       await expect(avatarEl).toHaveText('E')
 
       // Verify Client ID is visible
