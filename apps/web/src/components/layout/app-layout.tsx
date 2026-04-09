@@ -2,14 +2,13 @@ import { Button, cn } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { Outlet, useNavigate } from '@tanstack/react-router'
 import { Menu } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import { connectSocket, disconnectSocket } from '../../lib/socket'
 import { useAuthStore } from '../../stores/auth.store'
 import { useUIStore } from '../../stores/ui.store'
 import { ConfirmDialog } from '../common/confirm-dialog'
-import { OnboardingModal } from '../onboarding/onboarding-modal'
 import { RechargeModal } from '../recharge/recharge-modal'
 import { ServerSidebar } from '../server/server-sidebar'
 
@@ -19,7 +18,6 @@ export function AppLayout() {
   const { setUser, logout } = useAuthStore()
   const { mobileServerSidebarOpen, closeMobileServerSidebar, openMobileServerSidebar } =
     useUIStore()
-  const [showOnboarding, setShowOnboarding] = useState(false)
 
   // Fetch current user on mount
   const {
@@ -43,22 +41,6 @@ export function AppLayout() {
   useEffect(() => {
     if (me) setUser(me)
   }, [me, setUser])
-
-  // Show onboarding for new users (check if user has any servers)
-  useEffect(() => {
-    if (me) {
-      // Check if user has any servers - this is per-user, not global
-      fetchApi<Array<{ id: string }>>('/api/servers')
-        .then((servers) => {
-          // Show onboarding only if user has no servers
-          setShowOnboarding(servers.length === 0)
-        })
-        .catch(() => {
-          // On error, don't show onboarding
-          setShowOnboarding(false)
-        })
-    }
-  }, [me])
 
   // Redirect to login on auth failure
   useEffect(() => {
@@ -150,9 +132,6 @@ export function AppLayout() {
 
       <ConfirmDialog />
       <RechargeModal />
-
-      {/* Onboarding for new users */}
-      <OnboardingModal open={showOnboarding} onClose={() => setShowOnboarding(false)} />
     </div>
   )
 }
