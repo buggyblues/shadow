@@ -163,7 +163,7 @@ jobs:
       - name: Download screenshots artifact
         if: needs.e2e.result != 'skipped'
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: e2e-screenshots
           path: e2e-screenshots
