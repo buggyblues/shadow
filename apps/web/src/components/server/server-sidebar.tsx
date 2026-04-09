@@ -65,6 +65,27 @@ function getServerAvatarColor(name: string): string {
   return SERVER_AVATAR_COLORS[Math.abs(hash) % SERVER_AVATAR_COLORS.length]!
 }
 
+function resolveAssetUrl(url?: string | null): string | undefined {
+  if (!url) return undefined
+  const trimmed = url.trim()
+  if (!trimmed) return undefined
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('blob:')
+  ) {
+    return trimmed
+  }
+
+  if (trimmed.startsWith('/')) {
+    const apiBase = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '')
+    return apiBase ? `${apiBase}${trimmed}` : trimmed
+  }
+
+  return trimmed
+}
+
 interface ServerEntry {
   server: {
     id: string
@@ -95,7 +116,16 @@ function ServerItem({
   onSelect: (id: string, slug?: string | null) => void
   onContextMenu: (e: React.MouseEvent, serverEntry: ServerEntry) => void
 }) {
-  const { activeServerId } = useChatStore()
+  const serverWithCompatFields = server as ServerEntry['server'] & {
+    icon?: string | null
+    icon_url?: string | null
+  }
+  const serverIconUrl = resolveAssetUrl(
+    serverWithCompatFields.iconUrl ??
+      serverWithCompatFields.icon ??
+      serverWithCompatFields.icon_url ??
+      null,
+  )
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
@@ -105,7 +135,7 @@ function ServerItem({
   )
 
   return (
-    <div className="relative shrink-0 flex items-center justify-center group/item w-[56px] h-[56px]">
+    <div className="relative shrink-0 flex items-center justify-center group/item w-[68px] h-[68px] overflow-visible">
       <Tooltip>
         <TooltipTrigger asChild>
           <button
@@ -113,15 +143,15 @@ function ServerItem({
             onClick={() => onSelect(server.id, server.slug)}
             onContextMenu={handleContextMenu}
             className={cn(
-              'w-[56px] h-[56px] transition-all duration-300 flex items-center justify-center overflow-visible bouncy',
-              activeServerId === null
+              'w-[56px] h-[56px] transition-all duration-300 flex items-center justify-center overflow-visible bouncy relative z-[1] hover:z-[2]',
+              isActive
                 ? 'rounded-full ring-[3px] ring-primary ring-offset-2 ring-offset-bg-deep shadow-[0_0_24px_rgba(0,243,255,0.4)] scale-105'
                 : 'rounded-full ring-0 hover:ring-[3px] hover:ring-primary/50 hover:shadow-[0_0_16px_rgba(0,243,255,0.15)] opacity-80 hover:opacity-100',
             )}
           >
-            {server.iconUrl ? (
+            {serverIconUrl ? (
               <Avatar className="w-[56px] h-[56px] rounded-[inherit]">
-                <AvatarImage src={server.iconUrl} alt={server.name} className="object-cover" />
+                <AvatarImage src={serverIconUrl} alt={server.name} className="object-cover" />
                 <AvatarFallback
                   className={cn(
                     'rounded-[inherit] text-[#050508] font-bold text-[18px]',
@@ -192,6 +222,20 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   const scopeReadCooldownRef = useRef<Map<string, number>>(new Map())
   const scopeReadInFlightRef = useRef<Set<string>>(new Set())
   const { user } = useAuthStore()
+  const userWithCompatFields = (user ?? null) as
+    | ({
+        id?: string
+        avatarUrl?: string | null
+        avatar?: string | null
+        avatar_url?: string | null
+      } & Record<string, unknown>)
+    | null
+  const userAvatarUrl = resolveAssetUrl(
+    userWithCompatFields?.avatarUrl ??
+      userWithCompatFields?.avatar ??
+      userWithCompatFields?.avatar_url ??
+      null,
+  )
 
   // Listen for 'create-server' pending action from task center
   const pendingAction = useUIStore((s) => s.pendingAction)
@@ -335,7 +379,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="w-[88px] glass-panel !overflow-visible flex flex-col items-center py-4 shrink-0 h-full z-50">
+      <div className="w-[96px] glass-panel !overflow-visible flex flex-col items-center py-4 shrink-0 h-full z-50">
         {/* User avatar → settings/profile */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -347,8 +391,9 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
             >
               <Avatar className="w-[56px] h-[56px]">
                 <AvatarImage
-                  src={user?.avatarUrl ?? undefined}
+                  src={userAvatarUrl}
                   alt={user?.displayName || user?.username}
+                  className="object-cover"
                 />
                 <AvatarFallback className="bg-primary/20 text-primary font-bold text-lg">
                   {(user?.displayName || user?.username || '?').charAt(0).toUpperCase()}
@@ -367,19 +412,21 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
         <div className="w-8 h-0.5 bg-border/20 rounded-full my-1 shrink-0" />
 
         {/* Scrollable server list */}
-        <div className="flex-1 overflow-y-auto overflow-x-visible px-4 flex flex-col items-center gap-3 min-h-0 py-2 scrollbar-hidden w-full">
-          {servers.map((s) => (
-            <ServerItem
-              key={s.server.id}
-              server={s.server}
-              member={s.member}
-              isActive={activeServerId === s.server.id}
-              unreadCount={scopedUnread?.serverUnread?.[s.server.id] ?? 0}
-              isMuted={notificationPreference?.mutedServerIds?.includes(s.server.id) ?? false}
-              onSelect={handleSelect}
-              onContextMenu={handleContextMenu}
-            />
-          ))}
+        <div className="flex-1 min-h-0 py-2 w-full overflow-visible">
+          <div className="h-full overflow-y-auto px-1 flex flex-col items-center gap-3 scrollbar-hidden w-full">
+            {servers.map((s) => (
+              <ServerItem
+                key={s.server.id}
+                server={s.server}
+                member={s.member}
+                isActive={activeServerId === s.server.id}
+                unreadCount={scopedUnread?.serverUnread?.[s.server.id] ?? 0}
+                isMuted={notificationPreference?.mutedServerIds?.includes(s.server.id) ?? false}
+                onSelect={handleSelect}
+                onContextMenu={handleContextMenu}
+              />
+            ))}
+          </div>
         </div>
 
         {/* Action buttons — fixed at bottom */}
