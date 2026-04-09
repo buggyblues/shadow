@@ -155,12 +155,12 @@ export function ServerSettingsModal({
       }),
     onSuccess: (updatedServer) => {
       queryClient.invalidateQueries({ queryKey: ['server', serverSlug] })
-      if (updatedServer.slug !== serverSlug) {
+      if (updatedServer.slug && updatedServer.slug !== serverSlug) {
         queryClient.invalidateQueries({ queryKey: ['server', updatedServer.slug] })
       }
       queryClient.invalidateQueries({ queryKey: ['servers'] })
       queryClient.invalidateQueries({ queryKey: ['discover-servers'] })
-      if (updatedServer.slug !== serverSlug) {
+      if (updatedServer.slug && updatedServer.slug !== serverSlug) {
         navigate({ to: '/servers/$serverSlug', params: { serverSlug: updatedServer.slug } })
       }
     },
@@ -186,6 +186,8 @@ export function ServerSettingsModal({
         body: formData,
       })
       updateDraftField('bannerUrl', result.url)
+      // Auto-save after upload
+      saveServerChanges()
     } catch {
       /* upload failed */
     } finally {
@@ -205,6 +207,8 @@ export function ServerSettingsModal({
         body: formData,
       })
       updateDraftField('iconUrl', result.url)
+      // Auto-save after upload
+      saveServerChanges()
     } catch {
       /* upload failed */
     } finally {

@@ -1,7 +1,6 @@
 import {
   Avatar,
   AvatarFallback,
-  AvatarImage,
   Button,
   cn,
   Dialog,
@@ -10,9 +9,11 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  ServerAvatar,
   Switch,
   Tooltip,
   TooltipContent,
+  TooltipPortal,
   TooltipProvider,
   TooltipTrigger,
 } from '@shadowob/ui'
@@ -40,30 +41,6 @@ import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { ContextMenu } from '../common/context-menu'
-
-/** Deterministic color for server avatar fallback based on name — Neon Frost palette (Cyan/Yellow core) */
-const SERVER_AVATAR_COLORS = [
-  'bg-[#00c6d1]', // Primary Cyan
-  'bg-[#0891b2]', // Cyan Deep
-  'bg-[#06b6d4]', // Cyan Bright
-  'bg-[#00a3b0]', // Cyan Muted
-  'bg-[#ffb300]', // Accent Yellow
-  'bg-[#e0a800]', // Yellow Muted
-  'bg-[#1565c0]', // Deep Blue
-  'bg-[#0d47a1]', // Navy
-  'bg-[#00897B]', // Teal Muted
-  'bg-[#FF2A55]', // Danger Crimson
-  'bg-[#37474f]', // Slate
-  'bg-[#455a64]', // Blue Grey
-] as const
-
-function getServerAvatarColor(name: string): string {
-  let hash = 0
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  return SERVER_AVATAR_COLORS[Math.abs(hash) % SERVER_AVATAR_COLORS.length]!
-}
 
 interface ServerEntry {
   server: {
@@ -95,8 +72,6 @@ function ServerItem({
   onSelect: (id: string, slug?: string | null) => void
   onContextMenu: (e: React.MouseEvent, serverEntry: ServerEntry) => void
 }) {
-  const { activeServerId } = useChatStore()
-
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
       onContextMenu(e, { server, member })
@@ -114,41 +89,23 @@ function ServerItem({
             onContextMenu={handleContextMenu}
             className={cn(
               'w-[56px] h-[56px] transition-all duration-300 flex items-center justify-center overflow-visible bouncy',
-              activeServerId === null
-                ? 'rounded-full ring-[3px] ring-primary ring-offset-2 ring-offset-bg-deep shadow-[0_0_24px_rgba(0,243,255,0.4)] scale-105'
-                : 'rounded-full ring-0 hover:ring-[3px] hover:ring-primary/50 hover:shadow-[0_0_16px_rgba(0,243,255,0.15)] opacity-80 hover:opacity-100',
+              isActive
+                ? // Server item should be rounded rect to distinguish from user avatar, with stronger highlight when active
+                  'rounded-3xl ring-[3px] ring-primary ring-offset-2 ring-offset-bg-deep shadow-[0_0_24px_rgba(0,243,255,0.4)]'
+                : 'rounded-3xl ring-0 hover:ring-[3px] hover:ring-primary/50 hover:shadow-[0_0_16px_rgba(0,243,255,0.15)] opacity-80 hover:opacity-100',
             )}
           >
-            {server.iconUrl ? (
-              <Avatar className="w-[56px] h-[56px] rounded-[inherit]">
-                <AvatarImage src={server.iconUrl} alt={server.name} className="object-cover" />
-                <AvatarFallback
-                  className={cn(
-                    'rounded-[inherit] text-[#050508] font-bold text-[18px]',
-                    getServerAvatarColor(server.name),
-                  )}
-                >
-                  {server.name.charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-            ) : (
-              <div
-                className={cn(
-                  'w-[56px] h-[56px] rounded-[inherit] flex items-center justify-center text-[#050508] font-bold text-[22px]',
-                  getServerAvatarColor(server.name),
-                )}
-              >
-                {server.name.charAt(0).toUpperCase()}
-              </div>
-            )}{' '}
+            <ServerAvatar iconUrl={server.iconUrl} name={server.name} />{' '}
           </button>
         </TooltipTrigger>
-        <TooltipContent
-          side="right"
-          className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
-        >
-          {server.name}
-        </TooltipContent>
+        <TooltipPortal>
+          <TooltipContent
+            side="right"
+            className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
+          >
+            {server.name}
+          </TooltipContent>
+        </TooltipPortal>
       </Tooltip>
       {server.isPublic === false && (
         <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-bg-deep/80 backdrop-blur flex items-center justify-center shadow-sm">
@@ -345,29 +302,31 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
               onClick={() => navigate({ to: '/settings' })}
               className="w-[56px] h-[56px] rounded-full p-0 overflow-visible hover:ring-[3px] hover:ring-primary hover:shadow-[0_0_24px_rgba(0,243,255,0.4)] transition-all duration-300 flex items-center justify-center relative bouncy"
             >
-              <Avatar className="w-[56px] h-[56px]">
-                <AvatarImage
-                  src={user?.avatarUrl ?? undefined}
-                  alt={user?.displayName || user?.username}
-                />
+              <Avatar
+                avatarUrl={user?.avatarUrl}
+                displayName={user?.displayName || user?.username}
+                className="w-[56px] h-[56px]"
+              >
                 <AvatarFallback className="bg-primary/20 text-primary font-bold text-lg">
                   {(user?.displayName || user?.username || '?').charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
             </Button>
           </TooltipTrigger>
-          <TooltipContent
-            side="right"
-            className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
-          >
-            {user?.displayName || user?.username}
-          </TooltipContent>
+          <TooltipPortal>
+            <TooltipContent
+              side="right"
+              className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
+            >
+              {user?.displayName || user?.username}
+            </TooltipContent>
+          </TooltipPortal>
         </Tooltip>
 
         <div className="w-8 h-0.5 bg-border/20 rounded-full my-1 shrink-0" />
 
         {/* Scrollable server list */}
-        <div className="flex-1 overflow-y-auto overflow-x-visible px-4 flex flex-col items-center gap-3 min-h-0 py-2 scrollbar-hidden w-full">
+        <div className="flex-1 overflow-y-auto overflow-x-visible px-4 flex flex-col items-center gap-3 min-h-0 py-3 scrollbar-hidden w-full">
           {servers.map((s) => (
             <ServerItem
               key={s.server.id}
@@ -396,12 +355,14 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                 <Plus size={24} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent
-              side="right"
-              className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
-            >
-              {t('server.createServer')}
-            </TooltipContent>
+            <TooltipPortal>
+              <TooltipContent
+                side="right"
+                className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
+              >
+                {t('server.createServer')}
+              </TooltipContent>
+            </TooltipPortal>
           </Tooltip>
 
           {/* Join server */}
@@ -416,12 +377,14 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                 <UserPlus size={20} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent
-              side="right"
-              className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
-            >
-              {t('server.joinServer')}
-            </TooltipContent>
+            <TooltipPortal>
+              <TooltipContent
+                side="right"
+                className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
+              >
+                {t('server.joinServer')}
+              </TooltipContent>
+            </TooltipPortal>
           </Tooltip>
 
           {/* Discover servers */}
@@ -436,12 +399,14 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                 <Compass size={24} className="opacity-90" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent
-              side="right"
-              className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
-            >
-              {t('server.discover')}
-            </TooltipContent>
+            <TooltipPortal>
+              <TooltipContent
+                side="right"
+                className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
+              >
+                {t('server.discover')}
+              </TooltipContent>
+            </TooltipPortal>
           </Tooltip>
 
           {/* OpenClaw — desktop only */}
@@ -530,12 +495,14 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                   </svg>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent
-                side="right"
-                className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
-              >
-                OpenClaw
-              </TooltipContent>
+              <TooltipPortal>
+                <TooltipContent
+                  side="right"
+                  className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
+                >
+                  OpenClaw
+                </TooltipContent>
+              </TooltipPortal>
             </Tooltip>
           )}
         </div>
