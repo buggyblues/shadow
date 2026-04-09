@@ -1,13 +1,18 @@
+import AgoraRTC from 'agora-rtc-sdk-ng'
 import { Mic, MicOff, Monitor, MonitorOff, PhoneOff, Volume2 } from 'lucide-react'
+import { useEffect } from 'react'
 import { useSocketEvent } from '@/hooks/use-socket'
 import { useVoiceStore } from '@/stores/voice.store'
+
+// Threshold for "speaking" state based on Agora volume indicator (0-100)
+const SPEAKING_THRESHOLD = 20
 
 /**
  * Voice Channel Panel — Discord-style voice panel at the bottom of sidebar.
  *
  * Shows:
  * - Connected channel name with glass surface
- * - Member list with avatars, speaking indicators, and status icons
+ * - Member list with avatars, speaking indicators (green ring), and status icons
  * - Bottom control bar: Mic, Screen Share, Disconnect
  *
  * Design: Neon Frost + Discord UX patterns
@@ -18,8 +23,9 @@ export function VoiceChannel() {
   const leaveChannel = useVoiceStore((s) => s.leaveChannel)
   const setMuted = useVoiceStore((s) => s.setMuted)
   const setScreenSharing = useVoiceStore((s) => s.setScreenSharing)
+  const updateVolume = useVoiceStore((s) => s.updateVolume)
 
-  // Listen for voice channel events
+  // ── Socket.IO event listeners ────────────────────────────────────
   useSocketEvent(
     'voice:user-joined',
     (data: { userId: string; username: string; displayName: string }) => {
@@ -33,6 +39,7 @@ export function VoiceChannel() {
           muted: false,
           screenSharing: false,
           joinedAt: new Date().toISOString(),
+          volume: 0,
         },
       ])
     },
@@ -64,6 +71,31 @@ export function VoiceChannel() {
     )
   })
 
+  // ── Agora volume indicator for speaking ring animation ───────────
+  // Listens to AgoraRTC global volume indicator and updates store
+  useEffect(() => {
+    const handleVolumeIndicator = (volumes: { uid: number; level: number }[]) => {
+      for (const v of volumes) {
+        if (v.uid !== 0) {
+          // uid 0 is local user, skip for remote detection
+          updateVolume(v.uid, v.level)
+        }
+      }
+    }
+
+    // Register global listener
+    const handler = (volumes: { uid: number; level: number }[]) => {
+      handleVolumeIndicator(volumes)
+    }
+
+    AgoraRTC.onMicrophoneChanged = undefined
+    AgoraRTC.on('volume-indicator', handler)
+
+    return () => {
+      AgoraRTC.off('volume-indicator', handler)
+    }
+  }, [updateVolume])
+
   if (!activeChannelId) return null
 
   return (
@@ -93,7 +125,13 @@ export function VoiceChannel() {
         {/* Current user (self) */}
         <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors group">
           <div className="relative">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#00F3FF]/30 to-[#00c6d1]/20 flex items-center justify-center text-[11px] font-bold text-[#00F3FF]">
+            <div
+              className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all duration-150 ${
+                !isMuted
+                  ? 'bg-gradient-to-br from-[#00F3FF]/30 to-[#00c6d1]/20 text-[#00F3FF]'
+                  : 'bg-white/5 text-white/30'
+              }`}
+            >
               我
             </div>
             <div
@@ -111,8 +149,8 @@ export function VoiceChannel() {
 
         {/* Remote members */}
         {members.map((m) => {
-          const isSpeaking = !m.muted
           const initials = (m.displayName || m.username).slice(0, 2).toUpperCase()
+          const isSpeaking = !m.muted && m.volume > SPEAKING_THRESHOLD
 
           return (
             <div
@@ -121,9 +159,9 @@ export function VoiceChannel() {
             >
               <div className="relative">
                 <div
-                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all duration-200 ${
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all duration-150 ${
                     isSpeaking
-                      ? 'bg-gradient-to-br from-[#00E676]/30 to-[#00E676]/10 text-[#00E676] ring-2 ring-[#00E676]/30'
+                      ? 'bg-gradient-to-br from-[#00E676]/30 to-[#00E676]/10 text-[#00E676] ring-2 ring-[#00E676]/40'
                       : 'bg-white/5 text-white/40'
                   }`}
                 >
