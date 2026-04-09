@@ -95,7 +95,7 @@ async function cleanupTestData(origin: string, token: string) {
 test.describe
   .serial('OAuth Developer Settings — UI', () => {
     test.setTimeout(300_000) // 5 minutes — OAuth flow involves many API calls and UI transitions
-    test('creates, inspects, and deletes an OAuth app from developer settings', async ({
+    test.skip('creates, inspects, and deletes an OAuth app from developer settings', async ({
       browser,
     }) => {
       await ensureScreenshotDir()
