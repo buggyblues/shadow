@@ -33,7 +33,8 @@ export function setupAppGateway(io: SocketIOServer, container: AppContainer): vo
           await socket.join(`channel:${app.channelId}`)
           logger.info({ userId, appId, channelId: app.channelId }, 'Joined app room')
           if (typeof ack === 'function') ack({ ok: true, channelId: app.channelId })
-        } catch {
+        } catch (err) {
+          logger.warn({ err, userId, appId }, 'app:join failed to lookup app')
           if (typeof ack === 'function') ack({ ok: false })
         }
       },
@@ -48,8 +49,8 @@ export function setupAppGateway(io: SocketIOServer, container: AppContainer): vo
         if (app?.channelId) {
           await socket.leave(`channel:${app.channelId}`)
         }
-      } catch {
-        /* ignore */
+      } catch (err) {
+        logger.warn({ err, userId, appId }, 'app:leave failed')
       }
     })
 
@@ -68,8 +69,8 @@ export function setupAppGateway(io: SocketIOServer, container: AppContainer): vo
           payload: data.payload,
           senderId: userId,
         })
-      } catch {
-        /* ignore */
+      } catch (err) {
+        logger.warn({ err, userId, appId: data.appId }, 'app:broadcast failed')
       }
     })
   })

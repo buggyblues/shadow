@@ -22,8 +22,8 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
               if (typeof ack === 'function') ack({ ok: false })
               return
             }
-          } catch {
-            /* membership check failed, allow join as fallback */
+          } catch (err) {
+            logger.warn({ err, userId, channelId }, 'channel:join membership check failed — allowing join as fallback')
           }
         }
 
@@ -116,8 +116,8 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
                 // Push notification to the target user via WS
                 io.to(`user:${originalMessage.authorId}`).emit('notification:new', notification)
               }
-            } catch {
-              /* notification creation failed, non-critical */
+            } catch (err) {
+              logger.warn({ err, userId, replyToId: data.replyToId }, 'Reply notification creation failed — non-critical')
             }
           }
 
@@ -152,8 +152,8 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
                 }
               }
             }
-          } catch {
-            /* mention notification failed, non-critical */
+          } catch (err) {
+            logger.warn({ err, userId, channelId: data.channelId }, 'Mention notification failed — non-critical')
           }
         } catch (error) {
           const msg = error instanceof Error ? error.message : 'Failed to send message'
@@ -183,8 +183,8 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
         }
         await socket.join(`dm:${dmChannelId}`)
         logger.info({ userId, dmChannelId, socketId: socket.id }, 'Joined DM room')
-      } catch {
-        /* ignore */
+      } catch (err) {
+        logger.warn({ err, userId, dmChannelId }, 'dm:join verification failed — denying join')
       }
     })
 
@@ -231,8 +231,8 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
               senderId: userId,
             })
             io.to(`user:${otherUserId}`).emit('notification:new', notification)
-          } catch {
-            /* notification failed, non-critical */
+          } catch (err) {
+            logger.warn({ err, userId, dmChannelId }, 'DM notification failed — non-critical')
           }
 
           // Relay to bot using shared helper
@@ -253,11 +253,9 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
           try {
             const rentalService = container.resolve('rentalService')
             await rentalService.recordRentalMessage(userId, otherUserId)
-          } catch {
-            /* non-critical */
+          } catch (err) {
+            logger.warn({ err, userId, dmChannelId }, 'Rental message recording failed — non-critical')
           }
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : 'Failed to send DM'
           socket.emit('error', { message: msg })
         }
       },

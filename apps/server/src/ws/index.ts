@@ -21,7 +21,8 @@ export function setupWebSocket(io: SocketIOServer, container: AppContainer): voi
       socket.data.userId = payload.userId
       socket.data.username = payload.username
       next()
-    } catch {
+    } catch (err) {
+      logger.warn({ err, socketId: socket.id }, 'Socket authentication failed — invalid token')
       next(new Error('Invalid token'))
     }
   })
