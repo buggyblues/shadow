@@ -20,6 +20,11 @@ const desktopAPI = {
     ipcRenderer.invoke('desktop:minimizeToTray')
   },
 
+  // Onboarding
+  completeOnboarding: (result: { completed: boolean }) => {
+    return ipcRenderer.invoke('onboarding:complete', result) as Promise<{ success: boolean }>
+  },
+
   // Process Management
   startAgent: (config: { name: string; scriptPath: string; args?: string[] }) => {
     return ipcRenderer.invoke('desktop:startAgent', config) as Promise<{ id: string; pid: number }>

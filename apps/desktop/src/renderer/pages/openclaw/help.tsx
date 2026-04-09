@@ -5,7 +5,17 @@
  */
 
 import type { LucideIcon } from 'lucide-react'
-import { ArrowRight, Bot, Globe, HelpCircle, Link2, MessageSquare, Users, Zap } from 'lucide-react'
+import {
+  ArrowRight,
+  Bot,
+  Globe,
+  HelpCircle,
+  Link2,
+  MessageSquare,
+  Users,
+  Wand2,
+  Zap,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { OpenClawTopBar } from './openclaw-brand'
 import type { OpenClawPage } from './openclaw-layout'
@@ -25,6 +35,34 @@ export function HelpPage({ onNavigate }: HelpPageProps) {
       />
 
       <div className="px-6 pb-8 space-y-8 max-w-4xl">
+        {/* ─── Setup Wizard Banner ─── */}
+        <button
+          type="button"
+          onClick={() => onNavigate('onboard')}
+          className="w-full rounded-2xl border border-primary/30 bg-primary/5 p-5 text-left hover:border-primary/50 hover:bg-primary/10 transition-all cursor-pointer group"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+              <Wand2 size={24} className="text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-text-primary group-hover:text-primary transition-colors">
+                {t('openclaw.help.wizardTitle', '初始设置向导')}
+              </h3>
+              <p className="text-xs text-text-muted mt-0.5">
+                {t(
+                  'openclaw.help.wizardDesc',
+                  '首次使用？通过设置向导快速完成模型配置、创建 Buddy、关联远程连接，一键启动。',
+                )}
+              </p>
+            </div>
+            <ArrowRight
+              size={16}
+              className="text-text-muted group-hover:text-primary transition-colors shrink-0"
+            />
+          </div>
+        </button>
+
         {/* ─── FAQ ─── */}
         <section className="space-y-4">
           <h2 className="text-lg font-black text-text-primary flex items-center gap-2">

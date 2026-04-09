@@ -437,6 +437,32 @@ export function OpenClawDashboard({ onNavigate }: DashboardProps) {
           )}
         </section>
 
+        {/* ─── Onboarding Banner ─── */}
+        {modelCount === 0 && agentCount === 0 && (
+          <button
+            type="button"
+            onClick={() => onNavigate('onboard')}
+            className="w-full rounded-2xl border border-danger/20 bg-gradient-to-r from-danger/5 to-amber-500/5 p-5 text-left hover:border-danger/40 transition-all cursor-pointer group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-danger/10 flex items-center justify-center shrink-0">
+                <Sparkles size={24} className="text-danger" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-bold text-text-primary group-hover:text-danger transition-colors">
+                  {t('openclaw.dashboard.onboardTitle', '🤖 开始设置你的 AI 搭子')}
+                </div>
+                <div className="text-xs text-text-muted mt-0.5">
+                  {t(
+                    'openclaw.dashboard.onboardDesc',
+                    '只需几步即可配置模型、创建 Buddy 并开始对话。点击开始初始设置向导。',
+                  )}
+                </div>
+              </div>
+            </div>
+          </button>
+        )}
+
         {/* ─── Stats Grid ─── */}
         <div className="grid grid-cols-5 gap-3">
           {stats.map((s) => (

@@ -12,6 +12,7 @@ process.on('uncaughtException', (err) => {
 import { setupAutoUpdater } from './auto-updater'
 import { createAppMenu } from './menu'
 import { setupNotificationHandler } from './notifications'
+import { closeOnboardingWindow, createOnboardingWindow } from './onboarding-window'
 import { cleanupOpenClaw, initOpenClaw } from './openclaw'
 import { killAllAgents, setupProcessManager } from './process-manager'
 import { registerGlobalShortcuts, unregisterAllShortcuts } from './shortcuts'
@@ -39,6 +40,20 @@ protocol.registerSchemesAsPrivileged([
 
 const API_ORIGIN = 'https://shadowob.com'
 
+// Check if onboarding is needed
+function needsOnboarding(): boolean {
+  // Check if user has completed onboarding
+  const completed = app.getPath('userData') + '/.onboarding-completed'
+  const fs = require('fs')
+  return !fs.existsSync(completed)
+}
+
+function markOnboardingCompleted(): void {
+  const completed = app.getPath('userData') + '/.onboarding-completed'
+  const fs = require('fs')
+  fs.writeFileSync(completed, new Date().toISOString())
+}
+
 app.on('ready', async () => {
   // Handle app:// protocol — serve renderer files from dist/renderer/
   const rendererDir = join(__dirname, '../renderer')
@@ -58,6 +73,15 @@ app.on('ready', async () => {
     return net.fetch(pathToFileURL(fullPath).toString())
   })
 
+  // Check if onboarding is needed
+  if (needsOnboarding()) {
+    const result = await createOnboardingWindow()
+    if (result.completed) {
+      markOnboardingCompleted()
+    }
+  }
+
+  // Create main window after onboarding or if skipped
   createWindow()
   createTray()
   createAppMenu()
@@ -72,6 +96,22 @@ app.on('ready', async () => {
     if (win) {
       win.hide()
     }
+  })
+
+  // Handle onboarding completion from renderer
+  ipcMain.handle('onboarding:complete', (_event, result: { completed: boolean }) => {
+    if (result.completed) {
+      markOnboardingCompleted()
+    }
+    closeOnboardingWindow()
+    // Show main window
+    const mainWindow = getMainWindow()
+    if (mainWindow) {
+      mainWindow.show()
+    } else {
+      createWindow()
+    }
+    return { success: true }
   })
 })
 

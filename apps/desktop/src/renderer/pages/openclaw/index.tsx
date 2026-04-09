@@ -20,6 +20,7 @@ import { OpenClawDashboard } from './dashboard'
 import { DebugPage } from './debug'
 import { HelpPage } from './help'
 import { ModelsPage } from './models'
+import { OnboardPage } from './onboard'
 import { OpenClawLayout, type OpenClawPage as OpenClawPageId } from './openclaw-layout'
 import { SkillHubPage } from './skillhub'
 
@@ -34,6 +35,7 @@ export function OpenClawPage() {
   const [activePage, setActivePage] = useState<OpenClawPageId>('dashboard')
   const [navContext, setNavContext] = useState<NavContext | null>(null)
   const [gatewayStatus, setGatewayStatus] = useState<GatewayStatus | null>(null)
+  const [initialChecked, setInitialChecked] = useState(false)
 
   const navigate = useCallback((page: OpenClawPageId, ctx?: NavContext) => {
     setNavContext(ctx ?? null)
@@ -49,6 +51,21 @@ export function OpenClawPage() {
       /* ignore */
     }
   }, [])
+
+  // Check if onboarding is needed (no agents and no providers configured)
+  useEffect(() => {
+    if (!openClawApi.isAvailable || initialChecked) return
+    Promise.all([openClawApi.listAgents(), openClawApi.listModels()])
+      .then(([agents, models]) => {
+        const hasAgents = agents.length > 0
+        const hasProviders = Object.keys(models).length > 0
+        if (!hasAgents && !hasProviders) {
+          setActivePage('onboard')
+        }
+      })
+      .catch(() => {})
+      .finally(() => setInitialChecked(true))
+  }, [initialChecked])
 
   useEffect(() => {
     loadStatus()
@@ -77,6 +94,8 @@ export function OpenClawPage() {
         <HelpPage onNavigate={navigate} />
       ) : activePage === 'debug' ? (
         <DebugPage />
+      ) : activePage === 'onboard' ? (
+        <OnboardPage onNavigate={navigate} />
       ) : null}
     </OpenClawLayout>
   )
