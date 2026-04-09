@@ -3,10 +3,35 @@ import type { AppContainer } from '../container'
 import { relayDmToBot } from '../handlers/dm.handler'
 import { logger } from '../lib/logger'
 
+// Simple in-memory rate limiter for WebSocket message sending
+// Per-user, per-window: max 30 messages per 10 seconds
+const MESSAGE_RATE_LIMIT = 30
+const MESSAGE_RATE_WINDOW_MS = 10_000
+const messageTimestamps = new Map<string, number[]>()
+
+function checkMessageRate(userId: string): boolean {
+  const now = Date.now()
+  const timestamps = messageTimestamps.get(userId) ?? []
+  // Remove timestamps outside the current window
+  const recent = timestamps.filter((t) => now - t < MESSAGE_RATE_WINDOW_MS)
+  if (recent.length >= MESSAGE_RATE_LIMIT) {
+    messageTimestamps.set(userId, recent)
+    return false
+  }
+  recent.push(now)
+  messageTimestamps.set(userId, recent)
+  return true
+}
+
 export function setupChatGateway(io: SocketIOServer, container: AppContainer): void {
   io.on('connection', (socket: Socket) => {
     const userId = socket.data.userId as string | undefined
     logger.info({ socketId: socket.id, userId }, 'Client connected')
+
+    // Clean up rate limit data on disconnect
+    socket.on('disconnect', () => {
+      if (userId) messageTimestamps.delete(userId)
+    })
 
     // channel:join
     socket.on(
@@ -52,6 +77,13 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
         replyToId?: string
       }) => {
         if (!userId) return
+
+        // Rate limit check
+        if (!checkMessageRate(userId)) {
+          logger.warn({ userId }, 'message:send rate limit exceeded')
+          socket.emit('error', { message: 'Message rate limit exceeded. Slow down!' })
+          return
+        }
 
         try {
           // Verify channel membership before sending

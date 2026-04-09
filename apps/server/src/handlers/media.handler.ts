@@ -1,14 +1,21 @@
 import { Hono } from 'hono'
 import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
+import { rateLimit } from '../middleware/rate-limit.middleware'
 
 export function createMediaHandler(container: AppContainer) {
   const mediaHandler = new Hono()
 
   mediaHandler.use('*', authMiddleware)
 
-  // POST /api/media/upload
-  mediaHandler.post('/upload', async (c) => {
+  // POST /api/media/upload — 30 uploads per minute per user
+  mediaHandler.post(
+    '/upload',
+    rateLimit({ max: 30, windowSec: 60, prefix: 'rl:media:upload', keyFn: (c) => {
+      const user = c.get('user') as { userId?: string } | undefined
+      return user?.userId ?? 'anonymous'
+    }}),
+    async (c) => {
     const mediaService = container.resolve('mediaService')
     const messageDao = container.resolve('messageDao')
     const userDao = container.resolve('userDao')

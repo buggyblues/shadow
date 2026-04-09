@@ -5,27 +5,38 @@ import type { AppContainer } from '../container'
 import { verifyToken } from '../lib/jwt'
 import { logger } from '../lib/logger'
 import { authMiddleware } from '../middleware/auth.middleware'
+import { rateLimit } from '../middleware/rate-limit.middleware'
 import { changePasswordSchema, loginSchema, registerSchema } from '../validators/auth.schema'
 import { forceDisconnectUser } from '../ws/presence.gateway'
 
 export function createAuthHandler(container: AppContainer) {
   const authHandler = new Hono()
 
-  // POST /api/auth/register
-  authHandler.post('/register', zValidator('json', registerSchema), async (c) => {
-    const authService = container.resolve('authService')
-    const input = c.req.valid('json')
-    const result = await authService.register(input)
-    return c.json(result, 201)
-  })
+  // POST /api/auth/register — 10 requests per 5 minutes per IP
+  authHandler.post(
+    '/register',
+    rateLimit({ max: 10, windowSec: 300, prefix: 'rl:auth:register' }),
+    zValidator('json', registerSchema),
+    async (c) => {
+      const authService = container.resolve('authService')
+      const input = c.req.valid('json')
+      const result = await authService.register(input)
+      return c.json(result, 201)
+    },
+  )
 
-  // POST /api/auth/login
-  authHandler.post('/login', zValidator('json', loginSchema), async (c) => {
-    const authService = container.resolve('authService')
-    const input = c.req.valid('json')
-    const result = await authService.login(input)
-    return c.json(result)
-  })
+  // POST /api/auth/login — 20 requests per 5 minutes per IP (brute force protection)
+  authHandler.post(
+    '/login',
+    rateLimit({ max: 20, windowSec: 300, prefix: 'rl:auth:login' }),
+    zValidator('json', loginSchema),
+    async (c) => {
+      const authService = container.resolve('authService')
+      const input = c.req.valid('json')
+      const result = await authService.login(input)
+      return c.json(result)
+    },
+  )
 
   // POST /api/auth/refresh
   authHandler.post(
