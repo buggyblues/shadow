@@ -351,4 +351,9 @@ test.describe
       await clickNav(page, '调试控制台', '进阶')
       await page.screenshot({ path: screenshotPath('oc-09-debug') })
     })
+
+    test('oc-10-onboard', async () => {
+      await clickNav(page, '设置向导')
+      await page.screenshot({ path: screenshotPath('oc-10-onboard') })
+    })
   })

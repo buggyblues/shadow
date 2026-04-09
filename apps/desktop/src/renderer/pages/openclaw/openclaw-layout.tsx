@@ -16,6 +16,7 @@ import {
   HelpCircle,
   LayoutDashboard,
   Loader2,
+  Sparkles,
   Store,
   Terminal,
 } from 'lucide-react'
@@ -35,6 +36,7 @@ export type OpenClawPage =
   | 'buddy'
   | 'debug'
   | 'help'
+  | 'onboard'
 
 interface OpenClawLayoutProps {
   activePage: OpenClawPage
@@ -65,6 +67,7 @@ const NAV_SECTIONS: NavSection[] = [
     defaultLabel: '开始',
     defaultCollapsed: false,
     items: [
+      { id: 'onboard', icon: Sparkles, labelKey: 'openclaw.nav.onboard', defaultLabel: '设置向导' },
       {
         id: 'dashboard',
         icon: LayoutDashboard,
