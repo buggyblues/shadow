@@ -222,12 +222,12 @@ export function useVoiceBridge() {
   const toggleMute = useCallback(async () => {
     const track = localAudioRef.current
     if (!track) return
-    // Use setEnable() — the proper Agora API for toggling track state.
+    // Use setEnabled() — the proper Agora API for toggling track state.
     // Directly setting .enabled does not trigger internal Agora events
     // and can cause the remote side to not receive audio.
     const isCurrentlyEnabled = track.enabled
     try {
-      await track.setEnable(!isCurrentlyEnabled)
+      await track.setEnabled(!isCurrentlyEnabled)
       store.setMuted(isCurrentlyEnabled)
     } catch (err) {
       // If setEnable fails, don't update store state
