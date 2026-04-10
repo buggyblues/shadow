@@ -2,8 +2,9 @@ import AgoraRTC, {
   ILocalAudioTrack,
   ILocalVideoTrack,
   IMicrophoneAudioTrack,
+  IRemoteVideoTrack,
 } from 'agora-rtc-sdk-ng'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSocketEvent } from '@/hooks/use-socket'
 import { fetchApi } from '@/lib/api'
 import { useVoiceStore } from '@/stores/voice.store'
@@ -19,7 +20,7 @@ import { useVoiceStore } from '@/stores/voice.store'
  * Flow on join:
  *   1. Sidebar → store.joinChannel() → Socket.IO voice:join
  *   2. This hook sees activeChannelId change → fetches Agora token → joins RTC
- *   3. Creates & publishes audio track, subscribes to remote users
+ *   3. Creates & publishes audio track (or listen-only if mic denied), subscribes to remote users
  *
  * Syncs mute/screenshare between both layers automatically.
  */
@@ -33,6 +34,10 @@ export function useVoiceBridge() {
   const screenVideoRef = useRef<ILocalVideoTrack | null>(null)
   const screenAudioRef = useRef<ILocalAudioTrack | null>(null)
   const agoraChannelIdRef = useRef<string | null>(null)
+
+  // ── Remote screen share state ─────────────────────────────────────
+  const [screenSharerId, setScreenSharerId] = useState<string | null>(null)
+  const [screenShareTrack, setScreenShareTrack] = useState<IRemoteVideoTrack | null>(null)
 
   // ── Socket.IO signaling events (single source of listeners) ──────
   useSocketEvent(
@@ -61,6 +66,11 @@ export function useVoiceBridge() {
   useSocketEvent('voice:user-left', (data: { userId: string }) => {
     const state = useVoiceStore.getState()
     state.updateMembers(state.members.filter((m) => m.userId !== data.userId))
+    // If the leaving user was screen sharing, clean up
+    if (screenSharerId === data.userId) {
+      setScreenSharerId(null)
+      setScreenShareTrack(null)
+    }
   })
 
   useSocketEvent('voice:user-muted', (data: { userId: string; muted: boolean }) => {
@@ -82,6 +92,11 @@ export function useVoiceBridge() {
     state.updateMembers(
       state.members.map((m) => (m.userId === data.userId ? { ...m, screenSharing: false } : m)),
     )
+    // If the user who stopped was the current screen sharer, clean up
+    if (screenSharerId === data.userId) {
+      setScreenSharerId(null)
+      setScreenShareTrack(null)
+    }
   })
 
   // ── Internal: disconnect from Agora (no Socket.IO) ───────────────
@@ -100,6 +115,8 @@ export function useVoiceBridge() {
       // Non-critical
     }
     agoraChannelIdRef.current = null
+    setScreenSharerId(null)
+    setScreenShareTrack(null)
   }, [])
 
   // ── Internal: connect to Agora (no Socket.IO) ────────────────────
@@ -109,9 +126,6 @@ export function useVoiceBridge() {
         store.setError(null)
 
         // ⚠️ Disconnect existing client before creating a new one.
-        // Prevents leaking the old client when switching channels.
-        // The cleanup effect also calls disconnectAgora, but that races
-        // with this async function — doing it here first is safest.
         if (agoraClientRef.current) {
           await disconnectAgora()
         }
@@ -136,33 +150,61 @@ export function useVoiceBridge() {
         AgoraRTC.setLogLevel(1) // 1 = INFO, WARNING, ERROR
 
         // ⚠️ CRITICAL: Register remote user event handlers BEFORE join.
-        // If a user is already publishing when we join, their user-published
-        // event fires during join() — we must have listeners ready.
         client.on('user-published', async (remoteUser, mediaType) => {
           await client.subscribe(remoteUser, mediaType)
           if (mediaType === 'audio') {
             remoteUser.audioTrack?.play()
           }
-          // Note: uid→userId mapping is registered in voice:user-joined handler,
-          // which receives the actual userId. We can't register it here because
-          // remoteUser.uid is a number, not a userId.
+          if (mediaType === 'video') {
+            // Remote user is screen sharing — track it for viewer
+            if (remoteUser.videoTrack) {
+              setScreenSharerId(remoteUser.uid.toString())
+              setScreenShareTrack(remoteUser.videoTrack)
+            }
+          }
+          // uid→userId mapping is registered in voice:user-joined handler
         })
 
         client.on('user-unpublished', async (remoteUser, mediaType) => {
           if (mediaType === 'audio') {
             remoteUser.audioTrack?.stop()
           }
+          if (mediaType === 'video') {
+            // Remote user stopped screen sharing
+            if (screenSharerId === remoteUser.uid.toString()) {
+              setScreenSharerId(null)
+              setScreenShareTrack(null)
+            }
+          }
         })
 
         // Join channel (may trigger user-published for existing users)
         await client.join(tokenInfo.appId, tokenInfo.channelName, tokenInfo.token, tokenInfo.uid)
 
-        // Create & publish local audio track (triggers mic permission)
-        const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
-          encoderConfig: 'music_standard',
-        })
-        localAudioRef.current = audioTrack
-        await client.publish(audioTrack)
+        // Create & publish local audio track
+        // ⚠️ If mic permission is denied, join as listen-only mode
+        let canSpeak = true
+        try {
+          const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+            encoderConfig: 'music_standard',
+          })
+          localAudioRef.current = audioTrack
+          await client.publish(audioTrack)
+        } catch (err) {
+          // Permission denied or no mic available → listen-only mode
+          // Still allow the user to hear others
+          canSpeak = false
+          const message =
+            err instanceof Error && err.name === 'NotAllowedError'
+              ? '麦克风权限被拒绝，已加入为只听模式'
+              : '无法访问麦克风，已加入为只听模式'
+          store.setError(message)
+        }
+        store.setCanSpeak(canSpeak)
+        // Auto-set muted if can't speak
+        if (!canSpeak) {
+          store.setMuted(true)
+        }
 
         // Volume indicator for speaking ring animation
         client.enableAudioVolumeIndicator()
@@ -191,7 +233,7 @@ export function useVoiceBridge() {
         }
       }
     },
-    [store, disconnectAgora],
+    [store, disconnectAgora, screenSharerId],
   )
 
   // ── Auto-connect/disconnect Agora when store activeChannelId changes
@@ -222,15 +264,11 @@ export function useVoiceBridge() {
   const toggleMute = useCallback(async () => {
     const track = localAudioRef.current
     if (!track) return
-    // Use setEnabled() — the proper Agora API for toggling track state.
-    // Directly setting .enabled does not trigger internal Agora events
-    // and can cause the remote side to not receive audio.
     const isCurrentlyEnabled = track.enabled
     try {
       await track.setEnabled(!isCurrentlyEnabled)
       store.setMuted(isCurrentlyEnabled)
     } catch (err) {
-      // If setEnable fails, don't update store state
       const message = err instanceof Error ? err.message : 'Failed to toggle mute'
       store.setError(message)
     }
@@ -279,7 +317,6 @@ export function useVoiceBridge() {
         // Handle browser-native stop button
         const videoTrack = Array.isArray(screenTrack) ? screenTrack[0] : screenTrack
         const stopHandler = () => {
-          // Re-enter to stop
           void (async () => {
             try {
               if (screenVideoRef.current && agoraClientRef.current) {
@@ -298,7 +335,6 @@ export function useVoiceBridge() {
             } catch (err) {
               const message = err instanceof Error ? err.message : 'Failed to stop screen share'
               store.setError(message)
-              // Force reset refs on error to avoid stale state
               screenVideoRef.current = null
               screenAudioRef.current = null
               store.setScreenSharing(false)
@@ -310,20 +346,27 @@ export function useVoiceBridge() {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to toggle screen share'
       store.setError(message)
-      // Force reset refs on error
       screenVideoRef.current = null
       screenAudioRef.current = null
       store.setScreenSharing(false)
     }
   }, [store])
 
-  // ── Expose joinChannel for manual sidebar use ────────────────────
-  const joinChannel = useCallback(
-    async (channelId: string, channelName: string) => {
-      store.joinChannel(channelId, channelName)
-    },
-    [store],
-  )
+  // ── Device management for settings ───────────────────────────────
+  const getMicrophones = useCallback(async () => {
+    return AgoraRTC.getMicrophones()
+  }, [])
+
+  const getPlaybackDevices = useCallback(async () => {
+    return AgoraRTC.getPlaybackDevices()
+  }, [])
+
+  const setMicrophoneDevice = useCallback(async (deviceId: string) => {
+    const track = localAudioRef.current
+    if (track) {
+      await track.setDevice(deviceId)
+    }
+  }, [])
 
   // ── Cleanup on unmount ──────────────────────────────────────────
   useEffect(() => {
@@ -332,14 +375,19 @@ export function useVoiceBridge() {
       screenVideoRef.current?.close()
       screenAudioRef.current?.close()
       agoraClientRef.current?.leave()
-      agoraChannelIdRef.current = null
     }
   }, [])
 
   return {
-    joinChannel,
     leaveAgora,
     toggleMute,
     toggleScreenShare,
+    // Device management
+    getMicrophones,
+    getPlaybackDevices,
+    setMicrophoneDevice,
+    // Screen share state
+    screenSharerId,
+    screenShareTrack,
   }
 }

@@ -20,6 +20,8 @@ interface VoiceChannelState {
   isScreenSharing: boolean
   error: string | null
   agoraUid: number
+  /** Whether local user has mic access and can speak (false = listen-only mode) */
+  canSpeak: boolean
 
   /** Map of uid → userId for volume indicator lookup */
   uidToUserId: Map<number, string>
@@ -29,6 +31,7 @@ interface VoiceChannelState {
   setMuted: (muted: boolean) => void
   setScreenSharing: (sharing: boolean) => void
   setError: (error: string | null) => void
+  setCanSpeak: (canSpeak: boolean) => void
   updateMembers: (members: VoiceChannelMember[]) => void
   updateVolume: (uid: number, volume: number) => void
   registerUidMapping: (uid: number, userId: string) => void
@@ -42,6 +45,7 @@ export const useVoiceStore = create<VoiceChannelState>((set, get) => ({
   isScreenSharing: false,
   error: null,
   agoraUid: 0,
+  canSpeak: true,
   uidToUserId: new Map(),
 
   joinChannel: async (channelId: string, channelName: string, agoraUid = 0) => {
@@ -79,6 +83,7 @@ export const useVoiceStore = create<VoiceChannelState>((set, get) => ({
               members: membersWithVolume,
               agoraUid,
               error: null,
+              canSpeak: true, // Reset on join; bridge will update if mic fails
               uidToUserId: uidMap,
             })
             resolve()
@@ -105,6 +110,7 @@ export const useVoiceStore = create<VoiceChannelState>((set, get) => ({
       isScreenSharing: false,
       error: null,
       agoraUid: 0,
+      canSpeak: true,
       uidToUserId: new Map(),
     })
   },
@@ -130,6 +136,8 @@ export const useVoiceStore = create<VoiceChannelState>((set, get) => ({
   },
 
   setError: (error: string | null) => set({ error }),
+
+  setCanSpeak: (canSpeak: boolean) => set({ canSpeak }),
 
   updateMembers: (members: VoiceChannelMember[]) => set({ members }),
 
