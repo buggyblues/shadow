@@ -102,8 +102,8 @@ export function useVoiceBridge() {
         const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
         agoraClientRef.current = client
 
-        // Disable Agora telemetry reporting (console logs only, server-side telemetry is controlled via Agora console)
-        AgoraRTC.setLogLevel(4) // 4 = NONE, suppress all logs
+        // Keep console logs for debugging
+        AgoraRTC.setLogLevel(1) // 1 = INFO, WARNING, ERROR
 
         // ⚠️ CRITICAL: Register remote user event handlers BEFORE join.
         // If a user is already publishing when we join, their user-published
