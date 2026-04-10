@@ -84,6 +84,15 @@ When updating the API, **always sync**:
 2. **TypeScript SDK** — sync types and interfaces
 3. **Python SDK** — sync Python SDK
 
+## 🔤 i18n Requirements
+
+**Any UI copy changes on web, mobile, or website must go through i18n.**
+
+- Never hardcode user-facing text in components
+- All copy must use the project's i18n system (translation keys)
+- Applies to: buttons, labels, placeholders, error messages, tooltips, notifications, page titles, etc.
+- If i18n keys don't exist for the target language, add them with proper translations
+
 ## Commit & PR Standards
 
 1. Run type checks, lint, tests — ensure all pass
