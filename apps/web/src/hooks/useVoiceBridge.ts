@@ -98,20 +98,16 @@ export function useVoiceBridge() {
         // Register uid mapping for local user
         store.registerUidMapping(tokenInfo.uid, 'local')
 
-        // Create Agora client and join
+        // Create Agora client
         const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
         agoraClientRef.current = client
 
-        await client.join(tokenInfo.appId, tokenInfo.channelName, tokenInfo.token, tokenInfo.uid)
+        // Disable Agora telemetry reporting (console logs only, server-side telemetry is controlled via Agora console)
+        AgoraRTC.setLogLevel(4) // 4 = NONE, suppress all logs
 
-        // Create & publish local audio track (triggers mic permission)
-        const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
-          encoderConfig: 'music_standard',
-        })
-        localAudioRef.current = audioTrack
-        await client.publish(audioTrack)
-
-        // Remote user event handlers
+        // ⚠️ CRITICAL: Register remote user event handlers BEFORE join.
+        // If a user is already publishing when we join, their user-published
+        // event fires during join() — we must have listeners ready.
         client.on('user-published', async (remoteUser, mediaType) => {
           await client.subscribe(remoteUser, mediaType)
           if (mediaType === 'audio') {
@@ -126,6 +122,16 @@ export function useVoiceBridge() {
             remoteUser.audioTrack?.stop()
           }
         })
+
+        // Join channel (may trigger user-published for existing users)
+        await client.join(tokenInfo.appId, tokenInfo.channelName, tokenInfo.token, tokenInfo.uid)
+
+        // Create & publish local audio track (triggers mic permission)
+        const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+          encoderConfig: 'music_standard',
+        })
+        localAudioRef.current = audioTrack
+        await client.publish(audioTrack)
 
         // Volume indicator for speaking ring animation
         client.enableAudioVolumeIndicator()
