@@ -3,7 +3,20 @@
  * Tabs: Basic, Advanced, Shop, Workspace.
  * Uses shared SettingsPanel / SettingsCard / SettingsHeader / SettingsDanger primitives.
  */
-import { Button, cn, Dialog, DialogContent, FormField, Input, Switch, Textarea } from '@shadowob/ui'
+import {
+  Button,
+  cn,
+  FormField,
+  Input,
+  Modal,
+  ModalBody,
+  ModalButtonGroup,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  Switch,
+  Textarea,
+} from '@shadowob/ui'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
@@ -15,7 +28,6 @@ import {
   Settings,
   ShoppingBag,
   Trash2,
-  X,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -24,7 +36,6 @@ import {
   SettingsCard,
   SettingsDanger,
   SettingsGroup,
-  SettingsHeader,
   SettingsPanel,
 } from '../../pages/settings/_shared'
 import { useAppStore } from '../../stores/app.store'
@@ -104,6 +115,10 @@ export function ServerSettingsModal({
   const [iconUploading, setIconUploading] = useState(false)
   const [copiedInvite, setCopiedInvite] = useState(false)
   const activeTabMeta = MODAL_TABS.find((tab) => tab.id === activeTab) ?? MODAL_TABS[0]!
+  const ActiveTabIcon = activeTabMeta.icon
+  const headerOverline = server?.name
+    ? `${t('channel.serverSettings', '服务器设置')} · ${server.name}`
+    : t('channel.serverSettings', '服务器设置')
 
   // Initialize draft when dialog opens or server data changes
   useEffect(() => {
@@ -246,34 +261,19 @@ export function ServerSettingsModal({
   const isSettingsTab = activeTab === 'basic' || activeTab === 'advanced'
 
   return (
-    <Dialog isOpen={open} onClose={onClose}>
-      <DialogContent
+    <Modal open={open} onClose={onClose}>
+      <ModalContent
         maxWidth="max-w-5xl"
-        hideCloseButton
-        className="h-[min(88vh,820px)] p-0 flex flex-col overflow-hidden"
+        className="h-[min(88vh,820px)] flex flex-col overflow-hidden"
       >
-        <div className="flex items-center justify-between gap-4 border-b border-border-subtle/80 bg-bg-secondary/20 px-5 py-4 backdrop-blur-xl shrink-0">
-          <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-text-muted/50">
-              {t('channel.serverSettings', '服务器设置')}
-            </p>
-            <h2 className="text-sm font-black tracking-tight text-text-primary truncate">
-              {server?.name ?? t(activeTabMeta.labelKey, activeTabMeta.labelFallback)}
-              <span className="mx-2 text-text-muted/35">/</span>
-              <span>{t(activeTabMeta.labelKey, activeTabMeta.labelFallback)}</span>
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border-subtle bg-[var(--glass-bg)] text-text-muted shadow-[var(--shadow-soft)] transition-all hover:-translate-y-0.5 hover:border-primary/25 hover:bg-bg-tertiary/60 hover:text-text-primary active:scale-95"
-            aria-label={t('common.close', '关闭')}
-          >
-            <X size={18} strokeWidth={2.6} />
-          </button>
-        </div>
+        <ModalHeader
+          overline={headerOverline}
+          icon={<ActiveTabIcon size={18} strokeWidth={2.4} />}
+          title={t(activeTabMeta.labelKey, activeTabMeta.labelFallback)}
+          closeLabel={t('common.close', '关闭')}
+        />
 
-        <div className="flex flex-1 min-h-0">
+        <ModalBody className="flex flex-1 min-h-0 overflow-hidden p-0">
           {/* Sidebar tabs */}
           <nav className="w-48 shrink-0 border-r border-border-subtle p-4 flex flex-col overflow-y-auto">
             <div className="space-y-1 flex-1">
@@ -308,19 +308,15 @@ export function ServerSettingsModal({
           {/* Content area */}
           <div
             className={cn(
-              'flex-1 min-w-0 p-6',
-              isSettingsTab ? 'overflow-y-auto' : 'overflow-hidden',
+              'flex-1 min-w-0',
+              isSettingsTab
+                ? 'overflow-y-auto p-6'
+                : 'flex flex-col overflow-hidden bg-bg-primary/5',
             )}
           >
             {/* Basic Settings */}
             {activeTab === 'basic' && (
               <SettingsPanel className="pb-6">
-                <SettingsHeader
-                  titleKey="server.settingsBasic"
-                  titleFallback="基础设置"
-                  icon={ImageIcon}
-                />
-
                 {/* Banner + Icon */}
                 <SettingsCard className="p-0 overflow-hidden">
                   <div className="relative h-32 bg-gradient-to-br from-primary/20 to-primary/5 group/banner">
@@ -426,12 +422,6 @@ export function ServerSettingsModal({
             {/* Advanced Settings */}
             {activeTab === 'advanced' && (
               <SettingsPanel className="pb-6">
-                <SettingsHeader
-                  titleKey="server.settingsAdvanced"
-                  titleFallback="进阶设置"
-                  icon={Settings}
-                />
-
                 <SettingsCard>
                   <div className="space-y-5">
                     <SettingsGroup labelKey="channel.serverSlug" labelFallback="自定义链接标识">
@@ -530,14 +520,14 @@ export function ServerSettingsModal({
 
             {/* Shop page */}
             {activeTab === 'shop' && (
-              <div className="h-full">
+              <div className="flex h-full min-h-0 flex-col">
                 <ShopPage serverId={serverSlug} isAdmin={isOwner} embedded />
               </div>
             )}
 
             {/* Workspace page */}
             {activeTab === 'workspace' && (
-              <div className="h-full">
+              <div className="flex h-full min-h-0 flex-col">
                 <WorkspacePage
                   serverId={serverSlug}
                   embedded
@@ -553,11 +543,11 @@ export function ServerSettingsModal({
               </div>
             )}
           </div>
-        </div>
+        </ModalBody>
 
         {/* Footer — save / cancel (only for settings tabs) */}
         {isSettingsTab && (
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border-subtle shrink-0">
+          <ModalFooter>
             {hasDraftChanges() && !updateServer.isPending && (
               <span className="text-xs text-warning mr-auto">
                 {t('server.unsavedChanges', '有未保存的更改')}
@@ -568,29 +558,31 @@ export function ServerSettingsModal({
                 {t('common.saving', '保存中...')}
               </span>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              disabled={updateServer.isPending}
-              className="uppercase tracking-widest font-black"
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={saveServerChanges}
-              disabled={!formDraft.name.trim() || updateServer.isPending || !hasDraftChanges()}
-              loading={updateServer.isPending}
-              icon={Save}
-              className="uppercase tracking-widest font-black"
-            >
-              {updateServer.isPending ? t('common.saving') : t('common.save')}
-            </Button>
-          </div>
+            <ModalButtonGroup>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                disabled={updateServer.isPending}
+                className="uppercase tracking-widest font-black"
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={saveServerChanges}
+                disabled={!formDraft.name.trim() || updateServer.isPending || !hasDraftChanges()}
+                loading={updateServer.isPending}
+                icon={Save}
+                className="uppercase tracking-widest font-black"
+              >
+                {updateServer.isPending ? t('common.saving') : t('common.save')}
+              </Button>
+            </ModalButtonGroup>
+          </ModalFooter>
         )}
-      </DialogContent>
-    </Dialog>
+      </ModalContent>
+    </Modal>
   )
 }

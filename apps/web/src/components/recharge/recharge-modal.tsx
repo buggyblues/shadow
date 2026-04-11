@@ -1,4 +1,12 @@
-import { Button, Card, Dialog, DialogContent, DialogHeader, DialogTitle } from '@shadowob/ui'
+import {
+  Button,
+  Card,
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+} from '@shadowob/ui'
 import { Elements } from '@stripe/react-stripe-js'
 import { loadStripe } from '@stripe/stripe-js'
 import { useQuery } from '@tanstack/react-query'
@@ -95,26 +103,36 @@ export function RechargeModal() {
 
   if (!isOpen) return null
 
+  const subtitle =
+    step === 'pay'
+      ? t('recharge.payNow')
+      : step === 'success'
+        ? t('common.success', '成功')
+        : t('recharge.balance')
+
   return (
-    <Dialog isOpen={isOpen} onClose={closeModal}>
-      <DialogContent className="!rounded-[40px] !max-w-md">
-        {/* Header */}
-        <DialogHeader className="flex flex-row items-center justify-between">
-          {step === 'pay' && (
-            <Button
-              variant="ghost"
-              size="icon"
-              icon={ArrowLeft}
-              onClick={() => setStep('select')}
-              className="!h-8 !w-8"
-            />
-          )}
-          <DialogTitle className="flex-1 text-center">{t('recharge.title')}</DialogTitle>
-          {step === 'success' && <div className="w-8" />}
-        </DialogHeader>
+    <Modal open={isOpen} onClose={closeModal}>
+      <ModalContent maxWidth="max-w-md">
+        <ModalHeader
+          overline={t('recharge.title')}
+          title={t('recharge.title')}
+          subtitle={subtitle}
+          action={
+            step === 'pay' ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                icon={ArrowLeft}
+                onClick={() => setStep('select')}
+                className="!h-10 !w-10"
+              />
+            ) : null
+          }
+          closeLabel={t('common.close', '关闭')}
+        />
 
         {/* Content */}
-        <div className="space-y-4">
+        <ModalBody className="space-y-4 py-5">
           {/* Balance display */}
           {step === 'select' && wallet && (
             <Card variant="glass" className="!rounded-[24px]">
@@ -165,20 +183,20 @@ export function RechargeModal() {
 
           {/* Step: Success */}
           {step === 'success' && <SuccessAnimation />}
-        </div>
+        </ModalBody>
 
         {/* Footer: legal + contact */}
         {step !== 'success' && (
-          <div className="text-xs text-text-muted text-center font-bold italic opacity-60">
+          <ModalFooter className="justify-center text-center">
             <p>
               {t('recharge.contact')}{' '}
               <a href="mailto:yeejonexyq@gmail.com" className="text-primary hover:underline">
                 yeejonexyq@gmail.com
               </a>
             </p>
-          </div>
+          </ModalFooter>
         )}
-      </DialogContent>
-    </Dialog>
+      </ModalContent>
+    </Modal>
   )
 }

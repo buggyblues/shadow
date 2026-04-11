@@ -1,4 +1,4 @@
-import { Badge, Button, Card } from '@shadowob/ui'
+import { Badge, Button, Card, cn } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
@@ -27,6 +27,7 @@ interface ProductDetailProps {
   productId: string
   isAdmin?: boolean
   onBack: () => void
+  embedded?: boolean
 }
 
 interface Review {
@@ -47,6 +48,7 @@ export function ProductDetail({
   productId,
   isAdmin: _isAdmin,
   onBack,
+  embedded = false,
 }: ProductDetailProps) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -269,9 +271,19 @@ export function ProductDetail({
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-bg-primary overflow-hidden h-full relative z-30 font-sans">
+    <div
+      className={cn(
+        'relative z-30 flex h-full flex-1 flex-col overflow-hidden font-sans',
+        embedded ? 'bg-transparent' : 'bg-bg-primary',
+      )}
+    >
       {/* ── Top Header ── */}
-      <div className="flex items-center justify-between p-4 bg-bg-tertiary/50 backdrop-blur-xl border-b border-border-subtle shrink-0 sticky top-0 z-50">
+      <div
+        className={cn(
+          'sticky top-0 z-50 flex shrink-0 items-center justify-between border-b border-border-subtle backdrop-blur-xl',
+          embedded ? 'bg-bg-secondary/10 px-5 py-4' : 'bg-bg-tertiary/50 p-4',
+        )}
+      >
         <Button variant="ghost" size="icon" icon={ArrowLeft} onClick={onBack} />
         <span className="font-black text-text-primary truncate max-w-[200px]">{product.name}</span>
         <div className="flex gap-1 items-center">
@@ -284,7 +296,12 @@ export function ProductDetail({
 
       {/* ── Main Content Area ── */}
       <div className="flex-1 overflow-y-auto scrollbar-hidden relative">
-        <div className="max-w-[1200px] mx-auto w-full pb-28 md:pb-10 pt-0 md:pt-6 md:px-6">
+        <div
+          className={cn(
+            'mx-auto w-full max-w-[1200px] pb-28 md:pb-10 md:px-6',
+            embedded ? 'px-5 pt-5 md:pt-6' : 'pt-0',
+          )}
+        >
           <div className="flex flex-col md:flex-row gap-0 md:gap-8 lg:gap-12">
             {/* ═══ Left Column: Media Gallery ═══ */}
             <div className="w-full md:w-1/2 lg:w-[45%] shrink-0">

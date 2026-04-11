@@ -1,11 +1,12 @@
 import {
   Button,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   Input,
+  Modal,
+  ModalBody,
+  ModalButtonGroup,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
 } from '@shadowob/ui'
 import { useEffect, useState } from 'react'
 import type { DialogMode } from './workspace-types'
@@ -38,11 +39,9 @@ export function WorkspaceDialogs({ dialog, onClose, onSubmit, isPending }: Works
   const confirmLabel = dialog.kind === 'rename' ? '保存' : '创建'
 
   return (
-    <Dialog isOpen onClose={onClose}>
-      <DialogContent className="!rounded-[40px]">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
+    <Modal open onClose={onClose}>
+      <ModalContent maxWidth="max-w-md">
+        <ModalHeader title={title} closeLabel="关闭" />
         <DialogInput
           defaultValue={defaultValue}
           placeholder={placeholder}
@@ -51,8 +50,8 @@ export function WorkspaceDialogs({ dialog, onClose, onSubmit, isPending }: Works
           confirmLabel={confirmLabel}
           onCancel={onClose}
         />
-      </DialogContent>
-    </Dialog>
+      </ModalContent>
+    </Modal>
   )
 }
 
@@ -81,39 +80,43 @@ function DialogInput({
 
   return (
     <>
-      <Input
-        value={inputValue}
-        onChange={(e) => {
-          setInputValue(e.target.value)
-        }}
-        onKeyDown={(e) => {
-          e.stopPropagation()
-          if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
-            const val = inputValue.trim()
-            if (val) onSubmit(val)
-          } else if (e.key === 'Escape') {
-            onCancel()
-          }
-        }}
-        placeholder={placeholder}
-        className="mb-4"
-      />
-      <DialogFooter>
-        <Button variant="ghost" onClick={onCancel}>
-          取消
-        </Button>
-        <Button
-          variant="primary"
-          onClick={() => {
-            const val = inputValue.trim()
-            if (val) onSubmit(val)
+      <ModalBody className="py-5">
+        <Input
+          value={inputValue}
+          onChange={(e) => {
+            setInputValue(e.target.value)
           }}
-          disabled={isPending}
-          loading={isPending}
-        >
-          {confirmLabel}
-        </Button>
-      </DialogFooter>
+          onKeyDown={(e) => {
+            e.stopPropagation()
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+              const val = inputValue.trim()
+              if (val) onSubmit(val)
+            } else if (e.key === 'Escape') {
+              onCancel()
+            }
+          }}
+          placeholder={placeholder}
+          className="mb-1"
+        />
+      </ModalBody>
+      <ModalFooter>
+        <ModalButtonGroup>
+          <Button variant="ghost" onClick={onCancel}>
+            取消
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => {
+              const val = inputValue.trim()
+              if (val) onSubmit(val)
+            }}
+            disabled={isPending}
+            loading={isPending}
+          >
+            {confirmLabel}
+          </Button>
+        </ModalButtonGroup>
+      </ModalFooter>
     </>
   )
 }

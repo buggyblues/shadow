@@ -3,12 +3,13 @@ import {
   AvatarFallback,
   Button,
   cn,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   Input,
+  Modal,
+  ModalBody,
+  ModalButtonGroup,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
   ServerAvatar,
   Switch,
   Tooltip,
@@ -508,12 +509,15 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
         </div>
 
         {/* Simple create dialog */}
-        <Dialog isOpen={showCreate} onClose={() => setShowCreate(false)}>
-          <DialogContent className="max-w-sm rounded-[40px] shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
-            <DialogHeader>
-              <DialogTitle>{t('server.createServer')}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-5">
+        <Modal open={showCreate} onClose={() => setShowCreate(false)}>
+          <ModalContent maxWidth="max-w-sm">
+            <ModalHeader
+              overline={t('server.createServer')}
+              icon={<Plus size={18} strokeWidth={2.6} />}
+              title={t('server.createServer')}
+              closeLabel={t('common.close', '关闭')}
+            />
+            <ModalBody className="space-y-5 py-5">
               <Input
                 type="text"
                 value={newName}
@@ -554,79 +558,86 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                 </div>
                 <Switch checked={isPublic} onCheckedChange={setIsPublic} />
               </div>
-            </div>
-            <DialogFooter>
-              <Button
-                variant="ghost"
-                onClick={() => setShowCreate(false)}
-                className="uppercase tracking-widest font-black"
-              >
-                {t('common.cancel')}
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() =>
-                  newName.trim() && createServer.mutate({ name: newName.trim(), isPublic })
-                }
-                disabled={!newName.trim() || createServer.isPending}
-                loading={createServer.isPending}
-                className="uppercase tracking-widest font-black"
-              >
-                {t('common.create')}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </ModalBody>
+            <ModalFooter>
+              <ModalButtonGroup>
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowCreate(false)}
+                  className="uppercase tracking-widest font-black"
+                >
+                  {t('common.cancel')}
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() =>
+                    newName.trim() && createServer.mutate({ name: newName.trim(), isPublic })
+                  }
+                  disabled={!newName.trim() || createServer.isPending}
+                  loading={createServer.isPending}
+                  className="uppercase tracking-widest font-black"
+                >
+                  {t('common.create')}
+                </Button>
+              </ModalButtonGroup>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
 
         {/* Join server dialog */}
-        <Dialog isOpen={showJoin} onClose={() => setShowJoin(false)}>
-          <DialogContent className="max-w-sm rounded-[40px] shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
-            <DialogHeader>
-              <DialogTitle>{t('server.joinServer')}</DialogTitle>
-            </DialogHeader>
-            <p className="text-text-muted text-sm font-bold opacity-60">
-              {t('server.joinServerDesc')}
-            </p>
-            <Input
-              type="text"
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value)}
-              onKeyDown={(e) => {
-                if (
-                  e.key === 'Enter' &&
-                  !e.shiftKey &&
-                  !e.nativeEvent.isComposing &&
-                  e.keyCode !== 229 &&
-                  joinCode.trim().length === 8
-                ) {
-                  e.preventDefault()
-                  joinServer.mutate(joinCode.trim())
-                }
-              }}
-              placeholder={t('server.inviteCodePlaceholder')}
-              maxLength={8}
-              className="w-full rounded-2xl px-5 py-3.5 font-mono text-center text-lg tracking-widest"
+        <Modal open={showJoin} onClose={() => setShowJoin(false)}>
+          <ModalContent maxWidth="max-w-sm">
+            <ModalHeader
+              overline={t('server.joinServer')}
+              icon={<UserPlus size={18} strokeWidth={2.4} />}
+              title={t('server.joinServer')}
+              subtitle={t('server.joinServerDesc')}
+              closeLabel={t('common.close', '关闭')}
             />
-            <DialogFooter>
-              <Button
-                variant="ghost"
-                onClick={() => setShowJoin(false)}
-                className="uppercase tracking-widest font-black"
-              >
-                {t('common.cancel')}
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => joinCode.trim() && joinServer.mutate(joinCode.trim())}
-                disabled={joinCode.trim().length !== 8 || joinServer.isPending}
-                loading={joinServer.isPending}
-                className="uppercase tracking-widest font-black"
-              >
-                {t('server.joinButton')}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            <ModalBody className="space-y-4 py-5">
+              <Input
+                type="text"
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value)}
+                onKeyDown={(e) => {
+                  if (
+                    e.key === 'Enter' &&
+                    !e.shiftKey &&
+                    !e.nativeEvent.isComposing &&
+                    e.keyCode !== 229 &&
+                    joinCode.trim().length === 8
+                  ) {
+                    e.preventDefault()
+                    joinServer.mutate(joinCode.trim())
+                  }
+                }}
+                placeholder={t('server.inviteCodePlaceholder')}
+                maxLength={8}
+                className="w-full rounded-2xl px-5 py-3.5 font-mono text-center text-lg tracking-widest"
+              />
+            </ModalBody>
+            <ModalFooter>
+              <ModalButtonGroup>
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowJoin(false)}
+                  className="uppercase tracking-widest font-black"
+                >
+                  {t('common.cancel')}
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => joinCode.trim() && joinServer.mutate(joinCode.trim())}
+                  disabled={joinCode.trim().length !== 8 || joinServer.isPending}
+                  loading={joinServer.isPending}
+                  className="uppercase tracking-widest font-black"
+                >
+                  {t('server.joinButton')}
+                </Button>
+              </ModalButtonGroup>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
 
         {/* Server context menu */}
         {contextMenu && (

@@ -1,7 +1,7 @@
 import { Button, FormField, Input } from '@shadowob/ui'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { ExternalLink, Save, User as UserIcon } from 'lucide-react'
+import { ExternalLink, Save } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AvatarEditor } from '../../components/common/avatar-editor'
@@ -9,7 +9,7 @@ import { LanguageSwitcher } from '../../components/common/language-switcher'
 import { fetchApi } from '../../lib/api'
 import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
-import { SettingsCard, SettingsHeader, SettingsPanel } from './_shared'
+import { SettingsCard, SettingsPanel } from './_shared'
 
 export function ProfileSettings() {
   const { t } = useTranslation()
@@ -50,16 +50,6 @@ export function ProfileSettings() {
 
   return (
     <SettingsPanel>
-      <div className="flex items-center justify-between">
-        <SettingsHeader
-          titleKey="settings.tabProfile"
-          titleFallback="修改资料"
-          descKey="settings.profileDesc"
-          descFallback="修改你的头像、昵称和语言偏好"
-          icon={UserIcon}
-        />
-      </div>
-
       {/* Edit Form */}
       <SettingsCard>
         <div className="space-y-6">

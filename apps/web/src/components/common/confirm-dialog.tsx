@@ -1,12 +1,13 @@
 import {
   Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Modal,
+  ModalBody,
+  ModalButtonGroup,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
 } from '@shadowob/ui'
+import { AlertTriangle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { create } from 'zustand'
 
@@ -65,21 +66,28 @@ export function ConfirmDialog() {
   const { open, title, message, confirmLabel, cancelLabel, danger, close } = useConfirmStore()
 
   return (
-    <Dialog isOpen={open} onClose={() => close(false)}>
-      <DialogContent maxWidth="max-w-96">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription className="whitespace-pre-line">{message}</DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="ghost" size="sm" onClick={() => close(false)}>
-            {cancelLabel || t('common.cancel')}
-          </Button>
-          <Button variant={danger ? 'danger' : 'primary'} size="sm" onClick={() => close(true)}>
-            {confirmLabel || t('common.confirm')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <Modal open={open} onClose={() => close(false)}>
+      <ModalContent maxWidth="max-w-96">
+        <ModalHeader
+          overline={t('common.confirm', '确认')}
+          icon={<AlertTriangle size={18} strokeWidth={2.4} />}
+          title={title}
+          closeLabel={t('common.close', '关闭')}
+        />
+        <ModalBody className="py-5">
+          <p className="whitespace-pre-line text-sm font-medium text-text-muted">{message}</p>
+        </ModalBody>
+        <ModalFooter>
+          <ModalButtonGroup>
+            <Button variant="ghost" size="sm" onClick={() => close(false)}>
+              {cancelLabel || t('common.cancel')}
+            </Button>
+            <Button variant={danger ? 'danger' : 'primary'} size="sm" onClick={() => close(true)}>
+              {confirmLabel || t('common.confirm')}
+            </Button>
+          </ModalButtonGroup>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   )
 }

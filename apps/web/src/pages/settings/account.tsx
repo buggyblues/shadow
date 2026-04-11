@@ -1,12 +1,12 @@
 import { Button, FormField, Input } from '@shadowob/ui'
 import { useMutation } from '@tanstack/react-query'
-import { Key, Mail, Shield, User } from 'lucide-react'
+import { Key, Mail, User } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
-import { SettingsCard, SettingsHeader, SettingsPanel } from './_shared'
+import { SettingsCard, SettingsPanel } from './_shared'
 
 export function AccountSettings() {
   const { t } = useTranslation()
@@ -55,14 +55,6 @@ export function AccountSettings() {
 
   return (
     <SettingsPanel>
-      <SettingsHeader
-        titleKey="settings.tabAccount"
-        titleFallback="账号与安全"
-        descKey="settings.accountDesc"
-        descFallback="管理你的账号信息和安全设置"
-        icon={Shield}
-      />
-
       {/* Account Info */}
       <SettingsCard>
         <div className="flex flex-col gap-3">

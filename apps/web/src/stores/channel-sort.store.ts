@@ -29,8 +29,8 @@ export interface ChannelSortState {
 }
 
 export const DEFAULT_SORT: ServerSortConfig = {
-  sortBy: 'lastMessageAt',
-  sortDirection: 'desc',
+  sortBy: 'position',
+  sortDirection: 'asc',
 }
 
 function coerceSortBy(by: ChannelSortBy | undefined): ServerSortConfig['sortBy'] {

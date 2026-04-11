@@ -4,12 +4,13 @@ import {
   Card,
   CardContent,
   cn,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   Input,
+  Modal,
+  ModalBody,
+  ModalButtonGroup,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
 } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
@@ -460,27 +461,31 @@ export function BuddyManagementPage() {
       )}
 
       {/* Delete confirmation dialog */}
-      <Dialog isOpen={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)}>
-        <DialogContent className="rounded-[40px] shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
-          <DialogHeader>
-            <DialogTitle>{t('common.confirm')}</DialogTitle>
-          </DialogHeader>
-          <p className="text-text-muted text-sm font-bold italic">{t('agentMgmt.deleteConfirm')}</p>
-          <DialogFooter>
-            <Button variant="ghost" size="sm" onClick={() => setDeleteConfirmId(null)}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => deleteConfirmId && deleteMutation.mutate(deleteConfirmId)}
-              disabled={deleteMutation.isPending}
-            >
-              {t('common.delete')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <Modal open={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)}>
+        <ModalContent maxWidth="max-w-md">
+          <ModalHeader title={t('common.confirm')} closeLabel={t('common.close', '关闭')} />
+          <ModalBody className="py-5">
+            <p className="text-sm font-bold italic text-text-muted">
+              {t('agentMgmt.deleteConfirm')}
+            </p>
+          </ModalBody>
+          <ModalFooter>
+            <ModalButtonGroup>
+              <Button variant="ghost" size="sm" onClick={() => setDeleteConfirmId(null)}>
+                {t('common.cancel')}
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => deleteConfirmId && deleteMutation.mutate(deleteConfirmId)}
+                disabled={deleteMutation.isPending}
+              >
+                {t('common.delete')}
+              </Button>
+            </ModalButtonGroup>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
 
       {/* Agent context menu */}
       {contextMenu && (
@@ -1247,89 +1252,88 @@ function CreateAgentDialog({
   })
 
   return (
-    <Dialog isOpen onClose={onClose}>
-      <DialogContent
-        maxWidth="max-w-[480px]"
-        className="rounded-[40px] shadow-[0_32px_120px_rgba(0,0,0,0.5)]"
-      >
-        <DialogHeader>
-          <DialogTitle>{t('agentMgmt.createTitle')}</DialogTitle>
-        </DialogHeader>
+    <Modal open onClose={onClose}>
+      <ModalContent maxWidth="max-w-[480px]" className="shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
+        <ModalHeader title={t('agentMgmt.createTitle')} closeLabel={t('common.close')} />
 
-        {/* Name */}
-        <div className="space-y-2">
-          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-            {t('agentMgmt.nameLabel')}
-          </label>
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={t('agentMgmt.namePlaceholder')}
-            maxLength={64}
-          />
-        </div>
+        <ModalBody className="space-y-4 py-5">
+          {/* Name */}
+          <div className="space-y-2">
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
+              {t('agentMgmt.nameLabel')}
+            </label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t('agentMgmt.namePlaceholder')}
+              maxLength={64}
+            />
+          </div>
 
-        {/* Username */}
-        <div className="space-y-2">
-          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-            {t('agentMgmt.usernameLabel')}
-          </label>
-          <Input
-            value={username}
-            onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''))}
-            placeholder={t('agentMgmt.usernamePlaceholder')}
-            maxLength={32}
-          />
-        </div>
+          {/* Username */}
+          <div className="space-y-2">
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
+              {t('agentMgmt.usernameLabel')}
+            </label>
+            <Input
+              value={username}
+              onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''))}
+              placeholder={t('agentMgmt.usernamePlaceholder')}
+              maxLength={32}
+            />
+          </div>
 
-        {/* Description */}
-        <div className="space-y-2">
-          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-            {t('agentMgmt.descLabel')}
-          </label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder={t('agentMgmt.descPlaceholder')}
-            className="w-full bg-bg-tertiary border-2 border-border-subtle text-text-primary rounded-[24px] px-6 py-4 text-base font-bold outline-none transition-all placeholder:text-text-muted/30 focus:border-primary focus:shadow-[0_0_0_5px_rgba(0,198,209,0.1)] resize-none"
-            rows={3}
-            maxLength={500}
-          />
-        </div>
+          {/* Description */}
+          <div className="space-y-2">
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
+              {t('agentMgmt.descLabel')}
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder={t('agentMgmt.descPlaceholder')}
+              className="w-full bg-bg-tertiary border-2 border-border-subtle text-text-primary rounded-[24px] px-6 py-4 text-base font-bold outline-none transition-all placeholder:text-text-muted/30 focus:border-primary focus:shadow-[0_0_0_5px_rgba(0,198,209,0.1)] resize-none"
+              rows={3}
+              maxLength={500}
+            />
+          </div>
 
-        {/* Avatar picker */}
-        <div>
-          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-3">
-            {t('agentMgmt.avatarLabel')}
-          </label>
-          <AvatarEditor value={selectedAvatar ?? undefined} onChange={setSelectedAvatar} />
-        </div>
+          {/* Avatar picker */}
+          <div>
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-3">
+              {t('agentMgmt.avatarLabel')}
+            </label>
+            <AvatarEditor value={selectedAvatar ?? undefined} onChange={setSelectedAvatar} />
+          </div>
+        </ModalBody>
 
         {/* Actions */}
-        <DialogFooter>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            {t('common.cancel')}
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() =>
-              name.trim() &&
-              username.trim() &&
-              createMutation.mutate({
-                name: name.trim(),
-                username: username.trim(),
-                description: description.trim() || undefined,
-                avatarUrl: selectedAvatar ?? undefined,
-              })
-            }
-            disabled={!name.trim() || !username.trim() || createMutation.isPending}
-          >
-            {createMutation.isPending ? t('agentMgmt.creating') : t('common.create')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <ModalFooter>
+          <ModalButtonGroup>
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() =>
+                name.trim() &&
+                username.trim() &&
+                createMutation.mutate({
+                  name: name.trim(),
+                  username: username.trim(),
+                  description: description.trim() || undefined,
+                  avatarUrl: selectedAvatar ?? undefined,
+                })
+              }
+              disabled={!name.trim() || !username.trim() || createMutation.isPending}
+            >
+              {createMutation.isPending ? t('agentMgmt.creating') : t('common.create')}
+            </Button>
+          </ModalButtonGroup>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   )
 }
 
@@ -1365,70 +1369,69 @@ function EditAgentDialog({
   })
 
   return (
-    <Dialog isOpen onClose={onClose}>
-      <DialogContent
-        maxWidth="max-w-[480px]"
-        className="rounded-[40px] shadow-[0_32px_120px_rgba(0,0,0,0.5)]"
-      >
-        <DialogHeader>
-          <DialogTitle>{t('agentMgmt.editTitle')}</DialogTitle>
-        </DialogHeader>
+    <Modal open onClose={onClose}>
+      <ModalContent maxWidth="max-w-[480px]" className="shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
+        <ModalHeader title={t('agentMgmt.editTitle')} closeLabel={t('common.close')} />
 
-        <div className="space-y-2">
-          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-            {t('agentMgmt.nameLabel')}
-          </label>
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={t('agentMgmt.namePlaceholder')}
-            maxLength={64}
-          />
-        </div>
+        <ModalBody className="space-y-4 py-5">
+          <div className="space-y-2">
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
+              {t('agentMgmt.nameLabel')}
+            </label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t('agentMgmt.namePlaceholder')}
+              maxLength={64}
+            />
+          </div>
 
-        <div className="space-y-2">
-          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-            {t('agentMgmt.descLabel')}
-          </label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder={t('agentMgmt.descPlaceholder')}
-            className="w-full bg-bg-tertiary border-2 border-border-subtle text-text-primary rounded-[24px] px-6 py-4 text-base font-bold outline-none transition-all placeholder:text-text-muted/30 focus:border-primary focus:shadow-[0_0_0_5px_rgba(0,198,209,0.1)] resize-none"
-            rows={3}
-            maxLength={500}
-          />
-        </div>
+          <div className="space-y-2">
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
+              {t('agentMgmt.descLabel')}
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder={t('agentMgmt.descPlaceholder')}
+              className="w-full bg-bg-tertiary border-2 border-border-subtle text-text-primary rounded-[24px] px-6 py-4 text-base font-bold outline-none transition-all placeholder:text-text-muted/30 focus:border-primary focus:shadow-[0_0_0_5px_rgba(0,198,209,0.1)] resize-none"
+              rows={3}
+              maxLength={500}
+            />
+          </div>
 
-        <div>
-          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-3">
-            {t('agentMgmt.avatarLabel')}
-          </label>
-          <AvatarEditor value={selectedAvatar ?? undefined} onChange={setSelectedAvatar} />
-        </div>
+          <div>
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-3">
+              {t('agentMgmt.avatarLabel')}
+            </label>
+            <AvatarEditor value={selectedAvatar ?? undefined} onChange={setSelectedAvatar} />
+          </div>
+        </ModalBody>
 
-        <DialogFooter>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            {t('common.cancel')}
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() =>
-              name.trim() &&
-              updateMutation.mutate({
-                name: name.trim(),
-                description: description.trim() || undefined,
-                avatarUrl: selectedAvatar,
-              })
-            }
-            disabled={!name.trim() || updateMutation.isPending}
-          >
-            {updateMutation.isPending ? t('common.saving') : t('common.save')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <ModalFooter>
+          <ModalButtonGroup>
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() =>
+                name.trim() &&
+                updateMutation.mutate({
+                  name: name.trim(),
+                  description: description.trim() || undefined,
+                  avatarUrl: selectedAvatar,
+                })
+              }
+              disabled={!name.trim() || updateMutation.isPending}
+            >
+              {updateMutation.isPending ? t('common.saving') : t('common.save')}
+            </Button>
+          </ModalButtonGroup>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   )
 }
 
@@ -1766,27 +1769,31 @@ export function BuddyManagementContent() {
       )}
 
       {/* Delete confirmation */}
-      <Dialog isOpen={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)}>
-        <DialogContent className="rounded-[40px] shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
-          <DialogHeader>
-            <DialogTitle>{t('common.confirm')}</DialogTitle>
-          </DialogHeader>
-          <p className="text-text-muted text-sm font-bold italic">{t('agentMgmt.deleteConfirm')}</p>
-          <DialogFooter>
-            <Button variant="ghost" size="sm" onClick={() => setDeleteConfirmId(null)}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => deleteConfirmId && deleteMutation.mutate(deleteConfirmId)}
-              disabled={deleteMutation.isPending}
-            >
-              {t('common.delete')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <Modal open={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)}>
+        <ModalContent maxWidth="max-w-md">
+          <ModalHeader title={t('common.confirm')} closeLabel={t('common.close', '关闭')} />
+          <ModalBody className="py-5">
+            <p className="text-sm font-bold italic text-text-muted">
+              {t('agentMgmt.deleteConfirm')}
+            </p>
+          </ModalBody>
+          <ModalFooter>
+            <ModalButtonGroup>
+              <Button variant="ghost" size="sm" onClick={() => setDeleteConfirmId(null)}>
+                {t('common.cancel')}
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => deleteConfirmId && deleteMutation.mutate(deleteConfirmId)}
+                disabled={deleteMutation.isPending}
+              >
+                {t('common.delete')}
+              </Button>
+            </ModalButtonGroup>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </>
   )
 }

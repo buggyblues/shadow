@@ -1,9 +1,9 @@
 import { cn, Switch } from '@shadowob/ui'
-import { Check, Image as ImageIcon, Monitor, Moon, Paintbrush, Sun, X, Zap } from 'lucide-react'
+import { Check, Image as ImageIcon, Monitor, Moon, Sun, X, Zap } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { BACKGROUND_OPTIONS } from '../../lib/backgrounds'
 import { type ThemeMode, useUIStore } from '../../stores/ui.store'
-import { SettingsCard, SettingsHeader, SettingsPanel, SettingsRow } from './_shared'
+import { SettingsCard, SettingsPanel, SettingsRow } from './_shared'
 
 export function AppearanceSettings() {
   const { t } = useTranslation()
@@ -45,14 +45,6 @@ export function AppearanceSettings() {
 
   return (
     <SettingsPanel>
-      <SettingsHeader
-        titleKey="settings.tabAppearance"
-        titleFallback="外观"
-        descKey="settings.appearanceDesc"
-        descFallback="自定义你的界面外观"
-        icon={Paintbrush}
-      />
-
       <SettingsCard>
         <span className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 mb-4">
           {t('settings.themeLabel')}

@@ -1,21 +1,11 @@
 import { Button, Input } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
-import {
-  AlertTriangle,
-  Code2,
-  Copy,
-  Eye,
-  EyeOff,
-  Pencil,
-  Plus,
-  RotateCw,
-  Trash2,
-} from 'lucide-react'
+import { AlertTriangle, Copy, Eye, EyeOff, Pencil, Plus, RotateCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
-import { SettingsCard, SettingsHeader, SettingsPanel } from './_shared'
+import { SettingsCard, SettingsPanel } from './_shared'
 
 interface OAuthApp {
   id: string
@@ -146,14 +136,6 @@ export function DeveloperSettings() {
 
   return (
     <SettingsPanel>
-      <SettingsHeader
-        titleKey="oauth.developerTitle"
-        titleFallback="开发者设置"
-        descKey="oauth.developerDesc"
-        descFallback="管理你的 OAuth 应用，接入 Shadow 开放平台"
-        icon={Code2}
-      />
-
       <div className="flex justify-end -mt-2">
         <Button variant="primary" size="sm" type="button" onClick={() => setShowCreateForm(true)}>
           <Plus size={16} />

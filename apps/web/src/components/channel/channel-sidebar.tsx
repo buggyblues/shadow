@@ -2,13 +2,13 @@ import {
   Badge,
   Button,
   cn,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   Input,
+  Modal,
+  ModalBody,
+  ModalButtonGroup,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
   Switch,
 } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -31,7 +31,7 @@ import {
   UserPlus,
   Volume2,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useChannelSort } from '../../hooks/use-channel-sort'
 import { useSocketEvent } from '../../hooks/use-socket'
@@ -151,9 +151,20 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
 
   // Channel sorting and filter
   const [showArchived, setShowArchived] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const { sortChannels, updateLastAccessed } = useChannelSort(server?.id)
   const sortedChannels = sortChannels(rawChannels)
   const channels = showArchived ? sortedChannels : sortedChannels.filter((ch) => !ch.isArchived)
+  const visibleChannels = useMemo(() => {
+    const keyword = searchQuery.trim().toLowerCase()
+    if (!keyword) return channels
+
+    return channels.filter(
+      (channel) =>
+        channel.name.toLowerCase().includes(keyword) ||
+        channel.topic?.toLowerCase().includes(keyword),
+    )
+  }, [channels, searchQuery])
 
   const { data: scopedUnread } = useQuery({
     queryKey: ['notification-scoped-unread'],
@@ -356,13 +367,13 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
     setCollapsedGroups((prev) => ({ ...prev, [label]: !prev[label] }))
   }
 
-  const textChannels = channels.filter((c) => c.type === 'text')
-  const voiceChannels = channels.filter((c) => c.type === 'voice')
-  const announcementChannels = channels.filter((c) => c.type === 'announcement')
+  const textChannels = visibleChannels.filter((channel) => channel.type === 'text')
+  const voiceChannels = visibleChannels.filter((channel) => channel.type === 'voice')
+  const announcementChannels = visibleChannels.filter((channel) => channel.type === 'announcement')
 
   const renderChannelGroup = (label: string, items: Channel[]) => {
     if (items.length === 0) return null
-    const isCollapsed = !!collapsedGroups[label]
+    const isCollapsed = searchQuery.trim() ? false : !!collapsedGroups[label]
     return (
       <div className="mb-0.5">
         <div className="flex items-center justify-between pr-2">
@@ -406,7 +417,6 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
                         setEditingChannel(null)
                       }
                     }}
-                    // biome-ignore lint/a11y/noAutofocus: needed for inline edit UX
                     autoFocus
                     className="flex-1 !bg-transparent !border-none !shadow-none !ring-0 text-text-primary font-black !rounded-md !px-2 !py-1 text-sm focus:!ring-1 focus:!ring-primary pr-8"
                   />
@@ -540,6 +550,8 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
             <div className="flex items-center gap-1">
               <ChannelSortFilterButton
                 serverId={server.id}
+                searchQuery={searchQuery}
+                onSearchQueryChange={setSearchQuery}
                 showArchived={showArchived}
                 onShowArchivedChange={setShowArchived}
               />
@@ -561,28 +573,31 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
           {renderChannelGroup(t('channel.voice'), voiceChannels)}
         </div>
 
-        {channels.length === 0 && (
+        {visibleChannels.length === 0 && (
           <div className="px-4 py-6 text-center">
             <div className="w-12 h-12 bg-bg-tertiary/50 rounded-2xl flex items-center justify-center mx-auto mb-3 text-text-muted opacity-20">
               <Hash size={24} />
             </div>
             <p className="text-text-muted/40 text-xs font-bold leading-relaxed">
-              {t('channel.noChannels')}
+              {searchQuery.trim()
+                ? t('channel.noChannelsFound', { defaultValue: '没有匹配的频道' })
+                : t('channel.noChannels')}
             </p>
           </div>
         )}
       </div>
 
       {/* Create channel dialog */}
-      <Dialog isOpen={showCreate} onClose={() => setShowCreate(false)}>
-        <DialogContent className="max-w-md rounded-[40px] shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
-          <DialogHeader>
-            <DialogTitle>{t('channel.createChannel')}</DialogTitle>
-            <DialogDescription>
-              {t('channel.channels', { defaultValue: '创建一个新频道' })}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
+      <Modal open={showCreate} onClose={() => setShowCreate(false)}>
+        <ModalContent maxWidth="max-w-md">
+          <ModalHeader
+            overline={t('channel.channels', { defaultValue: '频道' })}
+            icon={<Plus size={18} strokeWidth={2.6} />}
+            title={t('channel.createChannel')}
+            subtitle={t('channel.createChannelDesc', { defaultValue: '创建一个新频道' })}
+            closeLabel={t('common.close', '关闭')}
+          />
+          <ModalBody className="space-y-4 py-5">
             <Input
               label={t('channel.channelName')}
               value={newName}
@@ -627,34 +642,36 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
               <span className="text-sm text-foreground">私有频道（仅受邀加入）</span>
               <Switch checked={newIsPrivate} onCheckedChange={(val) => setNewIsPrivate(val)} />
             </label>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setShowCreate(false)}
-              className="uppercase tracking-widest font-black"
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => {
-                if (!newName.trim()) return
-                createChannel.mutate({
-                  name: newName.trim(),
-                  type: newType,
-                  isPrivate: newIsPrivate,
-                })
-              }}
-              disabled={!newName.trim() || createChannel.isPending}
-              loading={createChannel.isPending}
-              className="uppercase tracking-widest font-black"
-            >
-              {t('common.create')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </ModalBody>
+          <ModalFooter>
+            <ModalButtonGroup>
+              <Button
+                variant="ghost"
+                onClick={() => setShowCreate(false)}
+                className="uppercase tracking-widest font-black"
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  if (!newName.trim()) return
+                  createChannel.mutate({
+                    name: newName.trim(),
+                    type: newType,
+                    isPrivate: newIsPrivate,
+                  })
+                }}
+                disabled={!newName.trim() || createChannel.isPending}
+                loading={createChannel.isPending}
+                className="uppercase tracking-widest font-black"
+              >
+                {t('common.create')}
+              </Button>
+            </ModalButtonGroup>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
 
       {/* Server settings modal */}
       <ServerSettingsModal

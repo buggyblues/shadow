@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AtSign, Bell, BellOff, Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
-import { SettingsCard, SettingsHeader, SettingsPanel } from './_shared'
+import { SettingsCard, SettingsPanel } from './_shared'
 
 const strategies = [
   {
@@ -62,14 +62,6 @@ export function NotificationSettings() {
 
   return (
     <SettingsPanel>
-      <SettingsHeader
-        titleKey="settings.notificationTitle"
-        titleFallback="通知设置"
-        descKey="settings.notificationDesc"
-        descFallback="管理通知策略"
-        icon={Bell}
-      />
-
       <SettingsCard>
         {isLoading ? (
           <div className="space-y-3">

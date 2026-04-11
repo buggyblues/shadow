@@ -1,6 +1,8 @@
+import { cn } from '@shadowob/ui'
 import { Eye } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
+import { useTranslation } from 'react-i18next'
 import { showToast } from '../../lib/toast'
 import { useWorkspaceStore, type WorkspaceNode } from '../../stores/workspace.store'
 import { useConfirmStore } from '../common/confirm-dialog'
@@ -30,6 +32,7 @@ export function WorkspacePage({
   onPublishAsApp,
   embedded = false,
 }: WorkspacePageProps) {
+  const { t } = useTranslation()
   const {
     workspace,
     selectedNodeId,
@@ -73,11 +76,15 @@ export function WorkspacePage({
     [selectedNodeId, tree, mutations.uploadFile.mutate],
   )
 
-  const { getRootProps, getInputProps } = useDropzone({
+  const dropzoneOptions = {
     onDrop,
     noClick: true,
     noKeyboard: true,
-  })
+    multiple: true,
+  } as unknown as Parameters<typeof useDropzone>[0]
+
+  const { getRootProps, getInputProps } = useDropzone(dropzoneOptions)
+  const inputProps = getInputProps() as React.InputHTMLAttributes<HTMLInputElement>
 
   /* Clipboard actions */
   const handleCopy = useCallback(() => {
@@ -366,15 +373,15 @@ export function WorkspacePage({
   return (
     <div
       {...getRootProps()}
-      className={
-        embedded
-          ? 'flex-1 flex flex-col min-h-0 overflow-hidden rounded-[32px] border border-border-subtle bg-[var(--glass-bg)] backdrop-blur-2xl shadow-[var(--shadow-soft)] relative'
-          : 'flex-1 flex flex-col glass-panel overflow-hidden h-full relative min-h-0'
-      }
+      className={cn(
+        'relative flex flex-1 flex-col overflow-hidden min-h-0',
+        embedded ? 'bg-transparent' : 'glass-panel h-full',
+      )}
     >
-      <input {...getInputProps()} />
+      <input {...inputProps} />
 
       <WorkspaceToolbar
+        embedded={embedded}
         workspaceName={workspace?.name ?? ''}
         stats={stats}
         onClose={onClose}
@@ -388,9 +395,17 @@ export function WorkspacePage({
         onRefresh={refetchTree}
       />
 
-      <div className="server-page-content flex flex-1 min-h-0 overflow-hidden">
+      <div
+        className={cn(
+          'flex flex-1 min-h-0 overflow-hidden',
+          embedded ? 'bg-transparent' : 'server-page-content',
+        )}
+      >
         <div
-          className="flex flex-col w-60 shrink-0 overflow-hidden border-r border-border-subtle bg-bg-tertiary/30 backdrop-blur-xl"
+          className={cn(
+            'flex w-64 shrink-0 flex-col overflow-hidden border-r border-border-subtle',
+            embedded ? 'bg-bg-secondary/10' : 'bg-bg-tertiary/30 backdrop-blur-xl',
+          )}
           onContextMenu={handleBlankContextMenu}
         >
           <WorkspaceTree
@@ -418,11 +433,25 @@ export function WorkspacePage({
             onClose={() => setActiveFileId(null)}
           />
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-text-muted gap-3">
-            <div className="w-16 h-16 rounded-[24px] bg-bg-tertiary/30 backdrop-blur-sm border border-border-subtle flex items-center justify-center">
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-text-muted">
+            <div
+              className={cn(
+                'flex h-16 w-16 items-center justify-center rounded-[24px] border border-border-subtle',
+                embedded ? 'bg-bg-secondary/10' : 'bg-bg-tertiary/30 backdrop-blur-sm',
+              )}
+            >
               <Eye size={28} strokeWidth={1} className="opacity-30" />
             </div>
-            <p className="text-[13px] text-text-muted/70 font-bold italic">选择文件以预览</p>
+            <div className="space-y-1 text-center">
+              <p className="text-[13px] font-black text-text-primary/80">
+                {t('workspace.previewEmptyTitle', { defaultValue: '选择文件以预览' })}
+              </p>
+              <p className="text-xs font-medium text-text-muted/70">
+                {t('workspace.previewEmptyDesc', {
+                  defaultValue: '左侧可搜索、上传或整理工作区内容',
+                })}
+              </p>
+            </div>
           </div>
         )}
       </div>
