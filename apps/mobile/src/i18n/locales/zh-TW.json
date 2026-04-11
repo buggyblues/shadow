@@ -425,7 +425,14 @@
     "inChannel": "已加入頻道",
     "inviteMembers": "邀請成員",
     "searchMembers": "搜尋成員...",
-    "allMembersAdded": "所有伺服器成員已在此頻道中"
+    "allMembersAdded": "所有伺服器成員已在此頻道中",
+    "policyBuddyInteraction": "Buddy 互動",
+    "policyReplyToBuddy": "回覆其他 Buddy 的訊息",
+    "policyReplyToBuddyDesc": "允許此 Buddy 回覆頻道中其他 Buddy 傳送的訊息",
+    "policyMaxBuddyChainDepth": "最大對話鏈深度",
+    "policyMaxBuddyChainDepthDesc": "防止 Buddy 之間無限循環對話（預設：3）",
+    "policySmartReply": "智能回覆",
+    "policySmartReplyDesc": "跳過明顯針對其他人的訊息（如 @了別人但沒 @ 自己）"
   },
   "features": {
     "pageTitle": "所有你需要的協作功能",

@@ -428,7 +428,14 @@
     "inChannel": "채널 참여 중",
     "inviteMembers": "멤버 초대",
     "searchMembers": "멤버 검색...",
-    "allMembersAdded": "모든 서버 멤버가 이 채널에 이미 참여 중입니다"
+    "allMembersAdded": "모든 서버 멤버가 이 채널에 이미 참여 중입니다",
+    "policyBuddyInteraction": "Buddy 간 상호작용",
+    "policyReplyToBuddy": "다른 Buddy의 메시지에 답장",
+    "policyReplyToBuddyDesc": "이 Buddy가 채널 내 다른 Buddy가 보낸 메시지에 답장할 수 있도록 허용합니다",
+    "policyMaxBuddyChainDepth": "최대 대화 체인 깊이",
+    "policyMaxBuddyChainDepthDesc": "Buddy 간 무한 루프를 방지합니다 (기본값: 3)",
+    "policySmartReply": "스마트 답장",
+    "policySmartReplyDesc": "명백히 다른 사람을 대상으로 하는 메시지를 건너뜁니다 (예: 다른 사람을 @멘션했지만 이 Buddy는 포함되지 않은 경우)"
   },
   "features": {
     "pageTitle": "필요한 모든 협업 기능",

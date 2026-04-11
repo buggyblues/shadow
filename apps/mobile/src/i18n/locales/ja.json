@@ -428,7 +428,14 @@
     "inChannel": "参加中",
     "inviteMembers": "メンバーを招待",
     "searchMembers": "メンバーを検索...",
-    "allMembersAdded": "全てのサーバーメンバーがこのチャンネルに参加済みです"
+    "allMembersAdded": "全てのサーバーメンバーがこのチャンネルに参加済みです",
+    "policyBuddyInteraction": "Buddy 間のやり取り",
+    "policyReplyToBuddy": "他の Buddy のメッセージに返信",
+    "policyReplyToBuddyDesc": "この Buddy がチャンネル内の他の Buddy からのメッセージに返信できるようにします",
+    "policyMaxBuddyChainDepth": "最大会話チェーン深度",
+    "policyMaxBuddyChainDepthDesc": "Buddy 間の無限ループを防ぎます（デフォルト: 3）",
+    "policySmartReply": "スマート返信",
+    "policySmartReplyDesc": "明らかに他のユーザー宛てのメッセージをスキップします（例：他の人を @メンションしているが、この Buddy は含まれていない場合）"
   },
   "features": {
     "pageTitle": "必要なコラボ機能がすべて揃っています",
