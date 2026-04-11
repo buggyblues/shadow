@@ -41,7 +41,8 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
       MINIO_BUCKET: shadow
-      JWT_SECRET: shadow-dev-secret
+      # CI test secret — never used in production
+      JWT_SECRET: ci-test-secret-do-not-use-in-prod
       OAUTH_BASE_URL: http://localhost:3000
       CORS_ORIGIN: http://localhost:3000
       ADMIN_EMAIL: admin@shadowob.app
