@@ -42,8 +42,6 @@ export function createApp(container: AppContainer) {
     return c.json(
       {
         error: status >= 500 ? 'Internal Server Error' : message,
-        // Beta: always include detail for easier debugging
-        ...(status >= 500 ? { detail: message } : {}),
       },
       status as 400,
     )
