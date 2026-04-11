@@ -450,18 +450,25 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
                       queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
                     }
                     if (ch.type === 'voice') {
-                      // Voice channel: open voice panel instead of navigating
+                      // Voice channel: join voice + navigate to a text channel for chat
                       const voiceStore = useVoiceStore.getState()
                       if (voiceStore.activeChannelId === ch.id) {
-                        // Already in this channel, do nothing
+                        // Already in this channel, ensure a text channel is active
+                        if (!useChatStore.getState().activeChannelId && textChannels.length > 0) {
+                          handleSelectChannel(textChannels[0]!.id)
+                        }
                         return
                       }
-                      // Leave previous channel if any
+                      // Leave previous voice channel if any
                       if (voiceStore.activeChannelId) {
                         voiceStore.leaveChannel()
                       }
                       // Join new voice channel
                       voiceStore.joinChannel(ch.id, ch.name)
+                      // Navigate to a text channel so chat area is visible
+                      if (!useChatStore.getState().activeChannelId && textChannels.length > 0) {
+                        handleSelectChannel(textChannels[0]!.id)
+                      }
                     } else {
                       handleSelectChannel(ch.id)
                     }
