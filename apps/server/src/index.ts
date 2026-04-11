@@ -14,6 +14,7 @@ import { db } from './db'
 import { users } from './db/schema'
 import { randomFixedDigits } from './lib/id'
 import { logger } from './lib/logger'
+import { verifyToken } from './lib/jwt'
 import { setupWebSocket } from './ws'
 
 const PORT = Number(process.env.PORT ?? 3002)
@@ -118,6 +119,35 @@ async function main() {
   // /api/app-proxy-ws/:appId/*
   const appProxyWss = new WebSocketServer({ noServer: true })
 
+  /**
+   * Extract and verify JWT token from WebSocket upgrade request.
+   * Supports both query parameter (?token=...) and Authorization Bearer header.
+   */
+  function extractWsAuthToken(req: import('http').IncomingMessage): { userId: string; email: string; username: string } | null {
+    // Try query parameter first (browser WebSocket API can't set custom headers)
+    const reqUrl = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
+    const queryToken = reqUrl.searchParams.get('token')
+    if (queryToken) {
+      try {
+        return verifyToken(queryToken)
+      } catch {
+        return null
+      }
+    }
+
+    // Fallback: Authorization header (for non-browser clients)
+    const authHeader = req.headers['authorization']
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        return verifyToken(authHeader.slice(7))
+      } catch {
+        return null
+      }
+    }
+
+    return null
+  }
+
   server.on('upgrade', async (req, socket, head) => {
     try {
       const reqUrl = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
@@ -127,6 +157,14 @@ async function main() {
       const appId = match[1]
       const pathPart = match[2] ?? ''
       if (!appId) {
+        socket.destroy()
+        return
+      }
+
+      // Authenticate the WebSocket connection
+      const authPayload = extractWsAuthToken(req)
+      if (!authPayload) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
         socket.destroy()
         return
       }
