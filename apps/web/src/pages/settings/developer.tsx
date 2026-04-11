@@ -5,7 +5,7 @@ import { AlertTriangle, Copy, Eye, EyeOff, Pencil, Plus, RotateCw, Trash2 } from
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
-import { SettingsCard, SettingsPanel } from './_shared'
+import { SettingsCard, SettingsHeader, SettingsPanel } from './_shared'
 
 interface OAuthApp {
   id: string
@@ -136,8 +136,20 @@ export function DeveloperSettings() {
 
   return (
     <SettingsPanel>
-      <div className="flex justify-end -mt-2">
-        <Button variant="primary" size="sm" type="button" onClick={() => setShowCreateForm(true)}>
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <SettingsHeader
+          titleKey="oauth.developerTitle"
+          titleFallback="开发者设置"
+          descKey="oauth.developerDesc"
+          descFallback="管理你的 OAuth 应用，接入 Shadow 开放平台"
+        />
+
+        <Button
+          size="sm"
+          type="button"
+          onClick={() => setShowCreateForm(true)}
+          className="self-start"
+        >
           <Plus size={16} />
           {t('oauth.createApp', '创建应用')}
         </Button>
@@ -519,12 +531,7 @@ function CreateAppForm({
         <Button variant="ghost" size="sm" type="button" onClick={onCancel}>
           {t('common.cancel', '取消')}
         </Button>
-        <Button
-          variant="primary"
-          size="sm"
-          type="submit"
-          disabled={isPending || !name.trim() || !redirectUri.trim()}
-        >
+        <Button size="sm" type="submit" disabled={isPending || !name.trim() || !redirectUri.trim()}>
           {isPending ? t('oauth.creating', '创建中...') : t('oauth.createApp', '创建应用')}
         </Button>
       </div>
@@ -646,7 +653,6 @@ function EditAppForm({
           {t('common.cancel', '取消')}
         </Button>
         <Button
-          variant="primary"
           size="sm"
           type="submit"
           disabled={isPending || !name.trim() || !redirectUri.trim()}
