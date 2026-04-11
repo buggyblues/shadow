@@ -6,6 +6,45 @@ import { presenceKeys } from '../lib/redis'
 
 const ACTIVITY_TTL = 60 // seconds — auto-expire safety net
 
+/**
+ * Broadcast presence change to only the rooms where the user is active:
+ * - All channel rooms the user is a member of
+ * - All DM rooms the user participates in
+ *
+ * This replaces the previous io.emit() which wasted bandwidth sending
+ * to every connected client regardless of relevance.
+ */
+async function broadcastPresenceToRooms(
+  io: SocketIOServer,
+  container: AppContainer,
+  userId: string,
+  payload: { userId: string; status: string },
+): Promise<void> {
+  try {
+    const channelMemberDao = container.resolve('channelMemberDao')
+    const channelIds = await channelMemberDao.getAllChannelIds(userId)
+
+    // Broadcast to all channel rooms
+    for (const channelId of channelIds) {
+      io.to(`channel:${channelId}`).emit('presence:change', payload)
+    }
+
+    // Broadcast to DM rooms
+    try {
+      const dmService = container.resolve('dmService')
+      const dmChannels = await dmService.getUserChannels(userId)
+      for (const dm of dmChannels) {
+        io.to(`dm:${dm.id}`).emit('presence:change', payload)
+      }
+    } catch {
+      // DM service may not be available — non-critical
+    }
+  } catch (err) {
+    logger.warn({ err, userId }, 'Failed to scope presence broadcast to rooms')
+    // Fallback: don't broadcast rather than broadcast to everyone
+  }
+}
+
 export function setupPresenceGateway(
   io: SocketIOServer,
   container: AppContainer,
@@ -23,7 +62,7 @@ export function setupPresenceGateway(
         if (wasEmpty) {
           const userDao = container.resolve('userDao')
           void userDao.updateStatus(userId, 'online')
-          io.emit('presence:change', { userId, status: 'online' })
+          void broadcastPresenceToRooms(io, container, userId, { userId, status: 'online' })
         }
       }
     })
@@ -37,7 +76,7 @@ export function setupPresenceGateway(
           if (size === 1) {
             const userDao = container.resolve('userDao')
             void userDao.updateStatus(userId, 'online')
-            io.emit('presence:change', { userId, status: 'online' })
+            void broadcastPresenceToRooms(io, container, userId, { userId, status: 'online' })
           }
         }
       } catch (err) {
@@ -51,7 +90,7 @@ export function setupPresenceGateway(
       async ({ status }: { status: 'online' | 'idle' | 'dnd' | 'offline' }) => {
         const userDao = container.resolve('userDao')
         await userDao.updateStatus(userId, status)
-        io.emit('presence:change', { userId, status })
+        await broadcastPresenceToRooms(io, container, userId, { userId, status })
       },
     )
 
@@ -95,7 +134,7 @@ export function setupPresenceGateway(
             await redis.del(presenceKeys.userActivity(userId))
             const userDao = container.resolve('userDao')
             void userDao.updateStatus(userId, 'offline')
-            io.emit('presence:change', { userId, status: 'offline' })
+            void broadcastPresenceToRooms(io, container, userId, { userId, status: 'offline' })
           }
         }
       } catch (err) {
@@ -137,7 +176,7 @@ export async function forceDisconnectUser(
     }
     const userDao = container.resolve('userDao')
     void userDao.updateStatus(userId, 'offline')
-    io.emit('presence:change', { userId, status: 'offline' })
+    void broadcastPresenceToRooms(io, container, userId, { userId, status: 'offline' })
   } catch (err) {
     logger.warn({ err, userId }, 'Failed to force-disconnect user')
   }
