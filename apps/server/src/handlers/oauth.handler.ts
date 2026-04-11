@@ -150,7 +150,7 @@ export function createOAuthHandler(container: AppContainer) {
     const oauthService = container.resolve('oauthService')
     const authHeader = c.req.header('Authorization')
     if (!authHeader?.startsWith('Bearer ')) {
-      return c.json({ error: 'Missing access token' }, 401)
+      return c.json({ ok: false, error: 'Missing access token' }, 401)
     }
     const token = authHeader.slice(7)
     const result = await oauthService.getUserInfo(token)

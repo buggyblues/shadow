@@ -34,7 +34,9 @@
     "yes": "Yes",
     "no": "No",
     "search": "Search",
-    "noResults": "No results"
+    "noResults": "No results",
+    "avatarUploaded": "Avatar uploaded successfully",
+    "uploadFailed": "Upload failed"
   },
   "nav": {
     "features": "Features",
@@ -375,7 +377,8 @@
     "isTyping": "is typing...",
     "areTyping": "are typing...",
     "copy": "Copy",
-    "edit": "Edit"
+    "edit": "Edit",
+    "copied": "Copied"
   },
   "member": {
     "title": "Members",

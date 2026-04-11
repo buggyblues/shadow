@@ -61,9 +61,9 @@ function CodeBlock({
   const handleCopy = useCallback(async () => {
     await Clipboard.setStringAsync(code)
     setCopied(true)
-    showToast(t('common.copied', 'Copied'), 'success')
+    showToast(t('chat.copied'), 'success')
     timerRef.current = setTimeout(() => setCopied(false), 2000)
-  }, [code])
+  }, [code, t])
 
   useEffect(
     () => () => {

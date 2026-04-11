@@ -34,7 +34,9 @@
     "yes": "是",
     "no": "否",
     "search": "搜索",
-    "noResults": "暂无结果"
+    "noResults": "暂无结果",
+    "avatarUploaded": "头像已上传",
+    "uploadFailed": "上传失败"
   },
   "nav": {
     "features": "特色功能",
@@ -374,7 +376,8 @@
     "isTyping": "正在输入...",
     "areTyping": "正在输入...",
     "copy": "复制",
-    "edit": "编辑"
+    "edit": "编辑",
+    "copied": "已复制"
   },
   "member": {
     "title": "成员",

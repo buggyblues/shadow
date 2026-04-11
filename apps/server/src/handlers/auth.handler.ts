@@ -81,7 +81,7 @@ export function createAuthHandler(container: AppContainer) {
         c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? c.req.header('x-real-ip')
       const userAgent = c.req.header('user-agent')
       await authService.changePassword(user.userId, input, { ipAddress, userAgent })
-      return c.json({ success: true })
+      return c.json({ ok: true })
     },
   )
 
@@ -91,10 +91,10 @@ export function createAuthHandler(container: AppContainer) {
     const agentDao = container.resolve('agentDao')
     const id = c.req.param('id')
     if (!id) {
-      return c.json({ error: 'Missing user id' }, 400)
+      return c.json({ ok: false, error: 'Missing user id' }, 400)
     }
     const user = await userDao.findById(id)
-    if (!user) return c.json({ error: 'User not found' }, 404)
+    if (!user) return c.json({ ok: false, error: 'User not found' }, 404)
 
     // If the user is a bot, also return agent info + owner profile
     let agent = null
@@ -293,7 +293,7 @@ export function createAuthHandler(container: AppContainer) {
     const user = c.get('user')
     const { accountId } = c.req.param()
     if (!accountId) {
-      return c.json({ error: 'Missing accountId' }, 400)
+      return c.json({ ok: false, error: 'Missing accountId' }, 400)
     }
     await externalOAuthService.unlinkAccount(user.userId, accountId)
     return c.json({ ok: true })

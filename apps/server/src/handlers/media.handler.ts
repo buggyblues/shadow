@@ -16,7 +16,7 @@ export function createMediaHandler(container: AppContainer) {
     const file = body.file
 
     if (!file || !(file instanceof File)) {
-      return c.json({ error: 'No file provided' }, 400)
+      return c.json({ ok: false, error: 'No file provided' }, 400)
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
@@ -113,7 +113,7 @@ export function createMediaHandler(container: AppContainer) {
       const url = await mediaService.getPresignedUrl(id)
       return c.redirect(url)
     } catch {
-      return c.json({ error: 'File not found' }, 404)
+      return c.json({ ok: false, error: 'File not found' }, 404)
     }
   })
 

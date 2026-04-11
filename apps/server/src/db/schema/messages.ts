@@ -1,4 +1,4 @@
-import { boolean, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { boolean, index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 import { channels } from './channels'
 import { threads } from './threads'
 import { users } from './users'
@@ -31,21 +31,29 @@ export interface MessageMetadata {
   [key: string]: unknown
 }
 
-export const messages = pgTable('messages', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  content: text('content').notNull(),
-  channelId: uuid('channel_id')
-    .notNull()
-    .references(() => channels.id, { onDelete: 'cascade' }),
-  authorId: uuid('author_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  threadId: uuid('thread_id').references(() => threads.id, { onDelete: 'set null' }),
-  replyToId: uuid('reply_to_id'),
-  isEdited: boolean('is_edited').default(false).notNull(),
-  isPinned: boolean('is_pinned').default(false).notNull(),
-  /** Metadata for agent chains, custom data, etc. */
-  metadata: jsonb('metadata').$type<MessageMetadata>(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-})
+export const messages = pgTable(
+  'messages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    content: text('content').notNull(),
+    channelId: uuid('channel_id')
+      .notNull()
+      .references(() => channels.id, { onDelete: 'cascade' }),
+    authorId: uuid('author_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    threadId: uuid('thread_id').references(() => threads.id, { onDelete: 'set null' }),
+    replyToId: uuid('reply_to_id'),
+    isEdited: boolean('is_edited').default(false).notNull(),
+    isPinned: boolean('is_pinned').default(false).notNull(),
+    /** Metadata for agent chains, custom data, etc. */
+    metadata: jsonb('metadata').$type<MessageMetadata>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    messagesChannelIdIdx: index('messages_channel_id_idx').on(t.channelId),
+    messagesThreadIdIdx: index('messages_thread_id_idx').on(t.threadId),
+    messagesCreatedAtIdx: index('messages_created_at_idx').on(t.createdAt),
+  }),
+)

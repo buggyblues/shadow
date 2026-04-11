@@ -34,7 +34,9 @@
     "yes": "是",
     "no": "否",
     "search": "搜尋",
-    "noResults": "暫無結果"
+    "noResults": "暫無結果",
+    "avatarUploaded": "頭像已上傳",
+    "uploadFailed": "上傳失敗"
   },
   "nav": {
     "features": "特色功能",
@@ -373,9 +375,7 @@
     "areTyping": "正在輸入...",
     "copy": "複製",
     "edit": "編輯",
-    "micPermissionDenied": "語音輸入需要麥克風權限",
-    "speechLang": "zh-TW",
-    "voiceInputUnavailable": "此版本不支援語音輸入，請使用開發版本。"
+    "copied": "已複製"
   },
   "member": {
     "title": "成員",
@@ -432,12 +432,12 @@
     "searchMembers": "搜尋成員...",
     "allMembersAdded": "所有伺服器成員已在此頻道中",
     "policyBuddyInteraction": "Buddy 互動",
-    "policyReplyToBuddy": "回覆其他 Buddy 的訊息",
-    "policyReplyToBuddyDesc": "允許此 Buddy 回覆頻道中其他 Buddy 傳送的訊息",
     "policyMaxBuddyChainDepth": "最大對話鏈深度",
-    "policyMaxBuddyChainDepthDesc": "防止 Buddy 之間無限循環對話（預設：3）",
-    "policySmartReply": "智能回覆",
-    "policySmartReplyDesc": "跳過明顯針對其他人的訊息（如 @了別人但沒 @ 自己）"
+    "policyMaxBuddyChainDepthDesc": "防止 Buddy 之間無限循環（預設值：3）",
+    "policyReplyToBuddy": "回覆其他 Buddy 訊息",
+    "policyReplyToBuddyDesc": "允許此 Buddy 回覆頻道中其他 Buddy 的訊息",
+    "policySmartReply": "智慧回覆",
+    "policySmartReplyDesc": "跳過明確針對他人的訊息（例如 @提及其他人而非此 Buddy）"
   },
   "features": {
     "pageTitle": "所有你需要的協作功能",
@@ -756,7 +756,56 @@
     "members": "成員",
     "joinButton": "加入",
     "enterButton": "進入",
-    "public": "公開"
+    "public": "公開",
+    "daysAgo": "{{count}}天前",
+    "deviceTier": {
+      "highEnd": "高階",
+      "lowEnd": "入門",
+      "midRange": "中階",
+      "unknown": "不明"
+    },
+    "emptyDesc": "成為第一個建立社群的人！",
+    "emptyTitle": "這裡空空如也",
+    "filter": {
+      "apply": "套用",
+      "ascending": "遞增",
+      "clear": "清除",
+      "descending": "遞減",
+      "searchPlaceholder": "搜尋頻道...",
+      "showArchived": "顯示已封存",
+      "sort": {
+        "activity": "活躍度",
+        "created": "建立時間",
+        "default": "預設",
+        "lastMessage": "最新訊息",
+        "updated": "更新時間"
+      },
+      "sortBy": "排序方式",
+      "title": "篩選器"
+    },
+    "filters": {
+      "all": "全部",
+      "channels": "頻道",
+      "rentals": "租賃",
+      "servers": "伺服器"
+    },
+    "heat": {
+      "hot": "熱門"
+    },
+    "hoursAgo": "{{count}}小時前",
+    "joinToView": "加入後查看",
+    "justNow": "剛剛",
+    "loadMore": "載入更多...",
+    "minutesAgo": "{{count}}分鐘前",
+    "noChannels": "沒有可用的活躍頻道",
+    "noMore": "沒有更多了",
+    "noRentals": "沒有可用的活躍租賃",
+    "noSearchResults": "沒有結果",
+    "noSearchResultsDesc": "試試其他關鍵字",
+    "rentedSince": "已租賃",
+    "unknownAgent": "未知 Buddy",
+    "unknownListing": "未知掛單",
+    "unknownUser": "未知用戶"
   },
   "notification": {
     "title": "通知",
@@ -1136,14 +1185,14 @@
     "sortBySize": "按大小排序"
   },
   "splash": {
-    "welcome": "歡迎來到 Shadow",
-    "welcomeDesc": "構建你的 AI 社群，讓搭子成為你的隊友",
+    "buddy": "AI 助理 Buddy",
+    "buddyDesc": "在頻道中加入 AI 助理，協助回答問題和執行任務",
     "chat": "即時聊天",
-    "chatDesc": "在頻道中與社群成員即時交流，支援 Markdown、圖片、表情",
-    "buddy": "AI 搭子 Buddy",
-    "buddyDesc": "添加 AI 搭子到頻道，讓它幫你回答問題、執行任務",
-    "community": "創建社群",
-    "communityDesc": "創建你自己的伺服器，邀請志同道合的朋友加入",
-    "getStarted": "開始使用"
+    "chatDesc": "在頻道中與社群聊天，支援 Markdown、圖片和表情符號",
+    "community": "建立社群",
+    "communityDesc": "建立你自己的伺服器，邀請志同道合的朋友",
+    "getStarted": "立即開始",
+    "welcome": "歡迎來到蝦豆",
+    "welcomeDesc": "建立你的 AI 社群，讓 Agent 成為你的隊友"
   }
 }

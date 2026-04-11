@@ -101,6 +101,8 @@ jobs:
     name: Unit/Integration tests
     runs-on: ubuntu-latest
     needs: changed-files
+    env:
+      JWT_SECRET: ci-test-secret-do-not-use-in-prod
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -120,6 +122,8 @@ jobs:
   e2e:
     name: E2E via docker-compose
     runs-on: ubuntu-latest
+    env:
+      JWT_SECRET: ci-test-secret-do-not-use-in-prod
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -129,6 +133,10 @@ jobs:
 
       - name: Run E2E stack
         shell: bash
+        env:
+          JWT_SECRET: e2e-test-secret-not-for-production
+          ADMIN_EMAIL: admin@shadowob.app
+          ADMIN_PASSWORD: admin123456
         run: |
           docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from e2e-runner e2e-runner
 

@@ -54,9 +54,9 @@ export function AvatarEditor({ value, userId, onChange }: AvatarEditorProps) {
         body: formData,
       })
       onChange(data.url)
-      showToast(t('common.avatarUploaded', '头像已上传'))
+      showToast(t('common.avatarUploaded'))
     } catch (err) {
-      showToast(err instanceof Error ? err.message : t('common.uploadFailed', '上传失败'))
+      showToast(err instanceof Error ? err.message : t('common.uploadFailed'))
     } finally {
       setUploading(false)
     }

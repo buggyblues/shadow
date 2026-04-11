@@ -94,7 +94,7 @@ export function createChannelHandler(container: AppContainer) {
     const channelService = container.resolve('channelService')
     const id = c.req.param('id')
     await channelService.delete(id)
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // PATCH /api/servers/:serverId/channels/positions
@@ -130,7 +130,7 @@ export function createChannelHandler(container: AppContainer) {
       serverDao.getMember(channel.serverId, targetUserId),
     ])
     if (!requesterServerMember) {
-      return c.json({ error: 'Not a member of this server' }, 403)
+      return c.json({ ok: false, error: 'Not a member of this server' }, 403)
     }
     if (!targetServerMember) {
       // If target is a bot, auto-add to server as member
@@ -140,7 +140,7 @@ export function createChannelHandler(container: AppContainer) {
         const serverService = container.resolve('serverService')
         await serverService.addBotMember(channel.serverId, targetUserId)
       } else {
-        return c.json({ error: 'Target user is not a server member' }, 400)
+        return c.json({ ok: false, error: 'Target user is not a server member' }, 400)
       }
     }
 
@@ -150,12 +150,12 @@ export function createChannelHandler(container: AppContainer) {
     if (isSelfJoin) {
       // Self-join is allowed only for public channels
       if (channel.isPrivate) {
-        return c.json({ error: 'Private channel requires an invite' }, 403)
+        return c.json({ ok: false, error: 'Private channel requires an invite' }, 403)
       }
     } else {
       // Inviting others requires inviter already in channel
       if (!requesterInChannel) {
-        return c.json({ error: 'Only channel members can invite others' }, 403)
+        return c.json({ ok: false, error: 'Only channel members can invite others' }, 403)
       }
     }
 
@@ -207,7 +207,7 @@ export function createChannelHandler(container: AppContainer) {
       /* non-critical */
     }
 
-    return c.json({ success: true }, 201)
+    return c.json({ ok: true }, 201)
   })
 
   // DELETE /api/channels/:id/members/:userId — remove a user from a channel
@@ -239,7 +239,7 @@ export function createChannelHandler(container: AppContainer) {
       /* non-critical */
     }
 
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // PUT /api/channels/:channelId/agents/:agentId/policy — set buddy policy for a channel
@@ -262,14 +262,14 @@ export function createChannelHandler(container: AppContainer) {
     // Verify agent exists and user owns it OR user is server admin/owner
     const agent = await agentService.getById(agentId)
     if (!agent) {
-      return c.json({ error: 'Agent not found' }, 404)
+      return c.json({ ok: false, error: 'Agent not found' }, 404)
     }
     const serverService = container.resolve('serverService')
     const serverMembers = await serverService.getMembers(channel.serverId)
     const requester = serverMembers.find((m) => m.userId === user.userId)
     const isAdminOrOwner = requester?.role === 'owner' || requester?.role === 'admin'
     if (agent.ownerId !== user.userId && !isAdminOrOwner) {
-      return c.json({ error: 'Not authorized' }, 403)
+      return c.json({ ok: false, error: 'Not authorized' }, 403)
     }
 
     // Determine policy fields based on mode
@@ -343,7 +343,7 @@ export function createChannelHandler(container: AppContainer) {
     const channel = await channelService.getById(channelId)
     const agent = await agentService.getById(agentId)
     if (!agent) {
-      return c.json({ error: 'Agent not found' }, 404)
+      return c.json({ ok: false, error: 'Agent not found' }, 404)
     }
 
     // Try channel-level policy first, fall back to server default
@@ -378,7 +378,7 @@ export function createChannelHandler(container: AppContainer) {
     // Broadcast channel update to all users in the channel
     io.to(`channel:${id}`).emit('channel:updated', { id, isArchived: true })
 
-    return c.json({ success: true, channel })
+    return c.json({ ok: true, channel })
   })
 
   // POST /api/channels/:id/unarchive — unarchive a channel
@@ -391,7 +391,7 @@ export function createChannelHandler(container: AppContainer) {
     // Broadcast channel update to all users in the channel
     io.to(`channel:${id}`).emit('channel:updated', { id, isArchived: false })
 
-    return c.json({ success: true, channel })
+    return c.json({ ok: true, channel })
   })
 
   // GET /api/servers/:serverId/channels/archived — list archived channels

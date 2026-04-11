@@ -1,5 +1,42 @@
 // ─── Shadow SDK Types ───────────────────────────────────────────────────────
 
+// ─── Unified API Response Types ────────────────────────────────────────────
+
+/** Standard success response shape */
+export interface ApiSuccess<T = unknown> {
+  ok: true
+  data: T
+}
+
+/** Structured error codes used across the Shadow API */
+export type ApiErrorCode =
+  | 'UNAUTHORIZED'
+  | 'FORBIDDEN'
+  | 'INVALID_TOKEN'
+  | 'TOKEN_EXPIRED'
+  | 'NOT_FOUND'
+  | 'ALREADY_EXISTS'
+  | 'CONFLICT'
+  | 'VALIDATION_ERROR'
+  | 'MISSING_FIELD'
+  | 'INVALID_INPUT'
+  | 'INTERNAL_ERROR'
+  | 'SERVICE_UNAVAILABLE'
+  | 'EXTERNAL_SERVICE_ERROR'
+  | string
+
+/** Standard error response shape */
+export interface ApiError {
+  ok: false
+  error: string | { code: ApiErrorCode; message: string }
+  code?: ApiErrorCode
+}
+
+/** Union type for all API responses */
+export type ApiResponse<T = unknown> = ApiSuccess<T> | ApiError
+
+// ─── Domain Types ─────────────────────────────────────────────────────────
+
 /** Message returned by the Shadow REST API and Socket.IO broadcasts */
 export interface ShadowMessage {
   id: string

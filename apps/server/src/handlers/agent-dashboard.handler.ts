@@ -19,7 +19,7 @@ export function createAgentDashboardHandler(container: AppContainer) {
     } catch (err) {
       const status = (err as { status?: number }).status ?? 500
       const message = (err as Error).message ?? 'Internal Server Error'
-      return c.json({ error: message }, status as 404 | 403 | 500)
+      return c.json({ ok: false, error: message }, status as 404 | 403 | 500)
     }
   })
 
@@ -32,11 +32,11 @@ export function createAgentDashboardHandler(container: AppContainer) {
 
     try {
       await agentDashboardService.addEvent(agentId, body.eventType, body.eventData ?? {})
-      return c.json({ success: true })
+      return c.json({ ok: true })
     } catch (err) {
       const status = (err as { status?: number }).status ?? 500
       const message = (err as Error).message ?? 'Internal Server Error'
-      return c.json({ error: message }, status as 500)
+      return c.json({ ok: false, error: message }, status as 500)
     }
   })
 

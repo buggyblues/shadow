@@ -109,7 +109,7 @@ export function createAgentHandler(container: AppContainer) {
       return c.json(agent, 201)
     } catch (err) {
       const status = (err as { status?: number }).status ?? 500
-      return c.json({ error: (err as Error).message || 'Internal Server Error' }, status as 409)
+      return c.json({ ok: false, error: (err as Error).message || 'Internal Server Error' }, status as 409)
     }
   })
 
@@ -121,7 +121,10 @@ export function createAgentHandler(container: AppContainer) {
     if (ownershipError) return ownershipError
     const agentService = container.resolve('agentService')
     const agent = await agentService.getById(id)
-    return c.json(agent!)
+    if (!agent) {
+      return c.json({ ok: false, error: 'Agent not found' }, 404)
+    }
+    return c.json(agent)
   })
 
   // PATCH /api/agents/:id — update existing agent (owner only, zod validated)
@@ -137,7 +140,7 @@ export function createAgentHandler(container: AppContainer) {
 
     const agent = await agentService.update(id, user.userId, input)
     if (!agent) {
-      return c.json({ error: 'Agent not found' }, 404)
+      return c.json({ ok: false, error: 'Agent not found' }, 404)
     }
     return c.json(agent)
   })
@@ -173,14 +176,14 @@ export function createAgentHandler(container: AppContainer) {
     // Verify ownership
     const agent = await agentService.getById(id)
     if (!agent) {
-      return c.json({ error: 'Agent not found' }, 404)
+      return c.json({ ok: false, error: 'Agent not found' }, 404)
     }
     if (agent.ownerId !== user.userId) {
-      return c.json({ error: 'Forbidden' }, 403)
+      return c.json({ ok: false, error: 'Forbidden' }, 403)
     }
 
     await agentService.delete(id)
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // POST /api/agents/:id/start — start agent (owner only)
@@ -215,7 +218,7 @@ export function createAgentHandler(container: AppContainer) {
       return c.json({ ok: true, status: agent?.status, lastHeartbeat: agent?.lastHeartbeat })
     } catch (err) {
       const status = (err as { status?: number }).status ?? 500
-      return c.json({ error: (err as Error).message }, status as 404 | 403)
+      return c.json({ ok: false, error: (err as Error).message }, status as 404 | 403)
     }
   })
 
@@ -231,7 +234,7 @@ export function createAgentHandler(container: AppContainer) {
       return c.json(config)
     } catch (err) {
       const status = (err as { status?: number }).status ?? 500
-      return c.json({ error: (err as Error).message }, status as 404)
+      return c.json({ ok: false, error: (err as Error).message }, status as 404)
     }
   })
 
@@ -247,7 +250,7 @@ export function createAgentHandler(container: AppContainer) {
       return c.json(policies)
     } catch (err) {
       const status = (err as { status?: number }).status ?? 500
-      return c.json({ error: (err as Error).message }, status as 404)
+      return c.json({ ok: false, error: (err as Error).message }, status as 404)
     }
   })
 
@@ -261,10 +264,10 @@ export function createAgentHandler(container: AppContainer) {
     const agentService = container.resolve('agentService')
     const agent = await agentService.getById(id)
     if (!agent) {
-      return c.json({ error: 'Agent not found' }, 404)
+      return c.json({ ok: false, error: 'Agent not found' }, 404)
     }
     if (agent.ownerId !== user.userId) {
-      return c.json({ error: 'Forbidden' }, 403)
+      return c.json({ ok: false, error: 'Forbidden' }, 403)
     }
 
     const body = await c.req.json<{
@@ -279,7 +282,7 @@ export function createAgentHandler(container: AppContainer) {
     }>()
 
     if (!Array.isArray(body.policies) || body.policies.length === 0) {
-      return c.json({ error: 'policies array is required' }, 400)
+      return c.json({ ok: false, error: 'policies array is required' }, 400)
     }
 
     try {
@@ -287,7 +290,7 @@ export function createAgentHandler(container: AppContainer) {
       return c.json(results)
     } catch (err) {
       const status = (err as { status?: number }).status ?? 500
-      return c.json({ error: (err as Error).message }, status as 404)
+      return c.json({ ok: false, error: (err as Error).message }, status as 404)
     }
   })
 
@@ -302,14 +305,14 @@ export function createAgentHandler(container: AppContainer) {
     const agentService = container.resolve('agentService')
     const agent = await agentService.getById(id)
     if (!agent) {
-      return c.json({ error: 'Agent not found' }, 404)
+      return c.json({ ok: false, error: 'Agent not found' }, 404)
     }
     if (agent.ownerId !== user.userId) {
-      return c.json({ error: 'Forbidden' }, 403)
+      return c.json({ ok: false, error: 'Forbidden' }, 403)
     }
 
     await agentPolicyService.deletePolicy(policyId)
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   return agentHandler

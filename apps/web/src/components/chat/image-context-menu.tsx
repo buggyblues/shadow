@@ -25,6 +25,7 @@ export function ImageContextMenu({
   onClose,
   onSaveToWorkspace,
 }: ImageContextMenuProps) {
+  const { t } = useTranslation()
   const menuRef = useRef<HTMLDivElement>(null)
   const position = useContextMenuPosition(x, y, menuRef, 180)
   const [showInfo, setShowInfo] = useState(false)
@@ -51,7 +52,7 @@ export function ImageContextMenu({
 
   function handleCopyLink() {
     navigator.clipboard.writeText(attachment.url)
-    showToast(t('chat.imageLinkCopied', '链接已复制'), 'success')
+    showToast(t('chat.linkCopied'), 'success')
     onClose()
   }
 

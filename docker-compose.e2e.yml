@@ -4,6 +4,10 @@ x-e2e-node: &e2e-node
   build:
     context: .
     dockerfile: Dockerfile.e2e
+    cache_from:
+      - type=gha
+    cache_to:
+      - type=gha,mode=max
   working_dir: /workspace
   init: true
   environment:
@@ -48,7 +52,8 @@ services:
     environment:
       DATABASE_URL: postgresql://shadow:shadow@postgres:5432/shadow
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: ${JWT_SECRET:-shadow-dev-secret}
+      # E2E test secret — never used in production
+      JWT_SECRET: ci-test-secret-do-not-use-in-prod
       JWT_EXPIRES_IN: 7d
       PORT: 3002
       HOST: 0.0.0.0
