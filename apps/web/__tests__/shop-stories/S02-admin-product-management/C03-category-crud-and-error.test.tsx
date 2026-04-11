@@ -50,7 +50,7 @@ describe('S02/C03 category crud and error', () => {
     await userEvent.click(screen.getByRole('button', { name: '新建类目' }))
 
     await waitFor(() => {
-      expect(showToastMock).toHaveBeenCalledWith('分类创建成功', 'success')
+      expect(showToastMock).toHaveBeenCalledWith('shop.categoryCreated', 'success')
     })
 
     const deleteBtns = screen.getAllByRole('button')
