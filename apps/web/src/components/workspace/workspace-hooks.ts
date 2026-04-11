@@ -190,7 +190,7 @@ export function useWorkspaceMutations({ serverId, refetchTree, invalidateStats }
     onSuccess: () => {
       refetchTree()
       invalidateStats()
-      showToast(t('workspace.fileCloned', '文件已克隆'), 'success')
+      showToast(t('workspace.fileCloned'), 'success')
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })
@@ -213,7 +213,7 @@ export function useWorkspaceMutations({ serverId, refetchTree, invalidateStats }
     },
     onSuccess: () => {
       refetchTree()
-      showToast(t('workspace.moved', '已移动'), 'success')
+      showToast(t('workspace.moved'), 'success')
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })
@@ -233,7 +233,7 @@ export function useWorkspaceMutations({ serverId, refetchTree, invalidateStats }
       refetchTree()
       invalidateStats()
       setClipboard(null)
-      showToast(t('workspace.pasteComplete', '粘贴完成'), 'success')
+      showToast(t('workspace.pasteComplete'), 'success')
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })
@@ -259,9 +259,9 @@ export function useWorkspaceMutations({ serverId, refetchTree, invalidateStats }
         selectMultiple([newFile.id])
         setActiveFileId(newFile.id)
       }
-      showToast(t('workspace.fileUploaded', '文件已上传'), 'success')
+      showToast(t('workspace.fileUploaded'), 'success')
     },
-    onError: (err: Error) => showToast(err.message || t('workspace.uploadFailed', '上传失败'), 'error'),
+    onError: (err: Error) => showToast(err.message || t('workspace.uploadFailed'), 'error'),
   })
 
   const updateFileContent = useMutation({
@@ -319,9 +319,9 @@ export function useWorkspaceMutations({ serverId, refetchTree, invalidateStats }
       refetchTree()
       // Invalidate file content cache
       queryClient.invalidateQueries({ queryKey: ['workspace-file-content', variables.fileId] })
-      showToast(t('workspace.fileSaved', '文件已保存'), 'success')
+      showToast(t('workspace.fileSaved'), 'success')
     },
-    onError: (err: Error) => showToast(err.message || t('workspace.saveFailed', '保存失败'), 'error'),
+    onError: (err: Error) => showToast(err.message || t('workspace.saveFailed'), 'error'),
   })
 
   return {

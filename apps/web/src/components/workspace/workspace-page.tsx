@@ -97,7 +97,7 @@ export function WorkspacePage({
       nodeIds: ids,
       updatedAt: Date.now(),
     })
-    showToast(t('workspace.copiedToClipboard', { count: ids.length }), 'info')
+    showToast(t('workspace.clipboardCopied', { count: ids.length }), 'info')
   }, [workspace, selectedIds, selectedNodeId, setClipboard])
 
   const handleCut = useCallback(() => {
@@ -110,7 +110,7 @@ export function WorkspacePage({
       nodeIds: ids,
       updatedAt: Date.now(),
     })
-    showToast(t('workspace.cutToClipboard', { count: ids.length }), 'info')
+    showToast(t('workspace.clipboardCut', { count: ids.length }), 'info')
   }, [workspace, selectedIds, selectedNodeId, setClipboard])
 
   const handlePaste = useCallback(
@@ -323,16 +323,16 @@ export function WorkspacePage({
       const res = await fetch(`/api/servers/${serverId}/workspace/folders/${folderId}/download`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
-      if (!res.ok) throw new Error(t('workspace.downloadFailed', '下载失败'))
+      if (!res.ok) throw new Error(t('workspace.downloadFailed'))
       const blob = await res.blob()
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
       a.download = `${node.name}.zip`
       a.click()
       URL.revokeObjectURL(a.href)
-      showToast(t('workspace.downloadComplete', '下载完成'), 'success')
+      showToast(t('workspace.downloadComplete'), 'success')
     } catch (err: unknown) {
-      showToast((err as Error).message || t('workspace.downloadFailed', '下载失败'), 'error')
+      showToast((err as Error).message || t('workspace.downloadFailed'), 'error')
     }
   }
 
@@ -343,16 +343,16 @@ export function WorkspacePage({
       const res = await fetch(`/api/servers/${serverId}/workspace/download`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
-      if (!res.ok) throw new Error(t('workspace.downloadFailed', '下载失败'))
+      if (!res.ok) throw new Error(t('workspace.downloadFailed'))
       const blob = await res.blob()
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
       a.download = `${workspace?.name ?? '工作区'}.zip`
       a.click()
       URL.revokeObjectURL(a.href)
-      showToast(t('workspace.downloadComplete', '下载完成'), 'success')
+      showToast(t('workspace.downloadComplete'), 'success')
     } catch (err: unknown) {
-      showToast((err as Error).message || t('workspace.downloadFailed', '下载失败'), 'error')
+      showToast((err as Error).message || t('workspace.downloadFailed'), 'error')
     }
   }
 
