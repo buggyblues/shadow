@@ -32,7 +32,7 @@ export function createProfileCommentHandler(container: AppContainer) {
     const offset = parseInt(c.req.query('offset') ?? '0', 10)
 
     if (!profileUserId) {
-      return c.json({ error: 'Missing profileUserId' }, 400)
+      return c.json({ ok: false, error: 'Missing profileUserId' }, 400)
     }
 
     const comments = await profileCommentDao.findByProfileUserId(
@@ -51,7 +51,7 @@ export function createProfileCommentHandler(container: AppContainer) {
     const profileUserId = c.req.param('profileUserId')
 
     if (!profileUserId) {
-      return c.json({ error: 'Missing profileUserId' }, 400)
+      return c.json({ ok: false, error: 'Missing profileUserId' }, 400)
     }
 
     const stats = await profileCommentDao.getReactionStats(profileUserId)
@@ -67,7 +67,7 @@ export function createProfileCommentHandler(container: AppContainer) {
     const offset = parseInt(c.req.query('offset') ?? '0', 10)
 
     if (!parentId) {
-      return c.json({ error: 'Missing parentId' }, 400)
+      return c.json({ ok: false, error: 'Missing parentId' }, 400)
     }
 
     const replies = await profileCommentDao.findReplies(
@@ -89,17 +89,17 @@ export function createProfileCommentHandler(container: AppContainer) {
     // Verify profile user exists
     const profileUser = await userDao.findById(input.profileUserId)
     if (!profileUser) {
-      return c.json({ error: 'Profile user not found' }, 404)
+      return c.json({ ok: false, error: 'Profile user not found' }, 404)
     }
 
     // If replying, verify parent comment exists and belongs to same profile
     if (input.parentId) {
       const parentComment = await profileCommentDao.findById(input.parentId)
       if (!parentComment) {
-        return c.json({ error: 'Parent comment not found' }, 404)
+        return c.json({ ok: false, error: 'Parent comment not found' }, 404)
       }
       if (parentComment.profileUserId !== input.profileUserId) {
-        return c.json({ error: 'Parent comment does not belong to this profile' }, 400)
+        return c.json({ ok: false, error: 'Parent comment does not belong to this profile' }, 400)
       }
     }
 
@@ -138,15 +138,15 @@ export function createProfileCommentHandler(container: AppContainer) {
     const id = c.req.param('id')
 
     if (!id) {
-      return c.json({ error: 'Missing comment id' }, 400)
+      return c.json({ ok: false, error: 'Missing comment id' }, 400)
     }
 
     const deleted = await profileCommentDao.delete(id, user.userId)
     if (!deleted) {
-      return c.json({ error: 'Comment not found or not authorized' }, 404)
+      return c.json({ ok: false, error: 'Comment not found or not authorized' }, 404)
     }
 
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // POST /api/profile-comments/:id/reactions — Add reaction
@@ -157,18 +157,18 @@ export function createProfileCommentHandler(container: AppContainer) {
     const { emoji } = c.req.valid('json')
 
     if (!id) {
-      return c.json({ error: 'Missing comment id' }, 400)
+      return c.json({ ok: false, error: 'Missing comment id' }, 400)
     }
 
     // Verify comment exists
     const comment = await profileCommentDao.findById(id)
     if (!comment) {
-      return c.json({ error: 'Comment not found' }, 404)
+      return c.json({ ok: false, error: 'Comment not found' }, 404)
     }
 
     const reaction = await profileCommentDao.addReaction(id, user.userId, emoji)
     if (!reaction) {
-      return c.json({ error: 'Already reacted with this emoji' }, 400)
+      return c.json({ ok: false, error: 'Already reacted with this emoji' }, 400)
     }
 
     return c.json(reaction, 201)
@@ -182,15 +182,15 @@ export function createProfileCommentHandler(container: AppContainer) {
     const { emoji } = c.req.valid('json')
 
     if (!id) {
-      return c.json({ error: 'Missing comment id' }, 400)
+      return c.json({ ok: false, error: 'Missing comment id' }, 400)
     }
 
     const deleted = await profileCommentDao.removeReaction(id, user.userId, emoji)
     if (!deleted) {
-      return c.json({ error: 'Reaction not found' }, 404)
+      return c.json({ ok: false, error: 'Reaction not found' }, 404)
     }
 
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   return handler

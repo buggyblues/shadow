@@ -143,7 +143,7 @@ export function createWorkspaceHandler(container: AppContainer) {
     const workspaceService = container.resolve('workspaceService')
     const folderId = c.req.param('folderId')
     await workspaceService.deleteFolder(workspace.id, folderId)
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // GET /servers/:serverId/workspace/folders/search
@@ -218,7 +218,7 @@ export function createWorkspaceHandler(container: AppContainer) {
     const workspaceService = container.resolve('workspaceService')
     const fileId = c.req.param('fileId')
     await workspaceService.deleteFile(fileId)
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // POST /servers/:serverId/workspace/files/:fileId/clone
@@ -273,7 +273,7 @@ export function createWorkspaceHandler(container: AppContainer) {
     const parentId = formData.get('parentId') as string | null
 
     if (!file) {
-      return c.json({ error: 'No file provided' }, 400)
+      return c.json({ ok: false, error: 'No file provided' }, 400)
     }
 
     // Upload via media service
@@ -351,7 +351,7 @@ export function createWorkspaceHandler(container: AppContainer) {
     const folderId = c.req.param('folderId')
     const folder = await workspaceService.getNode(folderId)
     if (!folder || folder.kind !== 'dir') {
-      return c.json({ error: 'Folder not found' }, 404)
+      return c.json({ ok: false, error: 'Folder not found' }, 404)
     }
 
     // Get all descendants

@@ -29,7 +29,7 @@ export function createAdminHandler(container: AppContainer) {
     const userDao = container.resolve('userDao')
     const dbUser = await userDao.findById(user.userId)
     if (!dbUser || !dbUser.isAdmin) {
-      return c.json({ error: 'Forbidden: admin access required' }, 403)
+      return c.json({ ok: false, error: 'Forbidden: admin access required' }, 403)
     }
     await next()
   })
@@ -103,7 +103,7 @@ export function createAdminHandler(container: AppContainer) {
     const inviteCodeDao = container.resolve('inviteCodeDao')
     const id = c.req.param('id')
     await inviteCodeDao.delete(id)
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   adminHandler.patch('/invite-codes/:id/deactivate', async (c) => {
@@ -155,7 +155,7 @@ export function createAdminHandler(container: AppContainer) {
     const userDao = container.resolve('userDao')
     const id = c.req.param('id')
     await userDao.update(id, { displayName: '[deleted]' })
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // ── Servers ───────────────────────────────────────
@@ -172,7 +172,7 @@ export function createAdminHandler(container: AppContainer) {
     const serverDao = container.resolve('serverDao')
     const id = c.req.param('id')
     const server = await serverDao.findById(id)
-    if (!server) return c.json({ error: 'Server not found' }, 404)
+    if (!server) return c.json({ ok: false, error: 'Server not found' }, 404)
     return c.json(server)
   })
 
@@ -200,7 +200,7 @@ export function createAdminHandler(container: AppContainer) {
     const id = c.req.param('id')
     const input = c.req.valid('json')
     const server = await serverDao.findById(id)
-    if (!server) return c.json({ error: 'Server not found' }, 404)
+    if (!server) return c.json({ ok: false, error: 'Server not found' }, 404)
     const updated = await serverDao.update(id, input as Parameters<typeof serverDao.update>[1])
     return c.json(updated)
   })
@@ -209,7 +209,7 @@ export function createAdminHandler(container: AppContainer) {
     const serverDao = container.resolve('serverDao')
     const id = c.req.param('id')
     await serverDao.delete(id)
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // ── Messages ──────────────────────────────────────
@@ -217,7 +217,7 @@ export function createAdminHandler(container: AppContainer) {
     const messageDao = container.resolve('messageDao')
     const id = c.req.param('id')
     await messageDao.delete(id)
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // ── Channels ──────────────────────────────────────
@@ -235,7 +235,7 @@ export function createAdminHandler(container: AppContainer) {
     const channelDao = container.resolve('channelDao')
     const id = c.req.param('id')
     await channelDao.delete(id)
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // ── Agents ────────────────────────────────────────
@@ -263,7 +263,7 @@ export function createAdminHandler(container: AppContainer) {
     const agentService = container.resolve('agentService')
     const id = c.req.param('id')
     await agentService.delete(id)
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // ── Password Change Logs ───────────────────────────

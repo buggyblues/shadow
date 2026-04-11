@@ -51,7 +51,7 @@ export function createVoiceEnhanceHandler(container: AppContainer) {
     try {
       const result = await voiceEnhanceService.enhance(body)
       return c.json({
-        success: true,
+        ok: true,
         data: result,
       })
     } catch (error) {
@@ -60,7 +60,7 @@ export function createVoiceEnhanceHandler(container: AppContainer) {
       if (err.code === 'CONFIG_MISSING') {
         return c.json(
           {
-            success: false,
+            ok: false,
             error: {
               code: 'SERVICE_NOT_CONFIGURED',
               message: 'Voice enhancement service is not configured',
@@ -73,7 +73,7 @@ export function createVoiceEnhanceHandler(container: AppContainer) {
       if (err.code === 'TIMEOUT') {
         return c.json(
           {
-            success: false,
+            ok: false,
             error: {
               code: 'TIMEOUT',
               message: 'Request timed out, try again later',
@@ -85,7 +85,7 @@ export function createVoiceEnhanceHandler(container: AppContainer) {
 
       return c.json(
         {
-          success: false,
+          ok: false,
           error: {
             code: 'ENHANCEMENT_FAILED',
             message: err.message || 'Failed to enhance transcript',
@@ -118,7 +118,7 @@ export function createVoiceEnhanceHandler(container: AppContainer) {
       })
 
       return c.json({
-        success: true,
+        ok: true,
         data: result,
       })
     } catch (error) {
@@ -127,7 +127,7 @@ export function createVoiceEnhanceHandler(container: AppContainer) {
       if (err.code === 'CONFIG_MISSING') {
         return c.json(
           {
-            success: false,
+            ok: false,
             error: {
               code: 'SERVICE_NOT_CONFIGURED',
               message: 'Voice enhancement service is not configured',
@@ -139,7 +139,7 @@ export function createVoiceEnhanceHandler(container: AppContainer) {
 
       return c.json(
         {
-          success: false,
+          ok: false,
           error: {
             code: 'ENHANCEMENT_FAILED',
             message: err.message || 'Failed to enhance transcript',
@@ -160,7 +160,7 @@ export function createVoiceEnhanceHandler(container: AppContainer) {
 
     if (!config) {
       return c.json({
-        success: true,
+        ok: true,
         data: {
           enabled: false,
           configured: false,
@@ -169,7 +169,7 @@ export function createVoiceEnhanceHandler(container: AppContainer) {
     }
 
     return c.json({
-      success: true,
+      ok: true,
       data: {
         enabled: config.enabled,
         configured: true,
@@ -203,13 +203,13 @@ export function createVoiceEnhanceHandler(container: AppContainer) {
       })
 
       return c.json({
-        success: true,
+        ok: true,
         message: 'Configuration updated successfully',
       })
     } catch (error) {
       return c.json(
         {
-          success: false,
+          ok: false,
           error: {
             code: 'CONFIG_UPDATE_FAILED',
             message: error instanceof Error ? error.message : 'Failed to update configuration',
@@ -229,7 +229,7 @@ export function createVoiceEnhanceHandler(container: AppContainer) {
     const health = await voiceEnhanceService.healthCheck()
 
     return c.json({
-      success: health.status === 'ok',
+      ok: health.status === 'ok',
       data: health,
     })
   })

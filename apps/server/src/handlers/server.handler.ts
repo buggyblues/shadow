@@ -41,7 +41,7 @@ export function createServerHandler(container: AppContainer) {
         iconUrl: server.iconUrl,
       })
     } catch {
-      return c.json({ error: 'Invalid invite code' }, 404)
+      return c.json({ ok: false, error: 'Invalid invite code' }, 404)
     }
   })
 
@@ -95,7 +95,7 @@ export function createServerHandler(container: AppContainer) {
     const resolvedId = isUuid ? id : (await serverService.getBySlug(id)).id
     const user = c.get('user')
     await serverService.delete(resolvedId, user.userId)
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // POST /api/servers/:id/join
@@ -209,7 +209,7 @@ export function createServerHandler(container: AppContainer) {
       }
     }
 
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // GET /api/servers/:id/members
@@ -279,7 +279,7 @@ export function createServerHandler(container: AppContainer) {
       }
     }
 
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // POST /api/servers/:id/invite/regenerate
@@ -288,7 +288,7 @@ export function createServerHandler(container: AppContainer) {
     const id = c.req.param('id')
     const user = c.get('user')
     const server = await serverService.regenerateInvite(id, user.userId)
-    if (!server) return c.json({ error: 'Server not found' }, 404)
+    if (!server) return c.json({ ok: false, error: 'Server not found' }, 404)
     return c.json({ inviteCode: server.inviteCode })
   })
 
@@ -300,7 +300,7 @@ export function createServerHandler(container: AppContainer) {
     const body = await c.req.json<{ userId: string }>()
     const targetUserId = body.userId
     if (!targetUserId) {
-      return c.json({ error: 'userId is required' }, 400)
+      return c.json({ ok: false, error: 'userId is required' }, 400)
     }
 
     const serverId = await resolveServerId(id)
@@ -309,13 +309,13 @@ export function createServerHandler(container: AppContainer) {
     const members = await serverService.getMembers(serverId)
     const isMember = members.some((m: { userId: string }) => m.userId === user.userId)
     if (!isMember) {
-      return c.json({ error: 'You are not a member of this server' }, 403)
+      return c.json({ ok: false, error: 'You are not a member of this server' }, 403)
     }
 
     // Check if target is already a member
     const alreadyMember = members.some((m: { userId: string }) => m.userId === targetUserId)
     if (alreadyMember) {
-      return c.json({ error: 'User is already a member' }, 409)
+      return c.json({ ok: false, error: 'User is already a member' }, 409)
     }
 
     // Get server info for notification
@@ -339,10 +339,10 @@ export function createServerHandler(container: AppContainer) {
       const io = container.resolve('io')
       io.to(`user:${targetUserId}`).emit('notification:new', notification)
     } catch {
-      return c.json({ error: 'Failed to send invitation' }, 500)
+      return c.json({ ok: false, error: 'Failed to send invitation' }, 500)
     }
 
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // POST /api/servers/:id/agents — add agent(s) to server as members
@@ -355,7 +355,7 @@ export function createServerHandler(container: AppContainer) {
     const body = await c.req.json<{ agentIds: string[] }>()
 
     if (!Array.isArray(body.agentIds) || body.agentIds.length === 0) {
-      return c.json({ error: 'agentIds is required' }, 400)
+      return c.json({ ok: false, error: 'agentIds is required' }, 400)
     }
 
     const results: Array<{ agentId: string; success: boolean; error?: string }> = []

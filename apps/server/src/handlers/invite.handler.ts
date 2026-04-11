@@ -63,7 +63,7 @@ export function createInviteHandler(container: AppContainer) {
     const codes = await inviteCodeDao.findByCreator(user.userId, 1000, 0)
     const owned = codes.find((code) => code.id === id)
     if (!owned) {
-      return c.json({ error: 'Not found or not owned' }, 404)
+      return c.json({ ok: false, error: 'Not found or not owned' }, 404)
     }
 
     const code = await inviteCodeDao.deactivate(id)
@@ -80,11 +80,11 @@ export function createInviteHandler(container: AppContainer) {
     const codes = await inviteCodeDao.findByCreator(user.userId, 1000, 0)
     const owned = codes.find((code) => code.id === id)
     if (!owned) {
-      return c.json({ error: 'Not found or not owned' }, 404)
+      return c.json({ ok: false, error: 'Not found or not owned' }, 404)
     }
 
     await inviteCodeDao.delete(id)
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   return handler

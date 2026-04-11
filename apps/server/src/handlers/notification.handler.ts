@@ -47,7 +47,7 @@ export function createNotificationHandler(container: AppContainer) {
     const notificationService = container.resolve('notificationService')
     const user = c.get('user')
     await notificationService.markAllAsRead(user.userId)
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // POST /api/notifications/read-scope

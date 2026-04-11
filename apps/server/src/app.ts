@@ -42,6 +42,7 @@ export function createApp(container: AppContainer) {
 
     return c.json(
       {
+        ok: false,
         error: status >= 500 ? 'Internal Server Error' : message,
       },
       status as 400,
@@ -134,7 +135,7 @@ export function createApp(container: AppContainer) {
   app.route('/api/discover', createDiscoverHandler(container))
 
   // 404 handler
-  app.notFound((c) => c.json({ error: 'Not Found' }, 404))
+  app.notFound((c) => c.json({ ok: false, error: 'Not Found' }, 404))
 
   return app
 }

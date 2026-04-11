@@ -23,7 +23,7 @@ export function createOAuthAuthMiddleware(container: AppContainer) {
   return async (c: Context, next: Next): Promise<Response | undefined> => {
     const authHeader = c.req.header('Authorization')
     if (!authHeader?.startsWith('Bearer ')) {
-      return c.json({ error: 'Missing access token' }, 401)
+      return c.json({ ok: false, error: 'Missing access token' }, 401)
     }
     const tokenValue = authHeader.slice(7)
 
@@ -32,10 +32,10 @@ export function createOAuthAuthMiddleware(container: AppContainer) {
     const token = await oauthAppDao.findAccessTokenByHash(tokenHash)
 
     if (!token) {
-      return c.json({ error: 'Invalid access token' }, 401)
+      return c.json({ ok: false, error: 'Invalid access token' }, 401)
     }
     if (new Date() > token.expiresAt) {
-      return c.json({ error: 'Access token expired' }, 401)
+      return c.json({ ok: false, error: 'Access token expired' }, 401)
     }
 
     c.set('oauthToken', {
@@ -57,13 +57,13 @@ export function oauthScopeMiddleware(requiredScopes: string[]) {
   return async (c: Context, next: Next): Promise<Response | undefined> => {
     const token = c.get('oauthToken')
     if (!token) {
-      return c.json({ error: 'Missing OAuth context' }, 401)
+      return c.json({ ok: false, error: 'Missing OAuth context' }, 401)
     }
 
     const grantedScopes = token.scope.split(' ')
     const hasAllScopes = requiredScopes.every((s) => grantedScopes.includes(s))
     if (!hasAllScopes) {
-      return c.json({ error: 'insufficient_scope', required: requiredScopes }, 403)
+      return c.json({ ok: false, error: 'insufficient_scope', code: 'FORBIDDEN', required: requiredScopes }, 403)
     }
 
     await next()

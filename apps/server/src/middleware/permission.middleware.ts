@@ -17,7 +17,7 @@ export function requireRole(requiredRole: RequiredRole) {
     const serverId = c.req.param('serverId') ?? c.req.param('id')
 
     if (!serverId) {
-      return c.json({ error: 'Server ID is required' }, 400)
+      return c.json({ ok: false, error: 'Server ID is required' }, 400)
     }
 
     const member = await db
@@ -27,12 +27,12 @@ export function requireRole(requiredRole: RequiredRole) {
       .limit(1)
 
     if (member.length === 0) {
-      return c.json({ error: 'Not a member of this server' }, 403)
+      return c.json({ ok: false, error: 'Not a member of this server' }, 403)
     }
 
     const userRole = member[0]!.role as RequiredRole
     if (ROLE_HIERARCHY[userRole] < ROLE_HIERARCHY[requiredRole]) {
-      return c.json({ error: `Requires ${requiredRole} role or higher` }, 403)
+      return c.json({ ok: false, error: `Requires ${requiredRole} role or higher` }, 403)
     }
 
     await next()

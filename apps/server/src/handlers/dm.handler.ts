@@ -42,7 +42,7 @@ export function createDmHandler(container: AppContainer) {
     // Verify user is a participant of this DM channel
     const isParticipant = await dmService.isParticipant(id, user.userId)
     if (!isParticipant) {
-      return c.json({ error: 'Not a participant of this DM channel' }, 403)
+      return c.json({ ok: false, error: 'Not a participant of this DM channel' }, 403)
     }
 
     const limit = Number(c.req.query('limit') ?? '50')
@@ -80,7 +80,7 @@ export function createDmHandler(container: AppContainer) {
       // Verify participant
       const isParticipant = await dmService.isParticipant(id, user.userId)
       if (!isParticipant) {
-        return c.json({ error: 'Not a participant of this DM channel' }, 403)
+        return c.json({ ok: false, error: 'Not a participant of this DM channel' }, 403)
       }
 
       const message = await dmService.sendMessage(id, user.userId, content, replyToId, attachments)
@@ -133,7 +133,7 @@ export function createDmHandler(container: AppContainer) {
       // Verify participant
       const isParticipant = await dmService.isParticipant(channelId, user.userId)
       if (!isParticipant) {
-        return c.json({ error: 'Not a participant of this DM channel' }, 403)
+        return c.json({ ok: false, error: 'Not a participant of this DM channel' }, 403)
       }
 
       const updated = await dmService.editMessage(messageId, user.userId, content)
@@ -160,7 +160,7 @@ export function createDmHandler(container: AppContainer) {
     // Verify participant
     const isParticipant = await dmService.isParticipant(channelId, user.userId)
     if (!isParticipant) {
-      return c.json({ error: 'Not a participant of this DM channel' }, 403)
+      return c.json({ ok: false, error: 'Not a participant of this DM channel' }, 403)
     }
 
     const deleted = await dmService.deleteMessage(messageId, user.userId)
@@ -176,7 +176,7 @@ export function createDmHandler(container: AppContainer) {
       /* io not yet registered */
     }
 
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // ── DM Reactions ─────────────────────────────────────
@@ -194,11 +194,11 @@ export function createDmHandler(container: AppContainer) {
       // Find the message and verify participant
       const message = await dmService.getMessageById(messageId)
       if (!message) {
-        return c.json({ error: 'Message not found' }, 404)
+        return c.json({ ok: false, error: 'Message not found' }, 404)
       }
       const isParticipant = await dmService.isParticipant(message.dmChannelId, user.userId)
       if (!isParticipant) {
-        return c.json({ error: 'Not a participant of this DM channel' }, 403)
+        return c.json({ ok: false, error: 'Not a participant of this DM channel' }, 403)
       }
 
       const reaction = await dmService.addReaction(messageId, user.userId, emoji)
@@ -229,11 +229,11 @@ export function createDmHandler(container: AppContainer) {
 
     const message = await dmService.getMessageById(messageId)
     if (!message) {
-      return c.json({ error: 'Message not found' }, 404)
+      return c.json({ ok: false, error: 'Message not found' }, 404)
     }
     const isParticipant = await dmService.isParticipant(message.dmChannelId, user.userId)
     if (!isParticipant) {
-      return c.json({ error: 'Not a participant of this DM channel' }, 403)
+      return c.json({ ok: false, error: 'Not a participant of this DM channel' }, 403)
     }
 
     await dmService.removeReaction(messageId, user.userId, emoji)
@@ -251,7 +251,7 @@ export function createDmHandler(container: AppContainer) {
       /* io not yet registered */
     }
 
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // GET /api/dm/messages/:messageId/reactions
@@ -262,11 +262,11 @@ export function createDmHandler(container: AppContainer) {
 
     const message = await dmService.getMessageById(messageId)
     if (!message) {
-      return c.json({ error: 'Message not found' }, 404)
+      return c.json({ ok: false, error: 'Message not found' }, 404)
     }
     const isParticipant = await dmService.isParticipant(message.dmChannelId, user.userId)
     if (!isParticipant) {
-      return c.json({ error: 'Not a participant of this DM channel' }, 403)
+      return c.json({ ok: false, error: 'Not a participant of this DM channel' }, 403)
     }
 
     const reactions = await dmService.getReactions(messageId)

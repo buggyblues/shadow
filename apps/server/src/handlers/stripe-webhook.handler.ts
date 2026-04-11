@@ -14,13 +14,13 @@ export function createStripeWebhookHandler(container: AppContainer) {
   h.post('/', async (c) => {
     if (!stripe) {
       logger.error('[Stripe Webhook] Payment service unavailable — STRIPE_SECRET_KEY not set')
-      return c.json({ error: 'Payment service unavailable' }, 503)
+      return c.json({ ok: false, error: 'Payment service unavailable' }, 503)
     }
 
     const signature = c.req.header('stripe-signature')
     if (!signature) {
       logger.warn('[Stripe Webhook] Missing stripe-signature header')
-      return c.json({ error: 'Missing Stripe signature' }, 400)
+      return c.json({ ok: false, error: 'Missing Stripe signature' }, 400)
     }
 
     // Get raw body for signature verification
@@ -32,7 +32,7 @@ export function createStripeWebhookHandler(container: AppContainer) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       logger.error({ err }, `[Stripe Webhook] Signature verification failed: ${message}`)
-      return c.json({ error: 'Invalid signature' }, 400)
+      return c.json({ ok: false, error: 'Invalid signature' }, 400)
     }
 
     // Process the event
@@ -47,7 +47,7 @@ export function createStripeWebhookHandler(container: AppContainer) {
     } catch (err) {
       logger.error({ err }, '[Stripe Webhook] Error processing event')
       // Return 500 so Stripe retries the webhook delivery automatically
-      return c.json({ error: 'Processing error, will retry' }, 500)
+      return c.json({ ok: false, error: 'Processing error, will retry' }, 500)
     }
 
     return c.json({ received: true })

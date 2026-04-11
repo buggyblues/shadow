@@ -20,7 +20,7 @@ export function createMessageHandler(container: AppContainer) {
     const messageService = container.resolve('messageService')
     const id = c.req.param('id')
     const message = await messageService.getById(id)
-    if (!message) return c.json({ error: 'Message not found' }, 404)
+    if (!message) return c.json({ ok: false, error: 'Message not found' }, 404)
     return c.json(message)
   })
 
@@ -85,7 +85,7 @@ export function createMessageHandler(container: AppContainer) {
 
     // Check if the requester is the bot's owner (can delete bot's messages)
     const message = await messageService.getById(id)
-    if (!message) return c.json({ error: 'Message not found' }, 404)
+    if (!message) return c.json({ ok: false, error: 'Message not found' }, 404)
 
     let canDelete = message.authorId === user.userId
     if (!canDelete && message.authorId) {
@@ -96,7 +96,7 @@ export function createMessageHandler(container: AppContainer) {
       }
     }
     if (!canDelete) {
-      return c.json({ error: 'Not authorized to delete this message' }, 403)
+      return c.json({ ok: false, error: 'Not authorized to delete this message' }, 403)
     }
 
     const deleted = await messageService.deleteById(id)
@@ -112,7 +112,7 @@ export function createMessageHandler(container: AppContainer) {
       /* io not yet registered */
     }
 
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // POST /api/channels/:channelId/threads
@@ -161,7 +161,7 @@ export function createMessageHandler(container: AppContainer) {
     const id = c.req.param('id')
     const user = c.get('user')
     await messageService.deleteThread(id, user.userId)
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // GET /api/threads/:id/messages
@@ -263,7 +263,7 @@ export function createMessageHandler(container: AppContainer) {
       /* io not yet registered */
     }
 
-    return c.json({ success: true })
+    return c.json({ ok: true })
   })
 
   // GET /api/messages/:id/reactions
