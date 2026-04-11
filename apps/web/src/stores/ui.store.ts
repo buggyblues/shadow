@@ -1,10 +1,16 @@
 import { create } from 'zustand'
-import { DEFAULT_BACKGROUND_IMAGE, normalizeBackgroundImageUrl } from '../lib/backgrounds'
+import {
+  DEFAULT_BACKGROUND_IMAGE,
+  getBackgroundOptionIdByUrl,
+  normalizeBackgroundImageUrl,
+  resolveBackgroundImageUrl,
+} from '../lib/backgrounds'
 
 type MobileView = 'servers' | 'channels' | 'chat'
 export type ThemeMode = 'dark' | 'light' | 'system'
 
-const BACKGROUND_NONE_SENTINEL = '__none__'
+const BACKGROUND_NONE_SENTINEL = 'none'
+const LEGACY_BACKGROUND_NONE_SENTINEL = '__none__'
 
 interface UIState {
   /** Current mobile navigation view */
@@ -51,14 +57,17 @@ function applyTheme(theme: ThemeMode) {
 }
 
 function persistBackgroundImage(url: string | null) {
-  localStorage.setItem('shadow-bg-image', url ?? BACKGROUND_NONE_SENTINEL)
+  const optionId = getBackgroundOptionIdByUrl(url)
+  localStorage.setItem('shadow-bg-image', optionId ?? BACKGROUND_NONE_SENTINEL)
 }
 
 function readSavedBackgroundImage() {
   const raw = localStorage.getItem('shadow-bg-image')
   if (raw === null) return DEFAULT_BACKGROUND_IMAGE
-  if (raw === BACKGROUND_NONE_SENTINEL) return null
-  return normalizeBackgroundImageUrl(raw) ?? DEFAULT_BACKGROUND_IMAGE
+  if (raw === BACKGROUND_NONE_SENTINEL || raw === LEGACY_BACKGROUND_NONE_SENTINEL) return null
+  return (
+    resolveBackgroundImageUrl(raw) ?? normalizeBackgroundImageUrl(raw) ?? DEFAULT_BACKGROUND_IMAGE
+  )
 }
 
 const savedTheme = (localStorage.getItem('shadow-theme') as ThemeMode) || 'dark'

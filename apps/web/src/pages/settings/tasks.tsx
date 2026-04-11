@@ -8,7 +8,6 @@ import {
   HelpCircle,
   History,
   Sparkles,
-  Target,
   Trophy,
 } from 'lucide-react'
 import { useState } from 'react'
@@ -16,7 +15,7 @@ import { useTranslation } from 'react-i18next'
 import { PriceDisplay } from '../../components/shop/ui/currency'
 import { fetchApi } from '../../lib/api'
 import { useUIStore } from '../../stores/ui.store'
-import { SettingsCard, SettingsGroup, SettingsHeader, SettingsPanel } from './_shared'
+import { SettingsCard, SettingsNotice, SettingsPanel, SettingsSectionBlock } from './_shared'
 
 const taskGuides: Record<string, string> = {
   create_server:
@@ -186,14 +185,6 @@ export function TaskSettings() {
 
   return (
     <SettingsPanel>
-      <SettingsHeader
-        titleKey="settings.tabTasks"
-        titleFallback="任务中心"
-        descKey="tasks.desc"
-        descFallback="完成任务赚取虾币，支持一次性任务与活动任务。"
-        icon={Target}
-      />
-
       {/* Progress Summary */}
       <SettingsCard className="relative overflow-hidden group bg-gradient-to-br from-primary/10 via-[var(--glass-bg)] to-[var(--glass-bg)] border-primary/20">
         <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-primary/10 transition-colors" />
@@ -222,7 +213,7 @@ export function TaskSettings() {
       </SettingsCard>
 
       {/* Tasks — split into active (top) and completed (bottom) */}
-      <SettingsGroup labelKey="tasks.currentTasks" labelFallback="当前任务">
+      <SettingsSectionBlock titleKey="tasks.currentTasks" titleFallback="当前任务">
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
@@ -297,14 +288,12 @@ export function TaskSettings() {
                         </p>
 
                         {taskGuides[task.key] && (
-                          <div className="p-3 bg-bg-tertiary/50 rounded-xl border border-border-subtle">
-                            <p className="text-[11px] font-black uppercase text-text-muted tracking-widest mb-1.5 flex items-center gap-1.5">
-                              <HelpCircle size={11} /> {t('tasks.tutorial', '操作教程')}
+                          <SettingsNotice title={t('tasks.tutorial', '操作教程')}>
+                            <p className="text-xs font-bold text-text-secondary whitespace-pre-wrap leading-relaxed italic opacity-80 flex items-start gap-1.5">
+                              <HelpCircle size={12} className="mt-0.5 shrink-0 text-primary/70" />
+                              <span>{taskGuides[task.key]}</span>
                             </p>
-                            <p className="text-xs font-bold text-text-secondary whitespace-pre-wrap leading-relaxed italic opacity-80">
-                              {taskGuides[task.key]}
-                            </p>
-                          </div>
+                          </SettingsNotice>
                         )}
 
                         <div className="flex justify-end">
@@ -381,10 +370,10 @@ export function TaskSettings() {
             )}
           </div>
         )}
-      </SettingsGroup>
+      </SettingsSectionBlock>
 
       {/* Reward History */}
-      <SettingsGroup labelKey="tasks.rewardHistory" labelFallback="奖励记录">
+      <SettingsSectionBlock titleKey="tasks.rewardHistory" titleFallback="奖励记录">
         {rewardLogs && rewardLogs.length > 0 ? (
           <div className="space-y-2">
             {rewardLogs.map((log) => (
@@ -412,7 +401,7 @@ export function TaskSettings() {
             className="py-12"
           />
         )}
-      </SettingsGroup>
+      </SettingsSectionBlock>
     </SettingsPanel>
   )
 }

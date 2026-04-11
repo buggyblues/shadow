@@ -29,12 +29,25 @@ export interface ChannelSortState {
 }
 
 export const DEFAULT_SORT: ServerSortConfig = {
-  sortBy: 'position',
-  sortDirection: 'asc',
+  sortBy: 'lastMessageAt',
+  sortDirection: 'desc',
 }
 
-function isTimeSort(by: ChannelSortBy): boolean {
-  return by !== 'position'
+function coerceSortBy(by: ChannelSortBy | undefined): ServerSortConfig['sortBy'] {
+  return by === 'position' ? 'position' : 'lastMessageAt'
+}
+
+function getDirectionForSort(by: ServerSortConfig['sortBy']): ChannelSortDirection {
+  return by === 'position' ? 'asc' : 'desc'
+}
+
+export function normalizeServerSortConfig(config?: Partial<ServerSortConfig>): ServerSortConfig {
+  const sortBy = coerceSortBy(config?.sortBy)
+
+  return {
+    sortBy,
+    sortDirection: getDirectionForSort(sortBy),
+  }
 }
 
 export const useChannelSortStore = create<ChannelSortState>()(
@@ -44,62 +57,49 @@ export const useChannelSortStore = create<ChannelSortState>()(
       lastAccessedAt: {},
 
       setSortBy: (serverId, by) => {
-        const currentConfig = get().serverSortConfigs[serverId] ?? DEFAULT_SORT
-        const nextDirection: ChannelSortDirection =
-          by === 'position'
-            ? 'asc'
-            : by !== currentConfig.sortBy && isTimeSort(by)
-              ? 'desc'
-              : currentConfig.sortDirection
-
         set((state) => ({
           serverSortConfigs: {
             ...state.serverSortConfigs,
-            [serverId]: {
-              ...DEFAULT_SORT,
-              ...state.serverSortConfigs[serverId],
-              sortBy: by,
-              sortDirection: nextDirection,
-            },
+            [serverId]: normalizeServerSortConfig({ sortBy: by }),
           },
         }))
       },
 
       setSortDirection: (serverId, direction) => {
+        const currentConfig = normalizeServerSortConfig(get().serverSortConfigs[serverId])
+        const sortBy =
+          currentConfig.sortBy === 'position' && direction === 'asc' ? 'position' : 'lastMessageAt'
+
         set((state) => ({
           serverSortConfigs: {
             ...state.serverSortConfigs,
-            [serverId]: {
-              ...DEFAULT_SORT,
-              ...state.serverSortConfigs[serverId],
-              sortDirection: direction,
-            },
+            [serverId]: normalizeServerSortConfig({ sortBy }),
           },
         }))
       },
 
       toggleSortDirection: (serverId) => {
-        const currentConfig = get().serverSortConfigs[serverId] ?? DEFAULT_SORT
-        const current = currentConfig.sortDirection
+        const currentConfig = normalizeServerSortConfig(get().serverSortConfigs[serverId])
         set((state) => ({
           serverSortConfigs: {
             ...state.serverSortConfigs,
-            [serverId]: {
-              ...DEFAULT_SORT,
-              ...state.serverSortConfigs[serverId],
-              sortDirection: current === 'asc' ? 'desc' : 'asc',
-            },
+            [serverId]: normalizeServerSortConfig({
+              sortBy: currentConfig.sortBy === 'lastMessageAt' ? 'position' : 'lastMessageAt',
+            }),
           },
         }))
       },
 
       getSortConfig: (serverId) => {
-        return get().serverSortConfigs[serverId] ?? DEFAULT_SORT
+        return normalizeServerSortConfig(get().serverSortConfigs[serverId])
       },
 
       hasCustomSort: (serverId) => {
-        const config = get().serverSortConfigs[serverId]
-        return config ? config.sortBy !== 'position' : false
+        const config = normalizeServerSortConfig(get().serverSortConfigs[serverId])
+        return (
+          config.sortBy !== DEFAULT_SORT.sortBy ||
+          config.sortDirection !== DEFAULT_SORT.sortDirection
+        )
       },
 
       updateLastAccessed: (channelId) => {

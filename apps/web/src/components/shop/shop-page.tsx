@@ -105,12 +105,16 @@ interface ShopPageProps {
   serverId: string
   isAdmin?: boolean
   onClose?: () => void
+  embedded?: boolean
 }
 
-export function ShopPage({ serverId, isAdmin, onClose }: ShopPageProps) {
+export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopPageProps) {
   const { activeProductId, setActiveProductId, overlay, setOverlay } = useShopStore()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const shellClassName = embedded
+    ? 'flex-1 flex flex-col min-h-0 overflow-hidden rounded-[32px] border border-border-subtle bg-[var(--glass-bg)] backdrop-blur-2xl shadow-[var(--shadow-soft)] relative font-sans'
+    : 'flex-1 flex flex-col glass-panel overflow-hidden h-full relative font-sans min-h-0'
 
   const { data: shop, isLoading: isShopLoading } = useQuery({
     queryKey: ['shop', serverId],
@@ -143,7 +147,7 @@ export function ShopPage({ serverId, isAdmin, onClose }: ShopPageProps) {
 
   // Product detail view
   if (activeProductId) {
-    return (
+    const detail = (
       <ProductDetail
         serverId={serverId}
         productId={activeProductId}
@@ -151,12 +155,25 @@ export function ShopPage({ serverId, isAdmin, onClose }: ShopPageProps) {
         onBack={() => setActiveProductId(null)}
       />
     )
+
+    if (!embedded) {
+      return detail
+    }
+
+    return <div className={shellClassName}>{detail}</div>
   }
 
   return (
-    <div className="flex-1 flex flex-col glass-panel overflow-hidden h-full relative font-sans min-h-0">
+    <div className={shellClassName}>
       {/* ── Header ── */}
-      <div className="desktop-drag-titlebar app-header px-4 flex items-center border-b border-border-subtle shrink-0 gap-3 z-20 sticky top-0 transition-colors">
+      <div
+        className={cn(
+          'app-header flex items-center border-b border-border-subtle shrink-0 gap-3 z-20 sticky top-0 transition-colors',
+          embedded
+            ? 'bg-[var(--glass-bg)]/85 px-5 backdrop-blur-2xl'
+            : 'desktop-drag-titlebar px-4',
+        )}
+      >
         {onClose && (
           <Button
             variant="ghost"

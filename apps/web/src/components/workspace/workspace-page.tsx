@@ -19,11 +19,17 @@ interface WorkspacePageProps {
   serverId: string
   onClose?: () => void
   onPublishAsApp?: (node: WorkspaceNode) => void
+  embedded?: boolean
 }
 
 /* --- WorkspacePage --- */
 
-export function WorkspacePage({ serverId, onClose, onPublishAsApp }: WorkspacePageProps) {
+export function WorkspacePage({
+  serverId,
+  onClose,
+  onPublishAsApp,
+  embedded = false,
+}: WorkspacePageProps) {
   const {
     workspace,
     selectedNodeId,
@@ -360,7 +366,11 @@ export function WorkspacePage({ serverId, onClose, onPublishAsApp }: WorkspacePa
   return (
     <div
       {...getRootProps()}
-      className="flex-1 flex flex-col glass-panel overflow-hidden h-full relative min-h-0"
+      className={
+        embedded
+          ? 'flex-1 flex flex-col min-h-0 overflow-hidden rounded-[32px] border border-border-subtle bg-[var(--glass-bg)] backdrop-blur-2xl shadow-[var(--shadow-soft)] relative'
+          : 'flex-1 flex flex-col glass-panel overflow-hidden h-full relative min-h-0'
+      }
     >
       <input {...getInputProps()} />
 

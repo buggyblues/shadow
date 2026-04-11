@@ -53,6 +53,7 @@ interface Channel {
   topic: string | null
   position: number
   isPrivate: boolean
+  isArchived?: boolean
   isMember?: boolean
   createdAt?: string
   updatedAt?: string
@@ -149,17 +150,10 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
   })
 
   // Channel sorting and filter
-  const [filterKeyword, setFilterKeyword] = useState('')
   const [showArchived, setShowArchived] = useState(false)
-  const hasActiveFilter = filterKeyword.trim().length > 0
   const { sortChannels, updateLastAccessed } = useChannelSort(server?.id)
   const sortedChannels = sortChannels(rawChannels)
-  const filteredChannels = hasActiveFilter
-    ? sortedChannels.filter((ch) =>
-        ch.name.toLowerCase().includes(filterKeyword.toLowerCase().trim()),
-      )
-    : sortedChannels
-  const channels = showArchived ? filteredChannels : filteredChannels.filter((ch) => !ch.isArchived)
+  const channels = showArchived ? sortedChannels : sortedChannels.filter((ch) => !ch.isArchived)
 
   const { data: scopedUnread } = useQuery({
     queryKey: ['notification-scoped-unread'],
@@ -546,9 +540,6 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
             <div className="flex items-center gap-1">
               <ChannelSortFilterButton
                 serverId={server.id}
-                filterKeyword={filterKeyword}
-                onFilterChange={setFilterKeyword}
-                hasActiveFilter={hasActiveFilter}
                 showArchived={showArchived}
                 onShowArchivedChange={setShowArchived}
               />

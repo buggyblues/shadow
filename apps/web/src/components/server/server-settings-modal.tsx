@@ -15,6 +15,7 @@ import {
   Settings,
   ShoppingBag,
   Trash2,
+  X,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -102,6 +103,7 @@ export function ServerSettingsModal({
   const [bannerUploading, setBannerUploading] = useState(false)
   const [iconUploading, setIconUploading] = useState(false)
   const [copiedInvite, setCopiedInvite] = useState(false)
+  const activeTabMeta = MODAL_TABS.find((tab) => tab.id === activeTab) ?? MODAL_TABS[0]!
 
   // Initialize draft when dialog opens or server data changes
   useEffect(() => {
@@ -247,8 +249,30 @@ export function ServerSettingsModal({
     <Dialog isOpen={open} onClose={onClose}>
       <DialogContent
         maxWidth="max-w-5xl"
-        className="h-[min(85vh,780px)] p-0 flex flex-col overflow-hidden"
+        hideCloseButton
+        className="h-[min(88vh,820px)] p-0 flex flex-col overflow-hidden"
       >
+        <div className="flex items-center justify-between gap-4 border-b border-border-subtle/80 bg-bg-secondary/20 px-5 py-4 backdrop-blur-xl shrink-0">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-text-muted/50">
+              {t('channel.serverSettings', '服务器设置')}
+            </p>
+            <h2 className="text-sm font-black tracking-tight text-text-primary truncate">
+              {server?.name ?? t(activeTabMeta.labelKey, activeTabMeta.labelFallback)}
+              <span className="mx-2 text-text-muted/35">/</span>
+              <span>{t(activeTabMeta.labelKey, activeTabMeta.labelFallback)}</span>
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border-subtle bg-[var(--glass-bg)] text-text-muted shadow-[var(--shadow-soft)] transition-all hover:-translate-y-0.5 hover:border-primary/25 hover:bg-bg-tertiary/60 hover:text-text-primary active:scale-95"
+            aria-label={t('common.close', '关闭')}
+          >
+            <X size={18} strokeWidth={2.6} />
+          </button>
+        </div>
+
         <div className="flex flex-1 min-h-0">
           {/* Sidebar tabs */}
           <nav className="w-48 shrink-0 border-r border-border-subtle p-4 flex flex-col overflow-y-auto">
@@ -282,7 +306,12 @@ export function ServerSettingsModal({
           </nav>
 
           {/* Content area */}
-          <div className="flex-1 min-w-0 overflow-y-auto p-6">
+          <div
+            className={cn(
+              'flex-1 min-w-0 p-6',
+              isSettingsTab ? 'overflow-y-auto' : 'overflow-hidden',
+            )}
+          >
             {/* Basic Settings */}
             {activeTab === 'basic' && (
               <SettingsPanel className="pb-6">
@@ -501,16 +530,17 @@ export function ServerSettingsModal({
 
             {/* Shop page */}
             {activeTab === 'shop' && (
-              <div className="h-full -m-6">
-                <ShopPage serverId={serverSlug} isAdmin={isOwner} />
+              <div className="h-full">
+                <ShopPage serverId={serverSlug} isAdmin={isOwner} embedded />
               </div>
             )}
 
             {/* Workspace page */}
             {activeTab === 'workspace' && (
-              <div className="h-full -m-6">
+              <div className="h-full">
                 <WorkspacePage
                   serverId={serverSlug}
+                  embedded
                   onPublishAsApp={(node) => {
                     const { setPublishFile, setOverlay, setEditingApp } = useAppStore.getState()
                     setEditingApp(null)

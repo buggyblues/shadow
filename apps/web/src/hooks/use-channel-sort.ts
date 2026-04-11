@@ -1,6 +1,10 @@
 import type { ChannelSortBy, ChannelSortDirection } from '@shadowob/shared'
 import { useCallback, useMemo } from 'react'
-import { DEFAULT_SORT, useChannelSortStore } from '../stores/channel-sort.store'
+import {
+  DEFAULT_SORT,
+  normalizeServerSortConfig,
+  useChannelSortStore,
+} from '../stores/channel-sort.store'
 
 function getSafeTime(value?: string | null): number {
   if (!value) return 0
@@ -22,12 +26,16 @@ export interface UseChannelSortReturn {
   sortBy: ChannelSortBy
   /** Current sort direction */
   sortDirection: ChannelSortDirection
+  /** Whether the latest-message sort is currently enabled */
+  isLatestMessageSort: boolean
   /** Set sort criteria */
   setSortBy: (by: ChannelSortBy) => void
   /** Set sort direction */
   setSortDirection: (direction: ChannelSortDirection) => void
   /** Toggle sort direction */
   toggleSortDirection: () => void
+  /** Toggle between latest-message mode and default position mode */
+  toggleSortMode: () => void
   /** Check if has custom sort */
   hasCustomSort: boolean
   /** Sort channels based on current settings */
@@ -52,16 +60,17 @@ export function useChannelSort(serverId?: string): UseChannelSortReturn {
   // Get current sort config for this server
   const currentConfig = useMemo(() => {
     if (!serverId) return DEFAULT_SORT
-    return serverSortConfigs[serverId] ?? DEFAULT_SORT
+    return normalizeServerSortConfig(serverSortConfigs[serverId])
   }, [serverSortConfigs, serverId])
 
   const { sortBy, sortDirection } = currentConfig
+  const isLatestMessageSort = sortBy === 'lastMessageAt'
 
   // Check if has custom sort
   const hasCustomSort = useMemo(() => {
     if (!serverId) return false
-    return sortBy !== 'position'
-  }, [sortBy, serverId])
+    return sortBy !== DEFAULT_SORT.sortBy || sortDirection !== DEFAULT_SORT.sortDirection
+  }, [sortBy, sortDirection, serverId])
 
   // Wrapper functions that include serverId
   const setSortBy = useCallback(
@@ -85,10 +94,17 @@ export function useChannelSort(serverId?: string): UseChannelSortReturn {
     storeToggleSortDirection(serverId)
   }, [serverId, storeToggleSortDirection])
 
+  const toggleSortMode = useCallback(() => {
+    if (!serverId) return
+    storeSetSortBy(serverId, isLatestMessageSort ? 'position' : 'lastMessageAt')
+  }, [isLatestMessageSort, serverId, storeSetSortBy])
+
   // Stable sort function that uses current sort config from closure
   const sortChannels = useCallback(
     <T extends SortableChannel>(channels: T[]): (T & { lastAccessedAt?: string })[] => {
-      const config = serverId ? (serverSortConfigs[serverId] ?? DEFAULT_SORT) : DEFAULT_SORT
+      const config = serverId
+        ? normalizeServerSortConfig(serverSortConfigs[serverId])
+        : DEFAULT_SORT
       const currentSortBy = config.sortBy ?? DEFAULT_SORT.sortBy
       const currentSortDirection = config.sortDirection ?? DEFAULT_SORT.sortDirection
 
@@ -140,9 +156,11 @@ export function useChannelSort(serverId?: string): UseChannelSortReturn {
     () => ({
       sortBy,
       sortDirection,
+      isLatestMessageSort,
       setSortBy,
       setSortDirection,
       toggleSortDirection,
+      toggleSortMode,
       hasCustomSort,
       sortChannels,
       updateLastAccessed,
@@ -150,9 +168,11 @@ export function useChannelSort(serverId?: string): UseChannelSortReturn {
     [
       sortBy,
       sortDirection,
+      isLatestMessageSort,
       setSortBy,
       setSortDirection,
       toggleSortDirection,
+      toggleSortMode,
       hasCustomSort,
       sortChannels,
       updateLastAccessed,

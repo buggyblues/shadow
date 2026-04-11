@@ -77,6 +77,95 @@ export function SettingsCard({ children, className }: { children: ReactNode; cla
   )
 }
 
+/* ── Section block with consistent container + heading/actions ── */
+export function SettingsSectionBlock({
+  titleKey,
+  titleFallback,
+  actions,
+  children,
+  className,
+}: {
+  titleKey?: string
+  titleFallback?: string
+  actions?: ReactNode
+  children: ReactNode
+  className?: string
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <div
+      className={cn(
+        'rounded-3xl border border-border-subtle bg-[var(--glass-bg)] backdrop-blur-2xl p-6 shadow-[var(--shadow-soft)] space-y-4',
+        className,
+      )}
+    >
+      {(titleKey || actions) && (
+        <div className="flex items-center justify-between gap-3">
+          {titleKey ? (
+            <span className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60">
+              {t(titleKey, titleFallback ?? '')}
+            </span>
+          ) : (
+            <div className="flex-1" />
+          )}
+          {actions}
+        </div>
+      )}
+      {children}
+    </div>
+  )
+}
+
+/* ── Inline note / caution block ── */
+export function SettingsNotice({
+  title,
+  children,
+  className,
+  tone = 'info',
+}: {
+  title?: string
+  children: ReactNode
+  className?: string
+  tone?: 'info' | 'success' | 'warning'
+}) {
+  const toneClassName =
+    tone === 'success'
+      ? 'border-success/20 bg-success/10'
+      : tone === 'warning'
+        ? 'border-warning/25 bg-warning/10'
+        : 'border-primary/20 bg-primary/10'
+
+  const titleClassName =
+    tone === 'success'
+      ? 'text-success/80'
+      : tone === 'warning'
+        ? 'text-warning/80'
+        : 'text-primary/75'
+
+  return (
+    <div
+      className={cn(
+        'rounded-2xl border px-4 py-3 backdrop-blur-xl shadow-[var(--shadow-soft)]',
+        toneClassName,
+        className,
+      )}
+    >
+      {title && (
+        <p
+          className={cn(
+            'mb-1.5 text-[11px] font-black uppercase tracking-[0.18em]',
+            titleClassName,
+          )}
+        >
+          {title}
+        </p>
+      )}
+      {children}
+    </div>
+  )
+}
+
 /* ── Labeled group inside a card ── */
 export function SettingsGroup({
   labelKey,

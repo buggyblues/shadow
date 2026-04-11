@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next'
 import { ShrimpCoinIcon } from '../../components/shop/ui/currency'
 import { fetchApi } from '../../lib/api'
 import { useRechargeStore } from '../../stores/recharge.store'
-import { SettingsCard, SettingsHeader, SettingsPanel } from './_shared'
+import { SettingsCard, SettingsPanel, SettingsSectionBlock } from './_shared'
 
 type TransactionType =
   | 'topup'
@@ -108,8 +108,6 @@ export function WalletSettings() {
 
   return (
     <SettingsPanel>
-      <SettingsHeader titleKey="wallet.title" titleFallback="钱包" icon={Wallet} />
-
       {/* Balance Card — Brand Gradient */}
       <SettingsCard className="relative overflow-hidden bg-gradient-to-br from-primary/20 via-primary/10 to-success/5 border-primary/20">
         <div className="absolute top-0 right-0 w-40 h-40 bg-primary/10 rounded-full blur-3xl -mr-16 -mt-16" />
@@ -160,11 +158,10 @@ export function WalletSettings() {
       </SettingsCard>
 
       {/* Transaction History */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60">
-            {t('wallet.transactionHistory')}
-          </h3>
+      <SettingsSectionBlock
+        titleKey="wallet.transactionHistory"
+        titleFallback="Transaction History"
+        actions={
           <div className="flex items-center gap-1 bg-bg-tertiary/30 rounded-full p-1">
             {(['all', 'income', 'expense'] as FilterType[]).map((f) => (
               <button
@@ -188,8 +185,8 @@ export function WalletSettings() {
               </button>
             ))}
           </div>
-        </div>
-
+        }
+      >
         {isLoading ? (
           <div className="flex justify-center py-12">
             <RefreshCw size={24} className="animate-spin text-text-muted" />
@@ -280,7 +277,7 @@ export function WalletSettings() {
             )}
           </div>
         )}
-      </div>
+      </SettingsSectionBlock>
     </SettingsPanel>
   )
 }
