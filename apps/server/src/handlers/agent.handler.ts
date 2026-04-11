@@ -2,7 +2,25 @@ import { zValidator } from '@hono/zod-validator'
 import { Hono } from 'hono'
 import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
-import { createAgentSchema } from '../validators/agent.schema'
+import { createAgentSchema, updateAgentSchema } from '../validators/agent.schema'
+
+/** Helper: verify the requesting user owns the agent. Returns 403 response or null. */
+async function requireAgentOwner(
+  container: AppContainer,
+  c: any,
+  agentId: string,
+  userId: string,
+): Promise<Response | null> {
+  const agentService = container.resolve('agentService')
+  const agent = await agentService.getById(agentId)
+  if (!agent) {
+    return c.json({ error: 'Agent not found' }, 404)
+  }
+  if (agent.ownerId !== userId) {
+    return c.json({ error: 'Forbidden' }, 403)
+  }
+  return null
+}
 
 export function createAgentHandler(container: AppContainer) {
   const agentHandler = new Hono()
@@ -95,25 +113,29 @@ export function createAgentHandler(container: AppContainer) {
     }
   })
 
-  // GET /api/agents/:id — get agent details
+  // GET /api/agents/:id — get agent details (owner only)
   agentHandler.get('/:id', async (c) => {
-    const agentService = container.resolve('agentService')
+    const user = c.get('user')
     const id = c.req.param('id')
+    const ownershipError = await requireAgentOwner(container, c, id, user.userId)
+    if (ownershipError) return ownershipError
+    const agentService = container.resolve('agentService')
     const agent = await agentService.getById(id)
-    if (!agent) {
-      return c.json({ error: 'Agent not found' }, 404)
-    }
-    return c.json(agent)
+    return c.json(agent!)
   })
 
-  // PATCH /api/agents/:id — update existing agent
-  agentHandler.patch('/:id', async (c) => {
+  // PATCH /api/agents/:id — update existing agent (owner only, zod validated)
+  agentHandler.patch('/:id', zValidator('json', updateAgentSchema), async (c) => {
     const agentService = container.resolve('agentService')
     const user = c.get('user')
     const id = c.req.param('id')
-    const body = await c.req.json()
+    const input = c.req.valid('json')
 
-    const agent = await agentService.update(id, user.userId, body)
+    // Verify ownership before updating
+    const ownershipError = await requireAgentOwner(container, c, id, user.userId)
+    if (ownershipError) return ownershipError
+
+    const agent = await agentService.update(id, user.userId, input)
     if (!agent) {
       return c.json({ error: 'Agent not found' }, 404)
     }
@@ -161,18 +183,24 @@ export function createAgentHandler(container: AppContainer) {
     return c.json({ success: true })
   })
 
-  // POST /api/agents/:id/start — start agent
+  // POST /api/agents/:id/start — start agent (owner only)
   agentHandler.post('/:id/start', async (c) => {
-    const agentService = container.resolve('agentService')
+    const user = c.get('user')
     const id = c.req.param('id')
+    const ownershipError = await requireAgentOwner(container, c, id, user.userId)
+    if (ownershipError) return ownershipError
+    const agentService = container.resolve('agentService')
     const agent = await agentService.start(id)
     return c.json(agent)
   })
 
-  // POST /api/agents/:id/stop — stop agent
+  // POST /api/agents/:id/stop — stop agent (owner only)
   agentHandler.post('/:id/stop', async (c) => {
-    const agentService = container.resolve('agentService')
+    const user = c.get('user')
     const id = c.req.param('id')
+    const ownershipError = await requireAgentOwner(container, c, id, user.userId)
+    if (ownershipError) return ownershipError
+    const agentService = container.resolve('agentService')
     const agent = await agentService.stop(id)
     return c.json(agent)
   })
@@ -191,10 +219,13 @@ export function createAgentHandler(container: AppContainer) {
     }
   })
 
-  // GET /api/agents/:id/config — full remote config for the plugin
+  // GET /api/agents/:id/config — full remote config for the plugin (owner only)
   agentHandler.get('/:id/config', async (c) => {
-    const agentPolicyService = container.resolve('agentPolicyService')
+    const user = c.get('user')
     const id = c.req.param('id')
+    const ownershipError = await requireAgentOwner(container, c, id, user.userId)
+    if (ownershipError) return ownershipError
+    const agentPolicyService = container.resolve('agentPolicyService')
     try {
       const config = await agentPolicyService.getRemoteConfig(id)
       return c.json(config)
@@ -204,10 +235,13 @@ export function createAgentHandler(container: AppContainer) {
     }
   })
 
-  // GET /api/agents/:id/policies — list all policies for an agent
+  // GET /api/agents/:id/policies — list all policies for an agent (owner only)
   agentHandler.get('/:id/policies', async (c) => {
-    const agentPolicyService = container.resolve('agentPolicyService')
+    const user = c.get('user')
     const id = c.req.param('id')
+    const ownershipError = await requireAgentOwner(container, c, id, user.userId)
+    if (ownershipError) return ownershipError
+    const agentPolicyService = container.resolve('agentPolicyService')
     try {
       const policies = await agentPolicyService.getPolicies(id)
       return c.json(policies)
