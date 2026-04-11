@@ -41,7 +41,7 @@ describe('S01/C06 category create edit delete flow', () => {
     await userEvent.type(screen.getByPlaceholderText('如：digital'), 'new-cat')
     await userEvent.click(screen.getByRole('button', { name: '新建类目' }))
     await waitFor(() =>
-      expect(showToastMock).toHaveBeenCalledWith('shop.categoryCreated', 'success'),
+      expect(showToastMock).toHaveBeenCalledWith('分类创建成功', 'success'),
     )
   })
 })
