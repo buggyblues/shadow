@@ -28,6 +28,7 @@ import { createVoiceEnhanceHandler } from './handlers/voice-enhance.handler'
 import { createWorkspaceHandler } from './handlers/workspace.handler'
 import { logger } from './lib/logger'
 import { loggerMiddleware } from './middleware/logger.middleware'
+import { securityHeadersMiddleware } from './middleware/security-headers.middleware'
 
 export function createApp(container: AppContainer) {
   const app = new Hono()
@@ -49,8 +50,28 @@ export function createApp(container: AppContainer) {
     )
   })
 
+  // Determine allowed CORS origins
+  const corsOrigin = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+    : process.env.NODE_ENV === 'production'
+      ? undefined
+      : ['http://localhost:3000']
+
+  if (process.env.NODE_ENV === 'production' && !corsOrigin) {
+    throw new Error(
+      'CORS_ORIGIN environment variable is required in production. Set it to a comma-separated list of allowed origins.',
+    )
+  }
+
   // Global middleware
-  app.use('*', cors())
+  app.use(
+    '*',
+    cors({
+      origin: corsOrigin!,
+      credentials: true,
+    }),
+  )
+  app.use('*', securityHeadersMiddleware)
   app.use('*', loggerMiddleware)
   app.use('*', bodyLimit({ maxSize: 50 * 1024 * 1024 })) // 50MB
 
