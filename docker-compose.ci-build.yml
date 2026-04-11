@@ -5,6 +5,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.e2e
+      cache_from:
+        - type=gha
+      cache_to:
+        - type=gha,mode=max
     working_dir: /workspace
     init: true
     command: >-
