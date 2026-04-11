@@ -431,13 +431,13 @@
     "inviteMembers": "メンバーを招待",
     "searchMembers": "メンバーを検索...",
     "allMembersAdded": "全てのサーバーメンバーがこのチャンネルに参加済みです",
-    "policyBuddyInteraction": "Buddy 間のやり取り",
-    "policyReplyToBuddy": "他の Buddy のメッセージに返信",
-    "policyReplyToBuddyDesc": "この Buddy がチャンネル内の他の Buddy からのメッセージに返信できるようにします",
+    "policyBuddyInteraction": "Buddy 間インタラクション",
     "policyMaxBuddyChainDepth": "最大会話チェーン深度",
-    "policyMaxBuddyChainDepthDesc": "Buddy 間の無限ループを防ぎます（デフォルト: 3）",
-    "policySmartReply": "スマート返信",
-    "policySmartReplyDesc": "明らかに他のユーザー宛てのメッセージをスキップします（例：他の人を @メンションしているが、この Buddy は含まれていない場合）"
+    "policyMaxBuddyChainDepthDesc": "Buddy 間の無限ループを防止（デフォルト：3）",
+    "policyReplyToBuddy": "他の Buddy メッセージに返信",
+    "policyReplyToBuddyDesc": "この Buddy がチャンネル内の他の Buddy からのメッセージに返信できるようにする",
+    "policySmartReply": "スマートリプライ",
+    "policySmartReplyDesc": "他者を明確にターゲットとしたメッセージをスキップ（例：他のユーザーへの @メンションなど）"
   },
   "features": {
     "pageTitle": "必要なコラボ機能がすべて揃っています",
@@ -756,7 +756,56 @@
     "members": "メンバー",
     "joinButton": "参加",
     "enterButton": "入る",
-    "public": "公開"
+    "public": "公開",
+    "daysAgo": "{{count}}日前",
+    "deviceTier": {
+      "highEnd": "ハイエンド",
+      "lowEnd": "ローエンド",
+      "midRange": "ミドルレンジ",
+      "unknown": "不明"
+    },
+    "emptyDesc": "コミュニティを最初に作成しよう！",
+    "emptyTitle": "まだ何もありません",
+    "filter": {
+      "apply": "適用",
+      "ascending": "昇順",
+      "clear": "クリア",
+      "descending": "降順",
+      "searchPlaceholder": "チャンネルを検索...",
+      "showArchived": "アーカイブ済みを表示",
+      "sort": {
+        "activity": "アクティビティ",
+        "created": "作成日時",
+        "default": "デフォルト",
+        "lastMessage": "最新メッセージ",
+        "updated": "更新日時"
+      },
+      "sortBy": "並び替え",
+      "title": "フィルター"
+    },
+    "filters": {
+      "all": "すべて",
+      "channels": "チャンネル",
+      "rentals": "レンタル",
+      "servers": "サーバー"
+    },
+    "heat": {
+      "hot": "ホット"
+    },
+    "hoursAgo": "{{count}}時間前",
+    "joinToView": "参加して表示",
+    "justNow": "たった今",
+    "loadMore": "さらに読み込み中...",
+    "minutesAgo": "{{count}}分前",
+    "noChannels": "アクティブなチャンネルはありません",
+    "noMore": "これ以上ありません",
+    "noRentals": "アクティブなレンタルはありません",
+    "noSearchResults": "結果なし",
+    "noSearchResultsDesc": "別のキーワードを試してください",
+    "rentedSince": "レンタル開始",
+    "unknownAgent": "不明な Buddy",
+    "unknownListing": "不明なリスティング",
+    "unknownUser": "不明なユーザー"
   },
   "notification": {
     "title": "通知",
@@ -1136,14 +1185,14 @@
     "sortBySize": "サイズ順"
   },
   "splash": {
-    "welcome": "Shadow へようこそ",
-    "welcomeDesc": "AI コミュニティを構築して、エージェントをチームメイトに",
-    "chat": "リアルタイムチャット",
-    "chatDesc": "チャンネルでコミュニティとチャット。Markdown、画像、絵文字に対応",
     "buddy": "AI アシスタント Buddy",
-    "buddyDesc": "チャンネルに AI アシスタントを追加して、質問回答やタスク実行を支援",
+    "buddyDesc": "チャンネルに AI アシスタントを追加して、質問に答えたりタスクを実行したり",
+    "chat": "リアルタイムチャット",
+    "chatDesc": "Markdown、画像、絵文字を使ってチャンネルでコミュニティとチャット",
     "community": "コミュニティを作成",
-    "communityDesc": "自分のサーバーを作成して、同じ趣味の友達を招待",
-    "getStarted": "始めよう"
+    "communityDesc": "自分のサーバーを作成して、気の合う友達を招待しよう",
+    "getStarted": "はじめよう",
+    "welcome": "Shadow へようこそ",
+    "welcomeDesc": "AI コミュニティを構築し、エージェントをチームメイトに"
   }
 }
