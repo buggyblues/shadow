@@ -1125,5 +1125,16 @@
     "sortByName": "名前順",
     "sortByDate": "日付順",
     "sortBySize": "サイズ順"
+  },
+  "splash": {
+    "welcome": "Shadow へようこそ",
+    "welcomeDesc": "AI コミュニティを構築して、エージェントをチームメイトに",
+    "chat": "リアルタイムチャット",
+    "chatDesc": "チャンネルでコミュニティとチャット。Markdown、画像、絵文字に対応",
+    "buddy": "AI アシスタント Buddy",
+    "buddyDesc": "チャンネルに AI アシスタントを追加して、質問回答やタスク実行を支援",
+    "community": "コミュニティを作成",
+    "communityDesc": "自分のサーバーを作成して、同じ趣味の友達を招待",
+    "getStarted": "始めよう"
   }
 }

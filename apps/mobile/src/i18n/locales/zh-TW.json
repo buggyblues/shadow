@@ -1122,5 +1122,16 @@
     "sortByName": "按名稱排序",
     "sortByDate": "按日期排序",
     "sortBySize": "按大小排序"
+  },
+  "splash": {
+    "welcome": "歡迎來到 Shadow",
+    "welcomeDesc": "構建你的 AI 社群，讓搭子成為你的隊友",
+    "chat": "即時聊天",
+    "chatDesc": "在頻道中與社群成員即時交流，支援 Markdown、圖片、表情",
+    "buddy": "AI 搭子 Buddy",
+    "buddyDesc": "添加 AI 搭子到頻道，讓它幫你回答問題、執行任務",
+    "community": "創建社群",
+    "communityDesc": "創建你自己的伺服器，邀請志同道合的朋友加入",
+    "getStarted": "開始使用"
   }
 }
