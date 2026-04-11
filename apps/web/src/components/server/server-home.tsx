@@ -451,9 +451,9 @@ document.addEventListener('click', function(e) {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-bg-primary overflow-hidden">
+    <div className="flex-1 flex flex-col glass-panel overflow-hidden min-h-0">
       {/* Header bar */}
-      <div className="desktop-drag-titlebar h-12 px-4 flex items-center border-b border-border-subtle shrink-0">
+      <div className="desktop-drag-titlebar app-header px-4 flex items-center border-b border-border-subtle shrink-0">
         {/* Mobile back button — return to channel list */}
         {!standalone && (
           <button
@@ -499,7 +499,7 @@ document.addEventListener('click', function(e) {
         </div>
       </div>
       {/* HTML content in sandboxed iframe */}
-      <div className="flex-1 overflow-auto">
+      <div className="server-page-content flex-1 overflow-auto">
         {homepageAppUrl ? (
           <iframe
             src={homepageAppUrl}
