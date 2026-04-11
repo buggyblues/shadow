@@ -262,6 +262,29 @@ export function useVoiceBridge() {
     store.leaveChannel()
   }, [disconnectAgora, store])
 
+  // ── Retry Microphone (listen-only → can speak) ────────────────
+  const retryMicrophone = useCallback(async () => {
+    const client = agoraClientRef.current
+    if (!client || localAudioRef.current) return
+
+    try {
+      const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+        encoderConfig: 'music_standard',
+      })
+      localAudioRef.current = audioTrack
+      await client.publish(audioTrack)
+      store.setCanSpeak(true)
+      store.setMuted(false)
+      store.setError(null)
+    } catch (err) {
+      const message =
+        err instanceof Error && err.name === 'NotAllowedError'
+          ? '麦克风权限被拒绝，请在浏览器设置中允许麦克风访问'
+          : `无法访问麦克风: ${err instanceof Error ? err.message : '未知错误'}`
+      store.setError(message)
+    }
+  }, [store])
+
   // ── Mute (controls actual Agora track + syncs via Socket.IO) ────
   const toggleMute = useCallback(async () => {
     const track = localAudioRef.current
@@ -384,6 +407,7 @@ export function useVoiceBridge() {
     leaveAgora,
     toggleMute,
     toggleScreenShare,
+    retryMicrophone,
     // Device management
     getMicrophones,
     getPlaybackDevices,

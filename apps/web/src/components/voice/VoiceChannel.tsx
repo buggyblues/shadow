@@ -31,6 +31,7 @@ export function VoiceChannel() {
     leaveAgora,
     toggleMute,
     toggleScreenShare,
+    retryMicrophone,
     getMicrophones,
     setMicrophoneDevice,
     screenSharerId,
@@ -156,22 +157,30 @@ export function VoiceChannel() {
         {/* Control bar — Discord style */}
         <div className="px-2 py-2 border-t border-border-subtle">
           <div className="flex items-center justify-center gap-1.5">
-            {/* Mic toggle */}
-            <button
-              type="button"
-              onClick={toggleMute}
-              disabled={!canSpeak}
-              className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 ${
-                !canSpeak
-                  ? 'bg-bg-tertiary/30 text-text-muted/30 cursor-not-allowed'
-                  : isMuted
+            {/* Mic toggle / retry */}
+            {canSpeak ? (
+              <button
+                type="button"
+                onClick={toggleMute}
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 ${
+                  isMuted
                     ? 'bg-[#FF2A55]/20 text-[#FF2A55] hover:bg-[#FF2A55]/30 dark:bg-[#FF2A55]/15 dark:hover:bg-[#FF2A55]/25'
                     : 'bg-bg-tertiary/60 text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
-              }`}
-              title={!canSpeak ? '麦克风权限被拒绝' : isMuted ? '取消静音' : '静音'}
-            >
-              {isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-            </button>
+                }`}
+                title={isMuted ? '取消静音' : '静音'}
+              >
+                {isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={retryMicrophone}
+                className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 bg-[#FFA726]/20 text-[#FFA726] hover:bg-[#FFA726]/30 dark:bg-[#FFA726]/15 dark:hover:bg-[#FFA726]/25"
+                title="重新尝试麦克风"
+              >
+                <Mic className="h-4 w-4" />
+              </button>
+            )}
 
             {/* Screen share toggle */}
             <button
