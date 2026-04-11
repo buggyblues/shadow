@@ -3,7 +3,7 @@
  * Uses DOM manipulation to avoid React re-render overhead.
  */
 
-type ToastType = 'error' | 'success' | 'info'
+export type ToastType = 'error' | 'success' | 'info'
 
 type ToastHook = (message: string, type?: ToastType) => void
 
@@ -61,4 +61,23 @@ export function showToast(message: string, type: ToastType = 'info') {
     el.style.transform = 'translateY(-8px)'
     setTimeout(() => el.remove(), 300)
   }, TOAST_DURATION)
+}
+
+/**
+ * Factory function that creates an i18n-aware toast function.
+ * Useful outside of React component context (e.g. in services, utilities,
+ * or after fetching the i18n instance).
+ *
+ * Usage:
+ * ```ts
+ * import { i18n } from './i18n'
+ * const toast = createI18nToast(i18n)
+ * toast('toast.error.network', 'error')
+ * ```
+ */
+export function createI18nToast(t: (key: string) => string) {
+  return (messageKey: string, type: ToastType = 'info') => {
+    const message = t(messageKey)
+    showToast(message, type)
+  }
 }
