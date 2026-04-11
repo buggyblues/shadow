@@ -372,7 +372,10 @@
     "isTyping": "正在輸入...",
     "areTyping": "正在輸入...",
     "copy": "複製",
-    "edit": "編輯"
+    "edit": "編輯",
+    "micPermissionDenied": "語音輸入需要麥克風權限",
+    "speechLang": "zh-TW",
+    "voiceInputUnavailable": "此版本不支援語音輸入，請使用開發版本。"
   },
   "member": {
     "title": "成員",
