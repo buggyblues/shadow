@@ -129,6 +129,10 @@ jobs:
 
       - name: Run E2E stack
         shell: bash
+        env:
+          JWT_SECRET: e2e-test-secret-not-for-production
+          ADMIN_EMAIL: admin@shadowob.app
+          ADMIN_PASSWORD: admin123456
         run: |
           docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from e2e-runner e2e-runner
 
