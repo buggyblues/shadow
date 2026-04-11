@@ -1,4 +1,4 @@
-import { boolean, jsonb, pgTable, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { boolean, index, jsonb, pgTable, timestamp, uuid } from 'drizzle-orm/pg-core'
 import { agents } from './agents'
 import { channels } from './channels'
 import { servers } from './servers'
@@ -39,4 +39,10 @@ export const agentPolicies = pgTable('agent_policies', {
 
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-})
+  },
+  (t) => ({
+    agentPoliciesAgentIdIdx: index('agent_policies_agent_id_idx').on(t.agentId),
+    agentPoliciesServerIdIdx: index('agent_policies_server_id_idx').on(t.serverId),
+    agentPoliciesChannelIdIdx: index('agent_policies_channel_id_idx').on(t.channelId),
+  }),
+)

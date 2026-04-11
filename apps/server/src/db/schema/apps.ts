@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -64,4 +65,9 @@ export const apps = pgTable('apps', {
 
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-})
+  },
+  (t) => ({
+    appsServerIdIdx: index('apps_server_id_idx').on(t.serverId),
+    appsChannelIdIdx: index('apps_channel_id_idx').on(t.channelId),
+  }),
+)
