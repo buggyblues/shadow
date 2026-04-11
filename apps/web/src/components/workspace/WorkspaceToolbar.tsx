@@ -36,13 +36,86 @@ export function WorkspaceToolbar({
   const { searchQuery, setSearchQuery } = useWorkspaceStore()
   const statsText = stats ? `${stats.folderCount} 文件夹 · ${stats.fileCount} 文件` : null
 
+  const statsBadge = statsText ? (
+    <div className="hidden items-center gap-1.5 rounded-2xl border border-border-subtle bg-bg-secondary/20 px-3 py-2 text-[11px] text-text-muted md:flex">
+      <BarChart3 size={12} />
+      <span>{statsText}</span>
+    </div>
+  ) : null
+
+  const searchControl = (
+    <div className="relative flex items-center">
+      <Search size={13} className="pointer-events-none absolute left-2.5 text-text-muted" />
+      <input
+        type="text"
+        placeholder={t('workspace.searchPlaceholder', { defaultValue: '搜索文件...' })}
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className={cn(
+          'h-10 rounded-2xl border border-border-subtle bg-bg-secondary/30 pl-8 pr-8 text-xs text-text-primary transition-all duration-150 placeholder:text-text-muted/60 focus:border-primary/40 focus:bg-bg-secondary/50 focus:outline-none',
+          embedded ? 'w-[220px] md:w-[260px]' : 'w-40 md:w-52',
+        )}
+      />
+      {searchQuery && (
+        <button
+          type="button"
+          onClick={() => setSearchQuery('')}
+          className="absolute right-2 rounded-full p-1 text-text-muted transition-colors hover:text-text-primary"
+        >
+          <X size={11} />
+        </button>
+      )}
+    </div>
+  )
+
+  const actionControls = (
+    <div className="flex items-center gap-1 rounded-2xl border border-border-subtle bg-bg-secondary/20 p-1">
+      <button
+        type="button"
+        onClick={onUpload}
+        className="rounded-xl p-2 text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
+        title={t('workspace.uploadFile', { defaultValue: '上传文件' })}
+      >
+        <Upload size={15} />
+      </button>
+
+      <button
+        type="button"
+        onClick={onNewFolder}
+        className="rounded-xl p-2 text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
+        title={t('workspace.newFolder', { defaultValue: '新建文件夹' })}
+      >
+        <FolderPlus size={15} />
+      </button>
+
+      <button
+        type="button"
+        onClick={onRefresh}
+        className="rounded-xl p-2 text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
+        title={t('common.refresh', { defaultValue: '刷新' })}
+      >
+        <RefreshCw size={15} />
+      </button>
+    </div>
+  )
+
+  if (embedded) {
+    return (
+      <div className="z-20 shrink-0 bg-transparent px-4 pb-3 pt-4">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {statsBadge}
+          {searchControl}
+          {actionControls}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       className={cn(
         'z-20 flex shrink-0 items-center gap-3 border-b border-border-subtle/80',
-        embedded
-          ? 'bg-bg-secondary/10 px-5 py-4 backdrop-blur-xl'
-          : 'desktop-drag-titlebar app-header px-3',
+        'desktop-drag-titlebar app-header px-3',
       )}
     >
       {onClose && (
@@ -73,66 +146,13 @@ export function WorkspaceToolbar({
         <div className="hidden md:block" />
       )}
 
-      {/* Stats badge */}
-      {statsText && (
-        <div className="hidden items-center gap-1.5 rounded-2xl border border-border-subtle bg-bg-secondary/20 px-3 py-2 text-[11px] text-text-muted md:flex">
-          <BarChart3 size={12} />
-          <span>{statsText}</span>
-        </div>
-      )}
+      {statsBadge}
 
       <div className="flex-1" />
 
-      {/* Search */}
-      <div className="relative flex items-center">
-        <Search size={13} className="absolute left-2.5 text-text-muted pointer-events-none" />
-        <input
-          type="text"
-          placeholder={t('workspace.searchPlaceholder', { defaultValue: '搜索文件...' })}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-10 w-40 rounded-2xl border border-border-subtle bg-bg-secondary/30 pl-8 pr-8 text-xs text-text-primary transition-all duration-150 placeholder:text-text-muted/60 focus:border-primary/40 focus:bg-bg-secondary/50 focus:outline-none md:w-52"
-        />
-        {searchQuery && (
-          <button
-            type="button"
-            onClick={() => setSearchQuery('')}
-            className="absolute right-2 rounded-full p-1 text-text-muted transition-colors hover:text-text-primary"
-          >
-            <X size={11} />
-          </button>
-        )}
-      </div>
+      {searchControl}
 
-      {/* Action buttons */}
-      <div className="flex items-center gap-1 rounded-2xl border border-border-subtle bg-bg-secondary/20 p-1">
-        <button
-          type="button"
-          onClick={onUpload}
-          className="rounded-xl p-2 text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
-          title={t('workspace.uploadFile', { defaultValue: '上传文件' })}
-        >
-          <Upload size={15} />
-        </button>
-
-        <button
-          type="button"
-          onClick={onNewFolder}
-          className="rounded-xl p-2 text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
-          title={t('workspace.newFolder', { defaultValue: '新建文件夹' })}
-        >
-          <FolderPlus size={15} />
-        </button>
-
-        <button
-          type="button"
-          onClick={onRefresh}
-          className="rounded-xl p-2 text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
-          title={t('common.refresh', { defaultValue: '刷新' })}
-        >
-          <RefreshCw size={15} />
-        </button>
-      </div>
+      {actionControls}
     </div>
   )
 }

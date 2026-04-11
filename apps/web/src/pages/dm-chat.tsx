@@ -1,7 +1,7 @@
 import { Button, cn } from '@shadowob/ui'
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useVirtualizer } from '@tanstack/react-virtual'
 import { useNavigate, useParams } from '@tanstack/react-router'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowLeft, Loader2, Paperclip, Reply, Send, Smile, X } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -380,9 +380,9 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
   const virtualItems = virtualizer.getVirtualItems()
 
   return (
-    <div className="flex-1 flex flex-col bg-bg-primary min-h-0">
+    <div className="chat-panel glass-panel flex flex-1 min-h-0 flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border-subtle bg-bg-primary/80 backdrop-blur-xl shrink-0 shadow-sm">
+      <div className="app-header flex items-center gap-3 px-4 md:px-6">
         <Button
           variant="ghost"
           size="icon"
@@ -416,7 +416,7 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
       </div>
 
       {/* Messages Area — virtual list */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
+      <div ref={scrollRef} className="chat-scroll-surface flex-1 overflow-y-auto px-4 py-4">
         {isFetchingNextPage && (
           <div className="flex justify-center py-3">
             <Loader2 size={20} className="animate-spin text-primary" />
@@ -494,11 +494,7 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
                         method: 'DELETE',
                       })
                     }}
-                    replyToMessage={
-                      msg.replyToId
-                        ? (messageMap.get(msg.replyToId) ?? null)
-                        : null
-                    }
+                    replyToMessage={msg.replyToId ? (messageMap.get(msg.replyToId) ?? null) : null}
                   />
                 </div>
               )
@@ -634,7 +630,7 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
                 }
               }}
             />
-            <div className="flex items-end gap-2 bg-bg-primary/80 backdrop-blur-xl rounded-[24px] border border-border-subtle focus-within:ring-1 focus-within:ring-primary/30">
+            <div className="input-valley flex items-end gap-2 rounded-[26px] bg-bg-primary/65">
               <Button
                 variant="ghost"
                 size="icon"

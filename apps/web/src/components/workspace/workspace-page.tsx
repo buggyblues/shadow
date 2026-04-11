@@ -398,13 +398,15 @@ export function WorkspacePage({
       <div
         className={cn(
           'flex flex-1 min-h-0 overflow-hidden',
-          embedded ? 'bg-transparent' : 'server-page-content',
+          embedded ? 'gap-3 px-4 pb-4' : 'server-page-content',
         )}
       >
         <div
           className={cn(
             'flex w-64 shrink-0 flex-col overflow-hidden border-r border-border-subtle',
-            embedded ? 'bg-bg-secondary/10' : 'bg-bg-tertiary/30 backdrop-blur-xl',
+            embedded
+              ? 'rounded-[28px] border border-border-subtle bg-[var(--glass-bg)]/70 shadow-[var(--shadow-soft)]'
+              : 'bg-bg-tertiary/30 backdrop-blur-xl',
           )}
           onContextMenu={handleBlankContextMenu}
         >
@@ -427,30 +429,55 @@ export function WorkspacePage({
         </div>
 
         {activeFileNode ? (
-          <WorkspaceWorkbench
-            node={activeFileNode}
-            serverId={serverId}
-            onClose={() => setActiveFileId(null)}
-          />
+          <div
+            className={cn(
+              'flex-1 min-w-0 overflow-hidden',
+              embedded &&
+                'rounded-[28px] border border-border-subtle bg-[var(--glass-bg)]/70 shadow-[var(--shadow-soft)]',
+            )}
+          >
+            <WorkspaceWorkbench
+              node={activeFileNode}
+              serverId={serverId}
+              onClose={() => setActiveFileId(null)}
+            />
+          </div>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-text-muted">
-            <div
-              className={cn(
-                'flex h-16 w-16 items-center justify-center rounded-[24px] border border-border-subtle',
-                embedded ? 'bg-bg-secondary/10' : 'bg-bg-tertiary/30 backdrop-blur-sm',
-              )}
-            >
-              <Eye size={28} strokeWidth={1} className="opacity-30" />
-            </div>
-            <div className="space-y-1 text-center">
-              <p className="text-[13px] font-black text-text-primary/80">
-                {t('workspace.previewEmptyTitle', { defaultValue: '选择文件以预览' })}
-              </p>
-              <p className="text-xs font-medium text-text-muted/70">
-                {t('workspace.previewEmptyDesc', {
-                  defaultValue: '左侧可搜索、上传或整理工作区内容',
-                })}
-              </p>
+          <div
+            className={cn(
+              'flex-1 min-w-0 overflow-hidden',
+              embedded &&
+                'rounded-[28px] border border-border-subtle bg-[var(--glass-bg)]/70 shadow-[var(--shadow-soft)]',
+            )}
+          >
+            <div className="flex h-full flex-col p-4 text-text-muted">
+              <div
+                className={cn(
+                  'flex h-full min-h-[320px] flex-col items-center justify-center gap-3 rounded-[28px] border border-dashed px-6 text-center',
+                  embedded
+                    ? 'border-border-subtle/80 bg-bg-secondary/10'
+                    : 'border-border-subtle bg-bg-tertiary/20',
+                )}
+              >
+                <div
+                  className={cn(
+                    'flex h-16 w-16 items-center justify-center rounded-[24px] border border-border-subtle',
+                    embedded ? 'bg-bg-secondary/10' : 'bg-bg-tertiary/30 backdrop-blur-sm',
+                  )}
+                >
+                  <Eye size={28} strokeWidth={1} className="opacity-30" />
+                </div>
+                <div className="space-y-1 text-center">
+                  <p className="text-[13px] font-black text-text-primary/80">
+                    {t('workspace.previewEmptyTitle', { defaultValue: '选择文件以预览' })}
+                  </p>
+                  <p className="text-xs font-medium text-text-muted/70">
+                    {t('workspace.previewEmptyDesc', {
+                      defaultValue: '左侧可搜索、上传或整理工作区内容',
+                    })}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         )}

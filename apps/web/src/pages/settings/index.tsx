@@ -253,11 +253,11 @@ export function SettingsPage() {
 
         {/* DM - unified contact sidebar + chat */}
         {activeTab === 'dm' && (
-          <div className="flex-1 glass-panel h-full overflow-hidden flex min-h-0">
+          <div className="flex flex-1 min-h-0 gap-3">
             {/* Left sidebar: unified contacts */}
             <div
               className={cn(
-                'w-full md:w-72 lg:w-80 flex-col border-r border-border-subtle shrink-0',
+                'chat-panel glass-panel w-full shrink-0 flex-col overflow-hidden md:w-72 lg:w-80',
                 activeDmChannelId ? 'hidden md:flex' : 'flex',
               )}
             >
@@ -285,7 +285,7 @@ export function SettingsPage() {
             {/* Right panel: chat or default view */}
             <div
               className={cn(
-                'flex-1 flex-col min-w-0',
+                'min-w-0 flex-1 flex-col',
                 activeDmChannelId ? 'flex' : 'hidden md:flex',
               )}
             >
@@ -295,7 +295,9 @@ export function SettingsPage() {
                   onBack={() => setActiveDmChannelId(null)}
                 />
               ) : (
-                <DmDefaultView />
+                <div className="chat-panel glass-panel flex-1 overflow-hidden">
+                  <DmDefaultView />
+                </div>
               )}
             </div>
           </div>
@@ -316,7 +318,7 @@ export function SettingsPage() {
 function DmDefaultView() {
   const { t } = useTranslation()
   return (
-    <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+    <div className="chat-scroll-surface flex flex-1 flex-col items-center justify-center p-8 text-center">
       <div className="max-w-sm space-y-6 animate-in fade-in duration-300">
         <div className="w-16 h-16 rounded-3xl bg-primary/10 flex items-center justify-center mx-auto">
           <MessageCircle size={28} className="text-primary" />

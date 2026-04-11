@@ -617,14 +617,14 @@ function ShopBrowse({
       ) : null}
 
       {/* ── Container for Filters & Grid (PC Friendly Layout) ── */}
-      <div className={cn('max-w-[1400px] mx-auto w-full', embedded && 'px-6 pb-8 md:px-8')}>
+      <div className={cn(embedded ? 'w-full px-4 pb-6 md:px-6' : 'mx-auto w-full max-w-[1400px]')}>
         {/* ── Discovery Bar ── */}
         <div
           className={cn(
-            'backdrop-blur-xl pt-5 pb-4 border-b border-border-subtle sticky top-0 z-10',
+            'z-10',
             embedded
-              ? 'bg-[var(--glass-bg)]/65 px-0 md:px-0'
-              : 'bg-bg-primary/90 px-4 md:static md:px-8',
+              ? 'bg-transparent px-0 py-4'
+              : 'sticky top-0 border-b border-border-subtle bg-bg-primary/90 px-4 pb-4 pt-5 backdrop-blur-xl md:static md:px-8',
           )}
         >
           <div className="mb-4 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -693,7 +693,7 @@ function ShopBrowse({
           </div>
 
           {/* Categories Pills */}
-          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hidden pb-2 pt-1 -mx-2 px-2 md:-mx-0 md:px-0">
+          <div className="-mx-2 flex items-center gap-2 overflow-x-auto px-2 pb-2 pt-1 scrollbar-hidden md:-mx-0 md:px-0">
             <button
               type="button"
               onClick={() => setActiveCategoryId(null)}
@@ -737,7 +737,7 @@ function ShopBrowse({
         </div>
 
         {/* ── Product Grid ── */}
-        <div className={cn('py-6', embedded ? 'px-0' : 'px-4 md:px-8')}>
+        <div className={cn(embedded ? 'px-0 py-4' : 'px-4 py-6 md:px-8')}>
           {isProductsLoading ? (
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
               {Array.from({ length: 8 }).map((_, i) => (
@@ -752,11 +752,22 @@ function ShopBrowse({
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <EmptyState
-              icon={ShoppingBag}
-              title="未找到相关商品"
-              description="尝试更换搜索词或分类"
-            />
+            <div className={cn('flex', embedded ? 'min-h-[420px]' : 'min-h-[520px]')}>
+              <div
+                className={cn(
+                  'flex flex-1 items-center justify-center rounded-[32px] border border-dashed border-border-subtle/80 px-6 py-10',
+                  embedded
+                    ? 'bg-[var(--glass-bg)]/55 shadow-[var(--shadow-soft)]'
+                    : 'bg-bg-secondary/25',
+                )}
+              >
+                <EmptyState
+                  icon={ShoppingBag}
+                  title="未找到相关商品"
+                  description="尝试更换搜索词或分类"
+                />
+              </div>
+            </div>
           ) : (
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
               {filtered.map((product) => (
