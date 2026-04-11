@@ -1,6 +1,6 @@
 import type { Socket, Server as SocketIOServer } from 'socket.io'
 import type { AppContainer } from '../container'
-import { relayDmToBot } from '../handlers/dm.handler'
+import { relayDmToBot } from '../lib/dm-relay'
 import { logger } from '../lib/logger'
 
 export function setupChatGateway(io: SocketIOServer, container: AppContainer): void {
