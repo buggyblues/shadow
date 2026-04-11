@@ -718,10 +718,10 @@ export function ChatArea() {
           method: 'POST',
           body: formData,
         })
-        showToast(t('chat.savedToWorkspace', '已保存到工作区'), 'success')
+        showToast(t('chat.savedToWorkspace'), 'success')
         setSaveToWorkspaceFile(null)
       } catch (_err) {
-        showToast(t('chat.saveToWorkspaceFailed', '保存到工作区失败'), 'error')
+        showToast(t('chat.saveToWorkspaceFailed'), 'error')
       }
     },
     [saveToWorkspaceFile, activeServerId],

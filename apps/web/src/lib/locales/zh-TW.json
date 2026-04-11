@@ -375,7 +375,7 @@
     "enterFullscreen": "全螢幕",
     "exitFullscreen": "退出全螢幕",
     "dropFilesHere": "拖放檔案到此處上傳",
-    "imageLinkCopied": "連結已複製",
+    "linkCopied": "連結已複製",
     "savedToWorkspace": "已儲存到工作區",
     "saveToWorkspaceFailed": "儲存到工作區失敗"
   },

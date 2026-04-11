@@ -365,7 +365,7 @@
     "enterFullscreen": "全屏",
     "exitFullscreen": "退出全屏",
     "dropFilesHere": "拖放文件到此处上传",
-    "imageLinkCopied": "链接已复制",
+    "linkCopied": "链接已复制",
     "savedToWorkspace": "已保存到工作区",
     "saveToWorkspaceFailed": "保存到工作区失败"
   },

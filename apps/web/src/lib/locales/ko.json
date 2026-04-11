@@ -375,7 +375,7 @@
     "enterFullscreen": "전체 화면",
     "exitFullscreen": "전체 화면 종료",
     "dropFilesHere": "파일을 여기에 끌어다 놓아 업로드",
-    "imageLinkCopied": "이미지 링크가 복사되었습니다",
+    "linkCopied": "링크가 복사되었습니다",
     "savedToWorkspace": "워크스페이스에 저장됨",
     "saveToWorkspaceFailed": "워크스페이스 저장 실패"
   },

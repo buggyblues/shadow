@@ -365,7 +365,7 @@
     "enterFullscreen": "Fullscreen",
     "exitFullscreen": "Exit Fullscreen",
     "dropFilesHere": "Drop files here to upload",
-    "imageLinkCopied": "Image link copied",
+    "linkCopied": "Link copied",
     "savedToWorkspace": "Saved to workspace",
     "saveToWorkspaceFailed": "Failed to save to workspace"
   },
