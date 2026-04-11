@@ -1,7 +1,10 @@
 import { create } from 'zustand'
+import { DEFAULT_BACKGROUND_IMAGE, normalizeBackgroundImageUrl } from '../lib/backgrounds'
 
 type MobileView = 'servers' | 'channels' | 'chat'
 export type ThemeMode = 'dark' | 'light' | 'system'
+
+const BACKGROUND_NONE_SENTINEL = '__none__'
 
 interface UIState {
   /** Current mobile navigation view */
@@ -47,20 +50,19 @@ function applyTheme(theme: ThemeMode) {
   localStorage.setItem('shadow-theme', theme)
 }
 
-/** Apply custom background image to document root and persist to localStorage */
-function applyBackgroundImage(url: string | null) {
-  const root = document.documentElement
-  if (url) {
-    root.style.setProperty('--app-bg-image', `url("${url}")`)
-    localStorage.setItem('shadow-bg-image', url)
-  } else {
-    root.style.removeProperty('--app-bg-image')
-    localStorage.removeItem('shadow-bg-image')
-  }
+function persistBackgroundImage(url: string | null) {
+  localStorage.setItem('shadow-bg-image', url ?? BACKGROUND_NONE_SENTINEL)
+}
+
+function readSavedBackgroundImage() {
+  const raw = localStorage.getItem('shadow-bg-image')
+  if (raw === null) return DEFAULT_BACKGROUND_IMAGE
+  if (raw === BACKGROUND_NONE_SENTINEL) return null
+  return normalizeBackgroundImageUrl(raw) ?? DEFAULT_BACKGROUND_IMAGE
 }
 
 const savedTheme = (localStorage.getItem('shadow-theme') as ThemeMode) || 'dark'
-const savedBgImage = localStorage.getItem('shadow-bg-image') || '/backgrounds/starry-night.png'
+const savedBgImage = readSavedBackgroundImage()
 const savedBgMovement = localStorage.getItem('shadow-bg-movement') !== 'false'
 
 export const useUIStore = create<UIState>((set) => ({
@@ -84,8 +86,9 @@ export const useUIStore = create<UIState>((set) => ({
     set({ theme })
   },
   setBackgroundImage: (url) => {
-    applyBackgroundImage(url)
-    set({ backgroundImage: url })
+    const normalizedUrl = normalizeBackgroundImageUrl(url)
+    persistBackgroundImage(normalizedUrl)
+    set({ backgroundImage: normalizedUrl })
   },
   setEnableBackgroundMovement: (enabled) => {
     localStorage.setItem('shadow-bg-movement', String(enabled))
@@ -96,7 +99,6 @@ export const useUIStore = create<UIState>((set) => ({
 
 // Apply theme on load
 applyTheme(savedTheme)
-applyBackgroundImage(savedBgImage)
 
 // Listen for system theme changes when in "system" mode
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {

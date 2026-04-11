@@ -63,11 +63,11 @@ export function AppLayout() {
       {/* ── Neon Frost atmosphere orbs ── */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
         <div
-          className="absolute top-[-150px] left-[5%] w-[600px] h-[600px] rounded-full blur-[120px] animate-float opacity-30"
+          className="absolute top-[-150px] left-[5%] w-[560px] h-[560px] rounded-full blur-[120px] animate-float opacity-18"
           style={{ background: 'radial-gradient(circle, #00F3FF 0%, transparent 70%)' }}
         />
         <div
-          className="absolute top-[25%] right-[-150px] w-[700px] h-[700px] rounded-full blur-[120px] animate-float opacity-30"
+          className="absolute top-[25%] right-[-150px] w-[640px] h-[640px] rounded-full blur-[120px] animate-float opacity-16"
           style={{
             background: 'radial-gradient(circle, #FF2A55 0%, transparent 70%)',
             animationDelay: '-7s',

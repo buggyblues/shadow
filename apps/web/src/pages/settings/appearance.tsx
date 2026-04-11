@@ -1,6 +1,7 @@
 import { cn, Switch } from '@shadowob/ui'
 import { Check, Image as ImageIcon, Monitor, Moon, Paintbrush, Sun, X, Zap } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { BACKGROUND_OPTIONS } from '../../lib/backgrounds'
 import { type ThemeMode, useUIStore } from '../../stores/ui.store'
 import { SettingsCard, SettingsHeader, SettingsPanel, SettingsRow } from './_shared'
 
@@ -36,26 +37,11 @@ export function AppearanceSettings() {
     },
   ]
 
-  const bgOptions = [
-    {
-      id: 'none',
-      label: t('settings.backgroundNone'),
-      url: null,
-      icon: X,
-    },
-    {
-      id: 'starry-night',
-      label: t('settings.backgroundStarryNight'),
-      url: '/backgrounds/starry-night.png',
-      preview: '/backgrounds/starry-night.png',
-    },
-    {
-      id: 'bosch-garden-of-earthly-delights',
-      label: t('settings.backgroundBoschGarden'),
-      url: '/backgrounds/bosch-garden-of-earthly-delights.jpg',
-      preview: '/backgrounds/bosch-garden-of-earthly-delights.jpg',
-    },
-  ]
+  const bgOptions = BACKGROUND_OPTIONS.map((option) => ({
+    ...option,
+    label: t(option.labelKey),
+    icon: option.id === 'none' ? X : undefined,
+  }))
 
   return (
     <SettingsPanel>

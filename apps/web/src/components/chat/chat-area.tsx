@@ -102,7 +102,9 @@ interface SystemEvent {
 }
 
 /** Pre-computed timeline item with grouping info */
-type TimelineItem = { kind: 'message'; data: Message; isGrouped: boolean } | { kind: 'system'; data: SystemEvent }
+type TimelineItem =
+  | { kind: 'message'; data: Message; isGrouped: boolean }
+  | { kind: 'system'; data: SystemEvent }
 
 /** Estimated height by content type — used for virtualizer initial estimates */
 function estimateItemSize(item: TimelineItem): number {
@@ -498,7 +500,23 @@ export function ChatArea() {
   const virtualizer = useVirtualizer({
     count: timeline.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: (index) => estimateItemSize(timeline[index] ?? { kind: 'message' as const, data: { content: '', createdAt: '', authorId: '', channelId: '', replyToId: null, isEdited: false, isPinned: false, id: '' } as Message, isGrouped: false }),
+    estimateSize: (index) =>
+      estimateItemSize(
+        timeline[index] ?? {
+          kind: 'message' as const,
+          data: {
+            content: '',
+            createdAt: '',
+            authorId: '',
+            channelId: '',
+            replyToId: null,
+            isEdited: false,
+            isPinned: false,
+            id: '',
+          } as Message,
+          isGrouped: false,
+        },
+      ),
     overscan: 5,
   })
 
@@ -722,7 +740,7 @@ export function ChatArea() {
   return (
     <div className="flex-1 flex min-w-0 h-full">
       <div
-        className="flex-1 flex flex-col glass-panel overflow-hidden min-w-0 h-full relative"
+        className="flex-1 flex flex-col glass-panel chat-panel overflow-hidden min-w-0 h-full relative"
         onDrop={handleAreaDrop}
         onDragOver={handleAreaDragOver}
         onDragLeave={handleAreaDragLeave}
@@ -776,7 +794,10 @@ export function ChatArea() {
         </div>
 
         {/* Messages — virtual list */}
-        <div ref={parentRef} className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div
+          ref={parentRef}
+          className="chat-scroll-surface flex-1 overflow-y-auto overflow-x-hidden"
+        >
           {isLoadingMessages ? (
             <div className="flex items-center justify-center h-full text-text-muted">
               <span className="animate-pulse">{t('chat.loading', 'Loading...')}</span>
@@ -883,9 +904,7 @@ export function ChatArea() {
                         }
                         highlight={highlightMsgId === item.data.id}
                         replyToMessage={
-                          item.data.replyToId
-                            ? (messageMap.get(item.data.replyToId) ?? null)
-                            : null
+                          item.data.replyToId ? (messageMap.get(item.data.replyToId) ?? null) : null
                         }
                         selectionMode={selectionMode}
                         isSelected={selectedMessageIds.has(item.data.id)}

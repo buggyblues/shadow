@@ -154,9 +154,9 @@ export function ShopPage({ serverId, isAdmin, onClose }: ShopPageProps) {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-bg-primary overflow-hidden h-full relative font-sans">
+    <div className="flex-1 flex flex-col glass-panel overflow-hidden h-full relative font-sans min-h-0">
       {/* ── Header ── */}
-      <div className="desktop-drag-titlebar h-14 px-4 flex items-center bg-bg-primary/80 backdrop-blur-xl border-b border-border-subtle shrink-0 gap-3 z-20 sticky top-0 transition-colors">
+      <div className="desktop-drag-titlebar app-header px-4 flex items-center border-b border-border-subtle shrink-0 gap-3 z-20 sticky top-0 transition-colors">
         {onClose && (
           <Button
             variant="ghost"
@@ -271,7 +271,7 @@ export function ShopPage({ serverId, isAdmin, onClose }: ShopPageProps) {
       </div>
 
       {/* ── Main content area ── */}
-      <div className="flex-1 overflow-y-auto scroll-smooth scrollbar-hidden">
+      <div className="server-page-content flex-1 overflow-y-auto scroll-smooth scrollbar-hidden">
         <ShopBrowse
           serverId={serverId}
           shop={shop}

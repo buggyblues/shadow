@@ -360,7 +360,7 @@ export function WorkspacePage({ serverId, onClose, onPublishAsApp }: WorkspacePa
   return (
     <div
       {...getRootProps()}
-      className="flex-1 flex flex-col bg-bg-primary overflow-hidden h-full relative"
+      className="flex-1 flex flex-col glass-panel overflow-hidden h-full relative min-h-0"
     >
       <input {...getInputProps()} />
 
@@ -378,7 +378,7 @@ export function WorkspacePage({ serverId, onClose, onPublishAsApp }: WorkspacePa
         onRefresh={refetchTree}
       />
 
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="server-page-content flex flex-1 min-h-0 overflow-hidden">
         <div
           className="flex flex-col w-60 shrink-0 overflow-hidden border-r border-border-subtle bg-bg-tertiary/30 backdrop-blur-xl"
           onContextMenu={handleBlankContextMenu}
