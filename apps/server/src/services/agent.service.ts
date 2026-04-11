@@ -110,6 +110,11 @@ export class AgentService {
     return this.deps.agentDao.findByOwnerId(ownerId)
   }
 
+  /** Find agent by its bot user ID */
+  async findByUserId(userId: string) {
+    return this.deps.agentDao.findByUserId(userId)
+  }
+
   /** Generate a long-lived JWT token for the agent's bot user */
   async generateToken(agentId: string, ownerId: string) {
     const agent = await this.deps.agentDao.findById(agentId)

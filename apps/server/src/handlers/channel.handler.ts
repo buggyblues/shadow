@@ -366,6 +366,136 @@ export function createChannelHandler(container: AppContainer) {
     })
   })
 
+  // ── Voice Channel ──────────────────────────────────────────────────
+
+  // POST /api/channels/:channelId/rtc-join — get RTC connection info for a voice channel
+  channelHandler.post('/channels/:channelId/rtc-join', async (c) => {
+    const voiceService = container.resolve('voiceService')
+    const channelService = container.resolve('channelService')
+    const user = c.get('user')
+    const channelId = c.req.param('channelId')
+
+    // Verify channel exists and is a voice channel
+    const channel = await channelService.getById(channelId)
+    if (channel.type !== 'voice') {
+      return c.json({ error: 'Not a voice channel' }, 400)
+    }
+
+    // Generate RTC connection info (UID + token)
+    const connectionInfo = voiceService.generateConnectionInfo(channelId, user.userId)
+
+    return c.json({
+      appId: connectionInfo.appId,
+      channelName: connectionInfo.channelName,
+      uid: connectionInfo.uid,
+      token: connectionInfo.token,
+      expireAt: connectionInfo.expireAt,
+      policy: { mode: 'standby' } as Record<string, unknown>,
+    })
+  })
+
+  // ── Voice Buddy Policy ─────────────────────────────────────────────
+
+  // PUT /api/channels/:channelId/voice-policy — set buddy voice policy for a channel
+  channelHandler.put('/channels/:channelId/voice-policy', async (c) => {
+    const agentPolicyService = container.resolve('agentPolicyService')
+    const agentService = container.resolve('agentService')
+    const channelService = container.resolve('channelService')
+    const user = c.get('user')
+    const channelId = c.req.param('channelId')
+    const body = await c.req.json<{
+      agentId: string
+      listen?: boolean
+      mode?: 'standby' | 'active' | 'silent'
+      config?: Record<string, unknown>
+    }>()
+
+    // Verify channel exists
+    const channel = await channelService.getById(channelId)
+    if (channel.type !== 'voice') {
+      return c.json({ error: 'Not a voice channel' }, 400)
+    }
+
+    // Verify agent exists and user owns it OR user is server admin/owner
+    const agent = await agentService.getById(body.agentId)
+    if (!agent) {
+      return c.json({ error: 'Agent not found' }, 404)
+    }
+    const serverService = container.resolve('serverService')
+    const serverMembers = await serverService.getMembers(channel.serverId)
+    const requester = serverMembers.find((m) => m.userId === user.userId)
+    const isAdminOrOwner = requester?.role === 'owner' || requester?.role === 'admin'
+    if (agent.ownerId !== user.userId && !isAdminOrOwner) {
+      return c.json({ error: 'Not authorized' }, 403)
+    }
+
+    const config: Record<string, unknown> = body.config ?? {}
+    if (body.mode) config.mode = body.mode
+
+    // Upsert voice policy
+    const policy = await agentPolicyService.upsertPolicies(body.agentId, [
+      {
+        serverId: channel.serverId,
+        channelId,
+        type: 'voice',
+        listen: body.listen ?? true,
+        reply: true,
+        mentionOnly: false,
+        config,
+      },
+    ])
+
+    // Broadcast policy change to the bot
+    try {
+      const io = container.resolve('io')
+      io.to(`user:${agent.userId}`).emit('agent:voice-policy-changed', {
+        agentId: body.agentId,
+        serverId: channel.serverId,
+        channelId,
+        listen: body.listen ?? true,
+        config,
+      })
+    } catch {
+      /* non-critical */
+    }
+
+    return c.json(policy)
+  })
+
+  // GET /api/channels/:channelId/voice-policy — get buddy voice policy for a channel
+  channelHandler.get('/channels/:channelId/voice-policy', async (c) => {
+    const agentPolicyDao = container.resolve('agentPolicyDao')
+    const channelService = container.resolve('channelService')
+    const channelId = c.req.param('channelId')
+    const agentId = c.req.query('agentId')
+
+    if (!agentId) {
+      return c.json({ error: 'agentId query param required' }, 400)
+    }
+
+    const channel = await channelService.getById(channelId)
+
+    // Try channel-level voice policy first, fall back to server default
+    const channelPolicy = await agentPolicyDao.findByChannel(
+      agentId,
+      channel.serverId,
+      channelId,
+      'voice',
+    )
+    if (channelPolicy) {
+      return c.json({
+        listen: channelPolicy.listen,
+        config: channelPolicy.config ?? {},
+      })
+    }
+
+    const serverDefault = await agentPolicyDao.findServerDefault(agentId, channel.serverId, 'voice')
+    return c.json({
+      listen: serverDefault?.listen ?? true,
+      config: serverDefault?.config ?? {},
+    })
+  })
+
   // POST /api/channels/:id/archive — archive a channel
   channelHandler.post('/channels/:id/archive', async (c) => {
     const channelService = container.resolve('channelService')

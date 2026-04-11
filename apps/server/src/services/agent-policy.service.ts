@@ -1,6 +1,6 @@
 import type { Logger } from 'pino'
 import type { AgentDao } from '../dao/agent.dao'
-import type { AgentPolicyDao } from '../dao/agent-policy.dao'
+import type { AgentPolicyDao, PolicyType } from '../dao/agent-policy.dao'
 import type { ChannelDao } from '../dao/channel.dao'
 import type { ServerDao } from '../dao/server.dao'
 
@@ -16,8 +16,8 @@ export class AgentPolicyService {
   ) {}
 
   /** Get all policies for an agent */
-  async getPolicies(agentId: string) {
-    return this.deps.agentPolicyDao.findByAgentId(agentId)
+  async getPolicies(agentId: string, type?: PolicyType) {
+    return this.deps.agentPolicyDao.findByAgentId(agentId, type)
   }
 
   /** Upsert policies (batch) */
@@ -26,6 +26,7 @@ export class AgentPolicyService {
     policies: Array<{
       serverId: string
       channelId?: string | null
+      type?: PolicyType
       listen?: boolean
       reply?: boolean
       mentionOnly?: boolean
@@ -117,13 +118,14 @@ export class AgentPolicyService {
   /**
    * Auto-create default server-wide policy when a bot is added to a server.
    */
-  async ensureServerDefault(agentId: string, serverId: string) {
-    const existing = await this.deps.agentPolicyDao.findServerDefault(agentId, serverId)
+  async ensureServerDefault(agentId: string, serverId: string, type: PolicyType = 'text') {
+    const existing = await this.deps.agentPolicyDao.findServerDefault(agentId, serverId, type)
     if (existing) return existing
     return this.deps.agentPolicyDao.upsert({
       agentId,
       serverId,
       channelId: null,
+      type,
       listen: true,
       reply: true,
       mentionOnly: false,

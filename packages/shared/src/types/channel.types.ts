@@ -39,3 +39,40 @@ export interface ChannelSortOptions {
   by: ChannelSortBy
   direction: ChannelSortDirection
 }
+
+// ── Voice Channel Types ──────────────────────────────────────────────
+
+export interface VoiceChannelMember {
+  userId: string
+  username: string
+  displayName: string
+  muted: boolean
+  screenSharing: boolean
+  joinedAt: string
+}
+
+export interface VoiceChannelState {
+  channelId: string
+  members: VoiceChannelMember[]
+}
+
+/**
+ * Buddy voice policy — controls how a buddy behaves in a voice channel.
+ * Extends the existing agent_policies config pattern.
+ */
+export interface BuddyVoicePolicy {
+  /** Whether the buddy should listen to the voice channel */
+  listen: boolean
+  /** Buddy user ID */
+  buddyUserId: string
+  /** Extensible config for future voice-specific fields */
+  config: {
+    /** Mode: 'standby' (listen only), 'active' (can speak), 'silent' (ignore) */
+    mode?: 'standby' | 'active' | 'silent'
+    /** Whether to capture screen share frames */
+    captureScreenshots?: boolean
+    /** Screenshot interval in seconds (if captureScreenshots is true) */
+    screenshotIntervalSec?: number
+    [key: string]: unknown
+  }
+}

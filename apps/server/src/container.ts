@@ -60,6 +60,7 @@ import { SearchService } from './services/search.service'
 import { ServerService } from './services/server.service'
 import { ShopService } from './services/shop.service'
 import { TaskCenterService } from './services/task-center.service'
+import { VoiceService } from './services/voice.service'
 import { VoiceEnhanceService } from './services/voice-enhance.service'
 import { WalletService } from './services/wallet.service'
 import { WorkspaceService } from './services/workspace.service'
@@ -148,6 +149,7 @@ export interface Cradle {
   taskCenterService: TaskCenterService
   rechargeService: RechargeService
   voiceEnhanceService: VoiceEnhanceService
+  voiceService: VoiceService
   agentDashboardService: AgentDashboardService
 }
 
@@ -244,6 +246,7 @@ export function createAppContainer(db: Database): AppContainer {
     taskCenterService: asClass(TaskCenterService).singleton(),
     rechargeService: asClass(RechargeService).singleton(),
     voiceEnhanceService: asClass(VoiceEnhanceService).singleton(),
+    voiceService: asClass(VoiceService).singleton(),
     agentDashboardService: asClass(AgentDashboardService).singleton(),
   })
 

@@ -24,6 +24,8 @@ import {
   Lock,
   Megaphone,
   Menu,
+  MicOff,
+  Monitor,
   PawPrint,
   Plus,
   Settings,
@@ -33,17 +35,19 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSocket } from '@/hooks/use-socket'
+import { useVoiceStore } from '@/stores/voice.store'
 import { useChannelSort } from '../../hooks/use-channel-sort'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
 import { joinChannel } from '../../lib/socket'
-
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { ContextMenu } from '../common/context-menu'
 import { InvitePanel } from '../common/invite-panel'
 import { ServerSettingsModal } from '../server/server-settings-modal'
+import { VoiceChannel as VoiceChannelPanel } from '../voice/VoiceChannel'
 import { ChannelSortFilterButton } from './channel-sort-button'
 
 interface Channel {
@@ -366,6 +370,10 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
   const voiceChannels = channels.filter((c) => c.type === 'voice')
   const announcementChannels = channels.filter((c) => c.type === 'announcement')
 
+  // Track which voice channels have connected members (from voice store)
+  const voiceStoreMembers = useVoiceStore((s) => s.members)
+  const voiceStoreActiveId = useVoiceStore((s) => s.activeChannelId)
+
   const renderChannelGroup = (label: string, items: Channel[]) => {
     if (items.length === 0) return null
     const isCollapsed = !!collapsedGroups[label]
@@ -441,7 +449,29 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
                       })
                       queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
                     }
-                    handleSelectChannel(ch.id)
+                    if (ch.type === 'voice') {
+                      // Voice channel: join voice + navigate to a text channel for chat
+                      const voiceStore = useVoiceStore.getState()
+                      if (voiceStore.activeChannelId === ch.id) {
+                        // Already in this channel, ensure a text channel is active
+                        if (!useChatStore.getState().activeChannelId && textChannels.length > 0) {
+                          handleSelectChannel(textChannels[0]!.id)
+                        }
+                        return
+                      }
+                      // Leave previous voice channel if any
+                      if (voiceStore.activeChannelId) {
+                        voiceStore.leaveChannel()
+                      }
+                      // Join new voice channel
+                      voiceStore.joinChannel(ch.id, ch.name)
+                      // Navigate to a text channel so chat area is visible
+                      if (!useChatStore.getState().activeChannelId && textChannels.length > 0) {
+                        handleSelectChannel(textChannels[0]!.id)
+                      }
+                    } else {
+                      handleSelectChannel(ch.id)
+                    }
                   }}
                   onContextMenu={(e) => handleContextMenu(e, ch)}
                   className={cn(
@@ -880,6 +910,9 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
           }}
         />
       )}
+
+      {/* Voice Channel Panel — Discord-style bottom bar */}
+      <VoiceChannelPanel />
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { setupAppGateway } from './app.gateway'
 import { setupChatGateway } from './chat.gateway'
 import { setupNotificationGateway } from './notification.gateway'
 import { setupPresenceGateway } from './presence.gateway'
+import { setupVoiceGateway } from './voice.gateway'
 
 export function setupWebSocket(io: SocketIOServer, container: AppContainer): void {
   // Auth middleware for Socket.IO
@@ -41,6 +42,7 @@ export function setupWebSocket(io: SocketIOServer, container: AppContainer): voi
   setupChatGateway(io, container)
   setupAppGateway(io, container)
   setupNotificationGateway(io)
+  setupVoiceGateway(io, container)
 
   logger.info('WebSocket gateways initialized')
 }

@@ -1,4 +1,4 @@
-import { boolean, jsonb, pgTable, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { boolean, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 import { agents } from './agents'
 import { channels } from './channels'
 import { servers } from './servers'
@@ -24,6 +24,9 @@ export const agentPolicies = pgTable('agent_policies', {
 
   /** null = server-wide default policy */
   channelId: uuid('channel_id').references(() => channels.id, { onDelete: 'cascade' }),
+
+  /** Policy type: 'text' or 'voice' */
+  type: text('type').default('text').notNull(),
 
   /** Whether the agent listens on this server/channel */
   listen: boolean('listen').default(true).notNull(),

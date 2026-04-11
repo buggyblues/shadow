@@ -420,6 +420,19 @@ export class ShadowClient {
     return this.request(`/api/channels/${channelId}/buddy-policy`)
   }
 
+  // ── Voice Channels ──────────────────────────────────────────────
+
+  async getRtcJoinInfo(channelId: string): Promise<{
+    appId: string
+    channelName: string
+    uid: number
+    token: string
+    expireAt: number
+    policy: Record<string, unknown>
+  }> {
+    return this.request(`/api/channels/${channelId}/rtc-join`, { method: 'POST' })
+  }
+
   // ── Messages ──────────────────────────────────────────────────────────
 
   async sendMessage(

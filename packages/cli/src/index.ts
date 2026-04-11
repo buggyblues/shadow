@@ -19,6 +19,7 @@ import { createServersCommand } from './commands/servers.js'
 import { createShopCommand } from './commands/shop.js'
 import { createStatusCommand } from './commands/status.js'
 import { createThreadsCommand } from './commands/threads.js'
+import { createVoiceCommand } from './commands/voice.js'
 import { createWorkspaceCommand } from './commands/workspace.js'
 
 const program = new Command()
@@ -55,5 +56,6 @@ program.addCommand(createSearchCommand())
 program.addCommand(createConfigCommand())
 program.addCommand(createPingCommand())
 program.addCommand(createStatusCommand())
+program.addCommand(createVoiceCommand())
 
 program.parse()
