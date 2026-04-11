@@ -23,6 +23,8 @@
     "copied": "已複製",
     "loading": "載入中...",
     "uploading": "上傳中...",
+    "avatarUploaded": "頭像已上傳",
+    "uploadFailed": "上傳失敗",
     "delete": "刪除",
     "edit": "編輯",
     "close": "關閉",

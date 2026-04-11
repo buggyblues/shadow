@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker'
 import { Dices, Upload } from 'lucide-react-native'
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useTranslation } from 'react-i18next'
 import { fetchApi, getImageUrl } from '../../lib/api'
 import { showToast } from '../../lib/toast'
 import { fontSize, radius, spacing, useColors } from '../../theme'
@@ -15,6 +16,7 @@ interface AvatarEditorProps {
 }
 
 export function AvatarEditor({ value, userId, onChange }: AvatarEditorProps) {
+  const { t } = useTranslation()
   const colors = useColors()
   const [uploading, setUploading] = useState(false)
   const [tab, setTab] = useState<'preset' | 'upload'>('preset')
@@ -52,9 +54,9 @@ export function AvatarEditor({ value, userId, onChange }: AvatarEditorProps) {
         body: formData,
       })
       onChange(data.url)
-      showToast('头像已上传')
+      showToast(t('common.avatarUploaded', '头像已上传'))
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '上传失败')
+      showToast(err instanceof Error ? err.message : t('common.uploadFailed', '上传失败'))
     } finally {
       setUploading(false)
     }

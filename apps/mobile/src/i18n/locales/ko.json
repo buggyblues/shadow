@@ -23,6 +23,8 @@
     "copied": "복사됨",
     "loading": "로딩 중...",
     "uploading": "업로드 중...",
+    "avatarUploaded": "아바타가 업로드되었습니다",
+    "uploadFailed": "업로드 실패",
     "delete": "삭제",
     "edit": "편집",
     "close": "닫기",

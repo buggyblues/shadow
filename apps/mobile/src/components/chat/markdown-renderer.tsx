@@ -4,6 +4,7 @@ import { Check, Copy } from 'lucide-react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { EnrichedMarkdownText, type MarkdownStyle } from 'react-native-enriched-markdown'
+import { useTranslation } from 'react-i18next'
 import { showToast } from '../../lib/toast'
 import type { ColorTokens } from '../../theme'
 import { useColors } from '../../theme'
@@ -53,13 +54,14 @@ function CodeBlock({
   language?: string
   colors: ColorTokens
 }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleCopy = useCallback(async () => {
     await Clipboard.setStringAsync(code)
     setCopied(true)
-    showToast('已复制', 'success')
+    showToast(t('common.copied', 'Copied'), 'success')
     timerRef.current = setTimeout(() => setCopied(false), 2000)
   }, [code])
 

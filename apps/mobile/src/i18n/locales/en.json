@@ -23,6 +23,8 @@
     "copied": "Copied",
     "loading": "Loading...",
     "uploading": "Uploading...",
+    "avatarUploaded": "Avatar uploaded",
+    "uploadFailed": "Upload failed",
     "delete": "Delete",
     "edit": "Edit",
     "close": "Close",
