@@ -61,6 +61,15 @@ export class ChannelMemberDao {
       .where(eq(channelMembers.channelId, channelId))
   }
 
+  /** Get all channel IDs a user belongs to. */
+  async getAllChannelIds(userId: string) {
+    const rows = await this.db
+      .select({ channelId: channelMembers.channelId })
+      .from(channelMembers)
+      .where(eq(channelMembers.userId, userId))
+    return rows.map((r) => r.channelId)
+  }
+
   /** Remove all members from a channel. */
   async removeAll(channelId: string) {
     await this.db.delete(channelMembers).where(eq(channelMembers.channelId, channelId))
