@@ -12,7 +12,10 @@
     "ios": "expo run:ios",
     "prebuild": "expo prebuild",
     "lint": "biome check src/ app/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
@@ -81,6 +84,9 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.14",
-    "typescript": "~5.9.3"
+    "@vitest/coverage-v8": "^4.1.0",
+    "jsdom": "^26.1.0",
+    "typescript": "~5.9.3",
+    "vitest": "^4.1.0"
   }
 }
