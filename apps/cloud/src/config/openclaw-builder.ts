@@ -463,6 +463,17 @@ function stripAndCollectWorkspaceFiles(openclawConfig: OpenClawConfig): Record<s
       }
       delete entry.params
     }
+
+    // Generate AGENTS.md from the agents list so heartbeat checks pass
+    if (agentList.length > 0 && !workspaceFiles['AGENTS.md']) {
+      const lines: string[] = ['# Agents', '']
+      for (const entry of agentList) {
+        const name = String(entry.name ?? entry.id ?? 'agent')
+        const desc = entry.description ? ` — ${entry.description}` : ''
+        lines.push(`- **${name}**${desc}`)
+      }
+      workspaceFiles['AGENTS.md'] = lines.join('\n') + '\n'
+    }
   }
   return workspaceFiles
 }
@@ -502,22 +513,22 @@ function applyPluginPipeline(
       agent,
       config,
       secrets,
-      namespace: config.namespace ?? 'default',
+      namespace: config.deployments?.namespace ?? 'default',
       pluginRegistry: registry,
     }
 
-    const agentConfig = resolved.config ?? {}
+    const agentConfig = (resolved.config ?? {}) as Record<string, unknown>
 
     // Build OpenClaw config fragment (new providers → legacy fallback)
     if (pluginDef.configBuilder) {
       const fragment = pluginDef.configBuilder.build(agentConfig, context)
-      mergePluginFragments(openclawConfig as unknown as PluginConfigFragment, fragment)
+      Object.assign(openclawConfig, mergePluginFragments(openclawConfig, fragment))
     } else if (pluginDef.channel) {
       const fragment = pluginDef.channel.buildChannel(agentConfig, context)
-      mergePluginFragments(openclawConfig as unknown as PluginConfigFragment, fragment)
+      Object.assign(openclawConfig, mergePluginFragments(openclawConfig, fragment))
     } else if (pluginDef.buildOpenClawConfig) {
       const fragment = pluginDef.buildOpenClawConfig(agentConfig, context)
-      mergePluginFragments(openclawConfig as unknown as PluginConfigFragment, fragment)
+      Object.assign(openclawConfig, mergePluginFragments(openclawConfig, fragment))
     }
 
     // Build env vars (new provider → legacy fallback)
@@ -642,6 +653,20 @@ export function buildOpenClawConfig(agent: AgentDeployment, config: CloudConfig)
   const pluginEnvVars = applyPluginPipeline(agent, config, openclawConfig)
   if (Object.keys(pluginEnvVars).length > 0) {
     openclawConfig._pluginEnvVars = pluginEnvVars
+  }
+
+  // 18. Ensure shadowob channel has a disabled fallback config so the
+  //     always-installed openclaw-shadowob extension passes validation.
+  const existingChannels = (openclawConfig as Record<string, unknown>).channels as
+    | Record<string, unknown>
+    | undefined
+  if (!existingChannels?.shadowob && !existingChannels?.['openclaw-shadowob']) {
+    if (!openclawConfig.channels) {
+      ;(openclawConfig as Record<string, unknown>).channels = {}
+    }
+    ;((openclawConfig as Record<string, unknown>).channels as Record<string, unknown>).shadowob = {
+      enabled: false,
+    }
   }
 
   return openclawConfig

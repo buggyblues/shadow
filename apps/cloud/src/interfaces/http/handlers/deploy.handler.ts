@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
-import { redactSecrets } from '../../../utils/redact.js'
+import { formatDeploymentLogLine } from '../deploy-log-format.js'
 import type { HandlerContext } from './types.js'
 
 function cleanupTmpFile(path: string): void {
@@ -16,6 +16,43 @@ function cleanupTmpFile(path: string): void {
     unlinkSync(path)
   } catch {
     /* ignore */
+  }
+}
+
+function parseTaskId(raw: string): number | null {
+  const taskId = Number(raw)
+  return Number.isInteger(taskId) && taskId > 0 ? taskId : null
+}
+
+function buildTaskUrl(taskId: number): string {
+  return `/deploy-tasks/${taskId}`
+}
+
+function buildDonePayload(
+  task:
+    | {
+        status: string
+        error: string | null
+        namespace: string
+        agentCount: number | null
+      }
+    | null
+    | undefined,
+): {
+  exitCode: number
+  error?: string
+  result?: {
+    namespace?: string
+    agentCount?: number
+  }
+} {
+  return {
+    exitCode: task?.status === 'deployed' ? 0 : 1,
+    ...(task?.error ? { error: task.error } : {}),
+    result: {
+      namespace: task?.namespace,
+      agentCount: task?.agentCount ?? 0,
+    },
   }
 }
 
@@ -32,100 +69,176 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
       return c.json({ error: 'Invalid JSON body' }, 400)
     }
 
-    // Resolve env vars from DB + wizard inputs for ${env:VAR} template resolution
-    const envOverrides: Record<string, string> = {}
-    const originalEnv: Record<string, string | undefined> = {}
+    const task = await ctx.deployTaskManager.start(config)
 
-    // 1. Load saved env vars (decrypted) from DB
-    try {
-      const dbEnvVars = ctx.envVarDao.findAllDecrypted()
-      Object.assign(envOverrides, dbEnvVars)
-    } catch { /* ignore */ }
+    return streamSSE(c, async (stream) => {
+      let lastLogId = 0
 
-    // 2. Load saved secrets (decrypted, mapped to env var names) from DB
-    try {
-      const dbSecrets = ctx.secretDao.findAllDecrypted()
-      Object.assign(envOverrides, dbSecrets)
-    } catch { /* ignore */ }
-
-    // 3. Apply wizard-supplied env vars (override DB values; resolve __SAVED__ sentinel)
-    const wizardEnvVars = config.envVars as Record<string, string> | undefined
-    if (wizardEnvVars && typeof wizardEnvVars === 'object') {
-      for (const [k, v] of Object.entries(wizardEnvVars)) {
-        if (typeof v === 'string' && v !== '__SAVED__' && v.trim() !== '') {
-          envOverrides[k] = v
-        }
-        // __SAVED__ → already resolved from DB above; skip
+      const sendLog = async (message: string) => {
+        await stream.writeSSE({ event: 'log', data: JSON.stringify(message) })
       }
+
+      const flushLogs = async () => {
+        const logs = ctx.deploymentLogDao.findByDeploymentIdSince(task.id, lastLogId)
+        for (const log of logs) {
+          lastLogId = log.id
+          await sendLog(formatDeploymentLogLine(log.message, log.createdAt))
+        }
+      }
+
+      await stream.writeSSE({
+        event: 'task',
+        data: JSON.stringify({ id: task.id, url: buildTaskUrl(task.id) }),
+      })
+
+      await flushLogs()
+
+      const existingTask = ctx.deploymentDao.findById(task.id)
+      if (!ctx.deployTaskManager.isActive(task.id)) {
+        await stream.writeSSE({
+          event: 'done',
+          data: JSON.stringify(buildDonePayload(existingTask)),
+        })
+        return
+      }
+
+      await new Promise<void>((resolve) => {
+        let finished = false
+
+        const finish = async (payload?: ReturnType<typeof buildDonePayload>) => {
+          if (finished) return
+          finished = true
+          await flushLogs()
+          await stream.writeSSE({
+            event: 'done',
+            data: JSON.stringify(payload ?? buildDonePayload(ctx.deploymentDao.findById(task.id))),
+          })
+          resolve()
+        }
+
+        const unsubscribe = ctx.deployTaskManager.subscribe(task.id, async (event) => {
+          if (event.type === 'log') {
+            if (event.data.id <= lastLogId) return
+            lastLogId = event.data.id
+            await sendLog(formatDeploymentLogLine(event.data.message, event.data.createdAt))
+            return
+          }
+
+          unsubscribe()
+          await finish(event.data)
+        })
+
+        void flushLogs().then(async () => {
+          if (!ctx.deployTaskManager.isActive(task.id)) {
+            unsubscribe()
+            await finish()
+          }
+        })
+
+        stream.onAbort(() => {
+          unsubscribe()
+          resolve()
+        })
+      })
+    })
+  })
+
+  app.get('/deploy-tasks', (c) => {
+    const tasks = ctx.deploymentDao.findAll().map((task) => ({
+      task,
+      url: buildTaskUrl(task.id),
+      active: ctx.deployTaskManager.isActive(task.id),
+    }))
+
+    return c.json({ tasks })
+  })
+
+  app.get('/deploy-tasks/:id', (c) => {
+    const taskId = parseTaskId(c.req.param('id'))
+    if (!taskId) {
+      return c.json({ error: 'Invalid task id' }, 400)
     }
 
-    // Remove envVars from config before writing (not part of the template schema)
-    const { envVars: _, ...templateConfig } = config
+    const task = ctx.deploymentDao.findById(taskId)
+    if (!task) {
+      return c.json({ error: 'Deployment task not found' }, 404)
+    }
 
-    const tmpFile = join(tmpdir(), `shadowob-deploy-${Date.now()}.json`)
-    writeFileSync(tmpFile, JSON.stringify(templateConfig, null, 2), 'utf-8')
+    return c.json({
+      task,
+      url: buildTaskUrl(task.id),
+      active: ctx.deployTaskManager.isActive(task.id),
+    })
+  })
 
-    // Temporarily inject resolved env vars into process.env
-    for (const [k, v] of Object.entries(envOverrides)) {
-      originalEnv[k] = process.env[k]
-      process.env[k] = v
+  app.get('/deploy-tasks/:id/stream', (c) => {
+    const taskId = parseTaskId(c.req.param('id'))
+    if (!taskId) {
+      return c.json({ error: 'Invalid task id' }, 400)
+    }
+
+    const task = ctx.deploymentDao.findById(taskId)
+    if (!task) {
+      return c.json({ error: 'Deployment task not found' }, 404)
     }
 
     return streamSSE(c, async (stream) => {
-      const sendLog = (msg: string) => {
-        void stream.writeSSE({ event: 'log', data: JSON.stringify(msg) })
+      let lastLogId = 0
+
+      const writeLog = async (message: string) => {
+        await stream.writeSSE({ data: JSON.stringify(message) })
       }
 
-      try {
-        sendLog('Starting deployment...')
+      const flushLogs = async () => {
+        const logs = ctx.deploymentLogDao.findByDeploymentIdSince(taskId, lastLogId)
+        for (const log of logs) {
+          lastLogId = log.id
+          await writeLog(formatDeploymentLogLine(log.message, log.createdAt))
+        }
+      }
 
-        const result = await ctx.container.deploy.up({
-          filePath: tmpFile,
-          namespace: templateConfig.namespace as string | undefined,
-          dryRun: templateConfig.dryRun as boolean | undefined,
-          onOutput: (out: string) => {
-            for (const line of out.split('\n').filter(Boolean)) {
-              void stream.writeSSE({ event: 'log', data: JSON.stringify(redactSecrets(line)) })
-            }
-          },
-        })
+      await flushLogs()
 
-        // Record deployment in DB
-        try {
-          ctx.deploymentDao.create({
-            namespace: result.namespace ?? (config.namespace as string) ?? 'shadowob-cloud',
-            templateSlug: (config.templateSlug as string) ?? 'unknown',
-            status: 'deployed',
-            config: config,
-            agentCount: result.agentCount ?? 0,
-          })
-        } catch {
-          /* non-critical */
+      if (!ctx.deployTaskManager.isActive(taskId)) {
+        await stream.writeSSE({ event: 'close', data: '{}' })
+        return
+      }
+
+      await new Promise<void>((resolve) => {
+        let closed = false
+
+        const close = async () => {
+          if (closed) return
+          closed = true
+          await flushLogs()
+          await stream.writeSSE({ event: 'close', data: '{}' })
+          resolve()
         }
 
-        await stream.writeSSE({
-          event: 'done',
-          data: JSON.stringify({
-            exitCode: 0,
-            result: { namespace: result.namespace, agentCount: result.agentCount },
-          }),
-        })
-      } catch (err) {
-        await stream.writeSSE({
-          event: 'done',
-          data: JSON.stringify({ exitCode: 1, error: (err as Error).message }),
-        })
-      } finally {
-        cleanupTmpFile(tmpFile)
-        // Restore process.env
-        for (const [k, v] of Object.entries(originalEnv)) {
-          if (v === undefined) {
-            delete process.env[k]
-          } else {
-            process.env[k] = v
+        const unsubscribe = ctx.deployTaskManager.subscribe(taskId, async (event) => {
+          if (event.type === 'log') {
+            if (event.data.id <= lastLogId) return
+            lastLogId = event.data.id
+            await writeLog(formatDeploymentLogLine(event.data.message, event.data.createdAt))
+            return
           }
-        }
-      }
+
+          unsubscribe()
+          await close()
+        })
+
+        void flushLogs().then(async () => {
+          if (!ctx.deployTaskManager.isActive(taskId)) {
+            unsubscribe()
+            await close()
+          }
+        })
+
+        stream.onAbort(() => {
+          unsubscribe()
+          resolve()
+        })
+      })
     })
   })
 

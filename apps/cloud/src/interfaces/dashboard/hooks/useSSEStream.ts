@@ -20,6 +20,10 @@ interface UseSSEStreamOptions {
   maxLines?: number
 }
 
+interface FetchSSEOptions {
+  onEvent?: (event: string | undefined, data: unknown) => void
+}
+
 interface UseSSEStreamReturn {
   lines: string[]
   status: SSEStatus
@@ -27,7 +31,7 @@ interface UseSSEStreamReturn {
   /** Connect to an EventSource (GET) endpoint */
   connect: (url: string) => void
   /** Start a fetch-based SSE stream (POST) */
-  startFetch: (url: string, body: unknown) => Promise<SSEResult>
+  startFetch: (url: string, body: unknown, options?: FetchSSEOptions) => Promise<SSEResult>
   /** Disconnect active stream */
   disconnect: () => void
   /** Clear accumulated lines */
@@ -105,7 +109,7 @@ export function useSSEStream(options: UseSSEStreamOptions = {}): UseSSEStreamRet
 
   // Fetch-based SSE (for deploy with POST body)
   const startFetch = useCallback(
-    async (url: string, body: unknown): Promise<SSEResult> => {
+    async (url: string, body: unknown, options?: FetchSSEOptions): Promise<SSEResult> => {
       cleanup()
       setLines([])
       setError(null)
@@ -148,6 +152,7 @@ export function useSSEStream(options: UseSSEStreamOptions = {}): UseSSEStreamRet
             if (!dataLine) continue
             const data = JSON.parse(dataLine.slice(5).trim())
             const event = eventLine?.slice(7).trim()
+            options?.onEvent?.(event, data)
             if (event === 'log') {
               setLines((prev) => [...prev.slice(-(maxLines - 1)), data as string])
             } else if (event === 'done') {

@@ -214,7 +214,7 @@ describe('parser', () => {
       }
 
       const result = buildOpenClawConfig(config.deployments!.agents[0], config)
-      expect(result.channels).toBeUndefined()
+      expect(result.channels).toEqual({ shadowob: { enabled: false } })
       expect(result.bindings).toBeUndefined()
     })
 

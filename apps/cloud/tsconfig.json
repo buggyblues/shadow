@@ -5,6 +5,10 @@
     "rootDir": "src",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/interfaces/dashboard/*"]
+    },
     "target": "ES2022",
     "declaration": true,
     "strict": true,

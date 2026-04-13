@@ -5,8 +5,10 @@ interface ConfirmDialogProps {
   title: string
   message: string
   confirmLabel?: string
+  confirmingLabel?: string
   /** If set, user must type this text to confirm */
   confirmText?: string
+  isConfirming?: boolean
   onConfirm: () => void
   onCancel: () => void
 }
@@ -15,7 +17,9 @@ export function ConfirmDialog({
   title,
   message,
   confirmLabel = 'Confirm',
+  confirmingLabel,
   confirmText,
+  isConfirming = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -53,6 +57,7 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
+            disabled={isConfirming}
             className="text-sm text-gray-400 hover:text-white px-4 py-2 rounded border border-gray-700 hover:border-gray-500 transition-colors"
           >
             Cancel
@@ -60,10 +65,10 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onConfirm}
-            disabled={!canConfirm}
+            disabled={!canConfirm || isConfirming}
             className="text-sm bg-red-600 hover:bg-red-500 disabled:bg-gray-700 disabled:text-gray-500 text-white px-4 py-2 rounded transition-colors"
           >
-            {confirmLabel}
+            {isConfirming ? (confirmingLabel ?? confirmLabel) : confirmLabel}
           </button>
         </div>
       </div>

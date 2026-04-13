@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  Copy,
   Download,
   Eye,
   EyeOff,
@@ -43,6 +44,10 @@ const WIZARD_STEPS: Step[] = [
   { id: 'configure', label: 'Configure', description: 'Set namespace & env' },
   { id: 'deploy', label: 'Deploy', description: 'Deploy & monitor' },
 ]
+
+function getProviderSecretEnvName(providerId: string): string {
+  return `${providerId.toUpperCase().replace(/-/g, '_')}_API_KEY`
+}
 
 // ── Step 1: Template Overview ─────────────────────────────────────────────────
 
@@ -205,10 +210,6 @@ function StepConfigure({
     queryKey: ['env'],
     queryFn: api.env.list,
   })
-  const { data: savedSecretsData } = useQuery({
-    queryKey: ['secrets'],
-    queryFn: api.secrets.list,
-  })
 
   const requiredVars = envRefsData?.requiredEnvVars ?? []
 
@@ -218,18 +219,8 @@ function StepConfigure({
     for (const ev of savedEnvData?.envVars ?? []) {
       lookup[ev.key] = ev.maskedValue
     }
-    for (const s of savedSecretsData?.secrets ?? []) {
-      // Map provider secrets to common env var names
-      const envName = `${s.providerId.toUpperCase()}_${s.key.toUpperCase()}`.replace(/-/g, '_')
-      lookup[envName] = s.maskedValue
-      // Also try direct key match (e.g. "apiKey" for provider "openai" → OPENAI_API_KEY)
-      if (s.key === 'apiKey') {
-        const altKey = `${s.providerId.toUpperCase().replace(/-/g, '_')}_API_KEY`
-        lookup[altKey] = s.maskedValue
-      }
-    }
     return lookup
-  }, [savedEnvData, savedSecretsData])
+  }, [savedEnvData])
 
   // Auto-populate from saved values on first load
   const initializedRef = useRef(false)
@@ -446,7 +437,9 @@ function StepConfigure({
                   value={env.key}
                   onChange={(e) => {
                     const updated = [...extraVars]
-                    updated[i] = { ...updated[i], key: e.target.value }
+                    const current = updated[i]
+                    if (!current) return
+                    updated[i] = { ...current, key: e.target.value }
                     setExtraVars(updated)
                     if (e.target.value) updateVar(e.target.value, env.value)
                   }}
@@ -459,7 +452,9 @@ function StepConfigure({
                   value={env.value}
                   onChange={(e) => {
                     const updated = [...extraVars]
-                    updated[i] = { ...updated[i], value: e.target.value }
+                    const current = updated[i]
+                    if (!current) return
+                    updated[i] = { ...current, value: e.target.value }
                     setExtraVars(updated)
                     if (env.key) updateVar(env.key, e.target.value)
                   }}
@@ -471,7 +466,7 @@ function StepConfigure({
                   onClick={() => {
                     const removed = extraVars[i]
                     setExtraVars(extraVars.filter((_, j) => j !== i))
-                    if (removed.key) {
+                    if (removed?.key) {
                       const updated = { ...config.envVars }
                       delete updated[removed.key]
                       onChange({ ...config, envVars: updated })
@@ -520,8 +515,7 @@ function StepConfigure({
 
 // ── Step 3: Providers ─────────────────────────────────────────────────────────
 
-// @ts-expect-error WIP: StepProviders not yet wired into wizard flow
-function StepProviders({
+export function StepProviders({
   providers,
   onChange,
   onNext,
@@ -532,6 +526,7 @@ function StepProviders({
   onNext: () => void
   onBack: () => void
 }) {
+  const { t } = useTranslation()
   const { data: settings } = useQuery({
     queryKey: ['settings'],
     queryFn: api.settings.get,
@@ -551,23 +546,26 @@ function StepProviders({
     const provider: ProviderSettings = {
       id: preset.id,
       api: preset.api,
-      apiKey: '',
       ...(preset.baseUrl ? { baseUrl: preset.baseUrl } : {}),
     }
     onChange([...providers, provider])
   }
 
-  const updateProvider = (index: number, field: string, value: string) => {
+  const updateProvider = (
+    index: number,
+    field: keyof Pick<ProviderSettings, 'baseUrl'>,
+    value: string,
+  ) => {
     const updated = [...providers]
-    updated[index] = { ...updated[index], [field]: value }
+    const current = updated[index]
+    if (!current) return
+    updated[index] = { ...current, [field]: value }
     onChange(updated)
   }
 
   const removeProvider = (index: number) => {
     onChange(providers.filter((_, i) => i !== index))
   }
-
-  const hasConfiguredProvider = providers.some((p) => p.apiKey)
 
   return (
     <div className="space-y-6">
@@ -631,23 +629,22 @@ function StepProviders({
               </button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">API Key</label>
-                <input
-                  type="password"
-                  value={provider.apiKey ?? ''}
-                  onChange={(e) => updateProvider(i, 'apiKey', e.target.value)}
-                  placeholder="sk-..."
-                  autoComplete="off"
-                  data-1p-ignore
-                  data-lpignore="true"
-                  data-form-type="other"
-                  className="w-full bg-gray-950 border border-gray-700 rounded px-3 py-2 text-xs font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500"
-                />
+              <div className="bg-gray-950 border border-gray-800 rounded px-3 py-2.5">
+                <label className="text-xs text-gray-500 mb-1 block">
+                  {t('settings.secretEnvKey')}
+                </label>
+                <code className="text-xs font-mono text-yellow-400/90 break-all">
+                  {getProviderSecretEnvName(provider.id)}
+                </code>
+                <p className="text-[11px] text-gray-600 mt-2">
+                  {t('settings.credentialsManagedInSecrets')}
+                </p>
               </div>
               {provider.baseUrl !== undefined && (
                 <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Base URL</label>
+                  <label className="text-xs text-gray-500 mb-1 block">
+                    {t('settings.baseUrl')}
+                  </label>
                   <input
                     type="text"
                     value={provider.baseUrl ?? ''}
@@ -677,16 +674,6 @@ function StepProviders({
           </button>
         ))}
       </div>
-
-      {/* Warning if no provider */}
-      {!hasConfiguredProvider && providers.length > 0 && (
-        <div className="bg-yellow-950/20 border border-yellow-900/30 rounded-lg p-3 flex items-center gap-2">
-          <AlertTriangle size={14} className="text-yellow-400 shrink-0" />
-          <p className="text-xs text-yellow-400">
-            At least one provider needs an API key configured for agents to function.
-          </p>
-        </div>
-      )}
 
       {/* Navigation */}
       <div className="flex justify-between">
@@ -722,6 +709,7 @@ function StepDeploy({
   config: DeployConfig
   onBack: () => void
 }) {
+  const { t } = useTranslation()
   const logRef = useRef<HTMLDivElement>(null)
   const toast = useToast()
   const navigate = useNavigate()
@@ -731,7 +719,10 @@ function StepDeploy({
   const { lines, status, error: _sseError, startFetch } = useSSEStream()
   const [deployStarted, setDeployStarted] = useState(false)
   const [deploySuccess, setDeploySuccess] = useState<boolean | null>(null)
+  const [taskInfo, setTaskInfo] = useState<{ id: number; url: string } | null>(null)
   const meta = getTemplateMeta(name)
+
+  const taskUrl = taskInfo ? new URL(taskInfo.url, window.location.origin).toString() : ''
 
   // Auto-scroll log
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on new lines
@@ -748,6 +739,7 @@ function StepDeploy({
 
   const handleDeploy = async () => {
     setDeployStarted(true)
+    setTaskInfo(null)
 
     try {
       // Step 1: Initialize from template (returns template JSON and persists to DB)
@@ -763,7 +755,21 @@ function StepDeploy({
         deployConfig.envVars = config.envVars
       }
 
-      const result = await startFetch('/api/deploy', deployConfig)
+      const result = await startFetch('/api/deploy', deployConfig, {
+        onEvent: (event, data) => {
+          if (
+            event === 'task' &&
+            data &&
+            typeof data === 'object' &&
+            'id' in data &&
+            'url' in data &&
+            typeof data.id === 'number' &&
+            typeof data.url === 'string'
+          ) {
+            setTaskInfo({ id: data.id, url: data.url })
+          }
+        },
+      })
 
       if (!result.success) {
         setDeploySuccess(false)
@@ -817,6 +823,17 @@ function StepDeploy({
     a.download = `deploy-${name}-${Date.now()}.log`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const handleCopyTaskUrl = async () => {
+    if (!taskUrl) return
+
+    try {
+      await navigator.clipboard.writeText(taskUrl)
+      toast.success(t('deployTask.linkCopied'))
+    } catch {
+      toast.error(t('deployTask.linkCopyFailed'))
+    }
   }
 
   const isDeploying =
@@ -944,6 +961,42 @@ function StepDeploy({
             </div>
           </div>
 
+          {taskInfo && (
+            <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-500 mb-1">{t('deployTask.taskUrl')}</p>
+                  <code className="block text-xs font-mono text-gray-300 break-all">{taskUrl}</code>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleCopyTaskUrl}
+                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-colors"
+                  >
+                    <Copy size={12} />
+                    {t('deployTask.copyLink')}
+                  </button>
+                  <Link
+                    to="/deploy-tasks/$taskId"
+                    params={{ taskId: String(taskInfo.id) }}
+                    className="flex items-center gap-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-3 py-2 transition-colors"
+                  >
+                    <Server size={12} />
+                    {t('deployTask.openTask')}
+                  </Link>
+                  <Link
+                    to="/deploy-tasks"
+                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-colors"
+                  >
+                    <Activity size={12} />
+                    {t('nav.deployTasks')}
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Log viewer */}
           <div className="bg-gray-950 border border-gray-800 rounded-lg overflow-hidden">
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-800 bg-gray-900/50">
@@ -989,19 +1042,22 @@ function StepDeploy({
               {/* What's Next cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left max-w-2xl mx-auto">
                 <button
-                  onClick={() =>
+                  onClick={() => {
+                    if (!taskInfo) return
                     navigate({
-                      to: '/deployments/$namespace/$id',
-                      params: { namespace: config.namespace, id: config.namespace },
+                      to: '/deploy-tasks/$taskId',
+                      params: { taskId: String(taskInfo.id) },
                     })
-                  }
+                  }}
                   className="p-4 bg-gray-800/50 border border-gray-800 rounded-lg hover:bg-gray-800 transition-colors group"
                 >
                   <Server size={20} className="text-gray-400 mb-2" />
                   <div className="text-sm font-medium text-gray-300 group-hover:text-gray-200">
-                    View Deployment
+                    {t('deployTask.openTask')}
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">Check pod status and view logs</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {t('deployTask.openTaskDescription')}
+                  </p>
                 </button>
                 <button
                   onClick={() => navigate({ to: '/monitoring' })}

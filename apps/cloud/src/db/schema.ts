@@ -2,8 +2,8 @@
  * Database Schema — all tables for the cloud console.
  */
 
-import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { sql } from 'drizzle-orm'
+import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 // ── Templates ────────────────────────────────────────────────────────────────
 
@@ -61,6 +61,16 @@ export const deployments = sqliteTable('deployments', {
   updatedAt: text('updated_at').default(sql`(datetime('now'))`),
 })
 
+export const deploymentLogs = sqliteTable('deployment_logs', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  deploymentId: integer('deployment_id')
+    .notNull()
+    .references(() => deployments.id, { onDelete: 'cascade' }),
+  event: text('event').notNull().default('log'),
+  message: text('message').notNull(),
+  createdAt: text('created_at').default(sql`(datetime('now'))`),
+})
+
 // ── Activity Log ─────────────────────────────────────────────────────────────
 
 export const activities = sqliteTable('activities', {
@@ -87,6 +97,13 @@ export const envVars = sqliteTable('env_vars', {
   updatedAt: text('updated_at').default(sql`(datetime('now'))`),
 })
 
+export const envGroups = sqliteTable('env_groups', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull().unique(),
+  createdAt: text('created_at').default(sql`(datetime('now'))`),
+  updatedAt: text('updated_at').default(sql`(datetime('now'))`),
+})
+
 // ── Config Version History (My Templates) ────────────────────────────────────
 
 export const configVersions = sqliteTable('config_versions', {
@@ -108,9 +125,13 @@ export type Config = typeof configs.$inferSelect
 export type NewConfig = typeof configs.$inferInsert
 export type Deployment = typeof deployments.$inferSelect
 export type NewDeployment = typeof deployments.$inferInsert
+export type DeploymentLog = typeof deploymentLogs.$inferSelect
+export type NewDeploymentLog = typeof deploymentLogs.$inferInsert
 export type Activity = typeof activities.$inferSelect
 export type NewActivity = typeof activities.$inferInsert
 export type EnvVar = typeof envVars.$inferSelect
 export type NewEnvVar = typeof envVars.$inferInsert
+export type EnvGroup = typeof envGroups.$inferSelect
+export type NewEnvGroup = typeof envGroups.$inferInsert
 export type ConfigVersion = typeof configVersions.$inferSelect
 export type NewConfigVersion = typeof configVersions.$inferInsert

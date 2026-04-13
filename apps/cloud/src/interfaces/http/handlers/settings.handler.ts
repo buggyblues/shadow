@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Hono } from 'hono'
+import { toProviderSecretEnvKey } from '../../../utils/env-names.js'
 import type { HandlerContext } from './types.js'
 
 function settingsPath(): string {
@@ -28,26 +29,53 @@ function writeSettings(data: Record<string, unknown>): void {
   writeFileSync(p, JSON.stringify(data, null, 2), 'utf-8')
 }
 
+function normalizeSettings(
+  ctx: HandlerContext,
+  settings: Record<string, unknown>,
+): { normalized: Record<string, unknown>; changed: boolean } {
+  const normalized = JSON.parse(JSON.stringify(settings)) as Record<string, unknown>
+  let changed = false
+
+  if (Array.isArray(normalized.providers)) {
+    ctx.envGroupDao.ensure('default')
+
+    for (const provider of normalized.providers) {
+      if (!provider || typeof provider !== 'object') continue
+
+      const providerRecord = provider as Record<string, unknown>
+      const providerId = typeof providerRecord.id === 'string' ? providerRecord.id : null
+      const apiKey = typeof providerRecord.apiKey === 'string' ? providerRecord.apiKey : null
+
+      if (providerId && apiKey && apiKey.trim()) {
+        const envKey = toProviderSecretEnvKey(providerId, 'apiKey')
+        if (!ctx.envVarDao.getValue('global', envKey)) {
+          ctx.envVarDao.upsert('global', envKey, apiKey, true, 'default')
+        }
+        delete providerRecord.apiKey
+        changed = true
+      }
+    }
+  }
+
+  return { normalized, changed }
+}
+
 export function createSettingsHandler(ctx: HandlerContext): Hono {
   const app = new Hono()
 
   app.get('/settings', (c) => {
-    const settings = readSettings()
-    const sanitized = JSON.parse(JSON.stringify(settings))
-    if (sanitized.providers && Array.isArray(sanitized.providers)) {
-      for (const p of sanitized.providers) {
-        if (p.apiKey && typeof p.apiKey === 'string' && p.apiKey.length > 8) {
-          p.apiKey = `${p.apiKey.slice(0, 8)}...[truncated]`
-        }
-      }
+    const { normalized, changed } = normalizeSettings(ctx, readSettings())
+    if (changed) {
+      writeSettings(normalized)
     }
-    return c.json(sanitized)
+    return c.json(normalized)
   })
 
   app.put('/settings', async (c) => {
     try {
       const data = await c.req.json<Record<string, unknown>>()
-      writeSettings(data)
+      const { normalized } = normalizeSettings(ctx, data)
+      writeSettings(normalized)
       return c.json({ ok: true })
     } catch (err) {
       return c.json({ error: (err as Error).message }, 400)
@@ -62,7 +90,9 @@ export function createSettingsHandler(ctx: HandlerContext): Hono {
 
   app.get('/runtimes', (c) => {
     const runtimes = ctx.container.runtime.getAll()
-    return c.json(runtimes.map((r: any) => ({ id: r.id, name: r.name, defaultImage: r.defaultImage })))
+    return c.json(
+      runtimes.map((r: any) => ({ id: r.id, name: r.name, defaultImage: r.defaultImage })),
+    )
   })
 
   // ── Plugins ───────────────────────────────────────────────────────────
