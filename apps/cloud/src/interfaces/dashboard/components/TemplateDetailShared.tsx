@@ -1,10 +1,13 @@
 import { Cpu, Layers, Settings, Users, Zap } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Breadcrumb } from '@/components/Breadcrumb'
 import { CodeBlock } from '@/components/CodeBlock'
 import { EmptyState } from '@/components/EmptyState'
 import { cn } from '@/lib/utils'
 import { Badge } from './Badge'
+import { type TabItem, Tabs } from './Tabs'
 
 export interface TemplateAgentInfo {
   id: string
@@ -320,6 +323,73 @@ export function TemplateConfigTab({
         showLineNumbers
         maxHeight="600px"
       />
+    </div>
+  )
+}
+
+export function TemplateDetailShell({
+  breadcrumbItems,
+  heroIcon,
+  title,
+  titleMeta,
+  titleActions,
+  description,
+  supportingText,
+  badges,
+  chips,
+  actions,
+  sidebar,
+  tabs,
+  activeTab,
+  onTabChange,
+  children,
+}: {
+  breadcrumbItems: Array<{ label: string; to?: string }>
+  heroIcon: ReactNode
+  title: string
+  titleMeta?: ReactNode
+  titleActions?: ReactNode
+  description: ReactNode
+  supportingText?: ReactNode
+  badges?: ReactNode
+  chips?: ReactNode
+  actions?: ReactNode
+  sidebar: ReactNode
+  tabs: TabItem[]
+  activeTab: string
+  onTabChange: (id: string) => void
+  children: ReactNode
+}) {
+  return (
+    <div className="p-6 max-w-6xl mx-auto">
+      <Breadcrumb items={breadcrumbItems} className="mb-4" />
+
+      <div className="flex flex-col lg:flex-row gap-6 mb-6">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start gap-4 mb-4">
+            <div className="shrink-0">{heroIcon}</div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 mb-2 flex-wrap">
+                <h1 className="text-2xl font-bold">{title}</h1>
+                {titleMeta}
+                {titleActions}
+              </div>
+              <div className="text-sm text-gray-400 leading-relaxed">{description}</div>
+              {supportingText && <div className="mt-2">{supportingText}</div>}
+              {badges && <div className="flex items-center gap-2 flex-wrap mt-3">{badges}</div>}
+            </div>
+          </div>
+
+          {chips && <div className="flex flex-wrap gap-3 mb-4">{chips}</div>}
+          {actions && <div className="flex items-center gap-3 flex-wrap">{actions}</div>}
+        </div>
+
+        <div className="lg:w-72 shrink-0">{sidebar}</div>
+      </div>
+
+      <Tabs items={tabs} active={activeTab} onChange={onTabChange} className="mb-6" />
+
+      <div className="min-h-[400px]">{children}</div>
     </div>
   )
 }

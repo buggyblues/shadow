@@ -25,12 +25,12 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/Badge'
 import { Breadcrumb } from '@/components/Breadcrumb'
 import { EmptyState } from '@/components/EmptyState'
-import { Tabs } from '@/components/Tabs'
 import {
   parseTemplateAgents,
   type TemplateAgentInfo,
   TemplateAgentsTab,
   TemplateConfigTab,
+  TemplateDetailShell,
 } from '@/components/TemplateDetailShared'
 import { api, type ValidateResult } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -425,168 +425,160 @@ export function MyTemplateDetailPage() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <Breadcrumb
-        items={[{ label: t('templates.title'), to: '/my-templates' }, { label: name }]}
-        className="mb-4"
-      />
-
-      <div className="flex flex-col lg:flex-row gap-6 mb-6">
-        <div className="flex-1">
-          <div className="flex items-start gap-4 mb-4">
-            <div className="w-14 h-14 rounded-2xl bg-blue-900/20 border border-blue-800/40 flex items-center justify-center">
-              <FileJson size={24} className="text-blue-400" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2 flex-wrap">
-                <h1 className="text-2xl font-bold">{name}</h1>
-                <Badge variant="default" size="sm">
-                  v{data.version ?? 1}
-                </Badge>
-                {data.templateSlug && (
-                  <Badge variant="outline" size="sm" icon={<GitFork size={10} />}>
-                    {data.templateSlug}
-                  </Badge>
-                )}
-              </div>
-              <p className="text-sm text-gray-400 leading-relaxed">
-                {data.templateSlug
-                  ? t('templateDetail.forkedDescription', { name: data.templateSlug })
-                  : t('templateDetail.customDescription')}
-              </p>
-              {data.templateSlug && (
-                <p className="text-xs text-gray-600 mt-2 flex items-center gap-1">
-                  <GitFork size={12} />
-                  <span>{t('templateDetail.forkedFrom')}</span>
-                  <Link
-                    to="/store/$name"
-                    params={{ name: data.templateSlug }}
-                    className="text-gray-400 hover:text-blue-400 transition-colors"
-                  >
-                    {data.templateSlug}
-                  </Link>
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 flex-wrap mb-4">
-            <div className="flex items-center gap-1.5 text-xs text-gray-300 bg-gray-900 border border-gray-800 px-3 py-1.5 rounded-full">
-              <Users size={11} className="text-blue-400" />
-              {t('templateDetail.agentsCount', { count: agents.length })}
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-gray-300 bg-gray-900 border border-gray-800 px-3 py-1.5 rounded-full">
-              <Layers size={11} className="text-purple-400" />
-              {Array.isArray(configurations) ? configurations.length : 0}{' '}
-              {t('templateDetail.configurations')}
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-gray-300 bg-gray-900 border border-gray-800 px-3 py-1.5 rounded-full">
-              <Cpu size={11} className="text-orange-400" />
-              {Array.isArray(providers) ? providers.length : 0} {t('templateDetail.providers')}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 flex-wrap">
-            <Link
-              to="/store/$name/deploy"
-              params={{ name: data.templateSlug ?? name }}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
-            >
-              <Rocket size={16} />
-              {t('common.deploy')}
-            </Link>
-            <button
-              type="button"
-              onClick={() => {
-                if (confirm(t('templates.deleteConfirm', { name }))) deleteMutation.mutate()
-              }}
-              className="flex items-center gap-2 text-sm text-gray-300 hover:text-red-300 border border-gray-700 hover:border-red-700 px-4 py-2.5 rounded-lg transition-colors"
-            >
-              <Trash2 size={14} />
-              {t('common.delete')}
-            </button>
-            <Link
-              to="/my-templates"
-              className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2.5 rounded-lg transition-colors"
-            >
-              <ArrowLeft size={14} />
-              {t('common.back')}
-            </Link>
-          </div>
+    <TemplateDetailShell
+      breadcrumbItems={[{ label: t('templates.title'), to: '/my-templates' }, { label: name }]}
+      heroIcon={
+        <div className="w-14 h-14 rounded-2xl bg-blue-900/20 border border-blue-800/40 flex items-center justify-center">
+          <FileJson size={24} className="text-blue-400" />
         </div>
-
-        <div className="lg:w-72 shrink-0">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              {t('templateDetail.quickInfo')}
-            </h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500 flex items-center gap-1.5">
-                  <Users size={12} />
-                  {t('templateDetail.agents')}
-                </span>
-                <span className="text-sm font-medium">{agents.length}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500 flex items-center gap-1.5">
-                  <Layers size={12} />
-                  {t('clusters.namespace')}
-                </span>
-                <span className="text-sm font-mono text-gray-300">
-                  {namespace ?? t('common.none')}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500 flex items-center gap-1.5">
-                  <Settings size={12} />
-                  {t('templateDetail.configurations')}
-                </span>
-                <span className="text-sm text-gray-300">
-                  {Array.isArray(configurations) ? configurations.length : 0}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500 flex items-center gap-1.5">
-                  <Cpu size={12} />
-                  {t('templateDetail.providers')}
-                </span>
-                <span className="text-sm text-gray-300">
-                  {Array.isArray(providers) ? providers.length : 0}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500 flex items-center gap-1.5">
-                  <History size={12} />
-                  {t('templateDetail.version')}
-                </span>
-                <span className="text-sm font-mono text-gray-300">v{data.version ?? 1}</span>
-              </div>
+      }
+      title={name}
+      titleMeta={
+        <>
+          <Badge variant="default" size="sm">
+            v{data.version ?? 1}
+          </Badge>
+          {data.templateSlug && (
+            <Badge variant="outline" size="sm" icon={<GitFork size={10} />}>
+              {data.templateSlug}
+            </Badge>
+          )}
+        </>
+      }
+      description={
+        data.templateSlug
+          ? t('templateDetail.forkedDescription', { name: data.templateSlug })
+          : t('templateDetail.customDescription')
+      }
+      supportingText={
+        data.templateSlug ? (
+          <p className="text-xs text-gray-600 flex items-center gap-1">
+            <GitFork size={12} />
+            <span>{t('templateDetail.forkedFrom')}</span>
+            <Link
+              to="/store/$name"
+              params={{ name: data.templateSlug }}
+              className="text-gray-400 hover:text-blue-400 transition-colors"
+            >
+              {data.templateSlug}
+            </Link>
+          </p>
+        ) : null
+      }
+      chips={
+        <>
+          <div className="flex items-center gap-1.5 text-xs text-gray-300 bg-gray-900 border border-gray-800 px-3 py-1.5 rounded-full">
+            <Users size={11} className="text-blue-400" />
+            {t('templateDetail.agentsCount', { count: agents.length })}
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-gray-300 bg-gray-900 border border-gray-800 px-3 py-1.5 rounded-full">
+            <Layers size={11} className="text-purple-400" />
+            {Array.isArray(configurations) ? configurations.length : 0}{' '}
+            {t('templateDetail.configurations')}
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-gray-300 bg-gray-900 border border-gray-800 px-3 py-1.5 rounded-full">
+            <Cpu size={11} className="text-orange-400" />
+            {Array.isArray(providers) ? providers.length : 0} {t('templateDetail.providers')}
+          </div>
+        </>
+      }
+      actions={
+        <>
+          <Link
+            to="/store/$name/deploy"
+            params={{ name: data.templateSlug ?? name }}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
+          >
+            <Rocket size={16} />
+            {t('common.deploy')}
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              if (confirm(t('templates.deleteConfirm', { name }))) deleteMutation.mutate()
+            }}
+            className="flex items-center gap-2 text-sm text-gray-300 hover:text-red-300 border border-gray-700 hover:border-red-700 px-4 py-2.5 rounded-lg transition-colors"
+          >
+            <Trash2 size={14} />
+            {t('common.delete')}
+          </button>
+          <Link
+            to="/my-templates"
+            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2.5 rounded-lg transition-colors"
+          >
+            <ArrowLeft size={14} />
+            {t('common.back')}
+          </Link>
+        </>
+      }
+      sidebar={
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            {t('templateDetail.quickInfo')}
+          </h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                <Users size={12} />
+                {t('templateDetail.agents')}
+              </span>
+              <span className="text-sm font-medium">{agents.length}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                <Layers size={12} />
+                {t('clusters.namespace')}
+              </span>
+              <span className="text-sm font-mono text-gray-300">
+                {namespace ?? t('common.none')}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                <Settings size={12} />
+                {t('templateDetail.configurations')}
+              </span>
+              <span className="text-sm text-gray-300">
+                {Array.isArray(configurations) ? configurations.length : 0}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                <Cpu size={12} />
+                {t('templateDetail.providers')}
+              </span>
+              <span className="text-sm text-gray-300">
+                {Array.isArray(providers) ? providers.length : 0}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                <History size={12} />
+                {t('templateDetail.version')}
+              </span>
+              <span className="text-sm font-mono text-gray-300">v{data.version ?? 1}</span>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Tabs */}
-      <Tabs items={tabs} active={activeTab} onChange={setActiveTab} className="mb-6" />
-
-      {/* Tab content */}
-      <div className="min-h-[400px]">
-        {activeTab === 'overview' && <OverviewPanel content={data.content} agents={agents} />}
-        {activeTab === 'agents' && (
-          <TemplateAgentsTab
-            agents={agents}
-            emptyTitle={t('templateDetail.noAgents')}
-            emptyDescription={t('templateDetail.noAgents')}
-            introText={t('templateDetail.agentsInTemplate', { count: agents.length })}
-          />
-        )}
-        {activeTab === 'editor' && (
-          <EditorTab name={name} content={data.content} templateSlug={data.templateSlug} />
-        )}
-        {activeTab === 'versions' && <VersionsTab name={name} />}
-      </div>
-    </div>
+      }
+      tabs={tabs}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+    >
+      {activeTab === 'overview' && <OverviewPanel content={data.content} agents={agents} />}
+      {activeTab === 'agents' && (
+        <TemplateAgentsTab
+          agents={agents}
+          emptyTitle={t('templateDetail.noAgents')}
+          emptyDescription={t('templateDetail.noAgents')}
+          introText={t('templateDetail.agentsInTemplate', { count: agents.length })}
+        />
+      )}
+      {activeTab === 'editor' && (
+        <EditorTab name={name} content={data.content} templateSlug={data.templateSlug} />
+      )}
+      {activeTab === 'versions' && <VersionsTab name={name} />}
+    </TemplateDetailShell>
   )
 }
 

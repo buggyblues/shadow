@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import { formatDeploymentLogLine } from '../deploy-log-format.js'
 import type { HandlerContext } from './types.js'
 
 function cleanupTmpFile(path: string): void {
@@ -81,7 +82,7 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
         const logs = ctx.deploymentLogDao.findByDeploymentIdSince(task.id, lastLogId)
         for (const log of logs) {
           lastLogId = log.id
-          await sendLog(log.message)
+          await sendLog(formatDeploymentLogLine(log.message, log.createdAt))
         }
       }
 
@@ -119,7 +120,7 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
           if (event.type === 'log') {
             if (event.data.id <= lastLogId) return
             lastLogId = event.data.id
-            await sendLog(event.data.message)
+            await sendLog(formatDeploymentLogLine(event.data.message, event.data.createdAt))
             return
           }
 
@@ -140,6 +141,16 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
         })
       })
     })
+  })
+
+  app.get('/deploy-tasks', (c) => {
+    const tasks = ctx.deploymentDao.findAll().map((task) => ({
+      task,
+      url: buildTaskUrl(task.id),
+      active: ctx.deployTaskManager.isActive(task.id),
+    }))
+
+    return c.json({ tasks })
   })
 
   app.get('/deploy-tasks/:id', (c) => {
@@ -182,7 +193,7 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
         const logs = ctx.deploymentLogDao.findByDeploymentIdSince(taskId, lastLogId)
         for (const log of logs) {
           lastLogId = log.id
-          await writeLog(log.message)
+          await writeLog(formatDeploymentLogLine(log.message, log.createdAt))
         }
       }
 
@@ -208,7 +219,7 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
           if (event.type === 'log') {
             if (event.data.id <= lastLogId) return
             lastLogId = event.data.id
-            await writeLog(event.data.message)
+            await writeLog(formatDeploymentLogLine(event.data.message, event.data.createdAt))
             return
           }
 

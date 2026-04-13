@@ -115,6 +115,28 @@ export interface DeployTask {
   updatedAt: string | null
 }
 
+export interface DeployTaskListItem {
+  task: DeployTask
+  url: string
+  active: boolean
+}
+
+export interface EnvVarListEntry {
+  scope: string
+  key: string
+  maskedValue: string
+  isSecret: boolean
+  groupName: string
+}
+
+export interface EnvVarDetail {
+  scope: string
+  key: string
+  value: string
+  isSecret: boolean
+  groupName: string
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function get<T>(path: string): Promise<T> {
@@ -239,6 +261,7 @@ export const api = {
   deploy: (config: unknown) => postRaw('/deploy', config),
 
   deployTasks: {
+    list: () => get<{ tasks: DeployTaskListItem[] }>('/deploy-tasks'),
     get: (id: number | string) =>
       get<{ task: DeployTask; url: string; active: boolean }>(
         `/deploy-tasks/${encodeURIComponent(String(id))}`,
@@ -307,13 +330,7 @@ export const api = {
   env: {
     list: () =>
       get<{
-        envVars: Array<{
-          scope: string
-          key: string
-          maskedValue: string
-          isSecret: boolean
-          groupName: string
-        }>
+        envVars: EnvVarListEntry[]
         groups: string[]
       }>('/env'),
     groups: () => get<{ groups: string[] }>('/env/groups'),
@@ -322,6 +339,8 @@ export const api = {
       get<{ envVars: Array<{ key: string; value: string; isSecret: boolean }> }>(
         `/env/${encodeURIComponent(scope)}`,
       ),
+    getOne: (scope: string, key: string) =>
+      get<{ envVar: EnvVarDetail }>(`/env/${encodeURIComponent(scope)}/${encodeURIComponent(key)}`),
     upsert: (scope: string, key: string, value: string, isSecret?: boolean, groupName?: string) =>
       put<{ ok: boolean }>(`/env/${encodeURIComponent(scope)}`, {
         key,

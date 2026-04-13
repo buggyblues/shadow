@@ -3,7 +3,9 @@ import {
   Eye,
   EyeOff,
   FolderPlus,
+  Loader2,
   Lock,
+  Pencil,
   Plus,
   Save,
   ShieldCheck,
@@ -16,6 +18,35 @@ import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/stores/toast'
 
+type EnvListResponse = Awaited<ReturnType<typeof api.env.list>>
+type EnvListEntry = EnvListResponse['envVars'][number]
+
+type EnvFormState = {
+  mode: 'create' | 'edit'
+  scope: string
+  key: string
+  value: string
+  isSecret: boolean
+  originalScope?: string
+  originalKey?: string
+}
+
+function sortGroups(groups: Iterable<string>): string[] {
+  return [...new Set(groups)].sort((a, b) =>
+    a === 'default' ? -1 : b === 'default' ? 1 : a.localeCompare(b),
+  )
+}
+
+function createEmptyFormState(): EnvFormState {
+  return {
+    mode: 'create',
+    scope: 'global',
+    key: '',
+    value: '',
+    isSecret: true,
+  }
+}
+
 function GroupTabs({
   groups,
   activeGroup,
@@ -25,18 +56,25 @@ function GroupTabs({
   groups: string[]
   activeGroup: string
   onSelect: (group: string) => void
-  onCreate: (name: string) => void
+  onCreate: (name: string) => Promise<void>
 }) {
   const { t } = useTranslation()
   const [showAdd, setShowAdd] = useState(false)
   const [groupName, setGroupName] = useState('')
+  const [isCreating, setIsCreating] = useState(false)
 
-  const createGroup = () => {
+  const createGroup = async () => {
     const name = groupName.trim()
-    if (!name) return
-    onCreate(name)
-    setGroupName('')
-    setShowAdd(false)
+    if (!name || isCreating) return
+
+    setIsCreating(true)
+    try {
+      await onCreate(name)
+      setGroupName('')
+      setShowAdd(false)
+    } finally {
+      setIsCreating(false)
+    }
   }
 
   return (
@@ -63,18 +101,19 @@ function GroupTabs({
             type="text"
             value={groupName}
             onChange={(event) => setGroupName(event.target.value)}
-            onKeyDown={(event) => event.key === 'Enter' && createGroup()}
+            onKeyDown={(event) => event.key === 'Enter' && void createGroup()}
             placeholder={t('secrets.groupNamePlaceholder')}
             className="bg-gray-950 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 w-32"
+            disabled={isCreating}
             autoFocus
           />
           <button
             type="button"
-            onClick={createGroup}
-            disabled={!groupName.trim()}
+            onClick={() => void createGroup()}
+            disabled={!groupName.trim() || isCreating}
             className="text-xs text-blue-400 hover:text-blue-300 px-1.5 py-1 disabled:text-gray-600"
           >
-            {t('common.add')}
+            {isCreating ? t('common.saving') : t('common.add')}
           </button>
           <button
             type="button"
@@ -82,6 +121,7 @@ function GroupTabs({
               setShowAdd(false)
               setGroupName('')
             }}
+            disabled={isCreating}
             className="text-xs text-gray-500 hover:text-gray-300 px-1"
           >
             ✕
@@ -106,14 +146,20 @@ function VariableRow({
   envKey,
   maskedValue,
   isSecret,
+  isEditLoading,
+  onEdit,
   onDelete,
 }: {
   scope: string
   envKey: string
   maskedValue: string
   isSecret: boolean
+  isEditLoading: boolean
+  onEdit: () => void
   onDelete: () => void
 }) {
+  const { t } = useTranslation()
+
   return (
     <div className="flex items-center gap-3 py-2.5 px-3 bg-gray-950 rounded-lg">
       <Variable size={13} className="text-gray-600 shrink-0" />
@@ -129,7 +175,17 @@ function VariableRow({
       </div>
       <button
         type="button"
+        onClick={onEdit}
+        disabled={isEditLoading}
+        title={t('common.edit')}
+        className="text-gray-600 hover:text-blue-400 transition-colors p-1 disabled:text-gray-700"
+      >
+        {isEditLoading ? <Loader2 size={13} className="animate-spin" /> : <Pencil size={13} />}
+      </button>
+      <button
+        type="button"
         onClick={onDelete}
+        title={t('common.delete')}
         className="text-gray-600 hover:text-red-400 transition-colors p-1"
       >
         <Trash2 size={13} />
@@ -138,51 +194,52 @@ function VariableRow({
   )
 }
 
-function AddEnvValueForm({
+function EnvValueForm({
   groupName,
-  onAdd,
+  form,
+  isSubmitting,
+  onChange,
+  onCancel,
+  onSubmit,
 }: {
   groupName: string
-  onAdd: (scope: string, key: string, value: string, isSecret: boolean) => void
+  form: EnvFormState
+  isSubmitting: boolean
+  onChange: (next: Partial<EnvFormState>) => void
+  onCancel: () => void
+  onSubmit: () => void
 }) {
   const { t } = useTranslation()
-  const [scope, setScope] = useState('global')
-  const [key, setKey] = useState('')
-  const [value, setValue] = useState('')
-  const [isSecret, setIsSecret] = useState(true)
   const [showValue, setShowValue] = useState(false)
 
-  const submit = () => {
-    if (!key.trim() || value === undefined) return
-    onAdd(scope.trim() || 'global', key.trim(), value, isSecret)
-    setKey('')
-    setValue('')
-  }
+  const isEditing = form.mode === 'edit'
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-3">
       <div>
         <h4 className="text-xs font-medium text-gray-400 flex items-center gap-1.5">
           <Plus size={12} />
-          {t('secrets.addEnvironmentValue')}
+          {isEditing ? t('secrets.editEnvironmentValue') : t('secrets.addEnvironmentValue')}
         </h4>
         <p className="text-[11px] text-gray-600 mt-1">
-          {t('secrets.addEnvironmentValueDescription', { group: groupName })}
+          {isEditing
+            ? t('secrets.editEnvironmentValueDescription', { group: groupName })
+            : t('secrets.addEnvironmentValueDescription', { group: groupName })}
         </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <input
           type="text"
-          value={key}
-          onChange={(event) => setKey(event.target.value)}
+          value={form.key}
+          onChange={(event) => onChange({ key: event.target.value })}
           placeholder={t('secrets.keyName')}
           className="bg-gray-950 border border-gray-700 rounded px-3 py-2 text-xs font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500"
         />
         <input
           type="text"
-          value={scope}
-          onChange={(event) => setScope(event.target.value)}
+          value={form.scope}
+          onChange={(event) => onChange({ scope: event.target.value })}
           placeholder={t('secrets.scope')}
           className="bg-gray-950 border border-gray-700 rounded px-3 py-2 text-xs font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500"
         />
@@ -192,8 +249,8 @@ function AddEnvValueForm({
         <div className="relative flex-1">
           <input
             type={showValue ? 'text' : 'password'}
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
+            value={form.value}
+            onChange={(event) => onChange({ value: event.target.value })}
             placeholder={t('secrets.secretValue')}
             className="w-full bg-gray-950 border border-gray-700 rounded px-3 py-2 text-xs font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 pr-8"
           />
@@ -209,20 +266,30 @@ function AddEnvValueForm({
         <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer shrink-0">
           <input
             type="checkbox"
-            checked={isSecret}
-            onChange={(event) => setIsSecret(event.target.checked)}
+            checked={form.isSecret}
+            onChange={(event) => onChange({ isSecret: event.target.checked })}
             className="accent-blue-500"
           />
           {t('secrets.secret')}
         </label>
 
+        {isEditing && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="border border-gray-700 hover:border-gray-600 text-gray-300 px-3 py-2 rounded text-xs transition-colors"
+          >
+            {t('common.cancel')}
+          </button>
+        )}
+
         <button
           type="button"
-          onClick={submit}
-          disabled={!key.trim()}
+          onClick={onSubmit}
+          disabled={!form.key.trim() || isSubmitting}
           className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white px-3 py-2 rounded text-xs transition-colors"
         >
-          <Save size={12} />
+          {isSubmitting ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
         </button>
       </div>
     </div>
@@ -234,6 +301,8 @@ export function SecretsPage() {
   const toast = useToast()
   const queryClient = useQueryClient()
   const [activeGroup, setActiveGroup] = useState('default')
+  const [form, setForm] = useState<EnvFormState>(() => createEmptyFormState())
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['env'],
@@ -244,9 +313,7 @@ export function SecretsPage() {
     const uniqueGroups = new Set<string>(['default'])
     for (const group of data?.groups ?? []) uniqueGroups.add(group)
     for (const envVar of data?.envVars ?? []) uniqueGroups.add(envVar.groupName ?? 'default')
-    return [...uniqueGroups].sort((a, b) =>
-      a === 'default' ? -1 : b === 'default' ? 1 : a.localeCompare(b),
-    )
+    return sortGroups(uniqueGroups)
   }, [data])
 
   useEffect(() => {
@@ -255,43 +322,109 @@ export function SecretsPage() {
     }
   }, [groups, activeGroup])
 
+  useEffect(() => {
+    setForm((current) => (current.mode === 'edit' ? createEmptyFormState() : current))
+    setEditingEntryId(null)
+  }, [activeGroup])
+
   const createGroup = useMutation({
     mutationFn: (name: string) => api.env.createGroup(name),
-    onSuccess: ({ name }) => {
-      queryClient.invalidateQueries({ queryKey: ['env'] })
+    onMutate: async (name) => {
+      await queryClient.cancelQueries({ queryKey: ['env'] })
+      const previous = queryClient.getQueryData<EnvListResponse>(['env'])
+      const previousActiveGroup = activeGroup
+
+      queryClient.setQueryData<EnvListResponse>(['env'], (current) => ({
+        envVars: current?.envVars ?? [],
+        groups: sortGroups(['default', ...(current?.groups ?? []), name]),
+      }))
+
       setActiveGroup(name)
+      return { previous, previousActiveGroup }
+    },
+    onSuccess: async ({ name }) => {
+      queryClient.setQueryData<EnvListResponse>(['env'], (current) => ({
+        envVars: current?.envVars ?? [],
+        groups: sortGroups(['default', ...(current?.groups ?? []), name]),
+      }))
+
+      await queryClient.invalidateQueries({ queryKey: ['env'] })
       toast.success(t('secrets.groupCreated'))
     },
-    onError: () => toast.error(t('secrets.groupCreateFailed')),
+    onError: (_error, _name, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['env'], context.previous)
+      }
+      setActiveGroup(context?.previousActiveGroup ?? 'default')
+      toast.error(t('secrets.groupCreateFailed'))
+    },
   })
 
   const saveValue = useMutation({
-    mutationFn: ({
-      scope,
-      key,
-      value,
-      isSecret,
-    }: {
-      scope: string
-      key: string
-      value: string
-      isSecret: boolean
-    }) => api.env.upsert(scope, key, value, isSecret, activeGroup),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['env'] })
-      toast.success(t('secrets.valueSaved'))
+    mutationFn: async (nextForm: EnvFormState) => {
+      const scope = nextForm.scope.trim() || 'global'
+      const key = nextForm.key.trim()
+
+      await api.env.upsert(scope, key, nextForm.value, nextForm.isSecret, activeGroup)
+
+      if (
+        nextForm.mode === 'edit' &&
+        nextForm.originalScope &&
+        nextForm.originalKey &&
+        (nextForm.originalScope !== scope || nextForm.originalKey !== key)
+      ) {
+        await api.env.delete(nextForm.originalScope, nextForm.originalKey)
+      }
     },
-    onError: () => toast.error(t('secrets.valueSaveFailed')),
+    onSuccess: async (_result, nextForm) => {
+      await queryClient.invalidateQueries({ queryKey: ['env'] })
+      setForm(createEmptyFormState())
+      toast.success(nextForm.mode === 'edit' ? t('secrets.valueUpdated') : t('secrets.valueSaved'))
+    },
+    onError: (_error, nextForm) => {
+      toast.error(
+        nextForm.mode === 'edit' ? t('secrets.valueUpdateFailed') : t('secrets.valueSaveFailed'),
+      )
+    },
   })
 
   const deleteValue = useMutation({
     mutationFn: ({ scope, key }: { scope: string; key: string }) => api.env.delete(scope, key),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['env'] })
+    onSuccess: async (_result, deletedEntry) => {
+      await queryClient.invalidateQueries({ queryKey: ['env'] })
+      if (
+        form.mode === 'edit' &&
+        form.originalScope === deletedEntry.scope &&
+        form.originalKey === deletedEntry.key
+      ) {
+        setForm(createEmptyFormState())
+      }
       toast.success(t('secrets.valueDeleted'))
     },
     onError: () => toast.error(t('secrets.valueDeleteFailed')),
   })
+
+  const startEditing = async (entry: EnvListEntry) => {
+    const entryId = `${entry.scope}:${entry.key}`
+    setEditingEntryId(entryId)
+
+    try {
+      const { envVar } = await api.env.getOne(entry.scope, entry.key)
+      setForm({
+        mode: 'edit',
+        scope: envVar.scope,
+        key: envVar.key,
+        value: envVar.value,
+        isSecret: envVar.isSecret,
+        originalScope: envVar.scope,
+        originalKey: envVar.key,
+      })
+    } catch {
+      toast.error(t('secrets.valueLoadFailed'))
+    } finally {
+      setEditingEntryId(null)
+    }
+  }
 
   const envVars = (data?.envVars ?? []).filter(
     (entry) => (entry.groupName ?? 'default') === activeGroup,
@@ -328,7 +461,7 @@ export function SecretsPage() {
         groups={groups}
         activeGroup={activeGroup}
         onSelect={setActiveGroup}
-        onCreate={(name) => createGroup.mutate(name)}
+        onCreate={(name) => createGroup.mutateAsync(name).then(() => undefined)}
       />
 
       <section>
@@ -339,9 +472,13 @@ export function SecretsPage() {
         </h2>
         <p className="text-xs text-gray-600 mb-4">{t('secrets.environmentValuesDescription')}</p>
 
-        <AddEnvValueForm
+        <EnvValueForm
           groupName={activeGroup}
-          onAdd={(scope, key, value, isSecret) => saveValue.mutate({ scope, key, value, isSecret })}
+          form={form}
+          isSubmitting={saveValue.isPending}
+          onChange={(next) => setForm((current) => ({ ...current, ...next }))}
+          onCancel={() => setForm(createEmptyFormState())}
+          onSubmit={() => saveValue.mutate(form)}
         />
 
         <div className="mt-3 space-y-1.5">
@@ -360,6 +497,8 @@ export function SecretsPage() {
               envKey={entry.key}
               maskedValue={entry.maskedValue}
               isSecret={entry.isSecret}
+              isEditLoading={editingEntryId === `${entry.scope}:${entry.key}`}
+              onEdit={() => void startEditing(entry)}
               onDelete={() => deleteValue.mutate({ scope: entry.scope, key: entry.key })}
             />
           ))}

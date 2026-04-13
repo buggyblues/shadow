@@ -63,6 +63,35 @@ export class EnvVarDao {
     }))
   }
 
+  findOne(
+    scope: string,
+    key: string,
+  ): {
+    scope: string
+    key: string
+    value: string
+    isSecret: boolean
+    groupName: string
+  } | null {
+    const row = this.db
+      .select()
+      .from(envVars)
+      .where(and(eq(envVars.scope, scope), eq(envVars.key, key)))
+      .get()
+
+    if (!row) {
+      return null
+    }
+
+    return {
+      scope: row.scope,
+      key: row.key,
+      value: this.decrypt(row.encryptedValue, row.iv),
+      isSecret: row.isSecret ?? true,
+      groupName: normalizeGroupName(row.groupName),
+    }
+  }
+
   findAllMasked(): Array<{
     scope: string
     key: string

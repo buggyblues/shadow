@@ -131,7 +131,7 @@ export function DeploymentTaskPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <Breadcrumb
-        items={[{ label: t('nav.clusters'), to: '/clusters' }, { label: `#${task.id}` }]}
+        items={[{ label: t('nav.deployTasks'), to: '/deploy-tasks' }, { label: `#${task.id}` }]}
         className="mb-4"
       />
 
@@ -163,6 +163,13 @@ export function DeploymentTaskPage() {
             <Copy size={12} />
             {t('deployTask.copyLink')}
           </button>
+          <Link
+            to="/deploy-tasks"
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-colors"
+          >
+            <Terminal size={12} />
+            {t('nav.deployTasks')}
+          </Link>
           <Link
             to="/clusters"
             className="flex items-center gap-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-3 py-2 transition-colors"

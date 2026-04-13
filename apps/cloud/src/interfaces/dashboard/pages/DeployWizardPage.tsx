@@ -985,6 +985,13 @@ function StepDeploy({
                     <Server size={12} />
                     {t('deployTask.openTask')}
                   </Link>
+                  <Link
+                    to="/deploy-tasks"
+                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-colors"
+                  >
+                    <Activity size={12} />
+                    {t('nav.deployTasks')}
+                  </Link>
                 </div>
               </div>
             </div>

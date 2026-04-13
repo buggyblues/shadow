@@ -5,6 +5,7 @@ import {
   Box,
   ChevronDown,
   Copy,
+  FolderClock,
   Globe,
   Home,
   Layers,
@@ -61,6 +62,7 @@ const NAV_SECTIONS: NavSection[] = [
     defaultOpen: true,
     items: [
       { to: '/clusters', labelKey: 'nav.clusters', icon: Layers },
+      { to: '/deploy-tasks', labelKey: 'nav.deployTasks', icon: FolderClock },
       { to: '/secrets', labelKey: 'nav.secrets', icon: ShieldCheck },
       { to: '/monitoring', labelKey: 'nav.monitoring', icon: BarChart3 },
     ],

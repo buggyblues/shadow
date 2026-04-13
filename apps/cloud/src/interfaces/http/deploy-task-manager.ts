@@ -44,7 +44,7 @@ export interface DeployTaskDoneEvent {
 }
 
 export type DeployTaskEvent =
-  | { type: 'log'; data: { id: number; message: string } }
+  | { type: 'log'; data: { id: number; message: string; createdAt: string | null } }
   | { type: 'done'; data: DeployTaskDoneEvent }
 
 type DeployTaskListener = (event: DeployTaskEvent) => void | Promise<void>
@@ -113,7 +113,10 @@ export class DeployTaskManager {
       event: 'log',
       message: sanitized,
     })
-    this.emit(taskId, { type: 'log', data: { id: log.id, message: sanitized } })
+    this.emit(taskId, {
+      type: 'log',
+      data: { id: log.id, message: sanitized, createdAt: log.createdAt },
+    })
   }
 
   private appendOutput(taskId: number, output: string): void {

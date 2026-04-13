@@ -94,6 +94,18 @@ export function createSecretHandler(ctx: HandlerContext): Hono {
     return c.json({ envVars })
   })
 
+  app.get('/env/:scope/:key', (c) => {
+    const scope = c.req.param('scope')
+    const key = c.req.param('key')
+    const envVar = ctx.envVarDao.findOne(scope, key)
+
+    if (!envVar) {
+      return c.json({ error: 'Environment value not found' }, 404)
+    }
+
+    return c.json({ envVar })
+  })
+
   app.put('/env/:scope', async (c) => {
     const scope = c.req.param('scope')
     try {

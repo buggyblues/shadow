@@ -11,6 +11,7 @@ import { ActivityPage } from '@/pages/ActivityPage'
 import { ClustersPage } from '@/pages/ClustersPage'
 import { DeploymentDetailPage } from '@/pages/DeploymentDetailPage'
 import { DeploymentTaskPage } from '@/pages/DeploymentTaskPage'
+import { DeploymentTasksPage } from '@/pages/DeploymentTasksPage'
 import { DeployWizardPage } from '@/pages/DeployWizardPage'
 import { MonitoringPage } from '@/pages/MonitoringPage'
 import { MyTemplateDetailPage } from '@/pages/MyTemplateDetailPage'
@@ -80,6 +81,12 @@ const deploymentDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/deployments/$namespace/$id',
   component: withErrorBoundary(DeploymentDetailPage),
+})
+
+const deploymentTasksRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/deploy-tasks',
+  component: withErrorBoundary(DeploymentTasksPage),
 })
 
 const deploymentTaskRoute = createRoute({
@@ -172,6 +179,7 @@ const routeTree = rootRoute.addChildren([
   deployWizardRoute,
   clustersRoute,
   deploymentDetailRoute,
+  deploymentTasksRoute,
   deploymentTaskRoute,
   configRoute,
   validateRoute,

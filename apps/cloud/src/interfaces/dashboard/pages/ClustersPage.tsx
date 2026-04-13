@@ -221,12 +221,22 @@ export function ClustersPage() {
 
   const destroyMutation = useMutation({
     mutationFn: (ns: string) => api.destroy({ namespace: ns }),
-    onMutate: (ns) => {
+    onMutate: async (ns) => {
+      await queryClient.cancelQueries({ queryKey: ['deployments'] })
+      const previousDeployments = queryClient.getQueryData<Deployment[]>(['deployments'])
+      const previousHiddenNamespaces = hiddenNamespaces
+
       setDestroyNs(ns)
-    },
-    onSuccess: (_, ns) => {
+
       setHiddenNamespaces((current) => (current.includes(ns) ? current : [...current, ns]))
-      queryClient.invalidateQueries({ queryKey: ['deployments'] })
+      queryClient.setQueryData<Deployment[]>(['deployments'], (current) =>
+        (current ?? []).filter((deployment) => deployment.namespace !== ns),
+      )
+
+      return { previousDeployments, previousHiddenNamespaces }
+    },
+    onSuccess: async (_, ns) => {
+      await queryClient.invalidateQueries({ queryKey: ['deployments'] })
       toast.success(`Destroyed namespace ${ns}`)
       addActivity({
         type: 'destroy',
@@ -235,7 +245,11 @@ export function ClustersPage() {
       })
       setDestroyNs(null)
     },
-    onError: () => {
+    onError: (_error, _ns, context) => {
+      if (context?.previousDeployments) {
+        queryClient.setQueryData(['deployments'], context.previousDeployments)
+      }
+      setHiddenNamespaces(context?.previousHiddenNamespaces ?? [])
       setDestroyNs(null)
       toast.error('Failed to destroy namespace')
     },
