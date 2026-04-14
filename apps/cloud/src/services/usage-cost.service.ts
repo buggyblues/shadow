@@ -244,7 +244,7 @@ function extractUsageUnavailableReason(payload: unknown, output: string): string
     if (usage && typeof usage === 'object') {
       const providers = (usage as Record<string, unknown>).providers
       if (Array.isArray(providers) && providers.length === 0) {
-        return 'OpenClaw reported no provider usage available.'
+        return 'Provider usage data unavailable.'
       }
     }
   }
@@ -255,15 +255,19 @@ function extractUsageUnavailableReason(payload: unknown, output: string): string
     .find((value) => /no provider usage available/i.test(value))
 
   if (!line) return null
+  if (/no provider usage available/i.test(line)) {
+    return 'Provider usage data unavailable.'
+  }
+
   return line.replace(/^Usage:\s*/i, '')
 }
 
 function formatUnavailableMessage(reason: string, model: string | null): string {
   if (!model) {
-    return `${reason} This usually means the provider does not expose usage data to OpenClaw, or the pod does not have provider usage auth available.`
+    return `${reason} OpenClaw did not receive usage details from the current provider for this pod.`
   }
 
-  return `${reason} Current model: ${model}. This usually means the provider does not expose usage data to OpenClaw, or the pod does not have provider usage auth available.`
+  return `${reason} Model: ${model}. OpenClaw did not receive usage details from the current provider for this pod.`
 }
 
 function preferRunningPods(pods: PodStatus[], agentName: string): PodStatus[] {

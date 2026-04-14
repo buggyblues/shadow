@@ -24,7 +24,7 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
       <Link
         to="/"
         className="text-gray-500 hover:text-white transition-colors p-0.5"
-        title={t('nav.consoleHome')}
+        title={t('nav.agentStore')}
       >
         <Home size={14} />
       </Link>
