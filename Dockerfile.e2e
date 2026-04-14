@@ -15,11 +15,13 @@ WORKDIR /workspace
 # Layer 1: Workspace manifests + lockfile (cached unless dependencies change)
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/admin/package.json ./apps/admin/
+COPY apps/cloud/package.json ./apps/cloud/
 COPY apps/desktop/package.json ./apps/desktop/
 COPY apps/mobile/package.json ./apps/mobile/
 COPY apps/playground/package.json ./apps/playground/
 COPY apps/server/package.json ./apps/server/
 COPY apps/web/package.json ./apps/web/
+COPY website/package.json ./website/
 COPY packages/cli/package.json ./packages/cli/
 COPY packages/oauth/package.json ./packages/oauth/
 COPY packages/openclaw-shadowob/package.json ./packages/openclaw-shadowob/
