@@ -2,7 +2,7 @@
  * Plugin Config Merger — merges plugin config fragments into OpenClaw config.
  */
 
-import type { CloudConfig, OpenClawBinding, OpenClawConfig } from '../config/schema.js'
+import type { CloudConfig, OpenClawBinding, OpenClawConfig, UseEntry } from '../config/schema.js'
 import type { PluginConfigFragment, PluginInstanceConfig } from './types.js'
 
 /**
@@ -92,9 +92,59 @@ export function mergePluginFragments(
   return result
 }
 
+function findUseEntry(useEntries: UseEntry[] | undefined, pluginId: string): UseEntry | undefined {
+  return useEntries?.find((entry) => entry.plugin === pluginId)
+}
+
+function getAgentUseEntry(
+  pluginId: string,
+  agentId: string | undefined,
+  config: CloudConfig,
+): UseEntry | undefined {
+  if (!agentId) return undefined
+  const agent = config.deployments?.agents?.find((candidate) => candidate.id === agentId)
+  return findUseEntry(agent?.use, pluginId)
+}
+
+function getLegacyPluginInstanceConfig(
+  pluginId: string,
+  config: CloudConfig,
+): PluginInstanceConfig | undefined {
+  return (config.plugins as Record<string, PluginInstanceConfig> | undefined)?.[pluginId]
+}
+
+function resolveUseEntrySecrets(
+  options: Record<string, unknown> | undefined,
+  processEnv: Record<string, string | undefined>,
+): Record<string, string> {
+  if (!options) return {}
+
+  const resolved: Record<string, string> = {}
+
+  for (const [key, value] of Object.entries(options)) {
+    if (typeof value !== 'string') continue
+
+    const envMatch = value.match(/^\$\{env:(\w+)\}$/)
+    if (envMatch) {
+      const envKey = envMatch[1]
+      if (!envKey) continue
+      const envVal = processEnv[envKey]
+      if (envVal !== undefined) {
+        resolved[key] = envVal
+      }
+      continue
+    }
+
+    resolved[key] = value
+  }
+
+  return resolved
+}
+
 /**
  * Resolve the effective plugin config for a specific agent.
- * Merges: plugin defaults → global config → per-agent override.
+ * Prefer the modern webpack-style `use` entries, then fall back to the
+ * legacy `plugins` map for compatibility.
  * Returns null if the plugin is disabled for this agent.
  */
 export function resolveAgentPluginConfig(
@@ -102,9 +152,17 @@ export function resolveAgentPluginConfig(
   agentId: string,
   config: CloudConfig,
 ): Record<string, unknown> | null {
-  const pluginInstanceConfig = (
-    config.plugins as Record<string, PluginInstanceConfig> | undefined
-  )?.[pluginId]
+  const agentUseEntry = getAgentUseEntry(pluginId, agentId, config)
+  if (agentUseEntry) {
+    return { ...(agentUseEntry.options ?? {}) }
+  }
+
+  const globalUseEntry = findUseEntry(config.use, pluginId)
+  if (globalUseEntry) {
+    return { ...(globalUseEntry.options ?? {}) }
+  }
+
+  const pluginInstanceConfig = getLegacyPluginInstanceConfig(pluginId, config)
   if (!pluginInstanceConfig) return null
   if (pluginInstanceConfig.enabled === false) return null
 
@@ -128,10 +186,19 @@ export function resolvePluginSecrets(
   pluginId: string,
   config: CloudConfig,
   processEnv: Record<string, string | undefined>,
+  agentId?: string,
 ): Record<string, string> {
-  const pluginInstanceConfig = (
-    config.plugins as Record<string, PluginInstanceConfig> | undefined
-  )?.[pluginId]
+  const agentUseEntry = getAgentUseEntry(pluginId, agentId, config)
+  if (agentUseEntry) {
+    return resolveUseEntrySecrets(agentUseEntry.options, processEnv)
+  }
+
+  const globalUseEntry = findUseEntry(config.use, pluginId)
+  if (globalUseEntry) {
+    return resolveUseEntrySecrets(globalUseEntry.options, processEnv)
+  }
+
+  const pluginInstanceConfig = getLegacyPluginInstanceConfig(pluginId, config)
   if (!pluginInstanceConfig?.secrets) return {}
 
   const resolved: Record<string, string> = {}

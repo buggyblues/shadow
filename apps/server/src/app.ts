@@ -79,6 +79,35 @@ export function createApp(container: AppContainer) {
   // PAT token resolution (must run before route-level authMiddleware)
   app.use('*', createPatMiddleware(container))
 
+  // Backward-compatible success responses.
+  // Many handlers still return `{ ok: true }`, while SDK/e2e consumers expect
+  // `{ success: true }` on mutation endpoints. Alias the field centrally so both
+  // contracts work during the migration.
+  app.use('*', async (c, next) => {
+    await next()
+
+    const contentType = c.res.headers.get('content-type') ?? ''
+    if (!contentType.includes('application/json')) return
+
+    try {
+      const payload = (await c.res.clone().json()) as unknown
+      if (!payload || Array.isArray(payload) || typeof payload !== 'object') return
+
+      const json = payload as Record<string, unknown>
+      if (typeof json.ok !== 'boolean' || 'success' in json) return
+
+      const headers = new Headers(c.res.headers)
+      headers.delete('content-length')
+      c.res = new Response(JSON.stringify({ ...json, success: json.ok }), {
+        status: c.res.status,
+        statusText: c.res.statusText,
+        headers,
+      })
+    } catch {
+      // Ignore non-JSON bodies and streamed responses.
+    }
+  })
+
   // Health check
   app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
 

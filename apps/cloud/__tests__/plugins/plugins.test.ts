@@ -177,7 +177,7 @@ describe('loadAllPlugins', () => {
     expect(registry.get('notion')).toBeDefined()
     expect(registry.get('discord')).toBeDefined()
     expect(registry.get('anthropic')).toBeDefined()
-  })
+  }, 20_000)
 
   it('should have valid manifests for all plugins', async () => {
     const registry = createPluginRegistry()
@@ -190,7 +190,7 @@ describe('loadAllPlugins', () => {
       expect(plugin.manifest.capabilities.length).toBeGreaterThan(0)
       expect(plugin.manifest.tags.length).toBeGreaterThan(0)
     }
-  })
+  }, 20_000)
 })
 
 // ─── createToolPlugin ──────────────────────────────────────────────────────

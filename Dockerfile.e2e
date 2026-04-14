@@ -52,6 +52,7 @@ WORKDIR /workspace
 COPY --from=builder /workspace/node_modules ./node_modules
 COPY --from=builder /workspace/apps ./apps
 COPY --from=builder /workspace/packages ./packages
+COPY --from=builder /workspace/website ./website
 
 # Copy remaining source files (scripts, configs, docs, etc.)
 # Excludes node_modules/ and dist/ per .dockerignore

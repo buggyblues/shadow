@@ -56,6 +56,7 @@ const STUB_ENV: NodeJS.ProcessEnv = {
   SLACK_BOT_TOKEN: 'stub-slack-bot',
   SLACK_APP_TOKEN: 'stub-slack-app',
   TELEGRAM_BOT_TOKEN: 'stub-telegram',
+  GITHUB_PERSONAL_ACCESS_TOKEN: 'stub-github-pat',
   GITHUB_TOKEN: 'stub-github-token',
   GITHUB_REPO: 'org/repo',
   DATABASE_URL: 'postgres://localhost/test',

@@ -19,11 +19,7 @@ import {
   resolvePluginSecrets,
 } from '../plugins/config-merger.js'
 import { getPluginRegistry } from '../plugins/registry.js'
-import type {
-  PluginBuildContext,
-  PluginConfigFragment,
-  PluginInstanceConfig,
-} from '../plugins/types.js'
+import type { PluginBuildContext, PluginConfigFragment } from '../plugins/types.js'
 import { getRuntime } from '../runtimes/index.js'
 import { registerAllRuntimes } from '../runtimes/loader.js'
 
@@ -527,7 +523,6 @@ function applyPluginPipeline(
   const registry = getPluginRegistry()
   if (registry.size === 0) return {}
 
-  const pluginsMap = (config.plugins ?? {}) as Record<string, PluginInstanceConfig>
   const envVars: Record<string, string> = {}
 
   // Collect K8s resources from resource providers
@@ -541,7 +536,7 @@ function applyPluginPipeline(
     const resolved = resolveAgentPluginConfig(pluginId, agent.id, config)
     if (!resolved) continue
 
-    const secrets = resolvePluginSecrets(pluginId, config, process.env)
+    const secrets = resolvePluginSecrets(pluginId, config, process.env, agent.id)
     const context: PluginBuildContext = {
       agent,
       config,
@@ -550,7 +545,7 @@ function applyPluginPipeline(
       pluginRegistry: registry,
     }
 
-    const agentConfig = (resolved.config ?? {}) as Record<string, unknown>
+    const agentConfig = resolved as Record<string, unknown>
 
     // Build OpenClaw config fragment (new providers → legacy fallback)
     if (pluginDef.configBuilder) {

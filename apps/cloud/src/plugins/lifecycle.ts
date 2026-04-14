@@ -8,11 +8,7 @@
 import type { AgentDeployment, CloudConfig } from '../config/schema.js'
 import { resolveAgentPluginConfig, resolvePluginSecrets } from './config-merger.js'
 import { getPluginRegistry } from './registry.js'
-import type {
-  PluginBuildContext,
-  PluginInstanceConfig,
-  PluginProvisionContext,
-} from './types.js'
+import type { PluginBuildContext, PluginProvisionContext } from './types.js'
 
 export interface ProvisionResults {
   secrets: Record<string, string>
@@ -44,7 +40,7 @@ export async function executePluginProvisions(
     const resolved = resolveAgentPluginConfig(pluginId, agent.id, config)
     if (!resolved) continue
 
-    const secrets = resolvePluginSecrets(pluginId, config, process.env)
+    const secrets = resolvePluginSecrets(pluginId, config, process.env, agent.id)
     const context: PluginProvisionContext = {
       agent,
       config,
@@ -54,7 +50,7 @@ export async function executePluginProvisions(
       existingState: results.states[pluginId] ?? null,
     }
 
-    const agentConfig = (resolved.config ?? {}) as Record<string, unknown>
+    const agentConfig = resolved as Record<string, unknown>
 
     try {
       logger.dim(`  Provisioning plugin: ${pluginDef.manifest.name}`)
@@ -106,7 +102,7 @@ export async function checkPluginHealth(
       pluginRegistry: registry,
     }
 
-    const agentConfig = (resolved.config ?? {}) as Record<string, unknown>
+    const agentConfig = resolved as Record<string, unknown>
 
     try {
       const result = await pluginDef.lifecycle.healthCheck(agentConfig, context)
