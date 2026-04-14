@@ -2,12 +2,17 @@ import { Cpu, Layers, Settings, Users, Zap } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import {
+  Badge,
+  Button,
+  EmptyState,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from '@shadowob/ui'
 import { Breadcrumb } from '@/components/Breadcrumb'
 import { CodeBlock } from '@/components/CodeBlock'
-import { EmptyState } from '@/components/EmptyState'
 import { cn } from '@/lib/utils'
-import { Badge } from './Badge'
-import { type TabItem, Tabs } from './Tabs'
 
 export interface TemplateAgentInfo {
   id: string
@@ -22,6 +27,13 @@ export interface TemplateAgentInfo {
   configuration?: Record<string, unknown>
   resources?: { requests?: Record<string, string>; limits?: Record<string, string> }
   env?: Record<string, string>
+}
+
+export interface TabItem {
+  id: string
+  label: string
+  icon?: ReactNode
+  count?: number
 }
 
 function getAgentName(agent: Record<string, unknown>): string {
@@ -107,59 +119,92 @@ function TemplateAgentCard({ agent, index }: { agent: TemplateAgentInfo; index: 
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-lg overflow-hidden hover:border-gray-700 transition-colors">
-      <button
+    <div
+      className="overflow-hidden rounded-[26px] border transition-all duration-300"
+      style={{
+        background: 'var(--nf-bg-surface)',
+        borderColor: expanded ? 'rgba(0, 243, 255, 0.18)' : 'var(--nf-border)',
+        boxShadow: expanded ? 'var(--nf-shadow-soft)' : 'none',
+      }}
+    >
+      <Button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-3 flex items-start justify-between text-left"
+        variant="ghost"
+        className="!flex !w-full !items-start !justify-between !gap-3 !px-4 !py-4 !text-left"
       >
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-900/30 border border-blue-800/50 flex items-center justify-center text-xs font-bold text-blue-400">
+        <div className="flex min-w-0 items-start gap-3">
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border text-xs font-black"
+            style={{
+              background: 'rgba(0, 243, 255, 0.08)',
+              borderColor: 'rgba(0, 243, 255, 0.14)',
+              color: 'var(--color-nf-cyan)',
+            }}
+          >
             {index + 1}
           </div>
-          <div>
-            <h4 className="text-sm font-medium text-white flex items-center gap-2">
+          <div className="min-w-0">
+            <h4
+              className="flex flex-wrap items-center gap-2 text-sm font-black"
+              style={{ color: 'var(--nf-text-high)' }}
+            >
               {agent.identity?.name ?? agent.name}
               {agent.runtime && (
-                <Badge variant="default" size="sm">
+                <Badge variant="neutral" size="sm">
                   {agent.runtime}
                 </Badge>
               )}
             </h4>
             {(agent.role ?? agent.description) && (
-              <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">
+              <p className="mt-1 line-clamp-1 text-xs" style={{ color: 'var(--nf-text-muted)' }}>
                 {agent.role ?? agent.description}
               </p>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0 ml-2">
+        <div className="ml-2 flex shrink-0 items-center gap-2">
           {agent.model && (
-            <Badge variant="default" size="sm" icon={<Cpu size={10} />}>
+            <Badge variant="neutral" size="sm" className="gap-1">
+              <Cpu size={10} />
               {agent.model}
             </Badge>
           )}
           {agent.integrations && agent.integrations.length > 0 && (
-            <Badge variant="info" size="sm" icon={<Layers size={10} />}>
+            <Badge variant="info" size="sm" className="gap-1">
+              <Layers size={10} />
               {agent.integrations.length}
             </Badge>
           )}
           <span
-            className={cn('text-gray-500 transition-transform text-xs', expanded && 'rotate-90')}
+            className={cn('text-xs transition-transform', expanded && 'rotate-90')}
+            style={{ color: 'var(--nf-text-muted)' }}
           >
             ▸
           </span>
         </div>
-      </button>
+      </Button>
 
       {expanded && (
-        <div className="px-4 pb-4 space-y-3 border-t border-gray-800/50 pt-3">
+        <div
+          className="space-y-3 border-t px-4 pb-4 pt-3"
+          style={{ borderColor: 'var(--nf-border)' }}
+        >
           {agent.identity?.personality && (
             <div>
-              <h5 className="text-[10px] uppercase text-gray-600 font-semibold mb-1.5">
+              <h5
+                className="mb-1.5 text-[10px] font-black uppercase tracking-[0.16em]"
+                style={{ color: 'var(--nf-text-muted)' }}
+              >
                 {t('templateDetail.identity')}
               </h5>
-              <p className="text-xs text-gray-400 bg-gray-950 rounded p-2.5 leading-relaxed line-clamp-4">
+              <p
+                className="line-clamp-4 rounded-[18px] px-3 py-3 text-xs leading-6"
+                style={{
+                  background: 'var(--nf-bg-glass-2)',
+                  color: 'var(--nf-text-mid)',
+                }}
+              >
                 {agent.identity.personality}
               </p>
             </div>
@@ -167,17 +212,23 @@ function TemplateAgentCard({ agent, index }: { agent: TemplateAgentInfo; index: 
 
           {agent.integrations && agent.integrations.length > 0 && (
             <div>
-              <h5 className="text-[10px] uppercase text-gray-600 font-semibold mb-1.5">
+              <h5
+                className="mb-1.5 text-[10px] font-black uppercase tracking-[0.16em]"
+                style={{ color: 'var(--nf-text-muted)' }}
+              >
                 {t('templateDetail.integrations')}
               </h5>
               <div className="flex flex-wrap gap-2">
                 {agent.integrations.map((integration) => (
-                  <span
+                  <Button
                     key={integration.name}
-                    className="flex items-center gap-1.5 text-xs bg-purple-900/20 text-purple-300 border border-purple-800/40 px-2.5 py-1 rounded-md"
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="pointer-events-none !h-8 !gap-1.5 !px-3 !text-xs"
                   >
                     <Zap size={10} /> {integration.name}
-                  </span>
+                  </Button>
                 ))}
               </div>
             </div>
@@ -185,31 +236,54 @@ function TemplateAgentCard({ agent, index }: { agent: TemplateAgentInfo; index: 
 
           {agent.resources && (
             <div>
-              <h5 className="text-[10px] uppercase text-gray-600 font-semibold mb-1.5">
+              <h5
+                className="mb-1.5 text-[10px] font-black uppercase tracking-[0.16em]"
+                style={{ color: 'var(--nf-text-muted)' }}
+              >
                 {t('templateDetail.resources')}
               </h5>
               <div className="grid grid-cols-2 gap-2">
                 {agent.resources.requests && (
-                  <div className="bg-gray-950 rounded p-2">
-                    <span className="text-[10px] text-gray-600 block mb-1">
+                  <div
+                    className="rounded-[18px] px-3 py-3"
+                    style={{ background: 'var(--nf-bg-glass-2)' }}
+                  >
+                    <span
+                      className="mb-1 block text-[10px] font-semibold"
+                      style={{ color: 'var(--nf-text-muted)' }}
+                    >
                       {t('templateDetail.requests')}
                     </span>
                     {Object.entries(agent.resources.requests).map(([key, value]) => (
-                      <div key={key} className="text-xs text-gray-400 flex justify-between gap-2">
-                        <span className="text-gray-600">{key}</span>
+                      <div
+                        key={key}
+                        className="flex justify-between gap-2 text-xs"
+                        style={{ color: 'var(--nf-text-mid)' }}
+                      >
+                        <span style={{ color: 'var(--nf-text-muted)' }}>{key}</span>
                         <span className="font-mono">{value}</span>
                       </div>
                     ))}
                   </div>
                 )}
                 {agent.resources.limits && (
-                  <div className="bg-gray-950 rounded p-2">
-                    <span className="text-[10px] text-gray-600 block mb-1">
+                  <div
+                    className="rounded-[18px] px-3 py-3"
+                    style={{ background: 'var(--nf-bg-glass-2)' }}
+                  >
+                    <span
+                      className="mb-1 block text-[10px] font-semibold"
+                      style={{ color: 'var(--nf-text-muted)' }}
+                    >
                       {t('templateDetail.limits')}
                     </span>
                     {Object.entries(agent.resources.limits).map(([key, value]) => (
-                      <div key={key} className="text-xs text-gray-400 flex justify-between gap-2">
-                        <span className="text-gray-600">{key}</span>
+                      <div
+                        key={key}
+                        className="flex justify-between gap-2 text-xs"
+                        style={{ color: 'var(--nf-text-mid)' }}
+                      >
+                        <span style={{ color: 'var(--nf-text-muted)' }}>{key}</span>
                         <span className="font-mono">{value}</span>
                       </div>
                     ))}
@@ -221,10 +295,19 @@ function TemplateAgentCard({ agent, index }: { agent: TemplateAgentInfo; index: 
 
           {agent.configuration && (
             <div>
-              <h5 className="text-[10px] uppercase text-gray-600 font-semibold mb-1.5 flex items-center gap-1">
+              <h5
+                className="mb-1.5 flex items-center gap-1 text-[10px] font-black uppercase tracking-[0.16em]"
+                style={{ color: 'var(--nf-text-muted)' }}
+              >
                 <Settings size={10} /> {t('storeDetail.configuration')}
               </h5>
-              <pre className="text-xs text-gray-500 bg-gray-950 rounded p-2.5 overflow-x-auto max-h-40">
+              <pre
+                className="max-h-40 overflow-x-auto rounded-[18px] px-3 py-3 text-xs"
+                style={{
+                  background: 'var(--nf-bg-glass-2)',
+                  color: 'var(--nf-text-mid)',
+                }}
+              >
                 {JSON.stringify(agent.configuration, null, 2)}
               </pre>
             </div>
@@ -232,15 +315,20 @@ function TemplateAgentCard({ agent, index }: { agent: TemplateAgentInfo; index: 
 
           {agent.env && Object.keys(agent.env).length > 0 && (
             <div>
-              <h5 className="text-[10px] uppercase text-gray-600 font-semibold mb-1.5">
+              <h5
+                className="mb-1.5 text-[10px] font-black uppercase tracking-[0.16em]"
+                style={{ color: 'var(--nf-text-muted)' }}
+              >
                 {t('templateDetail.environment')}
               </h5>
               <div className="space-y-1">
                 {Object.entries(agent.env).map(([key, value]) => (
                   <div key={key} className="text-xs font-mono flex gap-2">
-                    <span className="text-yellow-400/80">{key}</span>
-                    <span className="text-gray-600">=</span>
-                    <span className="text-gray-500 truncate">{String(value)}</span>
+                    <span style={{ color: 'var(--color-nf-yellow)' }}>{key}</span>
+                    <span style={{ color: 'var(--nf-text-muted)' }}>=</span>
+                    <span className="truncate" style={{ color: 'var(--nf-text-mid)' }}>
+                      {String(value)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -249,14 +337,21 @@ function TemplateAgentCard({ agent, index }: { agent: TemplateAgentInfo; index: 
 
           {agent.tools && agent.tools.length > 0 && (
             <div>
-              <h5 className="text-[10px] uppercase text-gray-600 font-semibold mb-1.5">
+              <h5
+                className="mb-1.5 text-[10px] font-black uppercase tracking-[0.16em]"
+                style={{ color: 'var(--nf-text-muted)' }}
+              >
                 {t('templateDetail.tools')}
               </h5>
               <div className="flex flex-wrap gap-1.5">
                 {agent.tools.map((tool) => (
                   <span
                     key={tool}
-                    className="text-[10px] text-gray-500 bg-gray-800 px-2 py-0.5 rounded font-mono"
+                    className="rounded-full px-2 py-1 text-[10px] font-mono"
+                    style={{
+                      background: 'var(--nf-bg-glass-2)',
+                      color: 'var(--nf-text-mid)',
+                    }}
                   >
                     {tool}
                   </span>
@@ -285,13 +380,13 @@ export function TemplateAgentsTab({
 
   if (agents.length === 0) {
     return (
-      <EmptyState icon={<Users size={32} />} title={emptyTitle} description={emptyDescription} />
+      <EmptyState icon={Users} title={emptyTitle} description={emptyDescription} />
     )
   }
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-gray-500 mb-4">
+      <p className="mb-4 text-sm" style={{ color: 'var(--nf-text-muted)' }}>
         {introText ?? t('templateDetail.agentsCount', { count: agents.length })}
       </p>
       {agents.map((agent, index) => (
@@ -315,7 +410,9 @@ export function TemplateConfigTab({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-gray-500">{description}</p>
+      <p className="text-sm" style={{ color: 'var(--nf-text-muted)' }}>
+        {description}
+      </p>
       <CodeBlock
         code={templateData ? configStr : t('common.loading')}
         language="json"
@@ -361,35 +458,83 @@ export function TemplateDetailShell({
   children: ReactNode
 }) {
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <Breadcrumb items={breadcrumbItems} className="mb-4" />
+    <div className="mx-auto max-w-[1440px] space-y-5 px-6 py-6 md:px-8">
+      <Breadcrumb items={breadcrumbItems} className="mb-1" />
 
-      <div className="flex flex-col lg:flex-row gap-6 mb-6">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start gap-4 mb-4">
-            <div className="shrink-0">{heroIcon}</div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-3 mb-2 flex-wrap">
-                <h1 className="text-2xl font-bold">{title}</h1>
-                {titleMeta}
-                {titleActions}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+        <div className="min-w-0 space-y-5">
+          <div className="glass-panel p-6">
+            <div className="flex flex-col gap-5 md:flex-row md:items-start">
+              <div
+                className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[28px] border"
+                style={{
+                  background: 'var(--nf-bg-glass-2)',
+                  borderColor: 'var(--nf-border)',
+                }}
+              >
+                {heroIcon}
               </div>
-              <div className="text-sm text-gray-400 leading-relaxed">{description}</div>
-              {supportingText && <div className="mt-2">{supportingText}</div>}
-              {badges && <div className="flex items-center gap-2 flex-wrap mt-3">{badges}</div>}
+
+              <div className="min-w-0 flex-1 space-y-4">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div className="min-w-0 space-y-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h1
+                        className="text-[32px] font-black tracking-[-0.04em]"
+                        style={{ color: 'var(--nf-text-high)' }}
+                      >
+                        {title}
+                      </h1>
+                      {titleMeta}
+                    </div>
+
+                    <div
+                      className="max-w-3xl text-sm leading-7"
+                      style={{ color: 'var(--nf-text-mid)' }}
+                    >
+                      {description}
+                    </div>
+
+                    {supportingText && <div>{supportingText}</div>}
+                  </div>
+
+                  {titleActions && <div className="shrink-0">{titleActions}</div>}
+                </div>
+
+                {badges && <div className="flex flex-wrap items-center gap-2.5">{badges}</div>}
+                {chips && <div className="flex flex-wrap gap-2.5">{chips}</div>}
+                {actions && <div className="flex flex-wrap items-center gap-2.5 pt-1">{actions}</div>}
+              </div>
             </div>
           </div>
 
-          {chips && <div className="flex flex-wrap gap-3 mb-4">{chips}</div>}
-          {actions && <div className="flex items-center gap-3 flex-wrap">{actions}</div>}
+          <Tabs value={activeTab} onChange={onTabChange}>
+            <TabsList className="dashboard-tabs-list">
+              {tabs.map((tab) => (
+                <TabsTrigger
+                  key={tab.id}
+                  value={tab.id}
+                  className="dashboard-tabs-trigger"
+                >
+                  {tab.icon && (
+                    <span className="dashboard-tab-icon">{tab.icon}</span>
+                  )}
+                  <span>{tab.label}</span>
+                  {typeof tab.count === 'number' && (
+                    <span className="rounded-full bg-bg-tertiary/70 px-2 py-0.5 text-[10px] font-black tracking-normal text-text-muted">
+                      {tab.count}
+                    </span>
+                  )}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+
+          <div>{children}</div>
         </div>
 
-        <div className="lg:w-72 shrink-0">{sidebar}</div>
+        <div className="w-full xl:sticky xl:top-6 xl:shrink-0">{sidebar}</div>
       </div>
-
-      <Tabs items={tabs} active={activeTab} onChange={onTabChange} className="mb-6" />
-
-      <div className="min-h-[400px]">{children}</div>
     </div>
   )
 }

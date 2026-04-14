@@ -15,8 +15,8 @@ import {
 } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Button, Input, Tabs, TabsList, TabsTrigger } from '@shadowob/ui'
 import { Breadcrumb } from '@/components/Breadcrumb'
-import { Tabs } from '@/components/Tabs'
 import { api, type ProviderSettings, type Settings } from '@/lib/api'
 import { API_PRESETS } from '@/lib/presets'
 import { cn } from '@/lib/utils'
@@ -42,46 +42,74 @@ function ProviderCard({
   const { t } = useTranslation()
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium">{provider.id}</p>
-          <p className="text-xs text-gray-500 font-mono">{provider.api}</p>
+    <div
+      className="space-y-4 rounded-[26px] border p-4"
+      style={{
+        background: 'var(--nf-bg-glass-2)',
+        borderColor: 'var(--nf-border)',
+      }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <p className="truncate text-base font-black" style={{ color: 'var(--nf-text-high)' }}>
+            {provider.id}
+          </p>
+          <p className="truncate text-xs font-mono" style={{ color: 'var(--nf-text-muted)' }}>
+            {provider.api}
+          </p>
         </div>
-        <button
+        <Button
           type="button"
           onClick={onRemove}
-          className="text-gray-600 hover:text-red-400 transition-colors"
+          variant="ghost"
+          size="icon"
+          style={{
+            color: 'var(--nf-text-muted)',
+            borderColor: 'var(--nf-border)',
+            background: 'var(--nf-bg-raised)',
+          }}
         >
           <Trash2 size={14} />
-        </button>
+        </Button>
       </div>
 
       <div className="space-y-2">
-        <div className="bg-gray-950 border border-gray-800 rounded-lg px-3 py-2.5">
-          <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-1">
+        <div
+          className="rounded-[20px] border px-4 py-3"
+          style={{
+            background: 'var(--nf-bg-raised)',
+            borderColor: 'var(--nf-border)',
+          }}
+        >
+          <p
+            className="mb-1 text-[10px] font-black uppercase tracking-[0.18em]"
+            style={{ color: 'var(--nf-text-muted)' }}
+          >
             {t('settings.secretEnvKey')}
           </p>
-          <code className="text-xs font-mono text-yellow-400/90 break-all">
+          <code className="break-all text-xs font-mono" style={{ color: 'var(--color-nf-yellow)' }}>
             {getProviderSecretEnvName(provider.id)}
           </code>
-          <p className="text-[11px] text-gray-600 mt-2">
+          <p className="mt-2 text-[11px]" style={{ color: 'var(--nf-text-muted)' }}>
             {t('settings.credentialsManagedInSecrets')}
           </p>
         </div>
 
         {provider.baseUrl !== undefined && (
           <div>
-            <label htmlFor={`baseurl-${provider.id}`} className="text-xs text-gray-500 block mb-1">
+            <label
+              htmlFor={`baseurl-${provider.id}`}
+              className="mb-1.5 block text-xs font-semibold"
+              style={{ color: 'var(--nf-text-muted)' }}
+            >
               {t('settings.baseUrl')}
             </label>
-            <input
+            <Input
               id={`baseurl-${provider.id}`}
               type="text"
               value={provider.baseUrl ?? ''}
               onChange={(e) => onChange({ ...provider, baseUrl: e.target.value })}
               placeholder="https://api.example.com/v1"
-              className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-1.5 text-sm font-mono text-gray-300 placeholder-gray-600 focus:outline-none focus:border-blue-500"
             />
           </div>
         )}
@@ -144,39 +172,59 @@ function ProvidersTab({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500">{t('settings.configureProvidersMetadata')}</p>
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <p className="max-w-2xl text-sm leading-7" style={{ color: 'var(--nf-text-muted)' }}>
+          {t('settings.configureProvidersMetadata')}
+        </p>
         <div className="relative group">
-          <button
-            type="button"
-            className="flex items-center gap-1.5 text-xs border border-gray-700 hover:border-gray-500 text-gray-400 hover:text-white rounded-lg px-3 py-1.5 transition-colors"
-          >
+          <Button type="button" variant="secondary" size="sm">
             <Plus size={12} />
             {t('settings.addProvider')}
-          </button>
-          <div className="absolute right-0 top-full mt-1 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-10 min-w-48 hidden group-hover:block">
+          </Button>
+          <div
+            className="absolute right-0 top-full z-10 mt-2 hidden min-w-52 overflow-hidden rounded-[20px] border shadow-xl group-hover:block"
+            style={{
+              background: 'var(--nf-bg-surface)',
+              borderColor: 'var(--nf-border)',
+              boxShadow: 'var(--nf-shadow-card)',
+            }}
+          >
             {API_PRESETS.map((preset) => (
-              <button
+              <Button
                 type="button"
                 key={preset.id}
                 onClick={() => addProvider(preset)}
-                className="w-full text-left px-4 py-2 text-sm hover:bg-gray-800 text-gray-300 first:rounded-t-lg last:rounded-b-lg"
+                variant="ghost"
               >
                 {preset.label}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="bg-blue-950/20 border border-blue-900/30 rounded-lg p-4 text-xs text-blue-300">
+      <div
+        className="rounded-[22px] border px-4 py-3 text-sm leading-6"
+        style={{
+          background: 'rgba(0, 243, 255, 0.08)',
+          borderColor: 'rgba(0, 243, 255, 0.16)',
+          color: 'var(--nf-text-mid)',
+        }}
+      >
         {t('settings.credentialsMoveNotice')}
       </div>
 
       {providers.length === 0 && (
-        <div className="bg-gray-900 border border-dashed border-gray-700 rounded-lg p-8 text-center text-sm text-gray-600">
-          <Key size={24} className="mx-auto mb-2 text-gray-700" />
+        <div
+          className="rounded-[26px] border border-dashed px-6 py-10 text-center text-sm"
+          style={{
+            background: 'var(--nf-bg-glass-2)',
+            borderColor: 'var(--nf-border-strong)',
+            color: 'var(--nf-text-muted)',
+          }}
+        >
+          <Key size={24} className="mx-auto mb-3" style={{ color: 'var(--nf-text-muted)' }} />
           {t('settings.noProvidersConfigured')}
         </div>
       )}
@@ -194,20 +242,16 @@ function ProvidersTab({
 
       {providers.length > 0 && (
         <div className="flex justify-end">
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
             onClick={handleSave}
             disabled={mutation.isPending}
-            className={cn(
-              'flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg transition-colors',
-              mutation.isPending
-                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-500 text-white',
-            )}
           >
             <Save size={14} />
             {mutation.isPending ? t('common.saving') : t('settings.saveSettings')}
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -226,22 +270,23 @@ function AppearanceOption({
   onClick: () => void
 }) {
   return (
-    <button
+    <Button
       type="button"
       onClick={onClick}
-      className="flex items-center justify-between gap-3 rounded-[22px] border px-4 py-3 text-left transition-all hover:-translate-y-0.5"
+      variant="ghost"
       style={{
-        background: active ? 'var(--nf-sidebar-active)' : 'var(--nf-bg-glass-2)',
-        borderColor: active ? 'rgba(0, 243, 255, 0.25)' : 'var(--nf-border)',
+        background: active ? 'var(--nf-bg-raised)' : 'transparent',
+        borderColor: active ? 'rgba(0, 243, 255, 0.2)' : 'var(--nf-border)',
         color: active ? 'var(--color-nf-cyan)' : 'var(--nf-text-high)',
+        boxShadow: active ? 'var(--nf-shadow-soft)' : 'none',
       }}
     >
       <span className="flex items-center gap-3 min-w-0">
         <span
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border"
           style={{
-            background: active ? 'rgba(0, 243, 255, 0.12)' : 'var(--nf-bg-raised)',
-            borderColor: active ? 'rgba(0, 243, 255, 0.22)' : 'var(--nf-border)',
+            background: active ? 'rgba(0, 243, 255, 0.12)' : 'var(--nf-bg-glass-2)',
+            borderColor: active ? 'rgba(0, 243, 255, 0.18)' : 'var(--nf-border)',
           }}
         >
           {icon}
@@ -250,7 +295,7 @@ function AppearanceOption({
       </span>
 
       {active && <Check size={14} />}
-    </button>
+    </Button>
   )
 }
 
@@ -260,7 +305,7 @@ function AppearanceTab() {
   const setTheme = useThemeStore((state) => state.setTheme)
   const currentLanguage = i18n.language?.startsWith('zh') ? 'zh-CN' : 'en'
 
-  const themeOptions: Array<{ value: Theme; label: string; icon: React.ReactNode }> = [
+  const themeOptions: Array<{ value: Theme; label: string; icon: ReactNode }> = [
     {
       value: 'light',
       label: t('theme.light'),
@@ -290,8 +335,8 @@ function AppearanceTab() {
   ]
 
   return (
-    <div className="space-y-6">
-      <div className="nf-card !p-5 space-y-4">
+    <div className="space-y-5">
+      <div className="nf-card !p-6 space-y-4">
         <div>
           <h2 className="text-sm font-black" style={{ color: 'var(--nf-text-high)' }}>
             {t('settings.themeSection')}
@@ -314,7 +359,7 @@ function AppearanceTab() {
         </div>
       </div>
 
-      <div className="nf-card !p-5 space-y-4">
+      <div className="nf-card !p-6 space-y-4">
         <div>
           <h2 className="text-sm font-black" style={{ color: 'var(--nf-text-high)' }}>
             {t('settings.languageSection')}
@@ -354,48 +399,68 @@ function SystemTab() {
   })
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gray-900 border border-gray-800 rounded-lg divide-y divide-gray-800">
-        <div className="px-5 py-3 flex items-center justify-between">
-          <span className="text-xs text-gray-500">API Status</span>
-          <span className={cn('text-sm', health ? 'text-green-400' : 'text-red-400')}>
+    <div className="space-y-5">
+      <div
+        className="nf-card !p-0 divide-y divide-gray-800/50"
+        style={{ borderColor: 'var(--nf-border)' }}
+      >
+        <div className="flex items-center justify-between gap-3 px-5 py-4">
+          <span className="text-xs font-semibold" style={{ color: 'var(--nf-text-muted)' }}>
+            API Status
+          </span>
+          <span className={cn('text-sm font-semibold', health ? 'text-green-400' : 'text-red-400')}>
             {health ? 'Healthy' : 'Unknown'}
           </span>
         </div>
-        <div className="px-5 py-3 flex items-center justify-between">
-          <span className="text-xs text-gray-500">Doctor Checks</span>
-          <span className="text-sm">
+        <div className="flex items-center justify-between gap-3 px-5 py-4">
+          <span className="text-xs font-semibold" style={{ color: 'var(--nf-text-muted)' }}>
+            Doctor Checks
+          </span>
+          <span className="text-sm" style={{ color: 'var(--nf-text-high)' }}>
             {doctor
               ? `${doctor.checks.filter((c) => c.status === 'pass').length}/${doctor.checks.length} passing`
               : '—'}
           </span>
         </div>
-        <div className="px-5 py-3 flex items-center justify-between">
-          <span className="text-xs text-gray-500">Dashboard Port</span>
-          <span className="text-sm font-mono text-gray-400">{window.location.port || '80'}</span>
+        <div className="flex items-center justify-between gap-3 px-5 py-4">
+          <span className="text-xs font-semibold" style={{ color: 'var(--nf-text-muted)' }}>
+            Dashboard Port
+          </span>
+          <span className="text-sm font-mono" style={{ color: 'var(--nf-text-high)' }}>
+            {window.location.port || '80'}
+          </span>
         </div>
-        <div className="px-5 py-3 flex items-center justify-between">
-          <span className="text-xs text-gray-500">API Endpoint</span>
-          <span className="text-sm font-mono text-gray-400">{window.location.origin}/api</span>
+        <div className="flex items-center justify-between gap-3 px-5 py-4">
+          <span className="text-xs font-semibold" style={{ color: 'var(--nf-text-muted)' }}>
+            API Endpoint
+          </span>
+          <span className="text-sm font-mono" style={{ color: 'var(--nf-text-high)' }}>
+            {window.location.origin}/api
+          </span>
         </div>
       </div>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
-        <h3 className="text-sm font-medium mb-3">Environment</h3>
+      <div className="nf-card !p-5">
+        <h3 className="mb-4 text-sm font-black" style={{ color: 'var(--nf-text-high)' }}>
+          Environment
+        </h3>
         <div className="space-y-2 text-xs">
           <div className="flex justify-between">
-            <span className="text-gray-500">User Agent</span>
-            <span className="text-gray-400 font-mono text-[10px] max-w-xs truncate">
+            <span style={{ color: 'var(--nf-text-muted)' }}>User Agent</span>
+            <span
+              className="max-w-xs truncate font-mono text-[10px]"
+              style={{ color: 'var(--nf-text-mid)' }}
+            >
               {navigator.userAgent.split(' ').slice(-2).join(' ')}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-500">Language</span>
-            <span className="text-gray-400">{navigator.language}</span>
+            <span style={{ color: 'var(--nf-text-muted)' }}>Language</span>
+            <span style={{ color: 'var(--nf-text-mid)' }}>{navigator.language}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-500">Timezone</span>
-            <span className="text-gray-400">
+            <span style={{ color: 'var(--nf-text-muted)' }}>Timezone</span>
+            <span style={{ color: 'var(--nf-text-mid)' }}>
               {Intl.DateTimeFormat().resolvedOptions().timeZone}
             </span>
           </div>
@@ -409,56 +474,80 @@ function SystemTab() {
 
 function AboutTab() {
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-gray-800 rounded-lg p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <Cloud size={28} className="text-blue-400" />
+    <div className="space-y-5">
+      <div className="nf-card !p-6">
+        <div className="mb-4 flex items-center gap-3">
+          <div
+            className="flex h-12 w-12 items-center justify-center rounded-full"
+            style={{
+              background: 'rgba(0, 243, 255, 0.12)',
+              border: '1px solid rgba(0, 243, 255, 0.18)',
+              boxShadow: '0 10px 24px rgba(0, 198, 209, 0.14)',
+            }}
+          >
+            <Cloud size={24} style={{ color: 'var(--color-nf-cyan)' }} />
+          </div>
           <div>
-            <h3 className="text-lg font-bold">Shadow Cloud Console</h3>
-            <p className="text-xs text-gray-500">AI Agent Cluster Management Platform</p>
+            <h3 className="text-lg font-black" style={{ color: 'var(--nf-text-high)' }}>
+              Shadow Cloud Console
+            </h3>
+            <p className="text-xs" style={{ color: 'var(--nf-text-muted)' }}>
+              AI Agent Cluster Management Platform
+            </p>
           </div>
         </div>
-        <p className="text-sm text-gray-400 leading-relaxed">
+        <p className="text-sm leading-7" style={{ color: 'var(--nf-text-mid)' }}>
           Shadow Cloud Console provides full lifecycle management for AI agent clusters on
           Kubernetes. Deploy, monitor, scale, and manage your agent teams with an intuitive
           cloud-native interface.
         </p>
       </div>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-lg divide-y divide-gray-800">
-        <div className="px-5 py-3 flex items-center justify-between">
-          <span className="text-xs text-gray-500">Platform</span>
-          <span className="text-sm">Shadow Cloud</span>
+      <div
+        className="nf-card !p-0 divide-y divide-gray-800/50"
+        style={{ borderColor: 'var(--nf-border)' }}
+      >
+        <div className="flex items-center justify-between gap-3 px-5 py-4">
+          <span className="text-xs font-semibold" style={{ color: 'var(--nf-text-muted)' }}>
+            Platform
+          </span>
+          <span className="text-sm" style={{ color: 'var(--nf-text-high)' }}>
+            Shadow Cloud
+          </span>
         </div>
-        <div className="px-5 py-3 flex items-center justify-between">
-          <span className="text-xs text-gray-500">Interface</span>
-          <span className="text-sm text-gray-400">Console (Web)</span>
+        <div className="flex items-center justify-between gap-3 px-5 py-4">
+          <span className="text-xs font-semibold" style={{ color: 'var(--nf-text-muted)' }}>
+            Interface
+          </span>
+          <span className="text-sm" style={{ color: 'var(--nf-text-mid)' }}>
+            Console (Web)
+          </span>
         </div>
-        <div className="px-5 py-3 flex items-center justify-between">
-          <span className="text-xs text-gray-500">License</span>
-          <span className="text-sm text-gray-400">MIT</span>
+        <div className="flex items-center justify-between gap-3 px-5 py-4">
+          <span className="text-xs font-semibold" style={{ color: 'var(--nf-text-muted)' }}>
+            License
+          </span>
+          <span className="text-sm" style={{ color: 'var(--nf-text-mid)' }}>
+            MIT
+          </span>
         </div>
       </div>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
-        <h3 className="text-sm font-medium mb-3">Quick Links</h3>
-        <div className="space-y-2">
-          <a
-            href="https://github.com/nicepkg/shadow"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block text-sm text-blue-400 hover:text-blue-300 transition-colors"
-          >
-            GitHub Repository →
-          </a>
-          <a
-            href="https://shadow.nicepkg.cn"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block text-sm text-blue-400 hover:text-blue-300 transition-colors"
-          >
-            Documentation →
-          </a>
+      <div className="nf-card !p-5">
+        <h3 className="mb-4 text-sm font-black" style={{ color: 'var(--nf-text-high)' }}>
+          Quick Links
+        </h3>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="secondary" size="sm">
+            <a href="https://github.com/nicepkg/shadow" target="_blank" rel="noopener noreferrer">
+              GitHub Repository →
+            </a>
+          </Button>
+          <Button asChild variant="secondary" size="sm">
+            <a href="https://shadow.nicepkg.cn" target="_blank" rel="noopener noreferrer">
+              Documentation →
+            </a>
+          </Button>
         </div>
       </div>
     </div>
@@ -470,7 +559,7 @@ function AboutTab() {
 export function SettingsPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState('appearance')
+  const [activeTab, setActiveTab] = useState('providers')
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -488,30 +577,47 @@ export function SettingsPage() {
   })
 
   const tabs = [
-    { id: 'appearance', label: t('settings.appearance'), icon: <Monitor size={13} /> },
     { id: 'providers', label: t('settings.providers'), icon: <Key size={13} /> },
+    { id: 'appearance', label: t('settings.appearance'), icon: <Monitor size={13} /> },
     { id: 'system', label: t('settings.system'), icon: <Server size={13} /> },
     { id: 'about', label: t('settings.about'), icon: <Info size={13} /> },
   ]
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <Breadcrumb items={[{ label: t('nav.settings') }]} className="mb-4" />
+    <div className="mx-auto max-w-4xl space-y-5 p-6">
+      <Breadcrumb items={[{ label: t('nav.settings') }]} className="mb-1" />
 
-      <div className="mb-6">
-        <h1 className="text-xl font-bold">{t('nav.settings')}</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{t('settings.pageDescription')}</p>
+      <div>
+        <h1
+          className="text-[30px] font-black tracking-[-0.03em]"
+          style={{ color: 'var(--nf-text-high)' }}
+        >
+          {t('nav.settings')}
+        </h1>
+        <p className="mt-1 text-sm leading-7" style={{ color: 'var(--nf-text-muted)' }}>
+          {t('settings.pageDescription')}
+        </p>
       </div>
 
       {isLoading && (
-        <div className="text-center text-gray-500 text-sm py-12">{t('common.loading')}</div>
+        <div className="py-12 text-center text-sm" style={{ color: 'var(--nf-text-muted)' }}>
+          {t('common.loading')}
+        </div>
       )}
 
       {!isLoading && (
         <>
-          <Tabs items={tabs} active={activeTab} onChange={setActiveTab} className="mb-6" />
+          <Tabs value={activeTab} onChange={setActiveTab}>
+            <TabsList>
+              {tabs.map((tab) => (
+                <TabsTrigger key={tab.id} value={tab.id}>
+                  <span>{tab.icon}</span>
+                  <span>{tab.label}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
 
-          {activeTab === 'appearance' && <AppearanceTab />}
           {activeTab === 'providers' && (
             <ProvidersTab
               providers={currentProviders}
@@ -520,6 +626,7 @@ export function SettingsPage() {
               mutation={mutation}
             />
           )}
+          {activeTab === 'appearance' && <AppearanceTab />}
           {activeTab === 'system' && <SystemTab />}
           {activeTab === 'about' && <AboutTab />}
         </>

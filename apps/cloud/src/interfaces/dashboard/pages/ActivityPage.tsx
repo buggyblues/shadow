@@ -13,10 +13,8 @@ import {
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Badge, type BadgeVariant } from '@/components/Badge'
+import { Badge, Button, Card, EmptyState, NativeSelect, Search } from '@shadowob/ui'
 import { Breadcrumb } from '@/components/Breadcrumb'
-import { EmptyState } from '@/components/EmptyState'
-import { SearchInput } from '@/components/SearchInput'
 import { useDebounce } from '@/hooks/useDebounce'
 import { api } from '@/lib/api'
 import { getRelativeTime, pluralize } from '@/lib/utils'
@@ -26,7 +24,7 @@ import { type ActivityEntry, type ActivityType, useAppStore } from '@/stores/app
 
 const TYPE_CONFIG: Record<
   ActivityType,
-  { label: string; icon: React.ReactNode; variant: BadgeVariant }
+  { label: string; icon: React.ReactNode; variant: 'success' | 'danger' | 'info' | 'warning' | 'neutral' }
 > = {
   deploy: {
     label: 'Deploy',
@@ -36,7 +34,7 @@ const TYPE_CONFIG: Record<
   destroy: {
     label: 'Destroy',
     icon: <Trash2 size={12} />,
-    variant: 'error',
+    variant: 'danger',
   },
   scale: {
     label: 'Scale',
@@ -51,12 +49,12 @@ const TYPE_CONFIG: Record<
   init: {
     label: 'Init',
     icon: <Box size={12} />,
-    variant: 'default',
+    variant: 'neutral',
   },
   settings: {
     label: 'Settings',
     icon: <Settings size={12} />,
-    variant: 'default',
+    variant: 'neutral',
   },
 }
 
@@ -72,20 +70,20 @@ function ActivityItem({ activity }: { activity: ActivityEntry }) {
   return (
     <div className="flex gap-4 py-4 border-b border-gray-800/50 last:border-0 hover:bg-gray-800/10 transition-colors px-4 -mx-4 rounded-lg">
       {/* Icon */}
-      <div className="mt-0.5 p-2 bg-gray-900 border border-gray-800 rounded-lg shrink-0">
+      <div className="mt-1 p-2 bg-gray-900 border border-gray-800 rounded-lg shrink-0">
         {config.icon}
       </div>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
+        <div className="flex items-center gap-2 mb-1">
           <p className="text-sm font-medium text-gray-200">{activity.title}</p>
           <Badge variant={config.variant} size="sm">
             {config.label}
           </Badge>
         </div>
         {activity.detail && <p className="text-xs text-gray-500 mb-1">{activity.detail}</p>}
-        <div className="flex items-center gap-3 text-[10px] text-gray-600">
+        <div className="flex items-center gap-3 text-xs text-gray-600">
           <span className="flex items-center gap-1">
             <Clock size={10} />
             {isValidDate ? time.toLocaleString() : '—'}
@@ -122,7 +120,7 @@ function StatsBar({ activities }: { activities: ActivityEntry[] }) {
 
   return (
     <div className="flex items-center gap-6 text-xs text-gray-500 mb-6">
-      <span className="flex items-center gap-1.5">
+      <span className="flex items-center gap-2">
         <Activity size={12} />
         {activities.length} total {pluralize(activities.length, 'activity', 'activities')}
       </span>
@@ -202,17 +200,18 @@ export function ActivityPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold">{t('activity.title')}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{t('activity.description')}</p>
+          <p className="text-sm text-gray-500 mt-1">{t('activity.description')}</p>
         </div>
         {activities.length > 0 && (
-          <button
+          <Button
             type="button"
             onClick={clearActivities}
-            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-400 border border-gray-700 hover:border-red-800 rounded-lg px-3 py-1.5 transition-colors"
+            variant="ghost"
+            size="sm"
           >
             <Trash2 size={12} />
             {t('common.clearAll')}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -220,20 +219,17 @@ export function ActivityPage() {
 
       {/* Filters */}
       <div className="flex items-center gap-3 mb-6 flex-wrap">
-        <SearchInput
+        <Search
           value={search}
           onChange={setSearch}
           placeholder={t('activity.searchActivities')}
-          size="sm"
-          className="w-64"
         />
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <Filter size={12} className="text-gray-600" />
-          <select
+          <NativeSelect
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value as ActivityType | 'all')}
-            className="text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-400 focus:outline-none focus:border-blue-500"
           >
             <option value="all">{t('activity.allTypes')}</option>
             {ALL_TYPES.map((type) => (
@@ -241,23 +237,24 @@ export function ActivityPage() {
                 {TYPE_CONFIG[type].label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
 
-        <button
+        <Button
           type="button"
           onClick={() => setSortOrder((s) => (s === 'newest' ? 'oldest' : 'newest'))}
-          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 border border-gray-700 rounded-lg px-3 py-1.5 transition-colors"
+          variant="ghost"
+          size="sm"
         >
           <ArrowUpDown size={11} />
           {sortOrder === 'newest' ? t('activity.newestFirst') : t('activity.oldestFirst')}
-        </button>
+        </Button>
       </div>
 
       {/* Activity List */}
       {filtered.length === 0 && (
         <EmptyState
-          icon={<Activity size={40} />}
+          icon={Activity}
           title={t('activity.noActivityRecorded')}
           description={
             activities.length === 0
@@ -268,7 +265,7 @@ export function ActivityPage() {
       )}
 
       {filtered.length > 0 && (
-        <div>
+        <Card variant="surface">
           {filtered.map((activity) => (
             <ActivityItem key={activity.id} activity={activity} />
           ))}
@@ -278,7 +275,7 @@ export function ActivityPage() {
               {t('activity.showingMostRecent')}
             </p>
           )}
-        </div>
+        </Card>
       )}
     </div>
   )

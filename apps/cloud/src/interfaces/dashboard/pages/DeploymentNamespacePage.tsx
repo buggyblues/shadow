@@ -27,13 +27,34 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Badge } from '@/components/Badge'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Badge,
+  Button,
+  Checkbox,
+  EmptyState,
+  Input,
+  NativeSelect,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from '@shadowob/ui'
 import { Breadcrumb } from '@/components/Breadcrumb'
-import { ConfirmDialog } from '@/components/ConfirmDialog'
-import { EmptyState } from '@/components/EmptyState'
 import { StatCard } from '@/components/StatCard'
 import { StatusDot } from '@/components/StatusDot'
-import { Tabs } from '@/components/Tabs'
 import { useSSEStream } from '@/hooks/useSSEStream'
 import { api, type Deployment, type EnvVarListEntry, type Pod } from '@/lib/api'
 import { formatUsdCost } from '@/lib/store-data'
@@ -109,20 +130,19 @@ function NamespaceEnvDialog({
             <Variable size={16} className="text-blue-400" />
             {mode === 'edit' ? t('deployments.editScopedEnv') : t('deployments.addScopedEnv')}
           </h3>
-          <button type="button" onClick={onClose} className="text-gray-500 hover:text-gray-300 p-1">
+          <Button type="button" variant="ghost" size="icon" onClick={onClose}>
             <X size={16} />
-          </button>
+          </Button>
         </div>
 
         <div className="space-y-3">
           <div>
             <label className="text-xs text-gray-400 mb-1.5 block">{t('secrets.keyName')}</label>
-            <input
+            <Input
               type="text"
               value={key}
               onChange={(event) => setKey(event.target.value)}
               placeholder="OPENAI_API_KEY"
-              className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2.5 text-sm font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500"
               autoFocus
               disabled={mode === 'edit'}
             />
@@ -130,28 +150,26 @@ function NamespaceEnvDialog({
           <div>
             <label className="text-xs text-gray-400 mb-1.5 block">{t('secrets.secretValue')}</label>
             <div className="relative">
-              <input
+              <Input
                 type={showValue ? 'text' : 'password'}
                 value={value}
                 onChange={(event) => setValue(event.target.value)}
                 placeholder={mode === 'edit' ? t('secrets.leaveEmptyKeep') : ''}
-                className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2.5 text-sm font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 pr-10"
               />
-              <button
+              <Button
                 type="button"
                 onClick={() => setShowValue((current) => !current)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400"
+                variant="ghost"
+                size="icon"
               >
                 {showValue ? <EyeOff size={14} /> : <Eye size={14} />}
-              </button>
+              </Button>
             </div>
           </div>
           <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={isSecret}
-              onChange={(event) => setIsSecret(event.target.checked)}
-              className="accent-blue-500 rounded"
+              onCheckedChange={(checked) => setIsSecret(checked === true)}
             />
             <Lock size={12} />
             {t('secrets.secret')}
@@ -159,22 +177,18 @@ function NamespaceEnvDialog({
         </div>
 
         <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg transition-colors"
-          >
+          <Button type="button" onClick={onClose} variant="ghost">
             {t('common.cancel')}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={() => key.trim() && onSubmit({ key: key.trim(), value, isSecret })}
             disabled={!key.trim() || isSubmitting}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg transition-colors"
+            variant="primary"
           >
             {isSubmitting && <Loader2 size={14} className="animate-spin" />}
             {mode === 'edit' ? t('common.save') : t('common.add')}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -236,7 +250,7 @@ function AgentCard({
       )}
     >
       <div className="flex items-start justify-between gap-3 mb-3">
-        <button type="button" onClick={onSelect} className="min-w-0 text-left flex-1">
+        <Button type="button" onClick={onSelect} variant="ghost" size="sm">
           <div className="flex items-center gap-2 min-w-0">
             <StatusDot status={ready ? 'success' : 'warning'} pulse={!ready} />
             <p className="text-sm font-mono text-gray-200 truncate">{deployment.name}</p>
@@ -246,16 +260,17 @@ function AgentCard({
               </Badge>
             )}
           </div>
-          <p className="text-[11px] text-gray-500 mt-1">{formatTimestamp(deployment.age)}</p>
-        </button>
+          <p className="text-xs text-gray-500 mt-1">{formatTimestamp(deployment.age)}</p>
+        </Button>
 
-        <button
+        <Button
           type="button"
           onClick={onOpenLogs}
-          className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-2.5 py-1.5 transition-colors shrink-0"
+          variant="ghost"
+          size="sm"
         >
           {t('deployments.tabLogs')}
-        </button>
+        </Button>
       </div>
 
       <div className="flex items-center justify-between gap-3">
@@ -264,23 +279,25 @@ function AgentCard({
         </Badge>
 
         <div className="flex items-center border border-gray-700 rounded">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="xs"
             onClick={() => handleScale(-1)}
             disabled={scaleMutation.isPending || currentReplicas <= 0}
-            className="px-2 py-1 text-gray-500 hover:text-white disabled:opacity-30 transition-colors"
           >
             −
-          </button>
+          </Button>
           <span className="text-xs font-mono px-2 min-w-[2rem] text-center">{currentReplicas}</span>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="xs"
             onClick={() => handleScale(1)}
             disabled={scaleMutation.isPending}
-            className="px-2 py-1 text-gray-500 hover:text-white disabled:opacity-30 transition-colors"
           >
             +
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -306,7 +323,7 @@ function PodsPanel({
 
   if (!agent) {
     return (
-      <div className="py-12 text-center text-gray-600 text-sm">
+      <div className="py-10 text-center text-gray-600 text-sm">
         <Box size={24} className="mx-auto mb-2 text-gray-700" />
         {t('deployments.noAgentSelected')}
       </div>
@@ -315,7 +332,7 @@ function PodsPanel({
 
   if (isLoading) {
     return (
-      <div className="py-12 text-center text-gray-500 text-sm">
+      <div className="py-10 text-center text-gray-500 text-sm">
         <Loader2 size={16} className="animate-spin inline mr-2" />
         {t('common.loading')}
       </div>
@@ -324,7 +341,7 @@ function PodsPanel({
 
   if (!pods || pods.length === 0) {
     return (
-      <div className="py-12 text-center text-gray-600 text-sm">
+      <div className="py-10 text-center text-gray-600 text-sm">
         <Box size={24} className="mx-auto mb-2 text-gray-700" />
         {t('deployments.noPodsForAgent', { agent })}
       </div>
@@ -338,44 +355,34 @@ function PodsPanel({
       </p>
 
       <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-gray-800 text-left">
-              <th className="px-4 py-2 text-xs font-medium text-gray-500">
-                {t('clusters.status')}
-              </th>
-              <th className="px-4 py-2 text-xs font-medium text-gray-500">
-                {t('monitoring.name')}
-              </th>
-              <th className="px-4 py-2 text-xs font-medium text-gray-500">
-                {t('monitoring.ready')}
-              </th>
-              <th className="px-4 py-2 text-xs font-medium text-gray-500">
-                {t('deployments.restarts')}
-              </th>
-              <th className="px-4 py-2 text-xs font-medium text-gray-500">
-                {t('deployments.age')}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t('clusters.status')}</TableHead>
+              <TableHead>{t('monitoring.name')}</TableHead>
+              <TableHead>{t('monitoring.ready')}</TableHead>
+              <TableHead>{t('deployments.restarts')}</TableHead>
+              <TableHead>{t('deployments.age')}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {pods.map((pod) => (
-              <tr key={pod.name} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                <td className="px-4 py-3">
+              <TableRow key={pod.name}>
+                <TableCell>
                   <StatusDot status={getPodStatusType(pod.status)} label={pod.status} />
-                </td>
-                <td className="px-4 py-3 font-mono text-xs text-gray-300">{pod.name}</td>
-                <td className="px-4 py-3">
+                </TableCell>
+                <TableCell>{pod.name}</TableCell>
+                <TableCell>
                   <Badge variant={pod.ready === '1/1' ? 'success' : 'warning'} size="sm">
                     {pod.ready}
                   </Badge>
-                </td>
-                <td className="px-4 py-3 text-xs text-gray-400">{pod.restarts}</td>
-                <td className="px-4 py-3 text-xs text-gray-500">{getAge(pod)}</td>
-              </tr>
+                </TableCell>
+                <TableCell>{pod.restarts}</TableCell>
+                <TableCell>{getAge(pod)}</TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </div>
   )
@@ -432,7 +439,7 @@ function NamespaceLogsTab({ namespace, agent }: { namespace: string; agent: stri
   if (!agent) {
     return (
       <EmptyState
-        icon={<FileText size={40} />}
+        icon={FileText}
         title={t('deployments.noAgentSelected')}
         description={t('deployments.selectAgentForLogs')}
       />
@@ -449,36 +456,37 @@ function NamespaceLogsTab({ namespace, agent }: { namespace: string; agent: stri
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <select
+          <NativeSelect
             value={String(limit)}
             onChange={(event) => {
               setLimit(Number(event.target.value))
               setPage(1)
             }}
-            className="text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300"
           >
             {[100, 200, 500].map((value) => (
               <option key={value} value={value}>
                 {t('deployments.linesPerPage', { count: value })}
               </option>
             ))}
-          </select>
-          <button
+          </NativeSelect>
+          <Button
             type="button"
             onClick={() => refetch()}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-colors"
+            variant="ghost"
+            size="sm"
           >
             <RefreshCw size={12} />
             {t('common.refresh')}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={handleDownload}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-colors"
+            variant="ghost"
+            size="sm"
           >
             <Download size={12} />
             {t('deploy.download')}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -490,25 +498,27 @@ function NamespaceLogsTab({ namespace, agent }: { namespace: string; agent: stri
             <span> · {t('deployments.pageLabel', { page })}</span>
           </div>
           <div className="flex items-center gap-2">
-            <button
+            <Button
               type="button"
               onClick={() => setPage((current) => Math.max(1, current - 1))}
               disabled={page === 1}
-              className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-30"
+              variant="ghost"
+              size="sm"
             >
               {t('deployments.newerLogs')}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={() => setPage((current) => current + 1)}
               disabled={!history?.hasMore}
-              className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-30"
+              variant="ghost"
+              size="sm"
             >
               {t('deployments.olderLogs')}
-            </button>
+            </Button>
           </div>
         </div>
-        <div className="h-72 overflow-auto p-4 font-mono text-xs text-gray-300 space-y-0.5">
+        <div className="min-h-[14rem] max-h-[26rem] overflow-auto p-4 font-mono text-xs text-gray-300 space-y-1">
           {isLoading ? (
             <span className="text-gray-600">{t('common.loading')}</span>
           ) : history?.lines.length ? (
@@ -531,30 +541,27 @@ function NamespaceLogsTab({ namespace, agent }: { namespace: string; agent: stri
           </div>
           <div className="flex items-center gap-2">
             {(lines.length > 0 || connected) && (
-              <button
+              <Button
                 type="button"
                 onClick={() => {
                   disconnect()
                   clear()
                 }}
-                className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-colors"
+                variant="ghost"
+                size="sm"
               >
                 {t('common.clearAll')}
-              </button>
+              </Button>
             )}
-            <button
+            <Button
               type="button"
               onClick={handleConnect}
-              className={cn(
-                'flex items-center gap-1.5 text-xs rounded-lg px-3 py-2 transition-colors border',
-                connected
-                  ? 'bg-green-900/30 text-green-400 border-green-800'
-                  : 'text-gray-400 hover:text-white border-gray-700 hover:border-gray-500',
-              )}
+              variant={connected ? 'secondary' : 'ghost'}
+              size="sm"
             >
               <RefreshCw size={12} className={connected ? 'animate-spin' : ''} />
               {connected ? t('deployments.streaming') : t('deployments.connectLogs')}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -565,12 +572,12 @@ function NamespaceLogsTab({ namespace, agent }: { namespace: string; agent: stri
         )}
 
         <div className="bg-gray-950 border border-gray-800 rounded-lg overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-gray-800 bg-gray-900/40 text-[10px] text-gray-500">
+          <div className="px-4 py-2.5 border-b border-gray-800 bg-gray-900/40 text-xs text-gray-500">
             {namespace}/{agent}
           </div>
           <div
             ref={logRef}
-            className="h-72 overflow-auto p-4 font-mono text-xs text-gray-300 space-y-0.5"
+            className="min-h-[14rem] max-h-[26rem] overflow-auto p-4 font-mono text-xs text-gray-300 space-y-1"
           >
             {lines.length === 0 && !connected && (
               <span className="text-gray-600">{t('deployments.connectLiveLogs')}</span>
@@ -653,7 +660,7 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
 
   if (scopedQuery.isLoading || effectiveQuery.isLoading) {
     return (
-      <div className="flex items-center justify-center py-16 text-gray-500 text-sm">
+      <div className="flex items-center justify-center py-14 text-gray-500 text-sm">
         <Loader2 size={16} className="animate-spin mr-2" />
         {t('common.loading')}
       </div>
@@ -670,17 +677,18 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
             </h3>
             <p className="text-xs text-gray-500">{t('deployments.scopedEnvDescription')}</p>
           </div>
-          <button
+          <Button
             type="button"
             onClick={() => {
               setEditEntry(null)
               setDialogMode('create')
             }}
-            className="flex items-center gap-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-3 py-2 transition-colors"
+            variant="primary"
+            size="sm"
           >
             <Plus size={11} />
             {t('common.add')}
-          </button>
+          </Button>
         </div>
 
         {scopedEntries.length === 0 ? (
@@ -690,63 +698,55 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
           </div>
         ) : (
           <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-800 text-left">
-                  <th className="px-4 py-2.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider">
-                    {t('secrets.keyName')}
-                  </th>
-                  <th className="px-4 py-2.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider">
-                    {t('secrets.secretValue')}
-                  </th>
-                  <th className="px-4 py-2.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider">
-                    {t('secrets.secret')}
-                  </th>
-                  <th className="px-4 py-2.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider w-24">
-                    {t('common.actions')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('secrets.keyName')}</TableHead>
+                  <TableHead>{t('secrets.secretValue')}</TableHead>
+                  <TableHead>{t('secrets.secret')}</TableHead>
+                  <TableHead>{t('common.actions')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {scopedEntries.map((entry) => (
-                  <tr key={entry.key} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-300">{entry.key}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-gray-500">
-                      {entry.maskedValue}
-                    </td>
-                    <td className="px-4 py-3">
+                  <TableRow key={entry.key}>
+                    <TableCell>{entry.key}</TableCell>
+                    <TableCell>{entry.maskedValue}</TableCell>
+                    <TableCell>
                       {entry.isSecret ? (
                         <Badge variant="warning" size="sm">
                           {t('secrets.secret')}
                         </Badge>
                       ) : (
-                        <Badge variant="outline" size="sm">
+                        <Badge variant="neutral" size="sm">
                           {t('deployments.plainText')}
                         </Badge>
                       )}
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell>
                       <div className="flex items-center gap-1">
-                        <button
+                        <Button
                           type="button"
                           onClick={() => void handleEditStart(entry)}
-                          className="p-1 text-gray-600 hover:text-blue-400 transition-colors"
+                          variant="ghost"
+                          size="icon"
                         >
                           <Pencil size={12} />
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           type="button"
                           onClick={() => setDeleteKey(entry.key)}
-                          className="p-1 text-gray-600 hover:text-red-400 transition-colors"
+                          variant="ghost"
+                          size="icon"
                         >
                           <Trash2 size={12} />
-                        </button>
+                        </Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>
@@ -764,41 +764,30 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
           </div>
         ) : (
           <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-800 text-left">
-                  <th className="px-4 py-2.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider">
-                    {t('secrets.keyName')}
-                  </th>
-                  <th className="px-4 py-2.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider">
-                    {t('secrets.secretValue')}
-                  </th>
-                  <th className="px-4 py-2.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider">
-                    {t('secrets.scope')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('secrets.keyName')}</TableHead>
+                  <TableHead>{t('secrets.secretValue')}</TableHead>
+                  <TableHead>{t('secrets.scope')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {fallbackEntries.map((entry) => (
-                  <tr
-                    key={`${entry.scope}-${entry.key}`}
-                    className="border-b border-gray-800/50 hover:bg-gray-800/20"
-                  >
-                    <td className="px-4 py-3 font-mono text-xs text-gray-300">{entry.key}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-gray-500">
-                      {entry.maskedValue}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant="outline" size="sm">
+                  <TableRow key={`${entry.scope}-${entry.key}`}>
+                    <TableCell>{entry.key}</TableCell>
+                    <TableCell>{entry.maskedValue}</TableCell>
+                    <TableCell>
+                      <Badge variant="neutral" size="sm">
                         {entry.scope === 'global'
                           ? t('deployments.globalFallback')
                           : t('deployments.namespaceScoped')}
                       </Badge>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>
@@ -816,16 +805,35 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
         />
       )}
 
-      {deleteKey && (
-        <ConfirmDialog
-          title={t('common.delete')}
-          message={t('deployments.deleteScopedEnvConfirm', { key: deleteKey })}
-          confirmLabel={t('common.delete')}
-          isConfirming={deleteMutation.isPending}
-          onConfirm={() => deleteMutation.mutate(deleteKey)}
-          onCancel={() => setDeleteKey(null)}
-        />
-      )}
+      <AlertDialog
+        open={Boolean(deleteKey)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteKey(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('common.delete')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteKey ? t('deployments.deleteScopedEnvConfirm', { key: deleteKey }) : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button variant="ghost">{t('common.cancel')}</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                variant="danger"
+                loading={deleteMutation.isPending}
+                onClick={() => deleteKey && deleteMutation.mutate(deleteKey)}
+              >
+                {t('common.delete')}
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -846,7 +854,7 @@ function NamespaceTasksTab({ namespace }: { namespace: string }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16 text-gray-500 text-sm">
+      <div className="flex items-center justify-center py-14 text-gray-500 text-sm">
         <Loader2 size={16} className="animate-spin mr-2" />
         {t('common.loading')}
       </div>
@@ -856,7 +864,7 @@ function NamespaceTasksTab({ namespace }: { namespace: string }) {
   if (tasks.length === 0) {
     return (
       <EmptyState
-        icon={<FolderClock size={40} />}
+        icon={FolderClock}
         title={t('deployTask.noTasks')}
         description={t('deployments.noTasksInNamespace')}
       />
@@ -871,10 +879,10 @@ function NamespaceTasksTab({ namespace }: { namespace: string }) {
           task.status === 'deployed'
             ? 'success'
             : task.status === 'failed'
-              ? 'error'
+              ? 'danger'
               : task.status === 'running'
                 ? 'info'
-                : ('default' as const)
+                : ('neutral' as const)
 
         return (
           <Link
@@ -894,7 +902,7 @@ function NamespaceTasksTab({ namespace }: { namespace: string }) {
                 </Badge>
                 {running && <Loader2 size={12} className="animate-spin text-blue-400" />}
               </div>
-              <span className="text-[10px] text-gray-600">
+              <span className="text-xs text-gray-600">
                 {formatTimestamp(task.updatedAt ?? task.createdAt)}
               </span>
             </div>
@@ -920,7 +928,7 @@ function NamespaceCostTab({ namespace }: { namespace: string }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16 text-gray-500 text-sm">
+      <div className="flex items-center justify-center py-14 text-gray-500 text-sm">
         <Loader2 size={16} className="animate-spin mr-2" />
         {t('common.loading')}
       </div>
@@ -930,7 +938,7 @@ function NamespaceCostTab({ namespace }: { namespace: string }) {
   if (!data) {
     return (
       <EmptyState
-        icon={<DollarSign size={40} />}
+        icon={DollarSign}
         title={t('deployments.costUnavailable')}
         description={t('deployments.costUnavailableDescription')}
       />
@@ -966,16 +974,16 @@ function NamespaceCostTab({ namespace }: { namespace: string }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {data.agents.map((agent) => (
-          <div key={agent.agentName} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div key={agent.agentName} className="bg-gray-900 border border-gray-800 rounded-xl p-5">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-mono text-gray-200">{agent.agentName}</p>
-                  <Badge variant={agent.totalUsd !== null ? 'success' : 'outline'} size="sm">
+                  <Badge variant={agent.totalUsd !== null ? 'success' : 'neutral'} size="sm">
                     {agent.source}
                   </Badge>
                 </div>
-                <p className="text-[11px] text-gray-500 mt-1">
+                <p className="text-xs text-gray-500 mt-1">
                   {agent.podName ?? t('common.none')}
                 </p>
               </div>
@@ -983,7 +991,7 @@ function NamespaceCostTab({ namespace }: { namespace: string }) {
                 <p className="text-lg font-semibold text-green-400">
                   {formatUsdCost(agent.totalUsd, i18n.language)}
                 </p>
-                <p className="text-[10px] text-gray-600">{t('deployments.totalCost')}</p>
+                <p className="text-xs text-gray-600">{t('deployments.totalCost')}</p>
               </div>
             </div>
 
@@ -1062,27 +1070,27 @@ function NamespaceInfoTab({
         </div>
       </div>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
+      <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
         <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
           <Terminal size={14} className="text-gray-400" />
           {t('deployments.kubectlCommands')}
         </h3>
         <div className="space-y-2">
           <div>
-            <p className="text-[10px] text-gray-600 mb-1">{t('deployments.viewAgents')}</p>
+            <p className="text-xs text-gray-600 mb-1">{t('deployments.viewAgents')}</p>
             <code className="block text-xs font-mono text-gray-400 bg-gray-950 rounded px-3 py-2">
               kubectl get deployments -n {namespace}
             </code>
           </div>
           <div>
-            <p className="text-[10px] text-gray-600 mb-1">{t('deployments.viewPods')}</p>
+            <p className="text-xs text-gray-600 mb-1">{t('deployments.viewPods')}</p>
             <code className="block text-xs font-mono text-gray-400 bg-gray-950 rounded px-3 py-2">
               kubectl get pods -n {namespace}
             </code>
           </div>
           {agent && (
             <div>
-              <p className="text-[10px] text-gray-600 mb-1">{t('clusters.viewLogs')}</p>
+              <p className="text-xs text-gray-600 mb-1">{t('clusters.viewLogs')}</p>
               <code className="block text-xs font-mono text-gray-400 bg-gray-950 rounded px-3 py-2">
                 kubectl logs -n {namespace} -l app={agent} --tail=200
               </code>
@@ -1251,17 +1259,16 @@ export function DeploymentNamespacePage() {
           className="mb-4"
         />
         <EmptyState
-          icon={<FolderOpen size={40} />}
+          icon={FolderOpen}
           title={t('deployments.noDeploymentsInNamespace')}
           description={t('deployments.noDeploymentsInNamespaceDescription', { namespace })}
           action={
-            <Link
-              to="/store"
-              className="inline-flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 border border-blue-800 hover:border-blue-600 rounded-lg px-4 py-2 transition-colors"
-            >
-              <Rocket size={14} />
-              {t('clusters.browseAgentStore')}
-            </Link>
+            <Button asChild variant="primary" size="sm">
+              <Link to="/store">
+                <Rocket size={14} />
+                {t('clusters.browseAgentStore')}
+              </Link>
+            </Button>
           }
         />
       </div>
@@ -1278,39 +1285,42 @@ export function DeploymentNamespacePage() {
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-xl font-bold font-mono">{namespace}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{t('deployments.namespaceDescription')}</p>
+          <p className="text-sm text-gray-500 mt-1">{t('deployments.namespaceDescription')}</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <Button
             type="button"
             onClick={() => {
               void refetch()
               void queryClient.invalidateQueries({ queryKey: ['namespace-costs', namespace] })
               void queryClient.invalidateQueries({ queryKey: ['deploy-tasks'] })
             }}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-colors"
+            variant="ghost"
+            size="sm"
           >
             <RefreshCw size={12} />
             {t('common.refresh')}
-          </button>
+          </Button>
           {latestTask && (
-            <button
+            <Button
               type="button"
               onClick={() => void handleRedeploy()}
-              className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 border border-blue-800 hover:border-blue-600 rounded-lg px-3 py-2 transition-colors"
+              variant="ghost"
+              size="sm"
             >
               <Rocket size={12} />
               {t('deployTask.redeploy')}
-            </button>
+            </Button>
           )}
-          <button
+          <Button
             type="button"
             onClick={() => setDestroyOpen(true)}
-            className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 rounded-lg px-3 py-2 transition-colors"
+            variant="ghost"
+            size="sm"
           >
             <Trash2 size={12} />
             {t('clusters.destroy')}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -1340,7 +1350,7 @@ export function DeploymentNamespacePage() {
         />
       </div>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6">
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div>
             <h2 className="text-sm font-semibold text-gray-200">
@@ -1371,9 +1381,23 @@ export function DeploymentNamespacePage() {
         </div>
       </div>
 
-      <Tabs items={tabs} active={activeTab} onChange={setActiveTab} className="mb-6" />
+      <Tabs value={activeTab} onChange={setActiveTab}>
+        <TabsList>
+          {tabs.map((tab) => (
+            <TabsTrigger key={tab.id} value={tab.id}>
+              <span>{tab.icon}</span>
+              <span>{tab.label}</span>
+              {typeof tab.count === 'number' && (
+                <span className="rounded-full bg-bg-tertiary/70 px-2 py-0.5 text-xs font-black tracking-normal text-text-muted">
+                  {tab.count}
+                </span>
+              )}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
-      <div className="min-h-[400px]">
+      <div className="min-h-[38vh]">
         {activeTab === 'agents' && (
           <PodsPanel namespace={namespace} agent={selectedAgent} enabled={!isLoading} />
         )}
@@ -1391,18 +1415,28 @@ export function DeploymentNamespacePage() {
         )}
       </div>
 
-      {destroyOpen && (
-        <ConfirmDialog
-          title={t('clusters.destroyNamespace')}
-          message={t('clusters.destroyWarning', { namespace })}
-          confirmLabel={t('clusters.destroy')}
-          confirmingLabel={t('clusters.destroying')}
-          confirmText={namespace}
-          isConfirming={destroyMutation.isPending}
-          onConfirm={() => destroyMutation.mutate()}
-          onCancel={() => setDestroyOpen(false)}
-        />
-      )}
+      <AlertDialog open={destroyOpen} onOpenChange={setDestroyOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('clusters.destroyNamespace')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('clusters.destroyWarning', { namespace })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button variant="ghost">{t('common.cancel')}</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button variant="danger" loading={destroyMutation.isPending} onClick={() => destroyMutation.mutate()}>
+                {destroyMutation.isPending ? t('clusters.destroying') : t('clusters.destroy')}
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

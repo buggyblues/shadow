@@ -1,7 +1,6 @@
 import { Code, Cpu, Layers, Server, Settings, Users, Zap } from 'lucide-react'
 import { useState } from 'react'
-import { Badge } from '@/components/Badge'
-import { EmptyState } from '@/components/EmptyState'
+import { Badge, Button, EmptyState } from '@shadowob/ui'
 import { cn, pluralize } from '@/lib/utils'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -76,10 +75,11 @@ export function AgentCard({ agent, index }: { agent: AgentInfo; index: number })
 
   return (
     <div className="bg-gray-900/50 border border-gray-800 rounded-lg overflow-hidden hover:border-gray-700 transition-colors">
-      <button
+      <Button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-3 flex items-start justify-between text-left"
+        variant="ghost"
+        className="!w-full !px-4 !py-3 !flex !items-start !justify-between !text-left"
       >
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-blue-900/30 border border-blue-800/50 flex items-center justify-center text-xs font-bold text-blue-400">
@@ -89,7 +89,7 @@ export function AgentCard({ agent, index }: { agent: AgentInfo; index: number })
             <h4 className="text-sm font-medium text-white flex items-center gap-2">
               {agent.identity?.name ?? agent.name}
               {agent.runtime && (
-                <Badge variant="default" size="sm">
+                <Badge variant="neutral" size="sm">
                   {agent.runtime}
                 </Badge>
               )}
@@ -103,12 +103,14 @@ export function AgentCard({ agent, index }: { agent: AgentInfo; index: number })
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-2">
           {agent.model && (
-            <Badge variant="default" size="sm" icon={<Cpu size={10} />}>
+            <Badge variant="neutral" size="sm" className="gap-1">
+              <Cpu size={10} />
               {agent.model}
             </Badge>
           )}
           {agent.integrations && agent.integrations.length > 0 && (
-            <Badge variant="info" size="sm" icon={<Layers size={10} />}>
+            <Badge variant="info" size="sm" className="gap-1">
+              <Layers size={10} />
               {agent.integrations.length}
             </Badge>
           )}
@@ -118,7 +120,7 @@ export function AgentCard({ agent, index }: { agent: AgentInfo; index: number })
             ▸
           </span>
         </div>
-      </button>
+      </Button>
 
       {expanded && (
         <div className="px-4 pb-4 space-y-3 border-t border-gray-800/50 pt-3">
@@ -262,7 +264,7 @@ export function AgentsTab({ agents }: { agents: AgentInfo[] }) {
   if (agents.length === 0) {
     return (
       <EmptyState
-        icon={<Users size={32} />}
+        icon={Users}
         title="Agent details unavailable"
         description="Deploy this template to see the full agent configuration."
       />

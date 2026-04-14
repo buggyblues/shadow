@@ -25,17 +25,44 @@ import {
   Terminal,
   Trash2,
   Variable,
-  X,
   XCircle,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Badge } from '@/components/Badge'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  EmptyState,
+  Input,
+  Modal,
+  ModalBody,
+  ModalButtonGroup,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from '@shadowob/ui'
 import { Breadcrumb } from '@/components/Breadcrumb'
-import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { StatCard } from '@/components/StatCard'
 import { StatusDot } from '@/components/StatusDot'
-import { Tabs } from '@/components/Tabs'
 import { useSSEStream } from '@/hooks/useSSEStream'
 import { api, type Pod, type ValidateResult } from '@/lib/api'
 import { cn, pluralize } from '@/lib/utils'
@@ -64,63 +91,63 @@ function getPodStatusType(status: string): 'success' | 'warning' | 'error' | 'in
 
 function PodsTab({ pods, isLoading }: { pods: Pod[] | undefined; isLoading: boolean }) {
   if (isLoading) {
-    return <div className="py-12 text-center text-gray-500 text-sm">Loading pods...</div>
+    return <div className="py-10 text-center text-text-muted text-sm">Loading pods...</div>
   }
 
   if (!pods || pods.length === 0) {
     return (
-      <div className="py-12 text-center text-gray-600 text-sm">
-        <Box size={24} className="mx-auto mb-2 text-gray-700" />
-        No pods found. The deployment may be scaling up.
-      </div>
+      <Card variant="glass">
+        <EmptyState
+          icon={Box}
+          title="No pods found"
+          description="The deployment may be scaling up."
+        />
+      </Card>
     )
   }
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-text-muted">
         {pods.length} {pluralize(pods.length, 'pod')} in this deployment.
       </p>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-gray-800 text-left">
-              <th className="px-4 py-2 text-xs font-medium text-gray-500">STATUS</th>
-              <th className="px-4 py-2 text-xs font-medium text-gray-500">NAME</th>
-              <th className="px-4 py-2 text-xs font-medium text-gray-500">READY</th>
-              <th className="px-4 py-2 text-xs font-medium text-gray-500">RESTARTS</th>
-              <th className="px-4 py-2 text-xs font-medium text-gray-500">AGE</th>
-            </tr>
-          </thead>
-          <tbody>
+      <Card variant="glass">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>STATUS</TableHead>
+              <TableHead>NAME</TableHead>
+              <TableHead>READY</TableHead>
+              <TableHead>RESTARTS</TableHead>
+              <TableHead>AGE</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {pods.map((pod) => (
-              <tr
-                key={pod.name}
-                className="border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors"
-              >
-                <td className="px-4 py-3">
+              <TableRow key={pod.name}>
+                <TableCell>
                   <StatusDot status={getPodStatusType(pod.status)} label={pod.status} />
-                </td>
-                <td className="px-4 py-3 font-mono text-xs text-gray-300">{pod.name}</td>
-                <td className="px-4 py-3">
+                </TableCell>
+                <TableCell>{pod.name}</TableCell>
+                <TableCell>
                   <Badge variant={pod.ready === '1/1' ? 'success' : 'warning'} size="sm">
                     {pod.ready}
                   </Badge>
-                </td>
-                <td className="px-4 py-3 text-xs text-gray-400">
+                </TableCell>
+                <TableCell>
                   {Number(pod.restarts) > 0 ? (
-                    <span className="text-yellow-400">{pod.restarts}</span>
+                    <span className="text-warning">{pod.restarts}</span>
                   ) : (
                     pod.restarts
                   )}
-                </td>
-                <td className="px-4 py-3 text-xs text-gray-500">{getAge(pod)}</td>
-              </tr>
+                </TableCell>
+                <TableCell>{getAge(pod)}</TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      </Card>
     </div>
   )
 }
@@ -156,73 +183,71 @@ function LogsTab({ namespace, id }: { namespace: string; id: string }) {
   }, [lines.length])
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-text-muted">
           Real-time log stream from all pods in this deployment.
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {lines.length > 0 && (
             <>
-              <button
+              <Button
                 type="button"
+                variant="glass"
+                size="sm"
                 onClick={handleDownload}
-                className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-2.5 py-1 transition-colors"
               >
                 <Download size={11} />
                 Download
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={() => {
                   disconnect()
                   clear()
                 }}
-                className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-2.5 py-1 transition-colors"
               >
                 <XCircle size={11} />
                 Clear
-              </button>
+              </Button>
             </>
           )}
-          <button
+          <Button
             type="button"
+            variant={connected ? 'primary' : 'glass'}
+            size="sm"
             onClick={handleConnect}
-            className={cn(
-              'flex items-center gap-1.5 text-xs rounded-lg px-3 py-1.5 transition-colors',
-              connected
-                ? 'bg-green-900/30 text-green-400 border border-green-800'
-                : 'text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500',
-            )}
           >
             <RefreshCw size={12} className={connected ? 'animate-spin' : ''} />
             {connected ? 'Streaming' : 'Connect'}
-          </button>
+          </Button>
         </div>
       </div>
 
       {error && (
-        <div className="text-xs text-red-400 bg-red-900/20 border border-red-900/30 rounded-lg px-4 py-2">
+        <div className="rounded-[20px] border border-danger/20 bg-danger/10 px-4 py-3 text-xs text-danger">
           {error}
         </div>
       )}
 
-      <div className="bg-gray-950 border border-gray-800 rounded-lg overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-900/30">
-          <span className="text-[10px] text-gray-600 font-mono">
+      <Card variant="glass">
+        <div className="flex items-center justify-between border-b border-border-subtle bg-bg-secondary/40 px-5 py-3">
+          <span className="font-mono text-xs text-text-muted">
             {namespace}/{id}
           </span>
-          <span className="text-[10px] text-gray-600">{lines.length} lines</span>
+          <span className="text-xs text-text-muted">{lines.length} lines</span>
         </div>
         <div
           ref={logRef}
-          className="h-96 overflow-auto p-4 font-mono text-xs text-gray-300 space-y-0.5"
+          className="min-h-[16rem] max-h-[30rem] overflow-auto bg-bg-deep/80 p-4 font-mono text-xs text-text-secondary space-y-1"
         >
           {lines.length === 0 && !connected && (
-            <span className="text-gray-600">Click "Connect" to stream logs…</span>
+            <span className="text-text-muted">Click "Connect" to stream logs…</span>
           )}
           {lines.length === 0 && connected && (
-            <span className="text-gray-600">Waiting for log output…</span>
+            <span className="text-text-muted">Waiting for log output…</span>
           )}
           {lines.map((line, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: log lines are append-only
@@ -231,7 +256,7 @@ function LogsTab({ namespace, id }: { namespace: string; id: string }) {
             </div>
           ))}
         </div>
-      </div>
+      </Card>
     </div>
   )
 }
@@ -252,58 +277,58 @@ function InfoTab({
 
   return (
     <div className="space-y-6">
-      <div className="bg-gray-900 border border-gray-800 rounded-lg divide-y divide-gray-800">
-        <div className="px-5 py-3 flex items-center justify-between">
-          <span className="text-xs text-gray-500">Deployment Name</span>
-          <span className="text-sm font-mono">{id}</span>
+      <Card variant="glass">
+        <div className="flex items-center justify-between px-5 py-3">
+          <span className="text-xs text-text-muted">Deployment Name</span>
+          <span className="text-sm font-mono text-text-primary">{id}</span>
         </div>
-        <div className="px-5 py-3 flex items-center justify-between">
-          <span className="text-xs text-gray-500">Namespace</span>
-          <span className="text-sm font-mono text-gray-300">{namespace}</span>
+        <div className="flex items-center justify-between px-5 py-3">
+          <span className="text-xs text-text-muted">Namespace</span>
+          <span className="text-sm font-mono text-text-secondary">{namespace}</span>
         </div>
-        <div className="px-5 py-3 flex items-center justify-between">
-          <span className="text-xs text-gray-500">Total Pods</span>
-          <span className="text-sm">{pods?.length ?? '—'}</span>
+        <div className="flex items-center justify-between px-5 py-3">
+          <span className="text-xs text-text-muted">Total Pods</span>
+          <span className="text-sm text-text-primary">{pods?.length ?? '—'}</span>
         </div>
-        <div className="px-5 py-3 flex items-center justify-between">
-          <span className="text-xs text-gray-500">Running Pods</span>
-          <span className="text-sm text-green-400">{running}</span>
+        <div className="flex items-center justify-between px-5 py-3">
+          <span className="text-xs text-text-muted">Running Pods</span>
+          <span className="text-sm text-success">{running}</span>
         </div>
-        <div className="px-5 py-3 flex items-center justify-between">
-          <span className="text-xs text-gray-500">Total Restarts</span>
-          <span className={cn('text-sm', totalRestarts > 0 ? 'text-yellow-400' : 'text-gray-400')}>
+        <div className="flex items-center justify-between px-5 py-3">
+          <span className="text-xs text-text-muted">Total Restarts</span>
+          <span className={cn('text-sm', totalRestarts > 0 ? 'text-warning' : 'text-text-secondary')}>
             {totalRestarts}
           </span>
         </div>
-      </div>
+      </Card>
 
       {/* CLI commands */}
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
-        <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
-          <Terminal size={14} className="text-gray-400" />
+      <Card variant="glass">
+        <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-text-primary">
+          <Terminal size={14} className="text-text-muted" />
           CLI Commands
         </h3>
         <div className="space-y-2">
           <div>
-            <p className="text-[10px] text-gray-600 mb-1">View pods</p>
-            <code className="block text-xs font-mono text-gray-400 bg-gray-950 rounded px-3 py-2">
+            <p className="mb-1 text-xs text-text-muted">View pods</p>
+            <code className="block rounded-[18px] bg-bg-deep/80 px-3 py-2 text-xs font-mono text-text-secondary">
               kubectl get pods -n {namespace}
             </code>
           </div>
           <div>
-            <p className="text-[10px] text-gray-600 mb-1">View logs</p>
-            <code className="block text-xs font-mono text-gray-400 bg-gray-950 rounded px-3 py-2">
+            <p className="mb-1 text-xs text-text-muted">View logs</p>
+            <code className="block rounded-[18px] bg-bg-deep/80 px-3 py-2 text-xs font-mono text-text-secondary">
               kubectl logs -n {namespace} -l app={id} --tail=100
             </code>
           </div>
           <div>
-            <p className="text-[10px] text-gray-600 mb-1">Scale deployment</p>
-            <code className="block text-xs font-mono text-gray-400 bg-gray-950 rounded px-3 py-2">
+            <p className="mb-1 text-xs text-text-muted">Scale deployment</p>
+            <code className="block rounded-[18px] bg-bg-deep/80 px-3 py-2 text-xs font-mono text-text-secondary">
               kubectl scale deployment {id} -n {namespace} --replicas=N
             </code>
           </div>
         </div>
-      </div>
+      </Card>
     </div>
   )
 }
@@ -360,7 +385,7 @@ function ConfigTab() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16 text-gray-500 text-sm">
+      <div className="flex items-center justify-center py-14 text-text-muted text-sm">
         <Loader2 size={16} className="animate-spin mr-2" />
         {t('common.loading')}
       </div>
@@ -370,30 +395,33 @@ function ConfigTab() {
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500">{t('deployments.configDescription')}</p>
-        <div className="flex items-center gap-2">
-          <button
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-text-muted">{t('deployments.configDescription')}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
             type="button"
+            variant="glass"
+            size="sm"
             onClick={handleFormat}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-2.5 py-1 transition-colors"
           >
             <FileJson size={11} />
             {t('deployments.format')}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="glass"
+            size="sm"
             onClick={handleValidate}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-2.5 py-1 transition-colors"
           >
             <CheckCircle size={11} />
             {t('deployments.validate')}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
             onClick={() => saveMutation.mutate()}
             disabled={!dirty || saveMutation.isPending}
-            className="flex items-center gap-1.5 text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg px-3 py-1.5 transition-colors"
           >
             {saveMutation.isPending ? (
               <Loader2 size={11} className="animate-spin" />
@@ -401,7 +429,7 @@ function ConfigTab() {
               <Save size={11} />
             )}
             {t('common.save')}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -409,10 +437,10 @@ function ConfigTab() {
       {validateResult && (
         <div
           className={cn(
-            'text-xs border rounded-lg px-4 py-2',
+            'rounded-[20px] border px-4 py-3 text-xs',
             validateResult.valid
-              ? 'text-green-400 bg-green-900/20 border-green-900/30'
-              : 'text-red-400 bg-red-900/20 border-red-900/30',
+              ? 'border-success/20 bg-success/10 text-success'
+              : 'border-danger/20 bg-danger/10 text-danger',
           )}
         >
           {validateResult.valid
@@ -422,9 +450,9 @@ function ConfigTab() {
       )}
 
       {/* Editor */}
-      <div className="border border-gray-700 rounded-lg overflow-hidden" style={{ height: 400 }}>
+      <Card variant="glass">
         <Editor
-          height="100%"
+          height="400px"
           language="json"
           value={content}
           onChange={(val) => {
@@ -446,7 +474,7 @@ function ConfigTab() {
             bracketPairColorization: { enabled: true },
           }}
         />
-      </div>
+      </Card>
     </div>
   )
 }
@@ -507,7 +535,7 @@ function EnvironmentTab() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16 text-gray-500 text-sm">
+      <div className="flex items-center justify-center py-14 text-text-muted text-sm">
         <Loader2 size={16} className="animate-spin mr-2" />
         {t('common.loading')}
       </div>
@@ -516,78 +544,71 @@ function EnvironmentTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500">{t('secrets.environmentValuesDescription')}</p>
-        <button
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-text-muted">{t('secrets.environmentValuesDescription')}</p>
+        <Button
           type="button"
+          variant="primary"
+          size="sm"
           onClick={() => {
             setEditEntry(null)
             setDialogMode('create')
           }}
-          className="flex items-center gap-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-3 py-1.5 transition-colors"
         >
           <Plus size={11} />
           {t('common.add')}
-        </button>
+        </Button>
       </div>
 
       {envVars.length === 0 ? (
-        <div className="text-center py-12 border border-dashed border-gray-800 rounded-lg">
-          <Variable size={24} className="mx-auto mb-2 text-gray-700" />
-          <p className="text-sm text-gray-500">{t('secrets.noEnvVarsInGroup')}</p>
-        </div>
+        <Card variant="glass">
+          <EmptyState icon={Variable} title={t('secrets.noEnvVarsInGroup')} />
+        </Card>
       ) : (
-        <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-800 text-left">
-                <th className="px-4 py-2.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider">
-                  {t('secrets.keyName')}
-                </th>
-                <th className="px-4 py-2.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider">
-                  {t('secrets.secretValue')}
-                </th>
-                <th className="px-4 py-2.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider w-24">
-                  {t('common.actions')}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+        <Card variant="glass">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('secrets.keyName')}</TableHead>
+                <TableHead>{t('secrets.secretValue')}</TableHead>
+                <TableHead>{t('common.actions')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {envVars.map((entry) => (
-                <tr
-                  key={entry.key}
-                  className="border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors"
-                >
-                  <td className="px-4 py-3">
+                <TableRow key={entry.key}>
+                  <TableCell>
                     <div className="flex items-center gap-2">
-                      <code className="text-xs font-mono text-gray-300">{entry.key}</code>
-                      {entry.isSecret && <Lock size={10} className="text-yellow-500" />}
+                      <code className="text-xs font-mono text-text-secondary">{entry.key}</code>
+                      {entry.isSecret && <Lock size={10} className="text-warning" />}
                     </div>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-500">{entry.maskedValue}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <button
+                  </TableCell>
+                  <TableCell>{entry.maskedValue}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="xs"
                         onClick={() => handleEditStart(entry)}
-                        className="p-1 text-gray-600 hover:text-blue-400 transition-colors"
                       >
                         <Pencil size={12} />
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="xs"
                         onClick={() => setDeleteKey(entry.key)}
-                        className="p-1 text-gray-600 hover:text-red-400 transition-colors"
                       >
                         <Trash2 size={12} />
-                      </button>
+                      </Button>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
 
       {/* Add/Edit dialog */}
@@ -605,16 +626,37 @@ function EnvironmentTab() {
       )}
 
       {/* Delete confirm */}
-      {deleteKey && (
-        <ConfirmDialog
-          title={t('common.delete')}
-          message={`Delete environment variable "${deleteKey}"?`}
-          confirmLabel={t('common.delete')}
-          isConfirming={deleteMutation.isPending}
-          onConfirm={() => deleteMutation.mutate(deleteKey)}
-          onCancel={() => setDeleteKey(null)}
-        />
-      )}
+      <AlertDialog
+        open={Boolean(deleteKey)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteKey(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('common.delete')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteKey ? `Delete environment variable "${deleteKey}"?` : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button variant="ghost">{t('common.cancel')}</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                variant="danger"
+                loading={deleteMutation.isPending}
+                onClick={() => deleteKey && deleteMutation.mutate(deleteKey)}
+              >
+                {t('common.delete')}
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -639,88 +681,71 @@ function EnvInlineDialog({
   const [showValue, setShowValue] = useState(mode === 'create')
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-      onClick={onClose}
-    >
-      <div
-        className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg mx-4 space-y-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold flex items-center gap-2">
-            <Variable size={16} className="text-blue-400" />
-            {mode === 'edit' ? t('secrets.editEnvironmentValue') : t('secrets.addEnvironmentValue')}
-          </h3>
-          <button type="button" onClick={onClose} className="text-gray-500 hover:text-gray-300 p-1">
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-gray-400 mb-1.5 block">{t('secrets.keyName')}</label>
-            <input
-              type="text"
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              placeholder="OPENAI_API_KEY"
-              className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2.5 text-sm font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500"
-              autoFocus
-              disabled={mode === 'edit'}
-            />
-          </div>
-          <div>
-            <label className="text-xs text-gray-400 mb-1.5 block">{t('secrets.secretValue')}</label>
+    <Modal open onClose={onClose}>
+      <ModalContent maxWidth="max-w-lg">
+        <ModalHeader
+          icon={<Variable size={18} />}
+          title={mode === 'edit' ? t('secrets.editEnvironmentValue') : t('secrets.addEnvironmentValue')}
+          onClose={onClose}
+        />
+        <ModalBody>
+          <Input
+            label={t('secrets.keyName')}
+            type="text"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            placeholder="OPENAI_API_KEY"
+            autoFocus
+            disabled={mode === 'edit'}
+          />
+          <div className="space-y-1.5">
+            <p className="ml-1 text-xs font-black uppercase tracking-[0.2em] text-text-muted">
+              {t('secrets.secretValue')}
+            </p>
             <div className="relative">
-              <input
+              <Input
                 type={showValue ? 'text' : 'password'}
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 placeholder={mode === 'edit' ? t('secrets.leaveEmptyKeep') : ''}
-                className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2.5 text-sm font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 pr-10"
               />
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="xs"
                 onClick={() => setShowValue(!showValue)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400"
               >
                 {showValue ? <EyeOff size={14} /> : <Eye size={14} />}
-              </button>
+              </Button>
             </div>
           </div>
-          <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
-            <input
-              type="checkbox"
+          <label className="flex cursor-pointer items-center gap-3 rounded-[24px] border border-border-subtle bg-bg-secondary/50 px-4 py-3 text-sm font-semibold text-text-secondary">
+            <Checkbox
               checked={isSecret}
-              onChange={(e) => setIsSecret(e.target.checked)}
-              className="accent-blue-500 rounded"
+              onCheckedChange={(checked) => setIsSecret(checked === true)}
             />
-            <Lock size={12} />
-            {t('secrets.secret')}
+            <Lock size={14} className="text-text-muted" />
+            <span>{t('secrets.secret')}</span>
           </label>
-        </div>
-
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg transition-colors"
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            type="button"
-            onClick={() => key.trim() && onSubmit({ key: key.trim(), value, isSecret })}
-            disabled={!key.trim() || isSubmitting}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg transition-colors"
-          >
-            {isSubmitting && <Loader2 size={14} className="animate-spin" />}
-            {mode === 'edit' ? t('common.save') : t('common.add')}
-          </button>
-        </div>
-      </div>
-    </div>
+        </ModalBody>
+        <ModalFooter>
+          <ModalButtonGroup>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => key.trim() && onSubmit({ key: key.trim(), value, isSecret })}
+              disabled={!key.trim() || isSubmitting}
+            >
+              {isSubmitting && <Loader2 size={14} className="animate-spin" />}
+              {mode === 'edit' ? t('common.save') : t('common.add')}
+            </Button>
+          </ModalButtonGroup>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   )
 }
 
@@ -740,7 +765,7 @@ function TasksTab({ namespace }: { namespace: string }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16 text-gray-500 text-sm">
+      <div className="flex items-center justify-center py-14 text-text-muted text-sm">
         <Loader2 size={16} className="animate-spin mr-2" />
         {t('common.loading')}
       </div>
@@ -749,10 +774,9 @@ function TasksTab({ namespace }: { namespace: string }) {
 
   if (tasks.length === 0) {
     return (
-      <div className="text-center py-12 text-gray-600 text-sm">
-        <FolderClock size={24} className="mx-auto mb-2 text-gray-700" />
-        {t('deployTask.noTasks')}
-      </div>
+      <Card variant="glass">
+        <EmptyState icon={FolderClock} title={t('deployTask.noTasks')} />
+      </Card>
     )
   }
 
@@ -764,40 +788,34 @@ function TasksTab({ namespace }: { namespace: string }) {
           task.status === 'deployed'
             ? 'success'
             : task.status === 'failed'
-              ? 'error'
+              ? 'danger'
               : task.status === 'running'
                 ? 'info'
-                : ('default' as const)
+                : ('neutral' as const)
 
         return (
-          <Link
-            key={task.id}
-            to="/deploy-tasks/$taskId"
-            params={{ taskId: String(task.id) }}
-            className={cn(
-              'block bg-gray-900 border rounded-lg px-4 py-3 hover:border-gray-600 transition-colors',
-              running ? 'border-blue-900/40' : 'border-gray-800',
-            )}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-gray-200">#{task.id}</span>
-                <Badge variant={statusVariant} size="sm">
-                  {t(`deployTask.statuses.${task.status}`)}
-                </Badge>
-                {running && <Loader2 size={12} className="animate-spin text-blue-400" />}
+          <Card key={task.id} variant="glass">
+            <Link to="/deploy-tasks/$taskId" params={{ taskId: String(task.id) }} className="block">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-text-primary">#{task.id}</span>
+                  <Badge variant={statusVariant} size="sm">
+                    {t(`deployTask.statuses.${task.status}`)}
+                  </Badge>
+                  {running && <Loader2 size={12} className="animate-spin text-primary" />}
+                </div>
+                <span className="text-xs text-text-muted">
+                  {task.updatedAt
+                    ? formatDistanceToNow(parseISO(task.updatedAt), { addSuffix: true })
+                    : '—'}
+                </span>
               </div>
-              <span className="text-[10px] text-gray-600">
-                {task.updatedAt
-                  ? formatDistanceToNow(parseISO(task.updatedAt), { addSuffix: true })
-                  : '—'}
-              </span>
-            </div>
-            <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
-              {task.templateSlug && <span>{task.templateSlug}</span>}
-              {task.error && <span className="text-red-400 truncate">{task.error}</span>}
-            </div>
-          </Link>
+              <div className="mt-1.5 flex items-center gap-3 text-xs text-text-muted">
+                {task.templateSlug && <span>{task.templateSlug}</span>}
+                {task.error && <span className="truncate text-danger">{task.error}</span>}
+              </div>
+            </Link>
+          </Card>
         )
       })}
     </div>
@@ -937,56 +955,60 @@ export function DeploymentDetailPage() {
       />
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="text-xl font-bold font-mono">{id}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Namespace: <span className="font-mono text-gray-400">{namespace}</span>
+          <p className="mt-1 text-sm text-text-muted">
+            Namespace: <span className="font-mono text-text-secondary">{namespace}</span>
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Scale controls */}
-          <div className="flex items-center gap-1 bg-gray-900 border border-gray-700 rounded-lg">
-            <button
+          <div className="flex items-center gap-1 rounded-[20px] border border-border-subtle bg-bg-secondary/50 p-1 shadow-[var(--shadow-soft)]">
+            <Button
               type="button"
+              variant="ghost"
+              size="xs"
               onClick={() => handleScale(-1)}
               disabled={scaleMutation.isPending || (replicas ?? 0) <= 0}
-              className="px-2.5 py-1.5 text-gray-400 hover:text-white disabled:opacity-30 transition-colors"
             >
               <Minus size={14} />
-            </button>
-            <span className="text-sm font-mono px-2 min-w-[2rem] text-center">
+            </Button>
+            <span className="min-w-[2rem] px-2 text-center text-sm font-mono text-text-primary">
               {replicas ?? '—'}
             </span>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="xs"
               onClick={() => handleScale(1)}
               disabled={scaleMutation.isPending}
-              className="px-2.5 py-1.5 text-gray-400 hover:text-white disabled:opacity-30 transition-colors"
             >
               <Plus size={14} />
-            </button>
+            </Button>
           </div>
 
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
             onClick={() => void handleRedeploy()}
-            className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 border border-blue-800 hover:border-blue-600 rounded-lg px-3 py-2 transition-colors"
           >
             <Rocket size={12} />
             {t('deployTask.redeploy')}
-          </button>
+          </Button>
 
-          <button
+          <Button
             type="button"
+            variant="danger"
+            size="sm"
             onClick={() => setShowDestroy(true)}
             disabled={destroyMutation.isPending}
-            className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 rounded-lg px-3 py-2 transition-colors disabled:opacity-50"
           >
             <Trash2 size={12} />
             Destroy
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -1009,9 +1031,23 @@ export function DeploymentDetailPage() {
       </div>
 
       {/* Tabs */}
-      <Tabs items={tabs} active={activeTab} onChange={setActiveTab} className="mb-6" />
+      <Tabs value={activeTab} onChange={setActiveTab}>
+        <TabsList>
+          {tabs.map((tab) => (
+            <TabsTrigger key={tab.id} value={tab.id}>
+              <span>{tab.icon}</span>
+              <span>{tab.label}</span>
+              {typeof tab.count === 'number' && (
+                <span className="rounded-full bg-bg-tertiary/70 px-2 py-0.5 text-xs font-black tracking-normal text-text-muted">
+                  {tab.count}
+                </span>
+              )}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
-      <div className="min-h-[400px]">
+      <div className="min-h-[38vh]">
         {activeTab === 'pods' && <PodsTab pods={pods} isLoading={isLoading} />}
         {activeTab === 'logs' && <LogsTab namespace={namespace} id={id} />}
         {activeTab === 'config' && <ConfigTab />}
@@ -1020,16 +1056,31 @@ export function DeploymentDetailPage() {
         {activeTab === 'info' && <InfoTab namespace={namespace} id={id} pods={pods} />}
       </div>
 
-      {showDestroy && (
-        <ConfirmDialog
-          title="Destroy Namespace"
-          message={`This will destroy all deployments in namespace "${namespace}". This cannot be undone.`}
-          confirmLabel="Destroy"
-          confirmText={namespace}
-          onConfirm={() => destroyMutation.mutate()}
-          onCancel={() => setShowDestroy(false)}
-        />
-      )}
+      <AlertDialog
+        open={showDestroy}
+        onOpenChange={(open) => {
+          if (!open) setShowDestroy(false)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Destroy Namespace</AlertDialogTitle>
+            <AlertDialogDescription>
+              {`This will destroy all deployments in namespace "${namespace}". This cannot be undone.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button variant="ghost">{t('common.cancel')}</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button variant="danger" loading={destroyMutation.isPending} onClick={() => destroyMutation.mutate()}>
+                Destroy
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

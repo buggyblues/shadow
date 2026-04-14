@@ -17,7 +17,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Badge } from '@/components/Badge'
+import { Badge, Button, Card } from '@shadowob/ui'
 import { StatCard } from '@/components/StatCard'
 import { StatusDot } from '@/components/StatusDot'
 import { api, type Deployment } from '@/lib/api'
@@ -37,42 +37,50 @@ function QuickActions() {
   const { t } = useTranslation()
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <Link to="/store" className="nf-card nf-bouncy group !p-4">
-        <ShoppingBag size={20} className="mb-2" style={{ color: 'var(--color-nf-cyan)' }} />
-        <p className="text-sm font-bold transition-colors" style={{ color: 'var(--nf-text-high)' }}>
-          {t('nav.agentStore')}
-        </p>
-        <p className="text-xs mt-0.5" style={{ color: 'var(--nf-text-muted)' }}>
-          {t('overview.browseAndDeploy')}
-        </p>
-      </Link>
-      <Link to="/deployments" className="nf-card nf-bouncy group !p-4">
-        <Layers size={20} className="text-green-400 mb-2" />
-        <p className="text-sm font-bold transition-colors" style={{ color: 'var(--nf-text-high)' }}>
-          {t('nav.deployments')}
-        </p>
-        <p className="text-xs mt-0.5" style={{ color: 'var(--nf-text-muted)' }}>
-          {t('overview.managedDeployments')}
-        </p>
-      </Link>
-      <Link to="/my-templates" className="nf-card nf-bouncy group !p-4">
-        <FileCode size={20} className="text-purple-400 mb-2" />
-        <p className="text-sm font-bold transition-colors" style={{ color: 'var(--nf-text-high)' }}>
-          {t('nav.myTemplates')}
-        </p>
-        <p className="text-xs mt-0.5" style={{ color: 'var(--nf-text-muted)' }}>
-          {t('overview.editAgentConfig')}
-        </p>
-      </Link>
-      <Link to="/monitoring" className="nf-card nf-bouncy group !p-4">
-        <BarChart3 size={20} className="mb-2" style={{ color: 'var(--color-nf-yellow)' }} />
-        <p className="text-sm font-bold transition-colors" style={{ color: 'var(--nf-text-high)' }}>
-          {t('nav.monitoring')}
-        </p>
-        <p className="text-xs mt-0.5" style={{ color: 'var(--nf-text-muted)' }}>
-          {t('overview.healthEvents')}
-        </p>
-      </Link>
+      <Card variant="surface">
+        <Link to="/store" className="block">
+          <ShoppingBag size={20} className="mb-2 text-primary" />
+          <p className="text-sm font-bold text-text-primary transition-colors">
+            {t('nav.agentStore')}
+          </p>
+          <p className="text-xs mt-0.5 text-text-muted">
+            {t('overview.browseAndDeploy')}
+          </p>
+        </Link>
+      </Card>
+      <Card variant="surface">
+        <Link to="/deployments" className="block">
+          <Layers size={20} className="text-green-400 mb-2" />
+          <p className="text-sm font-bold text-text-primary transition-colors">
+            {t('nav.deployments')}
+          </p>
+          <p className="text-xs mt-0.5 text-text-muted">
+            {t('overview.managedDeployments')}
+          </p>
+        </Link>
+      </Card>
+      <Card variant="surface">
+        <Link to="/my-templates" className="block">
+          <FileCode size={20} className="text-purple-400 mb-2" />
+          <p className="text-sm font-bold text-text-primary transition-colors">
+            {t('nav.myTemplates')}
+          </p>
+          <p className="text-xs mt-0.5 text-text-muted">
+            {t('overview.editAgentConfig')}
+          </p>
+        </Link>
+      </Card>
+      <Card variant="surface">
+        <Link to="/monitoring" className="block">
+          <BarChart3 size={20} className="mb-2 text-warning" />
+          <p className="text-sm font-bold text-text-primary transition-colors">
+            {t('nav.monitoring')}
+          </p>
+          <p className="text-xs mt-0.5 text-text-muted">
+            {t('overview.healthEvents')}
+          </p>
+        </Link>
+      </Card>
     </div>
   )
 }
@@ -198,7 +206,8 @@ function HealthSummary() {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-3 mb-3">
-        <Badge variant="success" icon={<CheckCircle size={10} />} size="sm">
+        <Badge variant="success" size="sm">
+          <CheckCircle size={10} />
           {doctor.summary.pass} {t('overview.pass')}
         </Badge>
         {doctor.summary.warn > 0 && (
@@ -207,7 +216,7 @@ function HealthSummary() {
           </Badge>
         )}
         {doctor.summary.fail > 0 && (
-          <Badge variant="error" size="sm">
+          <Badge variant="danger" size="sm">
             {doctor.summary.fail} {t('overview.fail')}
           </Badge>
         )}
@@ -226,13 +235,9 @@ function HealthSummary() {
           />
         </div>
       ))}
-      <button
-        type="button"
-        onClick={() => refetch()}
-        className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-2"
-      >
+      <Button type="button" variant="ghost" size="sm" onClick={() => refetch()}>
         <Stethoscope size={10} /> {t('overview.reRunChecks')}
-      </button>
+      </Button>
     </div>
   )
 }
@@ -265,14 +270,13 @@ export function OverviewPage() {
       {/* Header */}
       <div className="mb-6">
         <div
-          className="flex items-center gap-2 text-sm mb-1"
-          style={{ color: 'var(--color-nf-cyan)' }}
+          className="flex items-center gap-2 text-sm mb-1 text-primary"
         >
           <Zap size={14} />
           <span className="font-bold">{t('overview.title')}</span>
         </div>
         <h1 className="text-2xl font-black">{t('overview.subtitle')}</h1>
-        <p className="text-sm mt-0.5" style={{ color: 'var(--nf-text-muted)' }}>
+        <p className="text-sm mt-0.5 text-text-muted">
           {t('overview.description')}
         </p>
       </div>
@@ -312,8 +316,7 @@ export function OverviewPage() {
       {/* Quick Actions */}
       <section className="mb-8">
         <h2
-          className="text-sm font-bold mb-3 flex items-center gap-2"
-          style={{ color: 'var(--nf-text-mid)' }}
+          className="text-sm font-bold mb-3 flex items-center gap-2 text-text-secondary"
         >
           <Zap size={13} />
           {t('overview.quickActions')}
@@ -325,22 +328,17 @@ export function OverviewPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: Recent Deployments */}
         <div className="lg:col-span-2">
-          <div className="nf-card">
-            <div
-              className="px-5 py-4 flex items-center justify-between"
-              style={{ borderBottom: '1px solid var(--nf-border)' }}
-            >
+          <Card variant="surface">
+            <div className="px-5 py-4 flex items-center justify-between border-b border-border-subtle">
               <h2
-                className="text-sm font-bold flex items-center gap-2"
-                style={{ color: 'var(--nf-text-high)' }}
+                className="text-sm font-bold flex items-center gap-2 text-text-primary"
               >
-                <Layers size={14} style={{ color: 'var(--nf-text-muted)' }} />
+                <Layers size={14} className="text-text-muted" />
                 {t('overview.recentDeployments')}
               </h2>
               <Link
                 to="/deployments"
-                className="text-xs flex items-center gap-1"
-                style={{ color: 'var(--color-nf-cyan)' }}
+                className="text-xs flex items-center gap-1 text-primary"
               >
                 {t('common.viewAll')} <ArrowRight size={10} />
               </Link>
@@ -352,28 +350,23 @@ export function OverviewPage() {
                 <RecentDeployments deployments={deployments ?? []} />
               )}
             </div>
-          </div>
+          </Card>
         </div>
 
         {/* Right: Activity + Health */}
         <div className="space-y-6">
           {/* Recent Activity */}
-          <div className="nf-card">
-            <div
-              className="px-5 py-4 flex items-center justify-between"
-              style={{ borderBottom: '1px solid var(--nf-border)' }}
-            >
+          <Card variant="surface">
+            <div className="px-5 py-4 flex items-center justify-between border-b border-border-subtle">
               <h2
-                className="text-sm font-bold flex items-center gap-2"
-                style={{ color: 'var(--nf-text-high)' }}
+                className="text-sm font-bold flex items-center gap-2 text-text-primary"
               >
-                <Activity size={14} style={{ color: 'var(--nf-text-muted)' }} />
+                <Activity size={14} className="text-text-muted" />
                 {t('overview.recentActivity')}
               </h2>
               <Link
                 to="/monitoring"
-                className="text-xs flex items-center gap-1"
-                style={{ color: 'var(--color-nf-cyan)' }}
+                className="text-xs flex items-center gap-1 text-primary"
               >
                 {t('common.viewAll')} <ArrowRight size={10} />
               </Link>
@@ -381,23 +374,22 @@ export function OverviewPage() {
             <div className="p-5">
               <RecentActivity />
             </div>
-          </div>
+          </Card>
 
           {/* System Health */}
-          <div className="nf-card">
-            <div className="px-5 py-4" style={{ borderBottom: '1px solid var(--nf-border)' }}>
+          <Card variant="surface">
+            <div className="px-5 py-4 border-b border-border-subtle">
               <h2
-                className="text-sm font-bold flex items-center gap-2"
-                style={{ color: 'var(--nf-text-high)' }}
+                className="text-sm font-bold flex items-center gap-2 text-text-primary"
               >
-                <Stethoscope size={14} style={{ color: 'var(--nf-text-muted)' }} />
+                <Stethoscope size={14} className="text-text-muted" />
                 {t('overview.systemHealth')}
               </h2>
             </div>
             <div className="p-5">
               <HealthSummary />
             </div>
-          </div>
+          </Card>
         </div>
       </div>
     </div>

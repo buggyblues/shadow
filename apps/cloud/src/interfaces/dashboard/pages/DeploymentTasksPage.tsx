@@ -12,9 +12,8 @@ import {
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Badge } from '@/components/Badge'
+import { Badge, Button, Card, EmptyState } from '@shadowob/ui'
 import { Breadcrumb } from '@/components/Breadcrumb'
-import { EmptyState } from '@/components/EmptyState'
 import { StatCard } from '@/components/StatCard'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -29,12 +28,12 @@ function formatTimestamp(value?: string | null): string {
   }
 }
 
-function getStatusVariant(status: string): 'default' | 'success' | 'warning' | 'error' | 'info' {
+function getStatusVariant(status: string): 'neutral' | 'success' | 'warning' | 'danger' | 'info' {
   if (status === 'deployed') return 'success'
-  if (status === 'failed') return 'error'
+  if (status === 'failed') return 'danger'
   if (status === 'running') return 'info'
   if (status === 'pending') return 'warning'
-  return 'default'
+  return 'neutral'
 }
 
 export function DeploymentTasksPage() {
@@ -132,7 +131,7 @@ export function DeploymentTasksPage() {
 
       <div className="mb-6">
         <h1 className="text-xl font-bold">{t('deployTask.listTitle')}</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{t('deployTask.listDescription')}</p>
+        <p className="text-sm text-gray-500 mt-1">{t('deployTask.listDescription')}</p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -170,17 +169,16 @@ export function DeploymentTasksPage() {
 
       {!isLoading && tasks.length === 0 && (
         <EmptyState
-          icon={<Terminal size={40} />}
+          icon={Terminal}
           title={t('deployTask.noTasks')}
           description={t('deployTask.noTasksDescription')}
           action={
-            <Link
-              to="/store"
-              className="inline-flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 border border-blue-800 hover:border-blue-600 rounded-lg px-4 py-2 transition-colors"
-            >
-              <Rocket size={14} />
-              {t('deployTask.openStore')}
-            </Link>
+            <Button asChild variant="primary" size="sm">
+              <Link to="/store">
+                <Rocket size={14} />
+                {t('deployTask.openStore')}
+              </Link>
+            </Button>
           }
         />
       )}
@@ -201,107 +199,103 @@ export function DeploymentTasksPage() {
             return (
               <div
                 key={task.id}
-                className={cn(
-                  'bg-gray-900 border rounded-xl p-5 transition-colors',
-                  running ? 'border-blue-900/40' : 'border-gray-800',
-                )}
+                className={cn('transition-colors', running ? 'text-blue-100' : '')}
               >
-                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap mb-2">
-                      <h3 className="text-base font-semibold text-gray-100">#{task.id}</h3>
-                      <Badge variant={getStatusVariant(task.status)} size="sm">
-                        {t(`deployTask.statuses.${task.status}`)}
-                      </Badge>
-                      {running && (
-                        <Badge variant="info" size="sm">
-                          {t('deployTask.activeNow')}
+                <Card variant="surface">
+                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap mb-2">
+                        <h3 className="text-base font-semibold text-gray-100">#{task.id}</h3>
+                        <Badge variant={getStatusVariant(task.status)} size="sm">
+                          {t(`deployTask.statuses.${task.status}`)}
                         </Badge>
+                        {running && (
+                          <Badge variant="info" size="sm">
+                            {t('deployTask.activeNow')}
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs mb-3">
+                        <div>
+                          <p className="text-gray-600 mb-1">{t('deployTask.template')}</p>
+                          <p className="text-gray-300 break-words">{task.templateSlug ?? '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-600 mb-1">{t('deployTask.namespace')}</p>
+                          <p className="text-gray-300 break-words">{task.namespace}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-600 mb-1">{t('deployTask.updated')}</p>
+                          <p className="text-gray-300">
+                            {formatTimestamp(task.updatedAt ?? task.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-950 border border-gray-800 rounded-lg px-3 py-2">
+                        <p className="text-xs uppercase tracking-wider text-gray-600 mb-1">
+                          {t('deployTask.taskUrl')}
+                        </p>
+                        <code className="text-xs font-mono text-gray-400 break-all">
+                          {absoluteUrl}
+                        </code>
+                      </div>
+
+                      {task.error && (
+                        <div className="mt-3 rounded-lg border border-red-900/30 bg-red-950/20 px-3 py-2 text-xs text-red-300 break-words">
+                          {task.error}
+                        </div>
                       )}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs mb-3">
-                      <div>
-                        <p className="text-gray-600 mb-1">{t('deployTask.template')}</p>
-                        <p className="text-gray-300 break-words">{task.templateSlug ?? '—'}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600 mb-1">{t('deployTask.namespace')}</p>
-                        <p className="text-gray-300 break-words">{task.namespace}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600 mb-1">{t('deployTask.updated')}</p>
-                        <p className="text-gray-300">
-                          {formatTimestamp(task.updatedAt ?? task.createdAt)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="bg-gray-950 border border-gray-800 rounded-lg px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-1">
-                        {t('deployTask.taskUrl')}
-                      </p>
-                      <code className="text-xs font-mono text-gray-400 break-all">
-                        {absoluteUrl}
-                      </code>
-                    </div>
-
-                    {task.error && (
-                      <div className="mt-3 rounded-lg border border-red-900/30 bg-red-950/20 px-3 py-2 text-xs text-red-300 break-words">
-                        {task.error}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex flex-row lg:flex-col gap-2 shrink-0">
-                    <Link
-                      to="/deploy-tasks/$taskId"
-                      params={{ taskId: String(task.id) }}
-                      className="inline-flex items-center justify-center gap-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-3 py-2 transition-colors"
-                    >
-                      <Terminal size={12} />
-                      {t('deployTask.openTask')}
-                    </Link>
-                    {(task.status === 'deployed' || task.status === 'failed') && (
-                      <button
-                        type="button"
-                        onClick={() => handleRedeploy(task.id)}
-                        className="inline-flex items-center justify-center gap-1.5 text-xs bg-amber-600 hover:bg-amber-500 text-white rounded-lg px-3 py-2 transition-colors"
+                    <div className="flex flex-row lg:flex-col gap-2 shrink-0">
+                      <Link
+                        to="/deploy-tasks/$taskId"
+                        params={{ taskId: String(task.id) }}
+                        className="inline-flex items-center justify-center gap-2 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-3 py-2 transition-colors"
                       >
-                        <RefreshCw size={12} />
-                        {t('deployTask.redeploy')}
-                      </button>
-                    )}
-                    {task.status === 'deployed' && (
-                      <button
-                        type="button"
-                        disabled={rollbackMutation.isPending}
-                        onClick={() => {
-                          if (rollbackNs === task.namespace) {
-                            rollbackMutation.mutate(task.namespace)
-                          } else {
-                            setRollbackNs(task.namespace)
-                          }
-                        }}
-                        className={cn(
-                          'inline-flex items-center justify-center gap-1.5 text-xs rounded-lg px-3 py-2 transition-colors',
-                          rollbackNs === task.namespace
-                            ? 'bg-red-600 hover:bg-red-500 text-white'
-                            : 'bg-gray-700 hover:bg-gray-600 text-gray-200',
-                        )}
-                      >
-                        {rollbackMutation.isPending ? (
-                          <Loader2 size={12} className="animate-spin" />
-                        ) : (
-                          <RotateCcw size={12} />
-                        )}
-                        {rollbackNs === task.namespace
-                          ? t('deployTask.rollbackConfirm')
-                          : t('deployTask.rollback')}
-                      </button>
-                    )}
+                        <Terminal size={12} />
+                        {t('deployTask.openTask')}
+                      </Link>
+                      {(task.status === 'deployed' || task.status === 'failed') && (
+                        <Button
+                          type="button"
+                          onClick={() => handleRedeploy(task.id)}
+                          variant="secondary"
+                          size="sm"
+                        >
+                          <RefreshCw size={12} />
+                          {t('deployTask.redeploy')}
+                        </Button>
+                      )}
+                      {task.status === 'deployed' && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          disabled={rollbackMutation.isPending}
+                          onClick={() => {
+                            if (rollbackNs === task.namespace) {
+                              rollbackMutation.mutate(task.namespace)
+                            } else {
+                              setRollbackNs(task.namespace)
+                            }
+                          }}
+                        >
+                          {rollbackMutation.isPending ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            <RotateCcw size={12} />
+                          )}
+                          {rollbackNs === task.namespace
+                            ? t('deployTask.rollbackConfirm')
+                            : t('deployTask.rollback')}
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </Card>
               </div>
             )
           })}

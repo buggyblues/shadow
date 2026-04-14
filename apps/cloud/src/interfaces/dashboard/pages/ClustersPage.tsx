@@ -16,11 +16,21 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Badge } from '@/components/Badge'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Badge,
+  Button,
+  EmptyState,
+  Search,
+} from '@shadowob/ui'
 import { Breadcrumb } from '@/components/Breadcrumb'
-import { ConfirmDialog } from '@/components/ConfirmDialog'
-import { EmptyState } from '@/components/EmptyState'
-import { SearchInput } from '@/components/SearchInput'
 import { StatCard } from '@/components/StatCard'
 import { StatusDot } from '@/components/StatusDot'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -79,7 +89,7 @@ function NamespaceCard({
             <div className="flex items-center gap-2">
               <h3 className="font-semibold text-sm">{group.namespace}</h3>
               {isDiscovered && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/30 text-yellow-400 border border-yellow-800/50">
+                <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-900/30 text-yellow-400 border border-yellow-800/50">
                   {t('clusters.discovered')}
                 </span>
               )}
@@ -94,15 +104,16 @@ function NamespaceCard({
             status={group.readyCount === group.totalCount ? 'success' : 'warning'}
             label={`${group.readyCount}/${group.totalCount} ready`}
           />
-          <button
+          <Button
             type="button"
             onClick={() => onDestroy(group.namespace)}
+            variant="ghost"
+            size="xs"
             disabled={isDestroying}
-            className="text-gray-600 hover:text-red-400 transition-colors p-1.5 rounded-md hover:bg-red-900/10"
             title="Destroy namespace"
           >
             {isDestroying ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -163,7 +174,7 @@ function DeploymentRow({ dep }: { dep: Deployment }) {
           >
             {dep.name}
           </Link>
-          <span className="text-[10px] text-gray-600">{getAge(dep)}</span>
+          <span className="text-xs text-gray-600">{getAge(dep)}</span>
         </div>
       </div>
 
@@ -174,25 +185,27 @@ function DeploymentRow({ dep }: { dep: Deployment }) {
 
         {/* Scale controls inline */}
         <div className="flex items-center border border-gray-700 rounded">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="xs"
             onClick={() => handleScale(-1)}
             disabled={scaleMutation.isPending || currentReplicas <= 0}
-            className="px-1.5 py-0.5 text-gray-500 hover:text-white disabled:opacity-30 transition-colors"
           >
             <Minus size={11} />
-          </button>
-          <span className="text-[10px] font-mono px-1.5 min-w-[1.2rem] text-center">
+          </Button>
+          <span className="text-xs font-mono px-1.5 min-w-[1.2rem] text-center">
             {currentReplicas}
           </span>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="xs"
             onClick={() => handleScale(1)}
             disabled={scaleMutation.isPending}
-            className="px-1.5 py-0.5 text-gray-500 hover:text-white disabled:opacity-30 transition-colors"
           >
             <Plus size={11} />
-          </button>
+          </Button>
         </div>
 
         <Link
@@ -320,24 +333,24 @@ export function ClustersPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold">{t('clusters.title')}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{t('clusters.description')}</p>
+          <p className="text-sm text-gray-500 mt-1">{t('clusters.description')}</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <Button
             type="button"
             onClick={() => refetch()}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 transition-colors"
+            variant="ghost"
+            size="sm"
           >
             <RefreshCw size={12} />
             {t('common.refresh')}
-          </button>
-          <Link
-            to="/store"
-            className="flex items-center gap-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-3 py-1.5 transition-colors"
-          >
-            <Rocket size={12} />
-            {t('common.deployNew')}
-          </Link>
+          </Button>
+          <Button asChild variant="primary" size="sm">
+            <Link to="/store">
+              <Rocket size={12} />
+              {t('common.deployNew')}
+            </Link>
+          </Button>
         </div>
       </div>
 
@@ -370,11 +383,10 @@ export function ClustersPage() {
       </div>
 
       {/* Search */}
-      <SearchInput
+      <Search
         value={search}
         onChange={setSearch}
         placeholder={t('common.search') + '...'}
-        className="mb-6 max-w-md"
       />
 
       {/* Content */}
@@ -383,7 +395,7 @@ export function ClustersPage() {
           {[1, 2].map((i) => (
             <div
               key={i}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-5 animate-pulse"
+              className="bg-gray-900 border border-gray-800 rounded-xl p-4 animate-pulse"
             >
               <div className="h-5 w-32 bg-gray-800 rounded mb-4" />
               <div className="h-12 bg-gray-800 rounded" />
@@ -394,19 +406,18 @@ export function ClustersPage() {
 
       {!isLoading && groups.length === 0 && (
         <EmptyState
-          icon={<Layers size={40} />}
+          icon={Layers}
           title={t('clusters.noClustersFound')}
           description={
             debouncedSearch ? t('clusters.noNamespacesMatch') : t('clusters.noDeploymentsYet')
           }
           action={
-            <Link
-              to="/store"
-              className="inline-flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 border border-blue-800 hover:border-blue-600 rounded-lg px-4 py-2 transition-colors"
-            >
-              <Rocket size={14} />
-              {t('clusters.browseAgentStore')}
-            </Link>
+            <Button asChild variant="primary" size="sm">
+              <Link to="/store">
+                <Rocket size={14} />
+                {t('clusters.browseAgentStore')}
+              </Link>
+            </Button>
           }
         />
       )}
@@ -425,18 +436,37 @@ export function ClustersPage() {
         </div>
       )}
 
-      {destroyNs && (
-        <ConfirmDialog
-          title={t('clusters.destroyNamespace')}
-          message={t('clusters.destroyWarning', { namespace: destroyNs })}
-          confirmLabel={t('clusters.destroy')}
-          confirmingLabel={t('clusters.destroying')}
-          confirmText={destroyNs}
-          isConfirming={destroyMutation.isPending}
-          onConfirm={() => destroyMutation.mutate(destroyNs)}
-          onCancel={() => setDestroyNs(null)}
-        />
-      )}
+      <AlertDialog
+        open={Boolean(destroyNs)}
+        onOpenChange={(open) => {
+          if (!open) setDestroyNs(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('clusters.destroyNamespace')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {destroyNs ? t('clusters.destroyWarning', { namespace: destroyNs }) : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button variant="ghost">{t('common.cancel')}</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                variant="danger"
+                loading={destroyMutation.isPending}
+                onClick={() => destroyNs && destroyMutation.mutate(destroyNs)}
+              >
+                {destroyMutation.isPending ? t('clusters.destroying') : t('clusters.destroy')}
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -4,9 +4,8 @@ import { formatDistanceToNow, parseISO } from 'date-fns'
 import { CheckCircle2, Copy, FolderOpen, Loader2, RefreshCw, Terminal, XCircle } from 'lucide-react'
 import { useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Badge } from '@/components/Badge'
+import { Badge, Button, Card, EmptyState } from '@shadowob/ui'
 import { Breadcrumb } from '@/components/Breadcrumb'
-import { EmptyState } from '@/components/EmptyState'
 import { StatCard } from '@/components/StatCard'
 import { useSSEStream } from '@/hooks/useSSEStream'
 import { api } from '@/lib/api'
@@ -23,12 +22,12 @@ function formatTimestamp(value?: string | null): string {
   }
 }
 
-function getStatusVariant(status: string): 'default' | 'success' | 'warning' | 'error' | 'info' {
+function getStatusVariant(status: string): 'neutral' | 'success' | 'warning' | 'danger' | 'info' {
   if (status === 'deployed') return 'success'
-  if (status === 'failed') return 'error'
+  if (status === 'failed') return 'danger'
   if (status === 'running') return 'info'
   if (status === 'pending') return 'warning'
-  return 'default'
+  return 'neutral'
 }
 
 export function DeploymentTaskPage() {
@@ -85,7 +84,7 @@ export function DeploymentTaskPage() {
     return (
       <div className="p-6">
         <EmptyState
-          icon={<XCircle size={40} />}
+          icon={XCircle}
           title={t('deployTask.taskNotFound')}
           description={t('deployTask.invalidTaskId')}
         />
@@ -107,17 +106,16 @@ export function DeploymentTaskPage() {
       <div className="p-6">
         <Breadcrumb items={[{ label: t('deployTask.title') }]} className="mb-4" />
         <EmptyState
-          icon={<XCircle size={40} />}
+          icon={XCircle}
           title={t('deployTask.taskNotFound')}
           description={t('deployTask.taskNotFoundDescription')}
           action={
-            <Link
-              to="/store"
-              className="inline-flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 border border-blue-800 hover:border-blue-600 rounded-lg px-4 py-2 transition-colors"
-            >
-              <FolderOpen size={14} />
-              {t('deployTask.backToStore')}
-            </Link>
+            <Button asChild variant="primary" size="sm">
+              <Link to="/store">
+                <FolderOpen size={14} />
+                {t('deployTask.backToStore')}
+              </Link>
+            </Button>
           }
         />
       </div>
@@ -147,32 +145,34 @@ export function DeploymentTaskPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <button
+          <Button
             type="button"
             onClick={() => refetch()}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-colors"
+            variant="ghost"
+            size="sm"
           >
             <RefreshCw size={12} className={running ? 'animate-spin' : ''} />
             {t('deployTask.refresh')}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={copyTaskUrl}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-colors"
+            variant="ghost"
+            size="sm"
           >
             <Copy size={12} />
             {t('deployTask.copyLink')}
-          </button>
+          </Button>
           <Link
             to="/deployments"
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-colors"
+            className="flex items-center gap-2 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-colors"
           >
             <Terminal size={12} />
             {t('nav.deployments')}
           </Link>
           <Link
             to="/deployments"
-            className="flex items-center gap-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-3 py-2 transition-colors"
+            className="flex items-center gap-2 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-3 py-2 transition-colors"
           >
             <FolderOpen size={12} />
             {t('deployTask.openClusters')}
@@ -182,36 +182,38 @@ export function DeploymentTaskPage() {
 
       <div
         className={cn(
-          'rounded-xl border p-4 mb-6',
-          running && 'bg-blue-950/20 border-blue-900/30',
-          success && 'bg-green-950/20 border-green-900/30',
-          failed && 'bg-red-950/20 border-red-900/30',
+          'mb-6',
+          running && 'text-blue-100',
+          success && 'text-green-100',
+          failed && 'text-red-100',
         )}
       >
-        <div className="flex items-start gap-3">
-          {running && <Loader2 size={18} className="text-blue-400 animate-spin mt-0.5" />}
-          {success && <CheckCircle2 size={18} className="text-green-400 mt-0.5" />}
-          {failed && <XCircle size={18} className="text-red-400 mt-0.5" />}
-          <div>
-            <p
-              className={cn(
-                'text-sm font-medium',
-                running && 'text-blue-400',
-                success && 'text-green-400',
-                failed && 'text-red-400',
-              )}
-            >
-              {running && t('deployTask.runningMessage')}
-              {success && t('deployTask.successMessage')}
-              {failed && t('deployTask.failedMessage')}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              {running && t('deployTask.runningDescription')}
-              {success && t('deployTask.successDescription')}
-              {failed && t('deployTask.failedDescription')}
-            </p>
+        <Card variant="surface">
+          <div className="flex items-start gap-3">
+            {running && <Loader2 size={18} className="text-blue-400 animate-spin mt-1" />}
+            {success && <CheckCircle2 size={18} className="text-green-400 mt-1" />}
+            {failed && <XCircle size={18} className="text-red-400 mt-1" />}
+            <div>
+              <p
+                className={cn(
+                  'text-sm font-medium',
+                  running && 'text-blue-400',
+                  success && 'text-green-400',
+                  failed && 'text-red-400',
+                )}
+              >
+                {running && t('deployTask.runningMessage')}
+                {success && t('deployTask.successMessage')}
+                {failed && t('deployTask.failedMessage')}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {running && t('deployTask.runningDescription')}
+                {success && t('deployTask.successDescription')}
+                {failed && t('deployTask.failedDescription')}
+              </p>
+            </div>
           </div>
-        </div>
+        </Card>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -240,30 +242,32 @@ export function DeploymentTaskPage() {
         />
       </div>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6 space-y-3">
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-1">
-            {t('deployTask.taskUrl')}
-          </p>
-          <code className="block bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-xs font-mono text-gray-300 break-all">
-            {taskUrl}
-          </code>
+      <Card variant="surface">
+        <div className="space-y-3">
+          <div>
+            <p className="text-xs uppercase tracking-wider text-gray-600 mb-1">
+              {t('deployTask.taskUrl')}
+            </p>
+            <code className="block rounded-lg px-3 py-2 text-xs font-mono text-gray-300 break-all bg-gray-950 border border-gray-800">
+              {taskUrl}
+            </code>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            <div>
+              <p className="text-gray-600 mb-1">{t('deployTask.created')}</p>
+              <p className="text-gray-300">{formatTimestamp(task.createdAt)}</p>
+            </div>
+            <div>
+              <p className="text-gray-600 mb-1">{t('deployTask.updated')}</p>
+              <p className="text-gray-300">{formatTimestamp(task.updatedAt)}</p>
+            </div>
+            <div>
+              <p className="text-gray-600 mb-1">{t('deployTask.streamStatus')}</p>
+              <p className="text-gray-300">{t(`deployTask.streamStatuses.${streamStatus}`)}</p>
+            </div>
+          </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-          <div>
-            <p className="text-gray-600 mb-1">{t('deployTask.created')}</p>
-            <p className="text-gray-300">{formatTimestamp(task.createdAt)}</p>
-          </div>
-          <div>
-            <p className="text-gray-600 mb-1">{t('deployTask.updated')}</p>
-            <p className="text-gray-300">{formatTimestamp(task.updatedAt)}</p>
-          </div>
-          <div>
-            <p className="text-gray-600 mb-1">{t('deployTask.streamStatus')}</p>
-            <p className="text-gray-300">{t(`deployTask.streamStatuses.${streamStatus}`)}</p>
-          </div>
-        </div>
-      </div>
+      </Card>
 
       {task.error && (
         <div className="mb-6 bg-red-950/20 border border-red-900/30 rounded-xl p-4">
@@ -278,14 +282,14 @@ export function DeploymentTaskPage() {
         </div>
       )}
 
-      <div className="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden">
+      <Card variant="surface">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-900/50">
           <div>
             <p className="text-sm font-medium text-gray-200">{t('deployTask.logs')}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{t('deployTask.logDescription')}</p>
+            <p className="text-xs text-gray-500 mt-1">{t('deployTask.logDescription')}</p>
           </div>
           <Badge
-            variant={running ? 'info' : success ? 'success' : failed ? 'error' : 'default'}
+            variant={running ? 'info' : success ? 'success' : failed ? 'danger' : 'neutral'}
             size="sm"
           >
             {running ? t('deployTask.liveStreaming') : t('deployTask.logReplay')}
@@ -293,7 +297,7 @@ export function DeploymentTaskPage() {
         </div>
         <div
           ref={logRef}
-          className="h-[28rem] overflow-auto p-4 font-mono text-xs text-gray-300 space-y-0.5"
+          className="min-h-[16rem] max-h-[28rem] overflow-auto p-4 font-mono text-xs text-gray-300 space-y-1"
         >
           {lines.length === 0 && (
             <span className="text-gray-600">{t('deployTask.waitingForLogs')}</span>
@@ -305,7 +309,7 @@ export function DeploymentTaskPage() {
             </div>
           ))}
         </div>
-      </div>
+      </Card>
     </div>
   )
 }

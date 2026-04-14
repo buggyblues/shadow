@@ -1,22 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import {
-  ChevronDown,
-  ChevronRight,
-  Clock3,
-  Heart,
-  Package,
-  Rocket,
-  Sparkles,
-  Star,
-  Users,
-} from 'lucide-react'
+import { ChevronRight, Clock3, Heart, Package, Rocket, Sparkles, Star, Users } from 'lucide-react'
 import { type ReactNode, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Badge } from '@/components/Badge'
+import { Badge, Button, Card, EmptyState, Search } from '@shadowob/ui'
 import { Breadcrumb } from '@/components/Breadcrumb'
-import { EmptyState } from '@/components/EmptyState'
-import { SearchInput } from '@/components/SearchInput'
 import { useDebounce } from '@/hooks/useDebounce'
 import {
   api,
@@ -24,7 +12,6 @@ import {
   type TemplateCategoryId,
   type TemplateCategoryInfo,
 } from '@/lib/api'
-import { getCategoryColor, getDifficultyColor } from '@/lib/store-data'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
 
@@ -47,31 +34,18 @@ function CategoryPill({
   onClick: () => void
 }) {
   return (
-    <button
+    <Button
       type="button"
       onClick={onClick}
-      className={cn(
-        'inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-all',
-        active ? 'nf-glow' : 'hover:-translate-y-0.5',
-      )}
-      style={{
-        background: active ? 'var(--nf-sidebar-active)' : 'var(--nf-bg-glass-2)',
-        borderColor: active ? 'rgba(0, 243, 255, 0.25)' : 'var(--nf-border)',
-        color: active ? 'var(--color-nf-cyan)' : 'var(--nf-text-mid)',
-      }}
+      variant="ghost"
+      size="sm"
     >
-      <span>{category.emoji}</span>
-      <span>{category.label}</span>
-      <span
-        className="rounded-full px-2 py-0.5 text-[11px]"
-        style={{
-          background: active ? 'rgba(0, 243, 255, 0.12)' : 'var(--nf-bg-raised)',
-          color: active ? 'var(--color-nf-cyan)' : 'var(--nf-text-muted)',
-        }}
-      >
+      <span className="shrink-0">{category.emoji}</span>
+      <span className="truncate">{category.label}</span>
+      <span className={cn('rounded-xl px-2 py-0.5 text-[11px]', active ? 'bg-primary/15 text-primary' : 'bg-bg-tertiary/80 text-text-muted')}>
         {count}
       </span>
-    </button>
+    </Button>
   )
 }
 
@@ -85,17 +59,9 @@ function InlineMetric({
   label: string
 }) {
   return (
-    <span
-      className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold"
-      style={{
-        background: 'var(--nf-bg-glass-2)',
-        borderColor: 'var(--nf-border)',
-        color: 'var(--nf-text-mid)',
-      }}
-      title={label}
-    >
-      <span style={{ color: 'var(--color-nf-cyan)' }}>{icon}</span>
-      <span style={{ color: 'var(--nf-text-high)' }}>{value}</span>
+    <span className="inline-flex min-h-[40px] items-center gap-2.5 rounded-2xl border border-border-subtle bg-bg-secondary/70 px-3.5 py-2 text-xs font-semibold text-text-secondary whitespace-nowrap" title={label}>
+      <span className="text-primary">{icon}</span>
+      <span className="font-bold text-text-primary">{value}</span>
     </span>
   )
 }
@@ -110,58 +76,10 @@ function CardMetric({
   label: string
 }) {
   return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold"
-      style={{
-        background: 'var(--nf-bg-raised)',
-        borderColor: 'var(--nf-border)',
-        color: 'var(--nf-text-mid)',
-      }}
-      title={label}
-    >
+    <span className="inline-flex items-center gap-1.5 rounded-xl border border-border-subtle bg-bg-primary/60 px-2.5 py-1.5 text-[11px] font-semibold text-text-secondary" title={label}>
       {icon}
       <span>{value}</span>
     </span>
-  )
-}
-
-function StoreCardDetails({ template }: { template: TemplateCatalogSummary }) {
-  const { t } = useTranslation()
-  const details = [...template.highlights.slice(0, 2), ...template.features.slice(0, 4)]
-
-  if (details.length === 0) return null
-
-  return (
-    <details
-      className="rounded-[20px] border"
-      style={{
-        background: 'var(--nf-bg-glass-2)',
-        borderColor: 'var(--nf-border)',
-      }}
-    >
-      <summary
-        className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-xs font-semibold"
-        style={{ color: 'var(--nf-text-mid)' }}
-      >
-        <span>{t('common.details')}</span>
-        <ChevronDown size={14} />
-      </summary>
-      <div className="flex flex-wrap gap-2 px-3 pb-3 pt-0">
-        {details.map((item) => (
-          <span
-            key={item}
-            className="rounded-full border px-2.5 py-1 text-[11px]"
-            style={{
-              background: 'var(--nf-bg-raised)',
-              borderColor: 'var(--nf-border)',
-              color: 'var(--nf-text-mid)',
-            }}
-          >
-            {item}
-          </span>
-        ))}
-      </div>
-    </details>
   )
 }
 
@@ -178,100 +96,101 @@ function StoreAppCard({
   const summary = template.overview[0] ?? template.description
 
   return (
-    <article className="nf-card nf-bouncy group !p-5 space-y-4">
+    <Card variant="glass">
       <div className="flex items-start gap-4">
-        <div
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[22px] border text-3xl"
-          style={{
-            background: 'var(--nf-bg-glass-2)',
-            borderColor: 'var(--nf-border)',
-          }}
-        >
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-border-subtle bg-bg-primary/50 text-[28px] shadow-sm">
           {template.emoji}
         </div>
 
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Link
-              to="/store/$name"
-              params={{ name: template.name }}
-              className="truncate text-base font-black transition-opacity hover:opacity-85"
-              style={{ color: 'var(--nf-text-high)' }}
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Link
+                  to="/store/$name"
+                  params={{ name: template.name }}
+                  className="truncate text-[17px] font-extrabold tracking-[-0.02em] text-text-primary transition-colors hover:text-primary"
+                >
+                  {template.name}
+                </Link>
+                {template.featured && (
+                  <Badge variant="info" size="sm">
+                    <Sparkles size={10} />
+                    {t('store.featured')}
+                  </Badge>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant="neutral" size="sm">
+                  {categoryLabel}
+                </Badge>
+                <Badge variant="neutral" size="sm">
+                  {getDifficultyLabel(template.difficulty, t)}
+                </Badge>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              onClick={() => toggleFavorite(template.name)}
+              variant="ghost"
+              size="icon"
+              style={
+                isFavorite
+                  ? {
+                    color: '#ff8ea8',
+                    borderColor: 'rgba(255, 42, 85, 0.2)',
+                    background: 'rgba(255, 42, 85, 0.1)',
+                  }
+                  : undefined
+              }
+              title={t('common.favorite')}
             >
-              {template.name}
-            </Link>
-            {template.featured && (
-              <Badge variant="info" size="sm" icon={<Sparkles size={10} />}>
-                {t('store.featured')}
-              </Badge>
-            )}
+              <Heart size={14} fill={isFavorite ? 'currentColor' : 'none'} />
+            </Button>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant="default" size="sm" className={getCategoryColor(template.category)}>
-              {categoryLabel}
-            </Badge>
-            <Badge variant="default" size="sm" className={getDifficultyColor(template.difficulty)}>
-              {getDifficultyLabel(template.difficulty, t)}
-            </Badge>
-          </div>
+          <p className="line-clamp-3 text-sm leading-6 text-text-secondary">
+            {summary}
+          </p>
         </div>
-
-        <button
-          type="button"
-          onClick={() => toggleFavorite(template.name)}
-          className={cn(
-            'shrink-0 rounded-full border p-2 transition-colors',
-            isFavorite
-              ? 'border-red-800/60 bg-red-900/20 text-red-400'
-              : 'border-gray-800 text-gray-500 hover:border-red-800/50 hover:text-red-300',
-          )}
-          title={t('common.favorite')}
-        >
-          <Heart size={14} fill={isFavorite ? 'currentColor' : 'none'} />
-        </button>
       </div>
-
-      <p className="line-clamp-2 text-sm leading-6" style={{ color: 'var(--nf-text-mid)' }}>
-        {summary}
-      </p>
 
       <div className="flex flex-wrap gap-2">
         <CardMetric
-          icon={<Users size={11} style={{ color: 'var(--color-nf-cyan)' }} />}
+          icon={<Users size={11} className="text-primary" />}
           value={template.agentCount}
           label={t('store.agentCount', { count: template.agentCount })}
         />
         <CardMetric
-          icon={<Clock3 size={11} style={{ color: 'var(--color-nf-cyan)' }} />}
+          icon={<Clock3 size={11} className="text-primary" />}
           value={template.estimatedDeployTime}
           label={t('deploy.deployTimeLabel')}
         />
         <CardMetric
-          icon={<Star size={11} style={{ color: 'var(--color-nf-yellow)' }} />}
+          icon={<Star size={11} className="text-warning" />}
           value={`${template.popularity}%`}
           label={t('store.popularity')}
         />
       </div>
 
-      <StoreCardDetails template={template} />
+      <div className="mt-auto flex flex-col items-stretch gap-2 border-t border-border-subtle pt-4 sm:flex-row">
+        <Button asChild variant="primary">
+          <Link to="/store/$name/deploy" params={{ name: template.name }}>
+            <Rocket size={14} />
+            <span className="truncate">{t('store.deployTemplate')}</span>
+          </Link>
+        </Button>
 
-      <div className="flex items-center gap-2">
-        <Link
-          to="/store/$name/deploy"
-          params={{ name: template.name }}
-          className="nf-pill nf-pill-cyan flex-1 justify-center text-sm"
-        >
-          <Rocket size={14} />
-          <span>{t('store.deployTemplate')}</span>
-        </Link>
-
-        <Link to="/store/$name" params={{ name: template.name }} className="nf-soft-button text-sm">
-          <span>{t('store.viewTemplate')}</span>
-          <ChevronRight size={14} />
-        </Link>
+        <Button asChild variant="secondary">
+          <Link to="/store/$name" params={{ name: template.name }}>
+            <span className="truncate">{t('store.viewTemplate')}</span>
+            <ChevronRight size={14} />
+          </Link>
+        </Button>
       </div>
-    </article>
+    </Card>
   )
 }
 
@@ -351,18 +270,21 @@ export function StorePage() {
   const hasFilters = selectedCategory !== 'all' || Boolean(search.trim())
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-6">
+    <div className="mx-auto max-w-[1440px] space-y-8 px-6 py-6 md:px-8">
       <Breadcrumb items={[{ label: t('store.title') }]} className="mb-1" />
 
-      <section className="space-y-4">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder={t('store.searchPlaceholder')}
-            size="lg"
-            className="w-full xl:max-w-2xl"
-          />
+      <section className="glass-panel space-y-5 p-6">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="max-w-3xl space-y-2">
+            <h1
+              className="text-[30px] font-extrabold tracking-[-0.04em] text-text-primary md:text-[34px]"
+            >
+              {t('store.title')}
+            </h1>
+            <p className="max-w-2xl text-sm leading-7 text-text-secondary md:text-[15px]">
+              {t('store.description')}
+            </p>
+          </div>
 
           <div className="flex flex-wrap gap-2">
             <InlineMetric
@@ -383,6 +305,12 @@ export function StorePage() {
           </div>
         </div>
 
+        <Search
+          value={search}
+          onChange={setSearch}
+          placeholder={t('store.searchPlaceholder')}
+        />
+
         <div className="flex flex-wrap gap-2">
           {categories.map((category) => (
             <CategoryPill
@@ -396,7 +324,7 @@ export function StorePage() {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm" style={{ color: 'var(--nf-text-muted)' }}>
+          <p className="text-sm text-text-muted">
             {t('store.matchingTemplates', { count: filtered.length })}
             {selectedCategory !== 'all'
               ? ` · ${categoryLabels[selectedCategory] ?? selectedCategory}`
@@ -405,64 +333,72 @@ export function StorePage() {
           </p>
 
           {hasFilters && (
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={() => {
                 setSearch('')
                 setSelectedCategory('all')
               }}
-              className="nf-soft-button text-sm"
             >
               {t('store.clearFilters')}
-            </button>
+            </Button>
           )}
         </div>
       </section>
 
       {isLoading && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <div
-              key={`store-skeleton-${index}`}
-              className="nf-card !h-[280px] !p-5 animate-pulse"
-            />
-          ))}
+        <div className="glass-panel p-5">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div
+                key={`store-skeleton-${index}`}
+                className="h-[248px] rounded-3xl border border-border-subtle bg-bg-secondary/60 p-5 animate-pulse"
+              />
+            ))}
+          </div>
         </div>
       )}
 
       {!isLoading && filtered.length === 0 && (
-        <EmptyState
-          icon={<Package size={40} />}
-          title={t('store.noTemplatesFound')}
-          description={
-            debouncedSearch
-              ? t('store.noTemplatesMatch', { query: debouncedSearch })
-              : t('store.noTemplatesInCategory')
-          }
-          action={
-            <button
-              type="button"
-              onClick={() => {
-                setSearch('')
-                setSelectedCategory('all')
-              }}
-              className="nf-pill nf-pill-cyan text-sm"
-            >
-              {t('store.clearFilters')}
-            </button>
-          }
-        />
+        <div className="glass-panel p-6">
+          <EmptyState
+            icon={Package}
+            title={t('store.noTemplatesFound')}
+            description={
+              debouncedSearch
+                ? t('store.noTemplatesMatch', { query: debouncedSearch })
+                : t('store.noTemplatesInCategory')
+            }
+            action={
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setSearch('')
+                  setSelectedCategory('all')
+                }}
+              >
+                {t('store.clearFilters')}
+              </Button>
+            }
+          />
+        </div>
       )}
 
       {!isLoading && filtered.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((template) => (
-            <StoreAppCard
-              key={template.name}
-              template={template}
-              categoryLabel={categoryLabels[template.category] ?? template.category}
-            />
-          ))}
+        <div className="glass-panel p-5 md:p-6">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {filtered.map((template) => (
+              <StoreAppCard
+                key={template.name}
+                template={template}
+                categoryLabel={categoryLabels[template.category] ?? template.category}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>

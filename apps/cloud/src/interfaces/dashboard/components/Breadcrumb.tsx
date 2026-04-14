@@ -1,5 +1,14 @@
+import {
+  Breadcrumb as UIBreadcrumb,
+  BreadcrumbItem as UIBreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@shadowob/ui'
 import { Link } from '@tanstack/react-router'
-import { ChevronRight, Home } from 'lucide-react'
+import { Home } from 'lucide-react'
+import { Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
@@ -17,29 +26,37 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
   const { t } = useTranslation()
 
   return (
-    <nav
-      className={cn('flex items-center gap-1 text-sm', className)}
-      aria-label={t('common.breadcrumb')}
-    >
-      <Link
-        to="/"
-        className="text-gray-500 hover:text-white transition-colors p-0.5"
-        title={t('nav.agentStore')}
-      >
-        <Home size={14} />
-      </Link>
-      {items.map((item, i) => (
-        <span key={`${item.label}-${i}`} className="flex items-center gap-1">
-          <ChevronRight size={12} className="text-gray-600" />
-          {item.to ? (
-            <Link to={item.to} className="text-gray-400 hover:text-white transition-colors">
-              {item.label}
+    <UIBreadcrumb className={cn('pb-2', className)} aria-label={t('common.breadcrumb')}>
+      <BreadcrumbList className="gap-1 text-sm">
+        <UIBreadcrumbItem>
+          <BreadcrumbLink
+            asChild
+            className="!flex !items-center !p-0.5 !text-text-muted hover:!text-text-primary"
+          >
+            <Link to="/" title={t('nav.agentStore')}>
+              <Home size={14} />
             </Link>
-          ) : (
-            <span className="text-gray-200">{item.label}</span>
-          )}
-        </span>
-      ))}
-    </nav>
+          </BreadcrumbLink>
+        </UIBreadcrumbItem>
+
+        {items.map((item, i) => (
+          <Fragment key={`group-${item.label}-${i}`}>
+            <BreadcrumbSeparator className="opacity-40" />
+            <UIBreadcrumbItem>
+              {item.to ? (
+                <BreadcrumbLink
+                  asChild
+                  className="!font-bold !tracking-[0.08em] !text-text-secondary hover:!text-text-primary"
+                >
+                  <Link to={item.to}>{item.label}</Link>
+                </BreadcrumbLink>
+              ) : (
+                <BreadcrumbPage className="!tracking-[0.08em]">{item.label}</BreadcrumbPage>
+              )}
+            </UIBreadcrumbItem>
+          </Fragment>
+        ))}
+      </BreadcrumbList>
+    </UIBreadcrumb>
   )
 }

@@ -22,8 +22,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Badge } from '@/components/Badge'
-import { EmptyState } from '@/components/EmptyState'
+import { Badge, Button, EmptyState } from '@shadowob/ui'
 import {
   parseTemplateAgents,
   TemplateAgentsTab,
@@ -31,8 +30,6 @@ import {
   TemplateDetailShell,
 } from '@/components/TemplateDetailShared'
 import { api } from '@/lib/api'
-import { getCategoryColor, getDifficultyColor } from '@/lib/store-data'
-import { cn } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/stores/toast'
 
@@ -65,7 +62,7 @@ function OverviewTab({
 
   return (
     <div className="space-y-6">
-      <div className="nf-card !p-6 space-y-4">
+      <div className="nf-card !p-5 space-y-4">
         {overview.map((paragraph) => (
           <p key={paragraph} className="text-sm leading-7" style={{ color: 'var(--nf-text-mid)' }}>
             {paragraph}
@@ -73,7 +70,7 @@ function OverviewTab({
         ))}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <div className="nf-card !p-5 space-y-4">
           <h3
             className="text-sm font-black flex items-center gap-2"
@@ -86,9 +83,9 @@ function OverviewTab({
             {features.map((feature) => (
               <div
                 key={feature}
-                className="flex items-center gap-2 rounded-2xl px-4 py-3"
+                className="flex items-center gap-2 rounded-[18px] px-4 py-3"
                 style={{
-                  background: 'var(--nf-bg-raised)',
+                  background: 'var(--nf-bg-glass-2)',
                   color: 'var(--nf-text-high)',
                 }}
               >
@@ -111,11 +108,11 @@ function OverviewTab({
             {useCases.map((useCase) => (
               <span
                 key={useCase}
-                className="px-3 py-2 rounded-full text-xs border"
+                className="rounded-full border px-3 py-2 text-xs"
                 style={{
-                  background: 'rgba(124, 77, 255, 0.08)',
-                  borderColor: 'rgba(124, 77, 255, 0.2)',
-                  color: 'var(--nf-text-high)',
+                  background: 'var(--nf-bg-glass-2)',
+                  borderColor: 'rgba(124, 77, 255, 0.16)',
+                  color: 'var(--nf-text-mid)',
                 }}
               >
                 {useCase}
@@ -137,9 +134,9 @@ function OverviewTab({
           {requirements.map((requirement) => (
             <div
               key={requirement}
-              className="rounded-2xl px-4 py-3 text-sm"
+              className="rounded-[18px] px-4 py-3 text-sm"
               style={{
-                background: 'var(--nf-bg-raised)',
+                background: 'var(--nf-bg-glass-2)',
                 color: 'var(--nf-text-mid)',
               }}
             >
@@ -207,9 +204,9 @@ export function StoreDetailPage() {
           title={t('storeDetail.templateNotFound')}
           description={t('storeDetail.templateNotFoundDesc')}
           action={
-            <Link to="/store" className="nf-pill nf-pill-cyan text-sm">
-              {t('storeDetail.backToStore')}
-            </Link>
+            <Button asChild variant="primary" size="sm">
+              <Link to="/store">{t('storeDetail.backToStore')}</Link>
+            </Button>
           }
         />
       </div>
@@ -222,31 +219,28 @@ export function StoreDetailPage() {
       heroIcon={<span className="text-5xl">{detail?.emoji ?? '📦'}</span>}
       title={name}
       titleActions={
-        <button
+        <Button
           type="button"
+          variant={isFavorite ? 'danger' : 'secondary'}
+          size="icon"
           onClick={() => toggleFavorite(name)}
-          className={cn(
-            'p-2 rounded-full border transition-colors',
-            isFavorite
-              ? 'text-red-400 border-red-800/60 bg-red-900/20'
-              : 'text-gray-500 border-gray-800 hover:text-red-300 hover:border-red-800/50',
-          )}
         >
           <Heart size={18} fill={isFavorite ? 'currentColor' : 'none'} />
-        </button>
+        </Button>
       }
       description={detail?.description ?? t('common.loading')}
       badges={
         detail ? (
           <>
-            <Badge variant="default" className={getCategoryColor(detail.category)}>
+            <Badge variant="neutral">
               {getCategoryLabel(detail.category, t)}
             </Badge>
-            <Badge variant="default" className={getDifficultyColor(detail.difficulty)}>
+            <Badge variant="neutral">
               {getDifficultyLabel(detail.difficulty, t)}
             </Badge>
             {detail.featured && (
-              <Badge variant="info" icon={<Star size={10} />}>
+              <Badge variant="info">
+                <Star size={10} />
                 {t('store.featured')}
               </Badge>
             )}
@@ -275,36 +269,27 @@ export function StoreDetailPage() {
       }
       actions={
         <>
-          <Link to="/store/$name/deploy" params={{ name }} className="nf-pill nf-pill-cyan text-sm">
-            <Rocket size={14} />
-            <span>{t('store.deployTemplate')}</span>
-          </Link>
-          <button
+          <Button asChild variant="primary">
+            <Link to="/store/$name/deploy" params={{ name }}>
+              <Rocket size={14} />
+              <span>{t('store.deployTemplate')}</span>
+            </Link>
+          </Button>
+          <Button
             type="button"
+            variant="secondary"
             onClick={() => forkMutation.mutate()}
             disabled={forkMutation.isPending}
-            className="nf-pill text-sm"
-            style={{
-              background: 'var(--nf-bg-raised)',
-              color: 'var(--nf-text-high)',
-              border: '1px solid var(--nf-border)',
-            }}
           >
             <GitFork size={14} />
             <span>{forkMutation.isPending ? t('common.loading') : t('store.forkTemplate')}</span>
-          </button>
-          <Link
-            to="/store"
-            className="nf-pill text-sm"
-            style={{
-              background: 'transparent',
-              color: 'var(--nf-text-mid)',
-              border: '1px solid var(--nf-border)',
-            }}
-          >
-            <ArrowLeft size={14} />
-            <span>{t('store.backToStore')}</span>
-          </Link>
+          </Button>
+          <Button asChild variant="ghost">
+            <Link to="/store">
+              <ArrowLeft size={14} />
+              <span>{t('store.backToStore')}</span>
+            </Link>
+          </Button>
         </>
       }
       sidebar={
@@ -435,7 +420,8 @@ export function StoreDetailPage() {
                       key={envKey}
                       className="px-2.5 py-1.5 rounded-full text-[11px]"
                       style={{
-                        background: 'rgba(248, 231, 28, 0.1)',
+                        background: 'rgba(248, 231, 28, 0.12)',
+                        border: '1px solid rgba(248, 231, 28, 0.16)',
                         color: 'var(--nf-text-high)',
                       }}
                     >

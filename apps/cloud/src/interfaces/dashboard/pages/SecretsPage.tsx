@@ -1,5 +1,35 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Button,
+  Card,
+  Checkbox,
+  EmptyState,
+  Input,
+  Modal,
+  ModalBody,
+  ModalButtonGroup,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from '@shadowob/ui'
+import {
   Eye,
   EyeOff,
   FolderPlus,
@@ -15,9 +45,7 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Breadcrumb } from '@/components/Breadcrumb'
-import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { api } from '@/lib/api'
-import { cn } from '@/lib/utils'
 import { useToast } from '@/stores/toast'
 
 type EnvListResponse = Awaited<ReturnType<typeof api.env.list>>
@@ -61,63 +89,61 @@ function GroupTabs({
   }
 
   return (
-    <div className="flex items-center gap-1 border-b border-gray-800 pb-2 flex-wrap">
-      {groups.map((group) => (
-        <button
-          key={group}
-          type="button"
-          onClick={() => onSelect(group)}
-          className={cn(
-            'px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
-            activeGroup === group
-              ? 'bg-blue-600/20 text-blue-400 border border-blue-800'
-              : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800',
-          )}
-        >
-          {group}
-        </button>
-      ))}
+    <div className="flex flex-wrap items-start gap-3">
+      <Tabs value={activeGroup} onChange={onSelect}>
+        <TabsList>
+          {groups.map((group) => (
+            <TabsTrigger key={group} value={group}>
+              {group}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
       {showAdd ? (
-        <div className="flex items-center gap-1 ml-1">
-          <input
+        <div className="flex items-center gap-2 rounded-[24px] border border-border-subtle bg-bg-secondary/60 p-2 shadow-[var(--shadow-soft)]">
+          <Input
             type="text"
             value={groupName}
             onChange={(e) => setGroupName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void handleCreate()}
             placeholder={t('secrets.groupNamePlaceholder')}
-            className="bg-gray-950 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 w-32"
             disabled={isCreating}
             autoFocus
           />
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
             onClick={() => void handleCreate()}
             disabled={!groupName.trim() || isCreating}
-            className="text-xs text-blue-400 hover:text-blue-300 px-1.5 py-1 disabled:text-gray-600"
           >
             {isCreating ? t('common.saving') : t('common.add')}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
+            size="xs"
             onClick={() => {
               setShowAdd(false)
               setGroupName('')
             }}
             disabled={isCreating}
-            className="text-xs text-gray-500 hover:text-gray-300 px-1"
           >
             <X size={12} />
-          </button>
+          </Button>
         </div>
       ) : (
-        <button
+        <Button
           type="button"
+          variant="glass"
+          size="sm"
           onClick={() => setShowAdd(true)}
-          className="flex items-center gap-1 px-2 py-1.5 text-xs text-gray-600 hover:text-gray-400 transition-colors"
           title={t('secrets.createGroup')}
         >
-          <FolderPlus size={12} />
-        </button>
+          <FolderPlus size={14} />
+          {t('secrets.createGroup')}
+        </Button>
       )}
     </div>
   )
@@ -137,7 +163,7 @@ function EnvDialog({
   groupName: string
   initial?: { key: string; value: string; isSecret: boolean }
   isSubmitting: boolean
-  onSubmit: (data: { scope: string; key: string; value: string; isSecret: boolean }) => void
+  onSubmit: (data: { key: string; value: string; isSecret: boolean }) => void
   onClose: () => void
 }) {
   const { t } = useTranslation()
@@ -149,98 +175,81 @@ function EnvDialog({
   const canSubmit = key.trim().length > 0 && !isSubmitting
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-      onClick={onClose}
-    >
-      <div
-        className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg mx-4 space-y-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold flex items-center gap-2">
-            <Variable size={16} className="text-blue-400" />
-            {mode === 'edit' ? t('secrets.editEnvironmentValue') : t('secrets.addEnvironmentValue')}
-          </h3>
-          <button type="button" onClick={onClose} className="text-gray-500 hover:text-gray-300 p-1">
-            <X size={16} />
-          </button>
-        </div>
+    <Modal open onClose={onClose}>
+      <ModalContent maxWidth="max-w-lg">
+        <ModalHeader
+          overline={groupName}
+          icon={<Variable size={18} />}
+          title={mode === 'edit' ? t('secrets.editEnvironmentValue') : t('secrets.addEnvironmentValue')}
+          subtitle={
+            mode === 'edit'
+              ? t('secrets.editEnvironmentValueDescription', { group: groupName })
+              : t('secrets.addEnvironmentValueDescription', { group: groupName })
+          }
+          onClose={onClose}
+        />
 
-        <p className="text-xs text-gray-500">
-          {mode === 'edit'
-            ? t('secrets.editEnvironmentValueDescription', { group: groupName })
-            : t('secrets.addEnvironmentValueDescription', { group: groupName })}
-        </p>
+        <ModalBody>
+          <Input
+            label={t('secrets.keyName')}
+            type="text"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            placeholder="OPENAI_API_KEY"
+            autoFocus
+            disabled={mode === 'edit'}
+          />
 
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-gray-400 mb-1.5 block">{t('secrets.keyName')}</label>
-            <input
-              type="text"
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              placeholder="OPENAI_API_KEY"
-              className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2.5 text-sm font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500"
-              autoFocus
-              disabled={mode === 'edit'}
-            />
-          </div>
-
-          <div>
-            <label className="text-xs text-gray-400 mb-1.5 block">{t('secrets.secretValue')}</label>
+          <div className="space-y-1.5">
+            <p className="ml-1 text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
+              {t('secrets.secretValue')}
+            </p>
             <div className="relative">
-              <input
+              <Input
                 type={showValue ? 'text' : 'password'}
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 placeholder={mode === 'edit' ? t('secrets.leaveEmptyKeep') : ''}
-                className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2.5 text-sm font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 pr-10"
               />
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="xs"
                 onClick={() => setShowValue(!showValue)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400"
               >
                 {showValue ? <EyeOff size={14} /> : <Eye size={14} />}
-              </button>
+              </Button>
             </div>
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
-            <input
-              type="checkbox"
+          <label className="flex cursor-pointer items-center gap-3 rounded-[24px] border border-border-subtle bg-bg-secondary/50 px-4 py-3 text-sm font-semibold text-text-secondary">
+            <Checkbox
               checked={isSecret}
-              onChange={(e) => setIsSecret(e.target.checked)}
-              className="accent-blue-500 rounded"
+              onCheckedChange={(checked) => setIsSecret(checked === true)}
             />
-            <Lock size={12} />
-            {t('secrets.secret')}
+            <Lock size={14} className="text-text-muted" />
+            <span>{t('secrets.secret')}</span>
           </label>
-        </div>
+        </ModalBody>
 
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg transition-colors"
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              canSubmit && onSubmit({ scope: 'global', key: key.trim(), value, isSecret })
-            }
-            disabled={!canSubmit}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg transition-colors"
-          >
-            {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : null}
-            {mode === 'edit' ? t('common.save') : t('common.add')}
-          </button>
-        </div>
-      </div>
-    </div>
+        <ModalFooter>
+          <ModalButtonGroup>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => canSubmit && onSubmit({ key: key.trim(), value, isSecret })}
+              disabled={!canSubmit}
+            >
+              {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : null}
+              {mode === 'edit' ? t('common.save') : t('common.add')}
+            </Button>
+          </ModalButtonGroup>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   )
 }
 
@@ -352,136 +361,140 @@ export function SecretsPage() {
   )
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <Breadcrumb items={[{ label: t('secrets.title') }]} className="mb-4" />
+    <div className="mx-auto max-w-[1280px] space-y-6 px-6 py-6 md:px-8">
+      <Breadcrumb items={[{ label: t('secrets.title') }]} className="mb-1" />
 
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <ShieldCheck size={20} className="text-blue-400" />
-            {t('secrets.title')}
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">{t('secrets.description')}</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setEditingEntry(null)
-            setDialogMode('create')
-          }}
-          className="flex items-center gap-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors"
-        >
-          <Plus size={14} />
-          {t('secrets.addEnvironmentValue')}
-        </button>
-      </div>
-
-      {/* Encryption banner */}
-      <div className="bg-green-950/20 border border-green-900/40 rounded-lg p-3 mb-5 flex items-center gap-3">
-        <div className="bg-green-900/40 rounded-full p-1.5">
-          <ShieldCheck size={14} className="text-green-400" />
-        </div>
-        <div className="flex-1">
-          <p className="text-xs font-medium text-green-300">{t('secrets.encryptionActive')}</p>
-          <p className="text-[10px] text-green-600 mt-0.5">
-            {t('secrets.allSecretsEncrypted')}{' '}
-            <code className="bg-green-900/30 px-1 rounded">SHADOWOB_PASSPHRASE</code>
-          </p>
-        </div>
-        <span className="text-[10px] text-green-700 px-2 py-0.5 bg-green-900/30 rounded-full border border-green-900/50">
-          {data?.envVars.length ?? 0} {t('secrets.encryptedValues')}
-        </span>
-      </div>
-
-      {/* Group tabs */}
-      <GroupTabs
-        groups={groups}
-        activeGroup={activeGroup}
-        onSelect={setActiveGroup}
-        onCreate={(name) => createGroup.mutateAsync(name).then(() => undefined)}
-      />
-
-      {/* Table */}
-      <div className="mt-4">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-16 text-gray-500 text-sm">
-            <Loader2 size={16} className="animate-spin mr-2" />
-            {t('common.loading')}
+      <section className="glass-panel p-6">
+        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h1 className="flex items-center gap-3 text-[30px] font-black tracking-[-0.03em] text-text-primary">
+              <span className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-primary/12 text-primary">
+                <ShieldCheck size={20} />
+              </span>
+              {t('secrets.title')}
+            </h1>
+            <p className="mt-1 text-sm leading-7 text-text-muted">{t('secrets.description')}</p>
           </div>
-        ) : envVars.length === 0 ? (
-          <div className="text-center py-16 border border-dashed border-gray-800 rounded-lg">
-            <Variable size={28} className="mx-auto mb-3 text-gray-700" />
-            <p className="text-sm text-gray-500">
-              {t('secrets.noValuesInGroup', { group: activeGroup })}
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setEditingEntry(null)
-                setDialogMode('create')
-              }}
-              className="mt-3 inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 border border-blue-800 hover:border-blue-600 rounded-lg px-4 py-2 transition-colors"
-            >
-              <Plus size={12} />
-              {t('secrets.addEnvironmentValue')}
-            </button>
+
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            onClick={() => {
+              setEditingEntry(null)
+              setDialogMode('create')
+            }}
+          >
+            <Plus size={14} />
+            {t('secrets.addEnvironmentValue')}
+          </Button>
+        </div>
+
+        <Card variant="glass">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full border border-success/25 bg-success/10 text-success">
+              <ShieldCheck size={16} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-black text-green-300">{t('secrets.encryptionActive')}</p>
+              <p className="mt-0.5 text-xs text-green-200/70">
+                {t('secrets.allSecretsEncrypted')}{' '}
+                <code className="rounded-full border border-green-500/20 bg-[rgba(0,0,0,0.12)] px-2 py-0.5 font-mono text-[11px] text-green-200">
+                  SHADOWOB_PASSPHRASE
+                </code>
+              </p>
+            </div>
+            <span className="rounded-full border border-success/25 bg-bg-primary/40 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-success/80">
+              {data?.envVars.length ?? 0} {t('secrets.encryptedValues')}
+            </span>
           </div>
-        ) : (
-          <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-800 text-left">
-                  <th className="px-4 py-2.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider">
-                    {t('secrets.keyName')}
-                  </th>
-                  <th className="px-4 py-2.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider">
-                    {t('secrets.secretValue')}
-                  </th>
-                  <th className="px-4 py-2.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider w-24" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800/50">
-                {envVars.map((entry) => (
-                  <tr
-                    key={`${entry.scope}-${entry.key}`}
-                    className="hover:bg-gray-800/20 transition-colors group"
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-mono text-gray-200">{entry.key}</span>
-                        {entry.isSecret && <Lock size={10} className="text-yellow-600" />}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs font-mono text-gray-600">{entry.maskedValue}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end">
-                        <button
-                          type="button"
-                          onClick={() => void handleStartEdit(entry)}
-                          className="p-1.5 text-gray-500 hover:text-blue-400 hover:bg-gray-800 rounded transition-colors"
-                          title={t('common.edit')}
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteTarget({ key: entry.key })}
-                          className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-gray-800 rounded transition-colors"
-                          title={t('common.delete')}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+        </Card>
+
+        <GroupTabs
+          groups={groups}
+          activeGroup={activeGroup}
+          onSelect={setActiveGroup}
+          onCreate={(name) => createGroup.mutateAsync(name).then(() => undefined)}
+        />
+      </section>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-20 text-sm text-text-muted">
+          <Loader2 size={18} className="mr-2 animate-spin" />
+          {t('common.loading')}
+        </div>
+      ) : envVars.length === 0 ? (
+        <Card variant="glass">
+          <EmptyState
+            icon={Variable}
+            title={t('secrets.noValuesInGroup', { group: activeGroup })}
+            description={t('secrets.description')}
+            action={
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setEditingEntry(null)
+                  setDialogMode('create')
+                }}
+              >
+                <Plus size={14} />
+                {t('secrets.addEnvironmentValue')}
+              </Button>
+            }
+          />
+        </Card>
+      ) : (
+        <Card variant="glass">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('secrets.keyName')}</TableHead>
+                <TableHead>{t('secrets.secretValue')}</TableHead>
+                <TableHead>{t('common.actions')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {envVars.map((entry) => (
+                <TableRow key={`${entry.scope}-${entry.key}`}>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <code className="text-sm font-mono text-text-primary">{entry.key}</code>
+                      {entry.isSecret && <Lock size={12} className="text-warning" />}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-xs font-mono text-text-muted">{entry.maskedValue}</span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => void handleStartEdit(entry)}
+                        title={t('common.edit')}
+                      >
+                        <Pencil size={13} />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => setDeleteTarget({ key: entry.key })}
+                        title={t('common.delete')}
+                      >
+                        <Trash2 size={13} />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
 
       {/* Add/Edit Dialog */}
       {dialogMode && (
@@ -492,6 +505,7 @@ export function SecretsPage() {
           isSubmitting={saveValue.isPending}
           onSubmit={(data) => {
             saveValue.mutate({
+              scope: 'global',
               ...data,
               originalKey: editingEntry?.key,
             })
@@ -504,17 +518,37 @@ export function SecretsPage() {
       )}
 
       {/* Delete Confirm */}
-      {deleteTarget && (
-        <ConfirmDialog
-          title={t('common.delete')}
-          message={`${t('common.delete')} ${deleteTarget.key}?`}
-          confirmLabel={t('common.delete')}
-          confirmingLabel={t('common.loading')}
-          isConfirming={deleteValue.isPending}
-          onConfirm={() => deleteValue.mutate({ key: deleteTarget.key })}
-          onCancel={() => setDeleteTarget(null)}
-        />
-      )}
+      <AlertDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('common.delete')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget ? `${t('common.delete')} ${deleteTarget.key}?` : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button variant="ghost">{t('common.cancel')}</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                variant="danger"
+                loading={deleteValue.isPending}
+                onClick={() => deleteTarget && deleteValue.mutate({ key: deleteTarget.key })}
+              >
+                {t('common.delete')}
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

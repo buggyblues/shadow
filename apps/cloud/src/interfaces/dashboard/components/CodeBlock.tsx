@@ -1,5 +1,12 @@
 import { Check, Copy } from 'lucide-react'
 import { useState } from 'react'
+import {
+  Button,
+  Table,
+  TableBody,
+  TableCell,
+  TableRow,
+} from '@shadowob/ui'
 import { cn } from '@/lib/utils'
 
 interface CodeBlockProps {
@@ -42,14 +49,16 @@ export function CodeBlock({
               </span>
             )}
           </div>
-          <button
+          <Button
             type="button"
             onClick={handleCopy}
-            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+            variant="ghost"
+            size="xs"
+            className="!flex !items-center !gap-1 !text-xs !text-gray-500 hover:!text-gray-300 !transition-colors"
           >
             {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
             {copied ? 'Copied' : 'Copy'}
-          </button>
+          </Button>
         </div>
       )}
 
@@ -57,20 +66,20 @@ export function CodeBlock({
       <div className="overflow-auto" style={{ maxHeight }}>
         <pre className="p-4 text-sm font-mono">
           {showLineNumbers ? (
-            <table className="border-collapse">
-              <tbody>
+            <Table className="!border-collapse">
+              <TableBody>
                 {lines.map((line, i) => (
-                  <tr key={i}>
-                    <td className="pr-4 text-right text-gray-600 select-none align-top text-xs leading-relaxed">
+                  <TableRow key={i}>
+                    <TableCell className="!pr-4 !text-right !text-gray-600 !select-none !align-top !text-xs !leading-relaxed">
                       {i + 1}
-                    </td>
-                    <td className="text-gray-300 leading-relaxed whitespace-pre">
+                    </TableCell>
+                    <TableCell className="!text-gray-300 !leading-relaxed !whitespace-pre">
                       {line || '\u00a0'}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           ) : (
             <code className="text-gray-300 leading-relaxed whitespace-pre-wrap">{code}</code>
           )}

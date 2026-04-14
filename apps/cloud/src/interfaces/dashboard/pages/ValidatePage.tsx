@@ -3,6 +3,7 @@ import { clsx } from 'clsx'
 import { AlertTriangle, CheckCircle, Shield } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Button, Textarea } from '@shadowob/ui'
 import { api, type ValidateResult } from '@/lib/api'
 import { useToast } from '@/stores/toast'
 
@@ -53,38 +54,34 @@ export function ValidatePage() {
       <div className="space-y-4">
         {/* Editor */}
         <div className="relative">
-          <textarea
+          <Textarea
             value={configText}
             onChange={(e) => setConfigText(e.target.value)}
             placeholder={t('validate.pasteConfig')}
-            className="w-full h-80 bg-gray-950 border border-gray-700 rounded-lg p-4 font-mono text-sm text-gray-300 placeholder-gray-600 focus:outline-none focus:border-blue-500 resize-y"
             spellCheck={false}
           />
-          <button
+          <Button
             type="button"
             onClick={handleLoadSample}
-            className="absolute top-2 right-2 text-xs text-gray-500 hover:text-white border border-gray-700 rounded px-2 py-1"
+            variant="ghost"
+            size="sm"
           >
             {t('validate.loadTemplate')}
-          </button>
+          </Button>
         </div>
 
         {/* Actions */}
         <div className="flex items-center gap-3">
-          <button
+          <Button
             type="button"
             onClick={handleValidate}
             disabled={!configText.trim() || mutation.isPending}
-            className={clsx(
-              'flex items-center gap-1.5 text-sm px-4 py-2 rounded transition-colors',
-              !configText.trim() || mutation.isPending
-                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-500 text-white',
-            )}
+            loading={mutation.isPending}
+            variant="primary"
           >
             <Shield size={14} />
             {mutation.isPending ? t('validate.validating') : t('validate.title')}
-          </button>
+          </Button>
         </div>
 
         {/* Parse error */}

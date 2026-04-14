@@ -27,20 +27,26 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Badge } from '@/components/Badge'
+import { Badge, Button, Checkbox, Input, Progress } from '@shadowob/ui'
 import { Breadcrumb } from '@/components/Breadcrumb'
-import { type Step, StepIndicator } from '@/components/StepIndicator'
 import { useSSEStream } from '@/hooks/useSSEStream'
 import { api, type ProviderSettings } from '@/lib/api'
 import { API_PRESETS } from '@/lib/presets'
-import { getCategoryColor } from '@/lib/store-data'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/stores/toast'
 
 // ── Step Definitions ──────────────────────────────────────────────────────────
 
-function getWizardSteps(t: (key: string, options?: Record<string, unknown>) => string): Step[] {
+interface WizardStep {
+  id: string
+  label: string
+  description?: string
+}
+
+function getWizardSteps(
+  t: (key: string, options?: Record<string, unknown>) => string,
+): WizardStep[] {
   return [
     {
       id: 'overview',
@@ -106,18 +112,11 @@ function StepOverview({ name, onNext }: { name: string; onNext: () => void }) {
             </p>
 
             <div className="flex items-center gap-2 mb-4">
-              {template && (
-                <Badge variant="default" className={getCategoryColor(template.category)}>
-                  {getCategoryLabel(template.category, t)}
-                </Badge>
-              )}
-              {template && (
-                <Badge variant="default" className="bg-gray-800 text-gray-200 border-gray-700">
-                  {getDifficultyLabel(template.difficulty, t)}
-                </Badge>
-              )}
+              {template && <Badge variant="neutral">{getCategoryLabel(template.category, t)}</Badge>}
+              {template && <Badge variant="neutral">{getDifficultyLabel(template.difficulty, t)}</Badge>}
               {template?.featured && (
-                <Badge variant="info" icon={<Sparkles size={10} />}>
+                <Badge variant="info">
+                  <Sparkles size={10} />
                   {t('store.featured')}
                 </Badge>
               )}
@@ -153,11 +152,11 @@ function StepOverview({ name, onNext }: { name: string; onNext: () => void }) {
 
       {/* Highlights */}
       <div className="bg-blue-950/20 border border-blue-900/50 rounded-lg p-4">
-        <h4 className="text-sm font-medium text-blue-400 mb-2 flex items-center gap-1.5">
+        <h4 className="text-sm font-medium text-blue-400 mb-2 flex items-center gap-2">
           <Sparkles size={13} />
           {t('deploy.whatYouWillGet')}
         </h4>
-        <ul className="space-y-1.5">
+        <ul className="space-y-2">
           {(template?.highlights ?? []).map((highlight) => (
             <li key={highlight} className="flex items-center gap-2 text-sm text-gray-300">
               <CheckCircle size={13} className="text-green-400 shrink-0" />
@@ -170,11 +169,11 @@ function StepOverview({ name, onNext }: { name: string; onNext: () => void }) {
       {/* Requirements */}
       {(template?.requirements.length ?? 0) > 0 && (
         <div className="bg-yellow-950/10 border border-yellow-900/30 rounded-lg p-4">
-          <h4 className="text-sm font-medium text-yellow-400 mb-2 flex items-center gap-1.5">
+          <h4 className="text-sm font-medium text-yellow-400 mb-2 flex items-center gap-2">
             <AlertTriangle size={13} />
             {t('deploy.prerequisites')}
           </h4>
-          <ul className="space-y-1.5">
+          <ul className="space-y-2">
             {(template?.requirements ?? []).map((requirement) => (
               <li key={requirement} className="flex items-center gap-2 text-sm text-gray-400">
                 <ChevronRight size={11} className="text-yellow-600 shrink-0" />
@@ -186,14 +185,14 @@ function StepOverview({ name, onNext }: { name: string; onNext: () => void }) {
       )}
 
       <div className="flex justify-end">
-        <button
+        <Button
           type="button"
           onClick={onNext}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
+          variant="primary"
         >
           {t('common.continue')}
           <ArrowRight size={16} />
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -350,18 +349,17 @@ function StepConfigure({
       </div>
 
       {/* Namespace */}
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
+      <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
         <label htmlFor="namespace" className="block text-sm font-medium mb-2">
           {t('deploy.namespace')}
         </label>
         <p className="text-xs text-gray-500 mb-3">{t('deploy.kubernetesNamespaceDesc')}</p>
-        <input
+        <Input
           id="namespace"
           type="text"
           value={config.namespace}
           onChange={(e) => onChange({ ...config, namespace: e.target.value })}
           placeholder={template?.namespace ?? name}
-          className="w-full max-w-md bg-gray-950 border border-gray-700 rounded-lg px-4 py-2.5 text-sm font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30"
         />
         <p className="text-[10px] text-gray-600 mt-2">
           {t('deploy.default')}{' '}
@@ -370,19 +368,19 @@ function StepConfigure({
       </div>
 
       {/* Shadow Connection */}
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
+      <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
         <div className="mb-3">
           <h3 className="text-sm font-medium flex items-center gap-2">
             <Unplug size={14} className="text-purple-400" />
             {t('deploy.shadowConnectionTitle')}
           </h3>
-          <p className="text-xs text-gray-500 mt-0.5">{t('deploy.shadowConnectionDescription')}</p>
+          <p className="text-xs text-gray-500 mt-1">{t('deploy.shadowConnectionDescription')}</p>
         </div>
 
         <div className="space-y-3">
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <label className="text-xs font-mono text-gray-300 flex items-center gap-1.5">
+              <label className="text-xs font-mono text-gray-300 flex items-center gap-2">
                 {hasShadowServerUrl ? (
                   <CheckCircle size={12} className="text-green-400" />
                 ) : (
@@ -393,13 +391,14 @@ function StepConfigure({
               </label>
               {savedLookup.SHADOW_SERVER_URL &&
                 config.envVars.SHADOW_SERVER_URL !== '__SAVED__' && (
-                  <button
+                  <Button
                     type="button"
                     onClick={() => useSavedValue('SHADOW_SERVER_URL')}
-                    className="text-[10px] text-blue-400 hover:text-blue-300 border border-blue-800 hover:border-blue-600 rounded px-2 py-0.5 transition-colors"
+                    variant="ghost"
+                    size="xs"
                   >
                     {t('deploy.restoreSavedValue')}
-                  </button>
+                  </Button>
                 )}
             </div>
             {config.envVars.SHADOW_SERVER_URL === '__SAVED__' ? (
@@ -408,32 +407,28 @@ function StepConfigure({
                   <CheckCircle size={12} />
                   {t('deploy.usingSavedValue')}
                 </div>
-                <button
+                <Button
                   type="button"
                   onClick={() => updateVar('SHADOW_SERVER_URL', '')}
-                  className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
+                  variant="ghost"
+                  size="xs"
                 >
                   {t('deploy.override')}
-                </button>
+                </Button>
               </div>
             ) : (
-              <input
+              <Input
                 type="text"
                 value={config.envVars.SHADOW_SERVER_URL ?? ''}
                 onChange={(e) => updateVar('SHADOW_SERVER_URL', e.target.value)}
                 placeholder="https://your-shadow-server.example.com"
-                className={cn(
-                  'w-full bg-gray-950 border rounded px-3 py-2 text-xs font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500',
-                  !config.envVars.SHADOW_SERVER_URL?.trim() && 'border-yellow-800/50',
-                  config.envVars.SHADOW_SERVER_URL?.trim() && 'border-gray-700',
-                )}
               />
             )}
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <label className="text-xs font-mono text-gray-300 flex items-center gap-1.5">
+              <label className="text-xs font-mono text-gray-300 flex items-center gap-2">
                 {hasShadowUserToken ? (
                   <CheckCircle size={12} className="text-green-400" />
                 ) : (
@@ -444,13 +439,14 @@ function StepConfigure({
               </label>
               {savedLookup.SHADOW_USER_TOKEN &&
                 config.envVars.SHADOW_USER_TOKEN !== '__SAVED__' && (
-                  <button
+                  <Button
                     type="button"
                     onClick={() => useSavedValue('SHADOW_USER_TOKEN')}
-                    className="text-[10px] text-blue-400 hover:text-blue-300 border border-blue-800 hover:border-blue-600 rounded px-2 py-0.5 transition-colors"
+                    variant="ghost"
+                    size="xs"
                   >
                     {t('deploy.restoreSavedValue')}
-                  </button>
+                  </Button>
                 )}
             </div>
             {config.envVars.SHADOW_USER_TOKEN === '__SAVED__' ? (
@@ -459,17 +455,18 @@ function StepConfigure({
                   <CheckCircle size={12} />
                   {t('deploy.usingSavedValue')}
                 </div>
-                <button
+                <Button
                   type="button"
                   onClick={() => updateVar('SHADOW_USER_TOKEN', '')}
-                  className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
+                  variant="ghost"
+                  size="xs"
                 >
                   {t('deploy.override')}
-                </button>
+                </Button>
               </div>
             ) : (
               <div className="relative">
-                <input
+                <Input
                   type={showPasswords.SHADOW_USER_TOKEN ? 'text' : 'password'}
                   value={config.envVars.SHADOW_USER_TOKEN ?? ''}
                   onChange={(e) => updateVar('SHADOW_USER_TOKEN', e.target.value)}
@@ -479,18 +476,19 @@ function StepConfigure({
                   data-lpignore="true"
                   data-form-type="other"
                   className={cn(
-                    'w-full bg-gray-950 border rounded px-3 py-2 text-xs font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 pr-8',
+                    '!w-full !rounded !px-3 !py-2 !pr-8 !text-xs !font-mono !text-gray-200 placeholder:!text-gray-600',
                     !config.envVars.SHADOW_USER_TOKEN?.trim() && 'border-yellow-800/50',
                     config.envVars.SHADOW_USER_TOKEN?.trim() && 'border-gray-700',
                   )}
                 />
-                <button
+                <Button
                   type="button"
                   onClick={() => toggleShowPassword('SHADOW_USER_TOKEN')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400"
+                  variant="ghost"
+                  size="icon"
                 >
                   {showPasswords.SHADOW_USER_TOKEN ? <Eye size={12} /> : <EyeOff size={12} />}
-                </button>
+                </Button>
               </div>
             )}
           </div>
@@ -499,14 +497,14 @@ function StepConfigure({
 
       {/* Required Environment Variables */}
       {requiredVars.length > 0 && (
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
+        <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="text-sm font-medium flex items-center gap-2">
                 <Key size={14} className="text-yellow-400" />
                 {t('deploy.requiredEnvVars')}
               </h3>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-xs text-gray-500 mt-1">
                 {t('deploy.templateRequiresVars', { count: requiredVars.length })}{' '}
                 {t('deploy.envVarsAllRequired')}
               </p>
@@ -521,9 +519,9 @@ function StepConfigure({
               const isFilled = currentValue.trim() !== '' || isUsingSaved
 
               return (
-                <div key={key} className="space-y-1.5">
+                <div key={key} className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <label className="text-xs font-mono text-gray-300 flex items-center gap-1.5">
+                    <label className="text-xs font-mono text-gray-300 flex items-center gap-2">
                       {isFilled ? (
                         <CheckCircle size={12} className="text-green-400" />
                       ) : (
@@ -533,13 +531,14 @@ function StepConfigure({
                       <span className="text-red-400 text-[10px]">*</span>
                     </label>
                     {hasSaved && !isUsingSaved && (
-                      <button
+                      <Button
                         type="button"
                         onClick={() => useSavedValue(key)}
-                        className="text-[10px] text-blue-400 hover:text-blue-300 border border-blue-800 hover:border-blue-600 rounded px-2 py-0.5 transition-colors"
+                        variant="ghost"
+                        size="xs"
                       >
                         {t('deploy.restoreSavedValue')}
-                      </button>
+                      </Button>
                     )}
                   </div>
                   {isUsingSaved ? (
@@ -548,17 +547,18 @@ function StepConfigure({
                         <CheckCircle size={12} />
                         {t('deploy.usingSavedValue')}
                       </div>
-                      <button
+                      <Button
                         type="button"
                         onClick={() => updateVar(key, '')}
-                        className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
+                        variant="ghost"
+                        size="xs"
                       >
                         {t('deploy.override')}
-                      </button>
+                      </Button>
                     </div>
                   ) : (
                     <div className="relative">
-                      <input
+                      <Input
                         type={showPasswords[key] ? 'text' : 'password'}
                         value={currentValue}
                         onChange={(e) => updateVar(key, e.target.value)}
@@ -572,19 +572,15 @@ function StepConfigure({
                         data-lpignore="true"
                         data-form-type="other"
                         name={`env-${key}`}
-                        className={cn(
-                          'w-full bg-gray-950 border rounded px-3 py-2 text-xs font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 pr-8',
-                          !isFilled && 'border-yellow-800/50',
-                          isFilled && 'border-gray-700',
-                        )}
                       />
-                      <button
+                      <Button
                         type="button"
                         onClick={() => toggleShowPassword(key)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400"
+                        variant="ghost"
+                        size="icon"
                       >
                         {showPasswords[key] ? <Eye size={12} /> : <EyeOff size={12} />}
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -595,20 +591,21 @@ function StepConfigure({
       )}
 
       {/* Extra env vars (optional) */}
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
+      <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
           <div>
             <h3 className="text-sm font-medium">{t('deploy.additionalVariables')}</h3>
-            <p className="text-xs text-gray-500 mt-0.5">{t('deploy.optionalKeyValue')}</p>
+            <p className="text-xs text-gray-500 mt-1">{t('deploy.optionalKeyValue')}</p>
           </div>
-          <button
+          <Button
             type="button"
             onClick={() => setExtraVars([...extraVars, { key: '', value: '' }])}
-            className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 border border-blue-800 hover:border-blue-600 rounded px-3 py-1.5 transition-colors"
+            variant="ghost"
+            size="sm"
           >
             <Plus size={12} />
             {t('deploy.addVariable')}
-          </button>
+          </Button>
         </div>
 
         {extraVars.length === 0 && (
@@ -621,7 +618,7 @@ function StepConfigure({
           <div className="space-y-2">
             {extraVars.map((env, i) => (
               <div key={i} className="flex items-center gap-2">
-                <input
+                <Input
                   type="text"
                   value={env.key}
                   onChange={(e) => {
@@ -633,10 +630,10 @@ function StepConfigure({
                     if (e.target.value) updateVar(e.target.value, env.value)
                   }}
                   placeholder="KEY"
-                  className="flex-1 bg-gray-950 border border-gray-700 rounded px-3 py-2 text-xs font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500"
+                  className="flex-1 rounded border-gray-700 bg-gray-950 px-3 py-2 text-xs font-mono text-gray-200 placeholder:text-gray-600"
                 />
                 <span className="text-gray-600">=</span>
-                <input
+                <Input
                   type="text"
                   value={env.value}
                   onChange={(e) => {
@@ -648,9 +645,9 @@ function StepConfigure({
                     if (env.key) updateVar(env.key, e.target.value)
                   }}
                   placeholder="value"
-                  className="flex-1 bg-gray-950 border border-gray-700 rounded px-3 py-2 text-xs font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500"
+                  className="flex-1 rounded border-gray-700 bg-gray-950 px-3 py-2 text-xs font-mono text-gray-200 placeholder:text-gray-600"
                 />
-                <button
+                <Button
                   type="button"
                   onClick={() => {
                     const removed = extraVars[i]
@@ -661,10 +658,12 @@ function StepConfigure({
                       onChange({ ...config, envVars: updated })
                     }
                   }}
-                  className="text-gray-600 hover:text-red-400 transition-colors p-1"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 p-1 text-gray-600 hover:text-red-400"
                 >
                   <Trash2 size={13} />
-                </button>
+                </Button>
               </div>
             ))}
           </div>
@@ -681,22 +680,22 @@ function StepConfigure({
 
       {/* Navigation */}
       <div className="flex justify-between">
-        <button
+        <Button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2 rounded-lg transition-colors"
+          variant="ghost"
         >
           <ArrowLeft size={14} />
           {t('common.back')}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           onClick={handleNext}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
+          variant="primary"
         >
           {t('common.continue')}
           <ArrowRight size={16} />
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -778,15 +777,14 @@ export function StepProviders({
             </div>
           </div>
           <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={useExisting}
-              onChange={(e) => {
-                setUseExisting(e.target.checked)
-                if (e.target.checked) onChange(existingProviders)
+              onCheckedChange={(checked) => {
+                const next = checked === true
+                setUseExisting(next)
+                if (next) onChange(existingProviders)
                 else onChange([])
               }}
-              className="accent-blue-500"
             />
             <span className="text-xs text-gray-400">{t('deploy.useExisting')}</span>
           </label>
@@ -806,13 +804,14 @@ export function StepProviders({
                 <span className="text-sm font-medium">{provider.id}</span>
                 <span className="text-xs text-gray-600 font-mono">{provider.api}</span>
               </div>
-              <button
+              <Button
                 type="button"
                 onClick={() => removeProvider(i)}
-                className="text-gray-600 hover:text-red-400 transition-colors"
+                variant="ghost"
+                size="icon"
               >
                 <Trash2 size={13} />
-              </button>
+              </Button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="bg-gray-950 border border-gray-800 rounded px-3 py-2.5">
@@ -822,7 +821,7 @@ export function StepProviders({
                 <code className="text-xs font-mono text-yellow-400/90 break-all">
                   {getProviderSecretEnvName(provider.id)}
                 </code>
-                <p className="text-[11px] text-gray-600 mt-2">
+                <p className="text-xs text-gray-600 mt-2">
                   {t('settings.credentialsManagedInSecrets')}
                 </p>
               </div>
@@ -831,12 +830,11 @@ export function StepProviders({
                   <label className="text-xs text-gray-500 mb-1 block">
                     {t('settings.baseUrl')}
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={provider.baseUrl ?? ''}
                     onChange={(e) => updateProvider(i, 'baseUrl', e.target.value)}
                     placeholder="https://api.example.com/v1"
-                    className="w-full bg-gray-950 border border-gray-700 rounded px-3 py-2 text-xs font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500"
                   />
                 </div>
               )}
@@ -849,36 +847,37 @@ export function StepProviders({
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-gray-600">{t('deploy.addProvider')}</span>
         {API_PRESETS.map((preset) => (
-          <button
+          <Button
             key={preset.id}
             type="button"
             onClick={() => addPreset(preset)}
             disabled={providers.some((p) => p.id === preset.id)}
-            className="text-xs text-gray-400 hover:text-white bg-gray-900 border border-gray-800 hover:border-gray-700 rounded-lg px-3 py-1.5 transition-colors disabled:opacity-30"
+            variant="ghost"
+            size="sm"
           >
             + {preset.label}
-          </button>
+          </Button>
         ))}
       </div>
 
       {/* Navigation */}
       <div className="flex justify-between">
-        <button
+        <Button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2 rounded-lg transition-colors"
+          variant="ghost"
         >
           <ArrowLeft size={14} />
           {t('common.back')}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           onClick={onNext}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
+          variant="primary"
         >
           {t('deploy.reviewDeploy')}
           <Rocket size={16} />
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -966,7 +965,7 @@ function StepDeploy({
         setDeploySuccess(false)
         throw new Error(
           result.error ||
-            t('deploy.deployFailedWithCode', { code: result.exitCode ?? t('common.none') }),
+          t('deploy.deployFailedWithCode', { code: result.exitCode ?? t('common.none') }),
         )
       }
 
@@ -1101,22 +1100,22 @@ function StepDeploy({
 
           {/* Action buttons */}
           <div className="flex justify-between">
-            <button
+            <Button
               type="button"
               onClick={onBack}
-              className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2 rounded-lg transition-colors"
+              variant="ghost"
             >
               <ArrowLeft size={14} />
               {t('common.back')}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={handleDeploy}
-              className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
+              variant="primary"
             >
               <Rocket size={16} />
               {t('deploy.startDeployment')}
-            </button>
+            </Button>
           </div>
         </>
       )}
@@ -1149,7 +1148,7 @@ function StepDeploy({
                 {isDone && t('deploy.deploymentSuccessful')}
                 {isError && t('deploy.deploymentFailed')}
               </p>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-xs text-gray-500 mt-1">
                 {t('deploy.logLinesReceived', { count: lines.length })}
               </p>
             </div>
@@ -1163,25 +1162,26 @@ function StepDeploy({
                   <code className="block text-xs font-mono text-gray-300 break-all">{taskUrl}</code>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
+                  <Button
                     type="button"
                     onClick={handleCopyTaskUrl}
-                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-colors"
+                    variant="ghost"
+                    size="sm"
                   >
                     <Copy size={12} />
                     {t('deployTask.copyLink')}
-                  </button>
+                  </Button>
                   <Link
                     to="/deploy-tasks/$taskId"
                     params={{ taskId: String(taskInfo.id) }}
-                    className="flex items-center gap-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-3 py-2 transition-colors"
+                    className="flex items-center gap-2 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-3 py-2 transition-colors"
                   >
                     <Server size={12} />
                     {t('deployTask.openTask')}
                   </Link>
                   <Link
                     to="/deployments"
-                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-colors"
+                    className="flex items-center gap-2 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-colors"
                   >
                     <Activity size={12} />
                     {t('nav.deployments')}
@@ -1196,19 +1196,20 @@ function StepDeploy({
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-800 bg-gray-900/50">
               <span className="text-xs text-gray-500 font-medium">{t('deploy.deploymentLog')}</span>
               {lines.length > 0 && (
-                <button
+                <Button
                   type="button"
                   onClick={handleDownloadLog}
-                  className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                  variant="ghost"
+                  size="sm"
                 >
                   <Download size={11} />
                   {t('deploy.download')}
-                </button>
+                </Button>
               )}
             </div>
             <div
               ref={logRef}
-              className="h-80 overflow-auto p-4 font-mono text-xs text-gray-300 space-y-0.5"
+              className="min-h-[16rem] max-h-[28rem] overflow-auto p-4 font-mono text-xs text-gray-300 space-y-1"
             >
               {lines.length === 0 && isDeploying && (
                 <span className="text-gray-600">{t('deploy.initializingDeployment')}</span>
@@ -1236,7 +1237,7 @@ function StepDeploy({
 
               {/* What's Next cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left max-w-2xl mx-auto">
-                <button
+                <Button
                   onClick={() => {
                     if (!taskInfo) return
                     navigate({
@@ -1244,7 +1245,8 @@ function StepDeploy({
                       params: { taskId: String(taskInfo.id) },
                     })
                   }}
-                  className="p-4 bg-gray-800/50 border border-gray-800 rounded-lg hover:bg-gray-800 transition-colors group"
+                  variant="ghost"
+                  className="h-auto rounded-lg border border-gray-800 bg-gray-800/50 p-4 transition-colors group hover:bg-gray-800"
                 >
                   <Server size={20} className="text-gray-400 mb-2" />
                   <div className="text-sm font-medium text-gray-300 group-hover:text-gray-200">
@@ -1253,15 +1255,15 @@ function StepDeploy({
                   <p className="text-xs text-gray-500 mt-1">
                     {t('deployTask.openTaskDescription')}
                   </p>
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={() =>
                     navigate({
                       to: '/deployments/$namespace',
                       params: { namespace: targetNamespace },
                     })
                   }
-                  className="p-4 bg-gray-800/50 border border-gray-800 rounded-lg hover:bg-gray-800 transition-colors group"
+                  variant="ghost"
                 >
                   <Activity size={20} className="text-gray-400 mb-2" />
                   <div className="text-sm font-medium text-gray-300 group-hover:text-gray-200">
@@ -1270,7 +1272,7 @@ function StepDeploy({
                   <p className="text-xs text-gray-500 mt-1">
                     {t('deploy.openNamespaceDescription')}
                   </p>
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -1278,20 +1280,20 @@ function StepDeploy({
             <div className="flex items-center gap-3">
               <Link
                 to="/store"
-                className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2 rounded-lg transition-colors"
+                className="flex items-center gap-2 text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2 rounded-lg transition-colors"
               >
                 {t('store.backToStore')}
               </Link>
-              <button
+              <Button
                 type="button"
                 onClick={() => {
                   setDeployStarted(false)
                   setDeploySuccess(null)
                 }}
-                className="flex items-center gap-1.5 text-sm text-yellow-400 hover:text-yellow-300 border border-yellow-800 hover:border-yellow-600 px-4 py-2 rounded-lg transition-colors"
+                variant="ghost"
               >
                 {t('common.retry')}
-              </button>
+              </Button>
             </div>
           )}
         </>
@@ -1306,6 +1308,7 @@ export function DeployWizardPage() {
   const { t } = useTranslation()
   const { name } = useParams({ strict: false }) as { name: string }
   const [currentStep, setCurrentStep] = useState(0)
+  const steps = getWizardSteps(t)
   const [deployConfig, setDeployConfig] = useState<DeployConfig>({
     namespace: '',
     envVars: {},
@@ -1324,11 +1327,57 @@ export function DeployWizardPage() {
 
       {/* Step indicator */}
       <div className="mb-8">
-        <StepIndicator steps={getWizardSteps(t)} currentStep={currentStep} />
+        <div className="space-y-3 rounded-2xl border border-border-subtle bg-bg-secondary/35 p-4">
+          <Progress
+            value={((currentStep + 1) / steps.length) * 100}
+            className="h-2"
+            variant="primary"
+          />
+          <div className="grid gap-2 sm:grid-cols-3">
+            {steps.map((step, index) => {
+              const status = index < currentStep ? 'completed' : index === currentStep ? 'active' : 'upcoming'
+              return (
+                <div
+                  key={step.id}
+                  className={cn(
+                    'rounded-xl border px-3 py-2.5 transition-colors',
+                    status === 'active' && 'border-primary/30 bg-primary/10',
+                    status === 'completed' && 'border-success/25 bg-success/10',
+                    status === 'upcoming' && 'border-border-subtle bg-bg-primary/30',
+                  )}
+                >
+                  <div className="mb-1 flex items-center gap-2">
+                    <Badge
+                      size="sm"
+                      variant={
+                        status === 'completed'
+                          ? 'success'
+                          : status === 'active'
+                            ? 'info'
+                            : 'neutral'
+                      }
+                    >
+                      {index + 1}
+                    </Badge>
+                    <span
+                      className={cn(
+                        'text-sm font-semibold',
+                        status === 'upcoming' ? 'text-text-muted' : 'text-text-primary',
+                      )}
+                    >
+                      {step.label}
+                    </span>
+                  </div>
+                  {step.description && <p className="text-xs text-text-muted">{step.description}</p>}
+                </div>
+              )
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Step content */}
-      <div className="min-h-[500px]">
+      <div className="min-h-[42vh]">
         {currentStep === 0 && <StepOverview name={name} onNext={() => setCurrentStep(1)} />}
         {currentStep === 1 && (
           <StepConfigure

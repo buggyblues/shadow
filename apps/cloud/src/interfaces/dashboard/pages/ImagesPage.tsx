@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { clsx } from 'clsx'
 import { Container, FileCode, Package } from 'lucide-react'
+import { Button, Card, EmptyState } from '@shadowob/ui'
 import { api, type ImageInfo } from '@/lib/api'
 
 export function ImagesPage() {
@@ -18,66 +19,66 @@ export function ImagesPage() {
           <h1 className="text-xl font-semibold">Images</h1>
           <p className="text-sm text-gray-500 mt-0.5">Available container images for agents</p>
         </div>
-        <button
-          type="button"
-          onClick={() => refetch()}
-          className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded px-3 py-1.5 transition-colors"
-        >
+        <Button type="button" onClick={() => refetch()} variant="ghost" size="sm">
           Refresh
-        </button>
+        </Button>
       </div>
 
       {isLoading && <div className="text-center text-gray-500 text-sm py-8">Loading images...</div>}
       {error && <div className="text-center text-red-400 text-sm py-8">Failed to load images</div>}
 
       {data && data.length === 0 && (
-        <div className="py-12 text-center">
-          <Package size={32} className="mx-auto text-gray-700 mb-3" />
-          <p className="text-gray-500 text-sm">No images found</p>
-          <p className="text-gray-600 text-xs mt-1">
-            Images are defined in your templates and configuration
-          </p>
-        </div>
+        <EmptyState
+          icon={Package}
+          title="No images found"
+          description="Images are defined in your templates and configuration"
+        />
       )}
 
       {data && data.length > 0 && (
         <>
           <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-gray-400 text-xs mb-1">
-                <Container size={13} /> Total images
+            <Card variant="surface">
+              <div className="p-4">
+                <div className="flex items-center gap-2 text-gray-400 text-xs mb-1">
+                  <Container size={13} /> Total images
+                </div>
+                <p className="text-2xl font-semibold">{data.length}</p>
               </div>
-              <p className="text-2xl font-semibold">{data.length}</p>
-            </div>
-            <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-blue-400 text-xs mb-1">
-                <FileCode size={13} /> With Dockerfile
+            </Card>
+            <Card variant="surface">
+              <div className="p-4">
+                <div className="flex items-center gap-2 text-blue-400 text-xs mb-1">
+                  <FileCode size={13} /> With Dockerfile
+                </div>
+                <p className="text-2xl font-semibold text-blue-400">{withDockerfile}</p>
               </div>
-              <p className="text-2xl font-semibold text-blue-400">{withDockerfile}</p>
-            </div>
+            </Card>
           </div>
 
-          <div className="bg-gray-900 border border-gray-800 rounded-lg divide-y divide-gray-800">
-            {data.map((img: ImageInfo) => (
-              <div key={img.name} className="flex items-center gap-3 px-4 py-3">
-                <Container size={16} className="text-gray-400 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-mono">{img.name}</p>
+          <Card variant="surface">
+            <div className="divide-y divide-gray-800">
+              {data.map((img: ImageInfo) => (
+                <div key={img.name} className="flex items-center gap-3 px-4 py-3">
+                  <Container size={16} className="text-gray-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-mono">{img.name}</p>
+                  </div>
+                  <span
+                    className={clsx(
+                      'text-xs px-2 py-0.5 rounded-full flex items-center gap-1',
+                      img.hasDockerfile
+                        ? 'bg-blue-900/50 text-blue-400'
+                        : 'bg-gray-800 text-gray-500',
+                    )}
+                  >
+                    <FileCode size={10} />
+                    {img.hasDockerfile ? 'Dockerfile' : 'No Dockerfile'}
+                  </span>
                 </div>
-                <span
-                  className={clsx(
-                    'text-xs px-2 py-0.5 rounded-full flex items-center gap-1',
-                    img.hasDockerfile
-                      ? 'bg-blue-900/50 text-blue-400'
-                      : 'bg-gray-800 text-gray-500',
-                  )}
-                >
-                  <FileCode size={10} />
-                  {img.hasDockerfile ? 'Dockerfile' : 'No Dockerfile'}
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </Card>
         </>
       )}
     </div>

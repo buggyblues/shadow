@@ -4,6 +4,7 @@ import { clsx } from 'clsx'
 import { FileJson, Layers, Save, Shield } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Button, NativeSelect } from '@shadowob/ui'
 import { api, type ValidateResult } from '@/lib/api'
 import { useToast } from '@/stores/toast'
 
@@ -262,14 +263,13 @@ export function ConfigEditorPage() {
         </div>
         <div className="flex items-center gap-2">
           {/* Template selector */}
-          <select
+          <NativeSelect
             value=""
             onChange={(e) => {
               const val = e.target.value
               if (val.startsWith('store:')) handleLoadTemplate(val.slice(6))
               else if (val.startsWith('my:')) handleLoadMyTemplate(val.slice(3))
             }}
-            className="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs text-gray-400 focus:outline-none focus:border-blue-500 max-w-[180px]"
           >
             <option value="">{t('validate.loadTemplate')}...</option>
             {(storeTemplates ?? []).length > 0 && (
@@ -290,49 +290,49 @@ export function ConfigEditorPage() {
                 ))}
               </optgroup>
             )}
-          </select>
-          <button
+          </NativeSelect>
+          <Button
             type="button"
             onClick={handleFormat}
             disabled={!isValidJson}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded px-3 py-1.5 transition-colors disabled:opacity-40"
+            variant="ghost"
+            size="sm"
           >
             <FileJson size={12} />
             {t('templateDetail.format')}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={handleValidate}
             disabled={!isValidJson || validateMutation.isPending}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded px-3 py-1.5 transition-colors disabled:opacity-40"
+            variant="ghost"
+            size="sm"
           >
             <Shield size={12} />
             {t('templateDetail.validate')}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={handleSaveToMyTemplates}
             disabled={!isValidJson || !content.trim()}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded px-3 py-1.5 transition-colors disabled:opacity-40"
+            variant="ghost"
+            size="sm"
             title={t('configEditor.saveToMyTemplates')}
           >
             <Layers size={12} />
             {t('configEditor.saveAsTemplate')}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={handleSave}
             disabled={!content.trim() || saveMutation.isPending}
-            className={clsx(
-              'flex items-center gap-1.5 text-xs px-3 py-1.5 rounded transition-colors',
-              saveMutation.isPending
-                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-500 text-white',
-            )}
+            loading={saveMutation.isPending}
+            variant="primary"
+            size="sm"
           >
             <Save size={12} />
             {t('common.save')}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -362,13 +362,13 @@ export function ConfigEditorPage() {
           <span className="text-sm">
             {validateResult.valid
               ? t('templateDetail.validationSummaryValid', {
-                  agents: validateResult.agents,
-                  configurations: validateResult.configurations,
-                })
+                agents: validateResult.agents,
+                configurations: validateResult.configurations,
+              })
               : t('configEditor.validationSummaryInvalid', {
-                  violations: validateResult.violations.length,
-                  extendsErrors: validateResult.extendsErrors.length,
-                })}
+                violations: validateResult.violations.length,
+                extendsErrors: validateResult.extendsErrors.length,
+              })}
           </span>
         </div>
       )}

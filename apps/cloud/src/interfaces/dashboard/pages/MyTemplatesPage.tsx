@@ -1,7 +1,28 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
-  ChevronDown,
+  Badge,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Button,
+  EmptyState,
+  Input,
+  Card,
+  Modal,
+  ModalBody,
+  ModalButtonGroup,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  Search as SearchField,
+} from '@shadowob/ui'
+import {
   Copy,
   Edit3,
   GitBranch,
@@ -14,10 +35,7 @@ import {
 } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Badge } from '@/components/Badge'
 import { Breadcrumb } from '@/components/Breadcrumb'
-import { EmptyState } from '@/components/EmptyState'
-import { SearchInput } from '@/components/SearchInput'
 import { parseTemplateAgents } from '@/components/TemplateDetailShared'
 import { useDebounce } from '@/hooks/useDebounce'
 import { api, type TemplateCatalogSummary } from '@/lib/api'
@@ -78,30 +96,17 @@ function FilterPill({
   onClick: () => void
 }) {
   return (
-    <button
+    <Button
       type="button"
       onClick={onClick}
-      className={cn(
-        'inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-all',
-        active ? 'nf-glow' : 'hover:-translate-y-0.5',
-      )}
-      style={{
-        background: active ? 'var(--nf-sidebar-active)' : 'var(--nf-bg-glass-2)',
-        borderColor: active ? 'rgba(0, 243, 255, 0.25)' : 'var(--nf-border)',
-        color: active ? 'var(--color-nf-cyan)' : 'var(--nf-text-mid)',
-      }}
+      variant="ghost"
+      size="sm"
     >
-      <span>{label}</span>
-      <span
-        className="rounded-full px-2 py-0.5 text-[11px]"
-        style={{
-          background: active ? 'rgba(0, 243, 255, 0.12)' : 'var(--nf-bg-raised)',
-          color: active ? 'var(--color-nf-cyan)' : 'var(--nf-text-muted)',
-        }}
-      >
+      <span className="truncate">{label}</span>
+      <span className={cn('rounded-xl px-2 py-0.5 text-[11px]', active ? 'bg-primary/15 text-primary' : 'bg-bg-tertiary/80 text-text-muted')}>
         {count}
       </span>
-    </button>
+    </Button>
   )
 }
 
@@ -115,17 +120,9 @@ function InlineMetric({
   label: string
 }) {
   return (
-    <span
-      className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold"
-      style={{
-        background: 'var(--nf-bg-glass-2)',
-        borderColor: 'var(--nf-border)',
-        color: 'var(--nf-text-mid)',
-      }}
-      title={label}
-    >
-      <span style={{ color: 'var(--color-nf-cyan)' }}>{icon}</span>
-      <span style={{ color: 'var(--nf-text-high)' }}>{value}</span>
+    <span className="inline-flex min-h-[40px] items-center gap-2.5 rounded-2xl border border-border-subtle bg-bg-secondary/70 px-3.5 py-2 text-xs font-semibold text-text-secondary whitespace-nowrap" title={label}>
+      <span className="text-primary">{icon}</span>
+      <span className="font-bold text-text-primary">{value}</span>
     </span>
   )
 }
@@ -140,128 +137,10 @@ function CardMetric({
   label: string
 }) {
   return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold"
-      style={{
-        background: 'var(--nf-bg-raised)',
-        borderColor: 'var(--nf-border)',
-        color: 'var(--nf-text-mid)',
-      }}
-      title={label}
-    >
+    <span className="inline-flex items-center gap-1.5 rounded-xl border border-border-subtle bg-bg-primary/60 px-2.5 py-1.5 text-[11px] font-semibold text-text-secondary" title={label}>
       {icon}
       <span>{value}</span>
     </span>
-  )
-}
-
-function TemplateCardDetails({
-  templateSlug,
-  baseTemplate,
-  sourceType,
-  overview,
-  updatedAt,
-  onShare,
-  onDelete,
-}: {
-  templateSlug: string | null
-  baseTemplate?: TemplateCatalogSummary
-  sourceType: Exclude<TemplateSourceFilter, 'all'>
-  overview: ReturnType<typeof getMyTemplateOverview>
-  updatedAt: string
-  onShare: () => void
-  onDelete: () => void
-}) {
-  const { t, i18n } = useTranslation()
-
-  return (
-    <details
-      className="rounded-[20px] border"
-      style={{
-        background: 'var(--nf-bg-glass-2)',
-        borderColor: 'var(--nf-border)',
-      }}
-    >
-      <summary
-        className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-xs font-semibold"
-        style={{ color: 'var(--nf-text-mid)' }}
-      >
-        <span>{t('common.details')}</span>
-        <ChevronDown size={14} />
-      </summary>
-
-      <div className="space-y-3 px-3 pb-3 pt-0">
-        <div className="flex flex-wrap gap-2 text-[11px]" style={{ color: 'var(--nf-text-muted)' }}>
-          {overview.namespace && (
-            <span
-              className="rounded-full border px-2.5 py-1"
-              style={{ borderColor: 'var(--nf-border)' }}
-            >
-              {overview.namespace}
-            </span>
-          )}
-          <span
-            className="rounded-full border px-2.5 py-1"
-            style={{ borderColor: 'var(--nf-border)' }}
-          >
-            {new Date(updatedAt).toLocaleString(i18n.language)}
-          </span>
-          <span
-            className="rounded-full border px-2.5 py-1"
-            style={{ borderColor: 'var(--nf-border)' }}
-          >
-            {t(`templates.filters.${sourceType}`)}
-          </span>
-        </div>
-
-        {templateSlug && (
-          <div className="text-xs" style={{ color: 'var(--nf-text-muted)' }}>
-            <span>{t('templateDetail.forkedFrom')} </span>
-            {sourceType === 'store' ? (
-              <Link
-                to="/store/$name"
-                params={{ name: templateSlug }}
-                className="transition-opacity hover:opacity-85"
-                style={{ color: 'var(--nf-text-high)' }}
-              >
-                {templateSlug}
-              </Link>
-            ) : (
-              <span>{templateSlug}</span>
-            )}
-          </div>
-        )}
-
-        {(overview.agentHighlights.length > 0 || baseTemplate?.highlights.length) && (
-          <div className="flex flex-wrap gap-2">
-            {(baseTemplate?.highlights.slice(0, 2) ?? overview.agentHighlights).map((item) => (
-              <span
-                key={item}
-                className="rounded-full border px-2.5 py-1 text-[11px]"
-                style={{
-                  background: 'var(--nf-bg-raised)',
-                  borderColor: 'var(--nf-border)',
-                  color: 'var(--nf-text-mid)',
-                }}
-              >
-                {item}
-              </span>
-            ))}
-          </div>
-        )}
-
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={onShare} className="nf-soft-button text-sm">
-            <Copy size={14} />
-            <span>{t('common.share')}</span>
-          </button>
-          <button type="button" onClick={onDelete} className="nf-soft-button text-sm">
-            <Trash2 size={14} />
-            <span>{t('common.delete')}</span>
-          </button>
-        </div>
-      </div>
-    </details>
   )
 }
 
@@ -286,113 +165,145 @@ function TemplateCard({
   onDelete: () => void
   onShare: () => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const overview = useMemo(() => getMyTemplateOverview(content), [content])
   const sourceType = getTemplateSourceType(templateSlug)
   const summaryText =
     baseTemplate?.overview[0] ?? baseTemplate?.description ?? t('templateDetail.customDescription')
   const displayEmoji =
     baseTemplate?.emoji ?? (sourceType === 'git' ? '🌿' : sourceType === 'store' ? '🛍️' : '✨')
+  const updatedLabel = new Date(updatedAt).toLocaleDateString(i18n.language, {
+    month: 'short',
+    day: 'numeric',
+  })
 
   return (
-    <article className="nf-card nf-bouncy group !p-5 space-y-4">
+    <Card variant="surface">
       <div className="flex items-start gap-4">
-        <div
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[22px] border text-3xl"
-          style={{
-            background:
-              sourceType === 'store'
-                ? 'rgba(0, 243, 255, 0.08)'
-                : sourceType === 'git'
-                  ? 'rgba(0, 230, 118, 0.08)'
-                  : 'rgba(124, 77, 255, 0.08)',
-            borderColor: 'var(--nf-border)',
-          }}
-        >
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-border-subtle bg-bg-primary/50 text-[28px] shadow-sm">
           {displayEmoji}
         </div>
 
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Link
-              to="/my-templates/$name"
-              params={{ name }}
-              className="truncate text-base font-black transition-opacity hover:opacity-85"
-              style={{ color: 'var(--nf-text-high)' }}
-            >
-              {name}
-            </Link>
-            <Badge variant="outline" size="sm">
-              v{version}
-            </Badge>
-            <Badge
-              variant={
-                sourceType === 'store' ? 'info' : sourceType === 'git' ? 'success' : 'outline'
-              }
-              size="sm"
-            >
-              {t(`templates.filters.${sourceType}`)}
-            </Badge>
-            {baseTemplate?.featured && (
-              <Badge variant="info" size="sm" icon={<Sparkles size={10} />}>
-                {t('store.featured')}
-              </Badge>
-            )}
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Link
+                  to="/my-templates/$name"
+                  params={{ name }}
+                  className="truncate text-[17px] font-extrabold tracking-[-0.02em] text-text-primary transition-colors hover:text-primary"
+                >
+                  {name}
+                </Link>
+                <Badge variant="neutral" size="sm">
+                  v{version}
+                </Badge>
+                <Badge
+                  variant={
+                    sourceType === 'store' ? 'info' : sourceType === 'git' ? 'success' : 'neutral'
+                  }
+                  size="sm"
+                >
+                  {t(`templates.filters.${sourceType}`)}
+                </Badge>
+                {baseTemplate?.featured && (
+                  <Badge variant="info" size="sm">
+                    <Sparkles size={10} />
+                    {t('store.featured')}
+                  </Badge>
+                )}
+              </div>
+
+              <p className="line-clamp-2 text-sm leading-6 text-text-secondary">
+                {summaryText}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                onClick={onShare}
+                variant="ghost"
+                size="icon"
+                title={t('common.share')}
+              >
+                <Copy size={14} />
+              </Button>
+              <Button
+                type="button"
+                onClick={onDelete}
+                variant="ghost"
+                size="icon"
+                title={t('common.delete')}
+              >
+                <Trash2 size={14} />
+              </Button>
+            </div>
           </div>
 
-          <p className="line-clamp-2 text-sm leading-6" style={{ color: 'var(--nf-text-mid)' }}>
-            {summaryText}
-          </p>
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-text-muted">
+            {templateSlug && (
+              sourceType === 'store' ? (
+                <Link
+                  to="/store/$name"
+                  params={{ name: templateSlug }}
+                  className="rounded-xl border border-border-subtle px-2.5 py-1 transition-colors hover:text-text-primary"
+                >
+                  {templateSlug}
+                </Link>
+              ) : (
+                <span className="rounded-xl border border-border-subtle px-2.5 py-1">
+                  {templateSlug}
+                </span>
+              )
+            )}
+
+            {overview.namespace && (
+              <span className="rounded-xl border border-border-subtle px-2.5 py-1">
+                {overview.namespace}
+              </span>
+            )}
+
+            <span className="rounded-xl border border-border-subtle px-2.5 py-1">
+              {updatedLabel}
+            </span>
+          </div>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
         <CardMetric
-          icon={<Users size={11} style={{ color: 'var(--color-nf-cyan)' }} />}
+          icon={<Users size={11} className="text-primary" />}
           value={overview.agentCount}
           label={t('deploy.agentsLabel')}
         />
         <CardMetric
-          icon={<Sparkles size={11} style={{ color: 'var(--color-nf-cyan)' }} />}
+          icon={<Sparkles size={11} className="text-primary" />}
           value={overview.providerCount}
           label={t('templateDetail.providers')}
         />
         <CardMetric
-          icon={<Copy size={11} style={{ color: 'var(--color-nf-cyan)' }} />}
+          icon={<Copy size={11} className="text-primary" />}
           value={`v${version}`}
           label={t('templateDetail.version')}
         />
       </div>
 
-      <TemplateCardDetails
-        templateSlug={templateSlug}
-        baseTemplate={baseTemplate}
-        sourceType={sourceType}
-        overview={overview}
-        updatedAt={updatedAt}
-        onShare={onShare}
-        onDelete={onDelete}
-      />
-
-      <div className="flex items-center gap-2">
-        <Link
-          to="/my-templates/$name"
-          params={{ name }}
-          className="nf-soft-button flex-1 justify-center text-sm"
-        >
-          <Edit3 size={14} />
-          <span>{t('templates.openEditor')}</span>
-        </Link>
-        <Link
-          to="/store/$name/deploy"
-          params={{ name: slug }}
-          className="nf-pill nf-pill-cyan flex-1 justify-center text-sm"
-        >
-          <Sparkles size={14} />
-          <span>{t('templates.deployNow')}</span>
-        </Link>
+      <div className="mt-auto flex flex-col items-stretch gap-2 border-t border-border-subtle pt-4 sm:flex-row">
+        <Button asChild variant="secondary">
+          <Link to="/my-templates/$name" params={{ name }}>
+            <Edit3 size={14} />
+            <span className="truncate">{t('templates.openEditor')}</span>
+          </Link>
+        </Button>
+        <Button asChild variant="primary">
+          <Link to="/store/$name/deploy" params={{ name: slug }}>
+            <Sparkles size={14} />
+            <span className="truncate">{t('templates.deployNow')}</span>
+          </Link>
+        </Button>
       </div>
-    </article>
+    </Card>
   )
 }
 
@@ -441,28 +352,21 @@ function ForkDialog({
   }, [])
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-      onClick={onClose}
-    >
-      <div
-        className="mx-4 w-full max-w-lg space-y-4 rounded-xl border border-gray-700 bg-gray-900 p-6"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <h3 className="flex items-center gap-2 text-lg font-semibold">
-          <GitFork size={18} className="text-blue-400" />
-          {t('templates.forkTemplate')}
-        </h3>
-        <p className="text-sm text-gray-500">{t('templates.chooseStoreTemplate')}</p>
+    <Modal open onClose={onClose}>
+      <ModalContent maxWidth="max-w-lg">
+        <ModalHeader
+          overline={t('templates.forkTemplate')}
+          icon={<GitFork size={18} className="text-primary" />}
+          title={t('templates.forkTemplate')}
+          subtitle={t('templates.chooseStoreTemplate')}
+        />
 
-        <div ref={dropdownRef} className="relative">
-          <label className="mb-1.5 block text-xs text-gray-400">
-            {t('templates.sourceTemplate')}
-          </label>
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-            <input
+        <ModalBody>
+          <div ref={dropdownRef} className="relative">
+            <Input
               type="text"
+              label={t('templates.sourceTemplate')}
+              icon={Search}
               value={selected || searchQuery}
               onChange={(event) => {
                 setSearchQuery(event.target.value)
@@ -472,76 +376,79 @@ function ForkDialog({
               }}
               onFocus={() => setDropdownOpen(true)}
               placeholder={t('templates.searchPlaceholder')}
-              className="w-full rounded-lg border border-gray-700 bg-gray-950 pl-9 pr-3 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:outline-none"
             />
-          </div>
-          {dropdownOpen && filteredTemplates.length > 0 && (
-            <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-gray-700 bg-gray-950 shadow-xl">
-              {filteredTemplates.map((template) => (
-                <button
-                  key={template.name}
-                  type="button"
-                  onClick={() => {
-                    setSelected(template.name)
-                    setSearchQuery('')
-                    setNewName(`my-${template.name}`)
-                    setDropdownOpen(false)
-                  }}
-                  className={cn(
-                    'flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-gray-800',
-                    selected === template.name && 'bg-blue-900/30 text-blue-400',
-                  )}
-                >
-                  <span className="truncate">{template.name}</span>
-                  <span className="ml-2 shrink-0 text-xs text-gray-600">
-                    {t('store.agentCount', { count: template.agentCount })}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-          {dropdownOpen && searchQuery && filteredTemplates.length === 0 && (
-            <div className="absolute z-10 mt-1 w-full rounded-lg border border-gray-700 bg-gray-950 p-3 text-center text-xs text-gray-500">
-              {t('templates.noTemplatesMatch', { query: searchQuery })}
-            </div>
-          )}
-        </div>
 
-        <div>
-          <label className="mb-1.5 block text-xs text-gray-400">
-            {t('templates.newTemplateName')}
-          </label>
-          <input
+            {dropdownOpen && filteredTemplates.length > 0 && (
+              <div
+                className="absolute z-10 mt-2 max-h-52 w-full overflow-y-auto rounded-[22px] border"
+                style={{ boxShadow: 'var(--shadow-soft)' }}
+              >
+                {filteredTemplates.map((template) => {
+                  const active = selected === template.name
+
+                  return (
+                    <Button
+                      key={template.name}
+                      type="button"
+                      onClick={() => {
+                        setSelected(template.name)
+                        setSearchQuery('')
+                        setNewName(`my-${template.name}`)
+                        setDropdownOpen(false)
+                      }}
+                      variant="ghost"
+                      size="sm"
+                      style={{ background: active ? 'rgba(0, 209, 255, 0.08)' : 'transparent' }}
+                    >
+                      <span className={cn('truncate font-semibold', active ? 'text-text-primary' : 'text-text-secondary')}>{template.name}</span>
+                      <span className="ml-2 shrink-0 text-xs text-text-muted">
+                        {t('store.agentCount', { count: template.agentCount })}
+                      </span>
+                    </Button>
+                  )
+                })}
+              </div>
+            )}
+
+            {dropdownOpen && searchQuery && filteredTemplates.length === 0 && (
+              <div
+                className="absolute z-10 mt-2 w-full rounded-[22px] border px-4 py-3 text-center text-xs"
+                style={{ boxShadow: 'var(--shadow-soft)' }}
+              >
+                {t('templates.noTemplatesMatch', { query: searchQuery })}
+              </div>
+            )}
+          </div>
+
+          <Input
             type="text"
+            label={t('templates.newTemplateName')}
             value={newName}
             onChange={(event) => setNewName(event.target.value)}
             placeholder={t('templates.templateNamePlaceholder')}
-            className="w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2.5 text-sm font-mono text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:outline-none"
           />
-        </div>
+        </ModalBody>
 
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-400 transition-colors hover:text-white"
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (selected && newName.trim()) onFork(selected, newName.trim())
-            }}
-            disabled={!selected || !newName.trim()}
-            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white transition-colors hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500"
-          >
-            <GitFork size={14} />
-            {t('common.fork')}
-          </button>
-        </div>
-      </div>
-    </div>
+        <ModalFooter>
+          <ModalButtonGroup>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => {
+                if (selected && newName.trim()) onFork(selected, newName.trim())
+              }}
+              disabled={!selected || !newName.trim()}
+            >
+              <GitFork size={14} />
+              {t('common.fork')}
+            </Button>
+          </ModalButtonGroup>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   )
 }
 
@@ -561,100 +468,77 @@ function ImportGitDialog({
   const [path, setPath] = useState('')
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-      onClick={onClose}
-    >
-      <div
-        className="mx-4 w-full max-w-lg space-y-4 rounded-xl border border-gray-700 bg-gray-900 p-6"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <h3 className="flex items-center gap-2 text-lg font-semibold">
-          <GitBranch size={18} className="text-green-400" />
-          {t('templates.importFromGit')}
-        </h3>
-        <p className="text-sm text-gray-500">{t('templates.cloneGitRepository')}</p>
+    <Modal open onClose={onClose}>
+      <ModalContent maxWidth="max-w-lg">
+        <ModalHeader
+          overline={t('templates.importFromGit')}
+          icon={<GitBranch size={18} className="text-success" />}
+          title={t('templates.importFromGit')}
+          subtitle={t('templates.cloneGitRepository')}
+        />
 
-        <div>
-          <label className="mb-1.5 block text-xs text-gray-400">
-            {t('templates.repositoryUrl')} *
-          </label>
-          <input
+        <ModalBody>
+          <Input
             type="text"
+            label={`${t('templates.repositoryUrl')} *`}
             value={url}
             onChange={(event) => setUrl(event.target.value)}
             placeholder="https://github.com/org/repo.git"
-            className="w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2.5 text-sm font-mono text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:outline-none"
           />
-        </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1.5 block text-xs text-gray-400">
-              {t('templates.templateName')}
-            </label>
-            <input
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Input
               type="text"
+              label={t('templates.templateName')}
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder={t('templates.autoDetectFromRepo')}
-              className="w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:outline-none"
             />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs text-gray-400">{t('templates.branch')}</label>
-            <input
+            <Input
               type="text"
+              label={t('templates.branch')}
               value={branch}
               onChange={(event) => setBranch(event.target.value)}
               placeholder={t('templates.defaultBranch')}
-              className="w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:outline-none"
             />
           </div>
-        </div>
 
-        <div>
-          <label className="mb-1.5 block text-xs text-gray-400">
-            {t('templates.configFilePath')}
-          </label>
-          <input
+          <Input
             type="text"
+            label={t('templates.configFilePath')}
             value={path}
             onChange={(event) => setPath(event.target.value)}
             placeholder="auto-detect (shadowob.json, *.template.json)"
-            className="w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2.5 text-sm font-mono text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:outline-none"
           />
-        </div>
+        </ModalBody>
 
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-400 transition-colors hover:text-white"
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (url.trim()) {
-                onImport(
-                  url.trim(),
-                  name.trim() || undefined,
-                  path.trim() || undefined,
-                  branch.trim() || undefined,
-                )
-              }
-            }}
-            disabled={!url.trim() || isPending}
-            className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm text-white transition-colors hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500"
-          >
-            {isPending ? <Loader2 size={14} className="animate-spin" /> : <GitBranch size={14} />}
-            {isPending ? t('templates.cloning') : t('templates.importAction')}
-          </button>
-        </div>
-      </div>
-    </div>
+        <ModalFooter>
+          <ModalButtonGroup>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => {
+                if (url.trim()) {
+                  onImport(
+                    url.trim(),
+                    name.trim() || undefined,
+                    path.trim() || undefined,
+                    branch.trim() || undefined,
+                  )
+                }
+              }}
+              disabled={!url.trim() || isPending}
+            >
+              {isPending ? <Loader2 size={14} className="animate-spin" /> : <GitBranch size={14} />}
+              {isPending ? t('templates.cloning') : t('templates.importAction')}
+            </Button>
+          </ModalButtonGroup>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   )
 }
 
@@ -665,6 +549,7 @@ export function MyTemplatesPage() {
   const navigate = useNavigate()
   const [showForkDialog, setShowForkDialog] = useState(false)
   const [showGitImport, setShowGitImport] = useState(false)
+  const [templateToDelete, setTemplateToDelete] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<TemplateSourceFilter>('all')
   const debouncedSearch = useDebounce(search)
@@ -770,18 +655,21 @@ export function MyTemplatesPage() {
   const hasFilters = activeFilter !== 'all' || Boolean(search.trim())
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-6">
+    <div className="mx-auto max-w-[1440px] space-y-8 px-6 py-6 md:px-8">
       <Breadcrumb items={[{ label: t('templates.title') }]} className="mb-1" />
 
-      <section className="space-y-4">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder={t('templates.searchSavedPlaceholder')}
-            size="lg"
-            className="w-full xl:max-w-2xl"
-          />
+      <section className="space-y-5">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="max-w-3xl space-y-2">
+            <h1
+              className="text-[30px] font-extrabold tracking-[-0.04em] text-text-primary md:text-[34px]"
+            >
+              {t('templates.title')}
+            </h1>
+            <p className="max-w-2xl text-sm leading-7 text-text-secondary md:text-[15px]">
+              {t('templates.description')}
+            </p>
+          </div>
 
           <div className="flex flex-wrap gap-2">
             <InlineMetric
@@ -801,6 +689,12 @@ export function MyTemplatesPage() {
             />
           </div>
         </div>
+
+        <SearchField
+          value={search}
+          onChange={setSearch}
+          placeholder={t('templates.searchSavedPlaceholder')}
+        />
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
@@ -822,54 +716,47 @@ export function MyTemplatesPage() {
             ))}
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setShowForkDialog(true)}
-              className="nf-pill nf-pill-cyan text-sm"
-            >
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+            <Button type="button" variant="primary" size="sm" onClick={() => setShowForkDialog(true)}>
               <GitFork size={14} />
-              <span>{t('templates.forkFromStore')}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowGitImport(true)}
-              className="nf-soft-button text-sm"
-            >
+              <span className="truncate">{t('templates.forkFromStore')}</span>
+            </Button>
+            <Button type="button" variant="secondary" size="sm" onClick={() => setShowGitImport(true)}>
               <GitBranch size={14} />
-              <span>{t('templates.importGit')}</span>
-            </button>
+              <span className="truncate">{t('templates.importGit')}</span>
+            </Button>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm" style={{ color: 'var(--nf-text-muted)' }}>
+          <p className="text-sm text-text-muted">
             {t('store.matchingTemplates', { count: filteredTemplates.length })}
             {activeFilter !== 'all' ? ` · ${t(`templates.filters.${activeFilter}`)}` : ''}
             {debouncedSearch ? ` · ${t('store.matchingQuery', { query: debouncedSearch })}` : ''}
           </p>
 
           {hasFilters && (
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={() => {
                 setSearch('')
                 setActiveFilter('all')
               }}
-              className="nf-soft-button text-sm"
             >
               {t('templates.clearFilters')}
-            </button>
+            </Button>
           )}
         </div>
       </section>
 
       {isLoading && (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
           {Array.from({ length: 4 }).map((_, index) => (
             <div
               key={`template-skeleton-${index}`}
-              className="nf-card !h-[260px] !p-5 animate-pulse"
+              className="h-[248px] rounded-3xl border border-border-subtle bg-bg-secondary/60 p-5 animate-pulse"
             />
           ))}
         </div>
@@ -877,46 +764,43 @@ export function MyTemplatesPage() {
 
       {!isLoading && templates.length === 0 && (
         <EmptyState
-          icon={<Copy size={40} />}
+          icon={Copy}
           title={t('templates.noCustomTemplates')}
           description={t('templates.forkTemplateStart')}
           action={
-            <button
-              type="button"
-              onClick={() => setShowForkDialog(true)}
-              className="nf-pill nf-pill-cyan text-sm"
-            >
+            <Button type="button" variant="primary" size="sm" onClick={() => setShowForkDialog(true)}>
               <GitFork size={14} />
               {t('templates.forkTemplate')}
-            </button>
+            </Button>
           }
         />
       )}
 
       {!isLoading && templates.length > 0 && filteredTemplates.length === 0 && (
         <EmptyState
-          icon={<Search size={40} />}
+          icon={Search}
           title={t('templates.noTemplatesMatch', {
             query: debouncedSearch || t('templates.title'),
           })}
           description={t('templates.emptyFiltered')}
           action={
-            <button
+            <Button
               type="button"
+              variant="primary"
+              size="sm"
               onClick={() => {
                 setSearch('')
                 setActiveFilter('all')
               }}
-              className="nf-pill nf-pill-cyan text-sm"
             >
               {t('templates.clearFilters')}
-            </button>
+            </Button>
           }
         />
       )}
 
       {!isLoading && filteredTemplates.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
           {filteredTemplates.map((template) => (
             <TemplateCard
               key={template.slug}
@@ -940,14 +824,52 @@ export function MyTemplatesPage() {
                 }
               }}
               onDelete={() => {
-                if (window.confirm(t('templates.deleteConfirm', { name: template.name }))) {
-                  deleteMutation.mutate(template.name)
-                }
+                setTemplateToDelete(template.name)
               }}
             />
           ))}
         </div>
       )}
+
+      <AlertDialog
+        open={Boolean(templateToDelete)}
+        onOpenChange={(open) => {
+          if (!open) setTemplateToDelete(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('common.delete')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {templateToDelete ? t('templates.deleteConfirm', { name: templateToDelete }) : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button variant="ghost">
+                {t('common.cancel')}
+              </Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                variant="danger"
+                loading={deleteMutation.isPending}
+                onClick={() => {
+                  if (templateToDelete) {
+                    deleteMutation.mutate(templateToDelete)
+                  }
+                  setTemplateToDelete(null)
+                }}
+              >
+                {t('common.delete')}
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {showForkDialog && (
         <ForkDialog

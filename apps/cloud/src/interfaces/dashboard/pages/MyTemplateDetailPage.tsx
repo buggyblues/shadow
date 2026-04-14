@@ -22,9 +22,8 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Badge } from '@/components/Badge'
+import { Badge, Button, EmptyState } from '@shadowob/ui'
 import { Breadcrumb } from '@/components/Breadcrumb'
-import { EmptyState } from '@/components/EmptyState'
 import {
   parseTemplateAgents,
   type TemplateAgentInfo,
@@ -151,36 +150,36 @@ function EditorTab({
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <Button
             type="button"
             onClick={handleFormat}
             disabled={!isValidJson}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded px-3 py-1.5 transition-colors disabled:opacity-40"
+            variant="ghost"
+            size="sm"
           >
             <FileJson size={12} />
             {t('templateDetail.format')}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={handleValidate}
             disabled={!isValidJson || validateMutation.isPending}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded px-3 py-1.5 transition-colors disabled:opacity-40"
+            variant="ghost"
+            size="sm"
           >
             <Shield size={12} />
             {t('templateDetail.validate')}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={handleSave}
             disabled={!isValidJson || saveMutation.isPending}
-            className={cn(
-              'flex items-center gap-1.5 text-xs px-3 py-1.5 rounded transition-colors',
-              saved ? 'bg-gray-700 text-gray-400' : 'bg-blue-600 hover:bg-blue-500 text-white',
-            )}
+            variant="secondary"
+            size="sm"
           >
             {saved ? <Check size={12} /> : <Save size={12} />}
             {saved ? t('common.saved') : t('common.save')}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -197,12 +196,12 @@ function EditorTab({
           <Shield size={14} />
           {validateResult.valid
             ? t('templateDetail.validationSummaryValid', {
-                agents: validateResult.agents,
-                configurations: validateResult.configurations,
-              })
+              agents: validateResult.agents,
+              configurations: validateResult.configurations,
+            })
             : t('templateDetail.validationSummaryInvalid', {
-                count: validateResult.violations.length,
-              })}
+              count: validateResult.violations.length,
+            })}
         </div>
       )}
 
@@ -287,7 +286,7 @@ function VersionsTab({ name }: { name: string }) {
   if (versions.length <= 1) {
     return (
       <EmptyState
-        icon={<History size={32} />}
+        icon={History}
         title={t('templateDetail.noVersionHistory')}
         description={t('templateDetail.editAndSaveToCreate')}
       />
@@ -326,7 +325,7 @@ function VersionsTab({ name }: { name: string }) {
                 <span className="text-sm text-gray-200">
                   {t('templateDetail.versionLabel', { version: v.version })}
                   {v.current && (
-                    <Badge variant="info" size="sm" className="ml-2">
+                    <Badge variant="info" size="sm">
                       {t('templateDetail.current')}
                     </Badge>
                   )}
@@ -340,15 +339,16 @@ function VersionsTab({ name }: { name: string }) {
               </div>
             </div>
             {!v.current && (
-              <button
+              <Button
                 type="button"
                 onClick={() => restoreMutation.mutate(v.version)}
                 disabled={restoreMutation.isPending}
-                className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                variant="ghost"
+                size="sm"
               >
                 <RotateCcw size={12} />
                 {t('templateDetail.restore')}
-              </button>
+              </Button>
             )}
           </div>
         ))}
@@ -431,12 +431,9 @@ export function MyTemplateDetailPage() {
           title={t('storeDetail.templateNotFound')}
           description={t('templateDetail.missingTemplateDescription', { name })}
           action={
-            <Link
-              to="/my-templates"
-              className="text-sm text-blue-400 hover:text-blue-300 border border-blue-800 rounded-lg px-4 py-2"
-            >
-              {t('templateDetail.backToTemplates')}
-            </Link>
+            <Button asChild variant="primary" size="sm">
+              <Link to="/my-templates">{t('templateDetail.backToTemplates')}</Link>
+            </Button>
           }
         />
       </div>
@@ -447,18 +444,19 @@ export function MyTemplateDetailPage() {
     <TemplateDetailShell
       breadcrumbItems={[{ label: t('templates.title'), to: '/my-templates' }, { label: name }]}
       heroIcon={
-        <div className="w-14 h-14 rounded-2xl bg-blue-900/20 border border-blue-800/40 flex items-center justify-center">
-          <FileJson size={24} className="text-blue-400" />
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10">
+          <FileJson size={24} className="text-primary" />
         </div>
       }
       title={name}
       titleMeta={
         <>
-          <Badge variant="default" size="sm">
+          <Badge variant="neutral" size="sm">
             v{data.version ?? 1}
           </Badge>
           {data.templateSlug && (
-            <Badge variant="outline" size="sm" icon={<GitFork size={10} />}>
+            <Badge variant="neutral" size="sm">
+              <GitFork size={10} />
               {data.templateSlug}
             </Badge>
           )}
@@ -486,96 +484,97 @@ export function MyTemplateDetailPage() {
       }
       chips={
         <>
-          <div className="flex items-center gap-1.5 text-xs text-gray-300 bg-gray-900 border border-gray-800 px-3 py-1.5 rounded-full">
-            <Users size={11} className="text-blue-400" />
+          <div className="flex items-center gap-1.5 rounded-full border border-border-subtle bg-bg-secondary px-3 py-1.5 text-xs text-text-secondary">
+            <Users size={11} className="text-primary" />
             {t('templateDetail.agentsCount', { count: agents.length })}
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-gray-300 bg-gray-900 border border-gray-800 px-3 py-1.5 rounded-full">
-            <Layers size={11} className="text-purple-400" />
+          <div className="flex items-center gap-1.5 rounded-full border border-border-subtle bg-bg-secondary px-3 py-1.5 text-xs text-text-secondary">
+            <Layers size={11} className="text-primary" />
             {Array.isArray(configurations) ? configurations.length : 0}{' '}
             {t('templateDetail.configurations')}
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-gray-300 bg-gray-900 border border-gray-800 px-3 py-1.5 rounded-full">
-            <Cpu size={11} className="text-orange-400" />
+          <div className="flex items-center gap-1.5 rounded-full border border-border-subtle bg-bg-secondary px-3 py-1.5 text-xs text-text-secondary">
+            <Cpu size={11} className="text-primary" />
             {Array.isArray(providers) ? providers.length : 0} {t('templateDetail.providers')}
           </div>
         </>
       }
       actions={
         <>
-          <Link
-            to="/store/$name/deploy"
-            params={{ name: data.templateSlug ?? name }}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
-          >
-            <Rocket size={16} />
-            {t('common.deploy')}
-          </Link>
-          <button
+          <Button asChild variant="primary" size="sm">
+            <Link
+              to="/store/$name/deploy"
+              params={{ name: data.templateSlug ?? name }}
+            >
+              <Rocket size={16} />
+              {t('common.deploy')}
+            </Link>
+          </Button>
+          <Button
             type="button"
             onClick={() => {
               if (confirm(t('templates.deleteConfirm', { name }))) deleteMutation.mutate()
             }}
-            className="flex items-center gap-2 text-sm text-gray-300 hover:text-red-300 border border-gray-700 hover:border-red-700 px-4 py-2.5 rounded-lg transition-colors"
+            variant="ghost"
+            size="sm"
           >
             <Trash2 size={14} />
             {t('common.delete')}
-          </button>
-          <Link
-            to="/my-templates"
-            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2.5 rounded-lg transition-colors"
-          >
-            <ArrowLeft size={14} />
-            {t('common.back')}
-          </Link>
+          </Button>
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/my-templates">
+              <ArrowLeft size={14} />
+              {t('common.back')}
+            </Link>
+          </Button>
         </>
       }
       sidebar={
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+        <div className="glass-panel space-y-4 rounded-[24px] p-5">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
             {t('templateDetail.quickInfo')}
           </h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5">
+              <span className="flex items-center gap-1.5 text-xs text-text-muted">
                 <Users size={12} />
                 {t('templateDetail.agents')}
               </span>
-              <span className="text-sm font-medium">{agents.length}</span>
+              <span className="text-sm font-medium text-text-primary">{agents.length}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5">
+              <span className="flex items-center gap-1.5 text-xs text-text-muted">
                 <Layers size={12} />
                 {t('clusters.namespace')}
               </span>
-              <span className="text-sm font-mono text-gray-300">
+              <span className="text-sm font-mono text-text-primary">
                 {namespace ?? t('common.none')}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5">
+              <span className="flex items-center gap-1.5 text-xs text-text-muted">
                 <Settings size={12} />
                 {t('templateDetail.configurations')}
               </span>
-              <span className="text-sm text-gray-300">
+              <span className="text-sm text-text-primary">
                 {Array.isArray(configurations) ? configurations.length : 0}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5">
+              <span className="flex items-center gap-1.5 text-xs text-text-muted">
                 <Cpu size={12} />
                 {t('templateDetail.providers')}
               </span>
-              <span className="text-sm text-gray-300">
+              <span className="text-sm text-text-primary">
                 {Array.isArray(providers) ? providers.length : 0}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5">
+              <span className="flex items-center gap-1.5 text-xs text-text-muted">
                 <History size={12} />
                 {t('templateDetail.version')}
               </span>
-              <span className="text-sm font-mono text-gray-300">v{data.version ?? 1}</span>
+              <span className="text-sm font-mono text-text-primary">v{data.version ?? 1}</span>
             </div>
           </div>
         </div>
@@ -627,43 +626,43 @@ function OverviewPanel({ content, agents }: { content: unknown; agents: Template
         <StatCard
           label={t('templateDetail.agents')}
           value={agents.length}
-          icon={<Users size={14} className="text-blue-400" />}
+          icon={<Users size={14} className="text-primary" />}
         />
         <StatCard
           label={t('clusters.namespace')}
           value={namespace ?? t('common.none')}
-          icon={<Layers size={14} className="text-purple-400" />}
+          icon={<Layers size={14} className="text-primary" />}
         />
         <StatCard
           label={t('templateDetail.configurations')}
           value={Array.isArray(configs) ? configs.length : 0}
-          icon={<Settings size={14} className="text-green-400" />}
+          icon={<Settings size={14} className="text-primary" />}
         />
         <StatCard
           label={t('templateDetail.providers')}
           value={Array.isArray(providers) ? providers.length : 0}
-          icon={<Cpu size={14} className="text-orange-400" />}
+          icon={<Cpu size={14} className="text-primary" />}
         />
       </div>
 
       {/* Agent summary */}
-      <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+      <div className="glass-panel rounded-[22px] p-4">
         <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
-          <Users size={14} className="text-blue-400" />
+          <Users size={14} className="text-primary" />
           {t('templateDetail.agentSummary')}
         </h3>
         <div className="space-y-2">
           {agents.map((a) => (
             <div key={a.id} className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
-                <span className="text-gray-200">{a.identity?.name ?? a.id}</span>
-                <Badge variant="default" size="sm">
+                <span className="text-text-primary">{a.identity?.name ?? a.id}</span>
+                <Badge variant="neutral" size="sm">
                   {a.runtime}
                 </Badge>
               </div>
               <div className="flex items-center gap-2">
                 {a.integrations?.map((i) => (
-                  <Badge key={i.name} variant="outline" size="sm">
+                  <Badge key={i.name} variant="neutral" size="sm">
                     {i.name}
                   </Badge>
                 ))}
@@ -693,12 +692,12 @@ function StatCard({
   icon: React.ReactNode
 }) {
   return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-3">
-      <div className="flex items-center gap-1.5 text-[10px] text-gray-500 uppercase mb-1">
+    <div className="glass-panel rounded-[20px] p-3">
+      <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase text-text-muted">
         {icon}
         {label}
       </div>
-      <p className="text-lg font-semibold text-gray-200 font-mono">{value}</p>
+      <p className="font-mono text-lg font-semibold text-text-primary">{value}</p>
     </div>
   )
 }

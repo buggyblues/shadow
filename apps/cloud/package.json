@@ -41,6 +41,7 @@
     "@pulumi/pulumi": "^3.160.0",
     "@shadowob/sdk": "workspace:*",
     "@shadowob/shared": "workspace:*",
+    "@shadowob/ui": "workspace:*",
     "@tanstack/react-query": "^5.80.7",
     "@tanstack/react-router": "^1.168.2",
     "better-sqlite3": "^12.8.0",

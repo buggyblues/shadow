@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { clsx } from 'clsx'
 import { Activity, AlertTriangle, CheckCircle, Clock, XCircle } from 'lucide-react'
+import { Button, Card, EmptyState } from '@shadowob/ui'
 import { api, type DoctorCheck } from '@/lib/api'
 
 function CheckIcon({ status }: { status: DoctorCheck['status'] }) {
@@ -31,73 +32,81 @@ export function DoctorPage() {
               {lastChecked}
             </span>
           )}
-          <button
-            type="button"
-            onClick={() => refetch()}
-            className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded px-3 py-1.5 transition-colors"
-          >
+          <Button type="button" onClick={() => refetch()} variant="ghost" size="sm">
             Re-check
-          </button>
+          </Button>
         </div>
       </div>
 
-      {isLoading && <div className="text-center text-gray-500 text-sm py-8">Running checks...</div>}
-      {error && (
-        <div className="text-center text-red-400 text-sm py-8">Failed to run health checks</div>
+      {isLoading && (
+        <EmptyState
+          icon={Activity}
+          title="Running checks..."
+          description="Checking prerequisites and dependencies"
+        />
       )}
+      {error && <EmptyState title="Failed to run health checks" description="Please try again." />}
 
       {data && (
         <>
           {/* Summary cards */}
           <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-green-400 text-xs mb-1">
-                <CheckCircle size={13} /> Passing
+            <Card variant="surface">
+              <div className="p-4">
+                <div className="flex items-center gap-2 text-green-400 text-xs mb-1">
+                  <CheckCircle size={13} /> Passing
+                </div>
+                <p className="text-2xl font-semibold text-green-400">{data.summary.pass}</p>
               </div>
-              <p className="text-2xl font-semibold text-green-400">{data.summary.pass}</p>
-            </div>
-            <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-yellow-400 text-xs mb-1">
-                <AlertTriangle size={13} /> Warnings
+            </Card>
+            <Card variant="surface">
+              <div className="p-4">
+                <div className="flex items-center gap-2 text-yellow-400 text-xs mb-1">
+                  <AlertTriangle size={13} /> Warnings
+                </div>
+                <p className="text-2xl font-semibold text-yellow-400">{data.summary.warn}</p>
               </div>
-              <p className="text-2xl font-semibold text-yellow-400">{data.summary.warn}</p>
-            </div>
-            <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-red-400 text-xs mb-1">
-                <XCircle size={13} /> Failed
+            </Card>
+            <Card variant="surface">
+              <div className="p-4">
+                <div className="flex items-center gap-2 text-red-400 text-xs mb-1">
+                  <XCircle size={13} /> Failed
+                </div>
+                <p className="text-2xl font-semibold text-red-400">{data.summary.fail}</p>
               </div>
-              <p className="text-2xl font-semibold text-red-400">{data.summary.fail}</p>
-            </div>
+            </Card>
           </div>
 
           {/* Check list */}
-          <div className="bg-gray-900 border border-gray-800 rounded-lg divide-y divide-gray-800">
-            {data.checks.map((check) => (
-              <div
-                key={check.name}
-                className={clsx(
-                  'flex items-center gap-3 px-4 py-3',
-                  check.status === 'fail' && 'bg-red-900/10',
-                )}
-              >
-                <CheckIcon status={check.status} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">{check.name}</p>
-                  <p className="text-xs text-gray-500 truncate">{check.message}</p>
-                </div>
-                <span
+          <Card variant="surface">
+            <div className="divide-y divide-gray-800">
+              {data.checks.map((check) => (
+                <div
+                  key={check.name}
                   className={clsx(
-                    'text-xs px-2 py-0.5 rounded-full',
-                    check.status === 'pass' && 'bg-green-900/50 text-green-400',
-                    check.status === 'warn' && 'bg-yellow-900/50 text-yellow-400',
-                    check.status === 'fail' && 'bg-red-900/50 text-red-400',
+                    'flex items-center gap-3 px-4 py-3',
+                    check.status === 'fail' && 'bg-red-900/10',
                   )}
                 >
-                  {check.status}
-                </span>
-              </div>
-            ))}
-          </div>
+                  <CheckIcon status={check.status} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{check.name}</p>
+                    <p className="text-xs text-gray-500 truncate">{check.message}</p>
+                  </div>
+                  <span
+                    className={clsx(
+                      'text-xs px-2 py-0.5 rounded-full',
+                      check.status === 'pass' && 'bg-green-900/50 text-green-400',
+                      check.status === 'warn' && 'bg-yellow-900/50 text-yellow-400',
+                      check.status === 'fail' && 'bg-red-900/50 text-red-400',
+                    )}
+                  >
+                    {check.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Card>
 
           {data.summary.fail === 0 && (
             <div className="mt-4 flex items-center gap-2 text-green-400 text-sm">

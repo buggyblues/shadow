@@ -20,14 +20,27 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Badge } from '@/components/Badge'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Search,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from '@shadowob/ui'
 import { Breadcrumb } from '@/components/Breadcrumb'
-import { ConfirmDialog } from '@/components/ConfirmDialog'
-import { EmptyState } from '@/components/EmptyState'
-import { SearchInput } from '@/components/SearchInput'
 import { StatCard } from '@/components/StatCard'
 import { StatusDot } from '@/components/StatusDot'
-import { Tabs } from '@/components/Tabs'
 import { useDebounce } from '@/hooks/useDebounce'
 import { api, type Deployment, type DeployTaskListItem } from '@/lib/api'
 import { formatUsdCost } from '@/lib/store-data'
@@ -72,12 +85,12 @@ function formatTimestamp(value?: string | null): string {
   }
 }
 
-function getStatusVariant(status: string): 'default' | 'success' | 'warning' | 'error' | 'info' {
+function getStatusVariant(status: string): 'neutral' | 'success' | 'warning' | 'danger' | 'info' {
   if (status === 'deployed') return 'success'
-  if (status === 'failed') return 'error'
+  if (status === 'failed') return 'danger'
   if (status === 'running') return 'info'
   if (status === 'pending') return 'warning'
-  return 'default'
+  return 'neutral'
 }
 
 // ── Deployment Row ────────────────────────────────────────────────────────────
@@ -124,18 +137,18 @@ function DeploymentRow({ dep }: { dep: Deployment }) {
   }
 
   return (
-    <div className="px-5 py-3 flex items-center justify-between hover:bg-gray-800/20 transition-colors">
+    <div className="px-5 py-3 flex items-center justify-between transition-colors hover:bg-bg-modifier-hover/70">
       <div className="flex items-center gap-3 min-w-0">
         <StatusDot status={ready ? 'success' : 'warning'} />
         <div className="min-w-0">
           <Link
             to="/deployments/$namespace"
             params={{ namespace: dep.namespace }}
-            className="text-sm font-mono text-blue-400 hover:text-blue-300 transition-colors truncate block"
+            className="block truncate font-mono text-sm text-primary transition-colors hover:text-primary-strong"
           >
             {dep.name}
           </Link>
-          <span className="text-[10px] text-gray-600">{getAge(dep)}</span>
+          <span className="text-xs text-text-muted">{getAge(dep)}</span>
         </div>
       </div>
 
@@ -144,32 +157,34 @@ function DeploymentRow({ dep }: { dep: Deployment }) {
           {dep.ready}
         </Badge>
 
-        <div className="flex items-center border border-gray-700 rounded">
-          <button
+        <div className="flex items-center rounded border border-border-subtle bg-bg-secondary/40">
+          <Button
             type="button"
+            variant="ghost"
+            size="xs"
             onClick={() => handleScale(-1)}
             disabled={scaleMutation.isPending || currentReplicas <= 0}
-            className="px-1.5 py-0.5 text-gray-500 hover:text-white disabled:opacity-30 transition-colors"
           >
             <Minus size={11} />
-          </button>
-          <span className="text-[10px] font-mono px-1.5 min-w-[1.2rem] text-center">
+          </Button>
+          <span className="text-xs font-mono px-1.5 min-w-[1.2rem] text-center">
             {currentReplicas}
           </span>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="xs"
             onClick={() => handleScale(1)}
             disabled={scaleMutation.isPending}
-            className="px-1.5 py-0.5 text-gray-500 hover:text-white disabled:opacity-30 transition-colors"
           >
             <Plus size={11} />
-          </button>
+          </Button>
         </div>
 
         <Link
           to="/deployments/$namespace"
           params={{ namespace: dep.namespace }}
-          className="text-gray-600 hover:text-white transition-colors"
+          className="text-text-muted transition-colors hover:text-text-primary"
         >
           <ChevronRight size={14} />
         </Link>
@@ -199,32 +214,32 @@ function NamespaceCard({
   const task = group.latestTask
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden hover:border-gray-700 transition-colors">
+    <Card variant="glass">
       {/* Header */}
-      <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+      <div className="flex items-center justify-between border-b border-border-subtle px-5 py-4">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-900/20 rounded-lg">
-            <FolderOpen size={16} className="text-blue-400" />
+          <div className="rounded-lg bg-primary/10 p-2">
+            <FolderOpen size={16} className="text-primary" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <Link
                 to="/deployments/$namespace"
                 params={{ namespace: group.namespace }}
-                className="font-semibold text-sm text-gray-100 hover:text-blue-400 transition-colors"
+                className="text-sm font-semibold text-text-primary transition-colors hover:text-primary"
               >
                 {group.namespace}
               </Link>
               {isDiscovered && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/30 text-yellow-400 border border-yellow-800/50">
+                <span className="rounded px-1.5 py-0.5 text-xs text-warning border border-warning/30 bg-warning/10">
                   {t('clusters.discovered')}
                 </span>
               )}
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-text-muted">
               {group.totalCount} {pluralize(group.totalCount, 'deployment')}
             </p>
-            <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-500">
+            <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
               <DollarSign size={11} />
               <span>{formatUsdCost(group.costUsd ?? null, i18n.language)}</span>
               <span>·</span>
@@ -249,39 +264,42 @@ function NamespaceCard({
           />
           {/* Redeploy */}
           {task && (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => onRedeploy(task.task.id)}
-              className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-blue-400 border border-gray-700 hover:border-blue-800 rounded-md px-2 py-1 transition-colors"
             >
               <RefreshCw size={11} />
               {t('deployTask.redeploy')}
-            </button>
+            </Button>
           )}
           {/* Rollback */}
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => onRollback(group.namespace)}
-            className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-yellow-400 border border-gray-700 hover:border-yellow-800 rounded-md px-2 py-1 transition-colors"
           >
             <RotateCcw size={11} />
             {t('deployTask.rollback')}
-          </button>
+          </Button>
           {/* Destroy */}
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => onDestroy(group.namespace)}
             disabled={isDestroying}
-            className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-red-400 border border-gray-700 hover:border-red-800 rounded-md px-2 py-1 transition-colors disabled:opacity-30"
           >
             {isDestroying ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
             {t('clusters.destroy')}
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Deployment rows */}
-      <div className="divide-y divide-gray-800/50">
+      <div className="divide-y divide-border-subtle/70">
         {group.deployments.map((dep) => (
           <DeploymentRow key={`${dep.namespace}/${dep.name}`} dep={dep} />
         ))}
@@ -289,8 +307,8 @@ function NamespaceCard({
 
       {/* Latest task footer */}
       {task && (
-        <div className="px-5 py-2.5 border-t border-gray-800 flex items-center justify-between bg-gray-900/50">
-          <div className="flex items-center gap-2 text-xs text-gray-500">
+        <div className="flex items-center justify-between border-t border-border-subtle bg-bg-secondary/50 px-5 py-2.5">
+          <div className="flex items-center gap-2 text-xs text-text-muted">
             <FolderClock size={12} />
             <span>
               {t('deployTask.template')}: {task.task.templateSlug ?? '—'}
@@ -305,13 +323,13 @@ function NamespaceCard({
           <Link
             to="/deploy-tasks/$taskId"
             params={{ taskId: String(task.task.id) }}
-            className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
+            className="text-xs text-primary transition-colors hover:text-primary-strong"
           >
             #{task.task.id} →
           </Link>
         </div>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -586,114 +604,130 @@ export function DeploymentsPage() {
   ]
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="mx-auto max-w-[1440px] space-y-6 px-6 py-6 md:px-8">
       <Breadcrumb items={[{ label: t('deployments.title') }]} className="mb-4" />
 
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold">{t('deployments.title')}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{t('deployments.description')}</p>
+      <section className="glass-panel p-6">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-black tracking-[-0.02em] text-text-primary">{t('deployments.title')}</h1>
+            <p className="mt-1 text-sm text-text-muted">{t('deployments.description')}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => refetch()}
+            >
+              <RefreshCw size={12} />
+              {t('common.refresh')}
+            </Button>
+            <Button asChild variant="primary" size="sm">
+              <Link to="/store">
+                <Rocket size={12} />
+                {t('common.deployNew')}
+              </Link>
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => refetch()}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 transition-colors"
-          >
-            <RefreshCw size={12} />
-            {t('common.refresh')}
-          </button>
-          <Link
-            to="/store"
-            className="flex items-center gap-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-3 py-1.5 transition-colors"
-          >
-            <Rocket size={12} />
-            {t('common.deployNew')}
-          </Link>
-        </div>
-      </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        <StatCard
-          label={t('clusters.totalDeployments')}
-          value={total}
-          icon={<Box size={13} />}
-          color="default"
-        />
-        <StatCard
-          label={t('clusters.ready')}
-          value={ready}
-          icon={<CheckCircle size={13} />}
-          color="green"
-        />
-        <StatCard
-          label={t('deployments.namespaces')}
-          value={namespaceCount}
-          icon={<FolderOpen size={13} />}
-          color="blue"
-        />
-        <StatCard
-          label={t('deployTask.runningTasks')}
-          value={runningTasks}
-          icon={<Terminal size={13} />}
-          color={runningTasks > 0 ? 'blue' : 'default'}
-        />
-        <StatCard
-          label={t('deployments.totalCost')}
-          value={formatUsdCost(costOverview?.totalUsd ?? null, i18n.language)}
-          icon={<DollarSign size={13} />}
-          color="purple"
-        />
-      </div>
-
-      {/* Tabs */}
-      <div className="flex items-center justify-between mb-6">
-        <Tabs items={tabs} active={activeTab} onChange={setActiveTab} />
-        {activeTab === 'infrastructure' && (
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder={t('common.search') + '...'}
-            className="max-w-xs"
+        {/* Stats */}
+        <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-5">
+          <StatCard
+            label={t('clusters.totalDeployments')}
+            value={total}
+            icon={<Box size={13} />}
+            color="default"
           />
-        )}
-      </div>
+          <StatCard
+            label={t('clusters.ready')}
+            value={ready}
+            icon={<CheckCircle size={13} />}
+            color="green"
+          />
+          <StatCard
+            label={t('deployments.namespaces')}
+            value={namespaceCount}
+            icon={<FolderOpen size={13} />}
+            color="blue"
+          />
+          <StatCard
+            label={t('deployTask.runningTasks')}
+            value={runningTasks}
+            icon={<Terminal size={13} />}
+            color={runningTasks > 0 ? 'blue' : 'default'}
+          />
+          <StatCard
+            label={t('deployments.totalCost')}
+            value={formatUsdCost(costOverview?.totalUsd ?? null, i18n.language)}
+            icon={<DollarSign size={13} />}
+            color="purple"
+          />
+        </div>
+
+        {/* Tabs */}
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <Tabs value={activeTab} onChange={setActiveTab}>
+            <TabsList>
+              {tabs.map((tab) => (
+                <TabsTrigger key={tab.id} value={tab.id}>
+                  <span>{tab.icon}</span>
+                  <span>{tab.label}</span>
+                  {typeof tab.count === 'number' && (
+                    <span className="rounded-full bg-bg-tertiary/70 px-2 py-0.5 text-xs font-black tracking-normal text-text-muted">
+                      {tab.count}
+                    </span>
+                  )}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          {activeTab === 'infrastructure' && (
+            <Search
+              value={search}
+              onChange={setSearch}
+              placeholder={t('common.search') + '...'}
+            />
+          )}
+        </div>
+      </section>
 
       {/* Infrastructure Tab */}
       {activeTab === 'infrastructure' && (
         <>
           {isLoading && (
-            <div className="space-y-4">
+            <div className="glass-panel space-y-4 p-4">
               {[1, 2].map((i) => (
                 <div
                   key={i}
-                  className="bg-gray-900 border border-gray-800 rounded-xl p-5 animate-pulse"
+                  className="animate-pulse rounded-xl border border-border-subtle bg-bg-secondary/60 p-4"
                 >
-                  <div className="h-5 w-32 bg-gray-800 rounded mb-4" />
-                  <div className="h-12 bg-gray-800 rounded" />
+                  <div className="mb-4 h-5 w-32 rounded bg-bg-tertiary" />
+                  <div className="h-12 rounded bg-bg-tertiary" />
                 </div>
               ))}
             </div>
           )}
 
           {!isLoading && groups.length === 0 && (
-            <EmptyState
-              icon={<Layers size={40} />}
-              title={t('clusters.noClustersFound')}
-              description={
-                debouncedSearch ? t('clusters.noNamespacesMatch') : t('clusters.noDeploymentsYet')
-              }
-              action={
-                <Link
-                  to="/store"
-                  className="inline-flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 border border-blue-800 hover:border-blue-600 rounded-lg px-4 py-2 transition-colors"
-                >
-                  <Rocket size={14} />
-                  {t('clusters.browseAgentStore')}
-                </Link>
-              }
-            />
+            <div className="glass-panel p-6">
+              <EmptyState
+                icon={Layers}
+                title={t('clusters.noClustersFound')}
+                description={
+                  debouncedSearch ? t('clusters.noNamespacesMatch') : t('clusters.noDeploymentsYet')
+                }
+                action={
+                  <Button asChild variant="primary" size="sm">
+                    <Link to="/store">
+                      <Rocket size={14} />
+                      {t('clusters.browseAgentStore')}
+                    </Link>
+                  </Button>
+                }
+              />
+            </div>
           )}
 
           {!isLoading && groups.length > 0 && (
@@ -718,7 +752,7 @@ export function DeploymentsPage() {
       {activeTab === 'tasks' && (
         <>
           {tasksLoading && (
-            <div className="flex items-center justify-center py-20 text-gray-500 text-sm">
+            <div className="flex items-center justify-center py-20 text-sm text-text-muted">
               <Loader2 size={18} className="animate-spin mr-2" />
               {t('common.loading')}
             </div>
@@ -728,31 +762,70 @@ export function DeploymentsPage() {
       )}
 
       {/* Destroy confirmation */}
-      {destroyNs && !destroyMutation.isPending && (
-        <ConfirmDialog
-          title={t('clusters.destroyNamespace')}
-          message={t('clusters.destroyWarning', { namespace: destroyNs })}
-          confirmLabel={t('clusters.destroy')}
-          confirmingLabel={t('clusters.destroying')}
-          confirmText={destroyNs}
-          isConfirming={destroyMutation.isPending}
-          onConfirm={() => destroyMutation.mutate(destroyNs)}
-          onCancel={() => setDestroyNs(null)}
-        />
-      )}
+      <AlertDialog
+        open={Boolean(destroyNs)}
+        onOpenChange={(open) => {
+          if (!open) setDestroyNs(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('clusters.destroyNamespace')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {destroyNs ? t('clusters.destroyWarning', { namespace: destroyNs }) : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button variant="ghost">{t('common.cancel')}</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                variant="danger"
+                loading={destroyMutation.isPending}
+                onClick={() => destroyNs && destroyMutation.mutate(destroyNs)}
+              >
+                {destroyMutation.isPending ? t('clusters.destroying') : t('clusters.destroy')}
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Rollback confirmation */}
-      {rollbackNs && (
-        <ConfirmDialog
-          title={t('deployTask.rollback')}
-          message={t('deployments.rollbackWarning', { namespace: rollbackNs })}
-          confirmLabel={t('deployTask.rollback')}
-          confirmingLabel={t('common.loading')}
-          isConfirming={rollbackMutation.isPending}
-          onConfirm={() => rollbackMutation.mutate(rollbackNs)}
-          onCancel={() => setRollbackNs(null)}
-        />
-      )}
+      <AlertDialog
+        open={Boolean(rollbackNs)}
+        onOpenChange={(open) => {
+          if (!open) setRollbackNs(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('deployTask.rollback')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {rollbackNs ? t('deployments.rollbackWarning', { namespace: rollbackNs }) : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button variant="ghost">{t('common.cancel')}</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                variant="danger"
+                loading={rollbackMutation.isPending}
+                onClick={() => rollbackNs && rollbackMutation.mutate(rollbackNs)}
+              >
+                {t('deployTask.rollback')}
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

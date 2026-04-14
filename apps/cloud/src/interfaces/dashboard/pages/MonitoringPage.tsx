@@ -23,13 +23,26 @@ import {
 } from 'lucide-react'
 import { type ReactNode, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Badge } from '@/components/Badge'
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  NativeSelect,
+  Search,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from '@shadowob/ui'
 import { Breadcrumb } from '@/components/Breadcrumb'
-import { EmptyState } from '@/components/EmptyState'
-import { SearchInput } from '@/components/SearchInput'
 import { StatCard } from '@/components/StatCard'
 import { StatusDot, type StatusType } from '@/components/StatusDot'
-import { Tabs } from '@/components/Tabs'
 import { useDebounce } from '@/hooks/useDebounce'
 import {
   api,
@@ -88,7 +101,7 @@ function getActivityTypeConfig(
   {
     label: string
     icon: ReactNode
-    variant: 'success' | 'error' | 'info' | 'warning' | 'default'
+    variant: 'success' | 'danger' | 'info' | 'warning' | 'neutral'
   }
 > {
   return {
@@ -100,7 +113,7 @@ function getActivityTypeConfig(
     destroy: {
       label: translate('activity.types.destroy'),
       icon: <Trash2 size={12} />,
-      variant: 'error',
+      variant: 'danger',
     },
     scale: {
       label: translate('activity.types.scale'),
@@ -115,12 +128,12 @@ function getActivityTypeConfig(
     init: {
       label: translate('activity.types.init'),
       icon: <Box size={12} />,
-      variant: 'default',
+      variant: 'neutral',
     },
     settings: {
       label: translate('activity.types.settings'),
       icon: <Settings size={12} />,
-      variant: 'default',
+      variant: 'neutral',
     },
   }
 }
@@ -142,7 +155,7 @@ function ActivityList({ activities, limit }: { activities: ActivityEntry[]; limi
   if (visibleActivities.length === 0) {
     return (
       <EmptyState
-        icon={<Activity size={40} />}
+        icon={Activity}
         title={t('activity.noActivityRecorded')}
         description={t('activity.operationsWillAppear')}
       />
@@ -161,12 +174,12 @@ function ActivityList({ activities, limit }: { activities: ActivityEntry[]; limi
             key={activity.id}
             className="flex gap-4 py-3 border-b border-gray-800/50 last:border-0 hover:bg-gray-800/10 transition-colors px-4 -mx-4 rounded-lg"
           >
-            <div className="mt-0.5 p-2 bg-gray-900 border border-gray-800 rounded-lg shrink-0">
+            <div className="mt-1 p-2 bg-gray-900 border border-gray-800 rounded-lg shrink-0">
               {config.icon}
             </div>
 
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <p className="text-sm font-medium text-gray-200">{activity.title}</p>
                 <Badge variant={config.variant} size="sm">
                   {config.label}
@@ -175,7 +188,7 @@ function ActivityList({ activities, limit }: { activities: ActivityEntry[]; limi
 
               {activity.detail && <p className="text-xs text-gray-500 mb-1">{activity.detail}</p>}
 
-              <div className="flex items-center gap-3 text-[10px] text-gray-600 flex-wrap">
+              <div className="flex items-center gap-3 text-xs text-gray-600 flex-wrap">
                 <span className="flex items-center gap-1">
                   <Clock size={10} />
                   {isValidDate ? time.toLocaleString() : '—'}
@@ -202,23 +215,26 @@ function HealthPanel({ doctor }: { doctor: DoctorResult }) {
     <div className="space-y-3">
       <div className="flex items-center gap-3 mb-2">
         <div className="flex items-center gap-4 flex-wrap">
-          <Badge variant="success" icon={<CheckCircle size={11} />}>
+          <Badge variant="success">
+            <CheckCircle size={11} />
             {doctor.summary.pass} {t('monitoring.passed')}
           </Badge>
           {doctor.summary.warn > 0 && (
-            <Badge variant="warning" icon={<AlertTriangle size={11} />}>
+            <Badge variant="warning">
+              <AlertTriangle size={11} />
               {doctor.summary.warn} {t('monitoring.warnings')}
             </Badge>
           )}
           {doctor.summary.fail > 0 && (
-            <Badge variant="error" icon={<XCircle size={11} />}>
+            <Badge variant="danger">
+              <XCircle size={11} />
               {doctor.summary.fail} {t('monitoring.failed')}
             </Badge>
           )}
         </div>
       </div>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-lg divide-y divide-gray-800/50">
+      <Card variant="surface">
         {doctor.checks.map((check) => (
           <div key={check.name} className="px-4 py-3 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
@@ -231,7 +247,7 @@ function HealthPanel({ doctor }: { doctor: DoctorResult }) {
 
             <Badge
               variant={
-                check.status === 'pass' ? 'success' : check.status === 'warn' ? 'warning' : 'error'
+                check.status === 'pass' ? 'success' : check.status === 'warn' ? 'warning' : 'danger'
               }
               size="sm"
             >
@@ -239,7 +255,7 @@ function HealthPanel({ doctor }: { doctor: DoctorResult }) {
             </Badge>
           </div>
         ))}
-      </div>
+      </Card>
     </div>
   )
 }
@@ -260,39 +276,28 @@ function DeploymentsPanel({ deployments }: { deployments: Deployment[] }) {
         })}
       </p>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-gray-800 text-left">
-              <th className="px-4 py-2 text-xs font-medium text-gray-500">
-                {t('monitoring.status')}
-              </th>
-              <th className="px-4 py-2 text-xs font-medium text-gray-500">
-                {t('monitoring.name')}
-              </th>
-              <th className="px-4 py-2 text-xs font-medium text-gray-500">
-                {t('monitoring.namespace')}
-              </th>
-              <th className="px-4 py-2 text-xs font-medium text-gray-500">
-                {t('monitoring.ready')}
-              </th>
-              <th className="px-4 py-2 text-xs font-medium text-gray-500" />
-            </tr>
-          </thead>
+      <Card variant="surface">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t('monitoring.status')}</TableHead>
+              <TableHead>{t('monitoring.name')}</TableHead>
+              <TableHead>{t('monitoring.namespace')}</TableHead>
+              <TableHead>{t('monitoring.ready')}</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
 
-          <tbody>
+          <TableBody>
             {deployments.map((deployment) => {
               const ready = isDeploymentReady(deployment)
 
               return (
-                <tr
-                  key={`${deployment.namespace}/${deployment.name}`}
-                  className="border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors"
-                >
-                  <td className="px-4 py-2.5">
+                <TableRow key={`${deployment.namespace}/${deployment.name}`}>
+                  <TableCell>
                     <StatusDot status={ready ? 'success' : 'warning'} pulse={!ready} />
-                  </td>
-                  <td className="px-4 py-2.5">
+                  </TableCell>
+                  <TableCell>
                     <Link
                       to="/deployments/$namespace"
                       params={{ namespace: deployment.namespace }}
@@ -300,16 +305,16 @@ function DeploymentsPanel({ deployments }: { deployments: Deployment[] }) {
                     >
                       {deployment.name}
                     </Link>
-                  </td>
-                  <td className="px-4 py-2.5 text-xs text-gray-500 font-mono">
+                  </TableCell>
+                  <TableCell>
                     {deployment.namespace}
-                  </td>
-                  <td className="px-4 py-2.5">
+                  </TableCell>
+                  <TableCell>
                     <Badge variant={ready ? 'success' : 'warning'} size="sm">
                       {deployment.ready}
                     </Badge>
-                  </td>
-                  <td className="px-4 py-2.5">
+                  </TableCell>
+                  <TableCell>
                     <Link
                       to="/deployments/$namespace"
                       params={{ namespace: deployment.namespace }}
@@ -317,13 +322,13 @@ function DeploymentsPanel({ deployments }: { deployments: Deployment[] }) {
                     >
                       <ArrowRight size={13} />
                     </Link>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )
             })}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      </Card>
     </div>
   )
 }
@@ -380,7 +385,7 @@ function OverviewPanel({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className="nf-card !p-5 space-y-4">
+        <div className="nf-card !p-4 space-y-4">
           <div className="flex items-center gap-2">
             <Stethoscope size={16} style={{ color: 'var(--color-nf-cyan)' }} />
             <h2 className="text-sm font-black" style={{ color: 'var(--nf-text-high)' }}>
@@ -416,7 +421,7 @@ function OverviewPanel({
                             ? 'success'
                             : check.status === 'warn'
                               ? 'warning'
-                              : 'error'
+                              : 'danger'
                         }
                         size="sm"
                       >
@@ -446,7 +451,7 @@ function OverviewPanel({
           )}
         </div>
 
-        <div className="nf-card !p-5 space-y-4">
+        <div className="nf-card !p-4 space-y-4">
           <div className="flex items-center gap-2">
             <DollarSign size={16} style={{ color: 'var(--color-nf-yellow)' }} />
             <h2 className="text-sm font-black" style={{ color: 'var(--nf-text-high)' }}>
@@ -487,7 +492,7 @@ function OverviewPanel({
                         >
                           {item.namespace}
                         </p>
-                        <p className="text-[11px]" style={{ color: 'var(--nf-text-muted)' }}>
+                        <p className="text-xs" style={{ color: 'var(--nf-text-muted)' }}>
                           {t('deployments.availableAgents')}: {item.availableAgents} ·{' '}
                           {t('deployments.unavailableAgents')}: {item.unavailableAgents}
                         </p>
@@ -509,7 +514,7 @@ function OverviewPanel({
           )}
         </div>
 
-        <div className="nf-card !p-5 space-y-4">
+        <div className="nf-card !p-4 space-y-4">
           <div className="flex items-center gap-2">
             <FolderOpen size={16} style={{ color: 'var(--color-nf-cyan)' }} />
             <h2 className="text-sm font-black" style={{ color: 'var(--nf-text-high)' }}>
@@ -518,24 +523,24 @@ function OverviewPanel({
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            <div className="nf-glass-2 rounded-2xl p-3">
-              <div className="text-[11px] mb-1" style={{ color: 'var(--nf-text-muted)' }}>
+            <div className="nf-glass-2 rounded-2xl p-4">
+              <div className="text-xs mb-1" style={{ color: 'var(--nf-text-muted)' }}>
                 {t('monitoring.configuredNamespaces')}
               </div>
               <div className="text-lg font-black" style={{ color: 'var(--nf-text-high)' }}>
                 {namespaces?.configured.length ?? 0}
               </div>
             </div>
-            <div className="nf-glass-2 rounded-2xl p-3">
-              <div className="text-[11px] mb-1" style={{ color: 'var(--nf-text-muted)' }}>
+            <div className="nf-glass-2 rounded-2xl p-4">
+              <div className="text-xs mb-1" style={{ color: 'var(--nf-text-muted)' }}>
                 {t('monitoring.discoveredNamespaces')}
               </div>
               <div className="text-lg font-black" style={{ color: 'var(--nf-text-high)' }}>
                 {namespaces?.discovered.length ?? 0}
               </div>
             </div>
-            <div className="nf-glass-2 rounded-2xl p-3">
-              <div className="text-[11px] mb-1" style={{ color: 'var(--nf-text-muted)' }}>
+            <div className="nf-glass-2 rounded-2xl p-4">
+              <div className="text-xs mb-1" style={{ color: 'var(--nf-text-muted)' }}>
                 {t('monitoring.trackedNamespaces')}
               </div>
               <div className="text-lg font-black" style={{ color: 'var(--nf-text-high)' }}>
@@ -546,21 +551,18 @@ function OverviewPanel({
 
           <div className="flex flex-wrap gap-2">
             {(namespaces?.all ?? []).map((namespace) => (
-              <Link
-                key={namespace}
-                to="/deployments/$namespace"
-                params={{ namespace }}
-                className="nf-pill text-xs"
-              >
-                <span>{namespace}</span>
-              </Link>
+              <Button key={namespace} asChild variant="secondary" size="sm">
+                <Link to="/deployments/$namespace" params={{ namespace }}>
+                  <span>{namespace}</span>
+                </Link>
+              </Button>
             ))}
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-4">
-        <div className="nf-card !p-5 space-y-4">
+        <div className="nf-card !p-4 space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Activity size={16} style={{ color: 'var(--color-nf-cyan)' }} />
@@ -576,7 +578,7 @@ function OverviewPanel({
           <ActivityList activities={activities} limit={6} />
         </div>
 
-        <div className="nf-card !p-5 space-y-4">
+        <div className="nf-card !p-4 space-y-4">
           <div className="flex items-center gap-2">
             <Box size={16} style={{ color: 'var(--color-nf-cyan)' }} />
             <h2 className="text-sm font-black" style={{ color: 'var(--nf-text-high)' }}>
@@ -605,7 +607,7 @@ function OverviewPanel({
                       {group.ready}/{group.total}
                     </Badge>
                   </div>
-                  <p className="text-[11px] line-clamp-2" style={{ color: 'var(--nf-text-muted)' }}>
+                  <p className="text-xs line-clamp-2" style={{ color: 'var(--nf-text-muted)' }}>
                     {group.deployments.map((deployment) => deployment.name).join(', ')}
                   </p>
                 </Link>
@@ -613,7 +615,7 @@ function OverviewPanel({
             </div>
           ) : (
             <EmptyState
-              icon={<Box size={32} />}
+              icon={Box}
               title={t('monitoring.noDeploymentsFound')}
               description={t('deployments.noDeploymentsYet')}
             />
@@ -653,7 +655,7 @@ function CostsPanel({
   if (!overview || overview.namespaces.length === 0) {
     return (
       <EmptyState
-        icon={<DollarSign size={40} />}
+        icon={DollarSign}
         title={t('deployments.costUnavailable')}
         description={t('deployments.costUnavailableDescription')}
       />
@@ -703,7 +705,7 @@ function CostsPanel({
             : null
 
           return (
-            <div key={item.namespace} className="nf-card !p-5 space-y-4">
+            <div key={item.namespace} className="nf-card !p-4 space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -716,7 +718,7 @@ function CostsPanel({
                       {item.namespace}
                     </Link>
                     {detailStatus && (
-                      <Badge variant={item.totalUsd !== null ? 'success' : 'outline'} size="sm">
+                      <Badge variant={item.totalUsd !== null ? 'success' : 'neutral'} size="sm">
                         {t(`monitoring.costSources.${detailStatus}`)}
                       </Badge>
                     )}
@@ -732,7 +734,7 @@ function CostsPanel({
                   <p className="text-lg font-semibold text-green-400">
                     {formatUsdCost(item.totalUsd, i18n.language)}
                   </p>
-                  <p className="text-[10px] text-gray-600">{t('deployments.totalCost')}</p>
+                  <p className="text-xs text-gray-600">{t('deployments.totalCost')}</p>
                 </div>
               </div>
 
@@ -758,7 +760,7 @@ function CostsPanel({
                                 {agent.agentName}
                               </p>
                               <Badge
-                                variant={agent.totalUsd !== null ? 'success' : 'outline'}
+                                variant={agent.totalUsd !== null ? 'success' : 'neutral'}
                                 size="sm"
                               >
                                 {t(`monitoring.costSources.${agent.source}`)}
@@ -766,7 +768,7 @@ function CostsPanel({
                             </div>
 
                             <p
-                              className="text-[11px] mt-1"
+                              className="text-xs mt-1"
                               style={{ color: 'var(--nf-text-muted)' }}
                             >
                               {agent.podName ?? t('common.none')}
@@ -777,7 +779,7 @@ function CostsPanel({
                             <p className="text-sm font-semibold text-green-400">
                               {formatUsdCost(agent.totalUsd, i18n.language)}
                             </p>
-                            <p className="text-[10px] text-gray-600">
+                            <p className="text-xs text-gray-600">
                               {t('deployments.totalCost')}
                             </p>
                           </div>
@@ -866,20 +868,17 @@ function ActivityPanel({ activities }: { activities: ActivityEntry[] }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
-        <SearchInput
+        <Search
           value={search}
           onChange={setSearch}
           placeholder={t('activity.searchActivities')}
-          size="sm"
-          className="w-64"
         />
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <Filter size={12} className="text-gray-600" />
-          <select
+          <NativeSelect
             value={typeFilter}
             onChange={(event) => setTypeFilter(event.target.value as ActivityType | 'all')}
-            className="text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-400 focus:outline-none focus:border-blue-500"
           >
             <option value="all">{t('activity.allTypes')}</option>
             {ALL_ACTIVITY_TYPES.map((type) => (
@@ -887,21 +886,22 @@ function ActivityPanel({ activities }: { activities: ActivityEntry[] }) {
                 {activityTypeConfig[type].label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
 
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={() => setSortOrder((current) => (current === 'newest' ? 'oldest' : 'newest'))}
-          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 border border-gray-700 rounded-lg px-3 py-1.5 transition-colors"
         >
           <ArrowUpDown size={11} />
           {sortOrder === 'newest' ? t('activity.newestFirst') : t('activity.oldestFirst')}
-        </button>
+        </Button>
       </div>
 
       <div className="flex items-center gap-6 text-xs text-gray-500">
-        <span className="flex items-center gap-1.5">
+        <span className="flex items-center gap-2">
           <Activity size={12} />
           {activities.length} {t('activity.total')}
         </span>
@@ -909,7 +909,7 @@ function ActivityPanel({ activities }: { activities: ActivityEntry[] }) {
 
       {filtered.length === 0 ? (
         <EmptyState
-          icon={<Activity size={40} />}
+          icon={Activity}
           title={t('activity.noActivityRecorded')}
           description={
             activities.length === 0
@@ -1049,17 +1049,18 @@ export function MonitoringPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold">{t('monitoring.title')}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{t('monitoring.description')}</p>
+          <p className="text-sm text-gray-500 mt-1">{t('monitoring.description')}</p>
         </div>
 
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={handleRefresh}
-          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 transition-colors"
         >
           <RefreshCw size={12} />
           {t('common.refresh')}
-        </button>
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4 mb-6">
@@ -1101,9 +1102,23 @@ export function MonitoringPage() {
         />
       </div>
 
-      <Tabs items={tabs} active={activeTab} onChange={setActiveTab} className="mb-6" />
+      <Tabs value={activeTab} onChange={setActiveTab}>
+        <TabsList>
+          {tabs.map((tab) => (
+            <TabsTrigger key={tab.id} value={tab.id}>
+              <span>{tab.icon}</span>
+              <span>{tab.label}</span>
+              {typeof tab.count === 'number' && (
+                <span className="rounded-full bg-bg-tertiary/70 px-2 py-0.5 text-xs font-black tracking-normal text-text-muted">
+                  {tab.count}
+                </span>
+              )}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
-      <div className="min-h-[300px]">
+      <div className="min-h-[36vh]">
         {activeTab === 'overview' && (
           <OverviewPanel
             doctor={doctor}
@@ -1116,32 +1131,33 @@ export function MonitoringPage() {
 
         {activeTab === 'health' &&
           (loadingDoctor ? (
-            <div className="py-12 text-center text-gray-500 text-sm">
+            <div className="py-10 text-center text-gray-500 text-sm">
               {t('monitoring.runningHealthChecks')}
             </div>
           ) : doctor ? (
             <HealthPanel doctor={doctor} />
           ) : (
-            <div className="py-12 text-center text-gray-500 text-sm">
+            <div className="py-10 text-center text-gray-500 text-sm">
               {t('monitoring.failedHealthChecks')}
             </div>
           ))}
 
         {activeTab === 'deployments' &&
           (loadingDeployments ? (
-            <div className="py-12 text-center text-gray-500 text-sm">{t('common.loading')}</div>
+            <div className="py-10 text-center text-gray-500 text-sm">{t('common.loading')}</div>
           ) : deploymentList.length > 0 ? (
             <DeploymentsPanel deployments={deploymentList} />
           ) : (
-            <div className="py-12 text-center text-gray-600 text-sm">
-              <Box size={24} className="mx-auto mb-2 text-gray-700" />
-              {t('monitoring.noDeploymentsFound')}
-            </div>
+            <EmptyState
+              icon={Box}
+              title={t('monitoring.noDeploymentsFound')}
+              description={t('deployments.noDeploymentsYet')}
+            />
           ))}
 
         {activeTab === 'costs' &&
           (loadingCosts || loadingNamespaces ? (
-            <div className="py-12 text-center text-gray-500 text-sm">{t('common.loading')}</div>
+            <div className="py-10 text-center text-gray-500 text-sm">{t('common.loading')}</div>
           ) : (
             <CostsPanel
               overview={costOverview}
@@ -1152,7 +1168,7 @@ export function MonitoringPage() {
 
         {activeTab === 'activity' &&
           (loadingActivity ? (
-            <div className="py-12 text-center text-gray-500 text-sm">{t('common.loading')}</div>
+            <div className="py-10 text-center text-gray-500 text-sm">{t('common.loading')}</div>
           ) : (
             <ActivityPanel activities={activities} />
           ))}

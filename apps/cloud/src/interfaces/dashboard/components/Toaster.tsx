@@ -1,5 +1,6 @@
 import { clsx } from 'clsx'
 import { CheckCircle, Info, X, XCircle } from 'lucide-react'
+import { Button } from '@shadowob/ui'
 import { useToastStore } from '@/stores/toast'
 
 const icons = {
@@ -34,13 +35,15 @@ export function Toaster() {
           >
             <Icon size={16} className="shrink-0" />
             <span className="flex-1">{toast.message}</span>
-            <button
+            <Button
               type="button"
               onClick={() => remove(toast.id)}
-              className="shrink-0 opacity-60 hover:opacity-100"
+              variant="ghost"
+              size="xs"
+              className="!shrink-0 !opacity-60 hover:!opacity-100"
             >
               <X size={14} />
-            </button>
+            </Button>
           </div>
         )
       })}
