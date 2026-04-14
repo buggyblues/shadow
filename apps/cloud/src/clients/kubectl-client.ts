@@ -5,7 +5,7 @@
  * (as opposed to Pulumi which handles declarative infrastructure).
  */
 
-import { execSync, spawn } from 'node:child_process'
+import { execSync, spawn, spawnSync } from 'node:child_process'
 
 export interface PodStatus {
   name: string
@@ -21,6 +21,12 @@ export interface DeploymentStatus {
   upToDate: string
   available: string
   age: string
+}
+
+export interface CommandResult {
+  stdout: string
+  stderr: string
+  exitCode: number
 }
 
 function runKubectl(args: string[], namespace?: string): string {
@@ -83,7 +89,37 @@ export function streamLogs(
   const args = ['logs', podName, '--namespace', namespace]
   if (options.follow) args.push('--follow')
   if (options.tail !== undefined) args.push(`--tail=${options.tail}`)
-  return spawn('kubectl', args, { stdio: 'inherit' })
+  return spawn('kubectl', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+}
+
+export function readLogs(
+  namespace: string,
+  podName: string,
+  options: { tail?: number; timestamps?: boolean } = {},
+): string {
+  const args = ['logs', podName]
+  if (options.timestamps ?? true) args.push('--timestamps')
+  if (options.tail !== undefined) args.push(`--tail=${options.tail}`)
+  return runKubectl(args, namespace)
+}
+
+export function execInPod(
+  namespace: string,
+  podName: string,
+  command: string[],
+  options: { timeout?: number } = {},
+): CommandResult {
+  const args = ['exec', '--namespace', namespace, podName, '--', ...command]
+  const result = spawnSync('kubectl', args, {
+    encoding: 'utf-8',
+    timeout: options.timeout ?? 30_000,
+  })
+
+  return {
+    stdout: result.stdout ?? '',
+    stderr: result.stderr ?? '',
+    exitCode: result.status ?? 1,
+  }
 }
 
 export function scaleDeployment(namespace: string, deploymentName: string, replicas: number): void {

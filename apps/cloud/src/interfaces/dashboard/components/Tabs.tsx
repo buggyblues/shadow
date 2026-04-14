@@ -25,11 +25,16 @@ export function Tabs({ items, active, onChange, className, variant = 'default' }
             type="button"
             onClick={() => onChange(item.id)}
             className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-colors',
-              active === item.id
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white',
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-all',
+              active === item.id ? 'text-white nf-glow' : 'text-gray-400 hover:text-white',
             )}
+            style={{
+              background:
+                active === item.id
+                  ? 'linear-gradient(135deg, #00f3ff 0%, #7c4dff 100%)'
+                  : 'var(--nf-bg-raised)',
+              border: active === item.id ? 'none' : '1px solid var(--nf-border)',
+            }}
           >
             {item.icon}
             {item.label}
@@ -37,7 +42,7 @@ export function Tabs({ items, active, onChange, className, variant = 'default' }
               <span
                 className={cn(
                   'text-xs px-1.5 rounded-full',
-                  active === item.id ? 'bg-blue-500/50' : 'bg-gray-700',
+                  active === item.id ? 'bg-white/15' : 'bg-black/20',
                 )}
               >
                 {item.count}
@@ -50,26 +55,42 @@ export function Tabs({ items, active, onChange, className, variant = 'default' }
   }
 
   return (
-    <div className={cn('flex items-center border-b border-gray-800', className)}>
+    <div
+      className={cn('flex items-center gap-1 rounded-2xl border p-1 overflow-x-auto', className)}
+      style={{
+        background: 'var(--nf-bg-glass-2)',
+        borderColor: 'var(--nf-border)',
+        boxShadow: 'var(--nf-shadow-soft)',
+      }}
+    >
       {items.map((item) => (
         <button
           key={item.id}
           type="button"
           onClick={() => onChange(item.id)}
           className={cn(
-            'flex items-center gap-1.5 px-4 py-2.5 text-sm transition-colors relative',
+            'flex items-center gap-1.5 px-4 py-2.5 text-sm transition-all relative rounded-xl whitespace-nowrap',
             active === item.id ? 'text-white' : 'text-gray-500 hover:text-gray-300',
           )}
+          style={{
+            background:
+              active === item.id
+                ? 'linear-gradient(135deg, rgba(0, 243, 255, 0.18) 0%, rgba(124, 77, 255, 0.16) 100%)'
+                : 'transparent',
+          }}
         >
           {item.icon}
           {item.label}
           {item.count !== undefined && (
-            <span className="text-xs text-gray-500 bg-gray-800 px-1.5 rounded-full">
+            <span
+              className="text-xs px-1.5 rounded-full"
+              style={{
+                color: active === item.id ? 'var(--nf-text-high)' : 'var(--nf-text-muted)',
+                background: active === item.id ? 'rgba(255,255,255,0.12)' : 'var(--nf-bg-raised)',
+              }}
+            >
               {item.count}
             </span>
-          )}
-          {active === item.id && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500" />
           )}
         </button>
       ))}

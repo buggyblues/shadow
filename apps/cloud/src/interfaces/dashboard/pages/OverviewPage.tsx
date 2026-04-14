@@ -80,15 +80,16 @@ function QuickActions() {
 // ── Recent Deployments ────────────────────────────────────────────────────────
 
 function RecentDeployments({ deployments }: { deployments: Deployment[] }) {
+  const { t } = useTranslation()
   const recent = deployments.slice(0, 5)
 
   if (recent.length === 0) {
     return (
       <div className="text-center py-8 text-sm text-gray-600">
         <Rocket size={24} className="mx-auto mb-2 text-gray-700" />
-        No deployments yet.{' '}
+        {t('overview.noDeploymentsYet')}{' '}
         <Link to="/store" className="text-blue-400 hover:text-blue-300">
-          Deploy your first agent team.
+          {t('overview.deployFirstAgent')}
         </Link>
       </div>
     )
@@ -101,8 +102,8 @@ function RecentDeployments({ deployments }: { deployments: Deployment[] }) {
         return (
           <Link
             key={`${dep.namespace}/${dep.name}`}
-            to="/deployments/$namespace/$id"
-            params={{ namespace: dep.namespace, id: dep.name }}
+            to="/deployments/$namespace"
+            params={{ namespace: dep.namespace }}
             className="flex items-center justify-between py-3 hover:bg-gray-800/20 px-3 -mx-3 rounded-lg transition-colors"
           >
             <div className="flex items-center gap-3 min-w-0">
@@ -128,6 +129,7 @@ function RecentDeployments({ deployments }: { deployments: Deployment[] }) {
 // ── Recent Activity ───────────────────────────────────────────────────────────
 
 function RecentActivity() {
+  const { t } = useTranslation()
   const activities = useRecentActivities(5)
 
   const typeIcons: Record<string, React.ReactNode> = {
@@ -143,7 +145,7 @@ function RecentActivity() {
     return (
       <div className="text-center py-8 text-sm text-gray-600">
         <Clock size={24} className="mx-auto mb-2 text-gray-700" />
-        No recent activity.
+        {t('overview.noRecentActivity')}
       </div>
     )
   }
@@ -168,6 +170,7 @@ function RecentActivity() {
 // ── System Health Summary ─────────────────────────────────────────────────────
 
 function HealthSummary() {
+  const { t } = useTranslation()
   const {
     data: doctor,
     isLoading,
@@ -179,27 +182,33 @@ function HealthSummary() {
   })
 
   if (isLoading) {
-    return <div className="py-4 text-center text-xs text-gray-600">Checking health...</div>
+    return (
+      <div className="py-4 text-center text-xs text-gray-600">{t('overview.checkingHealth')}</div>
+    )
   }
 
   if (!doctor) {
-    return <div className="py-4 text-center text-xs text-gray-600">Health check unavailable</div>
+    return (
+      <div className="py-4 text-center text-xs text-gray-600">
+        {t('overview.healthUnavailable')}
+      </div>
+    )
   }
 
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-3 mb-3">
         <Badge variant="success" icon={<CheckCircle size={10} />} size="sm">
-          {doctor.summary.pass} pass
+          {doctor.summary.pass} {t('overview.pass')}
         </Badge>
         {doctor.summary.warn > 0 && (
           <Badge variant="warning" size="sm">
-            {doctor.summary.warn} warn
+            {doctor.summary.warn} {t('overview.warn')}
           </Badge>
         )}
         {doctor.summary.fail > 0 && (
           <Badge variant="error" size="sm">
-            {doctor.summary.fail} fail
+            {doctor.summary.fail} {t('overview.fail')}
           </Badge>
         )}
       </div>
@@ -222,7 +231,7 @@ function HealthSummary() {
         onClick={() => refetch()}
         className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-2"
       >
-        <Stethoscope size={10} /> Re-run checks
+        <Stethoscope size={10} /> {t('overview.reRunChecks')}
       </button>
     </div>
   )
@@ -338,7 +347,7 @@ export function OverviewPage() {
             </div>
             <div className="p-5">
               {isLoading ? (
-                <div className="py-8 text-center text-xs text-gray-600">Loading...</div>
+                <div className="py-8 text-center text-xs text-gray-600">{t('common.loading')}</div>
               ) : (
                 <RecentDeployments deployments={deployments ?? []} />
               )}

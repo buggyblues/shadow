@@ -1,5 +1,6 @@
 import { Search, X } from 'lucide-react'
 import { useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
 interface SearchInputProps {
@@ -14,11 +15,12 @@ interface SearchInputProps {
 export function SearchInput({
   value,
   onChange,
-  placeholder = 'Search...',
+  placeholder,
   className,
   size = 'md',
   autoFocus,
 }: SearchInputProps) {
+  const { t } = useTranslation()
   const inputRef = useRef<HTMLInputElement>(null)
 
   const sizeClasses = {
@@ -33,20 +35,28 @@ export function SearchInput({
     <div className={cn('relative', className)}>
       <Search
         size={iconSize[size]}
-        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
+        className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+        style={{ color: 'var(--nf-text-muted)' }}
       />
       <input
         ref={inputRef}
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
+        placeholder={placeholder ?? `${t('common.search')}...`}
         autoFocus={autoFocus}
         className={cn(
-          'w-full bg-gray-900 border border-gray-700 rounded-lg text-gray-200 placeholder-gray-600',
-          'focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-colors',
+          'w-full rounded-2xl text-gray-100 backdrop-blur-xl',
+          'border transition-all duration-200',
+          'focus:outline-none focus:ring-2',
           sizeClasses[size],
         )}
+        style={{
+          background: 'var(--nf-bg-glass-2)',
+          borderColor: 'var(--nf-border)',
+          color: 'var(--nf-text-high)',
+          boxShadow: 'var(--nf-shadow-soft)',
+        }}
       />
       {value && (
         <button
@@ -55,7 +65,8 @@ export function SearchInput({
             onChange('')
             inputRef.current?.focus()
           }}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 transition-colors"
+          style={{ color: 'var(--nf-text-muted)' }}
         >
           <X size={iconSize[size] - 2} />
         </button>

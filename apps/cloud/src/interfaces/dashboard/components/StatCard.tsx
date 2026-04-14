@@ -34,21 +34,26 @@ export function StatCard({
   return (
     <div
       className={cn(
-        'bg-gray-900 border border-gray-800 rounded-lg p-4 transition-colors',
-        onClick && 'cursor-pointer hover:border-gray-700',
+        'rounded-3xl p-4 transition-all duration-200',
+        onClick && 'cursor-pointer hover:-translate-y-0.5',
         className,
       )}
+      style={{
+        background: 'var(--nf-bg-glass-2)',
+        border: '1px solid var(--nf-border)',
+        boxShadow: 'var(--nf-shadow-soft)',
+      }}
       onClick={onClick}
     >
       <div className="flex items-center justify-between mb-2">
         <div className={cn('flex items-center gap-2 text-xs', colors.icon)}>
           {icon}
-          <span className="text-gray-500">{label}</span>
+          <span style={{ color: 'var(--nf-text-muted)' }}>{label}</span>
         </div>
         {trend && (
           <span
             className={cn(
-              'text-xs px-1.5 py-0.5 rounded',
+              'text-xs px-1.5 py-0.5 rounded-full',
               trend.positive ? 'text-green-400 bg-green-900/30' : 'text-red-400 bg-red-900/30',
             )}
           >
@@ -56,7 +61,7 @@ export function StatCard({
           </span>
         )}
       </div>
-      <p className={cn('text-2xl font-semibold', colors.value)}>{value}</p>
+      <p className={cn('text-2xl font-black tracking-tight', colors.value)}>{value}</p>
     </div>
   )
 }

@@ -16,12 +16,15 @@ import {
   loadImageToKind,
 } from '../clients/kind-client.js'
 import {
+  type CommandResult,
   type DeploymentStatus,
   deleteNamespace,
+  execInPod,
   getDeployments,
   getManagedNamespaces,
   getPods,
   type PodStatus,
+  readLogs,
   rolloutRestartAll,
   rolloutUndoAll,
   scaleDeployment,
@@ -102,6 +105,23 @@ export class K8sService {
     options?: { follow?: boolean; tail?: number },
   ): ChildProcess {
     return streamLogs(namespace, podName, options)
+  }
+
+  readLogs(
+    namespace: string,
+    podName: string,
+    options?: { tail?: number; timestamps?: boolean },
+  ): string {
+    return readLogs(namespace, podName, options)
+  }
+
+  execInPod(
+    namespace: string,
+    podName: string,
+    command: string[],
+    options?: { timeout?: number },
+  ): CommandResult {
+    return execInPod(namespace, podName, command, options)
   }
 
   scaleDeployment(namespace: string, name: string, replicas: number): void {

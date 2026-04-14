@@ -116,6 +116,35 @@ export class EnvVarDao {
     })
   }
 
+  findMaskedByScope(scope: string): Array<{
+    scope: string
+    key: string
+    maskedValue: string
+    isSecret: boolean
+    groupName: string
+  }> {
+    return this.findAllMasked().filter((entry) => entry.scope === scope)
+  }
+
+  findAllMaskedByScopes(scopes: string[]): Array<{
+    scope: string
+    key: string
+    maskedValue: string
+    isSecret: boolean
+    groupName: string
+  }> {
+    const scopedEntries = this.findAllMasked().filter((entry) => scopes.includes(entry.scope))
+    const merged = new Map<string, (typeof scopedEntries)[number]>()
+
+    for (const scope of scopes) {
+      for (const entry of scopedEntries.filter((item) => item.scope === scope)) {
+        merged.set(entry.key, entry)
+      }
+    }
+
+    return [...merged.values()].sort((left, right) => left.key.localeCompare(right.key))
+  }
+
   upsert(
     scope: string,
     key: string,
@@ -184,6 +213,22 @@ export class EnvVarDao {
     for (const r of rows) {
       Object.assign(result, withLegacyEnvAliases(r.key, this.decrypt(r.encryptedValue, r.iv)))
     }
+    return result
+  }
+
+  findAllDecryptedByScopes(scopes: string[]): Record<string, string> {
+    const rows = this.db.select().from(envVars).all()
+    const result: Record<string, string> = {}
+
+    for (const scope of scopes) {
+      for (const row of rows.filter((entry) => entry.scope === scope)) {
+        Object.assign(
+          result,
+          withLegacyEnvAliases(row.key, this.decrypt(row.encryptedValue, row.iv)),
+        )
+      }
+    }
+
     return result
   }
 }

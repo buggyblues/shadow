@@ -33,18 +33,46 @@ import { type Step, StepIndicator } from '@/components/StepIndicator'
 import { useSSEStream } from '@/hooks/useSSEStream'
 import { api, type ProviderSettings } from '@/lib/api'
 import { API_PRESETS } from '@/lib/presets'
-import { getCategoryColor, getTemplateMeta } from '@/lib/store-data'
-import { cn, pluralize } from '@/lib/utils'
+import { getCategoryColor } from '@/lib/store-data'
+import { cn } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/stores/toast'
 
 // ── Step Definitions ──────────────────────────────────────────────────────────
 
-const WIZARD_STEPS: Step[] = [
-  { id: 'overview', label: 'Template', description: 'Review template' },
-  { id: 'configure', label: 'Configure', description: 'Set namespace & env' },
-  { id: 'deploy', label: 'Deploy', description: 'Deploy & monitor' },
-]
+function getWizardSteps(t: (key: string, options?: Record<string, unknown>) => string): Step[] {
+  return [
+    {
+      id: 'overview',
+      label: t('deploy.stepTemplateLabel'),
+      description: t('deploy.stepTemplateDescription'),
+    },
+    {
+      id: 'configure',
+      label: t('deploy.stepConfigureLabel'),
+      description: t('deploy.stepConfigureDescription'),
+    },
+    {
+      id: 'deploy',
+      label: t('deploy.stepDeployLabel'),
+      description: t('deploy.stepDeployDescription'),
+    },
+  ]
+}
+
+function getCategoryLabel(
+  category: string,
+  translate: (key: string, options?: Record<string, unknown>) => string,
+) {
+  return translate(`store.categories.${category}`)
+}
+
+function getDifficultyLabel(
+  difficulty: string,
+  translate: (key: string, options?: Record<string, unknown>) => string,
+) {
+  return translate(`store.difficulties.${difficulty}`)
+}
 
 function getProviderSecretEnvName(providerId: string): string {
   return `${providerId.toUpperCase().replace(/-/g, '_')}_API_KEY`
@@ -53,37 +81,44 @@ function getProviderSecretEnvName(providerId: string): string {
 // ── Step 1: Template Overview ─────────────────────────────────────────────────
 
 function StepOverview({ name, onNext }: { name: string; onNext: () => void }) {
-  const { data: templates } = useQuery({
-    queryKey: ['templates'],
-    queryFn: api.templates.list,
+  const { t, i18n } = useTranslation()
+  const { data } = useQuery({
+    queryKey: ['template-detail', name, i18n.language],
+    queryFn: () => api.templates.detail(name, i18n.language),
   })
 
-  const template = templates?.find((t) => t.name === name)
-  const meta = getTemplateMeta(name)
+  const template = data?.template
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold mb-1">Review Template</h2>
-        <p className="text-sm text-gray-500">
-          Confirm the template you want to deploy to your Kubernetes cluster.
-        </p>
+        <h2 className="text-lg font-semibold mb-1">{t('deploy.reviewTemplate')}</h2>
+        <p className="text-sm text-gray-500">{t('deploy.confirmDeployKubernetes')}</p>
       </div>
 
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
         <div className="flex items-start gap-4">
-          <span className="text-4xl">{meta.emoji}</span>
+          <span className="text-4xl">{template?.emoji ?? '📦'}</span>
           <div className="flex-1">
             <h3 className="text-xl font-bold mb-1">{name}</h3>
-            <p className="text-sm text-gray-400 mb-3">{template?.description ?? 'Loading...'}</p>
+            <p className="text-sm text-gray-400 mb-3">
+              {template?.description ?? t('common.loading')}
+            </p>
 
             <div className="flex items-center gap-2 mb-4">
-              <Badge variant="default" className={getCategoryColor(meta.category)}>
-                {meta.category}
-              </Badge>
-              {meta.featured && (
+              {template && (
+                <Badge variant="default" className={getCategoryColor(template.category)}>
+                  {getCategoryLabel(template.category, t)}
+                </Badge>
+              )}
+              {template && (
+                <Badge variant="default" className="bg-gray-800 text-gray-200 border-gray-700">
+                  {getDifficultyLabel(template.difficulty, t)}
+                </Badge>
+              )}
+              {template?.featured && (
                 <Badge variant="info" icon={<Sparkles size={10} />}>
-                  Featured
+                  {t('store.featured')}
                 </Badge>
               )}
             </div>
@@ -93,23 +128,23 @@ function StepOverview({ name, onNext }: { name: string; onNext: () => void }) {
               <div className="bg-gray-950 border border-gray-800 rounded-lg p-3">
                 <div className="text-xs text-gray-500 flex items-center gap-1 mb-1">
                   <Users size={11} />
-                  Agents
+                  {t('deploy.agentsLabel')}
                 </div>
                 <p className="text-lg font-semibold">{template?.agentCount ?? '—'}</p>
               </div>
               <div className="bg-gray-950 border border-gray-800 rounded-lg p-3">
                 <div className="text-xs text-gray-500 flex items-center gap-1 mb-1">
                   <FolderOpen size={11} />
-                  Namespace
+                  {t('deploy.namespaceLabel')}
                 </div>
                 <p className="text-sm font-mono mt-1">{template?.namespace ?? '—'}</p>
               </div>
               <div className="bg-gray-950 border border-gray-800 rounded-lg p-3">
                 <div className="text-xs text-gray-500 flex items-center gap-1 mb-1">
                   <Clock size={11} />
-                  Deploy Time
+                  {t('deploy.deployTimeLabel')}
                 </div>
-                <p className="text-sm mt-1">{meta.estimatedDeployTime}</p>
+                <p className="text-sm mt-1">{template?.estimatedDeployTime ?? '—'}</p>
               </div>
             </div>
           </div>
@@ -120,30 +155,30 @@ function StepOverview({ name, onNext }: { name: string; onNext: () => void }) {
       <div className="bg-blue-950/20 border border-blue-900/50 rounded-lg p-4">
         <h4 className="text-sm font-medium text-blue-400 mb-2 flex items-center gap-1.5">
           <Sparkles size={13} />
-          What you'll get
+          {t('deploy.whatYouWillGet')}
         </h4>
         <ul className="space-y-1.5">
-          {meta.highlights.map((h) => (
-            <li key={h} className="flex items-center gap-2 text-sm text-gray-300">
+          {(template?.highlights ?? []).map((highlight) => (
+            <li key={highlight} className="flex items-center gap-2 text-sm text-gray-300">
               <CheckCircle size={13} className="text-green-400 shrink-0" />
-              {h}
+              {highlight}
             </li>
           ))}
         </ul>
       </div>
 
       {/* Requirements */}
-      {meta.requirements.length > 0 && (
+      {(template?.requirements.length ?? 0) > 0 && (
         <div className="bg-yellow-950/10 border border-yellow-900/30 rounded-lg p-4">
           <h4 className="text-sm font-medium text-yellow-400 mb-2 flex items-center gap-1.5">
             <AlertTriangle size={13} />
-            Prerequisites
+            {t('deploy.prerequisites')}
           </h4>
           <ul className="space-y-1.5">
-            {meta.requirements.map((r) => (
-              <li key={r} className="flex items-center gap-2 text-sm text-gray-400">
+            {(template?.requirements ?? []).map((requirement) => (
+              <li key={requirement} className="flex items-center gap-2 text-sm text-gray-400">
                 <ChevronRight size={11} className="text-yellow-600 shrink-0" />
-                {r}
+                {requirement}
               </li>
             ))}
           </ul>
@@ -156,7 +191,7 @@ function StepOverview({ name, onNext }: { name: string; onNext: () => void }) {
           onClick={onNext}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
         >
-          Continue
+          {t('common.continue')}
           <ArrowRight size={16} />
         </button>
       </div>
@@ -184,11 +219,13 @@ function StepConfigure({
   onNext: () => void
   onBack: () => void
 }) {
-  const { data: templates } = useQuery({
-    queryKey: ['templates'],
-    queryFn: api.templates.list,
+  const { t, i18n } = useTranslation()
+  const { data: detailData } = useQuery({
+    queryKey: ['template-detail', name, i18n.language],
+    queryFn: () => api.templates.detail(name, i18n.language),
   })
-  const template = templates?.find((t) => t.name === name)
+  const template = detailData?.template
+  const resolvedNamespace = config.namespace || template?.namespace || name
 
   // Fetch required env var refs from template
   const { data: envRefsData } = useQuery({
@@ -208,8 +245,9 @@ function StepConfigure({
 
   // Fetch already-saved env vars + secrets from backend
   const { data: savedEnvData } = useQuery({
-    queryKey: ['env'],
-    queryFn: api.env.list,
+    queryKey: ['deployment-env', resolvedNamespace, 'effective'],
+    queryFn: () => api.deployments.env.list(resolvedNamespace, 'effective'),
+    enabled: Boolean(resolvedNamespace),
   })
 
   const requiredVars = envRefsData?.requiredEnvVars ?? []
@@ -225,6 +263,10 @@ function StepConfigure({
 
   // Auto-populate from saved values on first load
   const initializedRef = useRef(false)
+  useEffect(() => {
+    initializedRef.current = false
+  }, [resolvedNamespace])
+
   useEffect(() => {
     if (initializedRef.current || Object.keys(savedLookup).length === 0) return
     // Wait until template env refs are loaded (or if there are none)
@@ -252,6 +294,12 @@ function StepConfigure({
   const [extraVars, setExtraVars] = useState<Array<{ key: string; value: string }>>([])
   const [validationError, setValidationError] = useState<string | null>(null)
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({})
+  const hasShadowServerUrl =
+    config.envVars.SHADOW_SERVER_URL === '__SAVED__' ||
+    Boolean(config.envVars.SHADOW_SERVER_URL?.trim())
+  const hasShadowUserToken =
+    config.envVars.SHADOW_USER_TOKEN === '__SAVED__' ||
+    Boolean(config.envVars.SHADOW_USER_TOKEN?.trim())
 
   const updateVar = (key: string, value: string) => {
     onChange({ ...config, envVars: { ...config.envVars, [key]: value } })
@@ -278,7 +326,7 @@ function StepConfigure({
     const trulyMissing = missing.filter((k) => !savedLookup[k])
     const allMissing = [...missingShadow, ...trulyMissing]
     if (allMissing.length > 0) {
-      setValidationError(`Missing required variables: ${allMissing.join(', ')}`)
+      setValidationError(`${t('deploy.missingRequiredVars')} ${allMissing.join(', ')}`)
       return
     }
     setValidationError(null)
@@ -297,18 +345,16 @@ function StepConfigure({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold mb-1">Configure Deployment</h2>
-        <p className="text-sm text-gray-500">
-          Set namespace and provide required environment variables for this template.
-        </p>
+        <h2 className="text-lg font-semibold mb-1">{t('deploy.configureDeploy')}</h2>
+        <p className="text-sm text-gray-500">{t('deploy.setNamespaceEnv')}</p>
       </div>
 
       {/* Namespace */}
       <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
         <label htmlFor="namespace" className="block text-sm font-medium mb-2">
-          Namespace
+          {t('deploy.namespace')}
         </label>
-        <p className="text-xs text-gray-500 mb-3">Kubernetes namespace for this deployment.</p>
+        <p className="text-xs text-gray-500 mb-3">{t('deploy.kubernetesNamespaceDesc')}</p>
         <input
           id="namespace"
           type="text"
@@ -318,7 +364,8 @@ function StepConfigure({
           className="w-full max-w-md bg-gray-950 border border-gray-700 rounded-lg px-4 py-2.5 text-sm font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30"
         />
         <p className="text-[10px] text-gray-600 mt-2">
-          Default: <code className="font-mono text-gray-500">{template?.namespace ?? name}</code>
+          {t('deploy.default')}{' '}
+          <code className="font-mono text-gray-500">{template?.namespace ?? name}</code>
         </p>
       </div>
 
@@ -327,19 +374,16 @@ function StepConfigure({
         <div className="mb-3">
           <h3 className="text-sm font-medium flex items-center gap-2">
             <Unplug size={14} className="text-purple-400" />
-            Shadow Platform Connection
+            {t('deploy.shadowConnectionTitle')}
           </h3>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Server URL and API token for provisioning Shadow resources (servers, channels, buddies).
-          </p>
+          <p className="text-xs text-gray-500 mt-0.5">{t('deploy.shadowConnectionDescription')}</p>
         </div>
 
         <div className="space-y-3">
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <label className="text-xs font-mono text-gray-300 flex items-center gap-1.5">
-                {config.envVars.SHADOW_SERVER_URL === '__SAVED__' ||
-                config.envVars.SHADOW_SERVER_URL?.trim() ? (
+                {hasShadowServerUrl ? (
                   <CheckCircle size={12} className="text-green-400" />
                 ) : (
                   <AlertTriangle size={12} className="text-yellow-500" />
@@ -354,7 +398,7 @@ function StepConfigure({
                     onClick={() => useSavedValue('SHADOW_SERVER_URL')}
                     className="text-[10px] text-blue-400 hover:text-blue-300 border border-blue-800 hover:border-blue-600 rounded px-2 py-0.5 transition-colors"
                   >
-                    Restore saved value
+                    {t('deploy.restoreSavedValue')}
                   </button>
                 )}
             </div>
@@ -362,14 +406,14 @@ function StepConfigure({
               <div className="flex items-center gap-2">
                 <div className="flex-1 bg-green-950/30 border border-green-900/50 rounded px-3 py-2 text-xs text-green-400 font-mono flex items-center gap-2">
                   <CheckCircle size={12} />
-                  Using saved value from Secrets
+                  {t('deploy.usingSavedValue')}
                 </div>
                 <button
                   type="button"
                   onClick={() => updateVar('SHADOW_SERVER_URL', '')}
                   className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
                 >
-                  Override
+                  {t('deploy.override')}
                 </button>
               </div>
             ) : (
@@ -390,8 +434,7 @@ function StepConfigure({
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <label className="text-xs font-mono text-gray-300 flex items-center gap-1.5">
-                {config.envVars.SHADOW_USER_TOKEN === '__SAVED__' ||
-                config.envVars.SHADOW_USER_TOKEN?.trim() ? (
+                {hasShadowUserToken ? (
                   <CheckCircle size={12} className="text-green-400" />
                 ) : (
                   <AlertTriangle size={12} className="text-yellow-500" />
@@ -406,7 +449,7 @@ function StepConfigure({
                     onClick={() => useSavedValue('SHADOW_USER_TOKEN')}
                     className="text-[10px] text-blue-400 hover:text-blue-300 border border-blue-800 hover:border-blue-600 rounded px-2 py-0.5 transition-colors"
                   >
-                    Restore saved value
+                    {t('deploy.restoreSavedValue')}
                   </button>
                 )}
             </div>
@@ -414,14 +457,14 @@ function StepConfigure({
               <div className="flex items-center gap-2">
                 <div className="flex-1 bg-green-950/30 border border-green-900/50 rounded px-3 py-2 text-xs text-green-400 font-mono flex items-center gap-2">
                   <CheckCircle size={12} />
-                  Using saved value from Secrets
+                  {t('deploy.usingSavedValue')}
                 </div>
                 <button
                   type="button"
                   onClick={() => updateVar('SHADOW_USER_TOKEN', '')}
                   className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
                 >
-                  Override
+                  {t('deploy.override')}
                 </button>
               </div>
             ) : (
@@ -461,12 +504,11 @@ function StepConfigure({
             <div>
               <h3 className="text-sm font-medium flex items-center gap-2">
                 <Key size={14} className="text-yellow-400" />
-                Required Environment Variables
+                {t('deploy.requiredEnvVars')}
               </h3>
               <p className="text-xs text-gray-500 mt-0.5">
-                This template requires {requiredVars.length} environment{' '}
-                {pluralize(requiredVars.length, 'variable')}. All must be provided before
-                deployment.
+                {t('deploy.templateRequiresVars', { count: requiredVars.length })}{' '}
+                {t('deploy.envVarsAllRequired')}
               </p>
             </div>
           </div>
@@ -496,7 +538,7 @@ function StepConfigure({
                         onClick={() => useSavedValue(key)}
                         className="text-[10px] text-blue-400 hover:text-blue-300 border border-blue-800 hover:border-blue-600 rounded px-2 py-0.5 transition-colors"
                       >
-                        Restore saved value
+                        {t('deploy.restoreSavedValue')}
                       </button>
                     )}
                   </div>
@@ -504,14 +546,14 @@ function StepConfigure({
                     <div className="flex items-center gap-2">
                       <div className="flex-1 bg-green-950/30 border border-green-900/50 rounded px-3 py-2 text-xs text-green-400 font-mono flex items-center gap-2">
                         <CheckCircle size={12} />
-                        Using saved value from Secrets
+                        {t('deploy.usingSavedValue')}
                       </div>
                       <button
                         type="button"
                         onClick={() => updateVar(key, '')}
                         className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
                       >
-                        Override
+                        {t('deploy.override')}
                       </button>
                     </div>
                   ) : (
@@ -523,7 +565,7 @@ function StepConfigure({
                         placeholder={
                           key.includes('KEY') || key.includes('TOKEN') || key.includes('SECRET')
                             ? 'sk-...'
-                            : 'Enter value'
+                            : t('deploy.enterValue')
                         }
                         autoComplete="off"
                         data-1p-ignore
@@ -556,10 +598,8 @@ function StepConfigure({
       <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h3 className="text-sm font-medium">Additional Variables</h3>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Optional key-value pairs beyond the required ones.
-            </p>
+            <h3 className="text-sm font-medium">{t('deploy.additionalVariables')}</h3>
+            <p className="text-xs text-gray-500 mt-0.5">{t('deploy.optionalKeyValue')}</p>
           </div>
           <button
             type="button"
@@ -567,13 +607,13 @@ function StepConfigure({
             className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 border border-blue-800 hover:border-blue-600 rounded px-3 py-1.5 transition-colors"
           >
             <Plus size={12} />
-            Add Variable
+            {t('deploy.addVariable')}
           </button>
         </div>
 
         {extraVars.length === 0 && (
           <div className="text-center py-4 text-xs text-gray-600 border border-dashed border-gray-800 rounded-lg">
-            No additional variables.
+            {t('deploy.noAdditionalVars')}
           </div>
         )}
 
@@ -647,14 +687,14 @@ function StepConfigure({
           className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2 rounded-lg transition-colors"
         >
           <ArrowLeft size={14} />
-          Back
+          {t('common.back')}
         </button>
         <button
           type="button"
           onClick={handleNext}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
         >
-          Continue
+          {t('common.continue')}
           <ArrowRight size={16} />
         </button>
       </div>
@@ -719,10 +759,8 @@ export function StepProviders({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold mb-1">LLM Providers</h2>
-        <p className="text-sm text-gray-500">
-          Configure at least one LLM provider. Agents need API access to function.
-        </p>
+        <h2 className="text-lg font-semibold mb-1">{t('deploy.providersTitle')}</h2>
+        <p className="text-sm text-gray-500">{t('deploy.providersDescription')}</p>
       </div>
 
       {/* Use existing settings toggle */}
@@ -732,11 +770,10 @@ export function StepProviders({
             <CheckCircle size={16} className="text-green-400" />
             <div>
               <p className="text-sm font-medium text-green-400">
-                {existingProviders.length} {pluralize(existingProviders.length, 'provider')}{' '}
-                configured in Settings
+                {t('deploy.providersConfiguredInSettings', { count: existingProviders.length })}
               </p>
               <p className="text-xs text-gray-500 mt-0.5">
-                Your existing provider settings will be used.
+                {t('deploy.providersUseExistingDescription')}
               </p>
             </div>
           </div>
@@ -751,7 +788,7 @@ export function StepProviders({
               }}
               className="accent-blue-500"
             />
-            <span className="text-xs text-gray-400">Use existing</span>
+            <span className="text-xs text-gray-400">{t('deploy.useExisting')}</span>
           </label>
         </div>
       )}
@@ -810,7 +847,7 @@ export function StepProviders({
 
       {/* Add provider */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-gray-600">Add provider:</span>
+        <span className="text-xs text-gray-600">{t('deploy.addProvider')}</span>
         {API_PRESETS.map((preset) => (
           <button
             key={preset.id}
@@ -832,14 +869,14 @@ export function StepProviders({
           className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2 rounded-lg transition-colors"
         >
           <ArrowLeft size={14} />
-          Back
+          {t('common.back')}
         </button>
         <button
           type="button"
           onClick={onNext}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
         >
-          Review & Deploy
+          {t('deploy.reviewDeploy')}
           <Rocket size={16} />
         </button>
       </div>
@@ -858,7 +895,7 @@ function StepDeploy({
   config: DeployConfig
   onBack: () => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const logRef = useRef<HTMLDivElement>(null)
   const toast = useToast()
   const navigate = useNavigate()
@@ -869,12 +906,16 @@ function StepDeploy({
   const [deployStarted, setDeployStarted] = useState(false)
   const [deploySuccess, setDeploySuccess] = useState<boolean | null>(null)
   const [taskInfo, setTaskInfo] = useState<{ id: number; url: string } | null>(null)
-  const meta = getTemplateMeta(name)
+  const { data: detailData } = useQuery({
+    queryKey: ['template-detail', name, i18n.language],
+    queryFn: () => api.templates.detail(name, i18n.language),
+  })
+  const template = detailData?.template
+  const targetNamespace = config.namespace || template?.namespace || name
 
   const taskUrl = taskInfo ? new URL(taskInfo.url, window.location.origin).toString() : ''
 
   // Auto-scroll log
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on new lines
   useEffect(() => {
     if (logRef.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight
@@ -923,7 +964,10 @@ function StepDeploy({
 
       if (!result.success) {
         setDeploySuccess(false)
-        throw new Error(result.error || `Deploy failed (exit code ${result.exitCode})`)
+        throw new Error(
+          result.error ||
+            t('deploy.deployFailedWithCode', { code: result.exitCode ?? t('common.none') }),
+        )
       }
 
       setDeploySuccess(true)
@@ -934,7 +978,7 @@ function StepDeploy({
       )
       for (const [key, value] of envEntries) {
         try {
-          await api.env.upsert('global', key, value, true)
+          await api.deployments.env.upsert(targetNamespace, key, value, true)
         } catch {
           /* non-critical */
         }
@@ -944,18 +988,21 @@ function StepDeploy({
       addActivity({
         type: 'deploy',
         title: `Deployed ${name}`,
-        detail: `Template: ${name}, Namespace: ${config.namespace || meta.emoji}`,
-        namespace: config.namespace || name,
+        detail: `Template: ${name}, Namespace: ${targetNamespace}`,
+        namespace: targetNamespace,
         template: name,
       })
-      addRecentDeploy(name, config.namespace || name)
+      addRecentDeploy(name, targetNamespace)
 
       queryClient.invalidateQueries({ queryKey: ['deployments'] })
-      toast.success(`Successfully deployed ${name}!`)
+      queryClient.invalidateQueries({ queryKey: ['deployment-env', targetNamespace] })
+      queryClient.invalidateQueries({ queryKey: ['namespace-costs', targetNamespace] })
+      queryClient.invalidateQueries({ queryKey: ['cost-overview'] })
+      toast.success(t('deploy.successfullyDeployed', { name }))
     } catch (err) {
       setDeploySuccess(false)
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error'
-      toast.error(`Deploy failed: ${errorMsg}`)
+      const errorMsg = err instanceof Error ? err.message : t('deploy.unknownError')
+      toast.error(t('deploy.deployFailedWithMessage', { message: errorMsg }))
       addActivity({
         type: 'deploy',
         title: `Failed to deploy ${name}`,
@@ -996,21 +1043,21 @@ function StepDeploy({
       <div>
         <h2 className="text-lg font-semibold mb-1">
           {!deployStarted
-            ? 'Review & Deploy'
+            ? t('deploy.reviewDeploy')
             : isDone
-              ? 'Deployment Complete'
+              ? t('deploy.deploymentComplete')
               : isError
-                ? 'Deployment Failed'
-                : 'Deploying...'}
+                ? t('deploy.deploymentFailed')
+                : t('deploy.deploying')}
         </h2>
         <p className="text-sm text-gray-500">
           {!deployStarted
-            ? 'Review your configuration and start the deployment.'
+            ? t('deploy.reviewConfig')
             : isDone
-              ? 'Your agent team has been deployed successfully.'
+              ? t('deploy.deploySuccessDesc')
               : isError
-                ? 'Deployment encountered an error. Check the logs below.'
-                : 'Deploying your agent team to the cluster...'}
+                ? t('deploy.deployFailDesc')
+                : t('deploy.deployingToCluster')}
         </p>
       </div>
 
@@ -1019,39 +1066,36 @@ function StepDeploy({
         <>
           <div className="bg-gray-900 border border-gray-800 rounded-lg divide-y divide-gray-800">
             <div className="px-5 py-3 flex items-center justify-between">
-              <span className="text-xs text-gray-500">Template</span>
+              <span className="text-xs text-gray-500">{t('deploy.template')}</span>
               <span className="text-sm font-medium flex items-center gap-2">
-                <span>{meta.emoji}</span>
+                <span>{template?.emoji ?? '📦'}</span>
                 {name}
               </span>
             </div>
             <div className="px-5 py-3 flex items-center justify-between">
-              <span className="text-xs text-gray-500">Namespace</span>
-              <span className="text-sm font-mono text-gray-300">
-                {config.namespace || '(default)'}
+              <span className="text-xs text-gray-500">{t('deploy.namespace')}</span>
+              <span className="text-sm font-mono text-gray-300">{targetNamespace}</span>
+            </div>
+            <div className="px-5 py-3 flex items-center justify-between">
+              <span className="text-xs text-gray-500">{t('deploy.envVariables')}</span>
+              <span className="text-sm text-gray-300">
+                {Object.keys(config.envVars).filter((k) => config.envVars[k]).length}{' '}
+                {t('deploy.configured')}
               </span>
             </div>
             <div className="px-5 py-3 flex items-center justify-between">
-              <span className="text-xs text-gray-500">Env Variables</span>
+              <span className="text-xs text-gray-500">{t('deploy.agentsLabel')}</span>
               <span className="text-sm text-gray-300">
-                {Object.keys(config.envVars).filter((k) => config.envVars[k]).length} configured
-              </span>
-            </div>
-            <div className="px-5 py-3 flex items-center justify-between">
-              <span className="text-xs text-gray-500">Agents</span>
-              <span className="text-sm text-gray-300">
-                {getTemplateMeta(name).features.length > 0
-                  ? `Includes: ${getTemplateMeta(name).features.slice(0, 2).join(', ')}`
-                  : 'As configured'}
+                {(template?.features.length ?? 0) > 0
+                  ? `${t('deploy.includes')}: ${(template?.features ?? []).slice(0, 2).join(', ')}`
+                  : t('deploy.asConfigured')}
               </span>
             </div>
           </div>
 
           <div className="bg-blue-950/20 border border-blue-900/30 rounded-lg p-4">
             <p className="text-xs text-blue-400">
-              <strong>What happens next:</strong> Shadow Cloud will initialize the template,
-              generate Kubernetes manifests, and deploy them to your cluster. You can monitor the
-              progress in real time below.
+              <strong>{t('deploy.whatHappensNext')}</strong> {t('deploy.whatHappensNextDesc')}
             </p>
           </div>
 
@@ -1063,7 +1107,7 @@ function StepDeploy({
               className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2 rounded-lg transition-colors"
             >
               <ArrowLeft size={14} />
-              Back
+              {t('common.back')}
             </button>
             <button
               type="button"
@@ -1071,7 +1115,7 @@ function StepDeploy({
               className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
             >
               <Rocket size={16} />
-              Start Deployment
+              {t('deploy.startDeployment')}
             </button>
           </div>
         </>
@@ -1101,12 +1145,12 @@ function StepDeploy({
                   isDeploying && 'text-blue-400',
                 )}
               >
-                {isDeploying && 'Deploying...'}
-                {isDone && 'Deployment Successful!'}
-                {isError && 'Deployment Failed'}
+                {isDeploying && t('deploy.deploying')}
+                {isDone && t('deploy.deploymentSuccessful')}
+                {isError && t('deploy.deploymentFailed')}
               </p>
               <p className="text-xs text-gray-500 mt-0.5">
-                {lines.length} log {pluralize(lines.length, 'line')} received
+                {t('deploy.logLinesReceived', { count: lines.length })}
               </p>
             </div>
           </div>
@@ -1150,7 +1194,7 @@ function StepDeploy({
           {/* Log viewer */}
           <div className="bg-gray-950 border border-gray-800 rounded-lg overflow-hidden">
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-800 bg-gray-900/50">
-              <span className="text-xs text-gray-500 font-medium">Deployment Log</span>
+              <span className="text-xs text-gray-500 font-medium">{t('deploy.deploymentLog')}</span>
               {lines.length > 0 && (
                 <button
                   type="button"
@@ -1158,7 +1202,7 @@ function StepDeploy({
                   className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
                 >
                   <Download size={11} />
-                  Download
+                  {t('deploy.download')}
                 </button>
               )}
             </div>
@@ -1167,7 +1211,7 @@ function StepDeploy({
               className="h-80 overflow-auto p-4 font-mono text-xs text-gray-300 space-y-0.5"
             >
               {lines.length === 0 && isDeploying && (
-                <span className="text-gray-600">Initializing deployment...</span>
+                <span className="text-gray-600">{t('deploy.initializingDeployment')}</span>
               )}
               {lines.map((line, i) => (
                 <div key={i} className="leading-relaxed">
@@ -1183,10 +1227,11 @@ function StepDeploy({
               <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-4">
                 <CheckCircle2 size={32} className="text-green-400" />
               </div>
-              <h3 className="text-xl font-semibold text-green-400 mb-2">Deployment Successful!</h3>
+              <h3 className="text-xl font-semibold text-green-400 mb-2">
+                {t('deploy.deploymentSuccessful')}
+              </h3>
               <p className="text-sm text-gray-400 mb-8">
-                Your agent is now running in the{' '}
-                <code className="text-gray-300">{config.namespace}</code> namespace.
+                {t('deploy.agentRunningInNamespace', { namespace: targetNamespace })}
               </p>
 
               {/* What's Next cards */}
@@ -1210,14 +1255,21 @@ function StepDeploy({
                   </p>
                 </button>
                 <button
-                  onClick={() => navigate({ to: '/monitoring' })}
+                  onClick={() =>
+                    navigate({
+                      to: '/deployments/$namespace',
+                      params: { namespace: targetNamespace },
+                    })
+                  }
                   className="p-4 bg-gray-800/50 border border-gray-800 rounded-lg hover:bg-gray-800 transition-colors group"
                 >
                   <Activity size={20} className="text-gray-400 mb-2" />
                   <div className="text-sm font-medium text-gray-300 group-hover:text-gray-200">
-                    Monitor Health
+                    {t('deploy.openNamespace')}
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">See health checks and events</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {t('deploy.openNamespaceDescription')}
+                  </p>
                 </button>
               </div>
             </div>
@@ -1228,7 +1280,7 @@ function StepDeploy({
                 to="/store"
                 className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2 rounded-lg transition-colors"
               >
-                Back to Store
+                {t('store.backToStore')}
               </Link>
               <button
                 type="button"
@@ -1238,7 +1290,7 @@ function StepDeploy({
                 }}
                 className="flex items-center gap-1.5 text-sm text-yellow-400 hover:text-yellow-300 border border-yellow-800 hover:border-yellow-600 px-4 py-2 rounded-lg transition-colors"
               >
-                Retry
+                {t('common.retry')}
               </button>
             </div>
           )}
@@ -1272,7 +1324,7 @@ export function DeployWizardPage() {
 
       {/* Step indicator */}
       <div className="mb-8">
-        <StepIndicator steps={WIZARD_STEPS} currentStep={currentStep} />
+        <StepIndicator steps={getWizardSteps(t)} currentStep={currentStep} />
       </div>
 
       {/* Step content */}

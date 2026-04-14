@@ -7,7 +7,7 @@ import {
 } from '@tanstack/react-router'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { Layout } from '@/components/Layout'
-import { DeploymentDetailPage } from '@/pages/DeploymentDetailPage'
+import { DeploymentNamespacePage } from '@/pages/DeploymentNamespacePage'
 import { DeploymentsPage } from '@/pages/DeploymentsPage'
 import { DeploymentTaskPage } from '@/pages/DeploymentTaskPage'
 import { DeployWizardPage } from '@/pages/DeployWizardPage'
@@ -84,10 +84,21 @@ const clustersRoute = createRoute({
   },
 })
 
+const deploymentNamespaceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/deployments/$namespace',
+  component: withErrorBoundary(DeploymentNamespacePage),
+})
+
 const deploymentDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/deployments/$namespace/$id',
-  component: withErrorBoundary(DeploymentDetailPage),
+  beforeLoad: ({ params }) => {
+    throw redirect({
+      to: '/deployments/$namespace',
+      params: { namespace: params.namespace },
+    })
+  },
 })
 
 const deploymentTasksRoute = createRoute({
@@ -191,6 +202,7 @@ const routeTree = rootRoute.addChildren([
   deployWizardRoute,
   deploymentsRoute,
   clustersRoute,
+  deploymentNamespaceRoute,
   deploymentDetailRoute,
   deploymentTasksRoute,
   deploymentTaskRoute,

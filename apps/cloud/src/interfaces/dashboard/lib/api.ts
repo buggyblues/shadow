@@ -28,6 +28,44 @@ export interface Template {
   namespace: string
 }
 
+export type TemplateCategoryId =
+  | 'devops'
+  | 'security'
+  | 'support'
+  | 'research'
+  | 'monitoring'
+  | 'business'
+  | 'demo'
+
+export type TemplateDifficulty = 'beginner' | 'intermediate' | 'advanced'
+
+export interface TemplateCategoryInfo {
+  id: TemplateCategoryId | 'all'
+  label: string
+  emoji: string
+  description: string
+}
+
+export interface TemplateCatalogSummary extends Template {
+  category: TemplateCategoryId
+  emoji: string
+  featured: boolean
+  popularity: number
+  difficulty: TemplateDifficulty
+  estimatedDeployTime: string
+  overview: string[]
+  features: string[]
+  highlights: string[]
+}
+
+export interface TemplateCatalogDetail extends TemplateCatalogSummary {
+  file: string
+  lastUpdated: string | null
+  useCases: string[]
+  requirements: string[]
+  requiredEnvVars: string[]
+}
+
 export interface Settings {
   providers?: ProviderSettings[]
   [key: string]: unknown
@@ -137,6 +175,53 @@ export interface EnvVarDetail {
   groupName: string
 }
 
+export interface DeploymentLogsPage {
+  namespace: string
+  agent: string
+  podName: string
+  page: number
+  limit: number
+  lines: string[]
+  hasMore: boolean
+}
+
+export interface ProviderUsageSummary {
+  provider: string
+  amountUsd: number | null
+  usageLabel: string | null
+  raw: string | null
+}
+
+export interface AgentCostSummary {
+  agentName: string
+  podName: string | null
+  totalUsd: number | null
+  providers: ProviderUsageSummary[]
+  source: 'json' | 'text' | 'unavailable'
+  message: string | null
+}
+
+export interface NamespaceCostSummary {
+  namespace: string
+  totalUsd: number | null
+  agents: AgentCostSummary[]
+  availableAgents: number
+  unavailableAgents: number
+  generatedAt: string
+}
+
+export interface CostOverviewSummary {
+  totalUsd: number | null
+  namespaces: Array<{
+    namespace: string
+    totalUsd: number | null
+    agentCount: number
+    availableAgents: number
+    unavailableAgents: number
+  }>
+  generatedAt: string
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function get<T>(path: string): Promise<T> {
@@ -188,6 +273,10 @@ export const api = {
       get<{ configured: string[]; discovered: string[]; all: string[] }>('/namespaces'),
     pods: (namespace: string, id: string) =>
       get<Pod[]>(`/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(id)}/pods`),
+    logsHistory: (namespace: string, agent: string, page = 1, limit = 200) =>
+      get<DeploymentLogsPage>(
+        `/deployments/${encodeURIComponent(namespace)}/logs?agent=${encodeURIComponent(agent)}&page=${page}&limit=${limit}`,
+      ),
     logsUrl: (namespace: string, id: string) =>
       `${BASE}/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(id)}/logs`,
     scale: (namespace: string, id: string, replicas: number) =>
@@ -195,12 +284,56 @@ export const api = {
         `/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(id)}/scale`,
         { replicas },
       ),
+    costs: () => get<CostOverviewSummary>('/deployments/costs'),
+    namespaceCosts: (namespace: string) =>
+      get<NamespaceCostSummary>(`/deployments/${encodeURIComponent(namespace)}/costs`),
+    env: {
+      list: (namespace: string, mode: 'effective' | 'scoped' = 'effective') =>
+        get<{
+          namespace: string
+          scope: string
+          mode: 'effective' | 'scoped'
+          envVars: EnvVarListEntry[]
+        }>(`/deployments/${encodeURIComponent(namespace)}/env?mode=${mode}`),
+      getOne: (namespace: string, key: string) =>
+        get<{ envVar: EnvVarDetail }>(
+          `/deployments/${encodeURIComponent(namespace)}/env/${encodeURIComponent(key)}`,
+        ),
+      upsert: (
+        namespace: string,
+        key: string,
+        value: string,
+        isSecret?: boolean,
+        groupName?: string,
+      ) =>
+        put<{ ok: boolean }>(`/deployments/${encodeURIComponent(namespace)}/env`, {
+          key,
+          value,
+          isSecret,
+          groupName,
+        }),
+      delete: (namespace: string, key: string) =>
+        fetch(
+          `${BASE}/deployments/${encodeURIComponent(namespace)}/env/${encodeURIComponent(key)}`,
+          {
+            method: 'DELETE',
+          },
+        ).then((response) => response.json()) as Promise<{ ok: boolean }>,
+    },
   },
 
   templates: {
     list: () => get<Template[]>('/templates'),
     listByLocale: (locale: string) =>
       get<Template[]>(`/templates?locale=${encodeURIComponent(locale)}`),
+    catalog: (locale: string) =>
+      get<{ templates: TemplateCatalogSummary[]; categories: TemplateCategoryInfo[] }>(
+        `/templates/catalog?locale=${encodeURIComponent(locale)}`,
+      ),
+    detail: (name: string, locale: string) =>
+      get<{ template: TemplateCatalogDetail }>(
+        `/templates/${encodeURIComponent(name)}/details?locale=${encodeURIComponent(locale)}`,
+      ),
     get: (name: string) => get<Record<string, unknown>>(`/templates/${encodeURIComponent(name)}`),
     envRefs: (name: string) =>
       get<{ template: string; requiredEnvVars: string[] }>(

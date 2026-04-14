@@ -31,8 +31,21 @@ export function createTemplateHandler(ctx: HandlerContext): Hono {
   const app = new Hono()
 
   app.get('/templates', (c) => {
-    // Use existing TemplateService (filesystem-based) for backward compat
-    return c.json(ctx.container.template.list())
+    const locale = c.req.query('locale')
+    return c.json(ctx.container.template.list(locale))
+  })
+
+  app.get('/templates/catalog', (c) => {
+    const locale = c.req.query('locale')
+    return c.json(ctx.container.templateI18n.listCatalog(locale))
+  })
+
+  app.get('/templates/:name/details', (c) => {
+    const name = c.req.param('name')
+    const locale = c.req.query('locale')
+    const detail = ctx.container.templateI18n.getTemplateDetail(name, locale)
+    if (!detail) return c.json({ error: `Template not found: ${name}` }, 404)
+    return c.json({ template: detail })
   })
 
   app.get('/templates/:name', (c) => {

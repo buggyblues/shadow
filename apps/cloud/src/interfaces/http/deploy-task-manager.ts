@@ -13,6 +13,7 @@ import type { DeploymentLogDao } from '../../dao/deployment-log.dao.js'
 import type { EnvVarDao } from '../../dao/envvar.dao.js'
 import type { Deployment } from '../../db/schema.js'
 import type { ServiceContainer } from '../../services/container.js'
+import { GLOBAL_ENV_SCOPE, toDeploymentEnvScope } from '../../utils/deployment-scope.js'
 import { redactSecrets } from '../../utils/redact.js'
 
 function cleanupTmpFile(path: string): void {
@@ -131,7 +132,11 @@ export class DeployTaskManager {
     templateConfig: Record<string, unknown>
   } {
     const envOverrides: Record<string, string> = {}
-    const savedEnvVars = this.envVarDao.findAllDecrypted()
+    const namespace = typeof config.namespace === 'string' ? config.namespace : undefined
+    const scopes = [GLOBAL_ENV_SCOPE]
+    if (namespace) scopes.push(toDeploymentEnvScope(namespace))
+
+    const savedEnvVars = this.envVarDao.findAllDecryptedByScopes(scopes)
     Object.assign(envOverrides, savedEnvVars)
 
     const wizardEnvVars = config.envVars as Record<string, string> | undefined

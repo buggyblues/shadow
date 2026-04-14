@@ -5,6 +5,7 @@ import {
   Box,
   CheckCircle,
   ChevronRight,
+  DollarSign,
   FolderClock,
   FolderOpen,
   Layers,
@@ -29,6 +30,7 @@ import { StatusDot } from '@/components/StatusDot'
 import { Tabs } from '@/components/Tabs'
 import { useDebounce } from '@/hooks/useDebounce'
 import { api, type Deployment, type DeployTaskListItem } from '@/lib/api'
+import { formatUsdCost } from '@/lib/store-data'
 import { cn, groupBy, pluralize } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/stores/toast'
@@ -41,6 +43,9 @@ interface NamespaceGroup {
   readyCount: number
   totalCount: number
   latestTask?: DeployTaskListItem
+  costUsd?: number | null
+  availableCostAgents?: number
+  unavailableCostAgents?: number
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -78,6 +83,7 @@ function getStatusVariant(status: string): 'default' | 'success' | 'warning' | '
 // ── Deployment Row ────────────────────────────────────────────────────────────
 
 function DeploymentRow({ dep }: { dep: Deployment }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const toast = useToast()
   const addActivity = useAppStore((s) => s.addActivity)
@@ -95,7 +101,12 @@ function DeploymentRow({ dep }: { dep: Deployment }) {
     mutationFn: (count: number) => api.deployments.scale(dep.namespace, dep.name, count),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deployments'] })
-      toast.success(`Scaled ${dep.name} to ${replicas} replicas`)
+      toast.success(
+        t('deployments.scaledAgent', {
+          agent: dep.name,
+          count: replicas ?? currentReplicas,
+        }),
+      )
       addActivity({
         type: 'scale',
         title: `Scaled ${dep.name}`,
@@ -103,7 +114,7 @@ function DeploymentRow({ dep }: { dep: Deployment }) {
         namespace: dep.namespace,
       })
     },
-    onError: () => toast.error(`Failed to scale ${dep.name}`),
+    onError: () => toast.error(t('deployments.scaleFailed', { agent: dep.name })),
   })
 
   const handleScale = (delta: number) => {
@@ -118,8 +129,8 @@ function DeploymentRow({ dep }: { dep: Deployment }) {
         <StatusDot status={ready ? 'success' : 'warning'} />
         <div className="min-w-0">
           <Link
-            to="/deployments/$namespace/$id"
-            params={{ namespace: dep.namespace, id: dep.name }}
+            to="/deployments/$namespace"
+            params={{ namespace: dep.namespace }}
             className="text-sm font-mono text-blue-400 hover:text-blue-300 transition-colors truncate block"
           >
             {dep.name}
@@ -156,8 +167,8 @@ function DeploymentRow({ dep }: { dep: Deployment }) {
         </div>
 
         <Link
-          to="/deployments/$namespace/$id"
-          params={{ namespace: dep.namespace, id: dep.name }}
+          to="/deployments/$namespace"
+          params={{ namespace: dep.namespace }}
           className="text-gray-600 hover:text-white transition-colors"
         >
           <ChevronRight size={14} />
@@ -184,7 +195,7 @@ function NamespaceCard({
   onRedeploy: (taskId: number) => void
   onRollback: (ns: string) => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const task = group.latestTask
 
   return (
@@ -197,7 +208,13 @@ function NamespaceCard({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-sm">{group.namespace}</h3>
+              <Link
+                to="/deployments/$namespace"
+                params={{ namespace: group.namespace }}
+                className="font-semibold text-sm text-gray-100 hover:text-blue-400 transition-colors"
+              >
+                {group.namespace}
+              </Link>
               {isDiscovered && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/30 text-yellow-400 border border-yellow-800/50">
                   {t('clusters.discovered')}
@@ -207,6 +224,22 @@ function NamespaceCard({
             <p className="text-xs text-gray-500">
               {group.totalCount} {pluralize(group.totalCount, 'deployment')}
             </p>
+            <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-500">
+              <DollarSign size={11} />
+              <span>{formatUsdCost(group.costUsd ?? null, i18n.language)}</span>
+              <span>·</span>
+              <span>
+                {t('deployments.availableAgents')} {group.availableCostAgents ?? 0}
+              </span>
+              {(group.unavailableCostAgents ?? 0) > 0 && (
+                <>
+                  <span>·</span>
+                  <span>
+                    {t('deployments.unavailableAgents')} {group.unavailableCostAgents ?? 0}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -336,7 +369,7 @@ function TasksPanel({ tasks }: { tasks: DeployTaskListItem[] }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function DeploymentsPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const toast = useToast()
@@ -369,6 +402,13 @@ export function DeploymentsPage() {
     queryKey: ['deploy-tasks'],
     queryFn: api.deployTasks.list,
     refetchInterval: 5_000,
+  })
+
+  const { data: costOverview } = useQuery({
+    queryKey: ['cost-overview'],
+    queryFn: api.deployments.costs,
+    refetchInterval: 30_000,
+    staleTime: 10_000,
   })
 
   const tasks = tasksData?.tasks ?? []
@@ -476,6 +516,23 @@ export function DeploymentsPage() {
     return map
   }, [tasks])
 
+  const costByNamespace = useMemo(() => {
+    const map = new Map<
+      string,
+      { totalUsd: number | null; availableAgents: number; unavailableAgents: number }
+    >()
+
+    for (const item of costOverview?.namespaces ?? []) {
+      map.set(item.namespace, {
+        totalUsd: item.totalUsd,
+        availableAgents: item.availableAgents,
+        unavailableAgents: item.unavailableAgents,
+      })
+    }
+
+    return map
+  }, [costOverview?.namespaces])
+
   // Compute groups
   const groups: NamespaceGroup[] = useMemo(() => {
     const deps = (deployments ?? []).filter((d) => !hiddenNamespaces.includes(d.namespace))
@@ -486,6 +543,9 @@ export function DeploymentsPage() {
       readyCount: deps.filter(isDeploymentReady).length,
       totalCount: deps.length,
       latestTask: tasksByNamespace.get(namespace),
+      costUsd: costByNamespace.get(namespace)?.totalUsd ?? null,
+      availableCostAgents: costByNamespace.get(namespace)?.availableAgents ?? 0,
+      unavailableCostAgents: costByNamespace.get(namespace)?.unavailableAgents ?? 0,
     }))
 
     if (debouncedSearch) {
@@ -498,7 +558,7 @@ export function DeploymentsPage() {
     }
 
     return result.sort((a, b) => a.namespace.localeCompare(b.namespace))
-  }, [deployments, debouncedSearch, hiddenNamespaces, tasksByNamespace])
+  }, [deployments, debouncedSearch, hiddenNamespaces, tasksByNamespace, costByNamespace])
 
   const visibleDeployments = (deployments ?? []).filter(
     (d) => !hiddenNamespaces.includes(d.namespace),
@@ -554,7 +614,7 @@ export function DeploymentsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <StatCard
           label={t('clusters.totalDeployments')}
           value={total}
@@ -578,6 +638,12 @@ export function DeploymentsPage() {
           value={runningTasks}
           icon={<Terminal size={13} />}
           color={runningTasks > 0 ? 'blue' : 'default'}
+        />
+        <StatCard
+          label={t('deployments.totalCost')}
+          value={formatUsdCost(costOverview?.totalUsd ?? null, i18n.language)}
+          icon={<DollarSign size={13} />}
+          color="purple"
         />
       </div>
 

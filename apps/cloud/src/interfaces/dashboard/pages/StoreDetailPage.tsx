@@ -3,10 +3,11 @@ import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import {
   ArrowLeft,
   BookOpen,
+  CalendarClock,
   CheckCircle,
   Clock,
   Cpu,
-  ExternalLink,
+  FileText,
   FolderOpen,
   GitFork,
   Heart,
@@ -22,7 +23,6 @@ import {
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/Badge'
-import { Breadcrumb } from '@/components/Breadcrumb'
 import { EmptyState } from '@/components/EmptyState'
 import {
   parseTemplateAgents,
@@ -30,132 +30,134 @@ import {
   TemplateConfigTab,
   TemplateDetailShell,
 } from '@/components/TemplateDetailShared'
-import { api, type Template } from '@/lib/api'
-import { getCategoryColor, getDifficultyColor, getTemplateMeta } from '@/lib/store-data'
-import { cn, pluralize } from '@/lib/utils'
+import { api } from '@/lib/api'
+import { getCategoryColor, getDifficultyColor } from '@/lib/store-data'
+import { cn } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/stores/toast'
 
-// ── Components ────────────────────────────────────────────────────────────────
+function getCategoryLabel(
+  category: string,
+  translate: (key: string, options?: Record<string, unknown>) => string,
+) {
+  return translate(`store.categories.${category}`)
+}
+
+function getDifficultyLabel(
+  difficulty: string,
+  translate: (key: string, options?: Record<string, unknown>) => string,
+) {
+  return translate(`store.difficulties.${difficulty}`)
+}
 
 function OverviewTab({
-  template: _template,
-  meta,
+  overview,
+  features,
+  useCases,
+  requirements,
 }: {
-  template: Template
-  meta: ReturnType<typeof getTemplateMeta>
+  overview: string[]
+  features: string[]
+  useCases: string[]
+  requirements: string[]
 }) {
+  const { t } = useTranslation()
+
   return (
     <div className="space-y-6">
-      {/* README */}
-      <div className="prose prose-invert prose-sm max-w-none">
-        {meta.readme.split('\n\n').map((paragraph, i) => {
-          if (paragraph.startsWith('## ')) {
-            return (
-              <h2 key={i} className="text-lg font-semibold text-white mt-6 mb-3">
-                {paragraph.replace('## ', '')}
-              </h2>
-            )
-          }
-          if (paragraph.startsWith('### ')) {
-            return (
-              <h3 key={i} className="text-base font-medium text-gray-200 mt-4 mb-2">
-                {paragraph.replace('### ', '')}
-              </h3>
-            )
-          }
-          if (paragraph.startsWith('- ')) {
-            return (
-              <ul key={i} className="space-y-1 text-sm text-gray-400">
-                {paragraph.split('\n').map((line, j) => (
-                  <li key={j} className="flex items-start gap-2">
-                    <span className="text-blue-400 mt-1">•</span>
-                    <span>{line.replace(/^- /, '')}</span>
-                  </li>
-                ))}
-              </ul>
-            )
-          }
-          if (paragraph.startsWith('1. ')) {
-            return (
-              <ol key={i} className="space-y-1 text-sm text-gray-400 list-decimal list-inside">
-                {paragraph.split('\n').map((line, j) => (
-                  <li key={j}>{line.replace(/^\d+\. /, '')}</li>
-                ))}
-              </ol>
-            )
-          }
-          return (
-            <p key={i} className="text-sm text-gray-400 leading-relaxed">
-              {paragraph}
-            </p>
-          )
-        })}
+      <div className="nf-card !p-6 space-y-4">
+        {overview.map((paragraph) => (
+          <p key={paragraph} className="text-sm leading-7" style={{ color: 'var(--nf-text-mid)' }}>
+            {paragraph}
+          </p>
+        ))}
       </div>
 
-      {/* Features */}
-      <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-5">
-        <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
-          <Zap size={14} className="text-yellow-500" />
-          Features
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {meta.features.map((feature) => (
-            <div key={feature} className="flex items-center gap-2 text-sm text-gray-300">
-              <CheckCircle size={13} className="text-green-400 shrink-0" />
-              {feature}
-            </div>
-          ))}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="nf-card !p-5 space-y-4">
+          <h3
+            className="text-sm font-black flex items-center gap-2"
+            style={{ color: 'var(--nf-text-high)' }}
+          >
+            <Zap size={14} style={{ color: 'var(--color-nf-yellow)' }} />
+            {t('storeDetail.features')}
+          </h3>
+          <div className="grid grid-cols-1 gap-2">
+            {features.map((feature) => (
+              <div
+                key={feature}
+                className="flex items-center gap-2 rounded-2xl px-4 py-3"
+                style={{
+                  background: 'var(--nf-bg-raised)',
+                  color: 'var(--nf-text-high)',
+                }}
+              >
+                <CheckCircle size={14} className="text-green-400 shrink-0" />
+                <span className="text-sm">{feature}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* Use Cases */}
-      {meta.useCases.length > 0 && (
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-5">
-          <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
-            <Layers size={14} className="text-purple-400" />
-            Use Cases
+        <div className="nf-card !p-5 space-y-4">
+          <h3
+            className="text-sm font-black flex items-center gap-2"
+            style={{ color: 'var(--nf-text-high)' }}
+          >
+            <Layers size={14} style={{ color: 'var(--color-nf-indigo)' }} />
+            {t('storeDetail.useCases')}
           </h3>
           <div className="flex flex-wrap gap-2">
-            {meta.useCases.map((uc) => (
+            {useCases.map((useCase) => (
               <span
-                key={uc}
-                className="text-xs bg-purple-900/30 text-purple-300 px-3 py-1.5 rounded-full border border-purple-800/50"
+                key={useCase}
+                className="px-3 py-2 rounded-full text-xs border"
+                style={{
+                  background: 'rgba(124, 77, 255, 0.08)',
+                  borderColor: 'rgba(124, 77, 255, 0.2)',
+                  color: 'var(--nf-text-high)',
+                }}
               >
-                {uc}
+                {useCase}
               </span>
             ))}
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Requirements */}
-      <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-5">
-        <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
-          <Shield size={14} className="text-orange-400" />
-          Requirements
+      <div className="nf-card !p-5 space-y-4">
+        <h3
+          className="text-sm font-black flex items-center gap-2"
+          style={{ color: 'var(--nf-text-high)' }}
+        >
+          <Shield size={14} style={{ color: 'var(--color-nf-crimson)' }} />
+          {t('storeDetail.requirements')}
         </h3>
-        <ul className="space-y-2">
-          {meta.requirements.map((req) => (
-            <li key={req} className="flex items-start gap-2 text-sm text-gray-400">
-              <span className="text-orange-400 mt-0.5">→</span>
-              {req}
-            </li>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {requirements.map((requirement) => (
+            <div
+              key={requirement}
+              className="rounded-2xl px-4 py-3 text-sm"
+              style={{
+                background: 'var(--nf-bg-raised)',
+                color: 'var(--nf-text-mid)',
+              }}
+            >
+              {requirement}
+            </div>
           ))}
-        </ul>
+        </div>
       </div>
     </div>
   )
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
-
 export function StoreDetailPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { name } = useParams({ strict: false }) as { name: string }
   const [activeTab, setActiveTab] = useState('overview')
-  const isFavorite = useAppStore((s) => s.favorites.includes(name))
-  const toggleFavorite = useAppStore((s) => s.toggleFavorite)
+  const isFavorite = useAppStore((state) => state.favorites.includes(name))
+  const toggleFavorite = useAppStore((state) => state.toggleFavorite)
   const toast = useToast()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -164,34 +166,24 @@ export function StoreDetailPage() {
     mutationFn: () => api.myTemplates.fork(name),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['my-templates'] })
-      toast.success(`Forked to My Templates as "${data.name}"`)
+      toast.success(`${t('storeDetail.forked')} "${data.name}"`)
       navigate({ to: '/my-templates/$name', params: { name: data.name } })
     },
-    onError: () => toast.error('Failed to fork template'),
+    onError: () => toast.error(t('storeDetail.failedToFork')),
   })
 
-  // Fetch basic template list (for matching)
-  const { data: templates } = useQuery({
-    queryKey: ['templates'],
-    queryFn: api.templates.list,
+  const { data: detailResponse, isLoading: detailLoading } = useQuery({
+    queryKey: ['template-detail', name, i18n.language],
+    queryFn: () => api.templates.detail(name, i18n.language),
   })
 
-  // Fetch full template config
-  const { data: templateData, isLoading: loadingDetail } = useQuery({
-    queryKey: ['template', name],
+  const { data: templateData, isLoading: configLoading } = useQuery({
+    queryKey: ['template-config', name],
     queryFn: () => api.templates.get(name),
   })
 
-  const template = templates?.find((t) => t.name === name)
-  const meta = getTemplateMeta(name)
+  const detail = detailResponse?.template
   const agents = parseTemplateAgents(templateData)
-
-  // Fetch required env var refs
-  const { data: envRefsData } = useQuery({
-    queryKey: ['template-env-refs', name],
-    queryFn: () => api.templates.envRefs(name),
-  })
-  const requiredEnvVars = envRefsData?.requiredEnvVars ?? []
 
   const tabs = [
     { id: 'overview', label: t('storeDetail.overview'), icon: <BookOpen size={13} /> },
@@ -201,24 +193,21 @@ export function StoreDetailPage() {
       count: agents.length,
       icon: <Users size={13} />,
     },
-    { id: 'config', label: t('storeDetail.configuration'), icon: <Settings size={13} /> },
+    {
+      id: 'config',
+      label: t('storeDetail.configuration'),
+      icon: <Settings size={13} />,
+    },
   ]
 
-  if (!template && !loadingDetail) {
+  if (!detail && !detailLoading) {
     return (
       <div className="p-6">
-        <Breadcrumb
-          items={[{ label: t('store.title'), to: '/store' }, { label: name }]}
-          className="mb-4"
-        />
         <EmptyState
           title={t('storeDetail.templateNotFound')}
           description={t('storeDetail.templateNotFoundDesc')}
           action={
-            <Link
-              to="/store"
-              className="text-sm text-blue-400 hover:text-blue-300 border border-blue-800 rounded-lg px-4 py-2"
-            >
+            <Link to="/store" className="nf-pill nf-pill-cyan text-sm">
               {t('storeDetail.backToStore')}
             </Link>
           }
@@ -230,184 +219,277 @@ export function StoreDetailPage() {
   return (
     <TemplateDetailShell
       breadcrumbItems={[{ label: t('store.title'), to: '/store' }, { label: name }]}
-      heroIcon={<span className="text-5xl">{meta.emoji}</span>}
+      heroIcon={<span className="text-5xl">{detail?.emoji ?? '📦'}</span>}
       title={name}
       titleActions={
         <button
           type="button"
           onClick={() => toggleFavorite(name)}
           className={cn(
-            'p-1.5 rounded-md transition-colors',
-            isFavorite ? 'text-red-400' : 'text-gray-600 hover:text-gray-400',
+            'p-2 rounded-full border transition-colors',
+            isFavorite
+              ? 'text-red-400 border-red-800/60 bg-red-900/20'
+              : 'text-gray-500 border-gray-800 hover:text-red-300 hover:border-red-800/50',
           )}
         >
           <Heart size={18} fill={isFavorite ? 'currentColor' : 'none'} />
         </button>
       }
-      description={template?.description ?? 'Loading...'}
+      description={detail?.description ?? t('common.loading')}
       badges={
-        <>
-          <Badge variant="default" className={getCategoryColor(meta.category)}>
-            {meta.category}
-          </Badge>
-          <Badge variant="default" className={getDifficultyColor(meta.difficulty)}>
-            {meta.difficulty}
-          </Badge>
-          {meta.featured && (
-            <Badge variant="info" icon={<Star size={10} />}>
-              {t('store.featured')}
+        detail ? (
+          <>
+            <Badge variant="default" className={getCategoryColor(detail.category)}>
+              {getCategoryLabel(detail.category, t)}
             </Badge>
-          )}
-        </>
+            <Badge variant="default" className={getDifficultyColor(detail.difficulty)}>
+              {getDifficultyLabel(detail.difficulty, t)}
+            </Badge>
+            {detail.featured && (
+              <Badge variant="info" icon={<Star size={10} />}>
+                {t('store.featured')}
+              </Badge>
+            )}
+          </>
+        ) : null
       }
       chips={
-        <>
-          {meta.highlights.map((h) => (
-            <div
-              key={h}
-              className="flex items-center gap-1.5 text-xs text-gray-300 bg-gray-900 border border-gray-800 px-3 py-1.5 rounded-full"
-            >
-              <Zap size={11} className="text-yellow-500" />
-              {h}
-            </div>
-          ))}
-        </>
+        detail ? (
+          <>
+            {detail.highlights.map((highlight) => (
+              <div
+                key={highlight}
+                className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-full border"
+                style={{
+                  background: 'var(--nf-bg-glass-2)',
+                  borderColor: 'var(--nf-border)',
+                  color: 'var(--nf-text-high)',
+                }}
+              >
+                <Zap size={11} style={{ color: 'var(--color-nf-yellow)' }} />
+                {highlight}
+              </div>
+            ))}
+          </>
+        ) : null
       }
       actions={
         <>
-          <Link
-            to="/store/$name/deploy"
-            params={{ name }}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
-          >
-            <Rocket size={16} />
-            {t('store.deployTemplate')}
+          <Link to="/store/$name/deploy" params={{ name }} className="nf-pill nf-pill-cyan text-sm">
+            <Rocket size={14} />
+            <span>{t('store.deployTemplate')}</span>
           </Link>
           <button
             type="button"
             onClick={() => forkMutation.mutate()}
             disabled={forkMutation.isPending}
-            className="flex items-center gap-2 text-sm text-gray-300 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2.5 rounded-lg transition-colors disabled:opacity-50"
+            className="nf-pill text-sm"
+            style={{
+              background: 'var(--nf-bg-raised)',
+              color: 'var(--nf-text-high)',
+              border: '1px solid var(--nf-border)',
+            }}
           >
             <GitFork size={14} />
-            {forkMutation.isPending ? 'Forking...' : t('store.forkTemplate')}
+            <span>{forkMutation.isPending ? t('common.loading') : t('store.forkTemplate')}</span>
           </button>
           <Link
             to="/store"
-            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2.5 rounded-lg transition-colors"
+            className="nf-pill text-sm"
+            style={{
+              background: 'transparent',
+              color: 'var(--nf-text-mid)',
+              border: '1px solid var(--nf-border)',
+            }}
           >
             <ArrowLeft size={14} />
-            {t('store.backToStore')}
+            <span>{t('store.backToStore')}</span>
           </Link>
         </>
       }
       sidebar={
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-            Quick Info
-          </h3>
+        detail ? (
+          <div className="nf-card !p-5 space-y-5">
+            <h3
+              className="text-xs font-black uppercase tracking-[0.2em]"
+              style={{ color: 'var(--nf-text-muted)' }}
+            >
+              {t('templateDetail.quickInfo')}
+            </h3>
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5">
-                <Users size={12} />
-                Agents
-              </span>
-              <span className="text-sm font-medium">{template?.agentCount ?? '—'}</span>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <span
+                  className="text-xs flex items-center gap-1.5"
+                  style={{ color: 'var(--nf-text-muted)' }}
+                >
+                  <Users size={12} />
+                  {t('deploy.agentsLabel')}
+                </span>
+                <span className="text-sm font-bold" style={{ color: 'var(--nf-text-high)' }}>
+                  {detail.agentCount}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span
+                  className="text-xs flex items-center gap-1.5"
+                  style={{ color: 'var(--nf-text-muted)' }}
+                >
+                  <FolderOpen size={12} />
+                  {t('deploy.namespaceLabel')}
+                </span>
+                <code className="text-sm" style={{ color: 'var(--nf-text-high)' }}>
+                  {detail.namespace}
+                </code>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span
+                  className="text-xs flex items-center gap-1.5"
+                  style={{ color: 'var(--nf-text-muted)' }}
+                >
+                  <Clock size={12} />
+                  {t('deploy.deployTimeLabel')}
+                </span>
+                <span className="text-sm" style={{ color: 'var(--nf-text-high)' }}>
+                  {detail.estimatedDeployTime}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span
+                  className="text-xs flex items-center gap-1.5"
+                  style={{ color: 'var(--nf-text-muted)' }}
+                >
+                  <Cpu size={12} />
+                  {t('storeDetail.team')}
+                </span>
+                <span className="text-sm" style={{ color: 'var(--nf-text-high)' }}>
+                  {detail.teamName}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span
+                  className="text-xs flex items-center gap-1.5"
+                  style={{ color: 'var(--nf-text-muted)' }}
+                >
+                  <Star size={12} />
+                  {t('storeDetail.popularity')}
+                </span>
+                <span className="text-sm" style={{ color: 'var(--nf-text-high)' }}>
+                  {detail.popularity}%
+                </span>
+              </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5">
-                <FolderOpen size={12} />
-                Namespace
-              </span>
-              <span className="text-sm font-mono text-gray-300">{template?.namespace ?? '—'}</span>
+
+            <div className="space-y-3 pt-4 border-t" style={{ borderColor: 'var(--nf-border)' }}>
+              <div className="flex items-center justify-between gap-3">
+                <span
+                  className="text-xs flex items-center gap-1.5"
+                  style={{ color: 'var(--nf-text-muted)' }}
+                >
+                  <FileText size={12} />
+                  {t('storeDetail.file')}
+                </span>
+                <code className="text-[11px]" style={{ color: 'var(--nf-text-high)' }}>
+                  {detail.file}
+                </code>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span
+                  className="text-xs flex items-center gap-1.5"
+                  style={{ color: 'var(--nf-text-muted)' }}
+                >
+                  <CalendarClock size={12} />
+                  {t('storeDetail.updated')}
+                </span>
+                <span className="text-xs" style={{ color: 'var(--nf-text-high)' }}>
+                  {detail.lastUpdated
+                    ? new Date(detail.lastUpdated).toLocaleDateString(i18n.language)
+                    : t('common.none')}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span
+                  className="text-xs flex items-center gap-1.5"
+                  style={{ color: 'var(--nf-text-muted)' }}
+                >
+                  <Key size={12} />
+                  {t('storeDetail.requiredEnvVars')}
+                </span>
+                <span className="text-sm font-bold" style={{ color: 'var(--nf-text-high)' }}>
+                  {detail.requiredEnvVars.length}
+                </span>
+              </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5">
-                <Clock size={12} />
-                Deploy time
-              </span>
-              <span className="text-sm text-gray-300">{meta.estimatedDeployTime}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5">
-                <Star size={12} />
-                Popularity
-              </span>
-              <div className="flex items-center gap-1.5">
-                <div className="w-20 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-yellow-500 rounded-full"
-                    style={{ width: `${meta.popularity}%` }}
-                  />
+
+            {detail.requiredEnvVars.length > 0 && (
+              <div className="space-y-2 pt-4 border-t" style={{ borderColor: 'var(--nf-border)' }}>
+                <div
+                  className="text-[11px] font-semibold"
+                  style={{ color: 'var(--nf-text-muted)' }}
+                >
+                  {t('storeDetail.requiredEnvVars')}
                 </div>
-                <span className="text-xs text-gray-500">{meta.popularity}%</span>
+                <div className="flex flex-wrap gap-2">
+                  {detail.requiredEnvVars.map((envKey) => (
+                    <code
+                      key={envKey}
+                      className="px-2.5 py-1.5 rounded-full text-[11px]"
+                      style={{
+                        background: 'rgba(248, 231, 28, 0.1)',
+                        color: 'var(--nf-text-high)',
+                      }}
+                    >
+                      {envKey}
+                    </code>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5">
-                <Cpu size={12} />
-                Team name
-              </span>
-              <span className="text-sm font-mono text-gray-300">{template?.teamName ?? '—'}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5">
-                <Key size={12} />
-                Env vars
-              </span>
-              <span className="text-sm text-gray-300">{requiredEnvVars.length || '—'}</span>
+            )}
+
+            <div className="space-y-2 pt-4 border-t" style={{ borderColor: 'var(--nf-border)' }}>
+              <div className="text-[11px] font-semibold" style={{ color: 'var(--nf-text-muted)' }}>
+                {t('storeDetail.cliQuickDeploy')}
+              </div>
+              <code
+                className="block rounded-2xl px-4 py-3 text-xs break-all"
+                style={{
+                  background: 'var(--nf-bg-raised)',
+                  color: 'var(--nf-text-high)',
+                }}
+              >
+                shadowob-cloud deploy --template {name}
+              </code>
             </div>
           </div>
-
-          {requiredEnvVars.length > 0 && (
-            <div className="pt-3 border-t border-gray-800">
-              <p className="text-[10px] text-gray-600 mb-2 flex items-center gap-1">
-                <Key size={10} />
-                Required Environment Variables
-              </p>
-              <div className="space-y-1">
-                {requiredEnvVars.map((v: string) => (
-                  <code
-                    key={v}
-                    className="block text-[11px] font-mono text-yellow-400/80 bg-gray-950 rounded px-2 py-1"
-                  >
-                    {v}
-                  </code>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="pt-3 border-t border-gray-800">
-            <p className="text-[10px] text-gray-600 mb-2 flex items-center gap-1">
-              <ExternalLink size={10} />
-              CLI Quick Deploy
-            </p>
-            <code className="block text-xs font-mono text-gray-400 bg-gray-950 rounded px-3 py-2 break-all">
-              shadowob-cloud deploy --template {name}
-            </code>
-          </div>
-        </div>
+        ) : null
       }
       tabs={tabs}
       activeTab={activeTab}
       onTabChange={setActiveTab}
     >
-      {activeTab === 'overview' && template && <OverviewTab template={template} meta={meta} />}
+      {activeTab === 'overview' && detail && (
+        <OverviewTab
+          overview={detail.overview}
+          features={detail.features}
+          useCases={detail.useCases}
+          requirements={detail.requirements}
+        />
+      )}
+
       {activeTab === 'agents' && (
         <TemplateAgentsTab
           agents={agents}
           emptyTitle={t('storeDetail.agentDetailsUnavailable')}
           emptyDescription={t('storeDetail.deployToSeeConfig')}
-          introText={`This template includes ${agents.length} ${pluralize(agents.length, 'agent')}:`}
+          introText={t('storeDetail.includesAgents', { count: agents.length })}
         />
       )}
+
       {activeTab === 'config' && (
         <TemplateConfigTab
           templateData={templateData}
           description={t('storeDetail.fullTemplateConfig')}
-          title="Template Configuration"
+          title={configLoading ? t('common.loading') : t('storeDetail.templateConfiguration')}
         />
       )}
     </TemplateDetailShell>

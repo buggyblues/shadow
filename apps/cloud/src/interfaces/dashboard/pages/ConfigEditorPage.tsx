@@ -87,7 +87,7 @@ function CodeEditor({
 export function ConfigEditorPage() {
   const toast = useToast()
   const queryClient = useQueryClient()
-  const { i18n } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [content, setContent] = useState('')
   const [validateResult, setValidateResult] = useState<ValidateResult | null>(null)
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
@@ -121,18 +121,31 @@ export function ConfigEditorPage() {
   const saveMutation = useMutation({
     mutationFn: (text: string) => api.config.put({ content: text }),
     onSuccess: () => {
-      toast.success('Config saved')
+      toast.success(t('configEditor.saved'))
       setDirty(false)
     },
-    onError: () => toast.error('Failed to save config'),
+    onError: () => toast.error(t('configEditor.saveFailed')),
   })
 
   const validateMutation = useMutation({
     mutationFn: (config: unknown) => api.validate(config),
     onSuccess: (data) => {
       setValidateResult(data)
-      if (data.valid) toast.success(`Valid: ${data.agents} agent(s)`)
-      else toast.error(`Invalid: ${data.violations.length} violation(s)`)
+      if (data.valid) {
+        toast.success(
+          t('templateDetail.validationSummaryValid', {
+            agents: data.agents,
+            configurations: data.configurations,
+          }),
+        )
+      } else {
+        toast.error(
+          t('configEditor.validationSummaryInvalid', {
+            violations: data.violations.length,
+            extendsErrors: data.extendsErrors.length,
+          }),
+        )
+      }
     },
   })
 
@@ -144,7 +157,7 @@ export function ConfigEditorPage() {
       setValidateResult(null)
       validateMutation.mutate(parsed)
     } catch {
-      toast.error('Invalid JSON syntax')
+      toast.error(t('templateDetail.invalidJSONSyntax'))
     }
   }
 
@@ -152,9 +165,9 @@ export function ConfigEditorPage() {
     try {
       const parsed = JSON.parse(content)
       setContent(JSON.stringify(parsed, null, 2))
-      toast.info('Formatted')
+      toast.info(t('templateDetail.formatted'))
     } catch {
-      toast.error('Cannot format: invalid JSON')
+      toast.error(t('templateDetail.cannotFormat'))
     }
   }
 
@@ -165,9 +178,9 @@ export function ConfigEditorPage() {
       setContent(JSON.stringify(tplData, null, 2))
       setSelectedTemplate(templateName)
       setDirty(false)
-      toast.info(`Loaded template: ${templateName}`)
+      toast.info(t('configEditor.loadedTemplate', { name: templateName }))
     } catch {
-      toast.error('Failed to load template')
+      toast.error(t('configEditor.loadTemplateFailed'))
     }
   }
 
@@ -178,9 +191,9 @@ export function ConfigEditorPage() {
       setContent(JSON.stringify(tplData.content, null, 2))
       setSelectedTemplate(`my:${name}`)
       setDirty(false)
-      toast.info(`Loaded: ${name}`)
+      toast.info(t('configEditor.loadedTemplate', { name }))
     } catch {
-      toast.error('Failed to load template')
+      toast.error(t('configEditor.loadTemplateFailed'))
     }
   }
 
@@ -197,9 +210,9 @@ export function ConfigEditorPage() {
       )
       queryClient.invalidateQueries({ queryKey: ['my-templates'] })
       setDirty(false)
-      toast.success(`Saved to My Templates as "${name}"`)
+      toast.success(t('configEditor.savedAsTemplate', { name }))
     } catch {
-      toast.error('Invalid JSON — cannot save')
+      toast.error(t('templateDetail.invalidJSONCannotSave'))
     }
   }
 
@@ -223,13 +236,17 @@ export function ConfigEditorPage() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-semibold flex items-center gap-2">
-            Config Editor
-            {dirty && <span className="text-xs text-yellow-400 font-normal">(unsaved)</span>}
+            {t('configEditor.title')}
+            {dirty && (
+              <span className="text-xs text-yellow-400 font-normal">
+                ({t('configEditor.unsaved')})
+              </span>
+            )}
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
             {selectedTemplate ? (
               <span>
-                Editing:{' '}
+                {t('configEditor.editing')}{' '}
                 <code className="font-mono text-xs text-gray-400">
                   {selectedTemplate.startsWith('my:')
                     ? selectedTemplate.slice(3)
@@ -239,7 +256,7 @@ export function ConfigEditorPage() {
             ) : data?.path ? (
               <span className="font-mono text-xs">{data.path}</span>
             ) : (
-              'Select a template to load, or start from scratch'
+              t('configEditor.selectTemplateOrScratch')
             )}
           </p>
         </div>
@@ -254,9 +271,9 @@ export function ConfigEditorPage() {
             }}
             className="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs text-gray-400 focus:outline-none focus:border-blue-500 max-w-[180px]"
           >
-            <option value="">Load template...</option>
+            <option value="">{t('validate.loadTemplate')}...</option>
             {(storeTemplates ?? []).length > 0 && (
-              <optgroup label="Store Templates">
+              <optgroup label={t('configEditor.storeTemplates')}>
                 {storeTemplates?.map((t) => (
                   <option key={`store:${t.name}`} value={`store:${t.name}`}>
                     {t.name}
@@ -265,7 +282,7 @@ export function ConfigEditorPage() {
               </optgroup>
             )}
             {(myTemplates ?? []).length > 0 && (
-              <optgroup label="My Templates">
+              <optgroup label={t('configEditor.myTemplates')}>
                 {myTemplates?.map((t) => (
                   <option key={`my:${t.name}`} value={`my:${t.name}`}>
                     {t.name}
@@ -281,7 +298,7 @@ export function ConfigEditorPage() {
             className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded px-3 py-1.5 transition-colors disabled:opacity-40"
           >
             <FileJson size={12} />
-            Format
+            {t('templateDetail.format')}
           </button>
           <button
             type="button"
@@ -290,17 +307,17 @@ export function ConfigEditorPage() {
             className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded px-3 py-1.5 transition-colors disabled:opacity-40"
           >
             <Shield size={12} />
-            Validate
+            {t('templateDetail.validate')}
           </button>
           <button
             type="button"
             onClick={handleSaveToMyTemplates}
             disabled={!isValidJson || !content.trim()}
             className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded px-3 py-1.5 transition-colors disabled:opacity-40"
-            title="Save to My Templates"
+            title={t('configEditor.saveToMyTemplates')}
           >
             <Layers size={12} />
-            Save as Template
+            {t('configEditor.saveAsTemplate')}
           </button>
           <button
             type="button"
@@ -314,19 +331,20 @@ export function ConfigEditorPage() {
             )}
           >
             <Save size={12} />
-            Save
+            {t('common.save')}
           </button>
         </div>
       </div>
 
-      {isLoading && <div className="text-center text-gray-500 text-sm py-8">Loading config...</div>}
+      {isLoading && (
+        <div className="text-center text-gray-500 text-sm py-8">
+          {t('configEditor.loadingConfig')}
+        </div>
+      )}
 
       {error && !data && (
         <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-4 mb-4">
-          <p className="text-sm text-yellow-400">
-            No config file loaded. Use the template selector above to load a store template or one
-            of your saved templates.
-          </p>
+          <p className="text-sm text-yellow-400">{t('configEditor.noConfigLoaded')}</p>
         </div>
       )}
 
@@ -343,8 +361,14 @@ export function ConfigEditorPage() {
           <Shield size={14} />
           <span className="text-sm">
             {validateResult.valid
-              ? `Valid: ${validateResult.agents} agent(s), ${validateResult.configurations} configuration(s)`
-              : `Invalid: ${validateResult.violations.length} violation(s), ${validateResult.extendsErrors.length} extends error(s)`}
+              ? t('templateDetail.validationSummaryValid', {
+                  agents: validateResult.agents,
+                  configurations: validateResult.configurations,
+                })
+              : t('configEditor.validationSummaryInvalid', {
+                  violations: validateResult.violations.length,
+                  extendsErrors: validateResult.extendsErrors.length,
+                })}
           </span>
         </div>
       )}
@@ -361,13 +385,17 @@ export function ConfigEditorPage() {
       {/* Status bar */}
       <div className="flex items-center justify-between mt-2 text-xs text-gray-600">
         <div className="flex items-center gap-3">
-          <span>{content.split('\n').length} lines</span>
-          <span>{content.length} chars</span>
+          <span>
+            {content.split('\n').length} {t('templateDetail.lines')}
+          </span>
+          <span>
+            {content.length} {t('configEditor.chars')}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           {content.trim() && (
             <span className={isValidJson ? 'text-green-600' : 'text-red-500'}>
-              {isValidJson ? 'Valid JSON' : 'Invalid JSON'}
+              {isValidJson ? t('templateDetail.validJSON') : t('templateDetail.invalidJSON')}
             </span>
           )}
         </div>

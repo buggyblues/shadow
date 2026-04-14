@@ -157,8 +157,8 @@ function DeploymentRow({ dep }: { dep: Deployment }) {
         <StatusDot status={ready ? 'success' : 'warning'} />
         <div className="min-w-0">
           <Link
-            to="/deployments/$namespace/$id"
-            params={{ namespace: dep.namespace, id: dep.name }}
+            to="/deployments/$namespace"
+            params={{ namespace: dep.namespace }}
             className="text-sm font-mono text-blue-400 hover:text-blue-300 transition-colors truncate block"
           >
             {dep.name}
@@ -196,8 +196,8 @@ function DeploymentRow({ dep }: { dep: Deployment }) {
         </div>
 
         <Link
-          to="/deployments/$namespace/$id"
-          params={{ namespace: dep.namespace, id: dep.name }}
+          to="/deployments/$namespace"
+          params={{ namespace: dep.namespace }}
           className="text-gray-600 hover:text-white transition-colors"
         >
           <ChevronRight size={14} />

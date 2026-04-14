@@ -17,6 +17,8 @@ import { ManifestService } from './manifest.service.js'
 import { ProvisionService } from './provision.service.js'
 import { RuntimeService } from './runtime.service.js'
 import { TemplateService } from './template.service.js'
+import { TemplateI18nService } from './template-i18n.service.js'
+import { UsageCostService } from './usage-cost.service.js'
 
 /**
  * Service container interface — all services accessible via a single object.
@@ -28,9 +30,11 @@ export interface ServiceContainer {
   provision: ProvisionService
   deploy: DeployService
   template: TemplateService
+  templateI18n: TemplateI18nService
   runtime: RuntimeService
   image: ImageService
   k8s: K8sService
+  usageCost: UsageCostService
 }
 
 /**
@@ -48,9 +52,23 @@ export function createContainer(overrides?: Partial<ServiceContainer>): ServiceC
   const runtime = overrides?.runtime ?? new RuntimeService()
   const image = overrides?.image ?? new ImageService(logger)
   const k8s = overrides?.k8s ?? new K8sService()
+  const templateI18n = overrides?.templateI18n ?? new TemplateI18nService(template)
+  const usageCost = overrides?.usageCost ?? new UsageCostService(k8s)
   const deploy = overrides?.deploy ?? new DeployService(config, manifest, provision, k8s, logger)
 
-  return { logger, config, manifest, provision, deploy, template, runtime, image, k8s }
+  return {
+    logger,
+    config,
+    manifest,
+    provision,
+    deploy,
+    template,
+    templateI18n,
+    runtime,
+    image,
+    k8s,
+    usageCost,
+  }
 }
 
 // Re-export service classes for SDK use
@@ -62,3 +80,19 @@ export { ManifestService } from './manifest.service.js'
 export { ProvisionService } from './provision.service.js'
 export { RuntimeService } from './runtime.service.js'
 export { type TemplateMeta, TemplateService } from './template.service.js'
+export {
+  type TemplateCatalogDetail,
+  type TemplateCatalogResponse,
+  type TemplateCatalogSummary,
+  type TemplateCategoryId,
+  type TemplateCategoryInfo,
+  type TemplateDifficulty,
+  TemplateI18nService,
+} from './template-i18n.service.js'
+export {
+  type AgentCostSummary,
+  type CostOverviewSummary,
+  type NamespaceCostSummary,
+  type ProviderUsageSummary,
+  UsageCostService,
+} from './usage-cost.service.js'

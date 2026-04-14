@@ -1,18 +1,72 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { Clock, Copy, Edit3, GitBranch, GitFork, Loader2, Search, Trash2 } from 'lucide-react'
+import {
+  Clock,
+  Copy,
+  Cpu,
+  Edit3,
+  FolderOpen,
+  GitBranch,
+  GitFork,
+  Layers,
+  Loader2,
+  Search,
+  Sparkles,
+  Trash2,
+  Users,
+} from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { api } from '@/lib/api'
+import { Badge } from '@/components/Badge'
+import { parseTemplateAgents } from '@/components/TemplateDetailShared'
+import { api, type TemplateCatalogSummary } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/stores/toast'
 
 // ── Template List ─────────────────────────────────────────────────────────────
 
+function getMyTemplateOverview(content: unknown) {
+  const agents = parseTemplateAgents(content)
+  const data = content && typeof content === 'object' ? (content as Record<string, unknown>) : {}
+  const deployments =
+    data.deployments && typeof data.deployments === 'object'
+      ? (data.deployments as Record<string, unknown>)
+      : undefined
+
+  const namespace =
+    typeof deployments?.namespace === 'string'
+      ? deployments.namespace
+      : typeof data.namespace === 'string'
+        ? data.namespace
+        : null
+
+  const providers = Array.isArray(data.providers)
+    ? data.providers
+    : Array.isArray(deployments?.providers)
+      ? deployments.providers
+      : []
+
+  const models = data.models && typeof data.models === 'object' ? Object.keys(data.models) : []
+  const plugins = Array.isArray(data.plugins) ? data.plugins : []
+
+  return {
+    agentCount: agents.length,
+    providerCount: providers.length > 0 ? providers.length : models.length,
+    pluginCount: plugins.length,
+    namespace,
+    agentHighlights: agents
+      .map((agent) => agent.identity?.name ?? agent.name)
+      .filter(Boolean)
+      .slice(0, 3),
+  }
+}
+
 function TemplateCard({
   name,
   slug,
   templateSlug,
+  content,
+  baseTemplate,
   version,
   updatedAt,
   onEdit,
@@ -22,39 +76,73 @@ function TemplateCard({
   name: string
   slug: string
   templateSlug: string | null
+  content: unknown
+  baseTemplate?: TemplateCatalogSummary
   version: number
   updatedAt: string
   onEdit: () => void
   onDelete: () => void
   onShare: () => void
 }) {
+  const { t, i18n } = useTranslation()
+  const overview = useMemo(() => getMyTemplateOverview(content), [content])
+  const summaryText =
+    baseTemplate?.overview[0] ?? baseTemplate?.description ?? t('templateDetail.customDescription')
+  const highlightChips = baseTemplate?.features.slice(0, 2) ?? overview.agentHighlights.slice(0, 2)
+  const isStoreTemplate = Boolean(templateSlug && !templateSlug.startsWith('git:'))
+
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 hover:border-gray-700 transition-colors group">
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-gray-200 truncate">{name}</h3>
-            <span className="text-[10px] bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded font-mono">
+    <div className="nf-card nf-bouncy group !p-5 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link
+              to="/my-templates/$name"
+              params={{ name }}
+              className="text-base font-black truncate hover:opacity-85 transition-opacity"
+              style={{ color: 'var(--nf-text-high)' }}
+            >
+              {name}
+            </Link>
+            <Badge variant="outline" size="sm">
               v{version}
-            </span>
+            </Badge>
+            {baseTemplate?.featured && (
+              <Badge variant="info" size="sm" icon={<Sparkles size={10} />}>
+                {t('store.featured')}
+              </Badge>
+            )}
           </div>
+
           {templateSlug && (
-            <p className="text-[10px] text-gray-600 mt-0.5 flex items-center gap-1">
-              <GitFork size={10} />
-              Forked from <span className="text-gray-500">{templateSlug}</span>
-            </p>
+            <div className="text-xs text-gray-500 flex items-center gap-1.5 flex-wrap">
+              <GitFork size={11} />
+              <span>{t('templateDetail.forkedFrom')}</span>
+              {isStoreTemplate ? (
+                <Link
+                  to="/store/$name"
+                  params={{ name: templateSlug }}
+                  className="hover:text-blue-300 transition-colors"
+                >
+                  {templateSlug}
+                </Link>
+              ) : (
+                <span>{templateSlug}</span>
+              )}
+            </div>
           )}
-          <p className="text-[10px] text-gray-600 mt-1 flex items-center gap-1">
-            <Clock size={10} />
-            {new Date(updatedAt).toLocaleString()}
+
+          <p className="text-sm leading-6 line-clamp-2" style={{ color: 'var(--nf-text-mid)' }}>
+            {summaryText}
           </p>
         </div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <button
             type="button"
             onClick={onShare}
             className="p-1.5 text-gray-500 hover:text-green-400 hover:bg-gray-800 rounded transition-colors"
-            title="Share"
+            title={t('common.share')}
           >
             <Copy size={13} />
           </button>
@@ -62,7 +150,7 @@ function TemplateCard({
             type="button"
             onClick={onEdit}
             className="p-1.5 text-gray-500 hover:text-blue-400 hover:bg-gray-800 rounded transition-colors"
-            title="Edit"
+            title={t('common.edit')}
           >
             <Edit3 size={13} />
           </button>
@@ -70,27 +158,117 @@ function TemplateCard({
             type="button"
             onClick={onDelete}
             className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-gray-800 rounded transition-colors"
-            title="Delete"
+            title={t('common.delete')}
           >
             <Trash2 size={13} />
           </button>
         </div>
       </div>
-      <div className="mt-3 flex gap-2">
+
+      {highlightChips.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {highlightChips.map((chip) => (
+            <span
+              key={chip}
+              className="px-3 py-1 rounded-full text-[11px] border"
+              style={{
+                background: 'var(--nf-bg-raised)',
+                borderColor: 'var(--nf-border)',
+                color: 'var(--nf-text-mid)',
+              }}
+            >
+              {chip}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="nf-glass-2 rounded-2xl p-3">
+          <div
+            className="text-[11px] mb-1 flex items-center gap-1.5"
+            style={{ color: 'var(--nf-text-muted)' }}
+          >
+            <Users size={11} />
+            {t('deploy.agentsLabel')}
+          </div>
+          <div className="text-sm font-bold" style={{ color: 'var(--nf-text-high)' }}>
+            {overview.agentCount}
+          </div>
+        </div>
+        <div className="nf-glass-2 rounded-2xl p-3">
+          <div
+            className="text-[11px] mb-1 flex items-center gap-1.5"
+            style={{ color: 'var(--nf-text-muted)' }}
+          >
+            <Cpu size={11} />
+            {t('templateDetail.providers')}
+          </div>
+          <div className="text-sm font-bold" style={{ color: 'var(--nf-text-high)' }}>
+            {overview.providerCount}
+          </div>
+        </div>
+        <div className="nf-glass-2 rounded-2xl p-3">
+          <div
+            className="text-[11px] mb-1 flex items-center gap-1.5"
+            style={{ color: 'var(--nf-text-muted)' }}
+          >
+            <Layers size={11} />
+            {t('settings.plugins')}
+          </div>
+          <div className="text-sm font-bold" style={{ color: 'var(--nf-text-high)' }}>
+            {overview.pluginCount}
+          </div>
+        </div>
+        <div className="nf-glass-2 rounded-2xl p-3">
+          <div
+            className="text-[11px] mb-1 flex items-center gap-1.5"
+            style={{ color: 'var(--nf-text-muted)' }}
+          >
+            <FolderOpen size={11} />
+            {t('clusters.namespace')}
+          </div>
+          <div className="text-sm font-bold truncate" style={{ color: 'var(--nf-text-high)' }}>
+            {overview.namespace ?? t('common.none')}
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="flex items-center justify-between gap-3 text-[11px]"
+        style={{ color: 'var(--nf-text-muted)' }}
+      >
+        <span className="flex items-center gap-1.5">
+          <Clock size={11} />
+          {new Date(updatedAt).toLocaleString(i18n.language)}
+        </span>
+      </div>
+
+      <div className="flex gap-2">
         <button
           type="button"
           onClick={onEdit}
-          className="flex-1 flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded py-1.5 transition-colors"
+          className="flex-1 flex items-center justify-center gap-1.5 text-sm rounded-2xl py-2.5 transition-colors"
+          style={{
+            background: 'var(--nf-bg-raised)',
+            color: 'var(--nf-text-mid)',
+            border: '1px solid var(--nf-border)',
+          }}
         >
           <Edit3 size={11} />
-          Edit
+          {t('common.edit')}
         </button>
         <Link
           to="/store/$name/deploy"
           params={{ name: slug }}
-          className="flex-1 flex items-center justify-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-800/50 rounded py-1.5 transition-colors"
+          className="flex-1 flex items-center justify-center gap-1.5 text-sm rounded-2xl py-2.5 transition-colors"
+          style={{
+            color: 'var(--color-nf-cyan)',
+            background: 'rgba(0, 243, 255, 0.08)',
+            border: '1px solid rgba(0, 243, 255, 0.2)',
+          }}
         >
-          Deploy
+          {t('common.deploy')}
         </Link>
       </div>
     </div>
@@ -106,7 +284,7 @@ function ForkDialog({
   onFork: (sourceTemplate: string, newName: string) => void
   onClose: () => void
 }) {
-  const { i18n } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { data: templates } = useQuery({
     queryKey: ['templates', i18n.language],
     queryFn: () => api.templates.listByLocale(i18n.language),
@@ -154,14 +332,14 @@ function ForkDialog({
       >
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <GitFork size={18} className="text-blue-400" />
-          Fork Template
+          {t('templates.forkTemplate')}
         </h3>
-        <p className="text-sm text-gray-500">
-          Choose a store template to fork. You'll get an editable copy.
-        </p>
+        <p className="text-sm text-gray-500">{t('templates.chooseStoreTemplate')}</p>
 
         <div ref={dropdownRef} className="relative">
-          <label className="text-xs text-gray-400 mb-1.5 block">Source Template</label>
+          <label className="text-xs text-gray-400 mb-1.5 block">
+            {t('templates.sourceTemplate')}
+          </label>
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
@@ -174,47 +352,51 @@ function ForkDialog({
                 setDropdownOpen(true)
               }}
               onFocus={() => setDropdownOpen(true)}
-              placeholder="Search templates..."
+              placeholder={t('templates.searchPlaceholder')}
               className="w-full bg-gray-950 border border-gray-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500"
             />
           </div>
           {dropdownOpen && filteredTemplates.length > 0 && (
             <div className="absolute z-10 w-full mt-1 bg-gray-950 border border-gray-700 rounded-lg max-h-48 overflow-y-auto shadow-xl">
-              {filteredTemplates.map((t) => (
+              {filteredTemplates.map((template) => (
                 <button
-                  key={t.name}
+                  key={template.name}
                   type="button"
                   onClick={() => {
-                    setSelected(t.name)
+                    setSelected(template.name)
                     setSearchQuery('')
-                    setNewName(`my-${t.name}`)
+                    setNewName(`my-${template.name}`)
                     setDropdownOpen(false)
                   }}
                   className={cn(
                     'w-full text-left px-3 py-2 text-sm hover:bg-gray-800 transition-colors flex items-center justify-between',
-                    selected === t.name && 'bg-blue-900/30 text-blue-400',
+                    selected === template.name && 'bg-blue-900/30 text-blue-400',
                   )}
                 >
-                  <span className="truncate">{t.name}</span>
-                  <span className="text-xs text-gray-600 ml-2 shrink-0">{t.agentCount} agents</span>
+                  <span className="truncate">{template.name}</span>
+                  <span className="text-xs text-gray-600 ml-2 shrink-0">
+                    {t('store.agentCount', { count: template.agentCount })}
+                  </span>
                 </button>
               ))}
             </div>
           )}
           {dropdownOpen && searchQuery && filteredTemplates.length === 0 && (
             <div className="absolute z-10 w-full mt-1 bg-gray-950 border border-gray-700 rounded-lg p-3 text-xs text-gray-500 text-center">
-              No templates match "{searchQuery}"
+              {t('templates.noTemplatesMatch', { query: searchQuery })}
             </div>
           )}
         </div>
 
         <div>
-          <label className="text-xs text-gray-400 mb-1.5 block">New Template Name</label>
+          <label className="text-xs text-gray-400 mb-1.5 block">
+            {t('templates.newTemplateName')}
+          </label>
           <input
             type="text"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="my-custom-template"
+            placeholder={t('templates.templateNamePlaceholder')}
             className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2.5 text-sm font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500"
           />
         </div>
@@ -225,7 +407,7 @@ function ForkDialog({
             onClick={onClose}
             className="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg transition-colors"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -236,7 +418,7 @@ function ForkDialog({
             className="flex items-center gap-1.5 px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg transition-colors"
           >
             <GitFork size={14} />
-            Fork
+            {t('common.fork')}
           </button>
         </div>
       </div>
@@ -255,6 +437,7 @@ function ImportGitDialog({
   onClose: () => void
   isPending: boolean
 }) {
+  const { t } = useTranslation()
   const [url, setUrl] = useState('')
   const [name, setName] = useState('')
   const [branch, setBranch] = useState('')
@@ -271,14 +454,14 @@ function ImportGitDialog({
       >
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <GitBranch size={18} className="text-green-400" />
-          Import from Git
+          {t('templates.importFromGit')}
         </h3>
-        <p className="text-sm text-gray-500">
-          Clone a git repository and import the template config.
-        </p>
+        <p className="text-sm text-gray-500">{t('templates.cloneGitRepository')}</p>
 
         <div>
-          <label className="text-xs text-gray-400 mb-1.5 block">Repository URL *</label>
+          <label className="text-xs text-gray-400 mb-1.5 block">
+            {t('templates.repositoryUrl')} *
+          </label>
           <input
             type="text"
             value={url}
@@ -290,29 +473,33 @@ function ImportGitDialog({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-gray-400 mb-1.5 block">Template Name</label>
+            <label className="text-xs text-gray-400 mb-1.5 block">
+              {t('templates.templateName')}
+            </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="auto-detect from repo"
+              placeholder={t('templates.autoDetectFromRepo')}
               className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500"
             />
           </div>
           <div>
-            <label className="text-xs text-gray-400 mb-1.5 block">Branch</label>
+            <label className="text-xs text-gray-400 mb-1.5 block">{t('templates.branch')}</label>
             <input
               type="text"
               value={branch}
               onChange={(e) => setBranch(e.target.value)}
-              placeholder="default branch"
+              placeholder={t('templates.defaultBranch')}
               className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500"
             />
           </div>
         </div>
 
         <div>
-          <label className="text-xs text-gray-400 mb-1.5 block">Config file path</label>
+          <label className="text-xs text-gray-400 mb-1.5 block">
+            {t('templates.configFilePath')}
+          </label>
           <input
             type="text"
             value={path}
@@ -328,7 +515,7 @@ function ImportGitDialog({
             onClick={onClose}
             className="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg transition-colors"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -345,7 +532,7 @@ function ImportGitDialog({
             className="flex items-center gap-1.5 px-4 py-2 text-sm bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg transition-colors"
           >
             {isPending ? <Loader2 size={14} className="animate-spin" /> : <GitBranch size={14} />}
-            {isPending ? 'Cloning...' : 'Import'}
+            {isPending ? t('templates.cloning') : t('templates.importAction')}
           </button>
         </div>
       </div>
@@ -356,7 +543,7 @@ function ImportGitDialog({
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function MyTemplatesPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const toast = useToast()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -368,6 +555,11 @@ export function MyTemplatesPage() {
     queryFn: api.myTemplates.list,
   })
 
+  const { data: catalogData } = useQuery({
+    queryKey: ['template-catalog', i18n.language],
+    queryFn: () => api.templates.catalog(i18n.language),
+  })
+
   const forkMutation = useMutation({
     mutationFn: ({ source, name }: { source: string; name: string }) =>
       api.myTemplates.fork(source, name),
@@ -375,9 +567,9 @@ export function MyTemplatesPage() {
       queryClient.invalidateQueries({ queryKey: ['my-templates'] })
       setShowForkDialog(false)
       navigate({ to: '/my-templates/$name', params: { name: data.name } })
-      toast.success(`Forked as "${data.name}"`)
+      toast.success(`${t('templates.forkedAs')} "${data.name}"`)
     },
-    onError: (err) => toast.error(`Fork failed: ${err.message}`),
+    onError: (err) => toast.error(t('templates.forkFailed', { message: err.message })),
   })
 
   const gitImportMutation = useMutation({
@@ -387,24 +579,28 @@ export function MyTemplatesPage() {
       queryClient.invalidateQueries({ queryKey: ['my-templates'] })
       setShowGitImport(false)
       navigate({ to: '/my-templates/$name', params: { name: data.name } })
-      toast.success(`Imported "${data.name}" from git`)
+      toast.success(`${t('templates.importedFromGit')} "${data.name}"`)
     },
-    onError: (err) => toast.error(`Import failed: ${err.message}`),
+    onError: (err) => toast.error(t('templates.importFailed', { message: err.message })),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (name: string) => api.myTemplates.delete(name),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-templates'] })
-      toast.success('Template deleted')
+      toast.success(t('templates.templateDeleted'))
     },
-    onError: () => toast.error('Failed to delete'),
+    onError: () => toast.error(t('templates.deleteFailed')),
   })
 
   const templates = myTemplates ?? []
+  const catalogByName = useMemo(
+    () => new Map((catalogData?.templates ?? []).map((template) => [template.name, template])),
+    [catalogData?.templates],
+  )
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold flex items-center gap-2">
@@ -435,7 +631,9 @@ export function MyTemplatesPage() {
 
       {/* Templates grid */}
       {isLoading && (
-        <div className="text-center text-gray-500 text-sm py-12">Loading templates...</div>
+        <div className="text-center text-gray-500 text-sm py-12">
+          {t('templates.loadingTemplates')}
+        </div>
       )}
 
       {!isLoading && templates.length === 0 && (
@@ -453,35 +651,41 @@ export function MyTemplatesPage() {
             className="inline-flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 border border-blue-800 hover:border-blue-600 rounded-lg px-4 py-2 transition-colors"
           >
             <GitFork size={14} />
-            Fork a Template
+            {t('templates.forkTemplate')}
           </button>
         </div>
       )}
 
       {templates.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {templates.map((t) => (
+          {templates.map((template) => (
             <TemplateCard
-              key={t.slug}
-              name={t.name}
-              slug={t.slug}
-              templateSlug={t.templateSlug}
-              version={t.version ?? 1}
-              updatedAt={t.updatedAt}
-              onEdit={() => navigate({ to: '/my-templates/$name', params: { name: t.name } })}
+              key={template.slug}
+              name={template.name}
+              slug={template.slug}
+              templateSlug={template.templateSlug}
+              content={template.content}
+              baseTemplate={
+                template.templateSlug ? catalogByName.get(template.templateSlug) : undefined
+              }
+              version={template.version ?? 1}
+              updatedAt={template.updatedAt}
+              onEdit={() =>
+                navigate({ to: '/my-templates/$name', params: { name: template.name } })
+              }
               onShare={async () => {
                 try {
-                  const shareData = await api.myTemplates.share(t.name)
+                  const shareData = await api.myTemplates.share(template.name)
                   const json = JSON.stringify(shareData, null, 2)
                   await navigator.clipboard.writeText(json)
-                  toast.success('Template JSON copied to clipboard — share with others!')
+                  toast.success(t('templates.shareCopied'))
                 } catch {
-                  toast.error('Failed to generate share link')
+                  toast.error(t('templates.shareFailed'))
                 }
               }}
               onDelete={() => {
-                if (confirm(`Delete template "${t.name}"?`)) {
-                  deleteMutation.mutate(t.name)
+                if (window.confirm(t('templates.deleteConfirm', { name: template.name }))) {
+                  deleteMutation.mutate(template.name)
                 }
               }}
             />
