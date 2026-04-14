@@ -87,21 +87,32 @@ function SidebarNavItem({ item, collapsed }: { item: NavItem; collapsed: boolean
     <Link
       to={item.to}
       className={cn(
-        'flex items-center gap-2.5 px-3 py-1.5 rounded-xl text-sm transition-all duration-200 group',
-        active ? 'font-bold' : 'hover:opacity-90',
+        'group flex items-center gap-3 rounded-[22px] px-3 py-2.5 text-sm transition-all duration-300',
+        active ? 'font-black' : 'font-semibold hover:-translate-y-0.5',
         collapsed && 'justify-center px-2',
       )}
       style={{
-        background: active ? 'var(--nf-sidebar-active)' : 'transparent',
-        color: active ? 'var(--color-nf-cyan)' : 'var(--nf-text-mid)',
+        background: active
+          ? 'linear-gradient(135deg, rgba(0,243,255,0.14) 0%, rgba(124,77,255,0.10) 100%)'
+          : 'transparent',
+        color: active ? 'var(--nf-text-high)' : 'var(--nf-text-mid)',
+        boxShadow: active ? 'var(--nf-shadow-soft)' : 'none',
       }}
       title={collapsed ? t(item.labelKey) : undefined}
     >
-      <Icon
-        size={15}
-        style={{ color: active ? 'var(--color-nf-cyan)' : 'var(--nf-text-muted)' }}
-        className="group-hover:opacity-100 transition-opacity"
-      />
+      <span
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all"
+        style={{
+          background: active ? 'rgba(0, 243, 255, 0.14)' : 'var(--nf-bg-raised)',
+          borderColor: active ? 'rgba(0, 243, 255, 0.2)' : 'var(--nf-border)',
+        }}
+      >
+        <Icon
+          size={16}
+          style={{ color: active ? 'var(--color-nf-cyan)' : 'var(--nf-text-muted)' }}
+          className="group-hover:opacity-100 transition-opacity"
+        />
+      </span>
       {!collapsed && <span className="truncate">{t(item.labelKey)}</span>}
     </Link>
   )
@@ -135,7 +146,7 @@ function SidebarSection({ section, collapsed }: { section: NavSection; collapsed
       <button
         type="button"
         onClick={() => setOpen(!isOpen)}
-        className="flex items-center justify-between w-full px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors"
+        className="flex items-center justify-between w-full px-4 py-2 text-[10px] font-black uppercase tracking-[0.22em] transition-colors"
         style={{ color: 'var(--nf-text-muted)' }}
       >
         <span className="truncate">{t(section.labelKey)}</span>
@@ -171,10 +182,14 @@ function ThemeToggle({ collapsed }: { collapsed: boolean }) {
       type="button"
       onClick={() => setTheme(next[theme])}
       className={cn(
-        'flex items-center gap-2 w-full p-1.5 rounded-xl transition-colors text-sm',
+        'flex items-center gap-2 w-full rounded-2xl px-3 py-2 text-sm font-semibold transition-all duration-300 hover:-translate-y-0.5',
         collapsed && 'justify-center',
       )}
-      style={{ color: 'var(--nf-text-muted)' }}
+      style={{
+        color: 'var(--nf-text-mid)',
+        background: 'var(--nf-bg-raised)',
+        border: '1px solid var(--nf-border)',
+      }}
       title={t(`theme.${theme}`)}
     >
       <Icon size={15} />
@@ -196,10 +211,14 @@ function LanguageToggle({ collapsed }: { collapsed: boolean }) {
       type="button"
       onClick={() => i18n.changeLanguage(nextLang)}
       className={cn(
-        'flex items-center gap-2 w-full p-1.5 rounded-xl transition-colors text-sm',
+        'flex items-center gap-2 w-full rounded-2xl px-3 py-2 text-sm font-semibold transition-all duration-300 hover:-translate-y-0.5',
         collapsed && 'justify-center',
       )}
-      style={{ color: 'var(--nf-text-muted)' }}
+      style={{
+        color: 'var(--nf-text-mid)',
+        background: 'var(--nf-bg-raised)',
+        border: '1px solid var(--nf-border)',
+      }}
       title={label}
     >
       <Globe size={15} />
@@ -218,55 +237,81 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'flex flex-col transition-[width] duration-200 shrink-0 relative z-20',
-        collapsed ? 'w-14' : 'w-56',
+        'shrink-0 transition-[width] duration-300 relative z-20',
+        collapsed ? 'w-24' : 'w-72',
       )}
-      style={{
-        background: 'var(--nf-sidebar-bg)',
-        borderRight: '1px solid var(--nf-border)',
-      }}
     >
-      {/* Header */}
-      <div
-        className={cn('flex items-center', collapsed ? 'px-2 py-4 justify-center' : 'px-4 py-4')}
-        style={{ borderBottom: '1px solid var(--nf-border)' }}
-      >
-        {!collapsed && (
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <Package size={20} style={{ color: 'var(--color-nf-cyan)' }} className="shrink-0" />
-            <div className="min-w-0">
-              <p className="font-bold text-sm truncate" style={{ color: 'var(--nf-text-high)' }}>
-                {t('nav.shadowCloud')}
-              </p>
-              <p className="text-[10px] truncate" style={{ color: 'var(--nf-text-muted)' }}>
-                {t('nav.console')}
-              </p>
-            </div>
-          </div>
-        )}
-        {collapsed && <Package size={20} style={{ color: 'var(--color-nf-cyan)' }} />}
-      </div>
-
-      {/* Navigation */}
-      <nav className={cn('flex-1 overflow-y-auto py-3 space-y-3', collapsed ? 'px-1' : 'px-2')}>
-        {NAV_SECTIONS.map((section) => (
-          <SidebarSection key={section.id} section={section} collapsed={collapsed} />
-        ))}
-      </nav>
-
-      {/* Footer: Theme + Language + Collapse */}
-      <div className="p-2 space-y-0.5" style={{ borderTop: '1px solid var(--nf-border)' }}>
-        <ThemeToggle collapsed={collapsed} />
-        <LanguageToggle collapsed={collapsed} />
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          className="flex items-center justify-center w-full p-1.5 rounded-xl transition-colors"
-          style={{ color: 'var(--nf-text-muted)' }}
-          title={collapsed ? t('common.expand') : t('common.collapse')}
+      <div className="sticky top-4 h-[calc(100vh-2rem)] px-3 pb-4">
+        <div
+          className="nf-glass flex h-full flex-col rounded-[32px] p-2"
+          style={{
+            background: 'var(--nf-sidebar-bg)',
+            boxShadow: 'var(--nf-sidebar-shadow)',
+          }}
         >
-          {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-        </button>
+          <div
+            className={cn(
+              'mb-2 flex items-center gap-3 rounded-[28px] p-3',
+              collapsed && 'justify-center',
+            )}
+            style={{
+              background: 'var(--nf-bg-glass-2)',
+              border: '1px solid var(--nf-border)',
+            }}
+          >
+            <div
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
+              style={{
+                background:
+                  'linear-gradient(135deg, var(--color-nf-cyan) 0%, var(--color-nf-cyan-strong) 100%)',
+                boxShadow: 'var(--nf-shadow-glow)',
+              }}
+            >
+              <Package size={20} className="text-black" />
+            </div>
+
+            {!collapsed && (
+              <div className="min-w-0">
+                <p className="text-sm font-black truncate" style={{ color: 'var(--nf-text-high)' }}>
+                  {t('nav.shadowCloud')}
+                </p>
+                <p className="text-[11px] truncate" style={{ color: 'var(--nf-text-muted)' }}>
+                  {t('nav.console')}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <nav className={cn('flex-1 overflow-y-auto space-y-4 pb-4', collapsed ? 'px-1' : 'px-2')}>
+            {NAV_SECTIONS.map((section) => (
+              <SidebarSection key={section.id} section={section} collapsed={collapsed} />
+            ))}
+          </nav>
+
+          <div
+            className="space-y-2 rounded-[26px] border p-2"
+            style={{
+              background: 'var(--nf-bg-glass-2)',
+              borderColor: 'var(--nf-border)',
+            }}
+          >
+            <ThemeToggle collapsed={collapsed} />
+            <LanguageToggle collapsed={collapsed} />
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="flex items-center justify-center w-full rounded-2xl px-3 py-2 transition-all duration-300 hover:-translate-y-0.5"
+              style={{
+                color: 'var(--nf-text-mid)',
+                background: 'var(--nf-bg-raised)',
+                border: '1px solid var(--nf-border)',
+              }}
+              title={collapsed ? t('common.expand') : t('common.collapse')}
+            >
+              {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+            </button>
+          </div>
+        </div>
       </div>
     </aside>
   )
