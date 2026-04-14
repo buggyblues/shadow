@@ -391,12 +391,30 @@
     "templateNamePlaceholder": "my-custom-template",
     "importAction": "Import",
     "loadingTemplates": "Loading templates...",
+    "searchSavedPlaceholder": "Search saved templates by name, source, or namespace...",
+    "recentlyUpdated": "Recently Updated",
+    "recentlyUpdatedDescription": "Jump back into what you edited most recently and keep shipping.",
+    "openEditor": "Open Editor",
+    "deployNow": "Deploy Now",
+    "emptyFiltered": "No saved templates match the current filters.",
+    "clearFilters": "Clear filters",
     "shareCopied": "Template JSON copied to clipboard — share with others!",
     "shareFailed": "Failed to generate share link",
     "forkFailed": "Fork failed: {{message}}",
     "importFailed": "Import failed: {{message}}",
     "templateDeleted": "Template deleted",
-    "deleteFailed": "Failed to delete"
+    "deleteFailed": "Failed to delete",
+    "stats": {
+      "saved": "Saved templates",
+      "storeForks": "Store forks",
+      "gitImports": "Git imports"
+    },
+    "filters": {
+      "all": "All",
+      "store": "Store forks",
+      "git": "Git imports",
+      "custom": "Custom"
+    }
   },
   "templateDetail": {
     "editor": "Editor",

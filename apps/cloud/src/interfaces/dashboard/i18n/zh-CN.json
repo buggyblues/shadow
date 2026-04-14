@@ -391,12 +391,30 @@
     "templateNamePlaceholder": "my-custom-template",
     "importAction": "导入",
     "loadingTemplates": "正在加载模板…",
+    "searchSavedPlaceholder": "按名称、来源或命名空间搜索已保存模板…",
+    "recentlyUpdated": "最近更新",
+    "recentlyUpdatedDescription": "快速回到你最近编辑过的模板，继续完善或直接部署。",
+    "openEditor": "打开编辑器",
+    "deployNow": "立即部署",
+    "emptyFiltered": "当前筛选条件下没有匹配的已保存模板。",
+    "clearFilters": "清除筛选",
     "shareCopied": "模板 JSON 已复制到剪贴板，可直接分享！",
     "shareFailed": "生成分享内容失败",
     "forkFailed": "复刻失败：{{message}}",
     "importFailed": "导入失败：{{message}}",
     "templateDeleted": "模板已删除",
-    "deleteFailed": "删除失败"
+    "deleteFailed": "删除失败",
+    "stats": {
+      "saved": "已保存模板",
+      "storeForks": "商店复刻",
+      "gitImports": "Git 导入"
+    },
+    "filters": {
+      "all": "全部",
+      "store": "商店复刻",
+      "git": "Git 导入",
+      "custom": "自定义"
+    }
   },
   "templateDetail": {
     "editor": "编辑器",
