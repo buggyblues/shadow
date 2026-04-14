@@ -127,8 +127,6 @@ export function ProductDetail({
     [media.length],
   )
 
-  const { t } = useTranslation()
-
   const contactSupport = useMutation({
     mutationFn: (payload: { message: string; images: string[] }) =>
       fetchApi<{
@@ -229,7 +227,10 @@ export function ProductDetail({
     localStorage.setItem(`shop:favorites:${serverId}`, JSON.stringify(next))
     setIsFavorite(next.includes(product.id))
     window.dispatchEvent(new Event('shop:favorites-changed'))
-    showToast(next.includes(product.id) ? t('shop.favoriteAdded') : t('shop.favoriteRemoved'), 'success')
+    showToast(
+      next.includes(product.id) ? t('shop.favoriteAdded') : t('shop.favoriteRemoved'),
+      'success',
+    )
   }
 
   const handleShare = async () => {

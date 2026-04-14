@@ -5,6 +5,7 @@ import type { AppContainer } from './container'
 import { createAdminHandler } from './handlers/admin.handler'
 import { createAgentHandler } from './handlers/agent.handler'
 import { createAgentDashboardHandler } from './handlers/agent-dashboard.handler'
+import { createApiTokenHandler } from './handlers/api-token.handler'
 import { createAppHandler } from './handlers/app.handler'
 import { createAuthHandler } from './handlers/auth.handler'
 import { createChannelHandler } from './handlers/channel.handler'
@@ -27,6 +28,7 @@ import { createTaskCenterHandler } from './handlers/task-center.handler'
 import { createVoiceEnhanceHandler } from './handlers/voice-enhance.handler'
 import { createWorkspaceHandler } from './handlers/workspace.handler'
 import { logger } from './lib/logger'
+import { createPatMiddleware } from './middleware/auth.middleware'
 import { loggerMiddleware } from './middleware/logger.middleware'
 import { securityHeadersMiddleware } from './middleware/security-headers.middleware'
 
@@ -74,6 +76,9 @@ export function createApp(container: AppContainer) {
   app.use('*', loggerMiddleware)
   app.use('*', bodyLimit({ maxSize: 50 * 1024 * 1024 })) // 50MB
 
+  // PAT token resolution (must run before route-level authMiddleware)
+  app.use('*', createPatMiddleware(container))
+
   // Health check
   app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
 
@@ -104,6 +109,7 @@ export function createApp(container: AppContainer) {
   // API routes
   app.route('/api/auth', createAuthHandler(container))
   app.route('/api/oauth', createOAuthHandler(container))
+  app.route('/api/tokens', createApiTokenHandler(container))
   // IMPORTANT: Mount app/workspace handlers before /api/servers base handler
   // so nested routes like /api/servers/:serverId/apps/* and
   // /api/servers/:serverId/workspace/* are not pre-empted by server auth middleware.

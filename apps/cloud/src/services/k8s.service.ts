@@ -17,9 +17,13 @@ import {
 } from '../clients/kind-client.js'
 import {
   type DeploymentStatus,
+  deleteNamespace,
   getDeployments,
+  getManagedNamespaces,
   getPods,
   type PodStatus,
+  rolloutRestartAll,
+  rolloutUndoAll,
   scaleDeployment,
   streamLogs,
 } from '../clients/kubectl-client.js'
@@ -102,6 +106,34 @@ export class K8sService {
 
   scaleDeployment(namespace: string, name: string, replicas: number): void {
     scaleDeployment(namespace, name, replicas)
+  }
+
+  /**
+   * List namespaces labeled `managed-by=shadowob-cloud-cli` on the cluster.
+   */
+  getManagedNamespaces(): string[] {
+    return getManagedNamespaces()
+  }
+
+  /**
+   * Delete a namespace and all its resources.
+   */
+  deleteNamespace(namespace: string): void {
+    deleteNamespace(namespace)
+  }
+
+  /**
+   * Rollout restart all deployments in a namespace.
+   */
+  rolloutRestartAll(namespace: string): void {
+    rolloutRestartAll(namespace)
+  }
+
+  /**
+   * Rollback all deployments in a namespace to the previous revision.
+   */
+  rolloutUndoAll(namespace: string): void {
+    rolloutUndoAll(namespace)
   }
 
   // ─── Kind Cluster Management ──────────────────────────────────────────

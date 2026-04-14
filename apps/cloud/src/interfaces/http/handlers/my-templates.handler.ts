@@ -6,6 +6,7 @@
  */
 
 import { Hono } from 'hono'
+import { parseJsonc } from '../../../utils/jsonc.js'
 import type { HandlerContext } from './types.js'
 
 const PREFIX = 'tpl:'
@@ -148,7 +149,12 @@ export function createMyTemplatesHandler(ctx: HandlerContext): Hono {
   /** Import config from a git repository URL */
   app.post('/my-templates/import-git', async (c) => {
     try {
-      const body = await c.req.json<{ url: string; name?: string; path?: string; branch?: string }>()
+      const body = await c.req.json<{
+        url: string
+        name?: string
+        path?: string
+        branch?: string
+      }>()
       if (!body.url) {
         return c.json({ error: 'url is required' }, 400)
       }
@@ -181,12 +187,15 @@ export function createMyTemplatesHandler(ctx: HandlerContext): Hono {
           : findConfigFile(repoDir, readdirSync, existsSync, join)
 
         if (!configPath || !existsSync(configPath)) {
-          return c.json({
-            error: `No config file found. Specify path or ensure the repo contains shadowob.json, *.template.json, or cloud.json`,
-          }, 404)
+          return c.json(
+            {
+              error: `No config file found. Specify path or ensure the repo contains shadowob.json, *.template.json, or cloud.json`,
+            },
+            404,
+          )
         }
 
-        const content = JSON.parse(readFileSync(configPath, 'utf-8'))
+        const content = parseJsonc(readFileSync(configPath, 'utf-8'), configPath)
 
         // Derive name from repo URL if not provided
         const repoName = basename(url.replace(/\.git$/, '').replace(/\/$/, ''))
@@ -222,11 +231,7 @@ function findConfigFile(
   existsSync: (p: string) => boolean,
   join: (...args: string[]) => string,
 ): string | null {
-  const candidates = [
-    'shadowob.json',
-    'shadowob-cloud.json',
-    'cloud.json',
-  ]
+  const candidates = ['shadowob.json', 'shadowob-cloud.json', 'cloud.json']
   for (const f of candidates) {
     const p = join(dir, f)
     if (existsSync(p)) return p
@@ -236,6 +241,8 @@ function findConfigFile(
     const files = readdirSync(dir)
     const tpl = files.find((f) => f.endsWith('.template.json'))
     if (tpl) return join(dir, tpl)
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return null
 }

@@ -19,7 +19,7 @@ import { defineConfig, devices } from '@playwright/test'
 export const SERVE_PORT = 4749
 
 export default defineConfig({
-  testDir: './e2e',
+  testDir: './e2e/console',
   timeout: 60_000,
   expect: {
     timeout: 10_000,
@@ -43,6 +43,6 @@ export default defineConfig({
   outputDir: 'test-results',
 
   // Global setup: build and start serve + preview before all tests
-  globalSetup: './e2e/global-setup.ts',
-  globalTeardown: './e2e/global-teardown.ts',
+  globalSetup: './e2e/console/global-setup.ts',
+  globalTeardown: './e2e/console/global-teardown.ts',
 })

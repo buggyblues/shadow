@@ -4,8 +4,9 @@
 
 import type { tags } from 'typia'
 import type { AgentSource } from './gitagent.schema.js'
-import type { AgentNetworking, AgentPermissions } from './managed-agents.schema.js'
+import type { AgentNetworking, AgentPermissions, VaultConfig } from './managed-agents.schema.js'
 import type { OpenClawProviderConfig } from './openclaw.schema.js'
+import type { UseEntry } from './shadow.schema.js'
 
 /**
  * Agent runtime types.
@@ -108,42 +109,20 @@ export interface AgentWorkflowDef {
 }
 
 /**
- * Agent compliance configuration — mirrors gitagent's compliance section.
- * Enables regulatory adherence for agents in regulated environments.
+ * Agent compliance/risk policy.
+ * Mirrors gitagent compliance fields in camelCase for internal usage.
  */
 export interface AgentCompliance {
-  /**
-   * Risk classification.
-   * - low: minimal logging, no HITL required
-   * - standard: audit logging recommended
-   * - high: HITL required, full audit logging
-   * - critical: kill switch, immutable logs, quarterly validation
-   */
+  /** Risk tier for this agent's tasks */
   riskTier?: 'low' | 'standard' | 'high' | 'critical'
-  /** Applicable regulatory frameworks (finra, sec, gdpr, hipaa, etc.) */
+  /** Regulatory / governance frameworks to align with */
   frameworks?: string[]
-  /** Human-in-the-loop requirement (mapped to OpenClaw HITL config when supported) */
+  /** Human supervision level */
   humanInTheLoop?: 'always' | 'conditional' | 'advisory' | 'none'
-  /** Enable structured audit logging for all agent decisions */
+  /** Enable audit logging */
   auditLogging?: boolean
-  /** Log retention period (e.g. "7y", "3y", "90d") */
+  /** Retention period for audit records (e.g. 90d) */
   retentionPeriod?: string
-}
-
-/**
- * Pre-configured integration reference — connects an agent to an external service.
- * Inspired by CrewClaw's "pre-wired integrations".
- */
-export interface AgentIntegration {
-  /** Integration name (e.g. "stripe", "github", "ga4", "slack") */
-  name: string
-  /** Whether this integration is enabled */
-  enabled?: boolean
-  /**
-   * Credential reference — use ${env:VAR_NAME} or ${secret:k8s/secret-name/key}
-   * to inject secrets without hardcoding them in the config.
-   */
-  credentials?: Record<string, string>
 }
 
 /**
@@ -155,20 +134,10 @@ export interface TeamConfig {
   name: string
   /** What this team does — appears in console and CLI output */
   description?: string
-  /**
-   * Default model applied to all agents in the team unless overridden at agent level.
-   * Agents can override this via their own `model` field.
-   */
+  /** Default model applied to agents that don't set `agent.model` */
   defaultModel?: AgentModel
-  /** Default compliance posture for all agents in the team */
+  /** Default compliance policy applied to agents that don't set `agent.compliance` */
   defaultCompliance?: AgentCompliance
-  /** Shared channel config applied to all agents by default */
-  defaultChannels?: {
-    telegram?: boolean
-    discord?: boolean
-    slack?: boolean
-    shadowob?: boolean
-  }
 }
 
 /**
@@ -247,22 +216,28 @@ export interface AgentDeployment {
   model?: AgentModel
 
   /**
+   * Compliance/risk policy for this agent.
+   * Falls back to team.defaultCompliance when omitted.
+   */
+  compliance?: AgentCompliance
+
+  /**
    * Deterministic multi-step workflows this agent can run.
    * Mirrors gitagent's SkillsFlow workflows/*.yaml.
    */
   workflows?: AgentWorkflowDef[]
 
   /**
-   * Compliance requirements for this agent.
-   * Merged with team.defaultCompliance (agent values take precedence).
+   * Per-agent plugin declarations (webpack-style "use" pattern).
+   * Each entry specifies a plugin and its options.
+   *
+   * @example
+   * [
+   *   { "plugin": "gitagent", "options": { "repo": "github.com/user/repo" } },
+   *   { "plugin": "stripe", "options": { "apiKey": "${vault:STRIPE_KEY}" } }
+   * ]
    */
-  compliance?: AgentCompliance
-
-  /**
-   * Pre-configured external integrations (Stripe, GitHub, GA4, etc.).
-   * Credentials are injected as env vars into the container.
-   */
-  integrations?: AgentIntegration[]
+  use?: UseEntry[]
 
   /** Short description shown in console and CLI output */
   description?: string
@@ -335,13 +310,19 @@ export interface Configuration {
 }
 
 /**
- * Registry section — reusable model provider and configuration presets.
+ * Registry section — reusable model provider, configuration presets, and vault definitions.
  */
 export interface RegistryConfig {
   /** Custom LLM provider configurations */
   providers?: OpenClawProviderConfig[]
   /** Reusable configuration presets */
   configurations?: Configuration[]
+  /**
+   * Vault definitions for secret isolation.
+   * Each agent references a vault by name (default: "default").
+   * Per-agent K8s Secrets are generated with only the relevant keys.
+   */
+  vaults?: Record<string, VaultConfig>
 }
 
 /**

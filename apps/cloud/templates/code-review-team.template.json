@@ -1,92 +1,101 @@
 {
   "version": "1.0.0",
-  "name": "Code Review Team",
-  "description": "Three-agent code review team: code reviewer, security scanner, and documentation auditor. Automatically reviews PRs on GitHub, flags security issues, and ensures documentation stays current.",
+  "name": "${i18n:name}",
+  "description": "${i18n:description}",
   "environment": "production",
   "team": {
     "name": "code-review-team",
-    "description": "Automated code review, security scanning, and documentation audit team",
-    "defaultModel": {
-      "preferred": "anthropic/claude-sonnet-4-5",
-      "fallbacks": ["deepseek/deepseek-chat", "openai/gpt-4o"],
-      "constraints": {
-        "temperature": 0.2,
-        "maxTokens": 8192,
-        "thinkingLevel": "medium"
+    "description": "Automated code review, security scanning, and documentation audit team"
+  },
+  "use": [
+    {
+      "plugin": "shadowob",
+      "options": {
+        "servers": [
+          {
+            "id": "eng-hub",
+            "name": "Engineering Hub",
+            "slug": "eng-hub",
+            "channels": [
+              {
+                "id": "code-reviews",
+                "title": "Code Reviews",
+                "type": "text"
+              },
+              {
+                "id": "security",
+                "title": "Security",
+                "type": "text"
+              },
+              {
+                "id": "docs",
+                "title": "Documentation",
+                "type": "text"
+              }
+            ]
+          }
+        ],
+        "buddies": [
+          {
+            "id": "reviewer-bot",
+            "name": "Code Reviewer"
+          },
+          {
+            "id": "security-bot",
+            "name": "Security Scanner"
+          },
+          {
+            "id": "docs-bot",
+            "name": "Docs Auditor"
+          }
+        ],
+        "bindings": [
+          {
+            "targetId": "reviewer-bot",
+            "targetType": "buddy",
+            "servers": ["eng-hub"],
+            "channels": ["code-reviews"],
+            "agentId": "code-reviewer"
+          },
+          {
+            "targetId": "security-bot",
+            "targetType": "buddy",
+            "servers": ["eng-hub"],
+            "channels": ["security"],
+            "agentId": "security-scanner"
+          },
+          {
+            "targetId": "docs-bot",
+            "targetType": "buddy",
+            "servers": ["eng-hub"],
+            "channels": ["docs"],
+            "agentId": "docs-auditor"
+          }
+        ]
       }
     }
-  },
-  "plugins": {
-    "shadowob": {
-      "servers": [
-        {
-          "id": "eng-hub",
-          "name": "Engineering Hub",
-          "slug": "eng-hub",
-          "channels": [
-            {
-              "id": "code-reviews",
-              "title": "Code Reviews",
-              "type": "text"
-            },
-            {
-              "id": "security",
-              "title": "Security",
-              "type": "text"
-            },
-            {
-              "id": "docs",
-              "title": "Documentation",
-              "type": "text"
-            }
-          ]
-        }
-      ],
-      "buddies": [
-        {
-          "id": "reviewer-bot",
-          "name": "Code Reviewer"
-        },
-        {
-          "id": "security-bot",
-          "name": "Security Scanner"
-        },
-        {
-          "id": "docs-bot",
-          "name": "Docs Auditor"
-        }
-      ],
-      "bindings": [
-        {
-          "targetId": "reviewer-bot",
-          "targetType": "buddy",
-          "servers": ["eng-hub"],
-          "channels": ["code-reviews"],
-          "agentId": "code-reviewer"
-        },
-        {
-          "targetId": "security-bot",
-          "targetType": "buddy",
-          "servers": ["eng-hub"],
-          "channels": ["security"],
-          "agentId": "security-scanner"
-        },
-        {
-          "targetId": "docs-bot",
-          "targetType": "buddy",
-          "servers": ["eng-hub"],
-          "channels": ["docs"],
-          "agentId": "docs-auditor"
-        }
-      ]
-    }
-  },
+  ],
   "registry": {
+    "vaults": {
+      "default": {
+        "providers": {
+          "anthropic": {
+            "apiKey": "${env:ANTHROPIC_API_KEY}"
+          },
+          "deepseek": {
+            "apiKey": "${env:DEEPSEEK_API_KEY}"
+          }
+        },
+        "secrets": {
+          "GITHUB_TOKEN": "${env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+        }
+      }
+    },
     "providers": [
       {
         "id": "anthropic",
         "api": "anthropic",
-        "apiKey": "${env:ANTHROPIC_API_KEY}",
+        "apiKey": "${vault:ANTHROPIC_API_KEY}",
         "models": [
           {
             "id": "claude-sonnet-4-5",
@@ -102,7 +111,7 @@
         "id": "deepseek",
         "api": "openai",
         "baseUrl": "https://api.deepseek.com/v1",
-        "apiKey": "${env:DEEPSEEK_API_KEY}",
+        "apiKey": "${vault:DEEPSEEK_API_KEY}",
         "models": [
           {
             "id": "deepseek-chat",
@@ -151,10 +160,10 @@
           "personality": "You are a senior software engineer with 10+ years of experience across TypeScript, Python, Go, and Rust. You give thorough, constructive code reviews that focus on correctness, performance, maintainability, and elegance. You always explain *why* something should change, not just *what* to change. You're generous with praise when code is well-written. You prioritize blocking issues before style nits.",
           "systemPrompt": "Review GitHub pull requests in the configured repository. Every 15 minutes, check for open PRs that haven't been reviewed yet. For each unreviewed PR:\n1. Read all changed files\n2. Check for: correctness, performance, security (surface-level), test coverage, code style\n3. Post a review comment on the PR with: summary, blocking issues (if any), suggestions, and praise for good code\n4. Report to the code-reviews channel with a brief summary\n\nALWAYS:\n- Be constructive and specific\n- Suggest the fix, not just the problem\n- Distinguish blocking from non-blocking issues"
         },
-        "integrations": [
+        "use": [
           {
-            "name": "github",
-            "credentials": {
+            "plugin": "github",
+            "options": {
               "GITHUB_TOKEN": "${env:GITHUB_TOKEN}"
             }
           }
@@ -194,10 +203,10 @@
           "personality": "You are a cybersecurity specialist focused on application security. You know the OWASP Top 10 cold, understand common vulnerability patterns in TypeScript/Python/Go, and can spot hardcoded secrets from a mile away. You are methodical, never miss injection patterns, and always provide clear remediation guidance with code examples. You take security seriously but understand business context.",
           "systemPrompt": "Perform security analysis on every open GitHub PR. Check for:\n- OWASP Top 10 violations (SQL injection, XSS, CSRF, insecure deserialization, etc.)\n- Hardcoded secrets, API keys, and credentials\n- Dangerous function calls (eval(), exec(), subprocess.run with shell=True, etc.)\n- Insecure dependencies (check npm audit / pip audit output)\n- Authentication/authorization flaws\n- Improper input validation\n\nFor each finding: severity (CRITICAL/HIGH/MEDIUM/LOW), file:line, description, and remediation code.\nPost findings as PR review comments. Alert the security channel for CRITICAL/HIGH findings immediately."
         },
-        "integrations": [
+        "use": [
           {
-            "name": "github",
-            "credentials": {
+            "plugin": "github",
+            "options": {
               "GITHUB_TOKEN": "${env:GITHUB_TOKEN}"
             }
           }
@@ -237,10 +246,10 @@
           "personality": "You believe that code without documentation is a liability. You check every PR for missing JSDoc/docstrings on public APIs, missing README updates for new features, absent changelog entries, and unclear naming. You write beautifully clear documentation yourself and expect the same from the code you review. You're persistent but fair — you know when a comment is obvious noise vs essential context.",
           "systemPrompt": "Audit GitHub PRs for documentation quality. For each PR check:\n1. New public functions/classes/APIs have JSDoc/docstring\n2. New features are documented in README or relevant docs files\n3. CHANGELOG.md is updated for user-facing changes\n4. Complex logic has explanatory comments\n5. Variable and function names are self-documenting\n\nPost documentation feedback as PR review suggestions. Generate a weekly docs quality report every Monday at 8am UTC to the docs channel."
         },
-        "integrations": [
+        "use": [
           {
-            "name": "github",
-            "credentials": {
+            "plugin": "github",
+            "options": {
               "GITHUB_TOKEN": "${env:GITHUB_TOKEN}"
             }
           }
@@ -272,5 +281,15 @@
         }
       }
     ]
+  },
+  "i18n": {
+    "en": {
+      "name": "Code Review Team",
+      "description": "Three-agent code review team: code reviewer, security scanner, and documentation auditor. Automatically reviews PRs on GitHub, flags security issues, and ensures documentation stays current."
+    },
+    "zh-CN": {
+      "name": "代码审查团队",
+      "description": "三智能体代码审查团队：代码审查员、安全扫描器和文档审计员。自动完成 PR 审查、安全检查和文档一致性验证。"
+    }
   }
 }

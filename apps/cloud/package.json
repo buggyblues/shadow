@@ -52,6 +52,7 @@
     "hono": "^4.12.8",
     "i18next": "^25.8.14",
     "i18next-browser-languagedetector": "^8.2.1",
+    "jsonc-parser": "^3.3.1",
     "lucide-react": "^0.513.0",
     "monaco-editor": "^0.55.1",
     "react": "^19.1.0",
@@ -79,6 +80,7 @@
     "tsup": "^8.5.0",
     "tsx": "^4.19.0",
     "typescript": "^5.9.3",
+    "typescript-json-schema": "^0.67.1",
     "vitest": "^4.1.0"
   },
   "engines": {

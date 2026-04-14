@@ -1,8 +1,25 @@
 /**
  * Shadow plugin config types — servers, channels, buddies, bindings.
+ * Also defines the universal UseEntry type for the "use" pattern.
  */
 
 import type { tags } from 'typia'
+
+// ─── Use Pattern ────────────────────────────────────────────────────────────
+
+/**
+ * A single plugin declaration in the `use` array.
+ *
+ * @example
+ * { "plugin": "shadowob", "options": { "baseURL": "${env:SHADOWOB_BASE_URL}" } }
+ * { "plugin": "gitagent", "options": { "repo": "github.com/user/repo" } }
+ */
+export interface UseEntry {
+  /** Plugin identifier (e.g. "shadowob", "gitagent", "slack") */
+  plugin: string
+  /** Plugin-specific options */
+  options?: Record<string, unknown>
+}
 
 export interface ShadowServer {
   /** Unique identifier for this server in the config */
@@ -103,7 +120,7 @@ export interface ShadowobPluginConfig {
 }
 
 /**
- * Per-plugin instance config in the YAML config file.
+ * @deprecated Use UseEntry[] instead. Kept for migration compatibility.
  */
 export interface PluginInstanceConfig {
   enabled?: boolean
@@ -121,7 +138,7 @@ export interface PluginInstanceConfig {
 }
 
 /**
- * Plugins config — generic map with typed shadowob entry for backward compat.
+ * @deprecated Use top-level `use: UseEntry[]` instead. Kept for migration compatibility.
  */
 export interface PluginsConfig {
   shadowob?: ShadowobPluginConfig

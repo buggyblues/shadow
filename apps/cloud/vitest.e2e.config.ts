@@ -17,11 +17,11 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['__tests__/e2e/**/*.test.ts'],
+    include: ['e2e/cli/**/*.test.ts'],
 
     // Global setup starts docker-compose and seeds Shadow server
-    globalSetup: '__tests__/e2e/global-setup.ts',
-    globalTeardown: '__tests__/e2e/global-teardown.ts',
+    globalSetup: 'e2e/cli/global-setup.ts',
+    globalTeardown: 'e2e/cli/global-teardown.ts',
 
     // E2E_ORIGIN points directly to Shadow server API (no web proxy needed)
     env: {

@@ -1,74 +1,69 @@
 {
   "version": "1.0.0",
-  "name": "Customer Support Team",
-  "description": "Two-agent support team: a triage agent that categorizes and routes incoming tickets, and a resolution agent that auto-resolves common issues and escalates complex ones.",
+  "name": "${i18n:name}",
+  "description": "${i18n:description}",
   "environment": "production",
   "team": {
     "name": "customer-support-team",
-    "description": "Automated customer support: triage, resolution, and escalation",
-    "defaultModel": {
-      "preferred": "anthropic/claude-sonnet-4-5",
-      "fallbacks": ["deepseek/deepseek-chat", "openai/gpt-4o", "anthropic/claude-haiku-4-5"],
-      "constraints": {
-        "temperature": 0.3,
-        "maxTokens": 4096
+    "description": "Automated customer support: triage, resolution, and escalation"
+  },
+  "use": [
+    {
+      "plugin": "shadowob",
+      "options": {
+        "servers": [
+          {
+            "id": "support-hub",
+            "name": "Support Hub",
+            "slug": "support-hub",
+            "channels": [
+              {
+                "id": "tickets",
+                "title": "Tickets",
+                "type": "text"
+              },
+              {
+                "id": "escalations",
+                "title": "Escalations",
+                "type": "text"
+              },
+              {
+                "id": "metrics",
+                "title": "Support Metrics",
+                "type": "text"
+              }
+            ]
+          }
+        ],
+        "buddies": [
+          {
+            "id": "triage-bot",
+            "name": "Support Triage"
+          },
+          {
+            "id": "resolver-bot",
+            "name": "Issue Resolver"
+          }
+        ],
+        "bindings": [
+          {
+            "targetId": "triage-bot",
+            "targetType": "buddy",
+            "servers": ["support-hub"],
+            "channels": ["tickets", "escalations"],
+            "agentId": "support-triage"
+          },
+          {
+            "targetId": "resolver-bot",
+            "targetType": "buddy",
+            "servers": ["support-hub"],
+            "channels": ["tickets", "escalations"],
+            "agentId": "issue-resolver"
+          }
+        ]
       }
     }
-  },
-  "plugins": {
-    "shadowob": {
-      "servers": [
-        {
-          "id": "support-hub",
-          "name": "Support Hub",
-          "slug": "support-hub",
-          "channels": [
-            {
-              "id": "tickets",
-              "title": "Tickets",
-              "type": "text"
-            },
-            {
-              "id": "escalations",
-              "title": "Escalations",
-              "type": "text"
-            },
-            {
-              "id": "metrics",
-              "title": "Support Metrics",
-              "type": "text"
-            }
-          ]
-        }
-      ],
-      "buddies": [
-        {
-          "id": "triage-bot",
-          "name": "Support Triage"
-        },
-        {
-          "id": "resolver-bot",
-          "name": "Issue Resolver"
-        }
-      ],
-      "bindings": [
-        {
-          "targetId": "triage-bot",
-          "targetType": "buddy",
-          "servers": ["support-hub"],
-          "channels": ["tickets", "escalations"],
-          "agentId": "support-triage"
-        },
-        {
-          "targetId": "resolver-bot",
-          "targetType": "buddy",
-          "servers": ["support-hub"],
-          "channels": ["tickets", "escalations"],
-          "agentId": "issue-resolver"
-        }
-      ]
-    }
-  },
+  ],
   "registry": {
     "providers": [
       {
@@ -139,16 +134,16 @@
           "personality": "You are an empathetic, highly organized support triage specialist. You acknowledge every message immediately, categorize the issue quickly, and route it appropriately. You're warm and professional — customers feel heard. You never make them wait more than 2 minutes for an acknowledgment. You're expert at distinguishing billing issues, technical bugs, feature requests, and account issues.",
           "systemPrompt": "Triage incoming customer support requests. For each incoming ticket:\n1. Acknowledge immediately (within 60 seconds)\n2. Categorize: billing | technical | account | feature-request | other\n3. Assess priority: critical (service down) | high (major feature broken) | medium | low\n4. Route: assign to resolver for standard issues, escalate to human for: account security, refund disputes > $100, legal threats, abusive users\n5. Create a ticket entry in the database (use the tickets tool)\n\nTone: warm, professional, empathetic. Never make customers feel like a number."
         },
-        "integrations": [
+        "use": [
           {
-            "name": "notion",
-            "credentials": {
+            "plugin": "notion",
+            "options": {
               "NOTION_TOKEN": "${env:NOTION_TOKEN}"
             }
           },
           {
-            "name": "postgresql",
-            "credentials": {
+            "plugin": "postgresql",
+            "options": {
               "DATABASE_URL": "${env:DATABASE_URL}"
             }
           }
@@ -188,22 +183,22 @@
           "personality": "You are a knowledgeable product support specialist who can resolve most common issues without human intervention. You have deep knowledge of the product, billing system, and common troubleshooting steps. You're patient, clear, and always verify that the issue is actually resolved before closing a ticket. You know when to escalate and do so without hesitation.",
           "systemPrompt": "Resolve assigned support tickets. For each ticket:\n1. Read the full customer history from the database\n2. Look up relevant account information\n3. Apply the appropriate resolution:\n   - Password reset: use account tools\n   - Billing issue: look up in Stripe, explain or create refund request\n   - Feature question: provide clear answer with documentation link\n   - Technical bug: confirm steps to reproduce, log in Notion, provide workaround\n4. Respond to customer with clear resolution steps\n5. Mark ticket resolved or escalate if unable to resolve\n6. Follow up in 24h to confirm resolution\n\nNever make refunds > $50 without flagging to human escalation channel."
         },
-        "integrations": [
+        "use": [
           {
-            "name": "stripe",
-            "credentials": {
+            "plugin": "stripe",
+            "options": {
               "STRIPE_SECRET_KEY": "${env:STRIPE_SECRET_KEY}"
             }
           },
           {
-            "name": "notion",
-            "credentials": {
+            "plugin": "notion",
+            "options": {
               "NOTION_TOKEN": "${env:NOTION_TOKEN}"
             }
           },
           {
-            "name": "postgresql",
-            "credentials": {
+            "plugin": "postgresql",
+            "options": {
               "DATABASE_URL": "${env:DATABASE_URL}"
             }
           }
@@ -223,5 +218,15 @@
         }
       }
     ]
+  },
+  "i18n": {
+    "en": {
+      "name": "Customer Support Team",
+      "description": "Two-agent support team: a triage agent that categorizes and routes incoming tickets, and a resolution agent that auto-resolves common issues and escalates complex ones."
+    },
+    "zh-CN": {
+      "name": "客户支持团队",
+      "description": "双智能体支持团队：分诊智能体负责分类和路由工单，解决智能体负责处理常见问题并起草回复。"
+    }
   }
 }

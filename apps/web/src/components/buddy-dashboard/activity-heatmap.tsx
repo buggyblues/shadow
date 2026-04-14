@@ -38,7 +38,7 @@ export function ActivityHeatmap({ data }: ActivityHeatmapProps) {
       const date = new Date(day.date)
       const weekStart = new Date(date)
       weekStart.setDate(date.getDate() - date.getDay())
-      const weekKey = weekStart.toISOString().split('T')[0]
+      const weekKey = weekStart.toISOString().split('T')[0] ?? ''
 
       if (!weekMap.has(weekKey)) {
         weekMap.set(weekKey, [])

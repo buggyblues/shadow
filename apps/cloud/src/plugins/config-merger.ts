@@ -2,7 +2,7 @@
  * Plugin Config Merger — merges plugin config fragments into OpenClaw config.
  */
 
-import type { CloudConfig, OpenClawConfig } from '../config/schema.js'
+import type { CloudConfig, OpenClawBinding, OpenClawConfig } from '../config/schema.js'
 import type { PluginConfigFragment, PluginInstanceConfig } from './types.js'
 
 /**
@@ -57,10 +57,8 @@ export function mergePluginFragments(
 
     // Bindings: append (array concat)
     if (fragment.bindings) {
-      result.bindings = [
-        ...((result.bindings as Array<Record<string, unknown>>) ?? []),
-        ...fragment.bindings,
-      ] as OpenClawConfig['bindings']
+      const existingBindings = (result.bindings ?? []) as OpenClawBinding[]
+      result.bindings = [...existingBindings, ...fragment.bindings] as OpenClawConfig['bindings']
     }
 
     // Plugins/MCP: deep merge
@@ -141,7 +139,9 @@ export function resolvePluginSecrets(
     // Resolve ${env:VAR_NAME} references
     const envMatch = ref.match(/^\$\{env:(\w+)\}$/)
     if (envMatch) {
-      const envVal = processEnv[envMatch[1]]
+      const envKey = envMatch[1]
+      if (!envKey) continue
+      const envVal = processEnv[envKey]
       if (envVal !== undefined) {
         resolved[key] = envVal
       }

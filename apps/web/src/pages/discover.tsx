@@ -179,15 +179,15 @@ export function DiscoverPage() {
   }, [feedData, searchResults, isSearching])
 
   // 监听滚动加载更多
-  const observerRef = useRef<IntersectionObserver>()
+  const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (isSearching) return
     observerRef.current = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
-          fetchNextPage()
+        if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage({})
         }
       },
       { threshold: 0.1 },
@@ -344,7 +344,10 @@ function FeedCard({
 }: {
   item: FeedItem
   joinedServerIds: Set<string>
-  joinMutation: ReturnType<typeof useMutation>
+  joinMutation: {
+    mutate: (variables: { inviteCode: string }) => void
+    isPending: boolean
+  }
   navigate: ReturnType<typeof useNavigate>
   t: (key: string, options?: Record<string, unknown>) => string
 }) {

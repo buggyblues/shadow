@@ -1081,10 +1081,13 @@ export const MessageBubble = React.memo(MessageBubbleInner, (prev, next) => {
   const prevReactions = prev.message.reactions
   const nextReactions = next.message.reactions
   if (prevReactions?.length !== nextReactions?.length) return false
-  if (prevReactions) {
+  if (prevReactions && nextReactions) {
     for (let i = 0; i < prevReactions.length; i++) {
-      if (prevReactions[i]?.emoji !== nextReactions[i]?.emoji) return false
-      if (prevReactions[i]?.count !== nextReactions[i]?.count) return false
+      const prevReaction = prevReactions[i]
+      const nextReaction = nextReactions[i]
+      if (!prevReaction || !nextReaction) return false
+      if (prevReaction.emoji !== nextReaction.emoji) return false
+      if (prevReaction.count !== nextReaction.count) return false
     }
   }
 
@@ -1096,10 +1099,13 @@ export const MessageBubble = React.memo(MessageBubbleInner, (prev, next) => {
   const prevAtt = prev.message.attachments
   const nextAtt = next.message.attachments
   if (prevAtt?.length !== nextAtt?.length) return false
-  if (prevAtt) {
+  if (prevAtt && nextAtt) {
     for (let i = 0; i < prevAtt.length; i++) {
-      if (prevAtt[i]?.id !== nextAtt[i]?.id) return false
-      if (prevAtt[i]?.url !== nextAtt[i]?.url) return false
+      const prevAttachment = prevAtt[i]
+      const nextAttachment = nextAtt[i]
+      if (!prevAttachment || !nextAttachment) return false
+      if (prevAttachment.id !== nextAttachment.id) return false
+      if (prevAttachment.url !== nextAttachment.url) return false
     }
   }
 

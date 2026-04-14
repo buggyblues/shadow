@@ -1,117 +1,112 @@
 {
   "version": "1.0.0",
-  "name": "Solopreneur Pack",
-  "description": "Five-agent all-in-one team for solopreneurs and indie hackers: metrics analyst, SEO monitor, content writer, social media manager, and a general assistant. Get your own AI team running in 60 seconds.",
+  "name": "${i18n:name}",
+  "description": "${i18n:description}",
   "environment": "production",
   "team": {
     "name": "solopreneur-pack",
-    "description": "Complete AI team for solopreneurs: metrics, SEO, content, social, and assistant",
-    "defaultModel": {
-      "preferred": "anthropic/claude-sonnet-4-5",
-      "fallbacks": ["deepseek/deepseek-chat", "openai/gpt-4o-mini", "anthropic/claude-haiku-4-5"],
-      "constraints": {
-        "temperature": 0.4,
-        "maxTokens": 4096
+    "description": "Complete AI team for solopreneurs: metrics, SEO, content, social, and assistant"
+  },
+  "use": [
+    {
+      "plugin": "shadowob",
+      "options": {
+        "servers": [
+          {
+            "id": "solo-hq",
+            "name": "Solo HQ",
+            "slug": "solo-hq",
+            "channels": [
+              {
+                "id": "morning-brief",
+                "title": "Morning Brief",
+                "type": "text"
+              },
+              {
+                "id": "content",
+                "title": "Content",
+                "type": "text"
+              },
+              {
+                "id": "seo",
+                "title": "SEO",
+                "type": "text"
+              },
+              {
+                "id": "social",
+                "title": "Social Media",
+                "type": "text"
+              },
+              {
+                "id": "chat",
+                "title": "Chat",
+                "type": "text"
+              }
+            ]
+          }
+        ],
+        "buddies": [
+          {
+            "id": "metrics-bot",
+            "name": "Metrics"
+          },
+          {
+            "id": "seo-bot",
+            "name": "SEO Monitor"
+          },
+          {
+            "id": "content-bot",
+            "name": "Content Writer"
+          },
+          {
+            "id": "social-bot",
+            "name": "Social Manager"
+          },
+          {
+            "id": "assistant-bot",
+            "name": "Assistant"
+          }
+        ],
+        "bindings": [
+          {
+            "targetId": "metrics-bot",
+            "targetType": "buddy",
+            "servers": ["solo-hq"],
+            "channels": ["morning-brief"],
+            "agentId": "solo-metrics"
+          },
+          {
+            "targetId": "seo-bot",
+            "targetType": "buddy",
+            "servers": ["solo-hq"],
+            "channels": ["seo"],
+            "agentId": "solo-seo"
+          },
+          {
+            "targetId": "content-bot",
+            "targetType": "buddy",
+            "servers": ["solo-hq"],
+            "channels": ["content"],
+            "agentId": "solo-content"
+          },
+          {
+            "targetId": "social-bot",
+            "targetType": "buddy",
+            "servers": ["solo-hq"],
+            "channels": ["social"],
+            "agentId": "solo-social"
+          },
+          {
+            "targetId": "assistant-bot",
+            "targetType": "buddy",
+            "servers": ["solo-hq"],
+            "channels": ["chat"],
+            "agentId": "solo-assistant"
+          }
+        ]
       }
     }
-  },
-  "plugins": {
-    "shadowob": {
-      "servers": [
-        {
-          "id": "solo-hq",
-          "name": "Solo HQ",
-          "slug": "solo-hq",
-          "channels": [
-            {
-              "id": "morning-brief",
-              "title": "Morning Brief",
-              "type": "text"
-            },
-            {
-              "id": "content",
-              "title": "Content",
-              "type": "text"
-            },
-            {
-              "id": "seo",
-              "title": "SEO",
-              "type": "text"
-            },
-            {
-              "id": "social",
-              "title": "Social Media",
-              "type": "text"
-            },
-            {
-              "id": "chat",
-              "title": "Chat",
-              "type": "text"
-            }
-          ]
-        }
-      ],
-      "buddies": [
-        {
-          "id": "metrics-bot",
-          "name": "Metrics"
-        },
-        {
-          "id": "seo-bot",
-          "name": "SEO Monitor"
-        },
-        {
-          "id": "content-bot",
-          "name": "Content Writer"
-        },
-        {
-          "id": "social-bot",
-          "name": "Social Manager"
-        },
-        {
-          "id": "assistant-bot",
-          "name": "Assistant"
-        }
-      ],
-      "bindings": [
-        {
-          "targetId": "metrics-bot",
-          "targetType": "buddy",
-          "servers": ["solo-hq"],
-          "channels": ["morning-brief"],
-          "agentId": "solo-metrics"
-        },
-        {
-          "targetId": "seo-bot",
-          "targetType": "buddy",
-          "servers": ["solo-hq"],
-          "channels": ["seo"],
-          "agentId": "solo-seo"
-        },
-        {
-          "targetId": "content-bot",
-          "targetType": "buddy",
-          "servers": ["solo-hq"],
-          "channels": ["content"],
-          "agentId": "solo-content"
-        },
-        {
-          "targetId": "social-bot",
-          "targetType": "buddy",
-          "servers": ["solo-hq"],
-          "channels": ["social"],
-          "agentId": "solo-social"
-        },
-        {
-          "targetId": "assistant-bot",
-          "targetType": "buddy",
-          "servers": ["solo-hq"],
-          "channels": ["chat"],
-          "agentId": "solo-assistant"
-        }
-      ]
-    }
-  },
+  ],
   "registry": {
     "providers": [
       {
@@ -186,16 +181,16 @@
           "personality": "You are a concise, insight-driven metrics analyst. Your morning brief is the first thing your founder reads. Make it punchy, clear, and immediately actionable. Lead with the most important number. Highlight trends in parentheses. Keep the whole report under 300 words.",
           "systemPrompt": "Send a morning metrics brief every day at 8:00 AM local time. Format:\n\n📊 **Morning Brief — {date}**\n\n💰 Revenue: {mrr} MRR ({delta} vs last week)\n👤 Users: {total} total, {new} new today\n📈 Traffic: {sessions} sessions ({delta} vs yesterday)\n\n🔥 Best: {top_metric}\n⚠️  Watch: {concern}\n\nKeep it under 200 words."
         },
-        "integrations": [
+        "use": [
           {
-            "name": "stripe",
-            "credentials": {
+            "plugin": "stripe",
+            "options": {
               "STRIPE_SECRET_KEY": "${env:STRIPE_SECRET_KEY}"
             }
           },
           {
-            "name": "google-analytics",
-            "credentials": {
+            "plugin": "google-analytics",
+            "options": {
               "GA4_PROPERTY_ID": "${env:GA4_PROPERTY_ID}",
               "GOOGLE_APPLICATION_CREDENTIALS": "${env:GOOGLE_CREDENTIALS_B64}"
             }
@@ -236,10 +231,10 @@
           "personality": "You are an SEO strategist who turns data into opportunities. You track keyword rankings religiously and immediately flag any drops. But you're not just reactive — you proactively surface content opportunities based on rising searches and competitor gaps. You speak in specifics: not 'traffic is down' but 'keyword X dropped from position 3 to 7, costing ~150 clicks/day'.",
           "systemPrompt": "Monitor SEO performance daily:\n1. Check top 20 keyword rankings via Search Console\n2. Alert if any keyword drops more than 3 positions\n3. Identify new keywords driving traffic (> 10 clicks/day)\n4. Weekly: suggest 3 content pieces based on high-volume, low-competition opportunities\n5. Monthly: full ranking report with trend analysis"
         },
-        "integrations": [
+        "use": [
           {
-            "name": "google-search-console",
-            "credentials": {
+            "plugin": "google-search-console",
+            "options": {
               "GSC_SITE_URL": "${env:GSC_SITE_URL}",
               "GOOGLE_APPLICATION_CREDENTIALS": "${env:GOOGLE_CREDENTIALS_B64}"
             }
@@ -280,10 +275,10 @@
           "personality": "You are a skilled content writer who produces engaging, SEO-optimized articles. You research topics thoroughly, write in a natural voice, and always include a compelling hook, practical insights, and a clear call to action. You understand keyword placement without keyword stuffing. Each piece you write is something the author would be proud to put their name on.",
           "systemPrompt": "Write 3 SEO-optimized blog posts per week (Monday, Wednesday, Friday):\n1. Research the topic using web search — find data, examples, quotes\n2. Write a full article: headline, intro hook, 4-6 sections with H2s, conclusion, CTA\n3. Include the target keyword naturally 3-5 times\n4. Target 1,200-1,800 words\n5. Save as a draft in Notion with: title, meta description, target keyword, word count, status: Draft\n\nFor topic ideas: ask the SEO agent what keywords to target next."
         },
-        "integrations": [
+        "use": [
           {
-            "name": "notion",
-            "credentials": {
+            "plugin": "notion",
+            "options": {
               "NOTION_TOKEN": "${env:NOTION_TOKEN}"
             }
           }
@@ -323,10 +318,10 @@
           "personality": "You are a social media strategist who knows how to make content pop on Twitter/X, LinkedIn, and Instagram. You take long-form content and distill it into punchy, shareable posts. You understand platform-specific tone: Twitter is pithy and direct, LinkedIn is professional but personal, Instagram is visual and aspirational. You never use generic filler phrases.",
           "systemPrompt": "Daily social media management:\n1. Check Notion for new published blog posts\n2. For each new post, create:\n   - Twitter/X thread (5-8 tweets, hook tweet first)\n   - LinkedIn post (professional angle, under 400 words)\n3. Save posts to social media calendar in Notion\n4. Track: notify if a post gets unusual engagement (>10x baseline)\n5. Weekly: engagement report for the past 7 days"
         },
-        "integrations": [
+        "use": [
           {
-            "name": "notion",
-            "credentials": {
+            "plugin": "notion",
+            "options": {
               "NOTION_TOKEN": "${env:NOTION_TOKEN}"
             }
           }
@@ -381,5 +376,15 @@
         }
       }
     ]
+  },
+  "i18n": {
+    "en": {
+      "name": "Solopreneur Pack",
+      "description": "Five-agent all-in-one team for solopreneurs and indie hackers: metrics analyst, SEO monitor, content writer, social media manager, and a general assistant. Get your own AI team running in 60 seconds."
+    },
+    "zh-CN": {
+      "name": "独立开发者套装",
+      "description": "五智能体全能团队：数据分析师、SEO 监控、内容编辑、客户支持和安全扫描。适合独立开发者和创业者。"
+    }
   }
 }

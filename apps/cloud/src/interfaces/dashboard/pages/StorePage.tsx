@@ -230,15 +230,15 @@ const SORT_OPTIONS: Array<{ value: SortOption; label: string }> = [
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function StorePage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [search, setSearch] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<StoreCategory | 'all'>('all')
   const [sort, setSort] = useState<SortOption>('popular')
   const debouncedSearch = useDebounce(search)
 
   const { data: templates, isLoading } = useQuery({
-    queryKey: ['templates'],
-    queryFn: api.templates.list,
+    queryKey: ['templates', i18n.language],
+    queryFn: () => api.templates.listByLocale(i18n.language),
   })
 
   // Computed values

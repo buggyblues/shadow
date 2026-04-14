@@ -20,6 +20,7 @@ import { createGenerateCommand } from './generate.command.js'
 import { createImagesCommand } from './images.command.js'
 import { createInitCommand } from './init.command.js'
 import { createLogsCommand } from './logs.command.js'
+import { createOnboardCommand } from './onboard.command.js'
 import { createProvisionCommand } from './provision.command.js'
 import { createScaleCommand } from './scale.command.js'
 import { createServeCommand } from './serve.command.js'
@@ -68,6 +69,7 @@ export function createCLI(container: ServiceContainer): Command {
   program.addCommand(createProvisionCommand(container))
   program.addCommand(createGenerateCommand(container))
   program.addCommand(createDoctorCommand(container))
+  program.addCommand(createOnboardCommand(container))
 
   return program
 }

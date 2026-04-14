@@ -106,9 +106,10 @@ function ForkDialog({
   onFork: (sourceTemplate: string, newName: string) => void
   onClose: () => void
 }) {
+  const { i18n } = useTranslation()
   const { data: templates } = useQuery({
-    queryKey: ['templates'],
-    queryFn: api.templates.list,
+    queryKey: ['templates', i18n.language],
+    queryFn: () => api.templates.listByLocale(i18n.language),
   })
   const [selected, setSelected] = useState('')
   const [newName, setNewName] = useState('')

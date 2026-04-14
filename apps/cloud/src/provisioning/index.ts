@@ -59,9 +59,12 @@ export async function provisionShadowResources(
     buddies: new Map(),
   }
 
-  const plugin = config.plugins?.shadowob
+  const shadowobEntry = config.use?.find((u) => u.plugin === 'shadowob')
+  const plugin = shadowobEntry?.options as
+    | import('../config/schema.js').ShadowobPluginConfig
+    | undefined
   if (!plugin) {
-    log.dim('No shadowob plugin configuration, skipping provisioning')
+    log.dim('No shadowob plugin in use array, skipping provisioning')
     return result
   }
 
@@ -129,7 +132,7 @@ export async function provisionShadowResources(
  */
 function detectOrphans(
   state: ProvisionState,
-  plugin: NonNullable<CloudConfig['plugins']>['shadowob'],
+  plugin: import('../config/schema.js').ShadowobPluginConfig,
 ): void {
   if (!plugin) return
 
@@ -361,7 +364,10 @@ export function buildProvisionedEnvVars(
   serverUrl: string,
 ): Record<string, string> {
   const env: Record<string, string> = {}
-  const plugin = config.plugins?.shadowob
+  const shadowobEntry = config.use?.find((u) => u.plugin === 'shadowob')
+  const plugin = shadowobEntry?.options as
+    | import('../config/schema.js').ShadowobPluginConfig
+    | undefined
   if (!plugin) return env
 
   env.SHADOW_SERVER_URL = serverUrl
@@ -377,19 +383,18 @@ export function buildProvisionedEnvVars(
     env[envKey] = buddyInfo.token
   }
 
-  // Inject integration credentials as env vars
+  // Inject plugin credentials from agent's use entries as env vars
   const agent = config.deployments?.agents?.find((a) => a.id === agentId)
-  if (agent?.integrations) {
-    for (const integration of agent.integrations) {
-      if (!integration.enabled && integration.enabled !== undefined) continue
-      if (integration.credentials) {
-        for (const [key, value] of Object.entries(integration.credentials)) {
-          // Key naming: INTEGRATION_NAME_CREDENTIAL_KEY (e.g. STRIPE_API_KEY)
-          const envKey = key.includes('_')
-            ? key // user provided fully-qualified key
-            : `${integration.name.toUpperCase().replace(/-/g, '_')}_${key.toUpperCase()}`
-          env[envKey] = value
-        }
+  if (agent?.use) {
+    for (const useEntry of agent.use) {
+      if (!useEntry.options) continue
+      for (const [key, value] of Object.entries(useEntry.options)) {
+        if (typeof value !== 'string') continue
+        // Only inject string values that look like credentials
+        const envKey = key.includes('_')
+          ? key
+          : `${useEntry.plugin.toUpperCase().replace(/-/g, '_')}_${key.toUpperCase()}`
+        env[envKey] = value
       }
     }
   }

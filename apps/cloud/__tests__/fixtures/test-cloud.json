@@ -17,47 +17,50 @@
       }
     ]
   },
-  "plugins": {
-    "shadowob": {
-      "servers": [
-        {
-          "id": "e2e-server",
-          "name": "Shadow Cloud E2E Server",
-          "slug": "shadowob-cloud-e2e",
-          "description": "Automated E2E test server for shadowob-cloud CLI",
-          "isPublic": false,
-          "channels": [
-            {
-              "id": "e2e-general",
-              "title": "general",
-              "type": "text"
-            },
-            {
-              "id": "e2e-agents",
-              "title": "agents",
-              "type": "text"
-            }
-          ]
-        }
-      ],
-      "buddies": [
-        {
-          "id": "e2e-assistant",
-          "name": "E2E Assistant",
-          "description": "OpenClaw AI assistant for E2E testing"
-        }
-      ],
-      "bindings": [
-        {
-          "targetId": "e2e-assistant",
-          "targetType": "buddy",
-          "servers": ["e2e-server"],
-          "channels": ["e2e-general", "e2e-agents"],
-          "agentId": "e2e-agent"
-        }
-      ]
+  "use": [
+    {
+      "plugin": "shadowob",
+      "options": {
+        "servers": [
+          {
+            "id": "e2e-server",
+            "name": "Shadow Cloud E2E Server",
+            "slug": "shadowob-cloud-e2e",
+            "description": "Automated E2E test server for shadowob-cloud CLI",
+            "isPublic": false,
+            "channels": [
+              {
+                "id": "e2e-general",
+                "title": "general",
+                "type": "text"
+              },
+              {
+                "id": "e2e-agents",
+                "title": "agents",
+                "type": "text"
+              }
+            ]
+          }
+        ],
+        "buddies": [
+          {
+            "id": "e2e-assistant",
+            "name": "E2E Assistant",
+            "description": "OpenClaw AI assistant for E2E testing"
+          }
+        ],
+        "bindings": [
+          {
+            "targetId": "e2e-assistant",
+            "targetType": "buddy",
+            "servers": ["e2e-server"],
+            "channels": ["e2e-general", "e2e-agents"],
+            "agentId": "e2e-agent"
+          }
+        ]
+      }
     }
-  },
+  ],
   "registry": {
     "providers": [
       {

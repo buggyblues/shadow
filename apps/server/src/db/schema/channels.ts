@@ -30,8 +30,15 @@ export const channels = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
     /** Last message timestamp for sorting by activity */
     lastMessageAt: timestamp('last_message_at', { withTimezone: true }),
+    /** Soft archive flag */
+    isArchived: boolean('is_archived').default(false).notNull(),
+    /** Archive timestamp */
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+    /** User id (string/uuid text) that archived the channel */
+    archivedBy: varchar('archived_by', { length: 36 }),
   },
   (t) => ({
     channelsServerIdIdx: index('channels_server_id_idx').on(t.serverId),
+    channelsArchivedIdx: index('idx_channels_archived').on(t.serverId, t.isArchived, t.archivedAt),
   }),
 )

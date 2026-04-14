@@ -48,8 +48,6 @@ export function ImageContextMenu({
     onClose()
   }
 
-  const { t } = useTranslation()
-
   function handleCopyLink() {
     navigator.clipboard.writeText(attachment.url)
     showToast(t('chat.linkCopied'), 'success')

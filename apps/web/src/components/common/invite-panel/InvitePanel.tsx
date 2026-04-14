@@ -126,7 +126,10 @@ export function InvitePanel({
 
   const { data: channelMembers = [] } = useQuery({
     queryKey: ['channel-members', channelId],
-    queryFn: () => fetchApi<Array<{ user: { id: string } }>>(`/api/channels/${channelId}/members`),
+    queryFn: () =>
+      fetchApi<Array<{ user: { id: string; isBot?: boolean } }>>(
+        `/api/channels/${channelId}/members`,
+      ),
     enabled: !!channelId,
   })
 

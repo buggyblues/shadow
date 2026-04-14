@@ -28,7 +28,8 @@ export function MonthlyTrend({ data }: MonthlyTrendProps) {
     const padding = 5
 
     const points = data.map((d, i) => {
-      const x = padding + (i / (data.length - 1)) * (width - 2 * padding)
+      const xRatio = data.length > 1 ? i / (data.length - 1) : 0
+      const x = padding + xRatio * (width - 2 * padding)
       const range = maxCount - minCount || 1
       const y = height - padding - ((d.messageCount - minCount) / range) * (height - 2 * padding)
       return `${x},${y}`
@@ -46,16 +47,19 @@ export function MonthlyTrend({ data }: MonthlyTrendProps) {
     const padding = 5
 
     const points = data.map((d, i) => {
-      const x = padding + (i / (data.length - 1)) * (width - 2 * padding)
+      const xRatio = data.length > 1 ? i / (data.length - 1) : 0
+      const x = padding + xRatio * (width - 2 * padding)
       const range = maxCount - minCount || 1
       const y = height - padding - ((d.messageCount - minCount) / range) * (height - 2 * padding)
       return `${x},${y}`
     })
 
-    const firstPoint = points[0].split(',')
-    const lastPoint = points[points.length - 1].split(',')
+    const firstPoint = (points[0] ?? `${padding},${height - padding}`).split(',')
+    const lastPoint = (points[points.length - 1] ?? `${padding},${height - padding}`).split(',')
+    const firstX = firstPoint[0] ?? String(padding)
+    const lastX = lastPoint[0] ?? String(padding)
 
-    return `M ${points.join(' L ')} L ${lastPoint[0]},${height} L ${firstPoint[0]},${height} Z`
+    return `M ${points.join(' L ')} L ${lastX},${height} L ${firstX},${height} Z`
   }
 
   return (
@@ -89,7 +93,8 @@ export function MonthlyTrend({ data }: MonthlyTrendProps) {
             const width = 100
             const height = 50
             const padding = 5
-            const x = padding + (i / (data.length - 1)) * (width - 2 * padding)
+            const xRatio = data.length > 1 ? i / (data.length - 1) : 0
+            const x = padding + xRatio * (width - 2 * padding)
             const range = maxCount - minCount || 1
             const y =
               height - padding - ((d.messageCount - minCount) / range) * (height - 2 * padding)

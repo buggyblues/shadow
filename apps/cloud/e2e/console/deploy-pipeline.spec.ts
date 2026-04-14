@@ -35,7 +35,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
-import { SERVE_PORT } from '../playwright.config.js'
+import { SERVE_PORT } from '../../playwright.config.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -70,7 +70,16 @@ function clearManifests(outputDir: string) {
 
 /** Clear stale Pulumi lock files to prevent "stack currently locked" errors. */
 function clearPulumiLocks() {
-  const locksDir = join(homedir(), '.shadowob', 'pulumi', '.pulumi', 'locks', 'organization', 'shadowob-cloud', 'dev')
+  const locksDir = join(
+    homedir(),
+    '.shadowob',
+    'pulumi',
+    '.pulumi',
+    'locks',
+    'organization',
+    'shadowob-cloud',
+    'dev',
+  )
   if (!existsSync(locksDir)) return
   for (const f of readdirSync(locksDir)) {
     if (f.endsWith('.json')) {
@@ -81,11 +90,24 @@ function clearPulumiLocks() {
 
 /** Wait for Pulumi stack lock to be released naturally, then force-clear if needed. */
 async function waitForPulumiUnlock(timeoutMs = 45_000) {
-  const locksDir = join(homedir(), '.shadowob', 'pulumi', '.pulumi', 'locks', 'organization', 'shadowob-cloud', 'dev')
+  const locksDir = join(
+    homedir(),
+    '.shadowob',
+    'pulumi',
+    '.pulumi',
+    'locks',
+    'organization',
+    'shadowob-cloud',
+    'dev',
+  )
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
-    if (!existsSync(locksDir) || readdirSync(locksDir).filter(f => f.endsWith('.json')).length === 0) return
-    await new Promise(r => setTimeout(r, 2000))
+    if (
+      !existsSync(locksDir) ||
+      readdirSync(locksDir).filter((f) => f.endsWith('.json')).length === 0
+    )
+      return
+    await new Promise((r) => setTimeout(r, 2000))
   }
   // Force clear if timeout reached
   clearPulumiLocks()
@@ -184,7 +206,9 @@ test.describe('Dashboard → Deploy pipeline (solopreneur-pack)', () => {
     await waitForPulumiUnlock()
 
     // Seed ALL required env vars so Step 2 validation passes
-    const envRefsRes = await fetch(`http://localhost:${SERVE_PORT}/api/templates/solopreneur-pack/env-refs`)
+    const envRefsRes = await fetch(
+      `http://localhost:${SERVE_PORT}/api/templates/solopreneur-pack/env-refs`,
+    )
     const envRefsData = (await envRefsRes.json()) as { requiredEnvVars: string[] }
     for (const key of envRefsData.requiredEnvVars) {
       await fetch(`http://localhost:${SERVE_PORT}/api/env/global`, {
@@ -212,7 +236,9 @@ test.describe('Dashboard → Deploy pipeline (solopreneur-pack)', () => {
     await page.getByRole('button', { name: /Start Deployment/i }).click()
 
     // Should show deploying state — proves the entire wizard flow + deploy kickoff works
-    await expect(page.getByRole('heading', { name: 'Deploying...' })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('heading', { name: 'Deploying...' })).toBeVisible({
+      timeout: 10_000,
+    })
 
     // Wait for SSE log lines to start streaming (proves SSE connection works)
     await expect(page.getByText(/log lines? received/i)).toBeVisible({ timeout: 15_000 })

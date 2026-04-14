@@ -15,41 +15,44 @@ describe('schema', () => {
       const result = validateCloudConfig({
         version: '1',
         environment: 'production',
-        plugins: {
-          shadowob: {
-            servers: [
-              {
-                id: 'srv-1',
-                name: 'Production Server',
-                slug: 'prod-server',
-                isPublic: false,
-                channels: [
-                  {
-                    id: 'ch-general',
-                    title: 'General',
-                    type: 'text',
-                  },
-                ],
-              },
-            ],
-            buddies: [
-              {
-                id: 'bot-1',
-                name: 'Assistant',
-                description: 'AI Assistant',
-              },
-            ],
-            bindings: [
-              {
-                targetId: 'bot-1',
-                targetType: 'buddy',
-                servers: ['srv-1'],
-                channels: ['ch-general'],
-                agentId: 'agent-1',
-              },
-            ],
+        use: [
+          {
+            plugin: 'shadowob',
+            options: {
+              servers: [
+                {
+                  id: 'srv-1',
+                  name: 'Production Server',
+                  slug: 'prod-server',
+                  isPublic: false,
+                  channels: [
+                    {
+                      id: 'ch-general',
+                      title: 'General',
+                      type: 'text',
+                    },
+                  ],
+                },
+              ],
+              buddies: [
+                {
+                  id: 'bot-1',
+                  name: 'Assistant',
+                  description: 'AI Assistant',
+                },
+              ],
+              bindings: [
+                {
+                  targetId: 'bot-1',
+                  targetType: 'buddy',
+                  servers: ['srv-1'],
+                  channels: ['ch-general'],
+                  agentId: 'agent-1',
+                },
+              ],
+            },
           },
-        },
+        ],
         registry: {
           providers: [
             {
@@ -118,24 +121,29 @@ describe('schema', () => {
       expect(result.success).toBe(false)
     })
 
-    it('should reject invalid binding targetType', () => {
+    it('should accept opaque plugin options in use entries', () => {
+      // With the use-pattern, plugin options are Record<string, unknown>
+      // and not validated at the schema level
       const result = validateCloudConfig({
         version: '1',
-        plugins: {
-          shadowob: {
-            bindings: [
-              {
-                targetId: 'bot-1',
-                targetType: 'invalid',
-                servers: [],
-                channels: [],
-                agentId: 'a1',
-              },
-            ],
+        use: [
+          {
+            plugin: 'shadowob',
+            options: {
+              bindings: [
+                {
+                  targetId: 'bot-1',
+                  targetType: 'invalid',
+                  servers: [],
+                  channels: [],
+                  agentId: 'a1',
+                },
+              ],
+            },
           },
-        },
+        ],
       })
-      expect(result.success).toBe(false)
+      expect(result.success).toBe(true)
     })
 
     it('should reject invalid environment', () => {
@@ -149,11 +157,14 @@ describe('schema', () => {
     it('should accept config without deployments', () => {
       const result = validateCloudConfig({
         version: '1',
-        plugins: {
-          shadowob: {
-            servers: [{ id: 's1', name: 'Server' }],
+        use: [
+          {
+            plugin: 'shadowob',
+            options: {
+              servers: [{ id: 's1', name: 'Server' }],
+            },
           },
-        },
+        ],
       })
       expect(result.success).toBe(true)
     })

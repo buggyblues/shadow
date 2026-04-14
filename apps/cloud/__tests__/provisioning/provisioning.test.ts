@@ -8,20 +8,23 @@ describe('provisioning', () => {
     it('should build env vars from provisioned buddies', () => {
       const config: CloudConfig = {
         version: '1',
-        plugins: {
-          shadowob: {
-            buddies: [{ id: 'bot-1', name: 'Bot' }],
-            bindings: [
-              {
-                targetId: 'bot-1',
-                targetType: 'buddy',
-                servers: ['srv-1'],
-                channels: ['ch-1'],
-                agentId: 'agent-1',
-              },
-            ],
+        use: [
+          {
+            plugin: 'shadowob',
+            options: {
+              buddies: [{ id: 'bot-1', name: 'Bot' }],
+              bindings: [
+                {
+                  targetId: 'bot-1',
+                  targetType: 'buddy',
+                  servers: ['srv-1'],
+                  channels: ['ch-1'],
+                  agentId: 'agent-1',
+                },
+              ],
+            },
           },
-        },
+        ],
       }
 
       const provision: ProvisionResult = {
@@ -46,20 +49,23 @@ describe('provisioning', () => {
     it('should handle hyphenated buddy IDs', () => {
       const config: CloudConfig = {
         version: '1',
-        plugins: {
-          shadowob: {
-            buddies: [{ id: 'my-cool-bot', name: 'Bot' }],
-            bindings: [
-              {
-                targetId: 'my-cool-bot',
-                targetType: 'buddy',
-                servers: ['s'],
-                channels: ['c'],
-                agentId: 'agent-1',
-              },
-            ],
+        use: [
+          {
+            plugin: 'shadowob',
+            options: {
+              buddies: [{ id: 'my-cool-bot', name: 'Bot' }],
+              bindings: [
+                {
+                  targetId: 'my-cool-bot',
+                  targetType: 'buddy',
+                  servers: ['s'],
+                  channels: ['c'],
+                  agentId: 'agent-1',
+                },
+              ],
+            },
           },
-        },
+        ],
       }
 
       const provision: ProvisionResult = {
@@ -75,19 +81,22 @@ describe('provisioning', () => {
     it('should return only server URL when no bindings match', () => {
       const config: CloudConfig = {
         version: '1',
-        plugins: {
-          shadowob: {
-            bindings: [
-              {
-                targetId: 'bot-1',
-                targetType: 'buddy',
-                servers: ['s'],
-                channels: ['c'],
-                agentId: 'other-agent',
-              },
-            ],
+        use: [
+          {
+            plugin: 'shadowob',
+            options: {
+              bindings: [
+                {
+                  targetId: 'bot-1',
+                  targetType: 'buddy',
+                  servers: ['s'],
+                  channels: ['c'],
+                  agentId: 'other-agent',
+                },
+              ],
+            },
           },
-        },
+        ],
       }
 
       const provision: ProvisionResult = {

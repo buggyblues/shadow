@@ -34,7 +34,7 @@ import { InvitePanel } from '../common/invite-panel'
 import { NotificationBell } from '../notification/notification-bell'
 import { type PickerResult, WorkspaceFilePicker } from '../workspace'
 import { FilePreviewPanel } from './file-preview-panel'
-import { MessageBubble } from './message-bubble'
+import { type Message as BubbleMessage, MessageBubble } from './message-bubble'
 import { MessageInput } from './message-input'
 
 interface Author {
@@ -54,7 +54,7 @@ interface ReactionGroup {
 interface Message {
   id: string
   content: string
-  channelId: string
+  channelId?: string
   authorId: string
   threadId: string | null
   replyToId: string | null
@@ -79,6 +79,7 @@ interface Channel {
   name: string
   topic: string | null
   type: string
+  isArchived?: boolean
 }
 
 interface MemberEvent {
@@ -227,7 +228,7 @@ export function ChatArea() {
   const timeline = useMemo<TimelineItem[]>(() => {
     const items: TimelineItem[] = []
     for (let i = 0; i < messages.length; i++) {
-      const m = messages[i]
+      const m = messages[i]!
       const prev = i > 0 ? messages[i - 1] : undefined
       const isGrouped =
         prev !== undefined &&
@@ -647,7 +648,7 @@ export function ChatArea() {
   }, [messages, selectedMessageIds, t, handleExitSelectionMode])
 
   const handleMessageUpdate = useCallback(
-    (msg: Message) => {
+    (msg: BubbleMessage) => {
       queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', activeChannelId], (old) => {
         if (!old) return old
         return {

@@ -1,7 +1,7 @@
 import { Button, Input } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
-import { AlertTriangle, Copy, Eye, EyeOff, Pencil, Plus, RotateCw, Trash2 } from 'lucide-react'
+import { AlertTriangle, Copy, Eye, EyeOff, Key, Pencil, Plus, RotateCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
@@ -21,6 +21,25 @@ interface OAuthApp {
 
 interface CreateAppResult extends OAuthApp {
   clientSecret: string
+}
+
+interface ApiToken {
+  id: string
+  name: string
+  scope: string
+  lastUsedAt: string | null
+  expiresAt: string | null
+  revoked: boolean
+  createdAt: string
+}
+
+interface CreateTokenResult {
+  id: string
+  name: string
+  token: string
+  scope: string
+  expiresAt: string | null
+  createdAt: string
 }
 
 function AppLogo({
@@ -136,6 +155,10 @@ export function DeveloperSettings() {
 
   return (
     <SettingsPanel>
+      {/* ── API Tokens (PAT) Section ── */}
+      <ApiTokenSection />
+
+      {/* ── OAuth Apps Section ── */}
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <SettingsHeader
           titleKey="oauth.developerTitle"
@@ -662,5 +685,276 @@ function EditAppForm({
         </Button>
       </div>
     </form>
+  )
+}
+
+function ApiTokenSection() {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [newToken, setNewToken] = useState<string | null>(null)
+  const [showToken, setShowToken] = useState(false)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [tokenName, setTokenName] = useState('')
+  const [expiresInDays, setExpiresInDays] = useState<string>('90')
+
+  const { data: tokens = [], isLoading } = useQuery({
+    queryKey: ['api-tokens'],
+    queryFn: () => fetchApi<ApiToken[]>('/api/tokens'),
+  })
+
+  const createMutation = useMutation({
+    mutationFn: (data: { name: string; expiresInDays?: number | null }) =>
+      fetchApi<CreateTokenResult>('/api/tokens', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: (result) => {
+      setNewToken(result.token)
+      setShowToken(true)
+      setShowCreateForm(false)
+      setTokenName('')
+      setExpiresInDays('90')
+      queryClient.invalidateQueries({ queryKey: ['api-tokens'] })
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (tokenId: string) => fetchApi(`/api/tokens/${tokenId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      setDeleteConfirmId(null)
+      queryClient.invalidateQueries({ queryKey: ['api-tokens'] })
+    },
+  })
+
+  const copyToClipboard = async (text: string) => {
+    await navigator.clipboard.writeText(text)
+  }
+
+  const handleCreateSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!tokenName.trim()) return
+    const days = expiresInDays === 'never' ? null : Number.parseInt(expiresInDays, 10)
+    createMutation.mutate({
+      name: tokenName.trim(),
+      expiresInDays: days,
+    })
+  }
+
+  return (
+    <>
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <SettingsHeader
+          titleKey="pat.title"
+          titleFallback="API Tokens"
+          descKey="pat.desc"
+          descFallback="Create personal access tokens for API and CLI access"
+        />
+        <Button
+          size="sm"
+          type="button"
+          onClick={() => setShowCreateForm(true)}
+          className="self-start"
+        >
+          <Plus size={16} />
+          {t('pat.create', 'Create Token')}
+        </Button>
+      </div>
+
+      {/* New token display banner */}
+      {newToken && (
+        <SettingsCard className="bg-warning/10 border-warning/30">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="text-warning shrink-0 mt-0.5" size={20} />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-warning">
+                {t('pat.tokenWarning', 'Your new API token (shown only once)')}
+              </p>
+              <div className="flex items-center gap-2 mt-2">
+                <code className="flex-1 text-xs bg-bg-tertiary/50 px-3 py-2 rounded-xl font-mono break-all">
+                  {showToken ? newToken : '•'.repeat(40)}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => setShowToken(!showToken)}
+                  className="p-2 hover:bg-bg-modifier-hover rounded-xl transition"
+                >
+                  {showToken ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(newToken)}
+                  className="p-2 hover:bg-bg-modifier-hover rounded-xl transition"
+                >
+                  <Copy size={16} />
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setNewToken(null)}
+                className="text-xs text-text-muted mt-2 hover:text-text-primary transition"
+              >
+                {t('pat.tokenDismiss', "I've saved it, dismiss")}
+              </button>
+            </div>
+          </div>
+        </SettingsCard>
+      )}
+
+      {/* Create token form */}
+      {showCreateForm && (
+        <form
+          onSubmit={handleCreateSubmit}
+          className="rounded-3xl border border-border-subtle bg-[var(--glass-bg)] backdrop-blur-2xl p-6 shadow-[var(--shadow-soft)] space-y-4"
+        >
+          <h3 className="font-black text-text-primary">{t('pat.createNew', 'Create New Token')}</h3>
+          <div>
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-2">
+              {t('pat.tokenName', 'Token Name')} *
+            </label>
+            <Input
+              type="text"
+              value={tokenName}
+              onChange={(e) => setTokenName(e.target.value)}
+              placeholder={t('pat.tokenNamePlaceholder', 'e.g. CLI deploy, CI/CD')}
+              className="rounded-2xl px-4 py-3"
+              maxLength={128}
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-2">
+              {t('pat.expiration', 'Expiration')}
+            </label>
+            <select
+              value={expiresInDays}
+              onChange={(e) => setExpiresInDays(e.target.value)}
+              className="w-full rounded-2xl px-4 py-3 bg-bg-secondary border border-border-subtle text-text-primary text-sm"
+            >
+              <option value="30">{t('pat.expires30', '30 days')}</option>
+              <option value="60">{t('pat.expires60', '60 days')}</option>
+              <option value="90">{t('pat.expires90', '90 days')}</option>
+              <option value="180">{t('pat.expires180', '180 days')}</option>
+              <option value="365">{t('pat.expires365', '1 year')}</option>
+              <option value="never">{t('pat.expiresNever', 'No expiration')}</option>
+            </select>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              onClick={() => setShowCreateForm(false)}
+            >
+              {t('common.cancel', 'Cancel')}
+            </Button>
+            <Button
+              size="sm"
+              type="submit"
+              disabled={createMutation.isPending || !tokenName.trim()}
+            >
+              {createMutation.isPending
+                ? t('pat.creating', 'Creating...')
+                : t('pat.create', 'Create Token')}
+            </Button>
+          </div>
+        </form>
+      )}
+
+      {/* Token list */}
+      {isLoading ? (
+        <div className="text-center text-text-muted py-8">{t('common.loading', 'Loading...')}</div>
+      ) : tokens.length === 0 ? (
+        <SettingsCard className="text-center py-12">
+          <p className="text-lg mb-2 text-text-muted">{t('pat.noTokens', 'No API Tokens')}</p>
+          <p className="text-sm text-text-muted">
+            {t('pat.noTokensHint', 'Create a token for CLI or API access')}
+          </p>
+        </SettingsCard>
+      ) : (
+        <div className="space-y-3">
+          {tokens.map((token) => (
+            <SettingsCard key={token.id}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Key size={18} className="text-primary shrink-0" />
+                  <div>
+                    <h3 className="font-black text-text-primary text-sm">{token.name}</h3>
+                    <div className="flex items-center gap-3 text-xs text-text-muted mt-0.5">
+                      <span>
+                        {t('pat.created', 'Created')}{' '}
+                        {new Date(token.createdAt).toLocaleDateString()}
+                      </span>
+                      {token.lastUsedAt && (
+                        <span>
+                          {t('pat.lastUsed', 'Last used')}{' '}
+                          {new Date(token.lastUsedAt).toLocaleDateString()}
+                        </span>
+                      )}
+                      {token.expiresAt && (
+                        <span
+                          className={new Date(token.expiresAt) < new Date() ? 'text-danger' : ''}
+                        >
+                          {new Date(token.expiresAt) < new Date()
+                            ? t('pat.expired', 'Expired')
+                            : `${t('pat.expiresOn', 'Expires')} ${new Date(token.expiresAt).toLocaleDateString()}`}
+                        </span>
+                      )}
+                      {!token.expiresAt && <span>{t('pat.noExpiry', 'No expiration')}</span>}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirmId(token.id)}
+                    className="p-2 text-text-muted hover:text-danger hover:bg-danger/10 rounded-xl transition"
+                    title={t('pat.delete', 'Delete token')}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Delete confirmation */}
+              {deleteConfirmId === token.id && (
+                <div className="mt-3 p-3 bg-danger/10 rounded-2xl border border-danger/20">
+                  <p className="text-sm text-danger font-medium">
+                    {t(
+                      'pat.deleteConfirm',
+                      'Are you sure? This token will stop working immediately.',
+                    )}
+                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      type="button"
+                      onClick={() => deleteMutation.mutate(token.id)}
+                      disabled={deleteMutation.isPending}
+                      className="text-xs"
+                    >
+                      {t('pat.confirmDelete', 'Confirm Delete')}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      type="button"
+                      onClick={() => setDeleteConfirmId(null)}
+                      className="text-xs"
+                    >
+                      {t('common.cancel', 'Cancel')}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </SettingsCard>
+          ))}
+        </div>
+      )}
+
+      {/* Divider between API Tokens and OAuth Apps sections */}
+      <div className="border-t border-border-subtle my-2" />
+    </>
   )
 }

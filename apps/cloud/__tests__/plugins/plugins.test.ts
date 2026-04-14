@@ -55,7 +55,7 @@ function makeBuildContext(overrides: Partial<PluginBuildContext> = {}): PluginBu
     config: {
       namespace: 'test-ns',
       agents: [],
-      plugins: {},
+      use: [],
     } as unknown as PluginBuildContext['config'],
     secrets: { TEST_API_KEY: 'sk-test-123' },
     namespace: 'test-ns',
@@ -325,60 +325,66 @@ describe('mergePluginFragments', () => {
 })
 
 describe('resolveAgentPluginConfig', () => {
-  it('should return null for disabled plugins', () => {
+  it('should return null for unconfigured plugins', () => {
+    const config = { version: '1' } as unknown as PluginBuildContext['config']
+    expect(resolveAgentPluginConfig('test-plugin', 'agent-1', config)).toBeNull()
+  })
+
+  it('should return null when plugin not in any use array', () => {
     const config = {
-      plugins: { 'test-plugin': { enabled: false, config: { x: 1 } } },
+      version: '1',
+      use: [{ plugin: 'other-plugin', options: { x: 1 } }],
+    } as unknown as PluginBuildContext['config']
+    expect(resolveAgentPluginConfig('test-plugin', 'agent-1', config)).toBeNull()
+  })
+
+  it('should resolve from global use array', () => {
+    const config = {
+      version: '1',
+      use: [{ plugin: 'test-plugin', options: { globalOpt: 'a' } }],
     } as unknown as PluginBuildContext['config']
 
-    expect(resolveAgentPluginConfig('test-plugin', 'agent-1', config)).toBeNull()
+    const resolved = resolveAgentPluginConfig('test-plugin', 'agent-1', config)
+    expect(resolved).toEqual({ globalOpt: 'a' })
   })
 
-  it('should return null for unconfigured plugins', () => {
-    const config = { plugins: {} } as unknown as PluginBuildContext['config']
-    expect(resolveAgentPluginConfig('test-plugin', 'agent-1', config)).toBeNull()
-  })
-
-  it('should merge global + per-agent config', () => {
+  it('should prefer agent-level use over global use', () => {
     const config = {
-      plugins: {
-        'test-plugin': {
-          enabled: true,
-          config: { globalOpt: 'a', sharedOpt: 'global' },
-          agents: {
-            'agent-1': { config: { agentOpt: 'b', sharedOpt: 'agent' } },
+      version: '1',
+      use: [{ plugin: 'test-plugin', options: { globalOpt: 'a', sharedOpt: 'global' } }],
+      deployments: {
+        agents: [
+          {
+            id: 'agent-1',
+            runtime: 'openclaw',
+            use: [{ plugin: 'test-plugin', options: { agentOpt: 'b', sharedOpt: 'agent' } }],
           },
-        },
+        ],
       },
     } as unknown as PluginBuildContext['config']
 
     const resolved = resolveAgentPluginConfig('test-plugin', 'agent-1', config)
     expect(resolved).toBeDefined()
-    expect(resolved).toEqual({ globalOpt: 'a', sharedOpt: 'agent', agentOpt: 'b' })
+    expect(resolved).toEqual({ agentOpt: 'b', sharedOpt: 'agent' })
   })
 
-  it('should return null when per-agent is disabled', () => {
+  it('should return empty options when plugin entry has no options', () => {
     const config = {
-      plugins: {
-        'test-plugin': {
-          enabled: true,
-          config: { x: 1 },
-          agents: { 'agent-1': { enabled: false } },
-        },
-      },
+      version: '1',
+      use: [{ plugin: 'test-plugin' }],
     } as unknown as PluginBuildContext['config']
 
-    expect(resolveAgentPluginConfig('test-plugin', 'agent-1', config)).toBeNull()
+    const resolved = resolveAgentPluginConfig('test-plugin', 'agent-1', config)
+    expect(resolved).toEqual({})
   })
 })
 
 describe('resolvePluginSecrets', () => {
   it('should resolve ${env:VAR} from process env', () => {
     const config = {
-      plugins: {
-        'test-plugin': {
-          secrets: { TEST_API_KEY: '${env:MY_KEY}' },
-        },
-      },
+      version: '1',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+      use: [{ plugin: 'test-plugin', options: { TEST_API_KEY: '${env:MY_KEY}' } }],
     } as unknown as PluginBuildContext['config']
 
     const secrets = resolvePluginSecrets('test-plugin', config, { MY_KEY: 'resolved-value' })
@@ -387,11 +393,8 @@ describe('resolvePluginSecrets', () => {
 
   it('should pass through literal values', () => {
     const config = {
-      plugins: {
-        'test-plugin': {
-          secrets: { TEST_API_KEY: 'literal-key' },
-        },
-      },
+      version: '1',
+      use: [{ plugin: 'test-plugin', options: { TEST_API_KEY: 'literal-key' } }],
     } as unknown as PluginBuildContext['config']
 
     const secrets = resolvePluginSecrets('test-plugin', config, {})
@@ -399,7 +402,7 @@ describe('resolvePluginSecrets', () => {
   })
 
   it('should return empty for missing plugin config', () => {
-    const config = { plugins: {} } as unknown as PluginBuildContext['config']
+    const config = { version: '1' } as unknown as PluginBuildContext['config']
     expect(resolvePluginSecrets('test-plugin', config, {})).toEqual({})
   })
 })

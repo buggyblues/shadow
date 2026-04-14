@@ -10,6 +10,10 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/stores/toast'
 
+function getProviderSecretEnvName(providerId: string): string {
+  return `${providerId.toUpperCase().replace(/-/g, '_')}_API_KEY`
+}
+
 // ── Provider Card ─────────────────────────────────────────────────────────────
 
 function ProviderCard({
@@ -21,6 +25,8 @@ function ProviderCard({
   onChange: (updated: ProviderSettings) => void
   onRemove: () => void
 }) {
+  const { t } = useTranslation()
+
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-3">
       <div className="flex items-center justify-between">
@@ -38,28 +44,22 @@ function ProviderCard({
       </div>
 
       <div className="space-y-2">
-        <div>
-          <label htmlFor={`apikey-${provider.id}`} className="text-xs text-gray-500 block mb-1">
-            API Key
-          </label>
-          <input
-            id={`apikey-${provider.id}`}
-            type="password"
-            value={provider.apiKey ?? ''}
-            onChange={(e) => onChange({ ...provider, apiKey: e.target.value })}
-            placeholder="sk-..."
-            autoComplete="off"
-            data-1p-ignore
-            data-lpignore="true"
-            data-form-type="other"
-            className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-1.5 text-sm font-mono text-gray-300 placeholder-gray-600 focus:outline-none focus:border-blue-500"
-          />
+        <div className="bg-gray-950 border border-gray-800 rounded-lg px-3 py-2.5">
+          <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-1">
+            {t('settings.secretEnvKey')}
+          </p>
+          <code className="text-xs font-mono text-yellow-400/90 break-all">
+            {getProviderSecretEnvName(provider.id)}
+          </code>
+          <p className="text-[11px] text-gray-600 mt-2">
+            {t('settings.credentialsManagedInSecrets')}
+          </p>
         </div>
 
         {provider.baseUrl !== undefined && (
           <div>
             <label htmlFor={`baseurl-${provider.id}`} className="text-xs text-gray-500 block mb-1">
-              Base URL
+              {t('settings.baseUrl')}
             </label>
             <input
               id={`baseurl-${provider.id}`}
@@ -89,6 +89,7 @@ function ProvidersTab({
   data: Settings | undefined
   mutation: ReturnType<typeof useMutation<{ ok: boolean }, Error, Settings>>
 }) {
+  const { t } = useTranslation()
   const toast = useToast()
   const addActivity = useAppStore((s) => s.addActivity)
 
@@ -96,7 +97,6 @@ function ProvidersTab({
     const newProvider: ProviderSettings = {
       id: preset.id,
       api: preset.api,
-      apiKey: '',
       ...(preset.baseUrl ? { baseUrl: preset.baseUrl } : {}),
     }
     setProviders([...providers, newProvider])
@@ -132,16 +132,14 @@ function ProvidersTab({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500">
-          Configure LLM providers and API keys for agent deployments.
-        </p>
+        <p className="text-sm text-gray-500">{t('settings.configureProvidersMetadata')}</p>
         <div className="relative group">
           <button
             type="button"
             className="flex items-center gap-1.5 text-xs border border-gray-700 hover:border-gray-500 text-gray-400 hover:text-white rounded-lg px-3 py-1.5 transition-colors"
           >
             <Plus size={12} />
-            Add provider
+            {t('settings.addProvider')}
           </button>
           <div className="absolute right-0 top-full mt-1 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-10 min-w-48 hidden group-hover:block">
             {API_PRESETS.map((preset) => (
@@ -158,10 +156,14 @@ function ProvidersTab({
         </div>
       </div>
 
+      <div className="bg-blue-950/20 border border-blue-900/30 rounded-lg p-4 text-xs text-blue-300">
+        {t('settings.credentialsMoveNotice')}
+      </div>
+
       {providers.length === 0 && (
         <div className="bg-gray-900 border border-dashed border-gray-700 rounded-lg p-8 text-center text-sm text-gray-600">
           <Key size={24} className="mx-auto mb-2 text-gray-700" />
-          No providers configured. Add one to get started.
+          {t('settings.noProvidersConfigured')}
         </div>
       )}
 
@@ -190,7 +192,7 @@ function ProvidersTab({
             )}
           >
             <Save size={14} />
-            {mutation.isPending ? 'Saving...' : 'Save settings'}
+            {mutation.isPending ? t('common.saving') : t('settings.saveSettings')}
           </button>
         </div>
       )}
@@ -357,7 +359,7 @@ export function SettingsPage() {
 
       <div className="mb-6">
         <h1 className="text-xl font-bold">{t('nav.settings')}</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{t('settings.configureLLMProviders')}</p>
+        <p className="text-sm text-gray-500 mt-0.5">{t('settings.configureProvidersMetadata')}</p>
       </div>
 
       {isLoading && (

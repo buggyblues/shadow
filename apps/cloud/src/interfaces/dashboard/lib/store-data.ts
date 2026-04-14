@@ -559,7 +559,15 @@ export function getTemplateMeta(name: string): StoreTemplateMeta {
 }
 
 export function getCategoryDef(id: StoreCategory | 'all'): StoreCategoryDef {
-  return CATEGORIES.find((c) => c.id === id) ?? CATEGORIES[0]
+  return (
+    CATEGORIES.find((c) => c.id === id) ?? {
+      id: 'all',
+      label: 'All Templates',
+      emoji: '📦',
+      description: 'Browse all available agent team templates',
+      color: 'gray',
+    }
+  )
 }
 
 export function getCategoryColor(category: StoreCategory): string {

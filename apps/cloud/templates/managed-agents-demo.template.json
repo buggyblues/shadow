@@ -1,42 +1,47 @@
 {
   "$comment": "Template with managed-agents features: vault isolation, permissions, networking, versioning",
   "version": "1",
-  "name": "Managed Agents Demo",
-  "description": "Demonstrates P0/P1 managed-agents features",
+  "name": "${i18n:name}",
+  "description": "${i18n:description}",
   "environment": "development",
-
-  "vaults": {
-    "default": {
-      "providers": {
-        "anthropic": { "apiKey": "${env:ANTHROPIC_API_KEY}" },
-        "openai": { "apiKey": "${env:OPENAI_API_KEY}" }
+  "registry": {
+    "vaults": {
+      "default": {
+        "providers": {
+          "anthropic": {
+            "apiKey": "${env:ANTHROPIC_API_KEY}"
+          },
+          "openai": {
+            "apiKey": "${env:OPENAI_API_KEY}"
+          }
+        },
+        "secrets": {
+          "github-token": "${env:GITHUB_TOKEN}"
+        }
       },
-      "secrets": {
-        "github-token": "${env:GITHUB_TOKEN}"
+      "restricted": {
+        "providers": {
+          "anthropic": {
+            "apiKey": "${env:RESTRICTED_ANTHROPIC_KEY}"
+          }
+        }
       }
     },
-    "restricted": {
-      "providers": {
-        "anthropic": { "apiKey": "${env:RESTRICTED_ANTHROPIC_KEY}" }
-      }
-    }
-  },
-
-  "registry": {
     "configurations": [
       {
         "id": "base",
         "openclaw": {
           "agents": {
             "defaults": {
-              "model": { "primary": "claude-sonnet-4-20250514" }
+              "model": {
+                "primary": "claude-sonnet-4-20250514"
+              }
             }
           }
         }
       }
     ]
   },
-
   "deployments": {
     "namespace": "managed-agents-demo",
     "agents": [
@@ -46,7 +51,9 @@
         "version": "1.0.0",
         "changelog": "Initial release with coding assistance",
         "vault": "default",
-        "configuration": { "extends": "base" },
+        "configuration": {
+          "extends": "base"
+        },
         "permissions": {
           "default": "approve-reads",
           "tools": {
@@ -76,7 +83,9 @@
         "version": "2.1.0",
         "changelog": "Added web search capabilities",
         "vault": "restricted",
-        "configuration": { "extends": "base" },
+        "configuration": {
+          "extends": "base"
+        },
         "permissions": {
           "default": "always-allow",
           "tools": {
@@ -97,7 +106,9 @@
         "id": "sandboxed-runner",
         "runtime": "openclaw",
         "version": "0.5.0",
-        "configuration": { "extends": "base" },
+        "configuration": {
+          "extends": "base"
+        },
         "permissions": {
           "default": "deny-all"
         },
@@ -107,5 +118,15 @@
         "description": "Fully sandboxed agent — no network, no tools"
       }
     ]
+  },
+  "i18n": {
+    "en": {
+      "name": "Managed Agents Demo",
+      "description": "Demonstrates P0/P1 managed-agents features"
+    },
+    "zh-CN": {
+      "name": "托管智能体演示",
+      "description": "演示 P0/P1 托管智能体功能"
+    }
   }
 }

@@ -109,7 +109,10 @@ export function createAgentHandler(container: AppContainer) {
       return c.json(agent, 201)
     } catch (err) {
       const status = (err as { status?: number }).status ?? 500
-      return c.json({ ok: false, error: (err as Error).message || 'Internal Server Error' }, status as 409)
+      return c.json(
+        { ok: false, error: (err as Error).message || 'Internal Server Error' },
+        status as 409,
+      )
     }
   })
 
@@ -222,12 +225,17 @@ export function createAgentHandler(container: AppContainer) {
     }
   })
 
-  // GET /api/agents/:id/config — full remote config for the plugin (owner only)
+  // GET /api/agents/:id/config — full remote config for the plugin (owner or agent itself)
   agentHandler.get('/:id/config', async (c) => {
+    const agentService = container.resolve('agentService')
     const user = c.get('user')
     const id = c.req.param('id')
-    const ownershipError = await requireAgentOwner(container, c, id, user.userId)
-    if (ownershipError) return ownershipError
+    const agent = await agentService.getById(id)
+    if (!agent) return c.json({ error: 'Agent not found' }, 404)
+    // Allow both the owner and the agent's own bot user
+    if (agent.ownerId !== user.userId && agent.userId !== user.userId) {
+      return c.json({ error: 'Forbidden' }, 403)
+    }
     const agentPolicyService = container.resolve('agentPolicyService')
     try {
       const config = await agentPolicyService.getRemoteConfig(id)

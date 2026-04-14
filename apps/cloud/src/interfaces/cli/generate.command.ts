@@ -2,8 +2,9 @@
  * CLI: shadowob-cloud generate — generate K8s manifests or OpenClaw configs.
  */
 
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Command } from 'commander'
 import type { ServiceContainer } from '../../services/container.js'
 
@@ -91,6 +92,41 @@ export function createGenerateCommand(container: ServiceContainer) {
         } else {
           console.log(JSON.stringify(openclawConfig, null, 2))
         }
+      }),
+  )
+
+  cmd.addCommand(
+    new Command('schema')
+      .description('Generate JSON Schema for shadowob-cloud.json (for IDE autocomplete)')
+      .option('-o, --output <path>', 'Output file path', 'shadowob-cloud.schema.json')
+      .action((options: { output: string }) => {
+        // Read pre-generated schema from the package's schemas/ directory
+        const schemaPath = resolve(
+          fileURLToPath(import.meta.url),
+          '..',
+          '..',
+          '..',
+          'schemas',
+          'config.schema.json',
+        )
+
+        if (!existsSync(schemaPath)) {
+          container.logger.error(
+            'Schema file not found. Run `pnpm generate:schema` in the cloud package first.',
+          )
+          process.exit(1)
+        }
+
+        const schema = readFileSync(schemaPath, 'utf-8')
+        const outPath = resolve(options.output)
+        mkdirSync(dirname(outPath), { recursive: true })
+        writeFileSync(outPath, schema, 'utf-8')
+
+        container.logger.success(`JSON Schema written to: ${options.output}`)
+        container.logger.dim(
+          'Add to your VS Code settings.json:\n' +
+            '  "json.schemas": [{ "fileMatch": ["shadowob-cloud.json"], "url": "./shadowob-cloud.schema.json" }]',
+        )
       }),
   )
 

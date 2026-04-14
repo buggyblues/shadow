@@ -40,6 +40,8 @@ export type PluginCapability =
   | 'auth-provider'
   | 'skill'
   | 'cli'
+  | 'config-builder'
+  | 'config-resolver'
 
 export type PluginAuthType = 'oauth2' | 'api-key' | 'token' | 'basic' | 'none'
 
@@ -238,10 +240,7 @@ export interface PluginChannelProvider {
 /** Config builder — custom OpenClaw config generation beyond auto-derivation. */
 export interface PluginConfigBuilder {
   /** Build the OpenClaw config fragment for this plugin */
-  build(
-    agentConfig: Record<string, unknown>,
-    context: PluginBuildContext,
-  ): PluginConfigFragment
+  build(agentConfig: Record<string, unknown>, context: PluginBuildContext): PluginConfigFragment
 }
 
 // ─── Resource Provider ──────────────────────────────────────────────────────
@@ -260,10 +259,7 @@ export interface PluginResourceProvider {
 /** Env provider — generates environment variables and manages secrets. */
 export interface PluginEnvProvider {
   /** Build environment variables map */
-  build(
-    agentConfig: Record<string, unknown>,
-    context: PluginBuildContext,
-  ): Record<string, string>
+  build(agentConfig: Record<string, unknown>, context: PluginBuildContext): Record<string, string>
 }
 
 // ─── Lifecycle Provider ─────────────────────────────────────────────────────
@@ -281,6 +277,22 @@ export interface PluginLifecycleProvider {
     agentConfig: Record<string, unknown>,
     context: PluginBuildContext,
   ): Promise<{ healthy: boolean; message: string }>
+}
+
+// ─── Config Resolver ────────────────────────────────────────────────────────
+
+/**
+ * Config resolver — pre-processes agent deployments before OpenClaw build.
+ *
+ * Called during resolveConfig(), before any build step:
+ * - Convert plugin `use` entries into agent fields (e.g., gitagent → agent.source)
+ * - Enrich agent metadata from external sources (git repos, APIs)
+ * - Validate and normalize plugin-specific options
+ */
+export interface PluginConfigResolver {
+  /** Transform an agent deployment before OpenClaw config building.
+   *  Must return the (potentially modified) agent. */
+  resolveAgent(agent: AgentDeployment, config: CloudConfig): AgentDeployment
 }
 
 // ─── Validation Provider ────────────────────────────────────────────────────
@@ -353,6 +365,8 @@ export interface PluginDefinition {
 
   // ── Lifecycle ──
 
+  /** Pre-build agent transformation (resolves use entries into agent fields) */
+  configResolver?: PluginConfigResolver
   /** Plugin lifecycle (provisioning, health) */
   lifecycle?: PluginLifecycleProvider
   /** Configuration validation */

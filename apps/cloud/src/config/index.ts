@@ -21,8 +21,9 @@ export type {
   ShadowReplyPolicy,
   ShadowReplyPolicyMode,
   ShadowServer,
+  UseEntry,
 } from './schema.js'
-export { assertCloudConfig, validateCloudConfig } from './schema.js'
+export { assertCloudConfig, getCloudConfigJsonSchema, validateCloudConfig } from './schema.js'
 export type { TemplateContext } from './template.js'
 export {
   collectTemplateRefs,

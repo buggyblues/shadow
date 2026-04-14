@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import {
   Activity,
   ArrowRight,
@@ -27,7 +27,7 @@ import { useRecentActivities } from '@/stores/app'
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function isReady(dep: Deployment): boolean {
-  const [r, t] = dep.ready.split('/').map(Number)
+  const [r = 0, t = 0] = dep.ready.split('/').map(Number)
   return r === t && t > 0
 }
 
@@ -46,10 +46,10 @@ function QuickActions() {
           {t('overview.browseAndDeploy')}
         </p>
       </Link>
-      <Link to="/clusters" className="nf-card nf-bouncy group !p-4">
+      <Link to="/deployments" className="nf-card nf-bouncy group !p-4">
         <Layers size={20} className="text-green-400 mb-2" />
         <p className="text-sm font-bold transition-colors" style={{ color: 'var(--nf-text-high)' }}>
-          {t('nav.clusters')}
+          {t('nav.deployments')}
         </p>
         <p className="text-xs mt-0.5" style={{ color: 'var(--nf-text-muted)' }}>
           {t('overview.managedDeployments')}
@@ -236,13 +236,16 @@ export function OverviewPage() {
     queryKey: ['deployments'],
     queryFn: api.deployments.list,
     refetchInterval: 10_000,
+    staleTime: 5_000,
   })
 
   const { data: templates } = useQuery({
     queryKey: ['templates'],
     queryFn: api.templates.list,
+    staleTime: 30_000,
   })
 
+  const navigate = useNavigate()
   const total = deployments?.length ?? 0
   const ready = deployments?.filter(isReady).length ?? 0
   const namespaces = new Set(deployments?.map((d) => d.namespace) ?? []).size
@@ -272,25 +275,28 @@ export function OverviewPage() {
           value={total}
           icon={<Box size={13} />}
           color="default"
-          onClick={() => {}}
+          onClick={() => navigate({ to: '/deployments' })}
         />
         <StatCard
           label={t('overview.ready')}
           value={ready}
           icon={<CheckCircle size={13} />}
           color="green"
+          onClick={() => navigate({ to: '/deployments' })}
         />
         <StatCard
           label={t('overview.namespaces')}
           value={namespaces}
           icon={<FolderOpen size={13} />}
           color="blue"
+          onClick={() => navigate({ to: '/deployments' })}
         />
         <StatCard
           label={t('overview.templates')}
           value={templateCount}
           icon={<ShoppingBag size={13} />}
           color="purple"
+          onClick={() => navigate({ to: '/store' })}
         />
       </div>
 
@@ -323,7 +329,7 @@ export function OverviewPage() {
                 {t('overview.recentDeployments')}
               </h2>
               <Link
-                to="/clusters"
+                to="/deployments"
                 className="text-xs flex items-center gap-1"
                 style={{ color: 'var(--color-nf-cyan)' }}
               >
@@ -356,7 +362,7 @@ export function OverviewPage() {
                 {t('overview.recentActivity')}
               </h2>
               <Link
-                to="/activity"
+                to="/monitoring"
                 className="text-xs flex items-center gap-1"
                 style={{ color: 'var(--color-nf-cyan)' }}
               >

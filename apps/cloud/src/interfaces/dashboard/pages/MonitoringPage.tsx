@@ -4,28 +4,35 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
+  ArrowUpDown,
   BarChart3,
   Box,
   CheckCircle,
   Clock,
+  Filter,
   FolderOpen,
   Heart,
   RefreshCw,
+  Rocket,
+  Settings,
   Shield,
   Stethoscope,
+  Trash2,
   XCircle,
-  Zap,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/Badge'
 import { Breadcrumb } from '@/components/Breadcrumb'
+import { EmptyState } from '@/components/EmptyState'
+import { SearchInput } from '@/components/SearchInput'
 import { StatCard } from '@/components/StatCard'
 import { StatusDot, type StatusType } from '@/components/StatusDot'
 import { Tabs } from '@/components/Tabs'
+import { useDebounce } from '@/hooks/useDebounce'
 import { api, type Deployment, type DoctorCheck, type DoctorResult } from '@/lib/api'
 import { getRelativeTime, pluralize } from '@/lib/utils'
-import { useRecentActivities } from '@/stores/app'
+import { type ActivityEntry, type ActivityType, useAppStore } from '@/stores/app'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -36,7 +43,7 @@ function doctorStatusToStatusType(status: DoctorCheck['status']): StatusType {
 }
 
 function isDeploymentReady(dep: Deployment): boolean {
-  const [r, t] = dep.ready.split('/').map(Number)
+  const [r = 0, t = 0] = dep.ready.split('/').map(Number)
   return r === t && t > 0
 }
 
@@ -160,50 +167,181 @@ function DeploymentsPanel({ deployments }: { deployments: Deployment[] }) {
   )
 }
 
-// ── Events Timeline ───────────────────────────────────────────────────────────
+// ── Activity Panel (merged from ActivityPage) ─────────────────────────────────
 
-function EventsPanel() {
-  const activities = useRecentActivities(20)
-
-  const typeIcons: Record<string, React.ReactNode> = {
-    deploy: <Zap size={12} className="text-green-400" />,
-    destroy: <XCircle size={12} className="text-red-400" />,
-    scale: <BarChart3 size={12} className="text-blue-400" />,
-    config: <Shield size={12} className="text-yellow-400" />,
-    init: <Box size={12} className="text-purple-400" />,
-    settings: <Activity size={12} className="text-cyan-400" />,
+const ACTIVITY_TYPE_CONFIG: Record<
+  ActivityType,
+  {
+    label: string
+    icon: React.ReactNode
+    variant: 'success' | 'error' | 'info' | 'warning' | 'default'
   }
+> = {
+  deploy: { label: 'Deploy', icon: <Rocket size={12} />, variant: 'success' },
+  destroy: { label: 'Destroy', icon: <Trash2 size={12} />, variant: 'error' },
+  scale: { label: 'Scale', icon: <BarChart3 size={12} />, variant: 'info' },
+  config: { label: 'Config', icon: <Shield size={12} />, variant: 'warning' },
+  init: { label: 'Init', icon: <Box size={12} />, variant: 'default' },
+  settings: { label: 'Settings', icon: <Settings size={12} />, variant: 'default' },
+}
 
-  if (activities.length === 0) {
-    return (
-      <div className="text-center py-12 text-sm text-gray-600">
-        <Clock size={24} className="mx-auto mb-2 text-gray-700" />
-        No recent events. Deploy an agent team to see activity here.
-      </div>
-    )
-  }
+const ALL_ACTIVITY_TYPES: ActivityType[] = [
+  'deploy',
+  'destroy',
+  'scale',
+  'config',
+  'init',
+  'settings',
+]
+
+function ActivityPanel() {
+  const { t } = useTranslation()
+  const { data: activityData } = useQuery({
+    queryKey: ['activity'],
+    queryFn: () => api.activity.list(),
+    staleTime: 10_000,
+  })
+  const activities = useMemo(() => {
+    return (activityData?.activities ?? []).map((a: Record<string, unknown>) => ({
+      ...a,
+      timestamp:
+        a.timestamp ?? (a.createdAt ? new Date(a.createdAt as string).getTime() : Date.now()),
+    })) as ActivityEntry[]
+  }, [activityData])
+  const clearActivities = useAppStore((s) => s.clearActivities)
+  const [search, setSearch] = useState('')
+  const [typeFilter, setTypeFilter] = useState<ActivityType | 'all'>('all')
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest')
+  const debouncedSearch = useDebounce(search)
+
+  const filtered = useMemo(() => {
+    let list = activities
+    if (typeFilter !== 'all') {
+      list = list.filter((a) => a.type === typeFilter)
+    }
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase()
+      list = list.filter(
+        (a) =>
+          a.title.toLowerCase().includes(q) ||
+          a.detail?.toLowerCase().includes(q) ||
+          a.namespace?.toLowerCase().includes(q) ||
+          a.template?.toLowerCase().includes(q),
+      )
+    }
+    if (sortOrder === 'oldest') {
+      list = [...list].reverse()
+    }
+    return list
+  }, [activities, typeFilter, debouncedSearch, sortOrder])
 
   return (
-    <div className="space-y-0">
-      {activities.map((activity) => (
-        <div
-          key={activity.id}
-          className="flex gap-3 py-3 border-b border-gray-800/50 last:border-0"
-        >
-          <div className="mt-0.5 p-1.5 bg-gray-900 border border-gray-800 rounded-lg shrink-0">
-            {typeIcons[activity.type] ?? <Activity size={12} className="text-gray-500" />}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm text-gray-300">{activity.title}</p>
-            {activity.detail && (
-              <p className="text-xs text-gray-600 mt-0.5 truncate">{activity.detail}</p>
-            )}
-          </div>
-          <span className="text-[10px] text-gray-600 shrink-0 mt-0.5">
-            {getRelativeTime(activity.timestamp)}
-          </span>
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder={t('activity.searchActivities')}
+          size="sm"
+          className="w-64"
+        />
+        <div className="flex items-center gap-1.5">
+          <Filter size={12} className="text-gray-600" />
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value as ActivityType | 'all')}
+            className="text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-gray-400 focus:outline-none focus:border-blue-500"
+          >
+            <option value="all">{t('activity.allTypes')}</option>
+            {ALL_ACTIVITY_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {ACTIVITY_TYPE_CONFIG[type].label}
+              </option>
+            ))}
+          </select>
         </div>
-      ))}
+        <button
+          type="button"
+          onClick={() => setSortOrder((s) => (s === 'newest' ? 'oldest' : 'newest'))}
+          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 border border-gray-700 rounded-lg px-3 py-1.5 transition-colors"
+        >
+          <ArrowUpDown size={11} />
+          {sortOrder === 'newest' ? t('activity.newestFirst') : t('activity.oldestFirst')}
+        </button>
+        {activities.length > 0 && (
+          <button
+            type="button"
+            onClick={clearActivities}
+            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-400 border border-gray-700 hover:border-red-800 rounded-lg px-3 py-1.5 transition-colors ml-auto"
+          >
+            <Trash2 size={12} />
+            {t('common.clearAll')}
+          </button>
+        )}
+      </div>
+
+      {/* Stats */}
+      <div className="flex items-center gap-6 text-xs text-gray-500">
+        <span className="flex items-center gap-1.5">
+          <Activity size={12} />
+          {activities.length} {t('activity.total')}
+        </span>
+      </div>
+
+      {/* List */}
+      {filtered.length === 0 ? (
+        <EmptyState
+          icon={<Activity size={40} />}
+          title={t('activity.noActivityRecorded')}
+          description={
+            activities.length === 0
+              ? t('activity.operationsWillAppear')
+              : t('activity.noActivitiesMatch')
+          }
+        />
+      ) : (
+        <div>
+          {filtered.map((activity) => {
+            const config = ACTIVITY_TYPE_CONFIG[activity.type]
+            const time = new Date(activity.timestamp)
+            const isValidDate = !Number.isNaN(time.getTime())
+            return (
+              <div
+                key={activity.id}
+                className="flex gap-4 py-3 border-b border-gray-800/50 last:border-0 hover:bg-gray-800/10 transition-colors px-4 -mx-4 rounded-lg"
+              >
+                <div className="mt-0.5 p-2 bg-gray-900 border border-gray-800 rounded-lg shrink-0">
+                  {config.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <p className="text-sm font-medium text-gray-200">{activity.title}</p>
+                    <Badge variant={config.variant} size="sm">
+                      {config.label}
+                    </Badge>
+                  </div>
+                  {activity.detail && (
+                    <p className="text-xs text-gray-500 mb-1">{activity.detail}</p>
+                  )}
+                  <div className="flex items-center gap-3 text-[10px] text-gray-600">
+                    <span className="flex items-center gap-1">
+                      <Clock size={10} />
+                      {isValidDate ? time.toLocaleString() : '—'}
+                    </span>
+                    {activity.namespace && (
+                      <span className="font-mono">ns: {activity.namespace}</span>
+                    )}
+                  </div>
+                </div>
+                <span className="text-xs text-gray-600 shrink-0 mt-1">
+                  {isValidDate ? getRelativeTime(activity.timestamp) : ''}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -218,6 +356,7 @@ export function MonitoringPage() {
     queryKey: ['deployments'],
     queryFn: api.deployments.list,
     refetchInterval: 15_000,
+    staleTime: 5_000,
   })
 
   const {
@@ -245,7 +384,7 @@ export function MonitoringPage() {
       count: total,
       icon: <Box size={13} />,
     },
-    { id: 'events', label: t('monitoring.events'), icon: <Activity size={13} /> },
+    { id: 'activity', label: t('activity.title'), icon: <Activity size={13} /> },
   ]
 
   return (
@@ -322,7 +461,7 @@ export function MonitoringPage() {
             </div>
           ))}
 
-        {activeTab === 'events' && <EventsPanel />}
+        {activeTab === 'activity' && <ActivityPanel />}
       </div>
     </div>
   )

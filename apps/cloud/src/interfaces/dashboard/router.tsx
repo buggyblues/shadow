@@ -7,9 +7,9 @@ import {
 } from '@tanstack/react-router'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { Layout } from '@/components/Layout'
-import { ActivityPage } from '@/pages/ActivityPage'
-import { ClustersPage } from '@/pages/ClustersPage'
 import { DeploymentDetailPage } from '@/pages/DeploymentDetailPage'
+import { DeploymentsPage } from '@/pages/DeploymentsPage'
+import { DeploymentTaskPage } from '@/pages/DeploymentTaskPage'
 import { DeployWizardPage } from '@/pages/DeployWizardPage'
 import { MonitoringPage } from '@/pages/MonitoringPage'
 import { MyTemplateDetailPage } from '@/pages/MyTemplateDetailPage'
@@ -67,18 +67,41 @@ const deployWizardRoute = createRoute({
   component: withErrorBoundary(DeployWizardPage),
 })
 
-// ── Clusters ──────────────────────────────────────────────────────────────────
+// ── Deployments (combines clusters + deploy tasks) ────────────────────────────
 
+const deploymentsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/deployments',
+  component: withErrorBoundary(DeploymentsPage),
+})
+
+// Legacy /clusters redirects to /deployments
 const clustersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/clusters',
-  component: withErrorBoundary(ClustersPage),
+  beforeLoad: () => {
+    throw redirect({ to: '/deployments' })
+  },
 })
 
 const deploymentDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/deployments/$namespace/$id',
   component: withErrorBoundary(DeploymentDetailPage),
+})
+
+const deploymentTasksRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/deploy-tasks',
+  beforeLoad: () => {
+    throw redirect({ to: '/deployments' })
+  },
+})
+
+const deploymentTaskRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/deploy-tasks/$taskId',
+  component: withErrorBoundary(DeploymentTaskPage),
 })
 
 // ── Configuration ─────────────────────────────────────────────────────────────
@@ -126,10 +149,13 @@ const templatesRedirectRoute = createRoute({
 
 // ── Operations ────────────────────────────────────────────────────────────────
 
+// Activity redirects to Monitoring (merged)
 const activityRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/activity',
-  component: withErrorBoundary(ActivityPage),
+  beforeLoad: () => {
+    throw redirect({ to: '/monitoring' })
+  },
 })
 
 const settingsRoute = createRoute({
@@ -163,8 +189,11 @@ const routeTree = rootRoute.addChildren([
   storeRoute,
   storeDetailRoute,
   deployWizardRoute,
+  deploymentsRoute,
   clustersRoute,
   deploymentDetailRoute,
+  deploymentTasksRoute,
+  deploymentTaskRoute,
   configRoute,
   validateRoute,
   monitoringRoute,

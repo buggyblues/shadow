@@ -49,6 +49,15 @@ interface ContractDetail {
   createdAt: string
 }
 
+interface ListingSnapshot {
+  title?: string
+  description?: string
+  deviceTier?: string
+  osType?: string
+  skills?: string[]
+  guidelines?: string
+}
+
 const STATUS_STYLES: Record<
   string,
   { label: string; bg: string; text: string; icon: React.ReactNode }
@@ -341,7 +350,7 @@ const DEVICE_TIERS: Record<string, string> = {
 
 function ContractInfoSection({ contract, t }: { contract: ContractDetail; t: TFunction }) {
   const [expanded, setExpanded] = useState(false)
-  const snapshot = contract.listingSnapshot as Record<string, unknown> | null
+  const snapshot = contract.listingSnapshot as ListingSnapshot | null
 
   return (
     <div className="bg-[var(--glass-bg)] backdrop-blur-xl rounded-2xl border border-[var(--glass-border)] shadow-[var(--shadow-soft)] p-8 mb-6">

@@ -13,7 +13,8 @@ function extractEnvRefs(obj: unknown): string[] {
   function walk(val: unknown) {
     if (typeof val === 'string') {
       for (const match of val.matchAll(pattern)) {
-        refs.add(match[1])
+        const envKey = match[1]
+        if (envKey) refs.add(envKey)
       }
     } else if (Array.isArray(val)) {
       for (const item of val) walk(item)

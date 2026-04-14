@@ -3,218 +3,22 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { clsx } from 'clsx'
 import { FileJson, Layers, Save, Shield } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api, type ValidateResult } from '@/lib/api'
 import { useToast } from '@/stores/toast'
 
-// ── JSON Schema for Cloud Config (drives Monaco autocomplete) ────────────────
+// ── Monaco JSON Schema setup (driven by API-served schema) ───────────────────
 
-const CLOUD_CONFIG_SCHEMA = {
-  $schema: 'http://json-schema.org/draft-07/schema#',
-  title: 'Shadow Cloud Configuration',
-  description: 'Configuration file for deploying OpenClaw AI agents to Kubernetes.',
-  type: 'object',
-  required: ['version'],
-  properties: {
-    version: { type: 'string', description: 'Config version', default: '1' },
-    name: { type: 'string', description: 'Human-readable name for this deployment config' },
-    description: { type: 'string', description: 'Description of what this agent team does' },
-    environment: {
-      type: 'string',
-      enum: ['development', 'staging', 'production'],
-      description: 'Deployment environment',
-    },
-    team: {
-      type: 'object',
-      description: 'Team / agent pack definition',
-      properties: {
-        name: { type: 'string', description: 'Team display name' },
-        description: { type: 'string' },
-        defaultModel: { $ref: '#/definitions/AgentModel' },
-        defaultCompliance: { $ref: '#/definitions/AgentCompliance' },
-      },
-      required: ['name'],
-    },
-    registry: {
-      type: 'object',
-      description: 'Reusable provider/configuration registry',
-      properties: {
-        providers: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: {
-                type: 'string',
-                description: 'Provider identifier (e.g. "anthropic", "openai")',
-              },
-              type: {
-                type: 'string',
-                enum: ['openai', 'anthropic', 'google', 'azure-openai', 'ollama'],
-              },
-              apiKey: { type: 'string', description: 'Use ${env:VAR_NAME} for secret injection' },
-              baseUrl: { type: 'string', description: 'Custom API base URL' },
-            },
-            required: ['id', 'type'],
-          },
-        },
-        configurations: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'string', description: 'Configuration ID referenced by agents' },
-              openclaw: { type: 'object', description: 'OpenClaw configuration object' },
-            },
-            required: ['id'],
-          },
-        },
-      },
-    },
-    deployments: {
-      type: 'object',
-      description: 'K8s deployment definitions',
-      properties: {
-        agents: {
-          type: 'array',
-          items: { $ref: '#/definitions/AgentDeployment' },
-        },
-      },
-    },
-    workspace: {
-      type: 'object',
-      description: 'Shared workspace across agents',
-      properties: {
-        enabled: { type: 'boolean' },
-        storageSize: { type: 'string', default: '5Gi' },
-        storageClassName: { type: 'string' },
-        mountPath: { type: 'string', default: '/workspace' },
-        accessMode: { type: 'string', enum: ['ReadWriteOnce', 'ReadWriteMany', 'ReadOnlyMany'] },
-      },
-      required: ['enabled'],
-    },
-    vaults: {
-      type: 'object',
-      description: 'Vault definitions for secret isolation',
-      additionalProperties: {
-        type: 'object',
-        properties: {
-          keys: { type: 'array', items: { type: 'string' } },
-        },
-      },
-    },
-  },
-  definitions: {
-    AgentModel: {
-      type: 'object',
-      properties: {
-        preferred: {
-          type: 'string',
-          description:
-            'Primary model in "provider/model" format (e.g. "anthropic/claude-sonnet-4-5")',
-        },
-        fallbacks: { type: 'array', items: { type: 'string' } },
-        constraints: {
-          type: 'object',
-          properties: {
-            temperature: { type: 'number', minimum: 0, maximum: 2 },
-            maxTokens: { type: 'integer' },
-            topP: { type: 'number', minimum: 0, maximum: 1 },
-            thinkingLevel: {
-              type: 'string',
-              enum: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'adaptive'],
-            },
-          },
-        },
-      },
-      required: ['preferred'],
-    },
-    AgentCompliance: {
-      type: 'object',
-      properties: {
-        riskTier: { type: 'string', enum: ['low', 'standard', 'high', 'critical'] },
-        frameworks: { type: 'array', items: { type: 'string' } },
-        humanInTheLoop: { type: 'string', enum: ['always', 'conditional', 'advisory', 'none'] },
-        auditLogging: { type: 'boolean' },
-        retentionPeriod: { type: 'string', description: 'e.g. "7y", "3y", "90d"' },
-      },
-    },
-    AgentDeployment: {
-      type: 'object',
-      required: ['id', 'runtime', 'configuration'],
-      properties: {
-        id: { type: 'string', description: 'Unique agent ID' },
-        runtime: {
-          type: 'string',
-          enum: ['openclaw', 'claude-code', 'codex', 'gemini', 'opencode'],
-          description: 'Agent runtime type',
-        },
-        image: { type: 'string', description: 'Custom container image' },
-        replicas: { type: 'integer', minimum: 0, default: 1 },
-        description: { type: 'string' },
-        configuration: {
-          type: 'object',
-          properties: {
-            extends: {
-              type: 'string',
-              description: 'Base configuration ID from registry.configurations',
-            },
-            openclaw: { type: 'object' },
-          },
-        },
-        resources: {
-          type: 'object',
-          properties: {
-            requests: {
-              type: 'object',
-              properties: { cpu: { type: 'string' }, memory: { type: 'string' } },
-            },
-            limits: {
-              type: 'object',
-              properties: { cpu: { type: 'string' }, memory: { type: 'string' } },
-            },
-          },
-        },
-        env: {
-          type: 'object',
-          additionalProperties: { type: 'string' },
-          description: 'Extra environment variables (use ${env:VAR} for secrets)',
-        },
-        identity: {
-          type: 'object',
-          properties: {
-            name: { type: 'string' },
-            description: { type: 'string' },
-            personality: { type: 'string' },
-            systemPrompt: { type: 'string' },
-          },
-        },
-        model: { $ref: '#/definitions/AgentModel' },
-        compliance: { $ref: '#/definitions/AgentCompliance' },
-        vault: { type: 'string', description: 'Vault reference (default: "default")' },
-        source: {
-          type: 'object',
-          properties: {
-            repo: { type: 'string' },
-            branch: { type: 'string' },
-            path: { type: 'string' },
-            mountPath: { type: 'string', default: '/agent' },
-          },
-        },
-      },
-    },
-  },
-} as const
-
-function setupMonacoJsonSchema(monaco: Monaco) {
+function setupMonacoJsonSchema(monaco: Monaco, schema: Record<string, unknown>) {
   monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
     validate: true,
     allowComments: false,
     schemaValidation: 'error',
     schemas: [
       {
-        uri: 'https://shadowob.cloud/schema/cloud-config.json',
+        uri: 'https://raw.githubusercontent.com/BuggyBlues/shadow/main/apps/cloud/schemas/config.schema.json',
         fileMatch: ['*'],
-        schema: CLOUD_CONFIG_SCHEMA as unknown as Record<string, unknown>,
+        schema,
       },
     ],
   })
@@ -231,9 +35,14 @@ function CodeEditor({
 }) {
   const editorRef = useRef<unknown>(null)
 
-  const handleMount = (editor: unknown, monaco: Monaco) => {
+  const handleMount = async (editor: unknown, monaco: Monaco) => {
     editorRef.current = editor
-    setupMonacoJsonSchema(monaco)
+    try {
+      const schema = await api.schema()
+      setupMonacoJsonSchema(monaco, schema)
+    } catch {
+      // Schema fetch failed — editor works without autocomplete
+    }
   }
 
   return (
@@ -278,6 +87,7 @@ function CodeEditor({
 export function ConfigEditorPage() {
   const toast = useToast()
   const queryClient = useQueryClient()
+  const { i18n } = useTranslation()
   const [content, setContent] = useState('')
   const [validateResult, setValidateResult] = useState<ValidateResult | null>(null)
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
@@ -285,8 +95,8 @@ export function ConfigEditorPage() {
 
   // Fetch store templates for the selector
   const { data: storeTemplates } = useQuery({
-    queryKey: ['templates'],
-    queryFn: api.templates.list,
+    queryKey: ['templates', i18n.language],
+    queryFn: () => api.templates.listByLocale(i18n.language),
   })
 
   // Fetch user's My Templates

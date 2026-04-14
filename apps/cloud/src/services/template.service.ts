@@ -7,6 +7,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parseJsonc } from '../utils/jsonc.js'
 
 export interface TemplateMeta {
   name: string
@@ -33,7 +34,7 @@ export class TemplateService {
   }
 
   /** Discover all available config templates. */
-  discover(): TemplateMeta[] {
+  discover(locale?: string): TemplateMeta[] {
     if (!existsSync(this.templatesDir)) return []
     return readdirSync(this.templatesDir)
       .filter((f) => f.endsWith('.template.json'))
@@ -41,15 +42,19 @@ export class TemplateService {
         const name = file.replace(/\.template\.json$/, '')
         const filePath = resolve(this.templatesDir, file)
         try {
-          const raw = JSON.parse(readFileSync(filePath, 'utf-8'))
+          const raw = parseJsonc<Record<string, unknown>>(readFileSync(filePath, 'utf-8'), filePath)
+          const i18nDict = resolveI18nDict(raw, locale)
+          const team = raw.team as Record<string, unknown> | undefined
           return {
             name,
             file,
-            description: raw.description ?? raw.team?.description ?? '',
-            teamName: raw.team?.name ?? raw.name ?? name,
-            agentCount: (raw.deployments?.agents ?? []).length,
-            namespace: raw.deployments?.namespace ?? name,
-          }
+            description:
+              resolveI18nValue(raw.description, i18nDict) ?? (team?.description as string) ?? '',
+            teamName: resolveI18nValue(raw.name, i18nDict) ?? (team?.name as string) ?? name,
+            agentCount: (((raw.deployments as Record<string, unknown>)?.agents as unknown[]) ?? [])
+              .length,
+            namespace: (raw.deployments as Record<string, unknown>)?.namespace ?? name,
+          } as TemplateMeta
         } catch {
           return { name, file, description: '', teamName: name, agentCount: 0, namespace: name }
         }
@@ -66,20 +71,46 @@ export class TemplateService {
     const filePath = resolve(this.templatesDir, `${name}.template.json`)
     if (!existsSync(filePath)) return null
     try {
-      return JSON.parse(readFileSync(filePath, 'utf-8'))
+      return parseJsonc(readFileSync(filePath, 'utf-8'), filePath)
     } catch {
       return null
     }
   }
 
   /** List templates in a display-friendly format. */
-  list(): Array<{
+  list(locale?: string): Array<{
     name: string
     description: string
     teamName: string
     agentCount: number
     namespace: string
   }> {
-    return this.discover()
+    return this.discover(locale)
   }
+}
+
+/**
+ * Resolve i18n dict from a template's `i18n` field for the given locale.
+ * Falls back to 'en' if the requested locale isn't available.
+ */
+function resolveI18nDict(
+  raw: Record<string, unknown>,
+  locale?: string,
+): Record<string, string> | undefined {
+  const i18n = raw.i18n as Record<string, Record<string, string>> | undefined
+  if (!i18n || !locale) return undefined
+  const baseLocale = locale.split('-')[0]
+  return i18n[locale] ?? (baseLocale ? i18n[baseLocale] : undefined) ?? i18n.en
+}
+
+/**
+ * Resolve a string value that may contain `${i18n:key}` references.
+ * Returns the translated string if available, or the raw value as fallback.
+ */
+function resolveI18nValue(value: unknown, i18nDict?: Record<string, string>): string | undefined {
+  if (typeof value !== 'string') return undefined
+  if (!i18nDict) return value
+  const key = /^\$\{i18n:([^}]+)\}$/.exec(value)?.[1]
+  if (!key) return value
+  return i18nDict[key] ?? value
 }
