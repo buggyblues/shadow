@@ -14,7 +14,6 @@ import { DeployWizardPage } from '@/pages/DeployWizardPage'
 import { MonitoringPage } from '@/pages/MonitoringPage'
 import { MyTemplateDetailPage } from '@/pages/MyTemplateDetailPage'
 import { MyTemplatesPage } from '@/pages/MyTemplatesPage'
-import { OverviewPage } from '@/pages/OverviewPage'
 import { SecretsPage } from '@/pages/SecretsPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { StoreDetailPage } from '@/pages/StoreDetailPage'
@@ -39,12 +38,12 @@ const rootRoute = createRootRoute({
   ),
 })
 
-// ── Console ───────────────────────────────────────────────────────────────────
+// ── Store (default entry) ────────────────────────────────────────────────────
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: withErrorBoundary(OverviewPage),
+  component: withErrorBoundary(StorePage),
 })
 
 // ── Agent Store ───────────────────────────────────────────────────────────────
@@ -145,7 +144,7 @@ const doctorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/doctor',
   beforeLoad: () => {
-    throw redirect({ to: '/' })
+    throw redirect({ to: '/monitoring' })
   },
 })
 
