@@ -1,6 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Cloud, Info, Key, Plus, Save, Server, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import {
+  Check,
+  Cloud,
+  Globe,
+  Info,
+  Key,
+  Monitor,
+  Moon,
+  Plus,
+  Save,
+  Server,
+  Sun,
+  Trash2,
+} from 'lucide-react'
+import { type ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Breadcrumb } from '@/components/Breadcrumb'
 import { Tabs } from '@/components/Tabs'
@@ -8,6 +21,7 @@ import { api, type ProviderSettings, type Settings } from '@/lib/api'
 import { API_PRESETS } from '@/lib/presets'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
+import { type Theme, useThemeStore } from '@/stores/theme'
 import { useToast } from '@/stores/toast'
 
 function getProviderSecretEnvName(providerId: string): string {
@@ -200,6 +214,132 @@ function ProvidersTab({
   )
 }
 
+function AppearanceOption({
+  active,
+  icon,
+  label,
+  onClick,
+}: {
+  active: boolean
+  icon: ReactNode
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center justify-between gap-3 rounded-[22px] border px-4 py-3 text-left transition-all hover:-translate-y-0.5"
+      style={{
+        background: active ? 'var(--nf-sidebar-active)' : 'var(--nf-bg-glass-2)',
+        borderColor: active ? 'rgba(0, 243, 255, 0.25)' : 'var(--nf-border)',
+        color: active ? 'var(--color-nf-cyan)' : 'var(--nf-text-high)',
+      }}
+    >
+      <span className="flex items-center gap-3 min-w-0">
+        <span
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border"
+          style={{
+            background: active ? 'rgba(0, 243, 255, 0.12)' : 'var(--nf-bg-raised)',
+            borderColor: active ? 'rgba(0, 243, 255, 0.22)' : 'var(--nf-border)',
+          }}
+        >
+          {icon}
+        </span>
+        <span className="truncate text-sm font-semibold">{label}</span>
+      </span>
+
+      {active && <Check size={14} />}
+    </button>
+  )
+}
+
+function AppearanceTab() {
+  const { t, i18n } = useTranslation()
+  const theme = useThemeStore((state) => state.theme)
+  const setTheme = useThemeStore((state) => state.setTheme)
+  const currentLanguage = i18n.language?.startsWith('zh') ? 'zh-CN' : 'en'
+
+  const themeOptions: Array<{ value: Theme; label: string; icon: React.ReactNode }> = [
+    {
+      value: 'light',
+      label: t('theme.light'),
+      icon: <Sun size={16} />,
+    },
+    {
+      value: 'dark',
+      label: t('theme.dark'),
+      icon: <Moon size={16} />,
+    },
+    {
+      value: 'system',
+      label: t('theme.system'),
+      icon: <Monitor size={16} />,
+    },
+  ]
+
+  const languageOptions = [
+    {
+      value: 'en',
+      label: t('settings.languageEnglish'),
+    },
+    {
+      value: 'zh-CN',
+      label: t('settings.languageChinese'),
+    },
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div className="nf-card !p-5 space-y-4">
+        <div>
+          <h2 className="text-sm font-black" style={{ color: 'var(--nf-text-high)' }}>
+            {t('settings.themeSection')}
+          </h2>
+          <p className="mt-1 text-sm" style={{ color: 'var(--nf-text-muted)' }}>
+            {t('settings.themeSectionDescription')}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          {themeOptions.map((option) => (
+            <AppearanceOption
+              key={option.value}
+              active={theme === option.value}
+              icon={option.icon}
+              label={option.label}
+              onClick={() => setTheme(option.value)}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="nf-card !p-5 space-y-4">
+        <div>
+          <h2 className="text-sm font-black" style={{ color: 'var(--nf-text-high)' }}>
+            {t('settings.languageSection')}
+          </h2>
+          <p className="mt-1 text-sm" style={{ color: 'var(--nf-text-muted)' }}>
+            {t('settings.languageSectionDescription')}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {languageOptions.map((option) => (
+            <AppearanceOption
+              key={option.value}
+              active={currentLanguage === option.value}
+              icon={<Globe size={16} />}
+              label={option.label}
+              onClick={() => i18n.changeLanguage(option.value)}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── System Tab ────────────────────────────────────────────────────────────────
 
 function SystemTab() {
@@ -330,7 +470,7 @@ function AboutTab() {
 export function SettingsPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState('providers')
+  const [activeTab, setActiveTab] = useState('appearance')
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -348,6 +488,7 @@ export function SettingsPage() {
   })
 
   const tabs = [
+    { id: 'appearance', label: t('settings.appearance'), icon: <Monitor size={13} /> },
     { id: 'providers', label: t('settings.providers'), icon: <Key size={13} /> },
     { id: 'system', label: t('settings.system'), icon: <Server size={13} /> },
     { id: 'about', label: t('settings.about'), icon: <Info size={13} /> },
@@ -359,7 +500,7 @@ export function SettingsPage() {
 
       <div className="mb-6">
         <h1 className="text-xl font-bold">{t('nav.settings')}</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{t('settings.configureProvidersMetadata')}</p>
+        <p className="text-sm text-gray-500 mt-0.5">{t('settings.pageDescription')}</p>
       </div>
 
       {isLoading && (
@@ -370,6 +511,7 @@ export function SettingsPage() {
         <>
           <Tabs items={tabs} active={activeTab} onChange={setActiveTab} className="mb-6" />
 
+          {activeTab === 'appearance' && <AppearanceTab />}
           {activeTab === 'providers' && (
             <ProvidersTab
               providers={currentProviders}
