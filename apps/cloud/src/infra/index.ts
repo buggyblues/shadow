@@ -236,7 +236,7 @@ export function buildManifests(options: InfraOptions) {
 
     // P0: Vault-based per-agent secret isolation
     const vaultName = agent.vault ?? 'default'
-    const vault = config.vaults?.[vaultName]
+    const vault = config.registry?.vaults?.[vaultName]
     if (vault) {
       // Vault provider API keys
       if (vault.providers) {
@@ -256,7 +256,7 @@ export function buildManifests(options: InfraOptions) {
     }
 
     // Fallback: legacy registry.providers (when no vaults configured)
-    if (!config.vaults && config.registry?.providers) {
+    if (!config.registry?.vaults && config.registry?.providers) {
       for (const p of config.registry.providers) {
         if (p.apiKey) {
           const envKey = `${(p.id ?? 'custom').toUpperCase().replace(/-/g, '_')}_API_KEY`

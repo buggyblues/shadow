@@ -24,6 +24,7 @@ export {
   notificationTypeEnum,
 } from './notifications'
 export {
+  apiTokens,
   oauthAccessTokens,
   oauthAccounts,
   oauthApps,

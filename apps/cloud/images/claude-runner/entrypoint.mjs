@@ -4,22 +4,22 @@
  * OpenClaw serves as the gateway, forwarding requests to Claude Code
  * via ACP (Agent Client Protocol) through the ACPX harness.
  *
- * 1. Read agent config from ConfigMap (/etc/xcloud/config.json)
+ * 1. Read agent config from ConfigMap (/etc/openclaw/config.json)
  * 2. Merge ACP config for Claude Code harness
- * 3. Write OpenClaw config to ~/.openclaw/config.json
+ * 3. Write OpenClaw config to ~/.openclaw/openclaw.json
  * 4. Verify extensions (shadowob plugin)
  * 5. Start OpenClaw gateway (which manages Claude Code via ACP)
  * 6. Health check endpoint
  * 7. Graceful shutdown
  */
 
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
 
-const OPENCLAW_DIR = process.env.OPENCLAW_DIR ?? '/root/.openclaw'
-const CONFIG_MOUNT = '/etc/xcloud'
+const OPENCLAW_STATE_DIR = '/home/openclaw/.openclaw'
+const CONFIG_MOUNT = '/etc/openclaw'
 const EXTENSIONS_DIR = '/app/extensions'
 const GATEWAY_PORT = parseInt(process.env.OPENCLAW_GATEWAY_PORT ?? '3100', 10)
 const LOG_DIR = '/var/log/openclaw'
@@ -226,7 +226,7 @@ function findGatewayEntry() {
 
 function startGateway(healthServer) {
   const entry = findGatewayEntry()
-  const configPath = join(OPENCLAW_DIR, 'config.json')
+  const configPath = join(OPENCLAW_STATE_DIR, 'openclaw.json')
   const gatewayPort = GATEWAY_PORT + 1
 
   console.log(`[entrypoint] Starting OpenClaw gateway with ACP → Claude Code`)
@@ -235,13 +235,15 @@ function startGateway(healthServer) {
 
   const env = {
     ...process.env,
-    OPENCLAW_CONFIG: configPath,
-    OPENCLAW_WORKSPACE: OPENCLAW_DIR,
+    OPENCLAW_CONFIG_PATH: configPath,
+    OPENCLAW_STATE_DIR: OPENCLAW_STATE_DIR,
     OPENCLAW_GATEWAY_PORT: String(gatewayPort),
     OPENCLAW_LOG_DIR: LOG_DIR,
     // Claude Code env
-    CLAUDE_CONFIG_DIR: '/root/.claude',
+    CLAUDE_CONFIG_DIR: '/home/openclaw/.claude',
     NODE_ENV: 'production',
+    OPENCLAW_NO_RESPAWN: '1',
+    NODE_COMPILE_CACHE: '/tmp/openclaw-compile-cache',
   }
 
   // Pass through API key if configured
@@ -252,7 +254,7 @@ function startGateway(healthServer) {
   const proc = spawn('node', [entry, 'gateway', '--port', String(gatewayPort)], {
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
-    cwd: OPENCLAW_DIR,
+    cwd: OPENCLAW_STATE_DIR,
   })
 
   gatewayProcess = proc
@@ -322,6 +324,46 @@ function setupSignalHandlers(proc) {
   process.on('SIGINT', () => shutdown('SIGINT'))
 }
 
+// ─── Workspace Initialization ───────────────────────────────────────────────
+
+const WORKSPACE_BOOTSTRAP_FILES = [
+  'SOUL.md', 'IDENTITY.md', 'TOOLS.md', 'AGENTS.md',
+  'USER.md', 'HEARTBEAT.md', 'BOOTSTRAP.md',
+]
+
+function initializeWorkspace(workspaceDir, configPath) {
+  if (!workspaceDir) return
+  mkdirSync(workspaceDir, { recursive: true })
+
+  // Run `openclaw setup` to seed workspace with internal bootstrap templates
+  console.log(`[entrypoint] Initializing workspace: ${workspaceDir}`)
+  const setupResult = spawnSync('openclaw', ['setup', '--workspace', workspaceDir], {
+    env: { ...process.env, OPENCLAW_CONFIG_PATH: configPath, HOME: '/home/openclaw' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 30000,
+  })
+  if (setupResult.status === 0) {
+    console.log('[entrypoint] \u2713 openclaw setup completed')
+  } else {
+    const stderr = setupResult.stderr?.toString().trim()
+    console.warn(`[entrypoint] \u26a0 openclaw setup exited ${setupResult.status}: ${stderr || '(no output)'}`)
+  }
+
+  // Overlay agent-specific files from ConfigMap over bootstrap defaults
+  for (const filename of WORKSPACE_BOOTSTRAP_FILES) {
+    const srcPath = join(CONFIG_MOUNT, filename)
+    if (existsSync(srcPath)) {
+      const destPath = join(workspaceDir, filename)
+      try {
+        writeFileSync(destPath, readFileSync(srcPath, 'utf-8'), 'utf-8')
+        console.log(`[entrypoint] Wrote ${filename} to workspace`)
+      } catch (err) {
+        console.warn(`[entrypoint] Failed to write ${filename}: ${err.message}`)
+      }
+    }
+  }
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -335,12 +377,16 @@ async function main() {
   const openclawConfig = generateOpenClawConfig(mountedConfig)
 
   // 2. Write config
-  mkdirSync(OPENCLAW_DIR, { recursive: true })
+  mkdirSync(OPENCLAW_STATE_DIR, { recursive: true })
   mkdirSync(WORKSPACE_DIR, { recursive: true })
   mkdirSync(LOG_DIR, { recursive: true })
-  const configPath = join(OPENCLAW_DIR, 'config.json')
+  const configPath = join(OPENCLAW_STATE_DIR, 'openclaw.json')
   writeFileSync(configPath, JSON.stringify(openclawConfig, null, 2), 'utf-8')
   console.log(`[entrypoint] Config written to ${configPath}`)
+
+  // 2b. Initialize workspace (openclaw setup + ConfigMap overlay)
+  const workspaceDir = openclawConfig.agents?.defaults?.workspace || WORKSPACE_DIR
+  initializeWorkspace(workspaceDir, configPath)
 
   // 3. Verify extensions + Claude Code
   verifyExtensions()

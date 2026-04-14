@@ -14,7 +14,7 @@ import {
   Trash2,
   XCircle,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/Badge'
 import { Breadcrumb } from '@/components/Breadcrumb'
@@ -41,7 +41,7 @@ interface NamespaceGroup {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function isDeploymentReady(dep: Deployment): boolean {
-  const [r, t] = dep.ready.split('/').map(Number)
+  const [r = 0, t = 0] = dep.ready.split('/').map(Number)
   return r === t && t > 0
 }
 
@@ -57,11 +57,16 @@ function getAge(dep: Deployment): string {
 
 function NamespaceCard({
   group,
+  isDestroying,
+  isDiscovered,
   onDestroy,
 }: {
   group: NamespaceGroup
+  isDestroying: boolean
+  isDiscovered: boolean
   onDestroy: (ns: string) => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden hover:border-gray-700 transition-colors">
       {/* Header */}
@@ -71,7 +76,14 @@ function NamespaceCard({
             <FolderOpen size={16} className="text-blue-400" />
           </div>
           <div>
-            <h3 className="font-semibold text-sm">{group.namespace}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-sm">{group.namespace}</h3>
+              {isDiscovered && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/30 text-yellow-400 border border-yellow-800/50">
+                  {t('clusters.discovered')}
+                </span>
+              )}
+            </div>
             <p className="text-xs text-gray-500">
               {group.totalCount} {pluralize(group.totalCount, 'deployment')}
             </p>
@@ -85,10 +97,11 @@ function NamespaceCard({
           <button
             type="button"
             onClick={() => onDestroy(group.namespace)}
+            disabled={isDestroying}
             className="text-gray-600 hover:text-red-400 transition-colors p-1.5 rounded-md hover:bg-red-900/10"
             title="Destroy namespace"
           >
-            <Trash2 size={13} />
+            {isDestroying ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
           </button>
         </div>
       </div>
@@ -113,7 +126,7 @@ function DeploymentRow({ dep }: { dep: Deployment }) {
   const currentReplicas =
     replicas ??
     (() => {
-      const [r] = dep.ready.split('/').map(Number)
+      const [r = 0] = dep.ready.split('/').map(Number)
       return r
     })()
 
@@ -204,6 +217,7 @@ export function ClustersPage() {
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search)
   const [destroyNs, setDestroyNs] = useState<string | null>(null)
+  const [hiddenNamespaces, setHiddenNamespaces] = useState<string[]>([])
 
   const {
     data: deployments,
@@ -213,12 +227,32 @@ export function ClustersPage() {
     queryKey: ['deployments'],
     queryFn: api.deployments.list,
     refetchInterval: 10_000,
+    staleTime: 5_000,
+  })
+
+  const { data: nsInfo } = useQuery({
+    queryKey: ['namespaces'],
+    queryFn: api.deployments.namespaces,
+    staleTime: 30_000,
   })
 
   const destroyMutation = useMutation({
     mutationFn: (ns: string) => api.destroy({ namespace: ns }),
-    onSuccess: (_, ns) => {
-      queryClient.invalidateQueries({ queryKey: ['deployments'] })
+    onMutate: async (ns) => {
+      await queryClient.cancelQueries({ queryKey: ['deployments'] })
+      const previousDeployments = queryClient.getQueryData<Deployment[]>(['deployments'])
+      const previousHiddenNamespaces = hiddenNamespaces
+
+      setDestroyNs(ns)
+
+      setHiddenNamespaces((current) => (current.includes(ns) ? current : [...current, ns]))
+      queryClient.setQueryData<Deployment[]>(['deployments'], (current) =>
+        (current ?? []).filter((deployment) => deployment.namespace !== ns),
+      )
+
+      return { previousDeployments, previousHiddenNamespaces }
+    },
+    onSuccess: async (_, ns) => {
       toast.success(`Destroyed namespace ${ns}`)
       addActivity({
         type: 'destroy',
@@ -226,13 +260,32 @@ export function ClustersPage() {
         namespace: ns,
       })
       setDestroyNs(null)
+      // Keep namespace hidden — k8s deletion is async.
+      // Delay invalidation to let k8s finish cleanup before re-fetching.
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['deployments'] })
+      }, 5_000)
     },
-    onError: () => toast.error('Failed to destroy namespace'),
+    onError: (_error, _ns, context) => {
+      if (context?.previousDeployments) {
+        queryClient.setQueryData(['deployments'], context.previousDeployments)
+      }
+      setHiddenNamespaces(context?.previousHiddenNamespaces ?? [])
+      setDestroyNs(null)
+      toast.error('Failed to destroy namespace')
+    },
   })
+
+  useEffect(() => {
+    const namespaces = new Set((deployments ?? []).map((deployment) => deployment.namespace))
+    setHiddenNamespaces((current) => current.filter((namespace) => namespaces.has(namespace)))
+  }, [deployments])
 
   // Compute groups
   const groups: NamespaceGroup[] = useMemo(() => {
-    const deps = deployments ?? []
+    const deps = (deployments ?? []).filter(
+      (deployment) => !hiddenNamespaces.includes(deployment.namespace),
+    )
     const grouped = groupBy(deps, (d) => d.namespace)
     let result = Object.entries(grouped).map(([namespace, deps]) => ({
       namespace,
@@ -251,10 +304,13 @@ export function ClustersPage() {
     }
 
     return result.sort((a, b) => a.namespace.localeCompare(b.namespace))
-  }, [deployments, debouncedSearch])
+  }, [deployments, debouncedSearch, hiddenNamespaces])
 
-  const total = deployments?.length ?? 0
-  const ready = deployments?.filter(isDeploymentReady).length ?? 0
+  const visibleDeployments = (deployments ?? []).filter(
+    (deployment) => !hiddenNamespaces.includes(deployment.namespace),
+  )
+  const total = visibleDeployments.length
+  const ready = visibleDeployments.filter(isDeploymentReady).length
   const namespaceCount = groups.length
 
   return (
@@ -358,7 +414,13 @@ export function ClustersPage() {
       {!isLoading && groups.length > 0 && (
         <div className="space-y-4">
           {groups.map((group) => (
-            <NamespaceCard key={group.namespace} group={group} onDestroy={setDestroyNs} />
+            <NamespaceCard
+              key={group.namespace}
+              group={group}
+              isDestroying={destroyMutation.isPending && destroyNs === group.namespace}
+              isDiscovered={nsInfo?.discovered?.includes(group.namespace) ?? false}
+              onDestroy={setDestroyNs}
+            />
           ))}
         </div>
       )}
@@ -366,9 +428,11 @@ export function ClustersPage() {
       {destroyNs && (
         <ConfirmDialog
           title={t('clusters.destroyNamespace')}
-          message={`This will destroy ALL deployments in namespace "${destroyNs}". This action cannot be undone.`}
-          confirmLabel="Destroy"
+          message={t('clusters.destroyWarning', { namespace: destroyNs })}
+          confirmLabel={t('clusters.destroy')}
+          confirmingLabel={t('clusters.destroying')}
           confirmText={destroyNs}
+          isConfirming={destroyMutation.isPending}
           onConfirm={() => destroyMutation.mutate(destroyNs)}
           onCancel={() => setDestroyNs(null)}
         />

@@ -89,3 +89,56 @@ export function streamLogs(
 export function scaleDeployment(namespace: string, deploymentName: string, replicas: number): void {
   runKubectl(['scale', 'deployment', deploymentName, `--replicas=${replicas}`], namespace)
 }
+
+/**
+ * List all namespaces managed by shadowob-cloud (by label) plus any extra
+ * namespaces that contain active deployments.
+ */
+export function getManagedNamespaces(): string[] {
+  try {
+    const output = runKubectl([
+      'get',
+      'namespaces',
+      '-l',
+      'managed-by=shadowob-cloud-cli',
+      '-o',
+      'jsonpath={.items[*].metadata.name}',
+    ])
+    return output
+      .split(/\s+/)
+      .map((ns) => ns.trim())
+      .filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Delete a namespace and all its resources.
+ * Uses --ignore-not-found so it won't error if the namespace is already gone.
+ */
+export function deleteNamespace(namespace: string): void {
+  runKubectl(['delete', 'namespace', namespace, '--ignore-not-found'])
+}
+
+/**
+ * Rollout restart all deployments in a namespace.
+ * This triggers a rolling update of all pods.
+ */
+export function rolloutRestartAll(namespace: string): void {
+  runKubectl(['rollout', 'restart', 'deployment', '--all'], namespace)
+}
+
+/**
+ * Rollout undo (rollback) all deployments in a namespace to the previous revision.
+ */
+export function rolloutUndoAll(namespace: string): void {
+  const output = runKubectl(
+    ['get', 'deployments', '-o', 'jsonpath={.items[*].metadata.name}'],
+    namespace,
+  )
+  const names = output.split(/\s+/).filter(Boolean)
+  for (const name of names) {
+    runKubectl(['rollout', 'undo', `deployment/${name}`], namespace)
+  }
+}

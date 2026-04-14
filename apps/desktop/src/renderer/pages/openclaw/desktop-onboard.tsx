@@ -566,6 +566,7 @@ function ModelStep({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [showAll, setShowAll] = useState(false)
+  const categories = useMemo(() => getPresetsByCategory(), [])
 
   // Quick presets for onboarding (common providers)
   const quickPresetIds = ['openai', 'anthropic', 'gemini', 'deepseek', 'moonshot']
@@ -849,7 +850,7 @@ function AgentStep({
         skills: [],
       }
       await openClawApi.createAgent(agent)
-      await openClawApi.writeBootstrapFile(agentDir, currentPreset.soul)
+      await openClawApi.writeBootstrapFile(agentDir, 'SOUL.md', currentPreset.soul)
       onSaved(agentId, agentName.trim())
       onNext()
     } catch (err) {
@@ -1013,7 +1014,7 @@ function BuddyStep({
       )
 
       // 3. 添加 Buddy 连接
-      const connection: BuddyConnection = {
+      const connection: Omit<BuddyConnection, 'status'> = {
         id: crypto.randomUUID(),
         label: savedAgentName || 'Buddy',
         serverUrl,

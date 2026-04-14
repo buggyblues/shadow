@@ -132,10 +132,10 @@ export default function AccountSettingsScreen() {
                 <View
                   style={[
                     styles.messageBox,
-                    { backgroundColor: `${colors.danger}20`, borderColor: colors.danger },
+                    { backgroundColor: `${colors.error}20`, borderColor: colors.error },
                   ]}
                 >
-                  <Text style={{ color: colors.danger, fontSize: fontSize.sm }}>
+                  <Text style={{ color: colors.error, fontSize: fontSize.sm }}>
                     {passwordError}
                   </Text>
                 </View>

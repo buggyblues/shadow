@@ -48,19 +48,14 @@ export type ApiResponse<T = unknown> = ApiSuccess<T> | ApiError
  * Usage: `return ok(c, { user: data })`
  */
 export function ok<T>(c: Context, data: T, status = 200): Response {
-  return c.json({ ok: true, data } satisfies ApiSuccess<T>, status)
+  return c.json({ ok: true, data } satisfies ApiSuccess<T>, status as Parameters<typeof c.json>[1])
 }
 
 /**
  * Create an error response.
  * Usage: `return err(c, 'User not found', ErrorCodes.NOT_FOUND, 404)`
  */
-export function err(
-  c: Context,
-  error: string,
-  code?: ErrorCode,
-  status = 400,
-): Response {
+export function err(c: Context, error: string, code?: ErrorCode, status = 400): Response {
   const body: ApiError = { ok: false, error }
   if (code) body.code = code
   return c.json(body, status as Parameters<typeof c.json>[1])

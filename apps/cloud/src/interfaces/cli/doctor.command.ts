@@ -4,6 +4,7 @@
 
 import { execSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
+import { platform } from 'node:os'
 import { Command } from 'commander'
 import type { ServiceContainer } from '../../services/container.js'
 
@@ -12,6 +13,7 @@ interface CheckResult {
   status: 'pass' | 'warn' | 'fail'
   message: string
   hint?: string
+  fixCmd?: string
 }
 
 function getVersion(cmd: string, versionFlag = '--version'): string | null {
@@ -26,12 +28,37 @@ function getVersion(cmd: string, versionFlag = '--version'): string | null {
   }
 }
 
+function hasBrew(): boolean {
+  try {
+    execSync('which brew', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] })
+    return true
+  } catch {
+    return false
+  }
+}
+
+function tryFix(logger: ServiceContainer['logger'], name: string, cmd: string): boolean {
+  logger.step(`Attempting to install ${name}...`)
+  logger.dim(`  $ ${cmd}`)
+  try {
+    execSync(cmd, { encoding: 'utf-8', timeout: 120_000, stdio: 'inherit' })
+    logger.success(`${name} installed successfully`)
+    return true
+  } catch {
+    logger.error(`Failed to install ${name}. Please install manually.`)
+    return false
+  }
+}
+
 export function createDoctorCommand(container: ServiceContainer) {
   return new Command('doctor')
     .description('Check prerequisites and system health')
     .option('--security', 'Run security configuration checks')
-    .action((options: { security?: boolean }) => {
+    .option('--fix', 'Attempt to auto-install missing dependencies')
+    .action((options: { security?: boolean; fix?: boolean }) => {
       const results: CheckResult[] = []
+      const isMac = platform() === 'darwin'
+      const brew = isMac && hasBrew()
 
       container.logger.step('Checking dependencies...')
 
@@ -59,6 +86,7 @@ export function createDoctorCommand(container: ServiceContainer) {
           status: 'fail',
           message: 'not found',
           hint: 'Install Docker: https://docs.docker.com/get-docker/',
+          fixCmd: brew ? 'brew install --cask docker' : undefined,
         })
       }
 
@@ -79,6 +107,7 @@ export function createDoctorCommand(container: ServiceContainer) {
           status: 'fail',
           message: 'not found',
           hint: 'Install kubectl: https://kubernetes.io/docs/tasks/tools/',
+          fixCmd: brew ? 'brew install kubectl' : undefined,
         })
       }
 
@@ -92,6 +121,7 @@ export function createDoctorCommand(container: ServiceContainer) {
           status: 'fail',
           message: 'not found',
           hint: 'Install Pulumi: https://www.pulumi.com/docs/install/',
+          fixCmd: brew ? 'brew install pulumi' : 'curl -fsSL https://get.pulumi.com | sh',
         })
       }
 
@@ -109,6 +139,7 @@ export function createDoctorCommand(container: ServiceContainer) {
           status: 'warn',
           message: 'not found (optional, for local development)',
           hint: 'Install kind: https://kind.sigs.k8s.io/docs/user/quick-start/',
+          fixCmd: brew ? 'brew install kind' : undefined,
         })
       }
 
@@ -200,11 +231,33 @@ export function createDoctorCommand(container: ServiceContainer) {
 
       // Summary
       const fails = results.filter((r) => r.status === 'fail')
+      const warns = results.filter((r) => r.status === 'warn')
       console.log()
-      if (fails.length === 0) {
+
+      // Attempt auto-fix for failed/warned items
+      if (options.fix && (fails.length > 0 || warns.length > 0)) {
+        const fixable = [...fails, ...warns].filter((r) => r.fixCmd)
+        if (fixable.length > 0) {
+          container.logger.step(`Attempting to fix ${fixable.length} issue(s)...`)
+          console.log()
+          let fixed = 0
+          for (const r of fixable) {
+            if (r.fixCmd && tryFix(container.logger, r.name, r.fixCmd)) {
+              fixed++
+            }
+          }
+          console.log()
+          if (fixed > 0) {
+            container.logger.success(`Fixed ${fixed} issue(s). Run 'doctor' again to verify.`)
+          }
+        } else {
+          container.logger.warn('No auto-fixable issues found. Please install manually.')
+        }
+      } else if (fails.length === 0) {
         container.logger.success('All checks passed')
       } else {
         container.logger.error(`${fails.length} check(s) failed`)
+        container.logger.dim('  Run with --fix to attempt auto-installation')
         process.exit(1)
       }
     })

@@ -10,8 +10,25 @@ import type {
   SharedWorkspaceConfig,
   TeamConfig,
 } from './agent.schema.js'
-import type { VaultConfig } from './managed-agents.schema.js'
-import type { PluginsConfig } from './shadow.schema.js'
+import type { UseEntry } from './shadow.schema.js'
+
+/**
+ * Plugin instance config (legacy map form).
+ * Kept for backward compatibility with existing templates and builder logic.
+ */
+export interface CloudPluginInstanceConfig {
+  enabled?: boolean
+  config?: Record<string, unknown>
+  agents?: Record<
+    string,
+    {
+      enabled?: boolean
+      config?: Record<string, unknown>
+    }
+  >
+  secrets?: Record<string, string>
+  [key: string]: unknown
+}
 
 /**
  * Top-level shadowob-cloud.json config.
@@ -28,15 +45,47 @@ export interface CloudConfig {
   description?: string
   /** Deployment environment */
   environment?: 'development' | 'staging' | 'production'
+  /** Active locale for i18n resolution (e.g. "en", "zh-CN"). Defaults to "en". */
+  locale?: string
+  /**
+   * Internationalization dictionary.
+   * Keyed by locale → key → translated string.
+   *
+   * Template strings can reference translations via `${i18n:key}`.
+   * The active locale is determined by `config.locale`.
+   *
+   * @example
+   * {
+   *   "en": { "team.name": "Research Team", "team.desc": "AI research agents" },
+   *   "zh-CN": { "team.name": "研究团队", "team.desc": "AI 研究 Agent 集群" }
+   * }
+   */
+  i18n?: Record<string, Record<string, string>>
   /**
    * Team / agent pack definition.
-   * Groups agents with shared defaults — model, compliance, workspace.
-   * Inspired by CrewClaw's "Agent Packs" concept.
+   * Groups agents with shared defaults.
    */
   team?: TeamConfig
-  /** Shadow resource plugins */
-  plugins?: PluginsConfig
-  /** Reusable provider/configuration registry */
+  /**
+   * Global plugin declarations — webpack-style "use" pattern.
+   * Each entry specifies a plugin id and optional configuration.
+   *
+   * @example
+   * [
+   *   { "plugin": "shadowob", "options": { "baseURL": "${env:SHADOWOB_BASE_URL}" } },
+   *   { "plugin": "slack", "options": { "token": "${vault:SLACK_TOKEN}" } }
+   * ]
+   */
+  use?: UseEntry[]
+  /**
+   * Legacy plugin declarations map.
+   * Prefer `use`, but keep this field for compatibility during migration.
+   */
+  plugins?: Record<string, CloudPluginInstanceConfig>
+  /**
+   * Reusable provider/configuration registry.
+   * Also contains vault definitions (registry.vaults) for secret isolation.
+   */
   registry?: RegistryConfig
   /** K8s deployment definitions */
   deployments?: DeploymentsConfig
@@ -44,12 +93,6 @@ export interface CloudConfig {
   workspace?: SharedWorkspaceConfig
   /** Cloud-level skills registry */
   skills?: CloudSkillsConfig
-  /**
-   * Vault definitions for secret isolation.
-   * Each agent references a vault by name (default: "default").
-   * Per-agent K8s Secrets are generated with only the relevant keys.
-   */
-  vaults?: Record<string, VaultConfig>
 }
 
 // ─── Typia Validators ───────────────────────────────────────────────────────
@@ -65,3 +108,13 @@ export const validateCloudConfig: (input: unknown) => typia.IValidation<CloudCon
  * Assert a CloudConfig object (throws on failure).
  */
 export const assertCloudConfig: (input: unknown) => CloudConfig = typia.createAssert<CloudConfig>()
+
+// ─── JSON Schema Export ─────────────────────────────────────────────────────
+
+/**
+ * Export JSON Schema for Monaco editor autocomplete.
+ * Uses typia AOT compilation to generate a standard JSON Schema document.
+ */
+export const getCloudConfigJsonSchema: () => typia.IJsonSchemaCollection = typia.json.schemas<
+  [CloudConfig]
+>

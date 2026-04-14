@@ -17,6 +17,8 @@ import type { Hono } from 'hono'
 import { ActivityDao } from '../../dao/activity.dao.js'
 import { ConfigDao } from '../../dao/config.dao.js'
 import { DeploymentDao } from '../../dao/deployment.dao.js'
+import { DeploymentLogDao } from '../../dao/deployment-log.dao.js'
+import { EnvGroupDao } from '../../dao/env-group.dao.js'
 import { EnvVarDao } from '../../dao/envvar.dao.js'
 import { SecretDao } from '../../dao/secret.dao.js'
 import { TemplateDao } from '../../dao/template.dao.js'
@@ -24,27 +26,58 @@ import { createDatabase } from '../../db/index.js'
 import { runMigrations } from '../../db/migrate.js'
 import { seedTemplates } from '../../db/seed.js'
 import type { ServiceContainer } from '../../services/container.js'
+import { toProviderSecretEnvKey } from '../../utils/env-names.js'
 import { createCloudApp } from './app.js'
+import { DeployTaskManager } from './deploy-task-manager.js'
 import type { HandlerContext } from './handlers/types.js'
 
 // ─── Database + DAO bootstrap ───────────────────────────────────────────────
 
-function createHandlerContext(
-  container: ServiceContainer,
-  namespaces: string[],
-): HandlerContext {
+function createHandlerContext(container: ServiceContainer, namespaces: string[]): HandlerContext {
   const db = createDatabase()
   runMigrations(db)
   seedTemplates(db)
 
+  const templateDao = new TemplateDao(db)
+  const configDao = new ConfigDao(db)
+  const secretDao = new SecretDao(db)
+  const deploymentDao = new DeploymentDao(db)
+  const deploymentLogDao = new DeploymentLogDao(db)
+  const activityDao = new ActivityDao(db)
+  const envVarDao = new EnvVarDao(db)
+  const envGroupDao = new EnvGroupDao(db)
+
+  const legacySecrets = secretDao.findAllDecryptedEntries()
+  for (const entry of legacySecrets) {
+    envGroupDao.ensure(entry.groupName)
+    const envKey = toProviderSecretEnvKey(entry.providerId, entry.key)
+    if (!envVarDao.getValue('global', envKey)) {
+      envVarDao.upsert('global', envKey, entry.value, true, entry.groupName)
+    }
+  }
+
+  if (legacySecrets.length > 0) {
+    secretDao.deleteAll()
+  }
+
+  const deployTaskManager = new DeployTaskManager(
+    container,
+    deploymentDao,
+    deploymentLogDao,
+    envVarDao,
+  )
+
   return {
     container,
-    templateDao: new TemplateDao(db),
-    configDao: new ConfigDao(db),
-    secretDao: new SecretDao(db),
-    deploymentDao: new DeploymentDao(db),
-    activityDao: new ActivityDao(db),
-    envVarDao: new EnvVarDao(db),
+    templateDao,
+    configDao,
+    secretDao,
+    deploymentDao,
+    deploymentLogDao,
+    activityDao,
+    envVarDao,
+    envGroupDao,
+    deployTaskManager,
     namespaces,
   }
 }

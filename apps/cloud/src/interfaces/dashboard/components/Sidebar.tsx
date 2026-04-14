@@ -1,6 +1,5 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import {
-  Activity,
   BarChart3,
   Box,
   ChevronDown,
@@ -60,7 +59,7 @@ const NAV_SECTIONS: NavSection[] = [
     icon: Layers,
     defaultOpen: true,
     items: [
-      { to: '/clusters', labelKey: 'nav.clusters', icon: Layers },
+      { to: '/deployments', labelKey: 'nav.deployments', icon: Layers },
       { to: '/secrets', labelKey: 'nav.secrets', icon: ShieldCheck },
       { to: '/monitoring', labelKey: 'nav.monitoring', icon: BarChart3 },
     ],
@@ -70,10 +69,7 @@ const NAV_SECTIONS: NavSection[] = [
     labelKey: 'nav.system',
     icon: Box,
     defaultOpen: false,
-    items: [
-      { to: '/activity', labelKey: 'nav.activity', icon: Activity },
-      { to: '/settings', labelKey: 'nav.settings', icon: Settings },
-    ],
+    items: [{ to: '/settings', labelKey: 'nav.settings', icon: Settings }],
   },
 ]
 

@@ -10,9 +10,45 @@ import type { HandlerContext } from './types.js'
 export function createClusterHandler(ctx: HandlerContext): Hono {
   const app = new Hono()
 
+  /**
+   * Resolve the effective namespace list: configured namespaces + any
+   * namespaces discovered on the cluster via the `managed-by` label.
+   * Also includes namespaces from the deployment DB to catch records
+   * whose K8S resources may have been cleaned up.
+   */
+  function resolveNamespaces(): { namespaces: string[]; discoveredNamespaces: string[] } {
+    let discovered: string[] = []
+    try {
+      discovered = ctx.container.k8s.getManagedNamespaces()
+    } catch {
+      /* kubectl may not be available */
+    }
+
+    const dbNamespaces = ctx.deploymentDao
+      .findAll()
+      .map((d) => d.namespace)
+      .filter(Boolean) as string[]
+
+    const all = new Set([...ctx.namespaces, ...discovered, ...dbNamespaces])
+    const sorted = [...all].sort()
+    const discoveredOnly = discovered.filter((ns) => !ctx.namespaces.includes(ns))
+
+    return { namespaces: sorted, discoveredNamespaces: discoveredOnly }
+  }
+
+  app.get('/namespaces', (c) => {
+    const { namespaces, discoveredNamespaces } = resolveNamespaces()
+    return c.json({
+      configured: ctx.namespaces,
+      discovered: discoveredNamespaces,
+      all: namespaces,
+    })
+  })
+
   app.get('/deployments', (c) => {
+    const { namespaces } = resolveNamespaces()
     const result: unknown[] = []
-    for (const ns of ctx.namespaces) {
+    for (const ns of namespaces) {
       try {
         const deps = ctx.container.k8s.getDeployments(ns)
         for (const d of deps) result.push({ ...d, namespace: ns })
@@ -41,7 +77,9 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
 
     return streamSSE(c, async (stream) => {
       const child = ctx.container.k8s.streamLogs(ns, podName, { follow: true, tail: 200 })
-      stream.onAbort(() => { child.kill() })
+      stream.onAbort(() => {
+        child.kill()
+      })
 
       let buffer = ''
       child.stdout?.on('data', (chunk: Buffer) => {

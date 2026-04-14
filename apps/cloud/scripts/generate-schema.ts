@@ -2,29 +2,49 @@
  * Generate JSON Schema from CloudConfig TypeScript interfaces.
  *
  * Usage: pnpm generate:schema
- * Output: schemas/xcloud.schema.json
+ * Output: schemas/config.schema.json
  *
- * Users can reference this schema in their xcloud.json:
- *   { "$schema": "./node_modules/@shadowob/cloud/schemas/xcloud.schema.json" }
+ * Uses typescript-json-schema to produce JSON Schema directly from
+ * TypeScript source (no build step required).
+ *
+ * Users can reference this schema in their shadowob-cloud.json:
+ *   { "$schema": "./schemas/config.schema.json" }
  */
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import typia from 'typia'
-import type { CloudConfig } from '../src/config/schema.js'
+import * as TJS from 'typescript-json-schema'
 
-const schemas = typia.json.schemas<[CloudConfig], '3.1'>()
+const projectRoot = resolve(import.meta.dirname, '..')
+const schemaFile = resolve(projectRoot, 'src/config/schema/cloud.schema.ts')
 
-const jsonSchema = {
-  $schema: 'https://json-schema.org/draft/2020-12/schema',
-  ...schemas.schemas[0],
-  $defs: schemas.components.schemas,
+const settings: TJS.PartialArgs = {
+  required: true,
+  noExtraProps: false,
+  strictNullChecks: true,
 }
 
-const outDir = resolve(import.meta.dirname, '..', 'schemas')
+const compilerOptions: TJS.CompilerOptions = {
+  strict: true,
+  esModuleInterop: true,
+  skipLibCheck: true,
+  moduleResolution: 100, // NodeNext
+  module: 199, // NodeNext
+  target: 99, // ESNext
+}
+
+const program = TJS.getProgramFromFiles([schemaFile], compilerOptions)
+const schema = TJS.generateSchema(program, 'CloudConfig', settings)
+
+if (!schema) {
+  console.error('Failed to generate JSON Schema for CloudConfig')
+  process.exit(1)
+}
+
+const outDir = resolve(projectRoot, 'schemas')
 mkdirSync(outDir, { recursive: true })
 
-const outPath = resolve(outDir, 'xcloud.schema.json')
-writeFileSync(outPath, `${JSON.stringify(jsonSchema, null, 2)}\n`, 'utf-8')
+const outPath = resolve(outDir, 'config.schema.json')
+writeFileSync(outPath, `${JSON.stringify(schema, null, 2)}\n`, 'utf-8')
 
-console.log(`Generated JSON Schema: ${outPath}`)
+console.log(`✓ Generated JSON Schema: ${outPath}`)

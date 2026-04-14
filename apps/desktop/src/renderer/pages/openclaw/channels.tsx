@@ -183,7 +183,7 @@ function ChannelEditor({
     try {
       const config: Record<string, string | number | boolean> = {}
       for (const field of channel.configFields ?? []) {
-        const val = fieldValues[field.key]
+        const val = fieldValues[field.key] ?? ''
         if (field.type === 'number') {
           config[field.key] = Number(val) || 0
         } else if (field.type === 'boolean') {

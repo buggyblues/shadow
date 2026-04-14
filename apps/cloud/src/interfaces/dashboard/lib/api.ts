@@ -102,6 +102,41 @@ export interface ConfigFile {
   content: string
 }
 
+export interface DeployTask {
+  id: number
+  namespace: string
+  templateSlug: string | null
+  version: number | null
+  status: string
+  config: unknown
+  agentCount: number | null
+  error: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export interface DeployTaskListItem {
+  task: DeployTask
+  url: string
+  active: boolean
+}
+
+export interface EnvVarListEntry {
+  scope: string
+  key: string
+  maskedValue: string
+  isSecret: boolean
+  groupName: string
+}
+
+export interface EnvVarDetail {
+  scope: string
+  key: string
+  value: string
+  isSecret: boolean
+  groupName: string
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function get<T>(path: string): Promise<T> {
@@ -145,8 +180,12 @@ async function postRaw(path: string, body: unknown): Promise<Response> {
 export const api = {
   health: () => get<{ status: string; timestamp: string }>('/health'),
 
+  schema: () => get<Record<string, unknown>>('/schema'),
+
   deployments: {
     list: () => get<Deployment[]>('/deployments'),
+    namespaces: () =>
+      get<{ configured: string[]; discovered: string[]; all: string[] }>('/namespaces'),
     pods: (namespace: string, id: string) =>
       get<Pod[]>(`/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(id)}/pods`),
     logsUrl: (namespace: string, id: string) =>
@@ -160,6 +199,8 @@ export const api = {
 
   templates: {
     list: () => get<Template[]>('/templates'),
+    listByLocale: (locale: string) =>
+      get<Template[]>(`/templates?locale=${encodeURIComponent(locale)}`),
     get: (name: string) => get<Record<string, unknown>>(`/templates/${encodeURIComponent(name)}`),
     envRefs: (name: string) =>
       get<{ template: string; requiredEnvVars: string[] }>(
@@ -225,8 +266,23 @@ export const api = {
 
   deploy: (config: unknown) => postRaw('/deploy', config),
 
+  deployTasks: {
+    list: () => get<{ tasks: DeployTaskListItem[] }>('/deploy-tasks'),
+    get: (id: number | string) =>
+      get<{ task: DeployTask; url: string; active: boolean }>(
+        `/deploy-tasks/${encodeURIComponent(String(id))}`,
+      ),
+    streamUrl: (id: number | string) =>
+      `${BASE}/deploy-tasks/${encodeURIComponent(String(id))}/stream`,
+    redeployUrl: (id: number | string) =>
+      `${BASE}/deploy-tasks/${encodeURIComponent(String(id))}/redeploy`,
+  },
+
   destroy: (options: { namespace?: string; stack?: string }) =>
     post<{ ok: boolean }>('/destroy', options),
+
+  rollback: (options: { namespace: string }) =>
+    post<{ ok: boolean; namespace: string }>('/rollback', options),
 
   validate: (config: unknown) => post<ValidateResult>('/validate', config),
 
@@ -285,18 +341,17 @@ export const api = {
   env: {
     list: () =>
       get<{
-        envVars: Array<{
-          scope: string
-          key: string
-          maskedValue: string
-          isSecret: boolean
-          groupName: string
-        }>
+        envVars: EnvVarListEntry[]
+        groups: string[]
       }>('/env'),
+    groups: () => get<{ groups: string[] }>('/env/groups'),
+    createGroup: (name: string) => post<{ ok: boolean; name: string }>('/env/groups', { name }),
     getByScope: (scope: string) =>
       get<{ envVars: Array<{ key: string; value: string; isSecret: boolean }> }>(
         `/env/${encodeURIComponent(scope)}`,
       ),
+    getOne: (scope: string, key: string) =>
+      get<{ envVar: EnvVarDetail }>(`/env/${encodeURIComponent(scope)}/${encodeURIComponent(key)}`),
     upsert: (scope: string, key: string, value: string, isSecret?: boolean, groupName?: string) =>
       put<{ ok: boolean }>(`/env/${encodeURIComponent(scope)}`, {
         key,

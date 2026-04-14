@@ -1,0 +1,3108 @@
+{
+  "description": "Configuration file for deploying OpenClaw AI agents to Kubernetes.",
+  "title": "Shadow Cloud Configuration",
+  "type": "object",
+  "properties": {
+    "version": {
+      "description": "Config version",
+      "type": "string"
+    },
+    "name": {
+      "description": "Human-readable name for this deployment config (shown in console)",
+      "type": "string"
+    },
+    "description": {
+      "description": "Description of what this agent team does",
+      "type": "string"
+    },
+    "environment": {
+      "description": "Deployment environment",
+      "enum": ["development", "production", "staging"],
+      "type": "string"
+    },
+    "locale": {
+      "description": "Active locale for i18n resolution (e.g. \"en\", \"zh-CN\"). Defaults to \"en\".",
+      "type": "string"
+    },
+    "i18n": {
+      "description": "Internationalization dictionary.\nKeyed by locale → key → translated string.\n\nTemplate strings can reference translations via `${i18n:key}`.\nThe active locale is determined by `config.locale`.",
+      "$ref": "#/definitions/Record%3Cstring%2CRecord%3Cstring%2Cstring%3E%3E"
+    },
+    "team": {
+      "description": "Team / agent pack definition.\nGroups agents with shared defaults.",
+      "$ref": "#/definitions/TeamConfig"
+    },
+    "use": {
+      "description": "Global plugin declarations — webpack-style \"use\" pattern.\nEach entry specifies a plugin id and optional configuration.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/UseEntry"
+      }
+    },
+    "registry": {
+      "description": "Reusable provider/configuration registry.\nAlso contains vault definitions (registry.vaults) for secret isolation.",
+      "$ref": "#/definitions/RegistryConfig"
+    },
+    "deployments": {
+      "description": "K8s deployment definitions",
+      "$ref": "#/definitions/DeploymentsConfig"
+    },
+    "workspace": {
+      "description": "Shared workspace (distributed filesystem across agents)",
+      "$ref": "#/definitions/SharedWorkspaceConfig"
+    },
+    "skills": {
+      "description": "Cloud-level skills registry",
+      "$ref": "#/definitions/CloudSkillsConfig"
+    }
+  },
+  "required": ["version"],
+  "definitions": {
+    "Record<string,Record<string,string>>": {
+      "type": "object"
+    },
+    "TeamConfig": {
+      "description": "Team / agent pack metadata — groups agents into a cohesive named team.\nInspired by CrewClaw's \"Agent Packs\" concept.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Team display name",
+          "type": "string"
+        },
+        "description": {
+          "description": "What this team does — appears in console and CLI output",
+          "type": "string"
+        }
+      },
+      "required": ["name"]
+    },
+    "UseEntry": {
+      "description": "A single plugin declaration in the `use` array.",
+      "type": "object",
+      "properties": {
+        "plugin": {
+          "description": "Plugin identifier (e.g. \"shadowob\", \"gitagent\", \"slack\")",
+          "type": "string"
+        },
+        "options": {
+          "description": "Plugin-specific options",
+          "$ref": "#/definitions/Record%3Cstring%2Cunknown%3E"
+        }
+      },
+      "required": ["plugin"]
+    },
+    "Record<string,unknown>": {
+      "type": "object"
+    },
+    "RegistryConfig": {
+      "description": "Registry section — reusable model provider, configuration presets, and vault definitions.",
+      "type": "object",
+      "properties": {
+        "providers": {
+          "description": "Custom LLM provider configurations",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/OpenClawProviderConfig"
+          }
+        },
+        "configurations": {
+          "description": "Reusable configuration presets",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Configuration"
+          }
+        },
+        "vaults": {
+          "description": "Vault definitions for secret isolation.\nEach agent references a vault by name (default: \"default\").\nPer-agent K8s Secrets are generated with only the relevant keys.",
+          "$ref": "#/definitions/Record%3Cstring%2CVaultConfig%3E"
+        }
+      }
+    },
+    "OpenClawProviderConfig": {
+      "description": "OpenClaw custom provider config.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Provider ID",
+          "type": "string"
+        },
+        "api": {
+          "description": "API adapter type",
+          "type": "string"
+        },
+        "apiKey": {
+          "description": "API key or SecretRef",
+          "type": "string"
+        },
+        "auth": {
+          "description": "Auth strategy",
+          "type": "string"
+        },
+        "baseUrl": {
+          "description": "Upstream base URL",
+          "type": "string"
+        },
+        "headers": {
+          "description": "Extra static headers",
+          "$ref": "#/definitions/Record%3Cstring%2Cstring%3E"
+        },
+        "models": {
+          "description": "Provider model catalog",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "reasoning": {
+                "type": "boolean"
+              },
+              "input": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "contextWindow": {
+                "type": "number"
+              },
+              "maxTokens": {
+                "type": "number"
+              },
+              "cost": {
+                "type": "object",
+                "properties": {
+                  "input": {
+                    "type": "number"
+                  },
+                  "output": {
+                    "type": "number"
+                  },
+                  "cacheRead": {
+                    "type": "number"
+                  },
+                  "cacheWrite": {
+                    "type": "number"
+                  }
+                }
+              }
+            },
+            "required": ["id"]
+          }
+        }
+      }
+    },
+    "Record<string,string>": {
+      "type": "object"
+    },
+    "Configuration": {
+      "description": "Registry configuration preset.",
+      "type": "object",
+      "additionalProperties": {},
+      "properties": {
+        "id": {
+          "description": "Unique configuration ID",
+          "type": "string"
+        },
+        "openclaw": {
+          "description": "OpenClaw config values",
+          "$ref": "#/definitions/Partial%3COpenClawConfig%3E"
+        }
+      },
+      "required": ["id"]
+    },
+    "Partial<OpenClawConfig>": {
+      "type": "object",
+      "properties": {
+        "agents": {
+          "description": "Agents section",
+          "$ref": "#/definitions/OpenClawAgentsConfig"
+        },
+        "bindings": {
+          "description": "Multi-agent routing bindings",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/OpenClawBinding"
+          }
+        },
+        "channels": {
+          "description": "Channel configs",
+          "$ref": "#/definitions/OpenClawChannelsConfig"
+        },
+        "acp": {
+          "description": "ACP config",
+          "$ref": "#/definitions/OpenClawAcpConfig"
+        },
+        "session": {
+          "description": "Session config",
+          "$ref": "#/definitions/OpenClawSessionConfig"
+        },
+        "messages": {
+          "description": "Messages config",
+          "$ref": "#/definitions/OpenClawMessagesConfig"
+        },
+        "tools": {
+          "description": "Tools config",
+          "$ref": "#/definitions/OpenClawToolsConfig"
+        },
+        "models": {
+          "description": "Custom model providers",
+          "$ref": "#/definitions/OpenClawModelsConfig"
+        },
+        "plugins": {
+          "description": "Plugin config",
+          "$ref": "#/definitions/OpenClawPluginsConfig"
+        },
+        "skills": {
+          "description": "Skill config",
+          "$ref": "#/definitions/OpenClawSkillsConfig"
+        },
+        "gateway": {
+          "description": "Gateway config",
+          "$ref": "#/definitions/OpenClawGatewayConfig"
+        },
+        "logging": {
+          "description": "Logging config",
+          "$ref": "#/definitions/OpenClawLoggingConfig"
+        },
+        "env": {
+          "description": "Environment variables",
+          "$ref": "#/definitions/Record%3Cstring%2Cunknown%3E"
+        }
+      }
+    },
+    "OpenClawAgentsConfig": {
+      "description": "OpenClaw agents section.",
+      "type": "object",
+      "properties": {
+        "defaults": {
+          "description": "Agent defaults",
+          "$ref": "#/definitions/OpenClawAgentDefaults"
+        },
+        "list": {
+          "description": "Per-agent list",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/OpenClawAgentConfig"
+          }
+        }
+      }
+    },
+    "OpenClawAgentDefaults": {
+      "description": "OpenClaw agent defaults configuration.",
+      "type": "object",
+      "properties": {
+        "workspace": {
+          "description": "Default workspace path",
+          "type": "string"
+        },
+        "repoRoot": {
+          "description": "Repository root for system prompt",
+          "type": "string"
+        },
+        "skipBootstrap": {
+          "description": "Skip bootstrap file creation",
+          "type": "boolean"
+        },
+        "bootstrapMaxChars": {
+          "description": "Max chars per bootstrap file",
+          "allOf": [
+            {
+              "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "type"
+                    },
+                    "value": {
+                      "description": "Numeric type identifier",
+                      "type": "string",
+                      "const": "uint32"
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "$importInternal(\"isTypeUint32\")($input)"
+                    },
+                    "exclusive": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "integer"
+                        },
+                        "minimum": {
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum", "type"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "bootstrapTotalMaxChars": {
+          "description": "Max total bootstrap chars",
+          "allOf": [
+            {
+              "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "type"
+                    },
+                    "value": {
+                      "description": "Numeric type identifier",
+                      "type": "string",
+                      "const": "uint32"
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "$importInternal(\"isTypeUint32\")($input)"
+                    },
+                    "exclusive": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "integer"
+                        },
+                        "minimum": {
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum", "type"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "model": {
+          "description": "Model config — string or { primary, fallbacks }",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OpenClawModelConfig"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "imageModel": {
+          "description": "Image model config",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OpenClawModelConfig"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "pdfModel": {
+          "description": "PDF model config",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OpenClawModelConfig"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "imageGenerationModel": {
+          "description": "Image generation model config",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OpenClawModelConfig"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "models": {
+          "description": "Model catalog keyed by \"provider/model\"",
+          "$ref": "#/definitions/Record%3Cstring%2COpenClawModelEntry%3E"
+        },
+        "thinkingDefault": {
+          "description": "Default thinking level",
+          "enum": ["adaptive", "high", "low", "medium", "minimal", "off", "xhigh"],
+          "type": "string"
+        },
+        "verboseDefault": {
+          "description": "Default verbose level",
+          "enum": ["full", "off", "on"],
+          "type": "string"
+        },
+        "elevatedDefault": {
+          "description": "Default elevated-output level",
+          "enum": ["ask", "full", "off", "on"],
+          "type": "string"
+        },
+        "timeoutSeconds": {
+          "description": "Timeout in seconds",
+          "allOf": [
+            {
+              "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "type"
+                    },
+                    "value": {
+                      "description": "Numeric type identifier",
+                      "type": "string",
+                      "const": "uint32"
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "$importInternal(\"isTypeUint32\")($input)"
+                    },
+                    "exclusive": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "integer"
+                        },
+                        "minimum": {
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum", "type"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "mediaMaxMb": {
+          "description": "Media max size in MB",
+          "allOf": [
+            {
+              "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "type"
+                    },
+                    "value": {
+                      "description": "Numeric type identifier",
+                      "type": "string",
+                      "const": "uint32"
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "$importInternal(\"isTypeUint32\")($input)"
+                    },
+                    "exclusive": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "integer"
+                        },
+                        "minimum": {
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum", "type"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "contextTokens": {
+          "description": "Context token limit",
+          "allOf": [
+            {
+              "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "type"
+                    },
+                    "value": {
+                      "description": "Numeric type identifier",
+                      "type": "string",
+                      "const": "uint32"
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "$importInternal(\"isTypeUint32\")($input)"
+                    },
+                    "exclusive": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "integer"
+                        },
+                        "minimum": {
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum", "type"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "maxConcurrent": {
+          "description": "Max concurrent agent runs",
+          "allOf": [
+            {
+              "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "type"
+                    },
+                    "value": {
+                      "description": "Numeric type identifier",
+                      "type": "string",
+                      "const": "uint32"
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "$importInternal(\"isTypeUint32\")($input)"
+                    },
+                    "exclusive": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "integer"
+                        },
+                        "minimum": {
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum", "type"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "userTimezone": {
+          "description": "User timezone",
+          "type": "string"
+        },
+        "timeFormat": {
+          "description": "Time format",
+          "enum": ["12", "24", "auto"],
+          "type": "string"
+        },
+        "heartbeat": {
+          "description": "Heartbeat config",
+          "$ref": "#/definitions/OpenClawHeartbeatConfig"
+        },
+        "compaction": {
+          "description": "Compaction config",
+          "$ref": "#/definitions/OpenClawCompactionConfig"
+        },
+        "sandbox": {
+          "description": "Sandbox config",
+          "$ref": "#/definitions/Record%3Cstring%2Cunknown%3E"
+        },
+        "subagents": {
+          "description": "Subagent defaults",
+          "$ref": "#/definitions/OpenClawSubagentDefaults"
+        }
+      }
+    },
+    "OpenClawModelConfig": {
+      "description": "OpenClaw model configuration.\nAccepts \"provider/model\" string form or object with primary + fallbacks.",
+      "type": "object",
+      "properties": {
+        "primary": {
+          "description": "Primary model in \"provider/model\" format",
+          "type": "string"
+        },
+        "fallbacks": {
+          "description": "Ordered fallback models",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["primary"]
+    },
+    "Record<string,OpenClawModelEntry>": {
+      "type": "object"
+    },
+    "OpenClawHeartbeatConfig": {
+      "type": "object",
+      "properties": {
+        "every": {
+          "description": "Interval duration string (e.g. \"30m\")",
+          "type": "string"
+        },
+        "model": {
+          "description": "Model for heartbeat runs",
+          "type": "string"
+        },
+        "prompt": {
+          "description": "Heartbeat prompt",
+          "type": "string"
+        },
+        "session": {
+          "description": "Session key",
+          "type": "string"
+        },
+        "to": {
+          "description": "Delivery target",
+          "type": "string"
+        },
+        "target": {
+          "description": "Target channel",
+          "type": "string"
+        }
+      }
+    },
+    "OpenClawCompactionConfig": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "description": "Compaction mode",
+          "enum": ["default", "safeguard"],
+          "type": "string"
+        },
+        "timeoutSeconds": {
+          "description": "Timeout in seconds",
+          "allOf": [
+            {
+              "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "type"
+                    },
+                    "value": {
+                      "description": "Numeric type identifier",
+                      "type": "string",
+                      "const": "uint32"
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "$importInternal(\"isTypeUint32\")($input)"
+                    },
+                    "exclusive": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "integer"
+                        },
+                        "minimum": {
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum", "type"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "identifierPolicy": {
+          "description": "Identifier policy",
+          "enum": ["custom", "off", "strict"],
+          "type": "string"
+        },
+        "identifierInstructions": {
+          "description": "Custom instructions for identifier preservation",
+          "type": "string"
+        },
+        "model": {
+          "description": "Model for compaction summarization",
+          "type": "string"
+        }
+      }
+    },
+    "OpenClawSubagentDefaults": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "description": "Default model for sub-agents",
+          "type": "string"
+        },
+        "maxConcurrent": {
+          "description": "Max concurrent sub-agents",
+          "allOf": [
+            {
+              "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "type"
+                    },
+                    "value": {
+                      "description": "Numeric type identifier",
+                      "type": "string",
+                      "const": "uint32"
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "$importInternal(\"isTypeUint32\")($input)"
+                    },
+                    "exclusive": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "integer"
+                        },
+                        "minimum": {
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum", "type"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "runTimeoutSeconds": {
+          "description": "Run timeout in seconds",
+          "allOf": [
+            {
+              "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "type"
+                    },
+                    "value": {
+                      "description": "Numeric type identifier",
+                      "type": "string",
+                      "const": "uint32"
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "$importInternal(\"isTypeUint32\")($input)"
+                    },
+                    "exclusive": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "integer"
+                        },
+                        "minimum": {
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum", "type"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "type": "number"
+            }
+          ]
+        }
+      }
+    },
+    "OpenClawAgentConfig": {
+      "description": "OpenClaw per-agent configuration (agents.list[] entry).",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Stable agent id (required)",
+          "type": "string"
+        },
+        "default": {
+          "description": "Whether this is the default agent",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "Agent display name",
+          "type": "string"
+        },
+        "workspace": {
+          "description": "Workspace path",
+          "type": "string"
+        },
+        "agentDir": {
+          "description": "Agent dir override",
+          "type": "string"
+        },
+        "model": {
+          "description": "Model override",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OpenClawModelConfig"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "thinkingDefault": {
+          "description": "Per-agent thinking level",
+          "enum": ["adaptive", "high", "low", "medium", "minimal", "off", "xhigh"],
+          "type": "string"
+        },
+        "params": {
+          "description": "Per-agent params merged over model catalog",
+          "$ref": "#/definitions/Record%3Cstring%2Cunknown%3E"
+        },
+        "identity": {
+          "description": "Agent identity",
+          "$ref": "#/definitions/OpenClawAgentIdentity"
+        },
+        "groupChat": {
+          "description": "Group chat mention patterns",
+          "type": "object",
+          "properties": {
+            "mentionPatterns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "runtime": {
+          "description": "Runtime descriptor",
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": ["acp", "subagent"],
+              "type": "string"
+            },
+            "acp": {
+              "description": "OpenClaw ACP runtime config for an agent.",
+              "$ref": "#/definitions/OpenClawAcpRuntime"
+            }
+          },
+          "required": ["type"]
+        },
+        "subagents": {
+          "description": "Subagent allow rules",
+          "type": "object",
+          "properties": {
+            "allowAgents": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "tools": {
+          "description": "Tool restrictions",
+          "type": "object",
+          "properties": {
+            "profile": {
+              "enum": ["coding", "full", "messaging", "minimal"],
+              "type": "string"
+            },
+            "allow": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "deny": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "elevated": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "sandbox": {
+          "description": "Sandbox config override",
+          "$ref": "#/definitions/Record%3Cstring%2Cunknown%3E"
+        },
+        "systemPrompt": {
+          "description": "System prompt (convenience, non-standard)",
+          "type": "string"
+        },
+        "instructions": {
+          "description": "Final instructions text (mapped from personality + systemPrompt)",
+          "type": "string"
+        }
+      },
+      "required": ["id"]
+    },
+    "OpenClawAgentIdentity": {
+      "description": "OpenClaw agent identity config.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Agent display name",
+          "type": "string"
+        },
+        "theme": {
+          "description": "Theme description",
+          "type": "string"
+        },
+        "emoji": {
+          "description": "Emoji identifier",
+          "type": "string"
+        },
+        "avatar": {
+          "description": "Avatar path or URL",
+          "type": "string"
+        }
+      }
+    },
+    "OpenClawAcpRuntime": {
+      "description": "OpenClaw ACP runtime config for an agent.",
+      "type": "object",
+      "properties": {
+        "agent": {
+          "description": "ACP harness agent id (e.g. \"claude\", \"codex\")",
+          "type": "string"
+        },
+        "backend": {
+          "description": "ACP backend id",
+          "type": "string"
+        },
+        "mode": {
+          "description": "Session mode",
+          "enum": ["ephemeral", "persistent"],
+          "type": "string"
+        },
+        "cwd": {
+          "description": "Working directory inside the harness",
+          "type": "string"
+        }
+      },
+      "required": ["agent"]
+    },
+    "OpenClawBinding": {
+      "description": "OpenClaw binding entry for multi-agent routing.",
+      "type": "object",
+      "properties": {
+        "agentId": {
+          "description": "Agent to route to",
+          "type": "string"
+        },
+        "type": {
+          "description": "Binding type",
+          "enum": ["acp", "route"],
+          "type": "string"
+        },
+        "match": {
+          "description": "Match criteria",
+          "type": "object",
+          "properties": {
+            "channel": {
+              "description": "Channel name (e.g. \"telegram\", \"discord\", \"shadowob\")",
+              "type": "string"
+            },
+            "accountId": {
+              "description": "Account id or \"*\" for any",
+              "type": "string"
+            },
+            "peer": {
+              "description": "Peer matching",
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "enum": ["channel", "direct", "group"],
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                }
+              }
+            },
+            "guildId": {
+              "description": "Guild ID (Discord)",
+              "type": "string"
+            },
+            "teamId": {
+              "description": "Team ID (Teams)",
+              "type": "string"
+            }
+          },
+          "required": ["channel"]
+        },
+        "acp": {
+          "description": "ACP binding config (only for type: \"acp\")",
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "cwd": {
+              "type": "string"
+            },
+            "backend": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": ["agentId", "match"]
+    },
+    "OpenClawChannelsConfig": {
+      "description": "OpenClaw channels section — each channel key matches official docs.",
+      "type": "object",
+      "additionalProperties": {},
+      "properties": {
+        "defaults": {
+          "description": "Channel defaults",
+          "type": "object",
+          "properties": {
+            "groupPolicy": {
+              "enum": ["allowlist", "disabled", "open"],
+              "type": "string"
+            },
+            "heartbeat": {
+              "type": "object",
+              "properties": {
+                "showOk": {
+                  "type": "boolean"
+                },
+                "showAlerts": {
+                  "type": "boolean"
+                },
+                "useIndicator": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "modelByChannel": {
+          "description": "Model overrides by channel ID",
+          "$ref": "#/definitions/Record%3Cstring%2CRecord%3Cstring%2Cstring%3E%3E"
+        },
+        "telegram": {
+          "description": "Telegram config",
+          "allOf": [
+            {
+              "$ref": "#/definitions/OpenClawChannelBase"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "botToken": {
+                  "type": "string"
+                },
+                "groups": {
+                  "$ref": "#/definitions/Record%3Cstring%2Cunknown%3E"
+                },
+                "customCommands": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "command": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["command", "description"]
+                  }
+                },
+                "replyToMode": {
+                  "enum": ["all", "first", "off"],
+                  "type": "string"
+                },
+                "linkPreview": {
+                  "type": "boolean"
+                }
+              }
+            }
+          ]
+        },
+        "discord": {
+          "description": "Discord config",
+          "allOf": [
+            {
+              "$ref": "#/definitions/OpenClawChannelBase"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "token": {
+                  "type": "string"
+                },
+                "allowBots": {
+                  "enum": [false, "mentions", true]
+                },
+                "guilds": {
+                  "$ref": "#/definitions/Record%3Cstring%2Cunknown%3E"
+                },
+                "replyToMode": {
+                  "enum": ["all", "first", "off"],
+                  "type": "string"
+                },
+                "textChunkLimit": {
+                  "type": "number"
+                },
+                "chunkMode": {
+                  "enum": ["length", "newline"],
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        },
+        "slack": {
+          "description": "Slack config",
+          "allOf": [
+            {
+              "$ref": "#/definitions/OpenClawChannelBase"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "botToken": {
+                  "type": "string"
+                },
+                "appToken": {
+                  "type": "string"
+                },
+                "channels": {
+                  "$ref": "#/definitions/Record%3Cstring%2Cunknown%3E"
+                },
+                "allowBots": {
+                  "type": "boolean"
+                }
+              }
+            }
+          ]
+        },
+        "whatsapp": {
+          "description": "WhatsApp config",
+          "allOf": [
+            {
+              "$ref": "#/definitions/OpenClawChannelBase"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "textChunkLimit": {
+                  "type": "number"
+                },
+                "chunkMode": {
+                  "enum": ["length", "newline"],
+                  "type": "string"
+                },
+                "sendReadReceipts": {
+                  "type": "boolean"
+                },
+                "groups": {
+                  "$ref": "#/definitions/Record%3Cstring%2Cunknown%3E"
+                }
+              }
+            }
+          ]
+        },
+        "shadowob": {
+          "description": "Shadow/ShadowOB channel config",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "accounts": {
+              "$ref": "#/definitions/Record%3Cstring%2C%7Btoken%3F%3Astring%7Cundefined%3BserverUrl%3F%3Astring%7Cundefined%3Benabled%3F%3Aboolean%7Cundefined%3B%7D%3E"
+            }
+          }
+        }
+      }
+    },
+    "OpenClawChannelBase": {
+      "description": "OpenClaw channel-level DM/group policies.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Whether channel is enabled",
+          "type": "boolean"
+        },
+        "dmPolicy": {
+          "description": "DM policy",
+          "enum": ["allowlist", "disabled", "open", "pairing"],
+          "type": "string"
+        },
+        "allowFrom": {
+          "description": "Allowed senders",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "groupPolicy": {
+          "description": "Group policy",
+          "enum": ["allowlist", "disabled", "open"],
+          "type": "string"
+        },
+        "historyLimit": {
+          "description": "History limit",
+          "allOf": [
+            {
+              "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "type"
+                    },
+                    "value": {
+                      "description": "Numeric type identifier",
+                      "type": "string",
+                      "const": "uint32"
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "$importInternal(\"isTypeUint32\")($input)"
+                    },
+                    "exclusive": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "integer"
+                        },
+                        "minimum": {
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum", "type"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "mediaMaxMb": {
+          "description": "Media max size in MB",
+          "allOf": [
+            {
+              "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "type"
+                    },
+                    "value": {
+                      "description": "Numeric type identifier",
+                      "type": "string",
+                      "const": "uint32"
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "$importInternal(\"isTypeUint32\")($input)"
+                    },
+                    "exclusive": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "integer"
+                        },
+                        "minimum": {
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum", "type"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "streaming": {
+          "description": "Streaming mode",
+          "enum": ["block", "off", "partial", "progress"],
+          "type": "string"
+        },
+        "configWrites": {
+          "description": "Config writes toggle",
+          "type": "boolean"
+        }
+      }
+    },
+    "Record<string,{token?:string|undefined;serverUrl?:string|undefined;enabled?:boolean|undefined;}>": {
+      "type": "object"
+    },
+    "OpenClawAcpConfig": {
+      "description": "OpenClaw ACP global config.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Enable ACP feature",
+          "type": "boolean"
+        },
+        "dispatch": {
+          "description": "Dispatch toggle",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        },
+        "backend": {
+          "description": "Default ACP runtime backend id",
+          "type": "string"
+        },
+        "defaultAgent": {
+          "description": "Default ACP target agent id",
+          "type": "string"
+        },
+        "allowedAgents": {
+          "description": "Allowed agent ids for ACP sessions",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "maxConcurrentSessions": {
+          "description": "Max concurrent ACP sessions",
+          "allOf": [
+            {
+              "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "type"
+                    },
+                    "value": {
+                      "description": "Numeric type identifier",
+                      "type": "string",
+                      "const": "uint32"
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "$importInternal(\"isTypeUint32\")($input)"
+                    },
+                    "exclusive": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "integer"
+                        },
+                        "minimum": {
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum", "type"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "stream": {
+          "description": "Stream config",
+          "type": "object",
+          "properties": {
+            "coalesceIdleMs": {
+              "type": "number"
+            },
+            "maxChunkChars": {
+              "type": "number"
+            },
+            "repeatSuppression": {
+              "type": "boolean"
+            },
+            "deliveryMode": {
+              "enum": ["final_only", "live"],
+              "type": "string"
+            },
+            "maxOutputChars": {
+              "type": "number"
+            },
+            "maxSessionUpdateChars": {
+              "type": "number"
+            }
+          }
+        },
+        "runtime": {
+          "description": "Runtime TTL",
+          "type": "object",
+          "properties": {
+            "ttlMinutes": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "OpenClawSessionConfig": {
+      "description": "OpenClaw session section.",
+      "type": "object",
+      "properties": {
+        "scope": {
+          "description": "Session scope",
+          "type": "string"
+        },
+        "dmScope": {
+          "description": "DM session scope",
+          "enum": ["main", "per-account-channel-peer", "per-channel-peer", "per-peer"],
+          "type": "string"
+        },
+        "reset": {
+          "description": "Session reset config",
+          "type": "object",
+          "properties": {
+            "mode": {
+              "enum": ["daily", "idle"],
+              "type": "string"
+            },
+            "atHour": {
+              "type": "number"
+            },
+            "idleMinutes": {
+              "type": "number"
+            }
+          }
+        },
+        "resetByType": {
+          "description": "Reset by chat type",
+          "$ref": "#/definitions/Record%3Cstring%2C%7Bmode%3F%3A%22daily%22%7C%22idle%22%7Cundefined%3BatHour%3F%3Anumber%7Cundefined%3BidleMinutes%3F%3Anumber%7Cundefined%3B%7D%3E"
+        },
+        "resetTriggers": {
+          "description": "Reset triggers",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "store": {
+          "description": "Session store path",
+          "type": "string"
+        },
+        "threadBindings": {
+          "description": "Thread bindings",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "idleHours": {
+              "type": "number"
+            },
+            "maxAgeHours": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "Record<string,{mode?:\"daily\"|\"idle\"|undefined;atHour?:number|undefined;idleMinutes?:number|undefined;}>": {
+      "type": "object"
+    },
+    "OpenClawMessagesConfig": {
+      "description": "OpenClaw messages section.\nMatches https://docs.openclaw.ai/gateway/configuration-reference#messages",
+      "type": "object",
+      "properties": {
+        "responsePrefix": {
+          "description": "Response prefix",
+          "type": "string"
+        },
+        "ackReaction": {
+          "description": "Ack reaction emoji",
+          "type": "string"
+        },
+        "ackReactionScope": {
+          "description": "Ack reaction scope",
+          "enum": ["all", "direct", "group-all", "group-mentions"],
+          "type": "string"
+        },
+        "removeAckAfterReply": {
+          "description": "Remove ack after reply",
+          "type": "boolean"
+        },
+        "queue": {
+          "description": "Message queue config",
+          "type": "object",
+          "properties": {
+            "mode": {
+              "enum": ["collect", "followup", "interrupt", "queue", "steer"],
+              "type": "string"
+            },
+            "debounceMs": {
+              "type": "number"
+            },
+            "cap": {
+              "type": "number"
+            }
+          }
+        },
+        "groupChat": {
+          "description": "Group chat config",
+          "type": "object",
+          "properties": {
+            "historyLimit": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "OpenClawToolsConfig": {
+      "description": "OpenClaw tools section.",
+      "type": "object",
+      "properties": {
+        "profile": {
+          "description": "Tool profile",
+          "enum": ["coding", "full", "messaging", "minimal"],
+          "type": "string"
+        },
+        "allow": {
+          "description": "Allow specific tools",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deny": {
+          "description": "Deny specific tools",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "readOnly": {
+          "description": "Read-only tools (approve-reads level)",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "nonInteractive": {
+          "description": "Behavior when approval is needed but no human is present",
+          "enum": ["deny", "fail"],
+          "type": "string"
+        },
+        "elevated": {
+          "description": "Elevated exec config",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "allowFrom": {
+              "$ref": "#/definitions/Record%3Cstring%2Cstring%5B%5D%3E"
+            }
+          }
+        },
+        "exec": {
+          "description": "Exec config",
+          "type": "object",
+          "properties": {
+            "backgroundMs": {
+              "type": "number"
+            },
+            "timeoutSec": {
+              "type": "number"
+            }
+          }
+        },
+        "web": {
+          "description": "Web tools config",
+          "type": "object",
+          "properties": {
+            "search": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "apiKey": {
+                  "type": "string"
+                },
+                "maxResults": {
+                  "type": "number"
+                }
+              }
+            },
+            "fetch": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "maxChars": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        },
+        "sandbox": {
+          "description": "Sandbox tools",
+          "$ref": "#/definitions/Record%3Cstring%2Cunknown%3E"
+        }
+      }
+    },
+    "Record<string,string[]>": {
+      "type": "object"
+    },
+    "OpenClawModelsConfig": {
+      "description": "OpenClaw models section.",
+      "type": "object",
+      "properties": {
+        "mode": {
+          "description": "Merge mode",
+          "enum": ["merge", "replace"],
+          "type": "string"
+        },
+        "providers": {
+          "description": "Custom providers",
+          "$ref": "#/definitions/Record%3Cstring%2COpenClawProviderConfig%3E"
+        }
+      }
+    },
+    "Record<string,OpenClawProviderConfig>": {
+      "type": "object"
+    },
+    "OpenClawPluginsConfig": {
+      "description": "OpenClaw plugins section.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Global enable/disable",
+          "type": "boolean"
+        },
+        "allow": {
+          "description": "Plugin allowlist",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deny": {
+          "description": "Plugin denylist",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "load": {
+          "description": "Plugin load paths",
+          "type": "object",
+          "properties": {
+            "paths": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "entries": {
+          "description": "Per-plugin config",
+          "$ref": "#/definitions/Record%3Cstring%2C%7Benabled%3F%3Aboolean%7Cundefined%3Bconfig%3F%3ARecord%3Cstring%2Cunknown%3E%7Cundefined%3Bhooks%3F%3A%7BallowPromptInjection%3F%3Aboolean%7Cundefined%3B%7D%7Cundefined%3B%7D%3E"
+        }
+      }
+    },
+    "Record<string,{enabled?:boolean|undefined;config?:Record<string,unknown>|undefined;hooks?:{allowPromptInjection?:boolean|undefined;}|undefined;}>": {
+      "type": "object"
+    },
+    "OpenClawSkillsConfig": {
+      "description": "OpenClaw skills section.\nMatches https://docs.openclaw.ai/gateway/configuration-reference#skills",
+      "type": "object",
+      "properties": {
+        "allowBundled": {
+          "description": "Allowed bundled skills",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "load": {
+          "description": "Extra skill directories",
+          "type": "object",
+          "properties": {
+            "extraDirs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "install": {
+          "description": "Installation preferences",
+          "type": "object",
+          "properties": {
+            "preferBrew": {
+              "type": "boolean"
+            },
+            "nodeManager": {
+              "enum": ["npm", "pnpm", "yarn"],
+              "type": "string"
+            }
+          }
+        },
+        "entries": {
+          "description": "Per-skill config",
+          "$ref": "#/definitions/Record%3Cstring%2C%7Benabled%3F%3Aboolean%7Cundefined%3BapiKey%3F%3Astring%7Cundefined%3Benv%3F%3ARecord%3Cstring%2Cstring%3E%7Cundefined%3B%7D%3E"
+        }
+      }
+    },
+    "Record<string,{enabled?:boolean|undefined;apiKey?:string|undefined;env?:Record<string,string>|undefined;}>": {
+      "type": "object"
+    },
+    "OpenClawGatewayConfig": {
+      "description": "OpenClaw gateway section.",
+      "type": "object",
+      "properties": {
+        "mode": {
+          "description": "Gateway mode",
+          "enum": ["local", "remote"],
+          "type": "string"
+        },
+        "port": {
+          "description": "Gateway port",
+          "allOf": [
+            {
+              "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "type"
+                    },
+                    "value": {
+                      "description": "Numeric type identifier",
+                      "type": "string",
+                      "const": "uint32"
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "$importInternal(\"isTypeUint32\")($input)"
+                    },
+                    "exclusive": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "integer"
+                        },
+                        "minimum": {
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum", "type"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "bind": {
+          "description": "Bind address",
+          "type": "string"
+        },
+        "auth": {
+          "description": "Auth config",
+          "type": "object",
+          "properties": {
+            "mode": {
+              "enum": ["none", "password", "token", "trusted-proxy"],
+              "type": "string"
+            },
+            "token": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string"
+            },
+            "allowTailscale": {
+              "type": "boolean"
+            }
+          }
+        },
+        "tls": {
+          "description": "TLS config",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "certPath": {
+              "type": "string"
+            },
+            "keyPath": {
+              "type": "string"
+            }
+          }
+        },
+        "reload": {
+          "description": "Reload behavior",
+          "type": "object",
+          "properties": {
+            "mode": {
+              "enum": ["hot", "hybrid", "off", "restart"],
+              "type": "string"
+            },
+            "debounceMs": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "OpenClawLoggingConfig": {
+      "description": "OpenClaw logging section.\nMatches https://docs.openclaw.ai/gateway/configuration-reference#logging",
+      "type": "object",
+      "properties": {
+        "level": {
+          "description": "Log level",
+          "type": "string"
+        },
+        "file": {
+          "description": "Log file path",
+          "type": "string"
+        },
+        "consoleLevel": {
+          "description": "Console log level",
+          "type": "string"
+        },
+        "consoleStyle": {
+          "description": "Console output style",
+          "enum": ["compact", "json", "pretty"],
+          "type": "string"
+        },
+        "redactSensitive": {
+          "description": "Redact sensitive data from tool output",
+          "enum": ["off", "tools"],
+          "type": "string"
+        }
+      }
+    },
+    "Record<string,VaultConfig>": {
+      "type": "object"
+    },
+    "DeploymentsConfig": {
+      "description": "Deployments section.",
+      "type": "object",
+      "properties": {
+        "namespace": {
+          "description": "K8s namespace",
+          "type": "string"
+        },
+        "agents": {
+          "description": "Agent deployments",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AgentDeployment"
+          }
+        }
+      },
+      "required": ["agents"]
+    },
+    "AgentDeployment": {
+      "description": "Agent deployment definition.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Unique agent ID",
+          "type": "string"
+        },
+        "runtime": {
+          "$ref": "#/definitions/AgentRuntime",
+          "description": "Runtime type"
+        },
+        "image": {
+          "description": "Custom container image",
+          "type": "string"
+        },
+        "replicas": {
+          "description": "Number of replicas",
+          "allOf": [
+            {
+              "description": "Inclusive minimum value constraint (value >= min).\n\n`Minimum<N>` is a type tag that validates numeric values are greater than or\nequal to the specified bound. Apply it to `number` or `bigint` properties\nusing TypeScript intersection types.\n\nThis constraint is **mutually exclusive** with {@link ExclusiveMinimum} - you\ncannot use both on the same property. Use `Minimum` for inclusive bounds (>=)\nand `ExclusiveMinimum` for exclusive bounds (>).\n\nThe constraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It also generates `minimum` in JSON Schema output.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "minimum"
+                    },
+                    "value": {
+                      "description": "The minimum allowed value (inclusive)",
+                      "type": "number",
+                      "const": 0
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "0 <= $input"
+                    },
+                    "exclusive": {
+                      "type": "array",
+                      "items": [
+                        {
+                          "type": "string",
+                          "const": "minimum"
+                        },
+                        {
+                          "type": "string",
+                          "const": "exclusiveMinimum"
+                        }
+                      ],
+                      "minItems": 2,
+                      "maxItems": 2
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "minimum": {
+                          "description": "The minimum allowed value (inclusive)",
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "type"
+                    },
+                    "value": {
+                      "description": "Numeric type identifier",
+                      "type": "string",
+                      "const": "uint32"
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "$importInternal(\"isTypeUint32\")($input)"
+                    },
+                    "exclusive": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "integer"
+                        },
+                        "minimum": {
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum", "type"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "configuration": {
+          "$ref": "#/definitions/AgentConfiguration",
+          "description": "Agent configuration (can extend a base config)"
+        },
+        "resources": {
+          "description": "K8s resource constraints",
+          "type": "object",
+          "properties": {
+            "requests": {
+              "description": "K8s resource requests/limits.",
+              "$ref": "#/definitions/K8sResources"
+            },
+            "limits": {
+              "description": "K8s resource requests/limits.",
+              "$ref": "#/definitions/K8sResources"
+            }
+          }
+        },
+        "env": {
+          "description": "Extra environment variables",
+          "$ref": "#/definitions/Record%3Cstring%2Cstring%3E"
+        },
+        "identity": {
+          "description": "Agent identity / soul — who this agent is.\nsystemPrompt and personality are merged into the OpenClaw system prompt.\nEquivalent to SOUL.md in the gitagent standard.",
+          "$ref": "#/definitions/AgentIdentity"
+        },
+        "model": {
+          "description": "Model preferences — overrides registry and team defaults.\nMirrors gitagent's `model` section: preferred primary + ordered fallbacks.",
+          "$ref": "#/definitions/AgentModel"
+        },
+        "workflows": {
+          "description": "Deterministic multi-step workflows this agent can run.\nMirrors gitagent's SkillsFlow workflows/*.yaml.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AgentWorkflowDef"
+          }
+        },
+        "use": {
+          "description": "Per-agent plugin declarations (webpack-style \"use\" pattern).\nEach entry specifies a plugin and its options.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/UseEntry"
+          }
+        },
+        "description": {
+          "description": "Short description shown in console and CLI output",
+          "type": "string"
+        },
+        "source": {
+          "description": "Agent source overlay — pulls files from a git repository or local path\ninto the container using the gitagent directory convention.\n\nWhen set, the agent container will have SOUL.md, RULES.md, skills/,\ntools/, hooks/, etc. available at `source.mountPath` (default: /agent).\nOpenClaw's agentDir is automatically configured to read from this path.\n\nSupports two strategies:\n- \"init-container\": Runtime git clone via K8s init container (default)\n- \"build-image\":    Bake files into Docker image layer at build time",
+          "$ref": "#/definitions/AgentSource"
+        },
+        "vault": {
+          "description": "Vault reference — which vault to use for this agent's secrets.\nDefaults to \"default\". Each vault generates an isolated K8s Secret.",
+          "type": "string"
+        },
+        "permissions": {
+          "description": "Per-tool permission policy.\nControls which tools can auto-execute vs. require human approval.\nMaps to ACPX permission modes in the generated OpenClaw config.",
+          "$ref": "#/definitions/AgentPermissions"
+        },
+        "networking": {
+          "description": "Network egress policy for this agent's pods.\nGenerates a K8s NetworkPolicy resource.",
+          "$ref": "#/definitions/AgentNetworking"
+        },
+        "version": {
+          "description": "Agent configuration version (semver).\nRecorded in K8s Deployment annotations for rollback tracking.",
+          "type": "string"
+        },
+        "changelog": {
+          "description": "Change description for this version (stored in K8s annotations)",
+          "type": "string"
+        }
+      },
+      "required": ["configuration", "id", "runtime"]
+    },
+    "AgentRuntime": {
+      "description": "Agent runtime types.",
+      "enum": ["claude-code", "codex", "gemini", "openclaw", "opencode"],
+      "type": "string"
+    },
+    "AgentConfiguration": {
+      "description": "Agent-level configuration that can extend a base config.",
+      "type": "object",
+      "additionalProperties": {},
+      "properties": {
+        "extends": {
+          "description": "Base configuration ID to extend from registry.configurations",
+          "type": "string"
+        },
+        "openclaw": {
+          "description": "OpenClaw config overrides (official format)",
+          "$ref": "#/definitions/Partial%3COpenClawConfig%3E"
+        }
+      }
+    },
+    "K8sResources": {
+      "description": "K8s resource requests/limits.",
+      "type": "object",
+      "properties": {
+        "cpu": {
+          "type": "string"
+        },
+        "memory": {
+          "type": "string"
+        }
+      }
+    },
+    "AgentIdentity": {
+      "description": "Agent identity / soul — who the agent is.\nMirrors gitagent's SOUL.md concept, expressed inline in the config.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Display name for the agent",
+          "type": "string"
+        },
+        "description": {
+          "description": "One-line description of what this agent does",
+          "type": "string"
+        },
+        "personality": {
+          "description": "Personality, communication style, values, domain expertise.\nFree-form text injected before the main system prompt.\nEquivalent to SOUL.md content.",
+          "type": "string"
+        },
+        "systemPrompt": {
+          "description": "Full system prompt override. When set, replaces any inherited prompt.\nIf `personality` is also set, it is prepended to this value.\n\n**Priority** (highest to lowest):\n1. `identity.systemPrompt` — overrides everything\n2. `configuration.openclaw.agents[].systemPrompt` — OpenClaw agent level\n3. `OpenClawAgentConfig.systemPrompt` — convenience field in config preset\n\nWhen `identity.personality` is also set, final prompt is:\n`${personality}\\n\\n${systemPrompt}`",
+          "type": "string"
+        }
+      }
+    },
+    "AgentModel": {
+      "description": "Agent model configuration — mirrors gitagent's model section.\nSpecifies primary model with ordered fallbacks and inference constraints.",
+      "type": "object",
+      "properties": {
+        "preferred": {
+          "description": "Primary model in \"provider/model\" format (e.g. \"anthropic/claude-sonnet-4-5\")",
+          "type": "string"
+        },
+        "fallbacks": {
+          "description": "Ordered fallback models tried if primary is unavailable",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "constraints": {
+          "description": "Inference constraints",
+          "type": "object",
+          "properties": {
+            "temperature": {
+              "description": "Sampling temperature 0.0–2.0",
+              "allOf": [
+                {
+                  "description": "Inclusive minimum value constraint (value >= min).\n\n`Minimum<N>` is a type tag that validates numeric values are greater than or\nequal to the specified bound. Apply it to `number` or `bigint` properties\nusing TypeScript intersection types.\n\nThis constraint is **mutually exclusive** with {@link ExclusiveMinimum} - you\ncannot use both on the same property. Use `Minimum` for inclusive bounds (>=)\nand `ExclusiveMinimum` for exclusive bounds (>).\n\nThe constraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It also generates `minimum` in JSON Schema output.",
+                  "type": "object",
+                  "properties": {
+                    "typia.tag": {
+                      "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                      "type": "object",
+                      "properties": {
+                        "target": {
+                          "type": "string",
+                          "const": "number"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "minimum"
+                        },
+                        "value": {
+                          "description": "The minimum allowed value (inclusive)",
+                          "type": "number",
+                          "const": 0
+                        },
+                        "validate": {
+                          "type": "string",
+                          "const": "0 <= $input"
+                        },
+                        "exclusive": {
+                          "type": "array",
+                          "items": [
+                            {
+                              "type": "string",
+                              "const": "minimum"
+                            },
+                            {
+                              "type": "string",
+                              "const": "exclusiveMinimum"
+                            }
+                          ],
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "minimum": {
+                              "description": "The minimum allowed value (inclusive)",
+                              "type": "number",
+                              "const": 0
+                            }
+                          },
+                          "required": ["minimum"]
+                        }
+                      },
+                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                    }
+                  }
+                },
+                {
+                  "description": "Inclusive maximum value constraint (value <= max).\n\n`Maximum<N>` is a type tag that validates numeric values are less than or\nequal to the specified bound. Apply it to `number` or `bigint` properties\nusing TypeScript intersection types.\n\nThis constraint is **mutually exclusive** with {@link ExclusiveMaximum} - you\ncannot use both on the same property. Use `Maximum` for inclusive bounds (<=)\nand `ExclusiveMaximum` for exclusive bounds (<).\n\nThe constraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It also generates `maximum` in JSON Schema output.",
+                  "type": "object",
+                  "properties": {
+                    "typia.tag": {
+                      "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                      "type": "object",
+                      "properties": {
+                        "target": {
+                          "type": "string",
+                          "const": "number"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "maximum"
+                        },
+                        "value": {
+                          "description": "The maximum allowed value (inclusive)",
+                          "type": "number",
+                          "const": 2
+                        },
+                        "validate": {
+                          "type": "string",
+                          "const": "$input <= 2"
+                        },
+                        "exclusive": {
+                          "type": "array",
+                          "items": [
+                            {
+                              "type": "string",
+                              "const": "maximum"
+                            },
+                            {
+                              "type": "string",
+                              "const": "exclusiveMaximum"
+                            }
+                          ],
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "maximum": {
+                              "description": "The maximum allowed value (inclusive)",
+                              "type": "number",
+                              "const": 2
+                            }
+                          },
+                          "required": ["maximum"]
+                        }
+                      },
+                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                    }
+                  }
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "maxTokens": {
+              "description": "Max output tokens",
+              "allOf": [
+                {
+                  "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+                  "type": "object",
+                  "properties": {
+                    "typia.tag": {
+                      "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                      "type": "object",
+                      "properties": {
+                        "target": {
+                          "type": "string",
+                          "const": "number"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "type"
+                        },
+                        "value": {
+                          "description": "Numeric type identifier",
+                          "type": "string",
+                          "const": "uint32"
+                        },
+                        "validate": {
+                          "type": "string",
+                          "const": "$importInternal(\"isTypeUint32\")($input)"
+                        },
+                        "exclusive": {
+                          "type": "boolean",
+                          "const": true
+                        },
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "integer"
+                            },
+                            "minimum": {
+                              "type": "number",
+                              "const": 0
+                            }
+                          },
+                          "required": ["minimum", "type"]
+                        }
+                      },
+                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                    }
+                  }
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "topP": {
+              "description": "Top-p sampling parameter",
+              "allOf": [
+                {
+                  "description": "Inclusive minimum value constraint (value >= min).\n\n`Minimum<N>` is a type tag that validates numeric values are greater than or\nequal to the specified bound. Apply it to `number` or `bigint` properties\nusing TypeScript intersection types.\n\nThis constraint is **mutually exclusive** with {@link ExclusiveMinimum} - you\ncannot use both on the same property. Use `Minimum` for inclusive bounds (>=)\nand `ExclusiveMinimum` for exclusive bounds (>).\n\nThe constraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It also generates `minimum` in JSON Schema output.",
+                  "type": "object",
+                  "properties": {
+                    "typia.tag": {
+                      "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                      "type": "object",
+                      "properties": {
+                        "target": {
+                          "type": "string",
+                          "const": "number"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "minimum"
+                        },
+                        "value": {
+                          "description": "The minimum allowed value (inclusive)",
+                          "type": "number",
+                          "const": 0
+                        },
+                        "validate": {
+                          "type": "string",
+                          "const": "0 <= $input"
+                        },
+                        "exclusive": {
+                          "type": "array",
+                          "items": [
+                            {
+                              "type": "string",
+                              "const": "minimum"
+                            },
+                            {
+                              "type": "string",
+                              "const": "exclusiveMinimum"
+                            }
+                          ],
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "minimum": {
+                              "description": "The minimum allowed value (inclusive)",
+                              "type": "number",
+                              "const": 0
+                            }
+                          },
+                          "required": ["minimum"]
+                        }
+                      },
+                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                    }
+                  }
+                },
+                {
+                  "description": "Inclusive maximum value constraint (value <= max).\n\n`Maximum<N>` is a type tag that validates numeric values are less than or\nequal to the specified bound. Apply it to `number` or `bigint` properties\nusing TypeScript intersection types.\n\nThis constraint is **mutually exclusive** with {@link ExclusiveMaximum} - you\ncannot use both on the same property. Use `Maximum` for inclusive bounds (<=)\nand `ExclusiveMaximum` for exclusive bounds (<).\n\nThe constraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It also generates `maximum` in JSON Schema output.",
+                  "type": "object",
+                  "properties": {
+                    "typia.tag": {
+                      "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                      "type": "object",
+                      "properties": {
+                        "target": {
+                          "type": "string",
+                          "const": "number"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "maximum"
+                        },
+                        "value": {
+                          "description": "The maximum allowed value (inclusive)",
+                          "type": "number",
+                          "const": 1
+                        },
+                        "validate": {
+                          "type": "string",
+                          "const": "$input <= 1"
+                        },
+                        "exclusive": {
+                          "type": "array",
+                          "items": [
+                            {
+                              "type": "string",
+                              "const": "maximum"
+                            },
+                            {
+                              "type": "string",
+                              "const": "exclusiveMaximum"
+                            }
+                          ],
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "maximum": {
+                              "description": "The maximum allowed value (inclusive)",
+                              "type": "number",
+                              "const": 1
+                            }
+                          },
+                          "required": ["maximum"]
+                        }
+                      },
+                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                    }
+                  }
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "thinkingLevel": {
+              "description": "Thinking depth level",
+              "enum": ["adaptive", "high", "low", "medium", "minimal", "off", "xhigh"],
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": ["preferred"]
+    },
+    "AgentWorkflowDef": {
+      "description": "Deterministic multi-step workflow — mirrors gitagent's SkillsFlow / workflows/*.yaml.\nChains skills, agents, and tools with explicit dependencies and data flow.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Workflow identifier",
+          "type": "string"
+        },
+        "description": {
+          "description": "Human-readable description",
+          "type": "string"
+        },
+        "triggers": {
+          "description": "Events or cron expressions that trigger this workflow",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "schedule": {
+          "description": "Cron schedule (e.g. \"0 9 * * *\" for 9am daily)",
+          "type": "string"
+        },
+        "steps": {
+          "$ref": "#/definitions/Record%3Cstring%2CAgentWorkflowStep%3E",
+          "description": "Ordered/parallel steps keyed by step ID"
+        },
+        "errorHandling": {
+          "description": "Error handling config",
+          "type": "object",
+          "properties": {
+            "onFailure": {
+              "enum": ["abort", "notify", "retry"],
+              "type": "string"
+            },
+            "notifyChannel": {
+              "type": "string"
+            },
+            "maxRetries": {
+              "allOf": [
+                {
+                  "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+                  "type": "object",
+                  "properties": {
+                    "typia.tag": {
+                      "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                      "type": "object",
+                      "properties": {
+                        "target": {
+                          "type": "string",
+                          "const": "number"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "type"
+                        },
+                        "value": {
+                          "description": "Numeric type identifier",
+                          "type": "string",
+                          "const": "uint32"
+                        },
+                        "validate": {
+                          "type": "string",
+                          "const": "$importInternal(\"isTypeUint32\")($input)"
+                        },
+                        "exclusive": {
+                          "type": "boolean",
+                          "const": true
+                        },
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "integer"
+                            },
+                            "minimum": {
+                              "type": "number",
+                              "const": 0
+                            }
+                          },
+                          "required": ["minimum", "type"]
+                        }
+                      },
+                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                    }
+                  }
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "required": ["name", "steps"]
+    },
+    "Record<string,AgentWorkflowStep>": {
+      "type": "object"
+    },
+    "AgentSource": {
+      "description": "Agent file source specification.\nPoints the agent at a git repository (or local path) that follows the\ngitagent directory layout: SOUL.md, RULES.md, agent.yaml, skills/, tools/,\nhooks/, skillflows/, memory/, compliance/, etc.",
+      "type": "object",
+      "properties": {
+        "git": {
+          "description": "Git repository source",
+          "$ref": "#/definitions/GitSource"
+        },
+        "path": {
+          "description": "Local filesystem path (dev/CI mode).\nResolved at `shadowob-cloud up` time and baked into a ConfigMap or\nused for local adapter pre-population.",
+          "type": "string"
+        },
+        "strategy": {
+          "description": "Strategy for delivering source files into the container.\nDefault: \"init-container\"",
+          "enum": ["build-image", "init-container"],
+          "type": "string"
+        },
+        "mountPath": {
+          "description": "Path inside the container where the agent source is mounted.\nOpenClaw reads SOUL.md, RULES.md, skills/, etc. from this directory.\nDefault: \"/agent\"",
+          "type": "string"
+        },
+        "include": {
+          "description": "Specific file/directory patterns to copy from the source.\nDefault: all standard gitagent files (SOUL.md, RULES.md, skills/, etc.)\nUse this to limit what gets overlaid.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "gitagent": {
+          "description": "When true, the mounted directory is treated as a gitagent standard layout.\nThe adapter will:\n  - set OpenClaw's agentDir to mountPath (reads SOUL.md, RULES.md automatically)\n  - parse agent.yaml model config and merge into agent.model\n  - parse hooks/hooks.yaml and map to OpenClaw hooks\n  - enumerate skillflows/*.yaml and map to agent.workflows\n  - configure compliance from compliance/regulatory-map.yaml\nDefault: true",
+          "type": "boolean"
+        },
+        "imageTag": {
+          "description": "When strategy is \"build-image\": Docker registry to push the built image to.\ne.g. \"ghcr.io/my-org/my-agent:latest\"\nIf omitted, uses a local image name based on agentId.",
+          "type": "string"
+        }
+      }
+    },
+    "GitSource": {
+      "description": "Git repository reference for an agent source.",
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "Repository URL (https or ssh)",
+          "type": "string"
+        },
+        "ref": {
+          "description": "Branch, tag, or full SHA. Defaults to \"main\"",
+          "type": "string"
+        },
+        "dir": {
+          "description": "Subdirectory inside the repository that contains the agent definition\n(e.g. \"agents/my-agent\" in a monorepo). Defaults to repo root.",
+          "type": "string"
+        },
+        "depth": {
+          "description": "Shallow clone depth. Defaults to 1",
+          "allOf": [
+            {
+              "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "type"
+                    },
+                    "value": {
+                      "description": "Numeric type identifier",
+                      "type": "string",
+                      "const": "uint32"
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "$importInternal(\"isTypeUint32\")($input)"
+                    },
+                    "exclusive": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "integer"
+                        },
+                        "minimum": {
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum", "type"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "sshKeySecret": {
+          "description": "Name of a K8s Secret that contains an SSH private key for private repos.\nThe secret must have a key named `ssh-privatekey`.",
+          "type": "string"
+        },
+        "tokenSecret": {
+          "description": "Name of a K8s Secret (or literal token via ${env:VAR}) for HTTPS auth.\nUsed as: git clone https://<token>@host/repo",
+          "type": "string"
+        }
+      },
+      "required": ["url"]
+    },
+    "AgentPermissions": {
+      "description": "Per-tool permission policy for an agent.\nInspired by Claude Managed Agents' toolset-level permission control.",
+      "type": "object",
+      "properties": {
+        "default": {
+          "$ref": "#/definitions/PermissionLevel",
+          "description": "Default permission level for all tools"
+        },
+        "tools": {
+          "description": "Per-tool overrides — key is tool name, supports glob patterns (e.g. \"mcp-*\")",
+          "$ref": "#/definitions/Record%3Cstring%2CPermissionLevel%3E"
+        },
+        "nonInteractive": {
+          "description": "Behaviour when the agent runs non-interactively (no human in the loop)",
+          "enum": ["deny", "fail"],
+          "type": "string"
+        }
+      },
+      "required": ["default"]
+    },
+    "PermissionLevel": {
+      "description": "Permission level for agent tools — maps to ACPX permission modes.",
+      "enum": ["always-allow", "always-ask", "approve-reads", "deny-all"],
+      "type": "string"
+    },
+    "Record<string,PermissionLevel>": {
+      "type": "object"
+    },
+    "AgentNetworking": {
+      "description": "Per-agent networking policy configuration.\nGenerates K8s NetworkPolicy resources to control egress.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "description": "Network policy type",
+          "enum": ["deny-all", "limited", "unrestricted"],
+          "type": "string"
+        },
+        "allowedHosts": {
+          "description": "Allowed egress domains (requires Cilium for FQDN-level enforcement)",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "allowMcpServers": {
+          "description": "Allow egress to MCP server endpoints (auto-extracted from agent config)",
+          "type": "boolean"
+        },
+        "allowPackageManagers": {
+          "description": "Allow egress to package manager registries (npm, pypi, etc.)",
+          "type": "boolean"
+        }
+      },
+      "required": ["type"]
+    },
+    "SharedWorkspaceConfig": {
+      "description": "Shared workspace configuration — creates a PersistentVolumeClaim\nthat is mounted into every agent container, so agents share a\ndistributed filesystem that OpenClaw can discover.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Enable shared workspace across agents",
+          "type": "boolean"
+        },
+        "storageSize": {
+          "description": "Storage size (e.g. \"5Gi\")",
+          "type": "string"
+        },
+        "storageClassName": {
+          "description": "Storage class name (empty for cluster default)",
+          "type": "string"
+        },
+        "mountPath": {
+          "description": "Mount path inside containers",
+          "type": "string"
+        },
+        "accessMode": {
+          "description": "Access mode",
+          "enum": ["ReadOnlyMany", "ReadWriteMany", "ReadWriteOnce"],
+          "type": "string"
+        }
+      },
+      "required": ["enabled"]
+    },
+    "CloudSkillsConfig": {
+      "description": "Cloud-level skills configuration — manages skill installation\nand distribution across agent containers.",
+      "type": "object",
+      "properties": {
+        "installDir": {
+          "description": "Directory inside the container where skills are installed",
+          "type": "string"
+        },
+        "entries": {
+          "description": "Skills to distribute to agents",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CloudSkillEntry"
+          }
+        }
+      }
+    },
+    "CloudSkillEntry": {
+      "description": "Cloud-level skill entry — specifies a skill to load\nfrom a registry or directory into the agent containers.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Skill identifier (npm package name or local directory name)",
+          "type": "string"
+        },
+        "source": {
+          "description": "Skill source: \"bundled\" (built-in), \"npm\" (install from registry), or \"path\" (local directory)",
+          "enum": ["bundled", "npm", "path"],
+          "type": "string"
+        },
+        "version": {
+          "description": "For npm: package version. For path: directory on the host.",
+          "type": "string"
+        },
+        "path": {
+          "description": "For path source: the local directory path",
+          "type": "string"
+        },
+        "enabled": {
+          "description": "Whether skill is enabled",
+          "type": "boolean"
+        },
+        "env": {
+          "description": "Environment variables for this skill",
+          "$ref": "#/definitions/Record%3Cstring%2Cstring%3E"
+        },
+        "apiKey": {
+          "description": "API key for this skill",
+          "type": "string"
+        }
+      },
+      "required": ["name"]
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

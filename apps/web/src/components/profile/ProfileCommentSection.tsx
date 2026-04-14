@@ -179,7 +179,7 @@ export function ProfileCommentSection({ profileUserId }: ProfileCommentSectionPr
             <UserAvatar
               userId={currentUser.id}
               avatarUrl={currentUser.avatarUrl}
-              displayName={currentUser.displayName}
+              displayName={currentUser.displayName ?? currentUser.username}
               size="sm"
             />
             <div className="flex-1 flex gap-2">

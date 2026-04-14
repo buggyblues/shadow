@@ -6,7 +6,7 @@
  */
 
 import { expect, test } from '@playwright/test'
-import { SERVE_PORT } from '../playwright.config.js'
+import { SERVE_PORT } from '../../playwright.config.js'
 
 // ─── API Health ──────────────────────────────────────────────────────────────
 

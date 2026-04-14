@@ -23,10 +23,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: [
-      '__tests__/e2e/validate-all-templates.test.ts',
-      '__tests__/e2e/generate-manifests.test.ts',
-    ],
+    include: ['e2e/cli/validate-all-templates.test.ts', 'e2e/cli/generate-manifests.test.ts'],
 
     // No global setup needed — these tests start their own processes
     globalSetup: undefined,

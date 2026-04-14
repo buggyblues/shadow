@@ -11,7 +11,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 export interface ContextMenuItem {
-  icon?: React.ComponentType<{ size?: number; className?: string }>
+  icon?: React.ComponentType<{ size?: number; className?: string; strokeWidth?: number }>
   label: string
   shortcut?: string
   onClick?: () => void

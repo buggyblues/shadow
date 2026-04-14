@@ -6,6 +6,11 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:
 import { and, eq } from 'drizzle-orm'
 import type { CloudDatabase } from '../db/index.js'
 import { type Secret, secrets } from '../db/schema.js'
+import {
+  normalizeGroupName,
+  toProviderSecretEnvKey,
+  withLegacyEnvAliases,
+} from '../utils/env-names.js'
 
 const ALGORITHM = 'aes-256-gcm'
 const KEY_LENGTH = 32
@@ -55,11 +60,7 @@ export class SecretDao {
   }
 
   findByProvider(providerId: string): Array<{ key: string; value: string }> {
-    const rows = this.db
-      .select()
-      .from(secrets)
-      .where(eq(secrets.providerId, providerId))
-      .all()
+    const rows = this.db.select().from(secrets).where(eq(secrets.providerId, providerId)).all()
     return rows.map((r) => ({
       key: r.key,
       value: this.decrypt(r.encryptedValue, r.iv),
@@ -73,10 +74,28 @@ export class SecretDao {
       return {
         providerId: r.providerId,
         key: r.key,
-        maskedValue: val.length > 8 ? `${val.slice(0, 4)}${'•'.repeat(val.length - 8)}${val.slice(-4)}` : '••••••••',
-        groupName: r.groupName ?? 'default',
+        maskedValue:
+          val.length > 8
+            ? `${val.slice(0, 4)}${'•'.repeat(val.length - 8)}${val.slice(-4)}`
+            : '••••••••',
+        groupName: normalizeGroupName(r.groupName),
       }
     })
+  }
+
+  findAllDecryptedEntries(): Array<{
+    providerId: string
+    key: string
+    value: string
+    groupName: string
+  }> {
+    const rows = this.db.select().from(secrets).all()
+    return rows.map((row) => ({
+      providerId: row.providerId,
+      key: row.key,
+      value: this.decrypt(row.encryptedValue, row.iv),
+      groupName: normalizeGroupName(row.groupName),
+    }))
   }
 
   findByGroup(groupName: string): Array<{ providerId: string; key: string; maskedValue: string }> {
@@ -86,7 +105,10 @@ export class SecretDao {
       return {
         providerId: r.providerId,
         key: r.key,
-        maskedValue: val.length > 8 ? `${val.slice(0, 4)}${'•'.repeat(val.length - 8)}${val.slice(-4)}` : '••••••••',
+        maskedValue:
+          val.length > 8
+            ? `${val.slice(0, 4)}${'•'.repeat(val.length - 8)}${val.slice(-4)}`
+            : '••••••••',
       }
     })
   }
@@ -103,7 +125,12 @@ export class SecretDao {
     if (existing) {
       return this.db
         .update(secrets)
-        .set({ encryptedValue: encrypted, iv, groupName, updatedAt: new Date().toISOString() })
+        .set({
+          encryptedValue: encrypted,
+          iv,
+          groupName: normalizeGroupName(groupName),
+          updatedAt: new Date().toISOString(),
+        })
         .where(eq(secrets.id, existing.id))
         .returning()
         .get()
@@ -111,7 +138,13 @@ export class SecretDao {
 
     return this.db
       .insert(secrets)
-      .values({ providerId, key, encryptedValue: encrypted, iv, groupName })
+      .values({
+        providerId,
+        key,
+        encryptedValue: encrypted,
+        iv,
+        groupName: normalizeGroupName(groupName),
+      })
       .returning()
       .get()
   }
@@ -127,6 +160,10 @@ export class SecretDao {
     this.db.delete(secrets).where(eq(secrets.providerId, providerId)).run()
   }
 
+  deleteAll(): void {
+    this.db.delete(secrets).run()
+  }
+
   /** Get decrypted value for a provider key — used internally by deploy flow. */
   getValue(providerId: string, key: string): string | null {
     const row = this.db
@@ -140,17 +177,12 @@ export class SecretDao {
 
   /** Return all secrets (decrypted) mapped to env var names for deploy resolution. */
   findAllDecrypted(): Record<string, string> {
-    const rows = this.db.select().from(secrets).all()
     const result: Record<string, string> = {}
-    for (const r of rows) {
-      const val = this.decrypt(r.encryptedValue, r.iv)
-      // Map to common env var names: PROVIDER_KEY (e.g., OPENAI_APIKEY)
-      const envName = `${r.providerId.toUpperCase()}_${r.key.toUpperCase()}`.replace(/-/g, '_')
-      result[envName] = val
-      // Also map apiKey → PROVIDER_API_KEY (e.g., OPENAI_API_KEY)
-      if (r.key === 'apiKey') {
-        result[`${r.providerId.toUpperCase().replace(/-/g, '_')}_API_KEY`] = val
-      }
+    for (const entry of this.findAllDecryptedEntries()) {
+      Object.assign(
+        result,
+        withLegacyEnvAliases(toProviderSecretEnvKey(entry.providerId, entry.key), entry.value),
+      )
     }
     return result
   }

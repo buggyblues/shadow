@@ -4,7 +4,7 @@
 
 import { desc, eq } from 'drizzle-orm'
 import type { CloudDatabase } from '../db/index.js'
-import { type Deployment, type NewDeployment, deployments } from '../db/schema.js'
+import { type Deployment, deployments, type NewDeployment } from '../db/schema.js'
 
 export class DeploymentDao {
   constructor(private db: CloudDatabase) {}
@@ -30,13 +30,17 @@ export class DeploymentDao {
     return this.db.insert(deployments).values(data).returning().get()
   }
 
-  updateStatus(id: number, status: string, error?: string): Deployment | undefined {
+  update(id: number, data: Partial<NewDeployment>): Deployment | undefined {
     return this.db
       .update(deployments)
-      .set({ status, error, updatedAt: new Date().toISOString() })
+      .set({ ...data, updatedAt: new Date().toISOString() })
       .where(eq(deployments.id, id))
       .returning()
       .get()
+  }
+
+  updateStatus(id: number, status: string, error?: string): Deployment | undefined {
+    return this.update(id, { status, error })
   }
 
   delete(id: number): void {

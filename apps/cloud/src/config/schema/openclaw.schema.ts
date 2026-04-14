@@ -396,6 +396,8 @@ export interface OpenClawProviderConfig {
   baseUrl?: string
   /** Extra static headers */
   headers?: Record<string, string>
+  /** Transport overrides (e.g. allowPrivateNetwork for proxy environments) */
+  request?: { allowPrivateNetwork?: boolean }
   /** Provider model catalog */
   models?: Array<{
     id: string

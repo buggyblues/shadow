@@ -1,0 +1,54 @@
+{
+  "id": "gitagent",
+  "name": "GitAgent",
+  "description": "Deploy agents from gitagent-standard git repositories. Supports init-container (runtime clone) and build-image (pre-baked) strategies.",
+  "version": "1.0.0",
+  "category": "code",
+  "icon": "git-branch",
+  "website": "https://gitagent.sh/",
+  "docs": "https://github.com/open-gitagent/gitagent",
+  "auth": {
+    "type": "token",
+    "fields": [
+      {
+        "key": "GITHUB_TOKEN",
+        "label": "Git Token (HTTPS)",
+        "description": "Personal access token for private HTTPS repositories",
+        "required": false,
+        "sensitive": true,
+        "placeholder": "ghp_..."
+      }
+    ]
+  },
+  "config": {
+    "type": "object",
+    "properties": {
+      "git": {
+        "type": "object",
+        "description": "Git repository source",
+        "properties": {
+          "url": { "type": "string", "description": "Repository URL (HTTPS or SSH)" },
+          "ref": { "type": "string", "description": "Branch, tag, or commit SHA" },
+          "dir": { "type": "string", "description": "Subdirectory within the repo" },
+          "depth": { "type": "number", "description": "Shallow clone depth" },
+          "sshKeySecret": { "type": "string", "description": "K8s Secret name for SSH key" },
+          "tokenSecret": {
+            "type": "string",
+            "description": "K8s Secret name or env var for HTTPS token"
+          }
+        }
+      },
+      "path": { "type": "string", "description": "Local gitagent directory (dev mode)" },
+      "strategy": {
+        "type": "string",
+        "enum": ["init-container", "build-image"],
+        "default": "init-container"
+      },
+      "mountPath": { "type": "string", "default": "/agent" },
+      "include": { "type": "array", "items": { "type": "string" } },
+      "imageTag": { "type": "string", "description": "Docker image tag for build-image strategy" }
+    }
+  },
+  "capabilities": ["config-builder"],
+  "tags": ["git", "gitagent", "source", "repository", "init-container", "build-image"]
+}

@@ -60,6 +60,17 @@ export function runMigrations(db: CloudDatabase) {
   `)
 
   db.run(/*sql*/ `
+    CREATE TABLE IF NOT EXISTS deployment_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      deployment_id INTEGER NOT NULL,
+      event TEXT NOT NULL DEFAULT 'log',
+      message TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (deployment_id) REFERENCES deployments(id) ON DELETE CASCADE
+    )
+  `)
+
+  db.run(/*sql*/ `
     CREATE TABLE IF NOT EXISTS activities (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       type TEXT NOT NULL,
@@ -85,14 +96,44 @@ export function runMigrations(db: CloudDatabase) {
     )
   `)
 
+  db.run(/*sql*/ `
+    CREATE TABLE IF NOT EXISTS env_groups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `)
+
   // ── Migrations for existing databases ──────────────────────────────
   // Add group_name column if upgrading from an older schema
-  try { db.run(/*sql*/ `ALTER TABLE secrets ADD COLUMN group_name TEXT NOT NULL DEFAULT 'default'`) } catch { /* already exists */ }
-  try { db.run(/*sql*/ `ALTER TABLE env_vars ADD COLUMN group_name TEXT NOT NULL DEFAULT 'default'`) } catch { /* already exists */ }
+  try {
+    db.run(/*sql*/ `ALTER TABLE secrets ADD COLUMN group_name TEXT NOT NULL DEFAULT 'default'`)
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.run(/*sql*/ `ALTER TABLE env_vars ADD COLUMN group_name TEXT NOT NULL DEFAULT 'default'`)
+  } catch {
+    /* already exists */
+  }
+
+  db.run(
+    /*sql*/ `CREATE INDEX IF NOT EXISTS idx_deployment_logs_deployment_id ON deployment_logs(deployment_id, id)`,
+  )
+  db.run(/*sql*/ `INSERT OR IGNORE INTO env_groups (name) VALUES ('default')`)
 
   // Version tracking
-  try { db.run(/*sql*/ `ALTER TABLE configs ADD COLUMN version INTEGER NOT NULL DEFAULT 1`) } catch { /* already exists */ }
-  try { db.run(/*sql*/ `ALTER TABLE deployments ADD COLUMN version INTEGER`) } catch { /* already exists */ }
+  try {
+    db.run(/*sql*/ `ALTER TABLE configs ADD COLUMN version INTEGER NOT NULL DEFAULT 1`)
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.run(/*sql*/ `ALTER TABLE deployments ADD COLUMN version INTEGER`)
+  } catch {
+    /* already exists */
+  }
 
   db.run(/*sql*/ `
     CREATE TABLE IF NOT EXISTS config_versions (

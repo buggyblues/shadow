@@ -217,7 +217,7 @@ export function ProfileCommentSection({ profileUserId }: ProfileCommentSectionPr
           <View style={[styles.inputRow, { backgroundColor: colors.inputBackground }]}>
             <Avatar
               uri={currentUser.avatarUrl}
-              name={currentUser.displayName}
+              name={currentUser.displayName ?? currentUser.username}
               size={32}
               userId={currentUser.id}
             />

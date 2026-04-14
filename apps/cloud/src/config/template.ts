@@ -1,16 +1,35 @@
 /**
- * Template engine — resolves ${env:VAR}, ${secret:NAME}, ${file:PATH} in config values.
+ * Template engine — resolves ${env:VAR}, ${secret:NAME}, ${file:PATH},
+ * ${vault:KEY}, ${config:path.to.value}, and ${i18n:key} in config values.
  */
 
 import { readFileSync } from 'node:fs'
 
-const TEMPLATE_RE = /\$\{(env|secret|file):([^}]+)\}/g
+const TEMPLATE_RE = /\$\{(env|secret|file|vault|config|i18n):([^}]+)\}/g
 
 export interface TemplateContext {
   /** Environment variables (defaults to process.env) */
   env?: Record<string, string | undefined>
   /** Pre-loaded secret values */
   secrets?: Record<string, string>
+  /** Vault secret values — resolved from registry.vaults */
+  vaultSecrets?: Record<string, string>
+  /** The full config object (for ${config:path} resolution) */
+  configRoot?: Record<string, unknown>
+  /** i18n dictionary for the active locale */
+  i18nDict?: Record<string, string>
+}
+
+/**
+ * Resolve a dot-path reference against an object (e.g. "registry.providers.0.id").
+ */
+function resolveConfigPath(root: Record<string, unknown>, path: string): string | undefined {
+  let current: unknown = root
+  for (const segment of path.split('.')) {
+    if (current === null || current === undefined || typeof current !== 'object') return undefined
+    current = (current as Record<string, unknown>)[segment]
+  }
+  return current !== null && current !== undefined ? String(current) : undefined
 }
 
 /**
@@ -43,6 +62,33 @@ export function resolveTemplateString(value: string, ctx: TemplateContext = {}):
         } catch {
           throw new Error(`Cannot read file ${key} (referenced as ${match})`)
         }
+      }
+      case 'vault': {
+        const val = ctx.vaultSecrets?.[key]
+        if (val === undefined) {
+          // Leave as placeholder for K8s secret mapping (same as secret refs)
+          return match
+        }
+        return val
+      }
+      case 'config': {
+        if (!ctx.configRoot) {
+          throw new Error(`Config reference ${match} cannot be resolved: no config root available`)
+        }
+        const val = resolveConfigPath(ctx.configRoot, key)
+        if (val === undefined) {
+          throw new Error(`Config path "${key}" not found (referenced as ${match})`)
+        }
+        return val
+      }
+      case 'i18n': {
+        const val = ctx.i18nDict?.[key]
+        if (val === undefined) {
+          throw new Error(
+            `i18n key "${key}" not found for the active locale (referenced as ${match})`,
+          )
+        }
+        return val
       }
       default:
         return match
@@ -91,18 +137,22 @@ export function resolveTemplates<T>(obj: T, ctx: TemplateContext = {}): T {
  * Collect all template references in a config for validation.
  */
 export function collectTemplateRefs(obj: unknown): Array<{
-  type: 'env' | 'secret' | 'file'
+  type: 'env' | 'secret' | 'file' | 'vault' | 'config'
   key: string
   raw: string
 }> {
-  const refs: Array<{ type: 'env' | 'secret' | 'file'; key: string; raw: string }> = []
+  const refs: Array<{
+    type: 'env' | 'secret' | 'file' | 'vault' | 'config'
+    key: string
+    raw: string
+  }> = []
 
   function walk(val: unknown) {
     if (typeof val === 'string') {
       for (const match of val.matchAll(TEMPLATE_RE)) {
         if (match[1] && match[2]) {
           refs.push({
-            type: match[1] as 'env' | 'secret' | 'file',
+            type: match[1] as 'env' | 'secret' | 'file' | 'vault' | 'config',
             key: match[2],
             raw: match[0],
           })

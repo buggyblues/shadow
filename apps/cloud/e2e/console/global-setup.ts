@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { SERVE_PORT } from '../playwright.config.js'
+import { SERVE_PORT } from '../../playwright.config.js'
 
 const __dir = dirname(fileURLToPath(import.meta.url))
 const CLOUD_ROOT = join(__dir, '..')

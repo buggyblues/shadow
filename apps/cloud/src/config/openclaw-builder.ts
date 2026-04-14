@@ -231,11 +231,16 @@ function buildProvidersConfig(config: CloudConfig): OpenClawConfig['models'] {
   for (const p of config.registry.providers) {
     const providerId = p.id ?? p.baseUrl ?? 'custom'
     const providerEntry: Record<string, unknown> = {}
-    if (p.api) providerEntry.api = API_TYPE_MAP[p.api] ?? p.api
+    // Support both `api` and legacy `apiType` field names
+    const apiField = p.api ?? ((p as Record<string, unknown>).apiType as string | undefined)
+    if (apiField) providerEntry.api = API_TYPE_MAP[apiField] ?? apiField
     if (p.apiKey) providerEntry.apiKey = p.apiKey
     if (p.auth) providerEntry.auth = p.auth
     providerEntry.baseUrl = p.baseUrl ?? DEFAULT_BASE_URLS[providerId]
     if (p.headers) providerEntry.headers = p.headers
+    // Allow LLM API calls to resolve to private/special-use IPs
+    // (common in container envs behind proxy/VPN where DNS returns e.g. 198.18.x.x)
+    providerEntry.request = { allowPrivateNetwork: true }
     if (p.models?.length) {
       providerEntry.models = p.models.map((m) => {
         const entry: Record<string, unknown> = { id: m.id, name: m.name ?? m.id }
@@ -257,17 +262,45 @@ function buildShadowobChannels(
   agent: AgentDeployment,
   config: CloudConfig,
 ): { channels?: OpenClawConfig['channels']; bindings?: OpenClawBinding[] } {
-  const shadowobPlugin = config.plugins?.shadowob
+  type ShadowobBinding = {
+    agentId: string
+    targetId: string
+    replyPolicy?: {
+      mode: string
+      custom?: Record<string, unknown>
+    }
+  }
+
+  type ShadowobBuddy = {
+    id: string
+    name: string
+    description?: string
+  }
+
+  type ShadowobPluginConfig = {
+    bindings?: ShadowobBinding[]
+    buddies?: ShadowobBuddy[]
+  }
+
+  // Support both modern `use` array and deprecated `plugins.shadowob` patterns
+  let shadowobPlugin = config.plugins?.shadowob as ShadowobPluginConfig | undefined
+  if (!shadowobPlugin) {
+    const useEntry = config.use?.find((u) => u.plugin === 'shadowob')
+    if (useEntry?.options) {
+      shadowobPlugin = useEntry.options as ShadowobPluginConfig
+    }
+  }
   if (!shadowobPlugin) return {}
 
-  const bindings = shadowobPlugin.bindings?.filter((b) => b.agentId === agent.id) ?? []
+  const bindings =
+    shadowobPlugin.bindings?.filter((b: ShadowobBinding) => b.agentId === agent.id) ?? []
   if (bindings.length === 0) return {}
 
   const accounts: Record<string, Record<string, unknown>> = {}
   const configBindings: OpenClawBinding[] = []
 
   for (const binding of bindings) {
-    const buddy = shadowobPlugin.buddies?.find((b) => b.id === binding.targetId)
+    const buddy = shadowobPlugin.buddies?.find((b: ShadowobBuddy) => b.id === binding.targetId)
     if (!buddy) continue
 
     const account: Record<string, unknown> = {
@@ -463,6 +496,17 @@ function stripAndCollectWorkspaceFiles(openclawConfig: OpenClawConfig): Record<s
       }
       delete entry.params
     }
+
+    // Generate AGENTS.md from the agents list so heartbeat checks pass
+    if (agentList.length > 0 && !workspaceFiles['AGENTS.md']) {
+      const lines: string[] = ['# Agents', '']
+      for (const entry of agentList) {
+        const name = String(entry.name ?? entry.id ?? 'agent')
+        const desc = entry.description ? ` — ${entry.description}` : ''
+        lines.push(`- **${name}**${desc}`)
+      }
+      workspaceFiles['AGENTS.md'] = lines.join('\n') + '\n'
+    }
   }
   return workspaceFiles
 }
@@ -502,22 +546,22 @@ function applyPluginPipeline(
       agent,
       config,
       secrets,
-      namespace: config.namespace ?? 'default',
+      namespace: config.deployments?.namespace ?? 'default',
       pluginRegistry: registry,
     }
 
-    const agentConfig = resolved.config ?? {}
+    const agentConfig = (resolved.config ?? {}) as Record<string, unknown>
 
     // Build OpenClaw config fragment (new providers → legacy fallback)
     if (pluginDef.configBuilder) {
       const fragment = pluginDef.configBuilder.build(agentConfig, context)
-      mergePluginFragments(openclawConfig as unknown as PluginConfigFragment, fragment)
+      Object.assign(openclawConfig, mergePluginFragments(openclawConfig, fragment))
     } else if (pluginDef.channel) {
       const fragment = pluginDef.channel.buildChannel(agentConfig, context)
-      mergePluginFragments(openclawConfig as unknown as PluginConfigFragment, fragment)
+      Object.assign(openclawConfig, mergePluginFragments(openclawConfig, fragment))
     } else if (pluginDef.buildOpenClawConfig) {
       const fragment = pluginDef.buildOpenClawConfig(agentConfig, context)
-      mergePluginFragments(openclawConfig as unknown as PluginConfigFragment, fragment)
+      Object.assign(openclawConfig, mergePluginFragments(openclawConfig, fragment))
     }
 
     // Build env vars (new provider → legacy fallback)
@@ -642,6 +686,20 @@ export function buildOpenClawConfig(agent: AgentDeployment, config: CloudConfig)
   const pluginEnvVars = applyPluginPipeline(agent, config, openclawConfig)
   if (Object.keys(pluginEnvVars).length > 0) {
     openclawConfig._pluginEnvVars = pluginEnvVars
+  }
+
+  // 18. Ensure shadowob channel has a disabled fallback config so the
+  //     always-installed openclaw-shadowob extension passes validation.
+  const existingChannels = (openclawConfig as Record<string, unknown>).channels as
+    | Record<string, unknown>
+    | undefined
+  if (!existingChannels?.shadowob && !existingChannels?.['openclaw-shadowob']) {
+    if (!openclawConfig.channels) {
+      ;(openclawConfig as Record<string, unknown>).channels = {}
+    }
+    ;((openclawConfig as Record<string, unknown>).channels as Record<string, unknown>).shadowob = {
+      enabled: false,
+    }
   }
 
   return openclawConfig

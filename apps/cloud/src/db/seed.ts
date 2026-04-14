@@ -7,6 +7,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { eq } from 'drizzle-orm'
+import { parseJsonc } from '../utils/jsonc.js'
 import type { CloudDatabase } from './index.js'
 import { templates } from './schema.js'
 
@@ -23,7 +24,7 @@ export function seedTemplates(db: CloudDatabase) {
 
     try {
       const raw = readFileSync(join(templatesDir, file), 'utf-8')
-      const content = JSON.parse(raw) as Record<string, unknown>
+      const content = parseJsonc<Record<string, unknown>>(raw, file)
       const meta = content.metadata as Record<string, unknown> | undefined
 
       db.insert(templates)

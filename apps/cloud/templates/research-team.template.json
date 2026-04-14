@@ -1,85 +1,80 @@
 {
   "version": "1.0.0",
-  "name": "Research Team",
-  "description": "Three-agent research and intelligence team: market researcher, competitor monitor, and weekly digest curator. Keeps you informed about trends, competitors, and opportunities without manual research.",
+  "name": "${i18n:name}",
+  "description": "${i18n:description}",
   "environment": "production",
   "team": {
     "name": "research-team",
-    "description": "Market intelligence, competitive monitoring, and research synthesis",
-    "defaultModel": {
-      "preferred": "anthropic/claude-sonnet-4-5",
-      "fallbacks": ["deepseek/deepseek-chat", "openai/gpt-4o"],
-      "constraints": {
-        "temperature": 0.5,
-        "maxTokens": 8192
+    "description": "Market intelligence, competitive monitoring, and research synthesis"
+  },
+  "use": [
+    {
+      "plugin": "shadowob",
+      "options": {
+        "servers": [
+          {
+            "id": "intel-hub",
+            "name": "Intel Hub",
+            "slug": "intel-hub",
+            "channels": [
+              {
+                "id": "market-research",
+                "title": "Market Research",
+                "type": "text"
+              },
+              {
+                "id": "competitor-intel",
+                "title": "Competitor Intel",
+                "type": "text"
+              },
+              {
+                "id": "weekly-digest",
+                "title": "Weekly Digest",
+                "type": "text"
+              }
+            ]
+          }
+        ],
+        "buddies": [
+          {
+            "id": "researcher-bot",
+            "name": "Market Researcher"
+          },
+          {
+            "id": "competitor-bot",
+            "name": "Competitor Monitor"
+          },
+          {
+            "id": "digest-bot",
+            "name": "Digest Curator"
+          }
+        ],
+        "bindings": [
+          {
+            "targetId": "researcher-bot",
+            "targetType": "buddy",
+            "servers": ["intel-hub"],
+            "channels": ["market-research"],
+            "agentId": "market-researcher"
+          },
+          {
+            "targetId": "competitor-bot",
+            "targetType": "buddy",
+            "servers": ["intel-hub"],
+            "channels": ["competitor-intel"],
+            "agentId": "competitor-monitor"
+          },
+          {
+            "targetId": "digest-bot",
+            "targetType": "buddy",
+            "servers": ["intel-hub"],
+            "channels": ["weekly-digest"],
+            "agentId": "digest-curator"
+          }
+        ]
       }
     }
-  },
-  "plugins": {
-    "shadowob": {
-      "servers": [
-        {
-          "id": "intel-hub",
-          "name": "Intel Hub",
-          "slug": "intel-hub",
-          "channels": [
-            {
-              "id": "market-research",
-              "title": "Market Research",
-              "type": "text"
-            },
-            {
-              "id": "competitor-intel",
-              "title": "Competitor Intel",
-              "type": "text"
-            },
-            {
-              "id": "weekly-digest",
-              "title": "Weekly Digest",
-              "type": "text"
-            }
-          ]
-        }
-      ],
-      "buddies": [
-        {
-          "id": "researcher-bot",
-          "name": "Market Researcher"
-        },
-        {
-          "id": "competitor-bot",
-          "name": "Competitor Monitor"
-        },
-        {
-          "id": "digest-bot",
-          "name": "Digest Curator"
-        }
-      ],
-      "bindings": [
-        {
-          "targetId": "researcher-bot",
-          "targetType": "buddy",
-          "servers": ["intel-hub"],
-          "channels": ["market-research"],
-          "agentId": "market-researcher"
-        },
-        {
-          "targetId": "competitor-bot",
-          "targetType": "buddy",
-          "servers": ["intel-hub"],
-          "channels": ["competitor-intel"],
-          "agentId": "competitor-monitor"
-        },
-        {
-          "targetId": "digest-bot",
-          "targetType": "buddy",
-          "servers": ["intel-hub"],
-          "channels": ["weekly-digest"],
-          "agentId": "digest-curator"
-        }
-      ]
-    }
-  },
+  ],
   "registry": {
     "providers": [
       {
@@ -146,10 +141,10 @@
           "personality": "You are a rigorous market researcher with deep analytical skills. You always seek primary sources, cross-reference data points, and flag speculative claims clearly. Your research reports are structured, scannable, and conclude with clear takeaways. You cite your sources explicitly. You understand that busy founders need insight, not data dumps.",
           "systemPrompt": "Conduct market research on request. For each research topic:\n1. Search for current data, news, and reports (last 12 months preferred)\n2. Structure findings: market size, key players, trends, opportunities, threats\n3. Cross-reference at least 3 sources\n4. Highlight the 3 most actionable insights\n5. Include source links\n6. Save summary to Notion\n\nAlso proactively research 1 industry topic per week related to the configured sector."
         },
-        "integrations": [
+        "use": [
           {
-            "name": "notion",
-            "credentials": {
+            "plugin": "notion",
+            "options": {
               "NOTION_TOKEN": "${env:NOTION_TOKEN}"
             }
           }
@@ -189,10 +184,10 @@
           "personality": "You are a competitive intelligence analyst. You watch competitors obsessively but objectively — your job is to surface facts, not spin them. When a competitor launches something important, you immediately analyze: what is it, who does it affect, is it a threat or an opportunity, and what should we do about it? You're dispassionate but strategic.",
           "systemPrompt": "Monitor configured competitors daily:\n\nCheck each competitor for:\n1. New product features or announcements (blog, changelog, product hunt)\n2. Pricing changes (scrape pricing page, compare to baseline)\n3. Marketing messages and positioning shifts\n4. Job postings (signals about product direction)\n5. GitHub activity (for open-source competitors)\n\nFor significant changes, alert immediately with:\n- What changed\n- Potential impact on us\n- Recommended response\n\nGenerate a competitor activity summary every Monday."
         },
-        "integrations": [
+        "use": [
           {
-            "name": "notion",
-            "credentials": {
+            "plugin": "notion",
+            "options": {
               "NOTION_TOKEN": "${env:NOTION_TOKEN}"
             }
           }
@@ -232,10 +227,10 @@
           "personality": "You are a sharp editor who reads everything so your audience doesn't have to. Your weekly digest is the highlight of the team's Monday morning — it's the 10-minute read that makes everyone feel informed and energized. You cut the noise ruthlessly, lead with what matters, and make every item actionable. You have impeccable taste in what's signal vs. noise.",
           "systemPrompt": "Every Monday at 7:00 AM UTC, produce a weekly intelligence digest:\n\n# 📰 Weekly Intel Digest — {week of date}\n\n## 🌍 Market Pulse\n[3 bullets on key market trends from the past week]\n\n## 🥊 Competitor Watch\n[Notable moves from competitors — sources from competitor monitor]\n\n## 💡 Opportunities\n[2-3 specific opportunities worth exploring based on market + competitor intel]\n\n## 📖 Must-Read\n[3 links with one-line summaries — articles, studies, or threads worth reading]\n\n## ⚡ Action Items\n[What the team should consider doing this week based on intel]\n\nSources: aggregate from market researcher, competitor monitor, and web search."
         },
-        "integrations": [
+        "use": [
           {
-            "name": "notion",
-            "credentials": {
+            "plugin": "notion",
+            "options": {
               "NOTION_TOKEN": "${env:NOTION_TOKEN}"
             }
           }
@@ -267,5 +262,15 @@
         }
       }
     ]
+  },
+  "i18n": {
+    "en": {
+      "name": "Research Team",
+      "description": "Three-agent research and intelligence team: market researcher, competitor monitor, and weekly digest curator. Keeps you informed about trends, competitors, and opportunities without manual research."
+    },
+    "zh-CN": {
+      "name": "研究团队",
+      "description": "三智能体研究情报团队：市场研究员、竞品监控和周报编辑。自动收集市场洞察和竞争分析。"
+    }
   }
 }

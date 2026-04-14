@@ -1,42 +1,47 @@
 {
   "version": "1.0.0",
+  "name": "${i18n:name}",
+  "description": "${i18n:description}",
   "environment": "production",
-  "plugins": {
-    "shadowob": {
-      "servers": [
-        {
-          "id": "my-server",
-          "name": "My Shadow Server",
-          "channels": [
-            {
-              "id": "general",
-              "title": "General"
-            }
-          ]
-        }
-      ],
-      "buddies": [
-        {
-          "id": "my-buddy",
-          "name": "My AI Assistant"
-        }
-      ],
-      "bindings": [
-        {
-          "targetId": "my-buddy",
-          "targetType": "buddy",
-          "servers": ["my-server"],
-          "channels": ["general"],
-          "agentId": "my-agent"
-        }
-      ]
+  "use": [
+    {
+      "plugin": "shadowob",
+      "options": {
+        "servers": [
+          {
+            "id": "my-server",
+            "name": "My Shadow Server",
+            "channels": [
+              {
+                "id": "general",
+                "title": "General"
+              }
+            ]
+          }
+        ],
+        "buddies": [
+          {
+            "id": "my-buddy",
+            "name": "My AI Assistant"
+          }
+        ],
+        "bindings": [
+          {
+            "targetId": "my-buddy",
+            "targetType": "buddy",
+            "servers": ["my-server"],
+            "channels": ["general"],
+            "agentId": "my-agent"
+          }
+        ]
+      }
     }
-  },
+  ],
   "registry": {
     "providers": [
       {
         "id": "openai",
-        "apiType": "openai-completions",
+        "api": "openai",
         "baseUrl": "https://api.openai.com/v1",
         "apiKey": "${env:OPENAI_API_KEY}",
         "models": [
@@ -85,6 +90,10 @@
       {
         "id": "my-agent",
         "runtime": "openclaw",
+        "model": {
+          "preferred": "openai/gpt-4o-mini",
+          "fallbacks": ["deepseek/deepseek-chat"]
+        },
         "configuration": {
           "extends": "base-chat",
           "openclaw": {
@@ -104,5 +113,15 @@
         }
       }
     ]
+  },
+  "i18n": {
+    "en": {
+      "name": "Shadow Cloud Basic",
+      "description": "Basic single-agent template with a general AI assistant. Quick-start template for Shadow Cloud deployment."
+    },
+    "zh-CN": {
+      "name": "Shadow Cloud 基础版",
+      "description": "基础单智能体模板，包含一个通用 AI 助手。适用于 Shadow Cloud 快速部署。"
+    }
   }
 }

@@ -125,6 +125,29 @@ export const oauthConsents = pgTable(
   }),
 )
 
+/* ──────────────── API Tokens (Personal Access Tokens) ──────────────── */
+
+export const apiTokens = pgTable(
+  'api_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: varchar('token_hash', { length: 128 }).notNull().unique(),
+    name: varchar('name', { length: 128 }).notNull(),
+    scope: varchar('scope', { length: 255 }).notNull().default('user:read'),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    revoked: boolean('revoked').default(false).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    apiTokensUserIdIdx: index('api_tokens_user_id_idx').on(t.userId),
+    apiTokensTokenHashIdx: index('api_tokens_token_hash_idx').on(t.tokenHash),
+  }),
+)
+
 /* ──────────────── OAuth Accounts (Consumer — third-party login) ──────────────── */
 
 export const oauthAccounts = pgTable(

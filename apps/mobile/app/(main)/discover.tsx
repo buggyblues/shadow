@@ -358,7 +358,10 @@ function FeedCard({
 }: {
   item: FeedItem
   joinedServerIds: Set<string>
-  joinMutation: ReturnType<typeof useMutation>
+  joinMutation: {
+    mutate: (variables: { inviteCode: string }) => void
+    isPending: boolean
+  }
   router: ReturnType<typeof useRouter>
   colors: ReturnType<typeof useColors>
   t: (key: string, options?: Record<string, unknown>) => string
@@ -884,4 +887,3 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
 })
-ENDOFFILE

@@ -3,6 +3,7 @@
  */
 
 import { Hono } from 'hono'
+import { normalizeGroupName } from '../../../utils/env-names.js'
 import type { HandlerContext } from './types.js'
 
 export function createSecretHandler(ctx: HandlerContext): Hono {
@@ -50,9 +51,41 @@ export function createSecretHandler(ctx: HandlerContext): Hono {
 
   // ── Environment Variables ─────────────────────────────────────────────
 
+  app.get('/env/groups', (c) => {
+    const groups = new Set<string>(ctx.envGroupDao.findAll())
+    for (const envVar of ctx.envVarDao.findAllMasked()) {
+      groups.add(normalizeGroupName(envVar.groupName))
+    }
+    return c.json({
+      groups: [...groups].sort((a, b) =>
+        a === 'default' ? -1 : b === 'default' ? 1 : a.localeCompare(b),
+      ),
+    })
+  })
+
+  app.post('/env/groups', async (c) => {
+    try {
+      const body = await c.req.json<{ name?: string }>()
+      const name = normalizeGroupName(body.name)
+      ctx.envGroupDao.create(name)
+      return c.json({ ok: true, name })
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 400)
+    }
+  })
+
   app.get('/env', (c) => {
     const envVars = ctx.envVarDao.findAllMasked()
-    return c.json({ envVars })
+    const groups = new Set<string>(ctx.envGroupDao.findAll())
+    for (const envVar of envVars) {
+      groups.add(normalizeGroupName(envVar.groupName))
+    }
+    return c.json({
+      envVars,
+      groups: [...groups].sort((a, b) =>
+        a === 'default' ? -1 : b === 'default' ? 1 : a.localeCompare(b),
+      ),
+    })
   })
 
   app.get('/env/:scope', (c) => {
@@ -61,14 +94,33 @@ export function createSecretHandler(ctx: HandlerContext): Hono {
     return c.json({ envVars })
   })
 
+  app.get('/env/:scope/:key', (c) => {
+    const scope = c.req.param('scope')
+    const key = c.req.param('key')
+    const envVar = ctx.envVarDao.findOne(scope, key)
+
+    if (!envVar) {
+      return c.json({ error: 'Environment value not found' }, 404)
+    }
+
+    return c.json({ envVar })
+  })
+
   app.put('/env/:scope', async (c) => {
     const scope = c.req.param('scope')
     try {
-      const body = await c.req.json<{ key: string; value: string; isSecret?: boolean; groupName?: string }>()
+      const body = await c.req.json<{
+        key: string
+        value: string
+        isSecret?: boolean
+        groupName?: string
+      }>()
       if (!body.key || body.value === undefined) {
         return c.json({ error: 'key and value are required' }, 400)
       }
-      ctx.envVarDao.upsert(scope, body.key, body.value, body.isSecret ?? true, body.groupName)
+      const groupName = normalizeGroupName(body.groupName)
+      ctx.envGroupDao.ensure(groupName)
+      ctx.envVarDao.upsert(scope, body.key, body.value, body.isSecret ?? true, groupName)
       return c.json({ ok: true })
     } catch (err) {
       return c.json({ error: (err as Error).message }, 400)

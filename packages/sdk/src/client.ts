@@ -33,6 +33,25 @@ import type {
 } from './types'
 
 /**
+ * Strip HTML tags from error response body for readable error messages.
+ * If the body looks like HTML (e.g. nginx 502 page), extract the title or return a short summary.
+ */
+function sanitizeErrorBody(body: string): string {
+  if (!body) return '(empty response)'
+  // If it's not HTML, return as-is (truncated)
+  if (!/<[^>]+>/.test(body)) return body.slice(0, 500)
+  // Try to extract <title> content
+  const titleMatch = /<title>([^<]+)<\/title>/i.exec(body)
+  if (titleMatch?.[1]) return titleMatch[1].trim()
+  // Strip all tags and collapse whitespace
+  const text = body
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return text.slice(0, 200) || '(HTML error page)'
+}
+
+/**
  * Shadow REST API client.
  *
  * Provides typed HTTP methods for interacting with the Shadow server API.
@@ -64,8 +83,9 @@ export class ShadowClient {
       })
       if (!res.ok) {
         const body = await res.text().catch(() => '')
+        const message = sanitizeErrorBody(body)
         throw new Error(
-          `Shadow API ${init?.method ?? 'GET'} ${path} failed (${res.status}): ${body}`,
+          `Shadow API ${init?.method ?? 'GET'} ${path} failed (${res.status}): ${message}`,
         )
       }
       return res.json() as Promise<T>
@@ -85,7 +105,10 @@ export class ShadowClient {
     })
     if (!res.ok) {
       const body = await res.text().catch(() => '')
-      throw new Error(`Shadow API ${init?.method ?? 'GET'} ${path} failed (${res.status}): ${body}`)
+      const message = sanitizeErrorBody(body)
+      throw new Error(
+        `Shadow API ${init?.method ?? 'GET'} ${path} failed (${res.status}): ${message}`,
+      )
     }
     return res
   }

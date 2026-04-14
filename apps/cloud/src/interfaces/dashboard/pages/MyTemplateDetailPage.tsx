@@ -1,11 +1,10 @@
-import Editor from '@monaco-editor/react'
+import Editor, { type Monaco } from '@monaco-editor/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import {
   ArrowLeft,
   Check,
   Clock,
-  Code,
   Cpu,
   Edit3,
   FileJson,
@@ -16,260 +15,26 @@ import {
   Rocket,
   RotateCcw,
   Save,
-  Server,
   Settings,
   Shield,
   Trash2,
   Users,
-  Zap,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/Badge'
 import { Breadcrumb } from '@/components/Breadcrumb'
-import { CodeBlock } from '@/components/CodeBlock'
 import { EmptyState } from '@/components/EmptyState'
-import { Tabs } from '@/components/Tabs'
+import {
+  parseTemplateAgents,
+  type TemplateAgentInfo,
+  TemplateAgentsTab,
+  TemplateConfigTab,
+  TemplateDetailShell,
+} from '@/components/TemplateDetailShared'
 import { api, type ValidateResult } from '@/lib/api'
-import { cn, pluralize } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { useToast } from '@/stores/toast'
-
-// ── Agent parsing ─────────────────────────────────────────────────────────────
-
-interface AgentDetail {
-  id: string
-  name: string
-  runtime: string
-  description?: string
-  identity?: { name?: string; personality?: string; systemPrompt?: string }
-  integrations?: Array<{ name: string; credentials?: Record<string, string> }>
-  configuration?: Record<string, unknown>
-  resources?: { requests?: Record<string, string>; limits?: Record<string, string> }
-  env?: Record<string, string>
-}
-
-function parseAgentDetails(templateData: unknown): AgentDetail[] {
-  if (!templateData || typeof templateData !== 'object') return []
-  const data = templateData as Record<string, unknown>
-  const agents: AgentDetail[] = []
-
-  const deployments = data.deployments as Record<string, unknown> | undefined
-  const deplAgents = deployments?.agents as unknown[] | undefined
-  const sourceAgents = Array.isArray(deplAgents)
-    ? deplAgents
-    : Array.isArray(data.agents)
-      ? data.agents
-      : []
-
-  for (const a of sourceAgents) {
-    if (typeof a !== 'object' || a === null) continue
-    const agent = a as Record<string, unknown>
-    agents.push({
-      id: String(agent.id ?? agent.name ?? 'unknown'),
-      name: String(
-        agent.name ?? (agent.identity as Record<string, unknown>)?.name ?? agent.id ?? 'Unknown',
-      ),
-      runtime: String(agent.runtime ?? 'unknown'),
-      description: agent.description ? String(agent.description) : undefined,
-      identity: agent.identity as AgentDetail['identity'],
-      integrations: agent.integrations as AgentDetail['integrations'],
-      configuration: agent.configuration as AgentDetail['configuration'],
-      resources: agent.resources as AgentDetail['resources'],
-      env: agent.env as AgentDetail['env'],
-    })
-  }
-  return agents
-}
-
-// ── Agents Tab ────────────────────────────────────────────────────────────────
-
-function AgentDetailCard({ agent, index }: { agent: AgentDetail; index: number }) {
-  const [expanded, setExpanded] = useState(false)
-
-  return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-lg overflow-hidden hover:border-gray-700 transition-colors">
-      {/* Header */}
-      <button
-        type="button"
-        onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-3 flex items-center justify-between text-left"
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-900/30 border border-blue-800/50 flex items-center justify-center text-xs font-bold text-blue-400">
-            {index + 1}
-          </div>
-          <div>
-            <h4 className="text-sm font-medium text-white flex items-center gap-2">
-              {agent.identity?.name ?? agent.id}
-              <Badge variant="default" size="sm">
-                {agent.runtime}
-              </Badge>
-            </h4>
-            {agent.description && (
-              <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{agent.description}</p>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {agent.integrations && agent.integrations.length > 0 && (
-            <Badge variant="info" size="sm" icon={<Layers size={9} />}>
-              {agent.integrations.length} {pluralize(agent.integrations.length, 'integration')}
-            </Badge>
-          )}
-          {agent.resources && (
-            <Badge variant="outline" size="sm" icon={<Server size={9} />}>
-              resources
-            </Badge>
-          )}
-          <span className={cn('text-gray-500 transition-transform', expanded && 'rotate-90')}>
-            ▸
-          </span>
-        </div>
-      </button>
-
-      {/* Expanded details */}
-      {expanded && (
-        <div className="px-4 pb-4 space-y-3 border-t border-gray-800/50 pt-3">
-          {/* Identity */}
-          {agent.identity && (
-            <div>
-              <h5 className="text-[10px] uppercase text-gray-600 font-semibold mb-1.5 flex items-center gap-1">
-                <Users size={10} /> Identity
-              </h5>
-              {agent.identity.personality && (
-                <p className="text-xs text-gray-400 bg-gray-950 rounded p-2.5 leading-relaxed line-clamp-4">
-                  {agent.identity.personality}
-                </p>
-              )}
-              {agent.identity.systemPrompt && (
-                <details className="mt-2">
-                  <summary className="text-[10px] text-gray-500 cursor-pointer hover:text-gray-400">
-                    System Prompt
-                  </summary>
-                  <p className="text-xs text-gray-500 bg-gray-950 rounded p-2.5 mt-1 leading-relaxed max-h-32 overflow-y-auto">
-                    {agent.identity.systemPrompt}
-                  </p>
-                </details>
-              )}
-            </div>
-          )}
-
-          {/* Integrations */}
-          {agent.integrations && agent.integrations.length > 0 && (
-            <div>
-              <h5 className="text-[10px] uppercase text-gray-600 font-semibold mb-1.5 flex items-center gap-1">
-                <Layers size={10} /> Integrations
-              </h5>
-              <div className="flex flex-wrap gap-2">
-                {agent.integrations.map((intg) => (
-                  <div
-                    key={intg.name}
-                    className="flex items-center gap-1.5 text-xs bg-purple-900/20 text-purple-300 border border-purple-800/40 px-2.5 py-1 rounded-md"
-                  >
-                    <Zap size={10} />
-                    {intg.name}
-                    {intg.credentials && (
-                      <span className="text-purple-500 text-[10px]">
-                        ({Object.keys(intg.credentials).length}{' '}
-                        {pluralize(Object.keys(intg.credentials).length, 'credential')})
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Resources */}
-          {agent.resources && (
-            <div>
-              <h5 className="text-[10px] uppercase text-gray-600 font-semibold mb-1.5 flex items-center gap-1">
-                <Server size={10} /> Resources
-              </h5>
-              <div className="grid grid-cols-2 gap-2">
-                {agent.resources.requests && (
-                  <div className="bg-gray-950 rounded p-2">
-                    <span className="text-[10px] text-gray-600 block mb-1">Requests</span>
-                    {Object.entries(agent.resources.requests).map(([k, v]) => (
-                      <div key={k} className="text-xs text-gray-400 flex justify-between">
-                        <span className="text-gray-600">{k}</span>
-                        <span className="font-mono">{v}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {agent.resources.limits && (
-                  <div className="bg-gray-950 rounded p-2">
-                    <span className="text-[10px] text-gray-600 block mb-1">Limits</span>
-                    {Object.entries(agent.resources.limits).map(([k, v]) => (
-                      <div key={k} className="text-xs text-gray-400 flex justify-between">
-                        <span className="text-gray-600">{k}</span>
-                        <span className="font-mono">{v}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Configuration */}
-          {agent.configuration && (
-            <div>
-              <h5 className="text-[10px] uppercase text-gray-600 font-semibold mb-1.5 flex items-center gap-1">
-                <Settings size={10} /> Configuration
-              </h5>
-              <pre className="text-xs text-gray-500 bg-gray-950 rounded p-2.5 overflow-x-auto max-h-40">
-                {JSON.stringify(agent.configuration, null, 2)}
-              </pre>
-            </div>
-          )}
-
-          {/* Environment variables */}
-          {agent.env && Object.keys(agent.env).length > 0 && (
-            <div>
-              <h5 className="text-[10px] uppercase text-gray-600 font-semibold mb-1.5 flex items-center gap-1">
-                <Code size={10} /> Environment
-              </h5>
-              <div className="space-y-1">
-                {Object.entries(agent.env).map(([k, v]) => (
-                  <div key={k} className="text-xs font-mono flex gap-2">
-                    <span className="text-yellow-400/80">{k}</span>
-                    <span className="text-gray-600">=</span>
-                    <span className="text-gray-500 truncate">{String(v)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function AgentsTab({ agents }: { agents: AgentDetail[] }) {
-  if (agents.length === 0) {
-    return (
-      <EmptyState
-        icon={<Users size={32} />}
-        title="No agents"
-        description="This template has no agents defined."
-      />
-    )
-  }
-
-  return (
-    <div className="space-y-3">
-      <p className="text-sm text-gray-500 mb-4">
-        {agents.length} {pluralize(agents.length, 'agent')} in this template:
-      </p>
-      {agents.map((agent, i) => (
-        <AgentDetailCard key={agent.id} agent={agent} index={i} />
-      ))}
-    </div>
-  )
-}
 
 // ── Editor Tab ────────────────────────────────────────────────────────────────
 
@@ -282,6 +47,7 @@ function EditorTab({
   content: unknown
   templateSlug: string | null
 }) {
+  const { t } = useTranslation()
   const toast = useToast()
   const queryClient = useQueryClient()
   const [content, setContent] = useState(() =>
@@ -300,17 +66,29 @@ function EditorTab({
       queryClient.invalidateQueries({ queryKey: ['my-templates'] })
       queryClient.invalidateQueries({ queryKey: ['my-template', name] })
       setSaved(true)
-      toast.success('Template saved')
+      toast.success(t('templateDetail.templateSaved'))
     },
-    onError: (err) => toast.error(`Save failed: ${err.message}`),
+    onError: (err) => toast.error(`${t('templateDetail.saveFailed')}: ${err.message}`),
   })
 
   const validateMutation = useMutation({
     mutationFn: (config: unknown) => api.validate(config),
     onSuccess: (result) => {
       setValidateResult(result)
-      if (result.valid) toast.success(`Valid: ${result.agents} agent(s)`)
-      else toast.error(`Invalid: ${result.violations.length} violation(s)`)
+      if (result.valid) {
+        toast.success(
+          t('templateDetail.validationSummaryValid', {
+            agents: result.agents,
+            configurations: result.configurations,
+          }),
+        )
+      } else {
+        toast.error(
+          t('templateDetail.validationSummaryInvalid', {
+            count: result.violations.length,
+          }),
+        )
+      }
     },
   })
 
@@ -318,7 +96,7 @@ function EditorTab({
     try {
       saveMutation.mutate(JSON.parse(content))
     } catch {
-      toast.error('Invalid JSON — cannot save')
+      toast.error(t('templateDetail.invalidJSONCannotSave'))
     }
   }
 
@@ -327,16 +105,16 @@ function EditorTab({
       setValidateResult(null)
       validateMutation.mutate(JSON.parse(content))
     } catch {
-      toast.error('Invalid JSON syntax')
+      toast.error(t('templateDetail.invalidJSONSyntax'))
     }
   }
 
   const handleFormat = () => {
     try {
       setContent(JSON.stringify(JSON.parse(content), null, 2))
-      toast.info('Formatted')
+      toast.info(t('templateDetail.formatted'))
     } catch {
-      toast.error('Cannot format: invalid JSON')
+      toast.error(t('templateDetail.cannotFormat'))
     }
   }
 
@@ -360,10 +138,16 @@ function EditorTab({
       {/* Toolbar */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2 text-xs text-gray-500">
-          <span>{content.split('\n').length} lines</span>
+          <span>
+            {content.split('\n').length} {t('templateDetail.lines')}
+          </span>
           <span>·</span>
           <span className={isValidJson ? 'text-green-600' : 'text-red-500'}>
-            {content.trim() ? (isValidJson ? 'Valid JSON' : 'Invalid JSON') : ''}
+            {content.trim()
+              ? isValidJson
+                ? t('templateDetail.validJSON')
+                : t('templateDetail.invalidJSON')
+              : ''}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -374,7 +158,7 @@ function EditorTab({
             className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded px-3 py-1.5 transition-colors disabled:opacity-40"
           >
             <FileJson size={12} />
-            Format
+            {t('templateDetail.format')}
           </button>
           <button
             type="button"
@@ -383,7 +167,7 @@ function EditorTab({
             className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded px-3 py-1.5 transition-colors disabled:opacity-40"
           >
             <Shield size={12} />
-            Validate
+            {t('templateDetail.validate')}
           </button>
           <button
             type="button"
@@ -395,7 +179,7 @@ function EditorTab({
             )}
           >
             {saved ? <Check size={12} /> : <Save size={12} />}
-            {saved ? 'Saved' : 'Save'}
+            {saved ? t('common.saved') : t('common.save')}
           </button>
         </div>
       </div>
@@ -412,8 +196,13 @@ function EditorTab({
         >
           <Shield size={14} />
           {validateResult.valid
-            ? `Valid: ${validateResult.agents} agent(s), ${validateResult.configurations} configuration(s)`
-            : `Invalid: ${validateResult.violations.length} violation(s)`}
+            ? t('templateDetail.validationSummaryValid', {
+                agents: validateResult.agents,
+                configurations: validateResult.configurations,
+              })
+            : t('templateDetail.validationSummaryInvalid', {
+                count: validateResult.violations.length,
+              })}
         </div>
       )}
 
@@ -424,6 +213,25 @@ function EditorTab({
           language="json"
           value={content}
           onChange={handleChange}
+          onMount={async (_editor, monaco: Monaco) => {
+            try {
+              const schema = await api.schema()
+              monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
+                validate: true,
+                allowComments: false,
+                schemaValidation: 'error',
+                schemas: [
+                  {
+                    uri: 'https://raw.githubusercontent.com/BuggyBlues/shadow/main/apps/cloud/schemas/config.schema.json',
+                    fileMatch: ['*'],
+                    schema,
+                  },
+                ],
+              })
+            } catch {
+              // Schema fetch failed — editor works without validation
+            }
+          }}
           theme="vs-dark"
           options={{
             minimap: { enabled: false },
@@ -446,6 +254,7 @@ function EditorTab({
 // ── Versions Tab ──────────────────────────────────────────────────────────────
 
 function VersionsTab({ name }: { name: string }) {
+  const { t } = useTranslation()
   const toast = useToast()
   const queryClient = useQueryClient()
 
@@ -459,16 +268,16 @@ function VersionsTab({ name }: { name: string }) {
     onSuccess: (_, version) => {
       queryClient.invalidateQueries({ queryKey: ['my-template', name] })
       queryClient.invalidateQueries({ queryKey: ['my-template-versions', name] })
-      toast.success(`Restored version ${version}`)
+      toast.success(t('templateDetail.restored', { version }))
     },
-    onError: (err) => toast.error(`Restore failed: ${err.message}`),
+    onError: (err) => toast.error(`${t('templateDetail.restoreFailed')}: ${err.message}`),
   })
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12 text-gray-500 text-sm">
         <Loader2 size={16} className="animate-spin mr-2" />
-        Loading versions...
+        {t('templateDetail.loadingVersions')}
       </div>
     )
   }
@@ -479,8 +288,8 @@ function VersionsTab({ name }: { name: string }) {
     return (
       <EmptyState
         icon={<History size={32} />}
-        title="No version history"
-        description="Edit and save the template to create version history."
+        title={t('templateDetail.noVersionHistory')}
+        description={t('templateDetail.editAndSaveToCreate')}
       />
     )
   }
@@ -488,9 +297,10 @@ function VersionsTab({ name }: { name: string }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-500">
-        Current version: <span className="text-white font-medium">v{data?.current ?? 1}</span>
+        {t('templateDetail.currentVersion')}{' '}
+        <span className="text-white font-medium">v{data?.current ?? 1}</span>
         {' · '}
-        {versions.length} {pluralize(versions.length, 'version')} total
+        {versions.length} {t('templateDetail.totalVersions')}
       </p>
       <div className="space-y-2">
         {versions.map((v) => (
@@ -514,10 +324,10 @@ function VersionsTab({ name }: { name: string }) {
               </div>
               <div>
                 <span className="text-sm text-gray-200">
-                  Version {v.version}
+                  {t('templateDetail.versionLabel', { version: v.version })}
                   {v.current && (
                     <Badge variant="info" size="sm" className="ml-2">
-                      current
+                      {t('templateDetail.current')}
                     </Badge>
                   )}
                 </span>
@@ -537,7 +347,7 @@ function VersionsTab({ name }: { name: string }) {
                 className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
               >
                 <RotateCcw size={12} />
-                Restore
+                {t('templateDetail.restore')}
               </button>
             )}
           </div>
@@ -566,16 +376,23 @@ export function MyTemplateDetailPage() {
     mutationFn: () => api.myTemplates.delete(name),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-templates'] })
-      toast.success('Template deleted')
+      toast.success(t('templateDetail.templateDeleted'))
       navigate({ to: '/my-templates' })
     },
-    onError: () => toast.error('Failed to delete'),
+    onError: () => toast.error(t('templateDetail.templateDeleteFailed')),
   })
 
   const agents = useMemo(
-    () => (data?.content ? parseAgentDetails(data.content) : []),
+    () => (data?.content ? parseTemplateAgents(data.content) : []),
     [data?.content],
   )
+  const templateContent = data?.content as Record<string, unknown> | undefined
+  const deployments = templateContent?.deployments as Record<string, unknown> | undefined
+  const namespace = deployments?.namespace as string | undefined
+  const configurations = (templateContent?.configurations ?? deployments?.configurations) as
+    | unknown[]
+    | undefined
+  const providers = (templateContent?.providers ?? deployments?.providers) as unknown[] | undefined
 
   const tabs = [
     { id: 'overview', label: t('templateDetail.overview'), icon: <FileJson size={13} /> },
@@ -598,7 +415,7 @@ export function MyTemplateDetailPage() {
     return (
       <div className="flex items-center justify-center py-20 text-gray-500 text-sm">
         <Loader2 size={18} className="animate-spin mr-2" />
-        Loading template...
+        {t('templateDetail.loadingTemplate')}
       </div>
     )
   }
@@ -612,13 +429,13 @@ export function MyTemplateDetailPage() {
         />
         <EmptyState
           title={t('storeDetail.templateNotFound')}
-          description={`The template "${name}" does not exist.`}
+          description={t('templateDetail.missingTemplateDescription', { name })}
           action={
             <Link
               to="/my-templates"
               className="text-sm text-blue-400 hover:text-blue-300 border border-blue-800 rounded-lg px-4 py-2"
             >
-              Back to My Templates
+              {t('templateDetail.backToTemplates')}
             </Link>
           }
         />
@@ -627,89 +444,175 @@ export function MyTemplateDetailPage() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <Breadcrumb
-        items={[{ label: t('templates.title'), to: '/my-templates' }, { label: name }]}
-        className="mb-4"
-      />
-
-      {/* Header */}
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-semibold flex items-center gap-2">
-            <FileJson size={20} className="text-blue-400" />
-            {name}
-            <Badge variant="default" size="sm">
-              v{data.version ?? 1}
-            </Badge>
-          </h1>
-          {data.templateSlug && (
-            <p className="text-xs text-gray-600 mt-1 flex items-center gap-1">
-              <GitFork size={12} />
-              Forked from{' '}
-              <Link
-                to="/store/$name"
-                params={{ name: data.templateSlug }}
-                className="text-gray-400 hover:text-blue-400 transition-colors"
-              >
-                {data.templateSlug}
-              </Link>
-            </p>
-          )}
-          <p className="text-sm text-gray-500 mt-1">
-            {agents.length} {pluralize(agents.length, 'agent')}
-            {' · '}Version {data.version ?? 1}
-          </p>
+    <TemplateDetailShell
+      breadcrumbItems={[{ label: t('templates.title'), to: '/my-templates' }, { label: name }]}
+      heroIcon={
+        <div className="w-14 h-14 rounded-2xl bg-blue-900/20 border border-blue-800/40 flex items-center justify-center">
+          <FileJson size={24} className="text-blue-400" />
         </div>
-        <div className="flex items-center gap-2">
+      }
+      title={name}
+      titleMeta={
+        <>
+          <Badge variant="default" size="sm">
+            v{data.version ?? 1}
+          </Badge>
+          {data.templateSlug && (
+            <Badge variant="outline" size="sm" icon={<GitFork size={10} />}>
+              {data.templateSlug}
+            </Badge>
+          )}
+        </>
+      }
+      description={
+        data.templateSlug
+          ? t('templateDetail.forkedDescription', { name: data.templateSlug })
+          : t('templateDetail.customDescription')
+      }
+      supportingText={
+        data.templateSlug ? (
+          <p className="text-xs text-gray-600 flex items-center gap-1">
+            <GitFork size={12} />
+            <span>{t('templateDetail.forkedFrom')}</span>
+            <Link
+              to="/store/$name"
+              params={{ name: data.templateSlug }}
+              className="text-gray-400 hover:text-blue-400 transition-colors"
+            >
+              {data.templateSlug}
+            </Link>
+          </p>
+        ) : null
+      }
+      chips={
+        <>
+          <div className="flex items-center gap-1.5 text-xs text-gray-300 bg-gray-900 border border-gray-800 px-3 py-1.5 rounded-full">
+            <Users size={11} className="text-blue-400" />
+            {t('templateDetail.agentsCount', { count: agents.length })}
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-gray-300 bg-gray-900 border border-gray-800 px-3 py-1.5 rounded-full">
+            <Layers size={11} className="text-purple-400" />
+            {Array.isArray(configurations) ? configurations.length : 0}{' '}
+            {t('templateDetail.configurations')}
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-gray-300 bg-gray-900 border border-gray-800 px-3 py-1.5 rounded-full">
+            <Cpu size={11} className="text-orange-400" />
+            {Array.isArray(providers) ? providers.length : 0} {t('templateDetail.providers')}
+          </div>
+        </>
+      }
+      actions={
+        <>
           <Link
             to="/store/$name/deploy"
             params={{ name: data.templateSlug ?? name }}
-            className="flex items-center gap-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors"
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
           >
-            <Rocket size={14} />
-            Deploy
+            <Rocket size={16} />
+            {t('common.deploy')}
           </Link>
           <button
             type="button"
             onClick={() => {
-              if (confirm(`Delete template "${name}"?`)) deleteMutation.mutate()
+              if (confirm(t('templates.deleteConfirm', { name }))) deleteMutation.mutate()
             }}
-            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-red-400 border border-gray-700 hover:border-red-800 px-3 py-2 rounded-lg transition-colors"
+            className="flex items-center gap-2 text-sm text-gray-300 hover:text-red-300 border border-gray-700 hover:border-red-700 px-4 py-2.5 rounded-lg transition-colors"
           >
             <Trash2 size={14} />
+            {t('common.delete')}
           </button>
           <Link
             to="/my-templates"
-            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-2 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2.5 rounded-lg transition-colors"
           >
             <ArrowLeft size={14} />
-            Back
+            {t('common.back')}
           </Link>
+        </>
+      }
+      sidebar={
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            {t('templateDetail.quickInfo')}
+          </h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                <Users size={12} />
+                {t('templateDetail.agents')}
+              </span>
+              <span className="text-sm font-medium">{agents.length}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                <Layers size={12} />
+                {t('clusters.namespace')}
+              </span>
+              <span className="text-sm font-mono text-gray-300">
+                {namespace ?? t('common.none')}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                <Settings size={12} />
+                {t('templateDetail.configurations')}
+              </span>
+              <span className="text-sm text-gray-300">
+                {Array.isArray(configurations) ? configurations.length : 0}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                <Cpu size={12} />
+                {t('templateDetail.providers')}
+              </span>
+              <span className="text-sm text-gray-300">
+                {Array.isArray(providers) ? providers.length : 0}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                <History size={12} />
+                {t('templateDetail.version')}
+              </span>
+              <span className="text-sm font-mono text-gray-300">v{data.version ?? 1}</span>
+            </div>
+          </div>
         </div>
-      </div>
-
-      {/* Tabs */}
-      <Tabs items={tabs} active={activeTab} onChange={setActiveTab} className="mb-6" />
-
-      {/* Tab content */}
-      <div className="min-h-[400px]">
-        {activeTab === 'overview' && <OverviewPanel content={data.content} agents={agents} />}
-        {activeTab === 'agents' && <AgentsTab agents={agents} />}
-        {activeTab === 'editor' && (
-          <EditorTab name={name} content={data.content} templateSlug={data.templateSlug} />
-        )}
-        {activeTab === 'versions' && <VersionsTab name={name} />}
-      </div>
-    </div>
+      }
+      tabs={tabs}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+    >
+      {activeTab === 'overview' && <OverviewPanel content={data.content} agents={agents} />}
+      {activeTab === 'agents' && (
+        <TemplateAgentsTab
+          agents={agents}
+          emptyTitle={t('templateDetail.noAgents')}
+          emptyDescription={t('templateDetail.noAgents')}
+          introText={t('templateDetail.agentsInTemplate', { count: agents.length })}
+        />
+      )}
+      {activeTab === 'editor' && (
+        <EditorTab name={name} content={data.content} templateSlug={data.templateSlug} />
+      )}
+      {activeTab === 'versions' && <VersionsTab name={name} />}
+    </TemplateDetailShell>
   )
 }
 
 // ── Overview Panel ────────────────────────────────────────────────────────────
 
-function OverviewPanel({ content, agents }: { content: unknown; agents: AgentDetail[] }) {
+function OverviewPanel({ content, agents }: { content: unknown; agents: TemplateAgentInfo[] }) {
+  const { t } = useTranslation()
+
   if (!content || typeof content !== 'object') {
-    return <EmptyState title="No content" description="Template has no configuration data." />
+    return (
+      <EmptyState
+        title={t('templateDetail.noContent')}
+        description={t('templateDetail.noContentDescription')}
+      />
+    )
   }
   const data = content as Record<string, unknown>
   const deployments = data.deployments as Record<string, unknown> | undefined
@@ -722,22 +625,22 @@ function OverviewPanel({ content, agents }: { content: unknown; agents: AgentDet
       {/* Quick stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard
-          label="Agents"
+          label={t('templateDetail.agents')}
           value={agents.length}
           icon={<Users size={14} className="text-blue-400" />}
         />
         <StatCard
-          label="Namespace"
-          value={namespace ?? '—'}
+          label={t('clusters.namespace')}
+          value={namespace ?? t('common.none')}
           icon={<Layers size={14} className="text-purple-400" />}
         />
         <StatCard
-          label="Configurations"
+          label={t('templateDetail.configurations')}
           value={Array.isArray(configs) ? configs.length : 0}
           icon={<Settings size={14} className="text-green-400" />}
         />
         <StatCard
-          label="Providers"
+          label={t('templateDetail.providers')}
           value={Array.isArray(providers) ? providers.length : 0}
           icon={<Cpu size={14} className="text-orange-400" />}
         />
@@ -747,7 +650,7 @@ function OverviewPanel({ content, agents }: { content: unknown; agents: AgentDet
       <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
         <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
           <Users size={14} className="text-blue-400" />
-          Agents
+          {t('templateDetail.agentSummary')}
         </h3>
         <div className="space-y-2">
           {agents.map((a) => (
@@ -771,19 +674,11 @@ function OverviewPanel({ content, agents }: { content: unknown; agents: AgentDet
       </div>
 
       {/* Raw config preview */}
-      <div>
-        <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
-          <Code size={14} className="text-gray-400" />
-          Configuration Preview
-        </h3>
-        <CodeBlock
-          code={JSON.stringify(content, null, 2)}
-          language="json"
-          title="Template JSON"
-          showLineNumbers
-          maxHeight="400px"
-        />
-      </div>
+      <TemplateConfigTab
+        templateData={content}
+        description={t('templateDetail.configPreviewDescription')}
+        title={t('templateDetail.configPreview')}
+      />
     </div>
   )
 }

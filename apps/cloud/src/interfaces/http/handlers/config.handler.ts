@@ -4,6 +4,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Hono } from 'hono'
 import type { HandlerContext } from './types.js'
 
@@ -68,6 +69,24 @@ export function createConfigHandler(ctx: HandlerContext): Hono {
     } catch (err) {
       return c.json({ error: (err as Error).message }, 400)
     }
+  })
+
+  // JSON Schema endpoint — drives Monaco autocomplete in the console
+  app.get('/schema', (c) => {
+    const schemaPath = resolve(
+      fileURLToPath(import.meta.url),
+      '..',
+      '..',
+      '..',
+      '..',
+      'schemas',
+      'config.schema.json',
+    )
+    if (!existsSync(schemaPath)) {
+      return c.json({ error: 'Schema file not found. Run pnpm generate:schema first.' }, 404)
+    }
+    const schema = JSON.parse(readFileSync(schemaPath, 'utf-8'))
+    return c.json(schema)
   })
 
   return app

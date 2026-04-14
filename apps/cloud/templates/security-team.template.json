@@ -1,97 +1,85 @@
 {
   "version": "1.0.0",
-  "name": "Security Team",
-  "description": "Three-agent security team: vulnerability scanner, dependency auditor, and secrets detective. Continuously monitors your codebase and infrastructure for security issues.",
+  "name": "${i18n:name}",
+  "description": "${i18n:description}",
   "environment": "production",
   "team": {
     "name": "security-team",
-    "description": "Continuous security monitoring: vulnerabilities, dependencies, and secrets",
-    "defaultModel": {
-      "preferred": "anthropic/claude-sonnet-4-5",
-      "fallbacks": ["deepseek/deepseek-chat", "openai/gpt-4o"],
-      "constraints": {
-        "temperature": 0.1,
-        "maxTokens": 8192,
-        "thinkingLevel": "high"
+    "description": "Continuous security monitoring: vulnerabilities, dependencies, and secrets"
+  },
+  "use": [
+    {
+      "plugin": "shadowob",
+      "options": {
+        "servers": [
+          {
+            "id": "security-ops",
+            "name": "Security Ops",
+            "slug": "security-ops",
+            "channels": [
+              {
+                "id": "findings",
+                "title": "Security Findings",
+                "type": "text"
+              },
+              {
+                "id": "dependencies",
+                "title": "Dependencies",
+                "type": "text"
+              },
+              {
+                "id": "secrets",
+                "title": "Secrets Alerts",
+                "type": "text"
+              },
+              {
+                "id": "weekly-report",
+                "title": "Weekly Report",
+                "type": "text"
+              }
+            ]
+          }
+        ],
+        "buddies": [
+          {
+            "id": "vuln-bot",
+            "name": "Vuln Scanner"
+          },
+          {
+            "id": "dep-bot",
+            "name": "Dep Auditor"
+          },
+          {
+            "id": "secrets-bot",
+            "name": "Secrets Detective"
+          }
+        ],
+        "bindings": [
+          {
+            "targetId": "vuln-bot",
+            "targetType": "buddy",
+            "servers": ["security-ops"],
+            "channels": ["findings"],
+            "agentId": "vuln-scanner"
+          },
+          {
+            "targetId": "dep-bot",
+            "targetType": "buddy",
+            "servers": ["security-ops"],
+            "channels": ["dependencies"],
+            "agentId": "dep-auditor"
+          },
+          {
+            "targetId": "secrets-bot",
+            "targetType": "buddy",
+            "servers": ["security-ops"],
+            "channels": ["secrets"],
+            "agentId": "secrets-detective"
+          }
+        ]
       }
-    },
-    "defaultCompliance": {
-      "riskTier": "high",
-      "auditLogging": true,
-      "humanInTheLoop": "conditional",
-      "retentionPeriod": "2y"
     }
-  },
-  "plugins": {
-    "shadowob": {
-      "servers": [
-        {
-          "id": "security-ops",
-          "name": "Security Ops",
-          "slug": "security-ops",
-          "channels": [
-            {
-              "id": "findings",
-              "title": "Security Findings",
-              "type": "text"
-            },
-            {
-              "id": "dependencies",
-              "title": "Dependencies",
-              "type": "text"
-            },
-            {
-              "id": "secrets",
-              "title": "Secrets Alerts",
-              "type": "text"
-            },
-            {
-              "id": "weekly-report",
-              "title": "Weekly Report",
-              "type": "text"
-            }
-          ]
-        }
-      ],
-      "buddies": [
-        {
-          "id": "vuln-bot",
-          "name": "Vuln Scanner"
-        },
-        {
-          "id": "dep-bot",
-          "name": "Dep Auditor"
-        },
-        {
-          "id": "secrets-bot",
-          "name": "Secrets Detective"
-        }
-      ],
-      "bindings": [
-        {
-          "targetId": "vuln-bot",
-          "targetType": "buddy",
-          "servers": ["security-ops"],
-          "channels": ["findings"],
-          "agentId": "vuln-scanner"
-        },
-        {
-          "targetId": "dep-bot",
-          "targetType": "buddy",
-          "servers": ["security-ops"],
-          "channels": ["dependencies"],
-          "agentId": "dep-auditor"
-        },
-        {
-          "targetId": "secrets-bot",
-          "targetType": "buddy",
-          "servers": ["security-ops"],
-          "channels": ["secrets"],
-          "agentId": "secrets-detective"
-        }
-      ]
-    }
-  },
+  ],
   "registry": {
     "providers": [
       {
@@ -153,21 +141,15 @@
         "id": "vuln-scanner",
         "runtime": "openclaw",
         "description": "Scans code for security vulnerabilities: OWASP Top 10, CWE patterns, business logic flaws. Posts findings to the security channel.",
-        "compliance": {
-          "riskTier": "critical",
-          "auditLogging": true,
-          "humanInTheLoop": "conditional",
-          "retentionPeriod": "2y"
-        },
         "identity": {
           "name": "Vuln Scanner",
           "personality": "You are an elite application security researcher. You think like an attacker to find vulnerabilities before bad actors do. You're methodical, thorough, and never miss edge cases. Your findings include proof-of-concept attack vectors so developers understand the real impact. You prioritize ruthlessly: CRITICAL findings get immediate escalation, the rest get detailed write-ups with remediation steps.",
           "systemPrompt": "Perform continuous security scanning of the configured GitHub repository:\n\n**Scan Schedule:**\n- On every PR: lightweight OWASP Top 10 scan of changed files\n- Daily at midnight UTC: full codebase scan\n- Weekly: trend report\n\n**Scan Categories:**\n1. Injection (SQL, NoSQL, command, LDAP)\n2. Authentication & Session management flaws\n3. Sensitive data exposure (PII, credentials, tokens)\n4. XML/JSON injection, deserialization flaws\n5. Access control violations\n6. Security misconfiguration\n7. XSS (stored, reflected, DOM)\n8. Business logic vulnerabilities\n\n**For each finding report:**\n- Severity: CRITICAL | HIGH | MEDIUM | LOW\n- CWE/CVE reference\n- File:line location\n- Attack vector description\n- Proof of concept\n- Remediation steps with code example\n\n**Escalation:**\n- CRITICAL findings → immediate alert to team, create GitHub issue\n- HIGH findings → post to security channel, create GitHub issue\n- MEDIUM/LOW → include in weekly report"
         },
-        "integrations": [
+        "use": [
           {
-            "name": "github",
-            "credentials": {
+            "plugin": "github",
+            "options": {
               "GITHUB_TOKEN": "${env:GITHUB_TOKEN}"
             }
           }
@@ -207,10 +189,10 @@
           "personality": "You are a dependency security specialist. You live and breathe CVE databases and know that most supply chain attacks start with a compromised package. You track the entire dependency tree — direct and transitive. You're pragmatic: you prioritize exploitable vulnerabilities over theoretical ones, and you always specify the safe version to upgrade to.",
           "systemPrompt": "Audit project dependencies continuously:\n\n**Daily checks:**\n1. npm audit / pip-audit / go mod audit — find new CVEs\n2. Check for packages abandoned > 2 years (no releases, no commits)\n3. Alert on any package with 0 weekly downloads (potential typosquatting)\n4. License compliance: flag GPL/AGPL in commercial codebase\n\n**Weekly checks:**\n5. Full dependency tree for outdated major versions\n6. Transitive dependency conflicts\n\n**For each vulnerable dependency:**\n- CVE ID and severity\n- Attack vector and exploitability\n- Affected version range\n- Safe version to upgrade to\n- One-line fix command (e.g., `npm update lodash@4.17.21`)\n\n**Escalation:** Any CVSS > 9.0 → immediate alert"
         },
-        "integrations": [
+        "use": [
           {
-            "name": "github",
-            "credentials": {
+            "plugin": "github",
+            "options": {
               "GITHUB_TOKEN": "${env:GITHUB_TOKEN}"
             }
           }
@@ -245,21 +227,15 @@
         "id": "secrets-detective",
         "runtime": "openclaw",
         "description": "Hunts for exposed secrets, API keys, and credentials in code, git history, and environment configs.",
-        "compliance": {
-          "riskTier": "critical",
-          "auditLogging": true,
-          "humanInTheLoop": "always",
-          "retentionPeriod": "2y"
-        },
         "identity": {
           "name": "Secrets Detective",
           "personality": "You are a secrets detection specialist with an obsessive eye for credential leaks. You know every pattern for AWS keys, GitHub tokens, Stripe secrets, and hundreds of other credential formats. When you find an exposed secret, you treat it as a P0 incident — the secret is already compromised, and you say so clearly. You never store the secret values in your output — only the file location and masked version.",
           "systemPrompt": "Scan for exposed secrets and credentials:\n\n**Scan targets:**\n1. Every git commit (including history on new PRs)\n2. Environment files (.env, .env.local, *.config.js)\n3. Docker files\n4. CI/CD configuration files\n5. Log files in the repository\n\n**Secret patterns to detect:**\n- AWS Access Keys (AKIA...)\n- GitHub/GitLab tokens (ghp_, gho_, glpat-)\n- Stripe keys (sk_live_, pk_live_)\n- Anthropic/OpenAI API keys\n- Private SSH/TLS keys\n- JWT secrets\n- Database connection strings with passwords\n- Slack/Discord/Telegram bot tokens\n- Any string matching entropy > 4.5 bits/char longer than 20 chars\n\n**On finding a secret:**\n1. IMMEDIATELY alert: 'CRITICAL: Secret exposed at {file}:{line}'\n2. Show masked version: first 4 + last 4 chars only\n3. Recommend: rotate the secret NOW, add to .gitignore, use pre-commit hook\n4. Create GitHub issue labeled 'security-critical'\n5. NEVER display the full secret value\n\n**Daily:** scan all new commits. **Weekly:** full repository history scan."
         },
-        "integrations": [
+        "use": [
           {
-            "name": "github",
-            "credentials": {
+            "plugin": "github",
+            "options": {
               "GITHUB_TOKEN": "${env:GITHUB_TOKEN}"
             }
           }
@@ -291,5 +267,15 @@
         }
       }
     ]
+  },
+  "i18n": {
+    "en": {
+      "name": "Security Team",
+      "description": "Three-agent security team: vulnerability scanner, dependency auditor, and secrets detective. Continuously monitors your codebase and infrastructure for security issues."
+    },
+    "zh-CN": {
+      "name": "安全团队",
+      "description": "三智能体安全团队：漏洞扫描器、依赖审计员和密钥侦探。持续监控代码安全、依赖漏洞和密钥泄露。"
+    }
   }
 }

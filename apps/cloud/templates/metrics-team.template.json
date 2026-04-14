@@ -1,69 +1,64 @@
 {
   "version": "1.0.0",
-  "name": "Metrics & Analytics Team",
-  "description": "Two-agent metrics team: a data analyst that pulls daily revenue/traffic reports from Stripe, GA4, and Mixpanel, and an alert agent that watches for anomalies 24/7.",
+  "name": "${i18n:name}",
+  "description": "${i18n:description}",
   "environment": "production",
   "team": {
     "name": "metrics-team",
-    "description": "Business metrics monitoring and analytics reporting team",
-    "defaultModel": {
-      "preferred": "anthropic/claude-sonnet-4-5",
-      "fallbacks": ["deepseek/deepseek-chat", "openai/gpt-4o-mini"],
-      "constraints": {
-        "temperature": 0.1,
-        "maxTokens": 8192
+    "description": "Business metrics monitoring and analytics reporting team"
+  },
+  "use": [
+    {
+      "plugin": "shadowob",
+      "options": {
+        "servers": [
+          {
+            "id": "metrics-hub",
+            "name": "Metrics Hub",
+            "slug": "metrics-hub",
+            "channels": [
+              {
+                "id": "daily-reports",
+                "title": "Daily Reports",
+                "type": "text"
+              },
+              {
+                "id": "alerts",
+                "title": "Alerts",
+                "type": "text"
+              }
+            ]
+          }
+        ],
+        "buddies": [
+          {
+            "id": "analyst-bot",
+            "name": "Data Analyst"
+          },
+          {
+            "id": "alert-bot",
+            "name": "Anomaly Alerter"
+          }
+        ],
+        "bindings": [
+          {
+            "targetId": "analyst-bot",
+            "targetType": "buddy",
+            "servers": ["metrics-hub"],
+            "channels": ["daily-reports"],
+            "agentId": "data-analyst"
+          },
+          {
+            "targetId": "alert-bot",
+            "targetType": "buddy",
+            "servers": ["metrics-hub"],
+            "channels": ["alerts"],
+            "agentId": "anomaly-alerter"
+          }
+        ]
       }
     }
-  },
-  "plugins": {
-    "shadowob": {
-      "servers": [
-        {
-          "id": "metrics-hub",
-          "name": "Metrics Hub",
-          "slug": "metrics-hub",
-          "channels": [
-            {
-              "id": "daily-reports",
-              "title": "Daily Reports",
-              "type": "text"
-            },
-            {
-              "id": "alerts",
-              "title": "Alerts",
-              "type": "text"
-            }
-          ]
-        }
-      ],
-      "buddies": [
-        {
-          "id": "analyst-bot",
-          "name": "Data Analyst"
-        },
-        {
-          "id": "alert-bot",
-          "name": "Anomaly Alerter"
-        }
-      ],
-      "bindings": [
-        {
-          "targetId": "analyst-bot",
-          "targetType": "buddy",
-          "servers": ["metrics-hub"],
-          "channels": ["daily-reports"],
-          "agentId": "data-analyst"
-        },
-        {
-          "targetId": "alert-bot",
-          "targetType": "buddy",
-          "servers": ["metrics-hub"],
-          "channels": ["alerts"],
-          "agentId": "anomaly-alerter"
-        }
-      ]
-    }
-  },
+  ],
   "registry": {
     "providers": [
       {
@@ -141,23 +136,23 @@
           "personality": "You are a sharp data analyst who delivers concise, insight-rich reports. You never just dump raw numbers — you always highlight trends, anomalies, and what they mean for the business. Your reports have a consistent structure: headline metrics, trend analysis, notable changes, and a 'what to watch' section. You're enthusiastic about data but respect people's time.",
           "systemPrompt": "Generate a daily business metrics report at 9:00 AM UTC every day. Pull data from:\n- Stripe: MRR, new subscriptions, churn, failed payments\n- Google Analytics 4: Sessions, users, conversion rate, top pages\n- Mixpanel: Active users, retention, key funnel metrics\n\nReport format:\n## 📊 Daily Metrics Report — {date}\n**Revenue**: ...\n**Traffic**: ...\n**Product**: ...\n**Trends**: ...\n**Watch**: ..."
         },
-        "integrations": [
+        "use": [
           {
-            "name": "stripe",
-            "credentials": {
+            "plugin": "stripe",
+            "options": {
               "STRIPE_SECRET_KEY": "${env:STRIPE_SECRET_KEY}"
             }
           },
           {
-            "name": "google-analytics",
-            "credentials": {
+            "plugin": "google-analytics",
+            "options": {
               "GA4_PROPERTY_ID": "${env:GA4_PROPERTY_ID}",
               "GOOGLE_APPLICATION_CREDENTIALS": "${env:GOOGLE_CREDENTIALS_B64}"
             }
           },
           {
-            "name": "mixpanel",
-            "credentials": {
+            "plugin": "mixpanel",
+            "options": {
               "MIXPANEL_SERVICE_ACCOUNT_USERNAME": "${env:MIXPANEL_USERNAME}",
               "MIXPANEL_SERVICE_ACCOUNT_SECRET": "${env:MIXPANEL_SECRET}",
               "MIXPANEL_PROJECT_ID": "${env:MIXPANEL_PROJECT_ID}"
@@ -200,16 +195,16 @@
           "personality": "You are an always-on anomaly detection sentinel for business metrics. You only alert when something is genuinely unusual — not just normal variance. You calibrate your thresholds based on historical baselines. When you alert, you include: what changed, by how much, when it changed, and a hypothesis for why. You never cry wolf.",
           "systemPrompt": "Monitor business metrics every hour for anomalies:\n- Revenue: Alert if hourly Stripe revenue drops >40% vs same hour yesterday\n- Traffic: Alert if sessions drop >50% or spike >200% vs baseline\n- Errors: Alert if 5xx error rate exceeds 2%\n- Churn: Alert if cancellations in a 4-hour window exceed baseline by 3x\n\nFor each alert include: metric name, current value, expected range, % deviation, and your top hypothesis."
         },
-        "integrations": [
+        "use": [
           {
-            "name": "stripe",
-            "credentials": {
+            "plugin": "stripe",
+            "options": {
               "STRIPE_SECRET_KEY": "${env:STRIPE_SECRET_KEY}"
             }
           },
           {
-            "name": "google-analytics",
-            "credentials": {
+            "plugin": "google-analytics",
+            "options": {
               "GA4_PROPERTY_ID": "${env:GA4_PROPERTY_ID}",
               "GOOGLE_APPLICATION_CREDENTIALS": "${env:GOOGLE_CREDENTIALS_B64}"
             }
@@ -242,5 +237,15 @@
         }
       }
     ]
+  },
+  "i18n": {
+    "en": {
+      "name": "Metrics & Analytics Team",
+      "description": "Two-agent metrics team: a data analyst that pulls daily revenue/traffic reports from Stripe, GA4, and Mixpanel, and an alert agent that watches for anomalies 24/7."
+    },
+    "zh-CN": {
+      "name": "数据分析团队",
+      "description": "双智能体数据团队：数据分析师从 Stripe、GA4 等平台拉取每日收入/流量报告，趋势播报员生成周报摘要。"
+    }
   }
 }

@@ -1,90 +1,80 @@
 {
   "version": "1.0.0",
-  "name": "DevOps Team",
-  "description": "Three-agent DevOps team: infrastructure monitor, CI/CD watcher, and incident responder. Delivers real-time alerts to Telegram/Slack when builds fail, deployments break, or databases degrade.",
+  "name": "${i18n:name}",
+  "description": "${i18n:description}",
   "environment": "production",
   "team": {
     "name": "devops-team",
-    "description": "24/7 DevOps monitoring and incident response team",
-    "defaultModel": {
-      "preferred": "anthropic/claude-sonnet-4-5",
-      "fallbacks": ["deepseek/deepseek-chat", "openai/gpt-4o", "anthropic/claude-haiku-4-5"],
-      "constraints": {
-        "temperature": 0.2,
-        "maxTokens": 4096
+    "description": "24/7 DevOps monitoring and incident response team"
+  },
+  "use": [
+    {
+      "plugin": "shadowob",
+      "options": {
+        "servers": [
+          {
+            "id": "devops-hub",
+            "name": "DevOps Hub",
+            "slug": "devops-hub",
+            "channels": [
+              {
+                "id": "general",
+                "title": "General",
+                "type": "text"
+              },
+              {
+                "id": "alerts",
+                "title": "Alerts",
+                "type": "text"
+              },
+              {
+                "id": "incidents",
+                "title": "Incidents",
+                "type": "text"
+              }
+            ]
+          }
+        ],
+        "buddies": [
+          {
+            "id": "infra-bot",
+            "name": "Infra Monitor"
+          },
+          {
+            "id": "cicd-bot",
+            "name": "CI/CD Watcher"
+          },
+          {
+            "id": "incident-bot",
+            "name": "Incident Responder"
+          }
+        ],
+        "bindings": [
+          {
+            "targetId": "infra-bot",
+            "targetType": "buddy",
+            "servers": ["devops-hub"],
+            "channels": ["general", "alerts"],
+            "agentId": "infra-monitor"
+          },
+          {
+            "targetId": "cicd-bot",
+            "targetType": "buddy",
+            "servers": ["devops-hub"],
+            "channels": ["general", "alerts"],
+            "agentId": "cicd-watcher"
+          },
+          {
+            "targetId": "incident-bot",
+            "targetType": "buddy",
+            "servers": ["devops-hub"],
+            "channels": ["general", "incidents"],
+            "agentId": "incident-responder"
+          }
+        ]
       }
-    },
-    "defaultChannels": {
-      "telegram": true,
-      "slack": true,
-      "shadowob": true
     }
-  },
-  "plugins": {
-    "shadowob": {
-      "servers": [
-        {
-          "id": "devops-hub",
-          "name": "DevOps Hub",
-          "slug": "devops-hub",
-          "channels": [
-            {
-              "id": "general",
-              "title": "General",
-              "type": "text"
-            },
-            {
-              "id": "alerts",
-              "title": "Alerts",
-              "type": "text"
-            },
-            {
-              "id": "incidents",
-              "title": "Incidents",
-              "type": "text"
-            }
-          ]
-        }
-      ],
-      "buddies": [
-        {
-          "id": "infra-bot",
-          "name": "Infra Monitor"
-        },
-        {
-          "id": "cicd-bot",
-          "name": "CI/CD Watcher"
-        },
-        {
-          "id": "incident-bot",
-          "name": "Incident Responder"
-        }
-      ],
-      "bindings": [
-        {
-          "targetId": "infra-bot",
-          "targetType": "buddy",
-          "servers": ["devops-hub"],
-          "channels": ["general", "alerts"],
-          "agentId": "infra-monitor"
-        },
-        {
-          "targetId": "cicd-bot",
-          "targetType": "buddy",
-          "servers": ["devops-hub"],
-          "channels": ["general", "alerts"],
-          "agentId": "cicd-watcher"
-        },
-        {
-          "targetId": "incident-bot",
-          "targetType": "buddy",
-          "servers": ["devops-hub"],
-          "channels": ["general", "incidents"],
-          "agentId": "incident-responder"
-        }
-      ]
-    }
-  },
+  ],
   "registry": {
     "providers": [
       {
@@ -162,16 +152,16 @@
           "personality": "You are a vigilant infrastructure monitoring agent. Your job is to proactively watch system health metrics — CPU usage, memory pressure, disk utilization, database connections, and network latency. You communicate clearly and concisely, using bullet points for status reports. When you detect anomalies, you escalate immediately with specific numbers and recommended actions.",
           "systemPrompt": "Monitor infrastructure health for the team. Check K8s cluster health, pod status, and resource utilization every 30 minutes. Alert the team immediately if CPU > 80%, memory > 90%, or any pod is in CrashLoopBackOff. Generate a daily infrastructure health summary at 9am UTC."
         },
-        "integrations": [
+        "use": [
           {
-            "name": "kubernetes",
-            "credentials": {
+            "plugin": "kubernetes",
+            "options": {
               "KUBECONFIG": "${env:KUBECONFIG_B64}"
             }
           },
           {
-            "name": "postgresql",
-            "credentials": {
+            "plugin": "postgresql",
+            "options": {
               "DATABASE_URL": "${env:DATABASE_URL}"
             }
           }
@@ -211,10 +201,10 @@
           "personality": "You are an expert CI/CD monitoring agent. You watch build pipelines obsessively and immediately alert the team when something breaks. You always include the error log excerpt, the failing test or step name, and a suggested fix. You're knowledgeable about GitHub Actions, Docker, and Kubernetes deployment workflows.",
           "systemPrompt": "Monitor GitHub CI/CD pipelines. Check for failed workflow runs every 10 minutes. When a build fails, immediately alert with: 1) which workflow failed, 2) the error excerpt, 3) which PR/branch triggered it, 4) a suggested fix. Also alert on successful production deployments."
         },
-        "integrations": [
+        "use": [
           {
-            "name": "github",
-            "credentials": {
+            "plugin": "github",
+            "options": {
               "GITHUB_TOKEN": "${env:GITHUB_TOKEN}"
             }
           }
@@ -254,22 +244,22 @@
           "personality": "You are an incident response specialist. When an incident is declared, you take charge immediately: diagnose the root cause, open a dedicated incident thread, coordinate with team members, and track every action taken. You are calm under pressure, systematic in your approach, and ensure nothing falls through the cracks. You always produce a post-mortem template when an incident is resolved.",
           "systemPrompt": "Respond to infrastructure and application incidents. When an incident is reported: 1) Acknowledge within 2 minutes, 2) Diagnose root cause using available tools, 3) Coordinate with the team on resolution steps, 4) Track all actions in the incidents channel, 5) Produce a post-mortem summary within 1 hour of resolution. You have access to K8s cluster, database, and GitHub."
         },
-        "integrations": [
+        "use": [
           {
-            "name": "kubernetes",
-            "credentials": {
+            "plugin": "kubernetes",
+            "options": {
               "KUBECONFIG": "${env:KUBECONFIG_B64}"
             }
           },
           {
-            "name": "postgresql",
-            "credentials": {
+            "plugin": "postgresql",
+            "options": {
               "DATABASE_URL": "${env:DATABASE_URL}"
             }
           },
           {
-            "name": "github",
-            "credentials": {
+            "plugin": "github",
+            "options": {
               "GITHUB_TOKEN": "${env:GITHUB_TOKEN}"
             }
           }
@@ -294,5 +284,15 @@
         }
       }
     ]
+  },
+  "i18n": {
+    "en": {
+      "name": "DevOps Team",
+      "description": "Three-agent DevOps team: infrastructure monitor, CI/CD watcher, and incident responder. Delivers real-time alerts to Telegram/Slack when builds fail, deployments break, or databases degrade."
+    },
+    "zh-CN": {
+      "name": "DevOps 团队",
+      "description": "三智能体 DevOps 团队：基础设施监控、CI/CD 监控和事件响应。提供实时警报、流水线状态和事件协调。"
+    }
   }
 }

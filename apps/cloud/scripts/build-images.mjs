@@ -123,3 +123,17 @@ for (const image of opts.images) {
 }
 
 console.log('\n✓ All images built successfully')
+
+// Run smoke tests automatically after build (unless pushing, to save time on CI)
+if (!opts.push) {
+  console.log('\n━━━ Running smoke tests ━━━')
+  try {
+    execSync(
+      `node ${join(__dirname, 'smoke-test-images.mjs')} ${opts.images.join(' ')} --tag ${opts.tag}`,
+      { stdio: 'inherit' },
+    )
+  } catch {
+    console.error('\n✗ Smoke tests failed — do NOT deploy this image')
+    process.exit(1)
+  }
+}

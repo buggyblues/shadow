@@ -220,11 +220,17 @@ export class GatewayService {
         stdio: ['pipe', 'pipe', 'pipe'],
       })
 
+      const gatewayProcess = this.gatewayProcess
+      if (!gatewayProcess) {
+        this.setState('error', 'Failed to spawn gateway process')
+        return false
+      }
+
       this.port = port
       this.startedAt = Date.now()
 
       return new Promise((resolve) => {
-        this.gatewayProcess!.stdout?.on('data', (data: Buffer) => {
+        gatewayProcess.stdout?.on('data', (data: Buffer) => {
           const msg = data.toString().trim()
           if (msg) this.emitLog('info', msg, 'gateway')
 
@@ -236,12 +242,12 @@ export class GatewayService {
           }
         })
 
-        this.gatewayProcess!.stderr?.on('data', (data: Buffer) => {
+        gatewayProcess.stderr?.on('data', (data: Buffer) => {
           const msg = data.toString().trim()
           if (msg) this.emitLog('warn', msg, 'gateway')
         })
 
-        this.gatewayProcess!.on('exit', (code) => {
+        gatewayProcess.on('exit', (code) => {
           this.emitLog('info', `Gateway process exited with code ${code}`, 'gateway')
           this.gatewayProcess = null
           this.port = null
@@ -256,7 +262,7 @@ export class GatewayService {
           }
         })
 
-        this.gatewayProcess.on('error', (err: Error) => {
+        gatewayProcess.on('error', (err: Error) => {
           this.emitLog('error', `Gateway error: ${err.message}`, 'gateway')
           this.setState('error', err.message)
           resolve(false)

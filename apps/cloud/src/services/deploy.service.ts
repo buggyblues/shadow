@@ -121,7 +121,7 @@ export class DeployService {
 
     // 2. Provision Shadow resources
     let provision: ProvisionResult | undefined
-    if (!options.skipProvision && config.plugins?.shadowob) {
+    if (!options.skipProvision && config.use?.some((u) => u.plugin === 'shadowob')) {
       const shadowUrl = options.shadowUrl ?? process.env.SHADOW_SERVER_URL
       const shadowToken = options.shadowToken ?? process.env.SHADOW_USER_TOKEN
 
@@ -132,28 +132,37 @@ export class DeployService {
         )
       } else {
         this.logger.step('Provisioning Shadow resources...')
-        const existingState = loadProvisionState(filePath, options.stateDir)
-        provision = await this.provisionService.provision(config, {
-          serverUrl: shadowUrl,
-          userToken: shadowToken,
-          dryRun: options.dryRun,
-          existingState,
-        })
-
-        if (!options.dryRun) {
-          this.logger.success(
-            `Provisioned: ${provision.servers.size} server(s), ` +
-              `${provision.channels.size} channel(s), ` +
-              `${provision.buddies.size} buddy/buddies`,
-          )
-
-          const newState = provisionResultToState(provision, shadowUrl, {
-            stackName: options.stack ?? 'dev',
-            namespace,
+        emit('Provisioning Shadow resources...\n')
+        try {
+          const existingState = loadProvisionState(filePath, options.stateDir)
+          provision = await this.provisionService.provision(config, {
+            serverUrl: shadowUrl,
+            userToken: shadowToken,
+            dryRun: options.dryRun,
+            existingState,
           })
-          const merged = mergeProvisionState(existingState, newState)
-          const statePath = saveProvisionState(filePath, merged, options.stateDir)
-          this.logger.dim(`  State saved: ${statePath}`)
+
+          if (!options.dryRun) {
+            this.logger.success(
+              `Provisioned: ${provision.servers.size} server(s), ` +
+                `${provision.channels.size} channel(s), ` +
+                `${provision.buddies.size} buddy/buddies`,
+            )
+
+            const newState = provisionResultToState(provision, shadowUrl, {
+              stackName: options.stack ?? 'dev',
+              namespace,
+            })
+            const merged = mergeProvisionState(existingState, newState)
+            const statePath = saveProvisionState(filePath, merged, options.stateDir)
+            this.logger.dim(`  State saved: ${statePath}`)
+          }
+        } catch (provisionError) {
+          const msg = (provisionError as Error).message
+          emit(`Shadow provisioning failed: ${msg}\n`)
+          throw new Error(
+            `Shadow provisioning failed. Check that SHADOW_SERVER_URL is reachable and SHADOW_USER_TOKEN is valid.\n${msg}`,
+          )
         }
       }
     }
@@ -250,15 +259,17 @@ export class DeployService {
         this.logger.warn('Stack is locked — attempting to cancel previous operation...')
         emit('Stack is locked — canceling stale lock...\n')
         try {
-          const tmpStack = await this.k8s.getOrCreateStack({
-            stackName: options.stack ?? 'dev',
-            config: resolved,
-            namespace,
-            provision,
-            shadowServerUrl: k8sShadowUrl,
-            kubeContext: options.k8sContext,
-            imagePullPolicy: options.imagePullPolicy ?? 'IfNotPresent',
-          }).catch(() => null)
+          const tmpStack = await this.k8s
+            .getOrCreateStack({
+              stackName: options.stack ?? 'dev',
+              config: resolved,
+              namespace,
+              provision,
+              shadowServerUrl: k8sShadowUrl,
+              kubeContext: options.k8sContext,
+              imagePullPolicy: options.imagePullPolicy ?? 'IfNotPresent',
+            })
+            .catch(() => null)
           if (tmpStack) {
             await tmpStack.cancel()
             this.logger.info('Lock canceled, retrying...')
@@ -275,7 +286,9 @@ export class DeployService {
               rmSync(lockDir, { recursive: true })
               this.logger.info('Lock files removed, retrying...')
               emit('Lock files removed, retrying...\n')
-            } catch { /* ignore */ }
+            } catch {
+              /* ignore */
+            }
           }
         }
         // Retry
@@ -345,6 +358,11 @@ export class DeployService {
         onOutput: (out) => process.stdout.write(out),
       })
       this.logger.success('Destroy complete!')
+    } else {
+      // No Pulumi config — fallback to direct kubectl namespace deletion
+      this.logger.info(`No stack config; deleting namespace "${namespace}" directly...`)
+      this.k8s.deleteNamespace(namespace)
+      this.logger.success(`Namespace "${namespace}" deleted.`)
     }
   }
 }

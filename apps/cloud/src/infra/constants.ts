@@ -3,22 +3,25 @@
  *
  * Centralizes magic values that were previously duplicated across
  * infra/index.ts and infra/agent-deployment.ts.
+ *
+ * All runners use the same user (openclaw:1000) and home directory.
+ * Follows OpenClaw's standard directory layout: ~/.openclaw/openclaw.json
  */
 
 /** Health check port — must match entrypoint.mjs and Dockerfile EXPOSE */
 export const HEALTH_PORT = 3100
 
-/** ConfigMap mount path inside agent containers */
-export const CONFIG_MOUNT_PATH = '/etc/shadowob-cloud'
+/** Home directory for the non-root openclaw user (UID 1000) */
+export const HOME_DIR = '/home/openclaw'
 
-/** OpenClaw data directory (HOME=/home/node) */
-export const OPENCLAW_DATA_PATH = '/home/node/.openclaw'
+/** OpenClaw state directory (standard: ~/.openclaw) */
+export const OPENCLAW_DATA_PATH = `${HOME_DIR}/.openclaw`
 
-/** Agent log directory */
+/** Log directory path */
 export const LOG_PATH = '/var/log/openclaw'
 
-/** Home directory for the non-root node user (UID 1000) */
-export const HOME_DIR = '/home/node'
+/** ConfigMap mount path — read-only source config from Pulumi */
+export const CONFIG_MOUNT_PATH = '/etc/openclaw'
 
 /** Git clone init container image */
 export const GIT_INIT_IMAGE = 'alpine/git:latest'
@@ -61,8 +64,8 @@ export const STARTUP_PROBE = {
 /** Standard volume mounts for every agent container */
 export function baseVolumeMounts() {
   return [
-    { name: 'config', mountPath: CONFIG_MOUNT_PATH, readOnly: true },
     { name: 'openclaw-data', mountPath: OPENCLAW_DATA_PATH },
+    { name: 'config', mountPath: CONFIG_MOUNT_PATH, readOnly: true },
     { name: 'logs', mountPath: LOG_PATH },
     { name: 'tmp', mountPath: '/tmp' },
   ]
@@ -71,8 +74,8 @@ export function baseVolumeMounts() {
 /** Standard volumes for every agent pod */
 export function baseVolumes(configMapName: string) {
   return [
-    { name: 'config', configMap: { name: configMapName } },
     { name: 'openclaw-data', emptyDir: {} },
+    { name: 'config', configMap: { name: configMapName } },
     { name: 'logs', emptyDir: {} },
     { name: 'tmp', emptyDir: {} },
   ]
@@ -84,6 +87,7 @@ export function baseEnvVars(agentName: string) {
     { name: 'AGENT_ID', value: agentName },
     { name: 'NODE_ENV', value: 'production' },
     { name: 'HOME', value: HOME_DIR },
-    { name: 'OPENCLAW_DIR', value: OPENCLAW_DATA_PATH },
+    { name: 'OPENCLAW_GATEWAY_PORT', value: String(HEALTH_PORT) },
+    { name: 'OPENCLAW_NO_RESPAWN', value: '1' },
   ]
 }

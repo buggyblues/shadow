@@ -122,6 +122,7 @@ export async function loadAllPlugins(registry: PluginRegistry): Promise<void> {
     import('./hume/index.js'),
     import('./serena/index.js'),
     import('./postman-api/index.js'),
+    import('./gitagent/index.js'),
   ])
 
   for (const mod of pluginModules) {
