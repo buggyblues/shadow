@@ -18,26 +18,33 @@
 
 /* ===== Neon Frost design tokens ===== */
 :root {
+  /* Override rspress base palette → Neon Frost */
+  --rp-c-bg: #f8fafc;
+  --rp-c-bg-soft: #f1f5f9;
+  --rp-c-bg-alt: #e8edf2;
+  --rp-c-text-1: #0f172a;
+  --rp-c-text-2: #475569;
+  --rp-c-text-3: #64748b;
+
   /* Brand: Cyber Cyan */
   --rp-c-brand: #00c6d1;
   --rp-c-brand-light: #00f3ff;
   --rp-c-brand-dark: #009aa3;
   --rp-c-brand-tint: rgba(0, 198, 209, 0.08);
 
-  /* Surface tokens */
-  --shadow-bg: var(--rp-c-bg);
-  --shadow-dot: color-mix(in oklab, var(--rp-c-text-1) 8%, var(--rp-c-bg) 92%);
-  --shadow-text: color-mix(in oklab, var(--rp-c-text-1) 96%, black 4%);
-  --shadow-text-muted: color-mix(in oklab, var(--rp-c-text-1) 72%, var(--rp-c-bg) 28%);
-  --shadow-text-dim: color-mix(in oklab, var(--rp-c-text-1) 56%, var(--rp-c-bg) 44%);
+  /* Neon Frost surface tokens */
+  --shadow-bg: #f8fafc;
+  --shadow-text: #0f172a;
+  --shadow-text-muted: #64748b;
+  --shadow-text-dim: #94a3b8;
   --shadow-card-bg: rgba(255, 255, 255, 0.75);
   --shadow-card-border: rgba(255, 255, 255, 0.9);
-  --shadow-nav-bg: rgba(255, 255, 255, 0.6);
+  --shadow-nav-bg: rgba(248, 250, 252, 0.75);
   --shadow-section-from: #f8fafc;
   --shadow-section-to: #f1f5f9;
   --shadow-accent: #00c6d1;
   --shadow-accent-strong: #00f3ff;
-  --shadow-accent-contrast: white;
+  --shadow-accent-contrast: #050508;
   --shadow-warm: #f8e71c;
   --shadow-warm-strong: #ffb300;
   --shadow-button-text: #050508;
@@ -82,6 +89,46 @@ body,
   font-family: "Nunito", "Noto Sans SC", sans-serif;
 }
 
+/* Neon Frost heading style — weight 900, tight tracking */
+.shadow-page h1,
+.shadow-page h2,
+.shadow-page h3 {
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--shadow-text);
+}
+.shadow-page h1 {
+  letter-spacing: -0.04em;
+}
+.shadow-page h2 {
+  letter-spacing: -0.03em;
+}
+
+/* Section label — uppercase, cyan, wide tracking */
+.section-label {
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--shadow-accent);
+  display: block;
+  margin-bottom: 12px;
+}
+
+/* Body text inside shadow-page */
+.shadow-page p,
+.shadow-page li {
+  font-weight: 600;
+  line-height: 1.75;
+}
+
+/* CJK text spacing */
+:lang(zh) .shadow-page,
+.shadow-page:lang(zh) {
+  line-height: 1.7;
+  letter-spacing: 0.03em;
+}
+
 /* ZCOOL KuaiLe shorthand */
 .zcool {
   font-family: "ZCOOL KuaiLe", cursive, sans-serif;
@@ -97,11 +144,10 @@ body,
 
 /* Glass card — Neon Frost style */
 .glass-card {
-  background: var(--shadow-card-bg);
+  background: rgba(255, 255, 255, 0.75);
   backdrop-filter: blur(32px);
   -webkit-backdrop-filter: blur(32px);
-  border: 1px solid var(--shadow-card-border);
-  border-top: 1px solid rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.95);
   border-radius: 40px;
   box-shadow:
     0 15px 45px rgba(0, 0, 0, 0.04),
@@ -109,7 +155,8 @@ body,
   transition: all 0.5s var(--bezier-bouncy);
 }
 html.dark .glass-card {
-  border-top-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
 .glass-card:hover {
@@ -328,15 +375,22 @@ html.dark .shadow-page .hero-dot:hover {
   }
 }
 
-/* Shadow page root — dark mode aware */
+/* Shadow page root — Neon Frost light bg + gradient orbs */
 .shadow-page {
-  font-family: "Nunito", "ZCOOL KuaiLe", sans-serif;
+  font-family: "Nunito", "Noto Sans SC", "ZCOOL KuaiLe", sans-serif;
   background-color: var(--shadow-bg);
-  background-image: radial-gradient(var(--shadow-dot) 3px, transparent 3px);
-  background-size: 40px 40px;
+  /* Replace dot-grid with Neon Frost gradient orbs */
+  background-image:
+    radial-gradient(circle 480px at 0% -8%, rgba(0, 243, 255, 0.28) 0%, transparent 70%),
+    radial-gradient(circle 560px at 108% 32%, rgba(255, 42, 85, 0.18) 0%, transparent 70%);
   color: var(--shadow-text);
   min-height: 100vh;
   isolation: isolate;
+}
+html.dark .shadow-page {
+  background-image:
+    radial-gradient(circle 480px at 0% -8%, rgba(0, 243, 255, 0.14) 0%, transparent 70%),
+    radial-gradient(circle 560px at 108% 32%, rgba(255, 42, 85, 0.1) 0%, transparent 70%);
 }
 
 /* Dark mode text overrides for inline-styled elements */
@@ -562,6 +616,25 @@ html.dark .glass-nav {
   border-color: var(--shadow-card-border);
 }
 
+/* ===== Content area top padding for floating nav ===== */
+/* rspress main content and sidebar need extra top offset because
+   our nav now floats 8px from top + ~56px nav height */
+:root {
+  --rp-header-height: 80px;
+}
+/* Ensure the body's first scrollable section clears the pill */
+[class*="container_"] {
+  padding-top: 0;
+}
+
+/* ===== Light-mode card baseline for shadow-page Tailwind cards ===== */
+/* Give all border-rounded white-bg cards in shadow-page the right glass quality */
+.shadow-page .bg-white\/70,
+.shadow-page .bg-white\/80 {
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
 /* ===== Section visual rhythm ===== */
 
 /* Alternating section tint — adds subtle warmth/coolness */
@@ -738,17 +811,35 @@ html.dark .rspress-doc hr {
   border-color: rgba(55, 58, 68, 0.4);
 }
 
-/* ===== Rspress nav — Neon Frost glassmorphism ===== */
+/* ===== Rspress nav — Neon Frost floating pill ===== */
 .rspress-nav {
-  background: var(--shadow-nav-bg);
+  /* Float away from viewport edges */
+  left: 12px;
+  right: 12px;
+  top: 8px;
+  width: auto;
+  border-radius: 24px;
+  background: rgba(248, 250, 252, 0.75);
   backdrop-filter: blur(32px);
   -webkit-backdrop-filter: blur(32px);
-  border-bottom: 1px solid var(--shadow-card-border);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.06),
+    0 2px 8px rgba(0, 0, 0, 0.04);
 }
 html.dark .rspress-nav {
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-  border-bottom-color: rgba(255, 255, 255, 0.08);
+  background: rgba(5, 5, 8, 0.78);
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+/* Shrink pill on mobile — keeps hamburger usable */
+@media (max-width: 640px) {
+  .rspress-nav {
+    left: 8px;
+    right: 8px;
+    top: 6px;
+    border-radius: 16px;
+  }
 }
 
 /* Logo font in Rspress nav */
