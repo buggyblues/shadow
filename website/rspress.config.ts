@@ -20,7 +20,7 @@ export default defineConfig({
   description:
     'Shadow — AI-native community platform with Buddy collaboration, P2P rental, and shared workspace',
   icon: '/Logo.svg',
-  logo: '/Logo.svg',
+  // logo intentionally omitted — CustomNavTitle slot renders the logo to avoid duplication
   lang: 'en',
   markdown: {
     mdxRs: false,
@@ -41,9 +41,7 @@ export default defineConfig({
     },
   ],
   themeConfig: {
-    socialLinks: [
-      { icon: 'github', mode: 'link', content: 'https://github.com/buggyblues/shadow' },
-    ],
+    // socialLinks removed from nav — GitHub link lives in footer only
     locales: [
       {
         lang: 'en',

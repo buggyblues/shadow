@@ -886,7 +886,10 @@ html.dark .rspress-nav {
 
 /* Hide rspress built-in controls — we manage these ourselves */
 .rspress-nav-appearance,
-.translation {
+.translation,
+.social-links,
+[class*="navAppearance"],
+[class*="socialLink"] {
   display: none !important;
 }
 

@@ -81,12 +81,7 @@ function NavLangSwitcher() {
 const Layout = () => (
   <Theme.Layout
     navTitle={<CustomNavTitle />}
-    afterNavMenu={
-      <>
-        <NavLangSwitcher />
-        <LaunchButton />
-      </>
-    }
+    afterNavMenu={<LaunchButton />}
     bottom={<GlobalFooter />}
   />
 )
