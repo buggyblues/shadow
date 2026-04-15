@@ -54,14 +54,20 @@ export default function remarkCodeGroup() {
   }
 }
 
-function isCodeGroupOpen(node) {
+function isCodeGroupOpen(node: {
+  type: string
+  children?: Array<{ type: string; value?: string }>
+}) {
   if (node.type !== 'paragraph') return false
   const text = node.children?.[0]
-  return text?.type === 'text' && text.value.trim() === ':::code-group'
+  return text?.type === 'text' && text.value?.trim() === ':::code-group'
 }
 
-function isCodeGroupClose(node) {
+function isCodeGroupClose(node: {
+  type: string
+  children?: Array<{ type: string; value?: string }>
+}) {
   if (node.type !== 'paragraph') return false
   const text = node.children?.[0]
-  return text?.type === 'text' && text.value.trim() === ':::'
+  return text?.type === 'text' && text.value?.trim() === ':::'
 }
