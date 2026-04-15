@@ -1,4 +1,37 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+
+/* ─── Scroll reveal ─── */
+function ScrollReveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true)
+          obs.disconnect()
+        }
+      },
+      { threshold: 0.08, rootMargin: '0px 0px -28px 0px' },
+    )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [])
+  return (
+    <div
+      ref={ref}
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'translateY(0) scale(1)' : 'translateY(22px) scale(0.97)',
+        transition: `opacity 0.52s ease ${delay}ms, transform 0.56s cubic-bezier(0.25, 0.46, 0.45, 0.94) ${delay}ms`,
+      }}
+    >
+      {children}
+    </div>
+  )
+}
 
 /* ─── Data ─── */
 
@@ -419,14 +452,14 @@ function DiceFace({ faceIdx }: { faceIdx: number }) {
 
 function DiceSection({ isZh }: { isZh: boolean }) {
   const [rolling, setRolling] = useState(false)
-  const [resultPlay, setResultPlay] = useState<Play | null>(null)
+  const [modalPlay, setModalPlay] = useState<Play | null>(null)
   const rotRef = useRef({ x: -15, y: 25 })
   const [diceRot, setDiceRot] = useState({ x: -15, y: 25 })
 
   const rollDice = () => {
     if (rolling) return
+    setModalPlay(null)
     setRolling(true)
-    setResultPlay(null)
 
     const spinsX = 1440 + Math.random() * 720
     const spinsY = 1080 + Math.random() * 720
@@ -435,128 +468,351 @@ function DiceSection({ isZh }: { isZh: boolean }) {
 
     setTimeout(() => {
       const randomPlay = PLAYS[Math.floor(Math.random() * PLAYS.length)]
-      setResultPlay(randomPlay)
+      setModalPlay(randomPlay)
       setRolling(false)
     }, 2000)
   }
 
   return (
-    <section style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 24px 80px' }}>
-      <div
-        style={{
-          background:
-            'linear-gradient(135deg, rgba(0,243,255,0.04) 0%, rgba(248,231,28,0.04) 100%)',
-          border: '1px dashed rgba(0,198,209,0.3)',
-          borderRadius: '40px',
-          padding: '56px 48px',
-          textAlign: 'center',
-        }}
-      >
-        <span className="section-label">🎲 {isZh ? '随机探索' : 'Random Discovery'}</span>
-        <h2
-          style={{
-            fontSize: '26px',
-            fontWeight: 900,
-            color: 'var(--rp-c-text-1)',
-            marginBottom: '8px',
-            marginTop: '4px',
-            fontFamily: '"Nunito", "Noto Sans SC", sans-serif',
-          }}
-        >
-          {isZh ? '不知道玩什么？' : "Don't know what to play?"}
-        </h2>
-        <p
-          style={{
-            fontSize: '14px',
-            color: 'var(--shadow-text-muted)',
-            fontWeight: 600,
-            marginBottom: '40px',
-          }}
-        >
-          {isZh ? '点击骰子，落地之后随机一个玩法' : 'Click the dice and land on a random play'}
-        </p>
-
-        {/* 3D Dice */}
+    <>
+      <section style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 24px 80px' }}>
         <div
           style={{
-            perspective: '800px',
-            width: '120px',
-            height: '120px',
-            margin: '0 auto 40px',
-            cursor: rolling ? 'not-allowed' : 'pointer',
+            background:
+              'linear-gradient(135deg, rgba(0,243,255,0.04) 0%, rgba(248,231,28,0.04) 100%)',
+            border: '1px dashed rgba(0,198,209,0.3)',
+            borderRadius: '40px',
+            padding: '56px 48px',
+            textAlign: 'center',
           }}
-          onClick={rollDice}
-          onKeyDown={(e) => e.key === 'Enter' && rollDice()}
-          role="button"
-          tabIndex={0}
-          aria-label={isZh ? '投骰子' : 'Roll dice'}
         >
-          <div
+          <span className="section-label">🎲 {isZh ? '随机探索' : 'Random Discovery'}</span>
+          <h2
             style={{
-              width: '120px',
-              height: '120px',
-              position: 'relative',
-              transformStyle: 'preserve-3d',
-              transform: `rotateX(${diceRot.x}deg) rotateY(${diceRot.y}deg)`,
-              transition: rolling
-                ? 'transform 2s cubic-bezier(0.22, 1, 0.36, 1)'
-                : 'transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
+              fontSize: '26px',
+              fontWeight: 900,
+              color: 'var(--rp-c-text-1)',
+              marginBottom: '8px',
+              marginTop: '4px',
+              fontFamily: '"Nunito", "Noto Sans SC", sans-serif',
             }}
           >
-            {[0, 1, 2, 3, 4, 5].map((n) => (
-              <DiceFace key={n} faceIdx={n} />
-            ))}
-          </div>
-        </div>
-
-        {rolling && (
+            {isZh ? '不知道玩什么？' : "Don't know what to play?"}
+          </h2>
           <p
             style={{
               fontSize: '14px',
-              color: 'var(--shadow-accent)',
-              fontWeight: 700,
-              marginBottom: '24px',
+              color: 'var(--shadow-text-muted)',
+              fontWeight: 600,
+              marginBottom: '40px',
             }}
           >
-            {isZh ? '骰子滚动中…' : 'Rolling…'}
+            {isZh ? '点击骰子，落地之后随机一个玩法' : 'Click the dice and land on a random play'}
           </p>
-        )}
 
-        {resultPlay && !rolling && (
-          <div style={{ maxWidth: '320px', margin: '0 auto' }}>
-            <PlayCard play={resultPlay} isZh={isZh} />
+          {/* 3D Dice */}
+          <div
+            style={{
+              perspective: '800px',
+              width: '120px',
+              height: '120px',
+              margin: '0 auto 40px',
+              cursor: rolling ? 'not-allowed' : 'pointer',
+            }}
+            onClick={rollDice}
+            onKeyDown={(e) => e.key === 'Enter' && rollDice()}
+            role="button"
+            tabIndex={0}
+            aria-label={isZh ? '投骰子' : 'Roll dice'}
+          >
+            <div
+              style={{
+                width: '120px',
+                height: '120px',
+                position: 'relative',
+                transformStyle: 'preserve-3d',
+                transform: `rotateX(${diceRot.x}deg) rotateY(${diceRot.y}deg)`,
+                transition: rolling
+                  ? 'transform 2s cubic-bezier(0.22, 1, 0.36, 1)'
+                  : 'transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
+              }}
+            >
+              {[0, 1, 2, 3, 4, 5].map((n) => (
+                <DiceFace key={n} faceIdx={n} />
+              ))}
+            </div>
+          </div>
+
+          {rolling && (
+            <p
+              style={{
+                fontSize: '14px',
+                color: 'var(--shadow-accent)',
+                fontWeight: 700,
+                marginBottom: '24px',
+              }}
+            >
+              {isZh ? '骰子滚动中…' : 'Rolling…'}
+            </p>
+          )}
+
+          {!rolling && (
             <button
               type="button"
               className="btn-secondary"
               onClick={rollDice}
-              style={{
-                marginTop: '16px',
-                width: '100%',
-                justifyContent: 'center',
-                fontSize: '13px',
-              }}
+              style={{ fontSize: '13px', padding: '12px 32px' }}
+            >
+              {isZh ? '投骰子！' : 'Roll the Dice!'}
+            </button>
+          )}
+        </div>
+      </section>
+
+      {/* Dice result modal */}
+      {modalPlay && !rolling && (
+        <DiceModal
+          play={modalPlay}
+          isZh={isZh}
+          onClose={() => setModalPlay(null)}
+          onRollAgain={() => {
+            setModalPlay(null)
+            rollDice()
+          }}
+        />
+      )}
+    </>
+  )
+}
+
+/* ─── Dice result modal with confetti ─── */
+
+const CONFETTI_COLORS = [
+  '#00f3ff',
+  '#f8e71c',
+  '#a78bfa',
+  '#f472b6',
+  '#34d399',
+  '#fb923c',
+  '#f87171',
+]
+
+function Confetti() {
+  const pieces = useMemo<
+    Array<{
+      id: number
+      color: string
+      left: number
+      delay: number
+      duration: number
+      size: number
+      isCircle: boolean
+    }>
+  >(
+    () =>
+      Array.from({ length: 72 }, (_, i) => ({
+        id: i,
+        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+        left: (i * 1.39) % 100,
+        delay: (i * 0.023) % 1.3,
+        duration: 1.8 + ((i * 0.031) % 1.4),
+        size: 6 + (i % 7),
+        isCircle: i % 3 !== 0,
+      })),
+    [],
+  )
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        overflow: 'hidden',
+        pointerEvents: 'none',
+        zIndex: 5,
+      }}
+    >
+      {pieces.map((p) => (
+        <div
+          key={p.id}
+          style={{
+            position: 'absolute',
+            top: '-16px',
+            left: `${p.left}%`,
+            width: `${p.size}px`,
+            height: `${p.size}px`,
+            background: p.color,
+            borderRadius: p.isCircle ? '50%' : '2px',
+            animation: `confettiFall ${p.duration}s ease-in ${p.delay}s forwards`,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
+function DiceModal({
+  play,
+  isZh,
+  onClose,
+  onRollAgain,
+}: {
+  play: Play
+  isZh: boolean
+  onClose: () => void
+  onRollAgain: () => void
+}) {
+  const title = isZh ? play.title : play.titleEn
+  const desc = isZh ? play.desc : play.descEn
+  const category = isZh ? play.category : play.categoryEn
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9999,
+        background: 'rgba(5,5,8,0.82)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px',
+        animation: 'modalFadeIn 0.22s ease',
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: 'relative',
+          background: 'var(--rp-c-bg, #12121a)',
+          border: '1px solid rgba(0,243,255,0.22)',
+          borderRadius: '32px',
+          maxWidth: '460px',
+          width: '100%',
+          overflow: 'hidden',
+          animation: 'modalSlideUp 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+          boxShadow: '0 40px 80px rgba(0,0,0,0.6), 0 0 48px rgba(0,243,255,0.08)',
+        }}
+      >
+        <Confetti />
+
+        {/* Image */}
+        <div style={{ position: 'relative', height: '220px', overflow: 'hidden', flexShrink: 0 }}>
+          <img
+            src={play.image}
+            alt={title}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'linear-gradient(to bottom, transparent 40%, rgba(5,5,8,0.88) 100%)',
+            }}
+          />
+          {/* Win badge */}
+          <div
+            style={{
+              position: 'absolute',
+              top: '16px',
+              left: '16px',
+              background: 'linear-gradient(135deg, #f8e71c, #ffb300)',
+              borderRadius: '999px',
+              padding: '4px 12px',
+              fontSize: '11px',
+              fontWeight: 900,
+              color: '#050508',
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+            }}
+          >
+            🎲 {isZh ? '落地结果' : 'You Landed On'}
+          </div>
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            style={{
+              position: 'absolute',
+              top: '16px',
+              right: '16px',
+              width: '32px',
+              height: '32px',
+              background: 'rgba(5,5,8,0.55)',
+              backdropFilter: 'blur(8px)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: '50%',
+              color: 'rgba(255,255,255,0.85)',
+              cursor: 'pointer',
+              fontSize: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Content */}
+        <div style={{ padding: '24px 28px 28px' }}>
+          <CategoryBadge label={category} color={play.accentColor} />
+          <h2
+            style={{
+              fontSize: '24px',
+              fontWeight: 900,
+              color: 'var(--rp-c-text-1)',
+              marginBottom: '10px',
+              fontFamily: '"Nunito", "Noto Sans SC", sans-serif',
+              lineHeight: 1.2,
+            }}
+          >
+            {title}
+          </h2>
+          <p
+            style={{
+              fontSize: '14px',
+              color: 'var(--shadow-text-muted)',
+              fontWeight: 600,
+              lineHeight: 1.75,
+              marginBottom: '24px',
+            }}
+          >
+            {desc}
+          </p>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <a
+              href="/app"
+              className="btn-primary"
+              style={{ textDecoration: 'none', flex: 1, justifyContent: 'center' }}
+            >
+              {isZh ? '进入玩法' : 'Launch'}
+            </a>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={onRollAgain}
+              style={{ flex: 1, justifyContent: 'center' }}
             >
               {isZh ? '再来一次 🎲' : 'Roll Again 🎲'}
             </button>
           </div>
-        )}
-
-        {!resultPlay && !rolling && (
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={rollDice}
-            style={{ fontSize: '13px', padding: '12px 32px' }}
-          >
-            {isZh ? '投骰子！' : 'Roll the Dice!'}
-          </button>
-        )}
+        </div>
       </div>
-    </section>
+    </div>
   )
 }
 
-/* ─── Category badge + play card ─── */
+/* ─── Dice section ─── */
 
 function CategoryBadge({ label, color }: { label: string; color: string }) {
   return (
@@ -592,11 +848,35 @@ function PlayCard({
   const title = isZh ? play.title : play.titleEn
   const desc = isZh ? play.desc : play.descEn
   const category = isZh ? play.category : play.categoryEn
+  const cardRef = useRef<HTMLDivElement>(null)
+
+  const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = cardRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const x = (e.clientX - rect.left) / rect.width - 0.5
+    const y = (e.clientY - rect.top) / rect.height - 0.5
+    cardRef.current!.style.transition = 'transform 0.08s ease'
+    cardRef.current!.style.transform = `perspective(800px) rotateX(${y * -7}deg) rotateY(${x * 7}deg) translateY(-4px) scale(1.01)`
+  }
+
+  const handleLeave = () => {
+    if (!cardRef.current) return
+    cardRef.current.style.transition = 'transform 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+    cardRef.current.style.transform = ''
+  }
 
   return (
     <div
+      ref={cardRef}
       className="glass-card"
-      style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        willChange: 'transform',
+      }}
+      onMouseMove={handleMove}
+      onMouseLeave={handleLeave}
     >
       <div style={{ padding: '14px 14px 0', flexShrink: 0 }}>
         <img
@@ -714,10 +994,15 @@ function FeaturedCarousel({ isZh }: { isZh: boolean }) {
         </h2>
       </div>
 
-      {/* Large card wrapper */}
+      {/* Large card wrapper — full-bleed cinema style */}
       <div
-        className="glass-card"
-        style={{ position: 'relative', overflow: 'hidden', padding: 0 }}
+        style={{
+          position: 'relative',
+          overflow: 'hidden',
+          padding: 0,
+          borderRadius: '32px',
+          boxShadow: '0 32px 80px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)',
+        }}
         onMouseEnter={() => {
           pauseRef.current = true
         }}
@@ -741,23 +1026,25 @@ function FeaturedCarousel({ isZh }: { isZh: boolean }) {
             <CategoryBadge label={category} color={play.accentColor} />
             <h3
               style={{
-                fontSize: 'clamp(22px, 2.5vw, 32px)',
+                fontSize: 'clamp(26px, 3vw, 42px)',
                 fontWeight: 900,
                 color: '#fff',
-                marginBottom: '12px',
-                lineHeight: 1.2,
+                marginBottom: '14px',
+                lineHeight: 1.15,
                 fontFamily: '"Nunito", "Noto Sans SC", sans-serif',
+                textShadow: '0 2px 16px rgba(0,0,0,0.5)',
               }}
             >
               {title}
             </h3>
             <p
               style={{
-                fontSize: '14px',
-                color: 'rgba(255,255,255,0.72)',
+                fontSize: '15px',
+                color: 'rgba(255,255,255,0.75)',
                 fontWeight: 600,
                 lineHeight: 1.75,
-                marginBottom: '28px',
+                marginBottom: '32px',
+                maxWidth: '520px',
               }}
             >
               {desc}
@@ -770,7 +1057,7 @@ function FeaturedCarousel({ isZh }: { isZh: boolean }) {
               >
                 {isZh ? '开始探索' : 'Start Exploring'}
               </button>
-              <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.55)', fontWeight: 700 }}>
+              <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>
                 {play.starts} {isZh ? '次启动' : 'launches'}
               </span>
             </div>
@@ -921,8 +1208,10 @@ function FeaturedTopics({ isZh }: { isZh: boolean }) {
         style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}
         className="home-topics-grid"
       >
-        {TOPICS.map((topic) => (
-          <TopicCard key={topic.id} topic={topic} isZh={isZh} />
+        {TOPICS.map((topic, i) => (
+          <ScrollReveal key={topic.id} delay={i * 100}>
+            <TopicCard topic={topic} isZh={isZh} />
+          </ScrollReveal>
         ))}
       </div>
     </section>
@@ -982,8 +1271,10 @@ function CategorySection({ meta, isZh }: { meta: CategoryMeta; isZh: boolean }) 
           gap: '20px',
         }}
       >
-        {plays.map((play) => (
-          <PlayCard key={play.id} play={play} isZh={isZh} />
+        {plays.map((play, i) => (
+          <ScrollReveal key={play.id} delay={i * 70}>
+            <PlayCard play={play} isZh={isZh} />
+          </ScrollReveal>
         ))}
       </div>
     </section>
