@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle, Shield } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button, Textarea } from '@shadowob/ui'
+import { PageShell } from '@/components/PageShell'
 import { api, type ValidateResult } from '@/lib/api'
 import { useToast } from '@/stores/toast'
 
@@ -17,8 +18,10 @@ export function ValidatePage() {
     mutationFn: (config: unknown) => api.validate(config),
     onSuccess: (data) => {
       setResult(data)
-      if (data.valid) toast.success(`Valid: ${data.agents} agent(s)`)
-      else toast.error(`Invalid: ${data.violations.length} violation(s)`)
+      if (data.valid) toast.success(t('validate.validationPassedToast', { agents: data.agents }))
+      else {
+        toast.error(t('validate.validationFailedToast', { count: data.violations.length }))
+      }
     },
   })
 
@@ -28,7 +31,7 @@ export function ValidatePage() {
       setResult(null)
       mutation.mutate(parsed)
     } catch {
-      toast.error('Invalid JSON — cannot validate')
+      toast.error(t('validate.invalidJsonCannotValidate'))
       setResult(null)
       mutation.reset()
     }
@@ -38,37 +41,32 @@ export function ValidatePage() {
     try {
       const content = await api.init()
       setConfigText(JSON.stringify(content, null, 2))
-      toast.info('Template loaded')
+      toast.info(t('validate.templateLoaded'))
     } catch {
       /* ignore */
     }
   }
 
   return (
-    <div className="p-6 max-w-4xl">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold">{t('validate.title')}</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{t('validate.description')}</p>
-      </div>
-
+    <PageShell
+      breadcrumb={[{ label: t('validate.title') }]}
+      title={t('validate.title')}
+      description={t('validate.description')}
+      actions={
+        <Button type="button" onClick={handleLoadSample} variant="ghost" size="sm">
+          {t('validate.loadTemplate')}
+        </Button>
+      }
+      narrow
+    >
       <div className="space-y-4">
         {/* Editor */}
-        <div className="relative">
-          <Textarea
-            value={configText}
-            onChange={(e) => setConfigText(e.target.value)}
-            placeholder={t('validate.pasteConfig')}
-            spellCheck={false}
-          />
-          <Button
-            type="button"
-            onClick={handleLoadSample}
-            variant="ghost"
-            size="sm"
-          >
-            {t('validate.loadTemplate')}
-          </Button>
-        </div>
+        <Textarea
+          value={configText}
+          onChange={(e) => setConfigText(e.target.value)}
+          placeholder={t('validate.pasteConfig')}
+          spellCheck={false}
+        />
 
         {/* Actions */}
         <div className="flex items-center gap-3">
@@ -121,17 +119,17 @@ export function ValidatePage() {
 
             {/* Stats */}
             <div className="grid grid-cols-3 gap-3 mb-3">
-              <div className="bg-gray-900/50 rounded p-2">
-                <p className="text-xs text-gray-500">{t('validate.agents')}</p>
+              <div className="bg-bg-secondary/50 rounded p-2">
+                <p className="text-xs text-text-muted">{t('validate.agents')}</p>
                 <p className="text-lg font-semibold">{result.agents}</p>
               </div>
-              <div className="bg-gray-900/50 rounded p-2">
-                <p className="text-xs text-gray-500">{t('validate.configurations')}</p>
+              <div className="bg-bg-secondary/50 rounded p-2">
+                <p className="text-xs text-text-muted">{t('validate.configurations')}</p>
                 <p className="text-lg font-semibold">{result.configurations}</p>
               </div>
-              <div className="bg-gray-900/50 rounded p-2">
-                <p className="text-xs text-gray-500">{t('validate.templateRefs')}</p>
-                <p className="text-xs mt-1 text-gray-400">
+              <div className="bg-bg-secondary/50 rounded p-2">
+                <p className="text-xs text-text-muted">{t('validate.templateRefs')}</p>
+                <p className="text-xs mt-1 text-text-secondary">
                   {result.templateRefs.env} {t('validate.env')}, {result.templateRefs.secret}{' '}
                   {t('validate.secret')}, {result.templateRefs.file} {t('validate.file')}
                 </p>
@@ -144,7 +142,7 @@ export function ValidatePage() {
                 <p className="text-xs text-red-400 font-medium">{t('validate.inlineApiKeys')}</p>
                 {result.violations.map((v, i) => (
                   <div key={i} className="text-xs text-red-300 font-mono pl-4">
-                    {v.path} (prefix: {v.prefix})
+                    {v.path} ({t('validate.prefixLabel')}: {v.prefix})
                   </div>
                 ))}
               </div>
@@ -164,6 +162,6 @@ export function ValidatePage() {
           </div>
         )}
       </div>
-    </div>
+    </PageShell>
   )
 }

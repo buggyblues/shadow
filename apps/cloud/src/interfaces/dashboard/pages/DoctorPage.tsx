@@ -1,7 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { clsx } from 'clsx'
 import { Activity, AlertTriangle, CheckCircle, Clock, XCircle } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button, Card, EmptyState } from '@shadowob/ui'
+import { PageShell } from '@/components/PageShell'
+import { StatCard } from '@/components/StatCard'
+import { StatsGrid } from '@/components/StatsGrid'
 import { api, type DoctorCheck } from '@/lib/api'
 
 function CheckIcon({ status }: { status: DoctorCheck['status'] }) {
@@ -11,6 +15,8 @@ function CheckIcon({ status }: { status: DoctorCheck['status'] }) {
 }
 
 export function DoctorPage() {
+  const { t } = useTranslation()
+
   const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ['doctor'],
     queryFn: api.doctor,
@@ -19,67 +25,63 @@ export function DoctorPage() {
   const lastChecked = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : null
 
   return (
-    <div className="p-6 max-w-2xl">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-semibold">System Health</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Prerequisites and dependency checks</p>
-        </div>
+    <PageShell
+      breadcrumb={[{ label: t('doctor.title') }]}
+      title={t('doctor.title')}
+      description={t('doctor.subtitle')}
+      narrow
+      actions={
         <div className="flex items-center gap-3">
           {lastChecked && (
-            <span className="flex items-center gap-1 text-xs text-gray-600">
+            <span className="flex items-center gap-1 text-xs text-text-muted">
               <Clock size={11} />
               {lastChecked}
             </span>
           )}
           <Button type="button" onClick={() => refetch()} variant="ghost" size="sm">
-            Re-check
+            {t('doctor.recheck')}
           </Button>
         </div>
-      </div>
-
+      }
+    >
       {isLoading && (
         <EmptyState
           icon={Activity}
-          title="Running checks..."
-          description="Checking prerequisites and dependencies"
+          title={t('doctor.runningTitle')}
+          description={t('doctor.runningDescription')}
         />
       )}
-      {error && <EmptyState title="Failed to run health checks" description="Please try again." />}
+      {error && (
+        <EmptyState title={t('doctor.failedTitle')} description={t('doctor.failedDescription')} />
+      )}
 
       {data && (
         <>
           {/* Summary cards */}
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <Card variant="surface">
-              <div className="p-4">
-                <div className="flex items-center gap-2 text-green-400 text-xs mb-1">
-                  <CheckCircle size={13} /> Passing
-                </div>
-                <p className="text-2xl font-semibold text-green-400">{data.summary.pass}</p>
-              </div>
-            </Card>
-            <Card variant="surface">
-              <div className="p-4">
-                <div className="flex items-center gap-2 text-yellow-400 text-xs mb-1">
-                  <AlertTriangle size={13} /> Warnings
-                </div>
-                <p className="text-2xl font-semibold text-yellow-400">{data.summary.warn}</p>
-              </div>
-            </Card>
-            <Card variant="surface">
-              <div className="p-4">
-                <div className="flex items-center gap-2 text-red-400 text-xs mb-1">
-                  <XCircle size={13} /> Failed
-                </div>
-                <p className="text-2xl font-semibold text-red-400">{data.summary.fail}</p>
-              </div>
-            </Card>
-          </div>
+          <StatsGrid className="grid-cols-3 lg:grid-cols-3">
+            <StatCard
+              label={t('settings.passing')}
+              value={data.summary.pass}
+              icon={<CheckCircle size={13} />}
+              color="green"
+            />
+            <StatCard
+              label={t('monitoring.warnings')}
+              value={data.summary.warn}
+              icon={<AlertTriangle size={13} />}
+              color="yellow"
+            />
+            <StatCard
+              label={t('monitoring.failed')}
+              value={data.summary.fail}
+              icon={<XCircle size={13} />}
+              color="red"
+            />
+          </StatsGrid>
 
           {/* Check list */}
           <Card variant="surface">
-            <div className="divide-y divide-gray-800">
+            <div className="divide-y divide-border-subtle">
               {data.checks.map((check) => (
                 <div
                   key={check.name}
@@ -91,7 +93,7 @@ export function DoctorPage() {
                   <CheckIcon status={check.status} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{check.name}</p>
-                    <p className="text-xs text-gray-500 truncate">{check.message}</p>
+                    <p className="text-xs text-text-muted truncate">{check.message}</p>
                   </div>
                   <span
                     className={clsx(
@@ -101,7 +103,7 @@ export function DoctorPage() {
                       check.status === 'fail' && 'bg-red-900/50 text-red-400',
                     )}
                   >
-                    {check.status}
+                    {t(`monitoring.statusLabels.${check.status}`)}
                   </span>
                 </div>
               ))}
@@ -111,11 +113,11 @@ export function DoctorPage() {
           {data.summary.fail === 0 && (
             <div className="mt-4 flex items-center gap-2 text-green-400 text-sm">
               <Activity size={14} />
-              All checks passed — system is ready
+              {t('doctor.allChecksPassed')}
             </div>
           )}
         </>
       )}
-    </div>
+    </PageShell>
   )
 }
