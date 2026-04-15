@@ -4,9 +4,21 @@ import { PublicFooter } from '../components/Layout'
 import './index.css'
 
 /**
- * Floating capsule nav — rendered only on the homepage.
- * rspress nav is hidden via uiSwitch.showNavbar=false on those pages.
- * Right-aligned compact pill: Logo + Launch only (no nav links, no lang toggle).
+ * Background orbs — injected only on the homepage to avoid showing on doc pages.
+ * position:fixed so they cover the full viewport even when scrolling.
+ */
+function HomeOrbs() {
+  return (
+    <>
+      <div className="shadow-orb shadow-orb-1" aria-hidden="true" />
+      <div className="shadow-orb shadow-orb-2" aria-hidden="true" />
+    </>
+  )
+}
+
+/**
+ * Floating capsule nav — homepage only (rspress nav hidden via uiSwitch).
+ * Matches preview.html: centered full-width pill, logo left, links+launch right.
  */
 function HomeCapsuleNav() {
   const { siteData } = usePageData()
@@ -18,7 +30,7 @@ function HomeCapsuleNav() {
   return (
     <header className="shadow-home-capsule-nav">
       <div className="shadow-home-capsule-inner">
-        {/* Logo */}
+        {/* Logo — left */}
         <a
           href={`${base}${prefix}/`}
           className="shadow-home-logo"
@@ -39,14 +51,30 @@ function HomeCapsuleNav() {
           </span>
         </a>
 
-        {/* Launch button only — lang is footer-only, nav links removed */}
-        <a
-          href="/app"
-          className="btn-primary zcool text-base px-5 py-1.5"
-          style={{ textDecoration: 'none' }}
-        >
-          {isZh ? '启动！' : 'Launch'}
-        </a>
+        {/* Right group: nav links + launch */}
+        <div className="shadow-home-nav-right">
+          <a
+            href={`${base}/product/`}
+            className="shadow-home-nav-link"
+            style={{ textDecoration: 'none' }}
+          >
+            {isZh ? '产品' : 'PRODUCT'}
+          </a>
+          <a
+            href={`${base}/platform/introduction`}
+            className="shadow-home-nav-link"
+            style={{ textDecoration: 'none' }}
+          >
+            {isZh ? '开放平台' : 'PLATFORM'}
+          </a>
+          <a
+            href="/app"
+            className="btn-primary zcool"
+            style={{ textDecoration: 'none', padding: '12px 28px', fontSize: '13px' }}
+          >
+            {isZh ? '启动！' : 'Enter App'}
+          </a>
+        </div>
       </div>
     </header>
   )
@@ -116,7 +144,12 @@ const Layout = () => {
       <Theme.Layout
         // biome-ignore lint: rspress LayoutProps type is broad
         uiSwitch={{ showNavbar: false } as never}
-        top={<HomeCapsuleNav />}
+        top={
+          <>
+            <HomeOrbs />
+            <HomeCapsuleNav />
+          </>
+        }
         bottom={<GlobalFooter />}
       />
     )
