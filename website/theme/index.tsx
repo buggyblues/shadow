@@ -1,7 +1,40 @@
-import { useLocation, usePageData } from 'rspress/runtime'
+import { useLang, useLocation, usePageData } from 'rspress/runtime'
 import Theme from 'rspress/theme'
 import { PublicFooter } from '../components/Layout'
 import './index.css'
+
+/**
+ * Replicates @rspress/shared replaceLang — computes equivalent URL in another locale.
+ * Source-reversed from @rspress/theme-default@1.47.1 bundle.
+ * Works with no versioning and cleanUrls=false (rspress default for static builds).
+ */
+function getLangUrl(
+  pathname: string,
+  search: string,
+  currentLang: string,
+  targetLang: string,
+  defaultLang: string,
+  base: string,
+): string {
+  const normalBase = base.endsWith('/') ? base.slice(0, -1) : base
+  let url = pathname.startsWith(normalBase) ? pathname.slice(normalBase.length) : pathname
+  if (!url) url = '/index.html'
+  if (url.endsWith('/')) url += 'index.html'
+
+  const parts = url.split('/').filter(Boolean)
+  let langPart = ''
+
+  if (targetLang !== defaultLang) {
+    langPart = targetLang
+    if (currentLang !== defaultLang) parts.shift() // strip current non-default lang prefix
+  } else {
+    parts.shift() // strip current non-default lang prefix (target IS default)
+  }
+
+  const purePath = parts.join('/') || ''
+  const combined = [langPart, purePath].filter(Boolean).join('/')
+  return `${normalBase}/${combined}${search}`
+}
 
 /**
  * Background orbs — injected only on the homepage to avoid showing on doc pages.
@@ -19,12 +52,18 @@ function HomeOrbs() {
 /**
  * Floating capsule nav — homepage only (rspress nav hidden via uiSwitch).
  * Matches preview.html: centered full-width pill, logo left, links+launch right.
+ * Lang switcher uses same replaceLang logic as rspress's native Translation component
+ * so switching preserves the current page path.
  */
 function HomeCapsuleNav() {
   const { siteData } = usePageData()
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
+  const currentLang = useLang()
   const base = (siteData.base || '/').replace(/\/$/, '')
-  const isZh = pathname.startsWith(`${base}/zh`)
+  const defaultLang = siteData.lang || 'en'
+  const locales: Array<{ lang: string; label: string }> =
+    (siteData.locales as Array<{ lang: string; label: string }>) || []
+  const isZh = currentLang === 'zh'
   const prefix = isZh ? '/zh' : ''
 
   return (
@@ -67,13 +106,19 @@ function HomeCapsuleNav() {
           >
             {isZh ? '开放平台' : 'PLATFORM'}
           </a>
-          <a
-            href={isZh ? `${base}/` : `${base}/zh/`}
-            className="shadow-home-nav-link"
-            style={{ textDecoration: 'none' }}
-          >
-            {isZh ? 'EN' : '中文'}
-          </a>
+          {/* Lang switcher — same replaceLang logic as rspress Translation component */}
+          {locales
+            .filter((l) => l.lang !== currentLang)
+            .map((l) => (
+              <a
+                key={l.lang}
+                href={getLangUrl(pathname, search, currentLang, l.lang, defaultLang, base)}
+                className="shadow-home-nav-link"
+                style={{ textDecoration: 'none' }}
+              >
+                {l.label}
+              </a>
+            ))}
           <a href="/app" className="btn-primary" style={{ textDecoration: 'none' }}>
             {isZh ? '启动！' : 'Launch'}
           </a>
