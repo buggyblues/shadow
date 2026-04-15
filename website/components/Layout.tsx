@@ -302,7 +302,6 @@ export function PublicFooter({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
   const base = getBase()
   const prefix = lang === 'zh' ? '/zh' : ''
   const brandLegal = '虾豆 ShadowOwnBuddy © 2026'
-  const poweredBy = 'Powered by Hono & React & Shadow'
 
   const columns =
     lang === 'zh'
@@ -433,7 +432,7 @@ export function PublicFooter({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
             </div>
           ))}
         </div>
-        {/* Bottom bar */}
+        {/* Bottom bar — copyright left, lang switcher right */}
         <div
           className="pt-6 flex flex-col md:flex-row justify-between items-center gap-3 border-t"
           style={{ borderColor: 'var(--shadow-card-border)' }}
@@ -441,7 +440,7 @@ export function PublicFooter({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
           <span className="text-xs font-medium" style={{ color: 'var(--shadow-text-dim)' }}>
             {brandLegal}
           </span>
-          {/* Language switcher in footer */}
+          {/* Language switcher — bottom right corner */}
           <a
             href={lang === 'zh' ? `${base}/` : `${base}/zh/`}
             className="text-xs font-bold hover:text-cyan-500 transition flex items-center gap-1"
@@ -452,9 +451,6 @@ export function PublicFooter({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
             </svg>
             {lang === 'zh' ? 'English' : '中文'}
           </a>
-          <span className="text-xs font-medium" style={{ color: 'var(--shadow-text-dim)' }}>
-            {poweredBy}
-          </span>
         </div>
       </div>
     </footer>

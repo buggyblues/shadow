@@ -855,13 +855,14 @@ html.dark .rspress-doc hr {
 }
 
 /* ===== Homepage capsule nav — rendered via top slot, rspress nav hidden ===== */
+/* Right-aligned compact pill: Logo + Launch only */
 .shadow-home-capsule-nav {
   position: sticky;
   top: 0;
   z-index: 100;
   display: flex;
-  justify-content: center;
-  padding: 8px 16px 0;
+  justify-content: flex-end;
+  padding: 10px 20px 0;
   /* keep orbs visible behind */
   pointer-events: none;
 }
@@ -869,12 +870,10 @@ html.dark .rspress-doc hr {
   pointer-events: auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  max-width: 1120px;
-  padding: 0 20px;
-  height: 56px;
-  border-radius: 28px;
+  gap: 14px;
+  padding: 0 18px;
+  height: 52px;
+  border-radius: 26px;
   background: rgba(248, 250, 252, 0.82);
   backdrop-filter: blur(32px);
   -webkit-backdrop-filter: blur(32px);
@@ -894,69 +893,25 @@ html.dark .shadow-home-capsule-inner {
   gap: 10px;
   flex-shrink: 0;
 }
-.shadow-home-nav-links {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.shadow-home-nav-link {
-  font-family: "Nunito", "Noto Sans SC", sans-serif;
-  font-weight: 800;
-  font-size: 13px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--rp-c-text-1);
-  padding: 6px 12px;
-  border-radius: 8px;
-  transition:
-    color 0.2s,
-    background 0.2s;
-}
-.shadow-home-nav-link:hover {
-  color: var(--shadow-accent);
-  background: rgba(0, 198, 209, 0.08);
-}
-.shadow-home-nav-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-.shadow-home-lang {
-  font-family: "Nunito", sans-serif;
-  font-weight: 700;
-  font-size: 13px;
-  color: var(--rp-c-text-2);
-  padding: 4px 10px;
-  border-radius: 6px;
-  transition:
-    color 0.2s,
-    background 0.2s;
-}
-.shadow-home-lang:hover {
-  color: var(--rp-c-text-1);
-  background: rgba(0, 0, 0, 0.05);
-}
-html.dark .shadow-home-lang:hover {
-  background: rgba(255, 255, 255, 0.07);
-}
-@media (max-width: 768px) {
-  .shadow-home-capsule-inner {
-    max-width: calc(100% - 8px);
-    padding: 0 12px;
-    border-radius: 20px;
+@media (max-width: 480px) {
+  .shadow-home-capsule-nav {
+    padding: 8px 10px 0;
   }
-  .shadow-home-nav-links {
-    display: none;
+  .shadow-home-capsule-inner {
+    padding: 0 12px;
+    height: 46px;
+    border-radius: 23px;
   }
 }
 
 /* ===== Doc pages — rspress default full-width nav ===== */
-/* Hide dark-mode toggle and GitHub socialLinks; language switcher (.translation) stays visible */
+/* Hide dark-mode toggle, GitHub socialLinks, and language switcher (lang is footer-only) */
 .rspress-nav-appearance,
+.translation,
 .social-links,
 [class*="navAppearance"],
-[class*="socialLink"] {
+[class*="socialLink"],
+[class*="translation"] {
   display: none !important;
 }
 
