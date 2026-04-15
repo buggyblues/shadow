@@ -639,6 +639,47 @@ function PlayCard({
 function FeaturedCarousel({ isZh }: { isZh: boolean }) {
   const featured = PLAYS.filter((p) => p.hot)
   const [active, setActive] = useState(0)
+  const pauseRef = useRef(false)
+
+  // Auto-advance every 5 seconds
+  useEffect(() => {
+    if (featured.length <= 1) return
+    const t = setInterval(() => {
+      if (!pauseRef.current) setActive((a) => (a + 1) % featured.length)
+    }, 5000)
+    return () => clearInterval(t)
+  }, [featured.length])
+
+  const prev = () => setActive((a) => (a - 1 + featured.length) % featured.length)
+  const next = () => setActive((a) => (a + 1) % featured.length)
+
+  const play = featured[active]
+  if (!play) return null
+
+  const title = isZh ? play.title : play.titleEn
+  const desc = isZh ? play.desc : play.descEn
+  const category = isZh ? play.category : play.categoryEn
+
+  const arrowBtn: React.CSSProperties = {
+    position: 'absolute',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    background: 'rgba(5, 5, 8, 0.55)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: '50%',
+    width: '44px',
+    height: '44px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    color: '#fff',
+    fontSize: '20px',
+    zIndex: 10,
+    flexShrink: 0,
+  }
 
   return (
     <section style={{ marginBottom: '56px' }}>
@@ -657,30 +698,95 @@ function FeaturedCarousel({ isZh }: { isZh: boolean }) {
         </h2>
       </div>
 
+      {/* Large card wrapper */}
       <div
-        style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}
-        className="home-featured-grid"
+        className="glass-card"
+        style={{ position: 'relative', overflow: 'hidden', padding: 0 }}
+        onMouseEnter={() => {
+          pauseRef.current = true
+        }}
+        onMouseLeave={() => {
+          pauseRef.current = false
+        }}
       >
-        {featured.map((play, i) => (
-          <div
-            key={play.id}
-            onClick={() => setActive(i)}
-            onKeyDown={(e) => e.key === 'Enter' && setActive(i)}
-            role="button"
-            tabIndex={0}
-            style={{
-              outline: active === i ? '2px solid var(--shadow-accent)' : '2px solid transparent',
-              borderRadius: '42px',
-              transition: 'outline 0.25s',
-              cursor: 'pointer',
-            }}
-          >
-            <PlayCard play={play} isZh={isZh} imgHeight={200} />
+        {/* Animated large card */}
+        <div
+          key={active}
+          className="home-featured-large-card"
+          style={{ animation: 'featuredSlideIn 0.38s ease both' }}
+        >
+          {/* Left: image */}
+          <div className="home-featured-large-img">
+            <img src={play.image} alt={title} loading="lazy" />
           </div>
-        ))}
+
+          {/* Right: content */}
+          <div className="home-featured-large-body">
+            <CategoryBadge label={category} color={play.accentColor} />
+            <h3
+              style={{
+                fontSize: 'clamp(22px, 2.5vw, 32px)',
+                fontWeight: 900,
+                color: 'var(--rp-c-text-1)',
+                marginBottom: '12px',
+                lineHeight: 1.2,
+                fontFamily: '"Nunito", "Noto Sans SC", sans-serif',
+              }}
+            >
+              {title}
+            </h3>
+            <p
+              style={{
+                fontSize: '14px',
+                color: 'var(--shadow-text-muted)',
+                fontWeight: 600,
+                lineHeight: 1.75,
+                marginBottom: '28px',
+                flex: 1,
+              }}
+            >
+              {desc}
+            </p>
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ fontSize: '15px', padding: '12px 32px' }}
+              >
+                {isZh ? '启动' : 'Launch'}
+              </button>
+              <span
+                style={{ fontSize: '12px', color: 'var(--shadow-text-muted)', fontWeight: 700 }}
+              >
+                {play.starts} {isZh ? '次启动' : 'launches'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Prev arrow */}
+        <button
+          type="button"
+          aria-label="Previous"
+          onClick={prev}
+          style={{ ...arrowBtn, left: '16px' }}
+        >
+          ‹
+        </button>
+
+        {/* Next arrow */}
+        <button
+          type="button"
+          aria-label="Next"
+          onClick={next}
+          style={{ ...arrowBtn, right: '16px' }}
+        >
+          ›
+        </button>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '20px' }}>
+      {/* Dot indicators */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '16px' }}>
         {featured.map((_, i) => (
           <button
             key={i}

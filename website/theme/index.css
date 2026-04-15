@@ -396,22 +396,24 @@ html.dark .shadow-page .hero-dot:hover {
   }
 }
 
-/* Shadow page root — Neon Frost light bg + gradient orbs */
+/* Homepage base bg on html/body so fixed orbs show through transparent shadow-page */
+html,
+body {
+  background-color: var(--shadow-bg);
+}
+
+/* Shadow page root — transparent so fixed HomeOrbs cover the full viewport */
 .shadow-page {
   font-family: "Nunito", "Noto Sans SC", sans-serif;
-  background-color: var(--shadow-bg);
-  /* Replace dot-grid with Neon Frost gradient orbs */
-  background-image:
-    radial-gradient(circle 480px at 0% -8%, rgba(0, 243, 255, 0.28) 0%, transparent 70%),
-    radial-gradient(circle 560px at 108% 32%, rgba(255, 42, 85, 0.18) 0%, transparent 70%);
+  background-color: transparent;
+  background-image: none;
   color: var(--shadow-text);
   min-height: 100vh;
   isolation: isolate;
 }
 html.dark .shadow-page {
-  background-image:
-    radial-gradient(circle 480px at 0% -8%, rgba(0, 243, 255, 0.14) 0%, transparent 70%),
-    radial-gradient(circle 560px at 108% 32%, rgba(255, 42, 85, 0.1) 0%, transparent 70%);
+  background-color: transparent;
+  background-image: none;
 }
 
 /* Dark mode text overrides for inline-styled elements */
@@ -646,11 +648,12 @@ html.dark .glass-nav {
 /* Do NOT remove rspress container padding — it's needed for nav clearance */
 
 /* ===== Neon Frost background orbs — homepage only (HomeOrbs component) ===== */
+/* z-index: 0 sits above html background but below page content (which is isolate) */
 .shadow-orb {
   position: fixed;
   border-radius: 50%;
   pointer-events: none;
-  z-index: -1;
+  z-index: 0;
   animation: orbFloat 25s infinite ease-in-out;
 }
 .shadow-orb-1 {
@@ -881,18 +884,21 @@ html.dark .rspress-doc hr {
   align-items: center;
   justify-content: space-between;
   padding: 12px 32px;
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(32px);
-  -webkit-backdrop-filter: blur(32px);
+  background: rgba(248, 250, 252, 0.55);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
   border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 html.dark .shadow-home-capsule-inner {
-  /* Match preview-dark.html exactly: 0.6 opacity so blur shows through */
-  background: rgba(5, 5, 8, 0.6);
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  background: rgba(5, 5, 8, 0.45);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 .shadow-home-logo {
   display: flex;
@@ -1115,18 +1121,52 @@ html.dark .code-group-tabs {
   }
 }
 
-/* Featured carousel: 3 columns */
-.home-featured-grid {
-  grid-template-columns: repeat(3, 1fr);
-}
-@media (max-width: 900px) {
-  .home-featured-grid {
-    grid-template-columns: repeat(2, 1fr);
+/* Featured carousel: large single-card mode */
+@keyframes featuredSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
-@media (max-width: 600px) {
-  .home-featured-grid {
-    grid-template-columns: 1fr;
+.home-featured-large-card {
+  display: flex;
+  min-height: 300px;
+  border-radius: 32px;
+  overflow: hidden;
+}
+.home-featured-large-img {
+  width: 46%;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.home-featured-large-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.home-featured-large-body {
+  flex: 1;
+  padding: 36px 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+@media (max-width: 700px) {
+  .home-featured-large-card {
+    flex-direction: column;
+    min-height: unset;
+  }
+  .home-featured-large-img {
+    width: 100%;
+    height: 200px;
+  }
+  .home-featured-large-body {
+    padding: 24px;
   }
 }
 
