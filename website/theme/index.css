@@ -1130,6 +1130,21 @@ html.dark .code-group-tabs {
   }
 }
 
+/* Topics: 3 columns */
+.home-topics-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+@media (max-width: 900px) {
+  .home-topics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .home-topics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Platform funnel: 3 columns */
 .home-platform-grid {
   grid-template-columns: repeat(3, 1fr);
