@@ -67,7 +67,7 @@ function HomeCapsuleNav() {
           >
             {isZh ? '开放平台' : 'PLATFORM'}
           </a>
-          <a href="/app" className="btn-primary zcool" style={{ textDecoration: 'none' }}>
+          <a href="/app" className="btn-primary" style={{ textDecoration: 'none' }}>
             {isZh ? '启动！' : 'Launch'}
           </a>
         </div>
@@ -116,7 +116,7 @@ function LaunchButton() {
   return (
     <a
       href="/app"
-      className="btn-primary zcool ml-3 whitespace-nowrap"
+      className="btn-primary ml-3 whitespace-nowrap"
       style={{ textDecoration: 'none' }}
     >
       {isZh ? '启动！' : 'Launch'}

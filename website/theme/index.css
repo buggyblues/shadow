@@ -196,6 +196,7 @@ html.dark .glass-card:hover {
   border: 1px solid rgba(255, 255, 255, 0.5);
   border-radius: 9999px;
   color: var(--shadow-button-text);
+  font-family: "Nunito", "Noto Sans SC", sans-serif;
   font-weight: 900;
   font-size: 13px;
   padding: 12px 28px;
