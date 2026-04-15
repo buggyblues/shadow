@@ -187,7 +187,7 @@ html.dark .glass-card:hover {
   transform: rotate(90deg);
 }
 
-/* Primary CTA button — Neon Frost jelly-pill */
+/* Primary CTA button — Neon Frost jelly-pill, matches preview.html nav button spec */
 .btn-primary {
   background: linear-gradient(135deg, var(--shadow-accent-strong), var(--shadow-accent));
   box-shadow:
@@ -197,7 +197,10 @@ html.dark .glass-card:hover {
   border-radius: 9999px;
   color: var(--shadow-button-text);
   font-weight: 900;
-  letter-spacing: 0.04em;
+  font-size: 13px;
+  padding: 12px 28px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   backdrop-filter: blur(12px);
   transition: all 0.5s var(--bezier-bouncy);
   text-decoration: none;
@@ -213,6 +216,18 @@ html.dark .glass-card:hover {
 }
 .btn-primary:active {
   transform: translateY(0) scale(0.96);
+}
+/* Dark mode — brighter cyan glow to match preview-dark.html */
+html.dark .btn-primary {
+  background: linear-gradient(135deg, rgba(0, 198, 209, 0.85), rgba(0, 243, 255, 0.95));
+  box-shadow:
+    0 10px 25px rgba(0, 243, 255, 0.4),
+    inset 0 2px 4px rgba(255, 255, 255, 0.5);
+}
+html.dark .btn-primary:hover {
+  box-shadow:
+    0 16px 32px rgba(0, 243, 255, 0.55),
+    inset 0 2px 4px rgba(255, 255, 255, 0.5);
 }
 
 /* Secondary CTA button — Vivid Yellow jelly-pill */
