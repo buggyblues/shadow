@@ -398,7 +398,7 @@ html.dark .shadow-page .hero-dot:hover {
 
 /* Shadow page root — Neon Frost light bg + gradient orbs */
 .shadow-page {
-  font-family: "Nunito", "Noto Sans SC", "ZCOOL KuaiLe", sans-serif;
+  font-family: "Nunito", "Noto Sans SC", sans-serif;
   background-color: var(--shadow-bg);
   /* Replace dot-grid with Neon Frost gradient orbs */
   background-image:
@@ -1082,7 +1082,28 @@ html.dark .code-group-tabs {
   }
 }
 
-/* ===== Homepage responsive grids ===== */
+/* ===== Homepage responsive grids =====*/
+
+/* Hero typing cursor */
+.hero-cursor {
+  display: inline-block;
+  font-weight: 400;
+  color: var(--shadow-accent);
+  margin-left: 2px;
+  transition: opacity 0.1s;
+}
+.hero-cursor-blink {
+  animation: heroCursorBlink 1s step-end infinite;
+}
+@keyframes heroCursorBlink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
 
 /* Main two-column layout: feed + sidebar */
 .home-main-grid {
@@ -1116,6 +1137,16 @@ html.dark .code-group-tabs {
 @media (max-width: 900px) {
   .home-platform-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+.home-dev-cta {
+  flex-direction: row;
+}
+@media (max-width: 700px) {
+  .home-dev-cta {
+    flex-direction: column;
+    text-align: center;
   }
 }
 

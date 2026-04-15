@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 /* ─── Data ─── */
 
 interface Play {
   id: string
-  emoji: string
+  image: string // picsum.photos URL
   title: string
   titleEn: string
   desc: string
@@ -12,14 +12,14 @@ interface Play {
   category: string
   categoryEn: string
   starts: string
-  color: string // accent gradient
+  accentColor: string // for badge
   hot?: boolean
 }
 
 const PLAYS: Play[] = [
   {
     id: 'retire-buddy',
-    emoji: '🌴',
+    image: 'https://picsum.photos/seed/retire/600/360',
     title: '退休助手',
     titleEn: 'RetireBuddy',
     desc: '帮你规划退休生活、财务自由路径，24小时温暖陪伴，让告别职场变成人生新章节。',
@@ -27,12 +27,12 @@ const PLAYS: Play[] = [
     category: '心理疗愈',
     categoryEn: 'Healing',
     starts: '24.5k',
-    color: 'linear-gradient(135deg, #00c6d1, #00f3ff)',
+    accentColor: 'var(--shadow-accent)',
     hot: true,
   },
   {
     id: 'financial-freedom',
-    emoji: '💰',
+    image: 'https://picsum.photos/seed/finance/600/360',
     title: '我财富自由了吗？',
     titleEn: 'Am I Free?',
     desc: '输入你的资产与支出，AI 为你计算财务自由距离，给出清晰的达成路线图。',
@@ -40,12 +40,12 @@ const PLAYS: Play[] = [
     category: '心理疗愈',
     categoryEn: 'Healing',
     starts: '18.2k',
-    color: 'linear-gradient(135deg, #f8e71c, #ffb300)',
+    accentColor: '#f8e71c',
     hot: true,
   },
   {
     id: 'brain-fix',
-    emoji: '🧠',
+    image: 'https://picsum.photos/seed/brain/600/360',
     title: '一分钟修复你的大脑！',
     titleEn: '1-Min Brain Fix',
     desc: '科学冥想 + 微呼吸练习，60秒内从焦虑模式切换到专注状态，屡试不爽。',
@@ -53,23 +53,23 @@ const PLAYS: Play[] = [
     category: '心理疗愈',
     categoryEn: 'Healing',
     starts: '15.9k',
-    color: 'linear-gradient(135deg, #a78bfa, #7c3aed)',
+    accentColor: '#a78bfa',
   },
   {
     id: 'gitstory',
-    emoji: '📖',
+    image: 'https://picsum.photos/seed/code/600/360',
     title: 'GitStory',
     titleEn: 'GitStory',
     desc: '把你的 GitHub 提交历史变成一本自传小说——AI 帮你回顾每一段代码背后的故事。',
     descEn: 'Turn your GitHub commits into an autobiography. Every line of code has a story.',
-    category: '心理疗愈',
-    categoryEn: 'Healing',
+    category: '黑客与画家',
+    categoryEn: 'Hacker & Painter',
     starts: '12.1k',
-    color: 'linear-gradient(135deg, #34d399, #059669)',
+    accentColor: '#34d399',
   },
   {
     id: 'gstack',
-    emoji: '🚀',
+    image: 'https://picsum.photos/seed/startup/600/360',
     title: 'gstack',
     titleEn: 'gstack',
     desc: '创业者的 AI 参谋，帮你快速验证商业想法、分析竞争格局、生成融资文件。',
@@ -77,11 +77,11 @@ const PLAYS: Play[] = [
     category: '黑客与画家',
     categoryEn: 'Hacker & Painter',
     starts: '9.3k',
-    color: 'linear-gradient(135deg, #f97316, #ef4444)',
+    accentColor: '#f97316',
   },
   {
     id: 'e-wife',
-    emoji: '🌸',
+    image: 'https://picsum.photos/seed/companion/600/360',
     title: '电子老婆',
     titleEn: 'Digital Partner',
     desc: '永远理解你、陪伴你、记住你所有小事的 AI 伴侣。情感细腻，回应真诚。',
@@ -89,14 +89,93 @@ const PLAYS: Play[] = [
     category: 'AI 陪伴',
     categoryEn: 'AI Companion',
     starts: '21.7k',
-    color: 'linear-gradient(135deg, #f472b6, #ec4899)',
+    accentColor: '#f472b6',
   },
 ]
 
-const CATEGORIES_ZH = ['全部', '心理疗愈', '世界资讯', '互动游戏', '黑客与画家', 'AI 陪伴']
-const CATEGORIES_EN = ['All', 'Healing', 'World News', 'Games', 'Hacker & Painter', 'AI Companion']
+/* Categories with metadata */
+interface CategoryMeta {
+  zh: string
+  en: string
+  label: string // section-label text
+  labelEn: string
+}
 
-/* ─── Sub-components ─── */
+const CATEGORY_META: CategoryMeta[] = [
+  {
+    zh: '心理疗愈',
+    en: 'Healing',
+    label: '解压 · 疗愈 · 自我探索',
+    labelEn: 'Calm · Heal · Explore Yourself',
+  },
+  {
+    zh: '黑客与画家',
+    en: 'Hacker & Painter',
+    label: '创造 · 构建 · 表达',
+    labelEn: 'Create · Build · Express',
+  },
+  {
+    zh: 'AI 陪伴',
+    en: 'AI Companion',
+    label: '陪伴 · 理解 · 共鸣',
+    labelEn: 'Companion · Empathy · Connection',
+  },
+  {
+    zh: '世界资讯',
+    en: 'World News',
+    label: '洞察 · 资讯 · 思考',
+    labelEn: 'Insight · News · Perspective',
+  },
+  { zh: '互动游戏', en: 'Games', label: '玩 · 竞技 · 拼团', labelEn: 'Play · Compete · Team Up' },
+]
+
+/* ─── Hero: Typing animation ─── */
+
+function TypingSlogan({ isZh }: { isZh: boolean }) {
+  const zhPhrase = '你的 AI 专属社区，与你常在'
+  const enPhrase = 'Your AI Community, Always Here'
+  const phrase = isZh ? zhPhrase : enPhrase
+
+  const [displayed, setDisplayed] = useState('')
+  const [done, setDone] = useState(false)
+  const idx = useRef(0)
+
+  useEffect(() => {
+    idx.current = 0
+    setDisplayed('')
+    setDone(false)
+    const interval = setInterval(() => {
+      idx.current += 1
+      setDisplayed(phrase.slice(0, idx.current))
+      if (idx.current >= phrase.length) {
+        clearInterval(interval)
+        setDone(true)
+      }
+    }, 55)
+    return () => clearInterval(interval)
+  }, [phrase])
+
+  return (
+    <h1
+      style={{
+        fontSize: 'clamp(36px, 5.5vw, 60px)',
+        fontWeight: 900,
+        letterSpacing: '-0.03em',
+        lineHeight: 1.15,
+        color: 'var(--rp-c-text-1)',
+        marginBottom: '24px',
+        fontFamily: '"Nunito", "Noto Sans SC", sans-serif',
+      }}
+    >
+      {displayed}
+      <span className={done ? 'hero-cursor hero-cursor-blink' : 'hero-cursor'} aria-hidden="true">
+        _
+      </span>
+    </h1>
+  )
+}
+
+/* ─── Play card ─── */
 
 function CategoryBadge({ label, color }: { label: string; color: string }) {
   return (
@@ -106,12 +185,12 @@ function CategoryBadge({ label, color }: { label: string; color: string }) {
         padding: '2px 10px',
         borderRadius: '999px',
         fontSize: '11px',
-        fontWeight: 900,
+        fontWeight: 800,
         letterSpacing: '0.05em',
         textTransform: 'uppercase',
         background: color,
         color: '#050508',
-        marginBottom: '8px',
+        marginBottom: '10px',
       }}
     >
       {label}
@@ -122,11 +201,11 @@ function CategoryBadge({ label, color }: { label: string; color: string }) {
 function PlayCard({
   play,
   isZh,
-  size = 'normal',
+  imgHeight = 160,
 }: {
   play: Play
   isZh: boolean
-  size?: 'normal' | 'featured'
+  imgHeight?: number
 }) {
   const title = isZh ? play.title : play.titleEn
   const desc = isZh ? play.desc : play.descEn
@@ -135,57 +214,47 @@ function PlayCard({
   return (
     <div
       className="glass-card"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        cursor: 'pointer',
-      }}
+      style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
     >
-      {/* Card image area — gradient + emoji */}
-      <div
-        style={{
-          padding: '16px 16px 0',
-        }}
-      >
-        <div
+      {/* Cover image */}
+      <div style={{ padding: '14px 14px 0', flexShrink: 0 }}>
+        <img
+          src={play.image}
+          alt={title}
           style={{
             width: '100%',
-            height: size === 'featured' ? '200px' : '140px',
-            borderRadius: '24px',
-            background: play.color,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: size === 'featured' ? '64px' : '48px',
-            userSelect: 'none',
+            height: `${imgHeight}px`,
+            borderRadius: '22px',
+            objectFit: 'cover',
+            display: 'block',
+            background: 'var(--shadow-card-border)',
           }}
-        >
-          {play.emoji}
-        </div>
+          loading="lazy"
+        />
       </div>
 
-      <div style={{ padding: '20px 24px 24px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <CategoryBadge label={category} color={play.color} />
+      {/* Body */}
+      <div style={{ padding: '18px 22px 22px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <CategoryBadge label={category} color={play.accentColor} />
         <h3
-          className="zcool"
           style={{
-            fontSize: size === 'featured' ? '20px' : '17px',
+            fontSize: '17px',
             fontWeight: 900,
             marginBottom: '8px',
             color: 'var(--rp-c-text-1)',
+            fontFamily: '"Nunito", "Noto Sans SC", sans-serif',
           }}
         >
-          {play.emoji} {title}
+          {title}
         </h3>
         <p
           style={{
             fontSize: '13px',
             color: 'var(--shadow-text-muted)',
-            fontWeight: 700,
+            fontWeight: 600,
             lineHeight: 1.7,
             flex: 1,
-            marginBottom: '20px',
+            marginBottom: '18px',
           }}
         >
           {desc}
@@ -195,20 +264,115 @@ function PlayCard({
           className="btn-primary"
           style={{ width: '100%', justifyContent: 'center' }}
         >
-          {isZh ? '立即启动' : 'START NOW'}
+          {isZh ? '启动' : 'Launch'}
         </button>
       </div>
     </div>
   )
 }
 
+/* ─── Featured carousel with dot indicators ─── */
+
 function FeaturedCarousel({ isZh }: { isZh: boolean }) {
-  const featured = PLAYS.slice(0, 3)
+  const featured = PLAYS.filter((p) => p.hot)
+  const [active, setActive] = useState(0)
   const label = isZh ? '主推玩法' : 'Featured Plays'
-  const moreLabel = isZh ? '更多玩法 →' : 'More plays →'
 
   return (
-    <section style={{ marginBottom: '48px' }}>
+    <section style={{ marginBottom: '56px' }}>
+      {/* Header */}
+      <div style={{ marginBottom: '20px' }}>
+        <span className="section-label">✨ {isZh ? '本周精选' : "This Week's Top"}</span>
+        <h2
+          style={{
+            fontSize: '26px',
+            fontWeight: 900,
+            letterSpacing: '-0.02em',
+            color: 'var(--rp-c-text-1)',
+            fontFamily: '"Nunito", "Noto Sans SC", sans-serif',
+          }}
+        >
+          {label}
+        </h2>
+      </div>
+
+      {/* Slides */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: '20px',
+        }}
+        className="home-featured-grid"
+      >
+        {featured.map((play, i) => (
+          <div
+            key={play.id}
+            onClick={() => setActive(i)}
+            onKeyDown={(e) => e.key === 'Enter' && setActive(i)}
+            role="button"
+            tabIndex={0}
+            style={{
+              outline: active === i ? '2px solid var(--shadow-accent)' : '2px solid transparent',
+              borderRadius: '42px',
+              transition: 'outline 0.25s',
+              cursor: 'pointer',
+            }}
+          >
+            <PlayCard play={play} isZh={isZh} imgHeight={200} />
+          </div>
+        ))}
+      </div>
+
+      {/* Dot indicators */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          gap: '8px',
+          marginTop: '20px',
+        }}
+      >
+        {featured.map((_, i) => (
+          <button
+            key={i}
+            type="button"
+            aria-label={`Slide ${i + 1}`}
+            onClick={() => setActive(i)}
+            style={{
+              width: active === i ? '24px' : '8px',
+              height: '8px',
+              borderRadius: '4px',
+              border: 'none',
+              background: active === i ? 'var(--shadow-accent)' : 'var(--shadow-card-border)',
+              cursor: 'pointer',
+              transition: 'all 0.3s var(--bezier-bouncy)',
+              padding: 0,
+            }}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/* ─── Category section ─── */
+
+function CategorySection({ meta, isZh }: { meta: CategoryMeta; isZh: boolean }) {
+  const plays = PLAYS.filter(
+    (p) => (isZh ? p.category : p.categoryEn) === (isZh ? meta.zh : meta.en),
+  )
+  if (plays.length === 0) return null
+
+  const title = isZh ? meta.zh : meta.en
+  const subtitle = isZh ? meta.label : meta.labelEn
+
+  return (
+    <section
+      style={{ marginBottom: '56px' }}
+      id={`cat-${meta.en.toLowerCase().replace(/\s+/g, '-')}`}
+    >
+      {/* Section header */}
       <div
         style={{
           display: 'flex',
@@ -218,21 +382,21 @@ function FeaturedCarousel({ isZh }: { isZh: boolean }) {
         }}
       >
         <div>
-          <span className="section-label">✨ {isZh ? '本周精选' : "This Week's Top"}</span>
+          <span className="section-label">{subtitle}</span>
           <h2
-            className="zcool"
             style={{
-              fontSize: '28px',
+              fontSize: '24px',
               fontWeight: 900,
-              letterSpacing: '-0.02em',
               color: 'var(--rp-c-text-1)',
+              letterSpacing: '-0.02em',
+              fontFamily: '"Nunito", "Noto Sans SC", sans-serif',
             }}
           >
-            {label}
+            {title}
           </h2>
         </div>
         <a
-          href="#all-plays"
+          href={`#cat-${meta.en.toLowerCase().replace(/\s+/g, '-')}`}
           style={{
             fontSize: '13px',
             fontWeight: 800,
@@ -240,148 +404,43 @@ function FeaturedCarousel({ isZh }: { isZh: boolean }) {
             textDecoration: 'none',
           }}
         >
-          {moreLabel}
+          {isZh ? '查看全部 →' : 'View All →'}
         </a>
       </div>
 
-      {/* Horizontal scroll carousel */}
+      {/* Cards */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
           gap: '20px',
         }}
-        className="home-featured-grid"
       >
-        {featured.map((play) => (
-          <PlayCard key={play.id} play={play} isZh={isZh} size="featured" />
+        {plays.map((play) => (
+          <PlayCard key={play.id} play={play} isZh={isZh} />
         ))}
       </div>
     </section>
   )
 }
 
-function TabBar({
-  activeTab,
-  onTabChange,
-  isZh,
-}: {
-  activeTab: 'recommend' | 'leaderboard'
-  onTabChange: (tab: 'recommend' | 'leaderboard') => void
-  isZh: boolean
-}) {
-  const tabs = isZh
-    ? [
-        { id: 'recommend', label: '推荐' },
-        { id: 'leaderboard', label: '排行榜' },
-      ]
-    : [
-        { id: 'recommend', label: 'For You' },
-        { id: 'leaderboard', label: 'Top Charts' },
-      ]
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        gap: '4px',
-        background: 'var(--shadow-card-bg)',
-        backdropFilter: 'blur(12px)',
-        borderRadius: '999px',
-        padding: '4px',
-        border: '1px solid var(--shadow-card-border)',
-        width: 'fit-content',
-        marginBottom: '20px',
-      }}
-    >
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          type="button"
-          onClick={() => onTabChange(tab.id as 'recommend' | 'leaderboard')}
-          style={{
-            padding: '8px 24px',
-            borderRadius: '999px',
-            fontSize: '13px',
-            fontWeight: 900,
-            border: 'none',
-            cursor: 'pointer',
-            transition: 'all 0.3s var(--bezier-bouncy)',
-            background:
-              activeTab === tab.id
-                ? 'linear-gradient(135deg, var(--shadow-accent-strong), var(--shadow-accent))'
-                : 'transparent',
-            color: activeTab === tab.id ? '#050508' : 'var(--shadow-text-muted)',
-            boxShadow: activeTab === tab.id ? '0 4px 16px rgba(0,198,209,0.3)' : 'none',
-          }}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function CategoryFilter({
-  active,
-  onSelect,
-  isZh,
-}: {
-  active: string
-  onSelect: (cat: string) => void
-  isZh: boolean
-}) {
-  const cats = isZh ? CATEGORIES_ZH : CATEGORIES_EN
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        gap: '8px',
-        flexWrap: 'wrap',
-        marginBottom: '28px',
-      }}
-    >
-      {cats.map((cat) => (
-        <button
-          key={cat}
-          type="button"
-          onClick={() => onSelect(cat)}
-          style={{
-            padding: '6px 18px',
-            borderRadius: '999px',
-            fontSize: '12px',
-            fontWeight: 800,
-            border: '1px solid',
-            cursor: 'pointer',
-            transition: 'all 0.3s var(--bezier-bouncy)',
-            background: active === cat ? 'var(--shadow-accent)' : 'transparent',
-            borderColor: active === cat ? 'var(--shadow-accent)' : 'var(--shadow-card-border)',
-            color: active === cat ? '#050508' : 'var(--shadow-text-muted)',
-          }}
-        >
-          {cat}
-        </button>
-      ))}
-    </div>
-  )
-}
+/* ─── Shuffle card ─── */
 
 function ShuffleCard({ isZh, onShuffle }: { isZh: boolean; onShuffle: () => void }) {
   return (
     <div
       style={{
-        background: 'linear-gradient(135deg, rgba(0,243,255,0.08), rgba(248,231,28,0.08))',
-        border: '2px dashed rgba(0,198,209,0.35)',
+        background: 'linear-gradient(135deg, rgba(0,243,255,0.06), rgba(248,231,28,0.06))',
+        border: '2px dashed rgba(0,198,209,0.3)',
         borderRadius: '24px',
-        padding: '24px',
+        padding: '28px',
         textAlign: 'center',
-        marginBottom: '32px',
+        marginBottom: '48px',
       }}
     >
       <p
         style={{
-          fontSize: '14px',
+          fontSize: '15px',
           color: 'var(--shadow-text-muted)',
           fontWeight: 700,
           marginBottom: '16px',
@@ -393,70 +452,65 @@ function ShuffleCard({ isZh, onShuffle }: { isZh: boolean; onShuffle: () => void
         type="button"
         className="btn-secondary"
         onClick={onShuffle}
-        style={{ fontSize: '14px', padding: '10px 24px' }}
+        style={{ fontSize: '13px', padding: '10px 24px' }}
       >
-        {isZh ? '碰碰运气！换一换 🎲' : 'Shuffle & Discover 🎲'}
+        {isZh ? '碰碰运气，换一换 🎲' : 'Shuffle & Discover 🎲'}
       </button>
     </div>
   )
 }
 
-function Leaderboard({ isZh }: { isZh: boolean }) {
-  const title = isZh ? '热门排行榜' : 'Top Charts'
-  const label = isZh ? '🔥 Trending Now' : '🔥 Trending Now'
-  const tipText = isZh
-    ? '榜单数据基于近 7 日活跃度实时计算，加入开放平台即可让你的应用上榜。'
-    : 'Rankings are calculated in real-time based on 7-day activity. Join the platform to get your app listed.'
+/* ─── Right sidebar: Leaderboard + Editor's Picks ─── */
 
+function Leaderboard({ isZh }: { isZh: boolean }) {
   const rankColors = [
-    'linear-gradient(135deg, #f8e71c, #ffb300)', // gold
-    '#E2E8F0',
+    'linear-gradient(135deg, #f8e71c, #ffb300)',
+    'rgba(226,232,240,0.6)',
     'linear-gradient(135deg, #FFD7A0, #f97316)',
   ]
   const rankTextColors = ['#050508', 'var(--rp-c-text-1)', '#7c2d12']
 
   return (
-    <aside>
-      <span className="section-label" style={{ color: '#FF2A55', letterSpacing: '0.15em' }}>
-        {label}
+    <div style={{ marginBottom: '32px' }}>
+      <span className="section-label" style={{ color: '#FF2A55' }}>
+        🔥 {isZh ? '热门' : 'Trending'}
       </span>
       <h2
-        className="zcool"
         style={{
-          fontSize: '28px',
+          fontSize: '22px',
           fontWeight: 900,
-          marginBottom: '20px',
+          marginBottom: '16px',
           color: 'var(--rp-c-text-1)',
+          fontFamily: '"Nunito", "Noto Sans SC", sans-serif',
         }}
       >
-        {title}
+        {isZh ? '热门排行榜' : 'Top Charts'}
       </h2>
 
       <div
         className="glass-card"
-        style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}
+        style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}
       >
-        {PLAYS.slice(0, 4).map((play, i) => (
+        {PLAYS.slice(0, 5).map((play, i) => (
           <div
             key={play.id}
+            className="leaderboard-row"
             style={{
               display: 'flex',
-              gap: '14px',
+              gap: '12px',
               alignItems: 'center',
-              padding: '14px',
-              borderRadius: '20px',
+              padding: '12px',
+              borderRadius: '18px',
               border: '1px solid var(--shadow-card-border)',
-              transition: 'all 0.3s var(--bezier-bouncy)',
               cursor: 'pointer',
               background: i === 0 ? 'rgba(0,198,209,0.04)' : 'transparent',
+              transition: 'all 0.3s var(--bezier-bouncy)',
             }}
-            className="leaderboard-row"
           >
-            {/* Rank badge */}
             <div
               style={{
-                width: '44px',
-                height: '44px',
+                width: '36px',
+                height: '36px',
                 borderRadius: '50%',
                 background: i < 3 ? rankColors[i] : 'transparent',
                 border: i < 3 ? 'none' : '2px solid var(--shadow-card-border)',
@@ -464,24 +518,115 @@ function Leaderboard({ isZh }: { isZh: boolean }) {
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontWeight: 900,
-                fontSize: '18px',
+                fontSize: '15px',
                 color: i < 3 ? rankTextColors[i] : 'var(--shadow-text-muted)',
                 flexShrink: 0,
-                boxShadow: i < 3 ? '0 4px 12px rgba(0,0,0,0.08)' : 'none',
               }}
             >
               {i + 1}
             </div>
 
-            {/* Info */}
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div
-                className="zcool"
                 style={{
                   fontWeight: 900,
-                  fontSize: '15px',
+                  fontSize: '14px',
                   color: 'var(--rp-c-text-1)',
                   marginBottom: '2px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  fontFamily: '"Nunito", "Noto Sans SC", sans-serif',
+                }}
+              >
+                {isZh ? play.title : play.titleEn}
+              </div>
+              <div
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: 'var(--shadow-text-muted)',
+                }}
+              >
+                {play.starts} {isZh ? '次启动' : 'launches'}
+              </div>
+            </div>
+
+            {i === 0 && (
+              <div
+                style={{
+                  width: '10px',
+                  height: '10px',
+                  background: '#00E676',
+                  borderRadius: '50%',
+                  boxShadow: '0 0 8px rgba(0,230,118,0.6)',
+                  flexShrink: 0,
+                }}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function EditorPicks({ isZh }: { isZh: boolean }) {
+  const picks = PLAYS.slice(0, 3)
+
+  return (
+    <div>
+      <span className="section-label">✦ {isZh ? '编辑精选' : "Editor's Picks"}</span>
+      <h2
+        style={{
+          fontSize: '22px',
+          fontWeight: 900,
+          marginBottom: '16px',
+          color: 'var(--rp-c-text-1)',
+          fontFamily: '"Nunito", "Noto Sans SC", sans-serif',
+        }}
+      >
+        {isZh ? '精选玩法' : 'Hand-picked'}
+      </h2>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {picks.map((play) => (
+          <div
+            key={play.id}
+            className="glass-card"
+            style={{
+              display: 'flex',
+              gap: '14px',
+              alignItems: 'center',
+              padding: '14px',
+              flexDirection: 'row',
+              borderRadius: '20px',
+              cursor: 'pointer',
+            }}
+          >
+            <img
+              src={play.image}
+              alt={isZh ? play.title : play.titleEn}
+              style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '14px',
+                objectFit: 'cover',
+                flexShrink: 0,
+              }}
+              loading="lazy"
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  fontWeight: 900,
+                  fontSize: '14px',
+                  color: 'var(--rp-c-text-1)',
+                  marginBottom: '4px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  fontFamily: '"Nunito", "Noto Sans SC", sans-serif',
                 }}
               >
                 {isZh ? play.title : play.titleEn}
@@ -489,52 +634,94 @@ function Leaderboard({ isZh }: { isZh: boolean }) {
               <div
                 style={{
                   fontSize: '12px',
-                  fontWeight: 800,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
                   color: 'var(--shadow-text-muted)',
-                  opacity: 0.8,
+                  fontWeight: 600,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
                 }}
               >
-                {play.starts} {isZh ? '次启动' : 'launches'}
+                {isZh ? play.category : play.categoryEn}
               </div>
             </div>
-
-            {/* Online dot for #1 */}
-            {i === 0 && (
-              <div
-                style={{
-                  width: '12px',
-                  height: '12px',
-                  background: '#00E676',
-                  borderRadius: '50%',
-                  boxShadow: '0 0 10px rgba(0,230,118,0.6)',
-                  border: '2px solid var(--rp-c-bg)',
-                  flexShrink: 0,
-                }}
-              />
-            )}
+            <button
+              type="button"
+              className="btn-primary"
+              style={{ fontSize: '11px', padding: '6px 14px', flexShrink: 0 }}
+            >
+              {isZh ? '启动' : 'Go'}
+            </button>
           </div>
         ))}
-
-        {/* Tip */}
-        <div
-          style={{
-            marginTop: '8px',
-            padding: '14px 18px',
-            background: 'rgba(0,243,255,0.05)',
-            borderLeft: '4px solid var(--shadow-accent)',
-            borderRadius: '0 16px 16px 0',
-            color: 'var(--shadow-text-muted)',
-            fontWeight: 700,
-            fontSize: '12px',
-            lineHeight: 1.6,
-          }}
-        >
-          🏆 {tipText}
-        </div>
       </div>
-    </aside>
+    </div>
+  )
+}
+
+/* ─── Developer CTA section ─── */
+
+function DevCta({ isZh }: { isZh: boolean }) {
+  const prefix = isZh ? '/zh' : ''
+  return (
+    <section
+      style={{
+        maxWidth: '1400px',
+        margin: '0 auto',
+        padding: '0 24px 80px',
+      }}
+    >
+      <div
+        style={{
+          background:
+            'linear-gradient(135deg, rgba(0,243,255,0.06) 0%, rgba(124,77,255,0.06) 100%)',
+          border: '1px solid var(--shadow-card-border)',
+          borderRadius: '40px',
+          padding: '56px 48px',
+          display: 'flex',
+          gap: '32px',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+        }}
+        className="home-dev-cta"
+      >
+        <div>
+          <span className="section-label">💡 {isZh ? '开放平台' : 'Open Platform'}</span>
+          <h2
+            style={{
+              fontSize: '28px',
+              fontWeight: 900,
+              color: 'var(--rp-c-text-1)',
+              marginBottom: '12px',
+              letterSpacing: '-0.02em',
+              fontFamily: '"Nunito", "Noto Sans SC", sans-serif',
+            }}
+          >
+            {isZh ? '开发自己的玩法？' : 'Want to Build Your Own Play?'}
+          </h2>
+          <p
+            style={{
+              fontSize: '15px',
+              color: 'var(--shadow-text-muted)',
+              fontWeight: 600,
+              maxWidth: '480px',
+              lineHeight: 1.7,
+            }}
+          >
+            {isZh
+              ? '任何人都可以在虾豆社区上创建玩法、发布到市场，并通过 Buddy 经济赚取虾币收益。开放平台提供完整的 API、SDK 和 Buddy 工具链。'
+              : 'Anyone can create a Play on Shadow, publish it to the marketplace, and earn Shrimp Coins through the Buddy economy. The Open Platform provides a full API, SDKs, and Buddy toolchain.'}
+          </p>
+        </div>
+        <a
+          href={`${prefix}/platform/introduction`}
+          className="btn-primary"
+          style={{ textDecoration: 'none', flexShrink: 0, fontSize: '14px', padding: '14px 32px' }}
+        >
+          {isZh ? '探索开放平台 →' : 'Explore Open Platform →'}
+        </a>
+      </div>
+    </section>
   )
 }
 
@@ -542,19 +729,14 @@ function Leaderboard({ isZh }: { isZh: boolean }) {
 
 export function HomeContent({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
   const isZh = lang === 'zh'
-  const [activeTab, setActiveTab] = useState<'recommend' | 'leaderboard'>('recommend')
-  const [activeCategory, setActiveCategory] = useState(isZh ? '全部' : 'All')
-  const [shuffleIdx, setShuffleIdx] = useState(0)
+  const [shufflePlay, setShufflePlay] = useState<string | null>(null)
 
   const handleShuffle = () => {
-    setShuffleIdx((i) => (i + 1) % PLAYS.length)
+    const idx = Math.floor(Math.random() * PLAYS.length)
+    setShufflePlay(PLAYS[idx]?.id ?? null)
+    // Clear after 2s
+    setTimeout(() => setShufflePlay(null), 2000)
   }
-
-  const filteredPlays = (() => {
-    const allLabel = isZh ? '全部' : 'All'
-    if (activeCategory === allLabel) return PLAYS
-    return PLAYS.filter((p) => (isZh ? p.category : p.categoryEn) === activeCategory)
-  })()
 
   return (
     <div className="shadow-page" style={{ minHeight: '100vh' }}>
@@ -562,234 +744,69 @@ export function HomeContent({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
       <section
         style={{
           textAlign: 'center',
-          padding: '80px 20px 60px',
+          padding: '80px 20px 64px',
           position: 'relative',
           zIndex: 10,
           maxWidth: '1400px',
           margin: '0 auto',
         }}
       >
-        <span className="section-label">Powered by OpenClaw · ShadowOwnBuddy</span>
-        <h1
-          className="zcool"
-          style={{
-            fontSize: 'clamp(40px, 6vw, 64px)',
-            fontWeight: 900,
-            letterSpacing: '-0.04em',
-            lineHeight: 1.1,
-            color: 'var(--rp-c-text-1)',
-            marginBottom: '20px',
-          }}
-        >
-          {isZh ? (
-            <>
-              你的 AI 专属社区，
-              <br />
-              与你常在
-            </>
-          ) : (
-            <>
-              Your AI Community,
-              <br />
-              Always With You
-            </>
-          )}
-        </h1>
-        <p
-          style={{
-            fontSize: '17px',
-            color: 'var(--shadow-text-muted)',
-            maxWidth: '560px',
-            margin: '0 auto 36px',
-            fontWeight: 700,
-            lineHeight: 1.7,
-          }}
-        >
-          {isZh
-            ? '融合 Lovart 顶级模型与 OpenClaw 强力驱动，带来前所未有的智能交互与创作体验。'
-            : 'Powered by top Lovart models and OpenClaw, delivering unprecedented AI interaction and creative experiences.'}
-        </p>
+        <TypingSlogan isZh={isZh} />
         <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
           <a href="/app" className="btn-primary" style={{ textDecoration: 'none' }}>
-            {isZh ? '探索玩法中心' : 'Explore Plays'}
-          </a>
-          <a
-            href={isZh ? '/zh/platform/introduction' : '/platform/introduction'}
-            className="btn-secondary"
-            style={{
-              textDecoration: 'none',
-              fontSize: '13px',
-              padding: '12px 28px',
-            }}
-          >
-            {isZh ? '成为开发者' : 'Become a Developer'}
+            {isZh ? '启动！' : 'Launch'}
           </a>
         </div>
       </section>
 
-      {/* ── Main content ── */}
+      {/* ── Main two-column layout ── */}
       <div
         style={{
           maxWidth: '1400px',
           margin: '0 auto',
           padding: '0 24px 80px',
           display: 'grid',
-          gridTemplateColumns: '1fr 360px',
+          gridTemplateColumns: '1fr 340px',
           gap: '48px',
           alignItems: 'start',
         }}
         className="home-main-grid"
       >
-        {/* Left: feed */}
+        {/* Left: featured + category sections */}
         <main>
           {/* Featured carousel */}
           <FeaturedCarousel isZh={isZh} />
 
-          {/* Tab + category filter */}
-          <div id="all-plays">
-            <TabBar activeTab={activeTab} onTabChange={setActiveTab} isZh={isZh} />
-            <CategoryFilter active={activeCategory} onSelect={setActiveCategory} isZh={isZh} />
-          </div>
-
           {/* Shuffle card */}
           <ShuffleCard isZh={isZh} onShuffle={handleShuffle} />
 
-          {/* Editor's picks label */}
-          <div style={{ marginBottom: '20px' }}>
-            <span className="section-label">{isZh ? '✦ 编辑精选' : "✦ Editor's Picks"}</span>
-          </div>
-
-          {/* Cards grid */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-              gap: '20px',
-              marginBottom: '32px',
-            }}
-          >
-            {filteredPlays.map((play, i) => {
-              const isHighlighted = play.id === PLAYS[shuffleIdx]?.id
-              return (
-                <div
-                  key={play.id}
-                  style={{
-                    outline: isHighlighted ? '2px solid var(--shadow-accent)' : 'none',
-                    borderRadius: '40px',
-                    transition: 'outline 0.3s',
-                  }}
-                >
-                  <PlayCard play={play} isZh={isZh} />
-                </div>
-              )
-            })}
-          </div>
-        </main>
-
-        {/* Right: leaderboard */}
-        <Leaderboard isZh={isZh} />
-      </div>
-
-      {/* ── Funnel / platform section ── */}
-      <section
-        style={{
-          maxWidth: '1400px',
-          margin: '0 auto',
-          padding: '0 24px 80px',
-        }}
-      >
-        <div
-          style={{
-            background: 'var(--shadow-card-bg)',
-            backdropFilter: 'blur(32px)',
-            border: '1px solid var(--shadow-card-border)',
-            borderRadius: '40px',
-            padding: '48px',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '32px',
-          }}
-          className="home-platform-grid"
-        >
-          {[
-            {
-              emoji: '🪐',
-              layer: isZh ? '第一层 · Shell' : 'Layer 1 · Shell',
-              title: isZh ? '外围玩法' : 'Outer Plays',
-              items: isZh
-                ? ['公开服务器 · 信息流', '定制服务器 · 一键开启', '拼团玩法 · DnD / 剧本杀']
-                : ['Public Servers · Feed', 'Custom Servers · 1-click', 'Group Plays · DnD / TRPG'],
-            },
-            {
-              emoji: '⚡',
-              layer: isZh ? '第二层 · OS' : 'Layer 2 · OS',
-              title: isZh ? '核心社区' : 'Core Community',
-              items: isZh
-                ? ['一切皆是频道', '7×24 主动式 Buddy', 'Buddy 推送商品 · 虾币经济']
-                : [
-                    'Everything is a Channel',
-                    '7×24 Active Buddies',
-                    'Buddy Commerce · Shrimp Coins',
-                  ],
-            },
-            {
-              emoji: '🏗️',
-              layer: isZh ? '第三层 · Infra' : 'Layer 3 · Infra',
-              title: isZh ? '基础建设' : 'Infrastructure',
-              items: isZh
-                ? ['开放平台 API', 'Shadow Cloud', '开发者生态']
-                : ['Open Platform API', 'Shadow Cloud', 'Developer Ecosystem'],
-            },
-          ].map((col) => (
-            <div key={col.layer}>
-              <div style={{ fontSize: '36px', marginBottom: '12px' }}>{col.emoji}</div>
-              <div
-                style={{
-                  fontSize: '11px',
-                  fontWeight: 900,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.15em',
-                  color: 'var(--shadow-accent)',
-                  marginBottom: '6px',
-                }}
-              >
-                {col.layer}
-              </div>
-              <h3
-                className="zcool"
-                style={{
-                  fontSize: '20px',
-                  fontWeight: 900,
-                  color: 'var(--rp-c-text-1)',
-                  marginBottom: '16px',
-                }}
-              >
-                {col.title}
-              </h3>
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                {col.items.map((item) => (
-                  <li
-                    key={item}
-                    style={{
-                      fontSize: '13px',
-                      fontWeight: 700,
-                      color: 'var(--shadow-text-muted)',
-                      padding: '6px 0',
-                      borderBottom: '1px solid var(--shadow-card-border)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                    }}
-                  >
-                    <span style={{ color: 'var(--shadow-accent)', fontWeight: 900 }}>·</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
+          {/* Category sections */}
+          {CATEGORY_META.map((meta) => (
+            <div
+              key={meta.zh}
+              style={{
+                outline:
+                  shufflePlay && PLAYS.find((p) => p.id === shufflePlay && p.category === meta.zh)
+                    ? '2px solid var(--shadow-accent)'
+                    : 'none',
+                borderRadius: '8px',
+                transition: 'outline 0.3s',
+              }}
+            >
+              <CategorySection meta={meta} isZh={isZh} />
             </div>
           ))}
-        </div>
-      </section>
+        </main>
+
+        {/* Right: leaderboard + editor's picks (always visible) */}
+        <aside style={{ position: 'sticky', top: '100px' }}>
+          <Leaderboard isZh={isZh} />
+          <EditorPicks isZh={isZh} />
+        </aside>
+      </div>
+
+      {/* ── Developer CTA ── */}
+      <DevCta isZh={isZh} />
     </div>
   )
 }

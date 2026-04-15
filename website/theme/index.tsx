@@ -78,16 +78,14 @@ function HomeCapsuleNav() {
         >
           <img src={`${base}/Logo.svg`} alt="Shadow Logo" className="w-8 h-8" />
           <span
-            className="zcool text-xl font-bold whitespace-nowrap"
-            style={{ color: 'var(--rp-c-text-1)' }}
+            className="text-xl font-bold whitespace-nowrap"
+            style={{
+              color: 'var(--rp-c-text-1)',
+              fontFamily: '"Nunito", "Noto Sans SC", sans-serif',
+            }}
           >
             虾豆
-            <span
-              className="text-base text-cyan-600 ml-1 font-black"
-              style={{ fontFamily: "'Nunito', sans-serif" }}
-            >
-              ShadowOwnBuddy
-            </span>
+            <span className="text-base text-cyan-600 ml-1 font-black">ShadowOwnBuddy</span>
           </span>
         </a>
 
@@ -148,16 +146,11 @@ function DocNavTitle() {
     >
       <img src={`${base}/Logo.svg`} alt="Shadow Logo" className="w-8 h-8" />
       <span
-        className="zcool text-xl font-bold whitespace-nowrap"
-        style={{ color: 'var(--rp-c-text-1)' }}
+        className="text-xl font-bold whitespace-nowrap"
+        style={{ color: 'var(--rp-c-text-1)', fontFamily: '"Nunito", "Noto Sans SC", sans-serif' }}
       >
         虾豆
-        <span
-          className="text-base text-cyan-600 ml-1 font-black"
-          style={{ fontFamily: "'Nunito', sans-serif" }}
-        >
-          ShadowOwnBuddy
-        </span>
+        <span className="text-base text-cyan-600 ml-1 font-black">ShadowOwnBuddy</span>
       </span>
     </a>
   )
