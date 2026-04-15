@@ -624,25 +624,24 @@ html.dark .glass-nav {
 }
 /* Do NOT remove rspress container padding — it's needed for nav clearance */
 
-/* ===== Neon Frost background orbs on ALL pages (fixed, full-viewport) ===== */
-body::before,
-body::after {
-  content: "";
+/* ===== Neon Frost background orbs — homepage only (HomeOrbs component) ===== */
+.shadow-orb {
   position: fixed;
   border-radius: 50%;
   pointer-events: none;
   z-index: -1;
   animation: orbFloat 25s infinite ease-in-out;
 }
-body::before {
+.shadow-orb-1 {
   width: 600px;
   height: 600px;
   background: radial-gradient(circle, rgba(0, 243, 255, 0.4) 0%, transparent 70%);
   top: -150px;
   left: 5%;
   filter: blur(100px);
+  opacity: 0.5;
 }
-body::after {
+.shadow-orb-2 {
   width: 700px;
   height: 700px;
   background: radial-gradient(circle, rgba(255, 42, 85, 0.25) 0%, transparent 70%);
@@ -650,23 +649,12 @@ body::after {
   right: -150px;
   filter: blur(120px);
   animation-delay: -7s;
+  opacity: 0.5;
 }
-@keyframes orbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  33% {
-    transform: translate(40px, 60px) scale(1.05);
-  }
-  66% {
-    transform: translate(-30px, 20px) scale(0.97);
-  }
-}
-html.dark body::before {
+html.dark .shadow-orb-1 {
   opacity: 0.55;
 }
-html.dark body::after {
+html.dark .shadow-orb-2 {
   opacity: 0.45;
 }
 
@@ -854,33 +842,30 @@ html.dark .rspress-doc hr {
   border-color: rgba(55, 58, 68, 0.4);
 }
 
-/* ===== Homepage capsule nav — rendered via top slot, rspress nav hidden ===== */
-/* Right-aligned compact pill: Logo + Launch only */
+/* ===== Homepage capsule nav — matches preview.html exactly ===== */
+/* Wrapper: provides sticky + top spacing */
 .shadow-home-capsule-nav {
   position: sticky;
-  top: 0;
+  top: 16px;
   z-index: 100;
-  display: flex;
-  justify-content: flex-end;
-  padding: 10px 20px 0;
-  /* keep orbs visible behind */
+  padding: 0 16px;
   pointer-events: none;
 }
+/* The pill: centered, full-width up to 1120px, logo left, links+CTA right */
 .shadow-home-capsule-inner {
   pointer-events: auto;
+  max-width: 1120px;
+  margin: 0 auto;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 0 18px;
-  height: 52px;
-  border-radius: 26px;
-  background: rgba(248, 250, 252, 0.82);
+  justify-content: space-between;
+  padding: 12px 32px;
+  background: rgba(255, 255, 255, 0.6);
   backdrop-filter: blur(32px);
   -webkit-backdrop-filter: blur(32px);
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.06),
-    0 2px 8px rgba(0, 0, 0, 0.04);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.04);
 }
 html.dark .shadow-home-capsule-inner {
   background: rgba(5, 5, 8, 0.85);
@@ -893,14 +878,33 @@ html.dark .shadow-home-capsule-inner {
   gap: 10px;
   flex-shrink: 0;
 }
-@media (max-width: 480px) {
+/* Right group: nav links + CTA */
+.shadow-home-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+.shadow-home-nav-link {
+  font-family: "Nunito", "Noto Sans SC", sans-serif;
+  font-weight: 800;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--rp-c-text-2);
+  transition: color 0.2s;
+}
+.shadow-home-nav-link:hover {
+  color: var(--shadow-accent, #00c6d1);
+}
+@media (max-width: 768px) {
   .shadow-home-capsule-nav {
-    padding: 8px 10px 0;
+    padding: 0 8px;
   }
   .shadow-home-capsule-inner {
-    padding: 0 12px;
-    height: 46px;
-    border-radius: 23px;
+    padding: 10px 20px;
+  }
+  .shadow-home-nav-link {
+    display: none;
   }
 }
 
@@ -915,9 +919,10 @@ html.dark .shadow-home-capsule-inner {
   display: none !important;
 }
 
-/* Hide the sidebar navTitleMask — logo is already in the nav bar */
+/* Hide the sidebar navTitleMask visually but preserve its height.
+   display:none would remove the spacer and cause sidebar to slide under the sticky nav. */
 [class*="navTitleMask"] {
-  display: none !important;
+  visibility: hidden !important;
 }
 
 /* Logo font in Rspress nav */
