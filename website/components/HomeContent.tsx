@@ -288,6 +288,7 @@ function TypingSlogan({ isZh }: { isZh: boolean }) {
         color: 'var(--rp-c-text-1)',
         marginBottom: '24px',
         fontFamily: '"Nunito", "Noto Sans SC", sans-serif',
+        minHeight: '2.6em',
       }}
     >
       <span>
@@ -548,6 +549,7 @@ function CategoryBadge({ label, color }: { label: string; color: string }) {
     <span
       style={{
         display: 'inline-block',
+        alignSelf: 'flex-start',
         padding: '2px 10px',
         borderRadius: '999px',
         fontSize: '11px',
@@ -727,7 +729,7 @@ function FeaturedCarousel({ isZh }: { isZh: boolean }) {
               style={{
                 fontSize: 'clamp(22px, 2.5vw, 32px)',
                 fontWeight: 900,
-                color: 'var(--rp-c-text-1)',
+                color: '#fff',
                 marginBottom: '12px',
                 lineHeight: 1.2,
                 fontFamily: '"Nunito", "Noto Sans SC", sans-serif',
@@ -738,11 +740,10 @@ function FeaturedCarousel({ isZh }: { isZh: boolean }) {
             <p
               style={{
                 fontSize: '14px',
-                color: 'var(--shadow-text-muted)',
+                color: 'rgba(255,255,255,0.72)',
                 fontWeight: 600,
                 lineHeight: 1.75,
                 marginBottom: '28px',
-                flex: 1,
               }}
             >
               {desc}
@@ -750,14 +751,12 @@ function FeaturedCarousel({ isZh }: { isZh: boolean }) {
             <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
               <button
                 type="button"
-                className="btn-primary"
+                className="btn-secondary"
                 style={{ fontSize: '15px', padding: '12px 32px' }}
               >
-                {isZh ? '启动' : 'Launch'}
+                {isZh ? '开始探索' : 'Start Exploring'}
               </button>
-              <span
-                style={{ fontSize: '12px', color: 'var(--shadow-text-muted)', fontWeight: 700 }}
-              >
+              <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.55)', fontWeight: 700 }}>
                 {play.starts} {isZh ? '次启动' : 'launches'}
               </span>
             </div>
@@ -1262,8 +1261,8 @@ export function HomeContent({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
         <TypingSlogan isZh={isZh} />
 
         <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <a href="/app" className="btn-primary" style={{ textDecoration: 'none' }}>
-            {isZh ? '启动！' : 'Launch'}
+          <a href="/app" className="btn-secondary" style={{ textDecoration: 'none' }}>
+            {isZh ? '开始探索' : 'Start Exploring'}
           </a>
         </div>
       </section>
