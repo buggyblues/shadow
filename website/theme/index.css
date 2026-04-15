@@ -854,13 +854,27 @@ html.dark .rspress-doc hr {
   border-color: rgba(55, 58, 68, 0.4);
 }
 
-/* ===== Rspress nav — Neon Frost floating pill ===== */
-.rspress-nav {
-  /* True floating pill: constrain width + center in flow */
+/* ===== Homepage capsule nav — rendered via top slot, rspress nav hidden ===== */
+.shadow-home-capsule-nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  padding: 8px 16px 0;
+  /* keep orbs visible behind */
+  pointer-events: none;
+}
+.shadow-home-capsule-inner {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
   max-width: 1120px;
-  margin: 8px auto 0;
-  border-radius: 24px;
-  /* Remove old sticky offset override — rspress sets top:0, our margin handles spacing */
+  padding: 0 20px;
+  height: 56px;
+  border-radius: 28px;
   background: rgba(248, 250, 252, 0.82);
   backdrop-filter: blur(32px);
   -webkit-backdrop-filter: blur(32px);
@@ -868,28 +882,86 @@ html.dark .rspress-doc hr {
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.06),
     0 2px 8px rgba(0, 0, 0, 0.04);
-  /* Override rspress default border-bottom */
-  border-bottom: none !important;
 }
-html.dark .rspress-nav {
+html.dark .shadow-home-capsule-inner {
   background: rgba(5, 5, 8, 0.85);
   border-color: rgba(255, 255, 255, 0.09);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
+.shadow-home-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.shadow-home-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.shadow-home-nav-link {
+  font-family: "Nunito", "Noto Sans SC", sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--rp-c-text-1);
+  padding: 6px 12px;
+  border-radius: 8px;
+  transition:
+    color 0.2s,
+    background 0.2s;
+}
+.shadow-home-nav-link:hover {
+  color: var(--shadow-accent);
+  background: rgba(0, 198, 209, 0.08);
+}
+.shadow-home-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.shadow-home-lang {
+  font-family: "Nunito", sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--rp-c-text-2);
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition:
+    color 0.2s,
+    background 0.2s;
+}
+.shadow-home-lang:hover {
+  color: var(--rp-c-text-1);
+  background: rgba(0, 0, 0, 0.05);
+}
+html.dark .shadow-home-lang:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
 @media (max-width: 768px) {
-  .rspress-nav {
-    max-width: calc(100% - 16px);
-    border-radius: 16px;
-    margin: 6px auto 0;
+  .shadow-home-capsule-inner {
+    max-width: calc(100% - 8px);
+    padding: 0 12px;
+    border-radius: 20px;
+  }
+  .shadow-home-nav-links {
+    display: none;
   }
 }
 
-/* Hide rspress built-in controls — we manage these ourselves */
+/* ===== Doc pages — rspress default full-width nav ===== */
+/* Hide dark-mode toggle and GitHub socialLinks; language switcher (.translation) stays visible */
 .rspress-nav-appearance,
-.translation,
 .social-links,
 [class*="navAppearance"],
 [class*="socialLink"] {
+  display: none !important;
+}
+
+/* Hide the sidebar navTitleMask — logo is already in the nav bar */
+[class*="navTitleMask"] {
   display: none !important;
 }
 

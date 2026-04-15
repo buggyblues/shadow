@@ -20,7 +20,7 @@ export default defineConfig({
   description:
     'Shadow — AI-native community platform with Buddy collaboration, P2P rental, and shared workspace',
   icon: '/Logo.svg',
-  // logo intentionally omitted — CustomNavTitle slot renders the logo to avoid duplication
+  logo: '/Logo.svg',
   lang: 'en',
   markdown: {
     mdxRs: false,
