@@ -139,12 +139,13 @@ body,
   font-family: "ZCOOL KuaiLe", cursive, sans-serif;
 }
 
-/* Glass navigation bar */
+/* Glass navigation bar — floating capsule style */
 .glass-nav {
   background: var(--shadow-nav-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 2px solid var(--shadow-card-border);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border-bottom: none;
+  border: 1px solid var(--shadow-card-border);
 }
 
 /* Glass card — Neon Frost style */
@@ -1235,21 +1236,7 @@ html.dark .leaderboard-row:hover {
   border-color: rgba(0, 243, 255, 0.2) !important;
 }
 
-/* ─── Confetti, Modal ─── */
-@keyframes confettiFall {
-  0% {
-    transform: translateY(-20px) rotateZ(0deg);
-    opacity: 1;
-  }
-  80% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(520px) rotateZ(600deg);
-    opacity: 0;
-  }
-}
-
+/* ─── Modal ─── */
 @keyframes modalFadeIn {
   from {
     opacity: 0;

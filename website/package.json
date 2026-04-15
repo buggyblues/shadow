@@ -10,12 +10,14 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "canvas-confetti": "^1.9.4",
     "mermaid": "^11.14.0",
     "rspress": "^1.47.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
     "@tailwindcss/postcss": "^4.2.2",
+    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^22",
     "tailwindcss": "^4.2.2"
   }

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import confetti from 'canvas-confetti'
+import { useEffect, useRef, useState } from 'react'
 
 /* ─── Scroll reveal ─── */
 function ScrollReveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
@@ -597,57 +598,26 @@ const CONFETTI_COLORS = [
   '#f87171',
 ]
 
-function Confetti() {
-  const pieces = useMemo<
-    Array<{
-      id: number
-      color: string
-      left: number
-      delay: number
-      duration: number
-      size: number
-      isCircle: boolean
-    }>
-  >(
-    () =>
-      Array.from({ length: 72 }, (_, i) => ({
-        id: i,
-        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-        left: (i * 1.39) % 100,
-        delay: (i * 0.023) % 1.3,
-        duration: 1.8 + ((i * 0.031) % 1.4),
-        size: 6 + (i % 7),
-        isCircle: i % 3 !== 0,
-      })),
-    [],
-  )
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        inset: 0,
-        overflow: 'hidden',
-        pointerEvents: 'none',
-        zIndex: 5,
-      }}
-    >
-      {pieces.map((p) => (
-        <div
-          key={p.id}
-          style={{
-            position: 'absolute',
-            top: '-16px',
-            left: `${p.left}%`,
-            width: `${p.size}px`,
-            height: `${p.size}px`,
-            background: p.color,
-            borderRadius: p.isCircle ? '50%' : '2px',
-            animation: `confettiFall ${p.duration}s ease-in ${p.delay}s forwards`,
-          }}
-        />
-      ))}
-    </div>
-  )
+function fireConfetti() {
+  const end = Date.now() + 1800
+  const frame = () => {
+    confetti({
+      particleCount: 6,
+      angle: 60,
+      spread: 55,
+      origin: { x: 0, y: 0.65 },
+      colors: CONFETTI_COLORS,
+    })
+    confetti({
+      particleCount: 6,
+      angle: 120,
+      spread: 55,
+      origin: { x: 1, y: 0.65 },
+      colors: CONFETTI_COLORS,
+    })
+    if (Date.now() < end) requestAnimationFrame(frame)
+  }
+  frame()
 }
 
 function DiceModal({
@@ -666,6 +636,7 @@ function DiceModal({
   const category = isZh ? play.category : play.categoryEn
 
   useEffect(() => {
+    fireConfetti()
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
@@ -704,8 +675,6 @@ function DiceModal({
           boxShadow: '0 40px 80px rgba(0,0,0,0.6), 0 0 48px rgba(0,243,255,0.08)',
         }}
       >
-        <Confetti />
-
         {/* Image */}
         <div style={{ position: 'relative', height: '220px', overflow: 'hidden', flexShrink: 0 }}>
           <img
@@ -872,7 +841,6 @@ function PlayCard({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        overflow: 'hidden',
         willChange: 'transform',
       }}
       onMouseMove={handleMove}
@@ -941,13 +909,13 @@ function FeaturedCarousel({ isZh }: { isZh: boolean }) {
   useEffect(() => {
     if (featured.length <= 1) return
     const t = setInterval(() => {
-      if (!pauseRef.current) setActive((a) => (a + 1) % featured.length)
+      if (!pauseRef.current) setActive((a: number) => (a + 1) % featured.length)
     }, 5000)
     return () => clearInterval(t)
   }, [featured.length])
 
-  const prev = () => setActive((a) => (a - 1 + featured.length) % featured.length)
-  const next = () => setActive((a) => (a + 1) % featured.length)
+  const prev = () => setActive((a: number) => (a - 1 + featured.length) % featured.length)
+  const next = () => setActive((a: number) => (a + 1) % featured.length)
 
   const play = featured[active]
   if (!play) return null
@@ -957,9 +925,6 @@ function FeaturedCarousel({ isZh }: { isZh: boolean }) {
   const category = isZh ? play.category : play.categoryEn
 
   const arrowBtn: React.CSSProperties = {
-    position: 'absolute',
-    top: '50%',
-    transform: 'translateY(-50%)',
     background: 'rgba(5, 5, 8, 0.55)',
     backdropFilter: 'blur(12px)',
     WebkitBackdropFilter: 'blur(12px)',
@@ -973,7 +938,6 @@ function FeaturedCarousel({ isZh }: { isZh: boolean }) {
     cursor: 'pointer',
     color: '#fff',
     fontSize: '20px',
-    zIndex: 10,
     flexShrink: 0,
   }
 
@@ -1050,43 +1014,34 @@ function FeaturedCarousel({ isZh }: { isZh: boolean }) {
               {desc}
             </p>
             <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className="btn-secondary"
-                style={{ fontSize: '15px', padding: '12px 32px' }}
+              <a
+                href="/app"
+                className="btn-primary"
+                style={{ textDecoration: 'none', fontSize: '15px', padding: '12px 32px' }}
               >
                 {isZh ? '开始探索' : 'Start Exploring'}
-              </button>
+              </a>
               <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>
                 {play.starts} {isZh ? '次启动' : 'launches'}
               </span>
             </div>
           </div>
         </div>
-
-        {/* Prev arrow */}
-        <button
-          type="button"
-          aria-label="Previous"
-          onClick={prev}
-          style={{ ...arrowBtn, left: '16px' }}
-        >
-          ‹
-        </button>
-
-        {/* Next arrow */}
-        <button
-          type="button"
-          aria-label="Next"
-          onClick={next}
-          style={{ ...arrowBtn, right: '16px' }}
-        >
-          ›
-        </button>
       </div>
 
-      {/* Dot indicators */}
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '16px' }}>
+      {/* Controls: prev arrow + dots + next arrow */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: '12px',
+          marginTop: '16px',
+        }}
+      >
+        <button type="button" aria-label="Previous" onClick={prev} style={arrowBtn}>
+          ‹
+        </button>
         {featured.map((_, i) => (
           <button
             key={i}
@@ -1105,6 +1060,9 @@ function FeaturedCarousel({ isZh }: { isZh: boolean }) {
             }}
           />
         ))}
+        <button type="button" aria-label="Next" onClick={next} style={arrowBtn}>
+          ›
+        </button>
       </div>
     </section>
   )
@@ -1128,12 +1086,12 @@ function TopicCard({ topic, isZh }: { topic: Topic; isZh: boolean }) {
           cursor: 'pointer',
         }}
         onMouseEnter={(e) => {
-          ;(e.currentTarget as HTMLElement).style.transform = 'translateY(-4px)'
-          ;(e.currentTarget as HTMLElement).style.boxShadow = '0 16px 40px rgba(0,0,0,0.3)'
+          ; (e.currentTarget as HTMLElement).style.transform = 'translateY(-4px)'
+            ; (e.currentTarget as HTMLElement).style.boxShadow = '0 16px 40px rgba(0,0,0,0.3)'
         }}
         onMouseLeave={(e) => {
-          ;(e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
-          ;(e.currentTarget as HTMLElement).style.boxShadow = 'none'
+          ; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
+            ; (e.currentTarget as HTMLElement).style.boxShadow = 'none'
         }}
       >
         <img
