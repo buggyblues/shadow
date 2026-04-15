@@ -67,6 +67,13 @@ function HomeCapsuleNav() {
           >
             {isZh ? '开放平台' : 'PLATFORM'}
           </a>
+          <a
+            href={isZh ? `${base}/` : `${base}/zh/`}
+            className="shadow-home-nav-link"
+            style={{ textDecoration: 'none' }}
+          >
+            {isZh ? 'EN' : '中文'}
+          </a>
           <a href="/app" className="btn-primary" style={{ textDecoration: 'none' }}>
             {isZh ? '启动！' : 'Launch'}
           </a>

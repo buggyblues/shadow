@@ -931,13 +931,12 @@ html.dark .shadow-home-capsule-inner {
 }
 
 /* ===== Doc pages — rspress default full-width nav ===== */
-/* Hide dark-mode toggle, GitHub socialLinks, and language switcher (lang is footer-only) */
+/* Hide dark-mode toggle, GitHub socialLinks.
+   Language switcher (.translation) is restored — keep it visible in nav. */
 .rspress-nav-appearance,
-.translation,
 .social-links,
 [class*="navAppearance"],
-[class*="socialLink"],
-[class*="translation"] {
+[class*="socialLink"] {
   display: none !important;
 }
 
