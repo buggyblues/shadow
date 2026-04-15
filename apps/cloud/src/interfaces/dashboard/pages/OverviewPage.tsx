@@ -1,3 +1,4 @@
+import { Badge, Button, Card } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
@@ -17,7 +18,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Badge, Button, Card } from '@shadowob/ui'
+import { PageShell } from '@/components/PageShell'
 import { StatCard } from '@/components/StatCard'
 import { StatusDot } from '@/components/StatusDot'
 import { api, type Deployment } from '@/lib/api'
@@ -43,9 +44,7 @@ function QuickActions() {
           <p className="text-sm font-bold text-text-primary transition-colors">
             {t('nav.agentStore')}
           </p>
-          <p className="text-xs mt-0.5 text-text-muted">
-            {t('overview.browseAndDeploy')}
-          </p>
+          <p className="text-xs mt-0.5 text-text-muted">{t('overview.browseAndDeploy')}</p>
         </Link>
       </Card>
       <Card variant="surface">
@@ -54,9 +53,7 @@ function QuickActions() {
           <p className="text-sm font-bold text-text-primary transition-colors">
             {t('nav.deployments')}
           </p>
-          <p className="text-xs mt-0.5 text-text-muted">
-            {t('overview.managedDeployments')}
-          </p>
+          <p className="text-xs mt-0.5 text-text-muted">{t('overview.managedDeployments')}</p>
         </Link>
       </Card>
       <Card variant="surface">
@@ -65,9 +62,7 @@ function QuickActions() {
           <p className="text-sm font-bold text-text-primary transition-colors">
             {t('nav.myTemplates')}
           </p>
-          <p className="text-xs mt-0.5 text-text-muted">
-            {t('overview.editAgentConfig')}
-          </p>
+          <p className="text-xs mt-0.5 text-text-muted">{t('overview.editAgentConfig')}</p>
         </Link>
       </Card>
       <Card variant="surface">
@@ -76,9 +71,7 @@ function QuickActions() {
           <p className="text-sm font-bold text-text-primary transition-colors">
             {t('nav.monitoring')}
           </p>
-          <p className="text-xs mt-0.5 text-text-muted">
-            {t('overview.healthEvents')}
-          </p>
+          <p className="text-xs mt-0.5 text-text-muted">{t('overview.healthEvents')}</p>
         </Link>
       </Card>
     </div>
@@ -93,8 +86,8 @@ function RecentDeployments({ deployments }: { deployments: Deployment[] }) {
 
   if (recent.length === 0) {
     return (
-      <div className="text-center py-8 text-sm text-gray-600">
-        <Rocket size={24} className="mx-auto mb-2 text-gray-700" />
+      <div className="text-center py-8 text-sm text-text-muted">
+        <Rocket size={24} className="mx-auto mb-2 text-text-secondary" />
         {t('overview.noDeploymentsYet')}{' '}
         <Link to="/store" className="text-blue-400 hover:text-blue-300">
           {t('overview.deployFirstAgent')}
@@ -104,7 +97,7 @@ function RecentDeployments({ deployments }: { deployments: Deployment[] }) {
   }
 
   return (
-    <div className="divide-y divide-gray-800/50">
+    <div className="divide-y divide-border-subtle">
       {recent.map((dep) => {
         const ready = isReady(dep)
         return (
@@ -112,20 +105,20 @@ function RecentDeployments({ deployments }: { deployments: Deployment[] }) {
             key={`${dep.namespace}/${dep.name}`}
             to="/deployments/$namespace"
             params={{ namespace: dep.namespace }}
-            className="flex items-center justify-between py-3 hover:bg-gray-800/20 px-3 -mx-3 rounded-lg transition-colors"
+            className="flex items-center justify-between py-3 hover:bg-bg-modifier-hover px-3 -mx-3 rounded-lg transition-colors"
           >
             <div className="flex items-center gap-3 min-w-0">
               <StatusDot status={ready ? 'success' : 'warning'} />
               <div className="min-w-0">
-                <p className="text-sm font-mono text-gray-200 truncate">{dep.name}</p>
-                <p className="text-[10px] text-gray-600">{dep.namespace}</p>
+                <p className="text-sm font-mono text-text-primary truncate">{dep.name}</p>
+                <p className="text-[10px] text-text-muted">{dep.namespace}</p>
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <Badge variant={ready ? 'success' : 'warning'} size="sm">
                 {dep.ready}
               </Badge>
-              <ArrowRight size={12} className="text-gray-600" />
+              <ArrowRight size={12} className="text-text-muted" />
             </div>
           </Link>
         )
@@ -151,23 +144,23 @@ function RecentActivity() {
 
   if (activities.length === 0) {
     return (
-      <div className="text-center py-8 text-sm text-gray-600">
-        <Clock size={24} className="mx-auto mb-2 text-gray-700" />
+      <div className="text-center py-8 text-sm text-text-muted">
+        <Clock size={24} className="mx-auto mb-2 text-text-secondary" />
         {t('overview.noRecentActivity')}
       </div>
     )
   }
 
   return (
-    <div className="divide-y divide-gray-800/50">
+    <div className="divide-y divide-border-subtle">
       {activities.map((a) => (
         <div key={a.id} className="flex items-start gap-3 py-2.5">
-          <div className="mt-0.5 p-1 bg-gray-800 rounded">
-            {typeIcons[a.type] ?? <Activity size={11} className="text-gray-500" />}
+          <div className="mt-0.5 p-1 bg-bg-secondary rounded">
+            {typeIcons[a.type] ?? <Activity size={11} className="text-text-muted" />}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-gray-300 truncate">{a.title}</p>
-            <p className="text-[10px] text-gray-600">{getRelativeTime(a.timestamp)}</p>
+            <p className="text-xs text-text-secondary truncate">{a.title}</p>
+            <p className="text-[10px] text-text-muted">{getRelativeTime(a.timestamp)}</p>
           </div>
         </div>
       ))}
@@ -191,13 +184,13 @@ function HealthSummary() {
 
   if (isLoading) {
     return (
-      <div className="py-4 text-center text-xs text-gray-600">{t('overview.checkingHealth')}</div>
+      <div className="py-4 text-center text-xs text-text-muted">{t('overview.checkingHealth')}</div>
     )
   }
 
   if (!doctor) {
     return (
-      <div className="py-4 text-center text-xs text-gray-600">
+      <div className="py-4 text-center text-xs text-text-muted">
         {t('overview.healthUnavailable')}
       </div>
     )
@@ -223,8 +216,11 @@ function HealthSummary() {
       </div>
       {doctor.checks.map((check) => (
         <div key={check.name} className="flex items-center justify-between gap-2">
-          <span className="text-xs text-gray-400 truncate flex-1">{check.name}</span>
-          <span className="text-[10px] text-gray-600 truncate max-w-[120px]" title={check.message}>
+          <span className="text-xs text-text-secondary truncate flex-1">{check.name}</span>
+          <span
+            className="text-[10px] text-text-muted truncate max-w-[120px]"
+            title={check.message}
+          >
             {check.message}
           </span>
           <StatusDot
@@ -266,58 +262,46 @@ export function OverviewPage() {
   const templateCount = templates?.length ?? 0
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <div
-          className="flex items-center gap-2 text-sm mb-1 text-primary"
-        >
-          <Zap size={14} />
-          <span className="font-bold">{t('overview.title')}</span>
+    <PageShell
+      breadcrumb={[{ label: t('overview.title') }]}
+      title={t('overview.subtitle')}
+      description={t('overview.description')}
+      headerContent={
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            label={t('overview.deployments')}
+            value={total}
+            icon={<Box size={13} />}
+            color="default"
+            onClick={() => navigate({ to: '/deployments' })}
+          />
+          <StatCard
+            label={t('overview.ready')}
+            value={ready}
+            icon={<CheckCircle size={13} />}
+            color="green"
+            onClick={() => navigate({ to: '/deployments' })}
+          />
+          <StatCard
+            label={t('overview.namespaces')}
+            value={namespaces}
+            icon={<FolderOpen size={13} />}
+            color="blue"
+            onClick={() => navigate({ to: '/deployments' })}
+          />
+          <StatCard
+            label={t('overview.templates')}
+            value={templateCount}
+            icon={<ShoppingBag size={13} />}
+            color="purple"
+            onClick={() => navigate({ to: '/store' })}
+          />
         </div>
-        <h1 className="text-2xl font-black">{t('overview.subtitle')}</h1>
-        <p className="text-sm mt-0.5 text-text-muted">
-          {t('overview.description')}
-        </p>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard
-          label={t('overview.deployments')}
-          value={total}
-          icon={<Box size={13} />}
-          color="default"
-          onClick={() => navigate({ to: '/deployments' })}
-        />
-        <StatCard
-          label={t('overview.ready')}
-          value={ready}
-          icon={<CheckCircle size={13} />}
-          color="green"
-          onClick={() => navigate({ to: '/deployments' })}
-        />
-        <StatCard
-          label={t('overview.namespaces')}
-          value={namespaces}
-          icon={<FolderOpen size={13} />}
-          color="blue"
-          onClick={() => navigate({ to: '/deployments' })}
-        />
-        <StatCard
-          label={t('overview.templates')}
-          value={templateCount}
-          icon={<ShoppingBag size={13} />}
-          color="purple"
-          onClick={() => navigate({ to: '/store' })}
-        />
-      </div>
-
+      }
+    >
       {/* Quick Actions */}
-      <section className="mb-8">
-        <h2
-          className="text-sm font-bold mb-3 flex items-center gap-2 text-text-secondary"
-        >
+      <section className="glass-panel p-6">
+        <h2 className="mb-3 text-sm font-bold flex items-center gap-2 text-text-secondary">
           <Zap size={13} />
           {t('overview.quickActions')}
         </h2>
@@ -330,22 +314,19 @@ export function OverviewPage() {
         <div className="lg:col-span-2">
           <Card variant="surface">
             <div className="px-5 py-4 flex items-center justify-between border-b border-border-subtle">
-              <h2
-                className="text-sm font-bold flex items-center gap-2 text-text-primary"
-              >
+              <h2 className="text-sm font-bold flex items-center gap-2 text-text-primary">
                 <Layers size={14} className="text-text-muted" />
                 {t('overview.recentDeployments')}
               </h2>
-              <Link
-                to="/deployments"
-                className="text-xs flex items-center gap-1 text-primary"
-              >
+              <Link to="/deployments" className="text-xs flex items-center gap-1 text-primary">
                 {t('common.viewAll')} <ArrowRight size={10} />
               </Link>
             </div>
             <div className="p-5">
               {isLoading ? (
-                <div className="py-8 text-center text-xs text-gray-600">{t('common.loading')}</div>
+                <div className="py-8 text-center text-xs text-text-muted">
+                  {t('common.loading')}
+                </div>
               ) : (
                 <RecentDeployments deployments={deployments ?? []} />
               )}
@@ -358,16 +339,11 @@ export function OverviewPage() {
           {/* Recent Activity */}
           <Card variant="surface">
             <div className="px-5 py-4 flex items-center justify-between border-b border-border-subtle">
-              <h2
-                className="text-sm font-bold flex items-center gap-2 text-text-primary"
-              >
+              <h2 className="text-sm font-bold flex items-center gap-2 text-text-primary">
                 <Activity size={14} className="text-text-muted" />
                 {t('overview.recentActivity')}
               </h2>
-              <Link
-                to="/monitoring"
-                className="text-xs flex items-center gap-1 text-primary"
-              >
+              <Link to="/monitoring" className="text-xs flex items-center gap-1 text-primary">
                 {t('common.viewAll')} <ArrowRight size={10} />
               </Link>
             </div>
@@ -379,9 +355,7 @@ export function OverviewPage() {
           {/* System Health */}
           <Card variant="surface">
             <div className="px-5 py-4 border-b border-border-subtle">
-              <h2
-                className="text-sm font-bold flex items-center gap-2 text-text-primary"
-              >
+              <h2 className="text-sm font-bold flex items-center gap-2 text-text-primary">
                 <Stethoscope size={14} className="text-text-muted" />
                 {t('overview.systemHealth')}
               </h2>
@@ -392,6 +366,6 @@ export function OverviewPage() {
           </Card>
         </div>
       </div>
-    </div>
+    </PageShell>
   )
 }

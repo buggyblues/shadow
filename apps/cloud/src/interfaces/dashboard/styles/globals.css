@@ -33,12 +33,12 @@
   --color-divider: #272733;
 
   /* Brand palette */
-  --color-nf-cyan: #00F3FF;
-  --color-nf-cyan-strong: #00c6d1;
-  --color-nf-yellow: #F8E71C;
-  --color-nf-yellow-strong: #ffb300;
-  --color-nf-crimson: #FF2A55;
-  --color-nf-emerald: #00E676;
+  --color-nf-cyan: var(--color-primary);
+  --color-nf-cyan-strong: var(--color-primary-strong);
+  --color-nf-yellow: var(--color-accent);
+  --color-nf-yellow-strong: var(--color-accent-strong);
+  --color-nf-crimson: var(--color-danger);
+  --color-nf-emerald: var(--color-success);
   --color-nf-indigo: #7C4DFF;
 
   /* Bouncy timing function */
@@ -81,6 +81,11 @@
   h3 {
     text-wrap: balance;
   }
+
+  .dashboard-root {
+    background-color: var(--nf-bg-core);
+    color: var(--nf-text-high);
+  }
 }
 
 /* ── Dark theme (default) ──────────────────────────────────────────── */
@@ -88,82 +93,36 @@
 :root, .dark {
   color-scheme: dark;
 
-  --nf-bg-core:     #05070c;
-  --nf-bg-surface:  rgba(10, 10, 15, 0.92);
-  --nf-bg-raised:   rgba(18, 18, 26, 0.94);
-  --nf-bg-glass:    rgba(255, 255, 255, 0.03);
-  --nf-bg-glass-2:  rgba(255, 255, 255, 0.02);
+  --nf-bg-core: var(--color-bg-deep);
+  --nf-bg-surface: color-mix(in srgb, var(--color-bg-primary) 92%, transparent);
+  --nf-bg-raised: color-mix(in srgb, var(--color-bg-secondary) 94%, transparent);
+  --nf-bg-glass: var(--glass-bg);
+  --nf-bg-glass-2: color-mix(in srgb, var(--glass-bg) 66%, transparent);
 
-  --nf-border:      rgba(255, 255, 255, 0.08);
-  --nf-border-soft: rgba(255, 255, 255, 0.06);
-  --nf-border-strong: rgba(255, 255, 255, 0.12);
+  --nf-border: var(--color-border-dim);
+  --nf-border-soft: var(--color-border-subtle);
+  --nf-border-strong: color-mix(in srgb, var(--color-border-dim) 80%, white);
 
-  --nf-text-high:   #f8fafc;
-  --nf-text-mid:    #a1a1aa;
-  --nf-text-muted:  #94a3b8;
+  --nf-text-high: var(--color-text-primary);
+  --nf-text-mid: var(--color-text-secondary);
+  --nf-text-muted: var(--color-text-muted);
 
-  --nf-sidebar-bg:  rgba(255, 255, 255, 0.03);
-  --nf-sidebar-active: rgba(0, 243, 255, 0.08);
+  --nf-sidebar-bg: var(--glass-bg);
+  --nf-sidebar-active: color-mix(in srgb, var(--color-primary) 12%, transparent);
 
   --nf-glass-blur:  48px;
   --nf-shadow-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.05), 0 12px 48px -12px rgba(0, 0, 0, 0.5);
-  --nf-shadow-soft: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
-  --nf-shadow-glow: 0 10px 25px rgba(0, 243, 255, 0.4);
+  --nf-shadow-soft: var(--shadow-soft);
+  --nf-shadow-glow: var(--shadow-cyan);
   --nf-sidebar-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05), 0 12px 48px -12px rgba(0, 0, 0, 0.5);
 
-  --color-primary: #00F3FF;
-  --color-primary-strong: #00c6d1;
-  --color-primary-hover: #00a3b0;
-  --color-accent: #F8E71C;
-  --color-accent-strong: #ffb300;
-  --color-accent-hover: #e0d018;
-  --color-success: #00E676;
-  --color-warning: #ff9100;
-  --color-danger: #FF2A55;
-  --color-bg-deep: #05070c;
-  --color-bg-primary: #0a0a0f;
-  --color-bg-secondary: #12121a;
-  --color-bg-tertiary: #1a1a24;
-  --color-text-primary: #f8fafc;
-  --color-text-secondary: #a1a1aa;
-  --color-text-muted: #94a3b8;
-  --color-bg-modifier-hover: rgba(255, 255, 255, 0.04);
-  --color-bg-modifier-active: rgba(255, 255, 255, 0.08);
-  --color-border-subtle: rgba(255, 255, 255, 0.06);
-  --color-border-dim: rgba(255, 255, 255, 0.1);
-  --color-divider: #272733;
-  --glass-bg: rgba(255, 255, 255, 0.03);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --shadow-soft: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
+  --glass-border: var(--color-border-dim);
 }
 
 /* ── Light theme ───────────────────────────────────────────────────── */
 
 .light {
   color-scheme: light;
-
-  --nf-bg-core:     #f1f5f9;
-  --nf-bg-surface:  rgba(255, 255, 255, 0.86);
-  --nf-bg-raised:   rgba(255, 255, 255, 0.68);
-  --nf-bg-glass:    rgba(255, 255, 255, 0.86);
-  --nf-bg-glass-2:  rgba(255, 255, 255, 0.6);
-
-  --nf-border:      rgba(0, 0, 0, 0.05);
-  --nf-border-soft: rgba(0, 0, 0, 0.05);
-  --nf-border-strong: rgba(0, 0, 0, 0.08);
-
-  --nf-text-high:   #0f172a;
-  --nf-text-mid:    #334155;
-  --nf-text-muted:  #64748b;
-
-  --nf-sidebar-bg:  rgba(255, 255, 255, 0.86);
-  --nf-sidebar-active: rgba(0, 198, 209, 0.08);
-
-  --nf-glass-blur:  40px;
-  --nf-shadow-card: 0 18px 48px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.92);
-  --nf-shadow-soft: 0 15px 45px rgba(15, 23, 42, 0.06);
-  --nf-shadow-glow: 0 10px 24px rgba(0, 198, 209, 0.12);
-  --nf-sidebar-shadow: 0 18px 48px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.92);
 
   --color-primary: #0891b2;
   --color-primary-strong: #0e7490;
@@ -187,8 +146,31 @@
   --color-border-dim: rgba(0, 0, 0, 0.12);
   --color-divider: #e2e8f0;
   --glass-bg: rgba(255, 255, 255, 0.86);
-  --glass-border: rgba(0, 0, 0, 0.05);
+  --glass-border: var(--color-border-dim);
   --shadow-soft: 0 15px 45px rgba(15, 23, 42, 0.06);
+
+  --nf-bg-core: var(--color-bg-deep);
+  --nf-bg-surface: color-mix(in srgb, var(--color-bg-primary) 86%, transparent);
+  --nf-bg-raised: color-mix(in srgb, var(--color-bg-secondary) 82%, transparent);
+  --nf-bg-glass: var(--glass-bg);
+  --nf-bg-glass-2: color-mix(in srgb, var(--glass-bg) 70%, transparent);
+
+  --nf-border: var(--color-border-subtle);
+  --nf-border-soft: var(--color-border-subtle);
+  --nf-border-strong: var(--color-border-dim);
+
+  --nf-text-high: var(--color-text-primary);
+  --nf-text-mid: var(--color-text-secondary);
+  --nf-text-muted: var(--color-text-muted);
+
+  --nf-sidebar-bg: var(--glass-bg);
+  --nf-sidebar-active: color-mix(in srgb, var(--color-primary-strong) 16%, transparent);
+
+  --nf-glass-blur: 40px;
+  --nf-shadow-card: 0 18px 48px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  --nf-shadow-soft: var(--shadow-soft);
+  --nf-shadow-glow: 0 10px 24px rgba(0, 198, 209, 0.12);
+  --nf-sidebar-shadow: 0 18px 48px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.92);
 }
 
 .light body {
@@ -199,23 +181,77 @@
 /* ── Utility classes ───────────────────────────────────────────────── */
 
 @layer utilities {
+  .dashboard-page-shell {
+    margin-inline: auto;
+    max-width: 1440px;
+    padding: 1.5rem;
+  }
+
+  @media (min-width: 768px) {
+    .dashboard-page-shell {
+      padding-inline: 2rem;
+    }
+  }
+
+  .dashboard-page-shell--narrow {
+    max-width: 1280px;
+  }
+
+  /* Font-weight hierarchy: page title → font-extrabold(800); section header → font-bold(700); field label → font-semibold(600) */
+  .dashboard-page-title {
+    font-size: 1.875rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--color-text-primary);
+  }
+
+  @media (min-width: 768px) {
+    .dashboard-page-title {
+      font-size: 2.125rem;
+    }
+  }
+
+  .dashboard-page-description {
+    font-size: 0.875rem;
+    line-height: 1.75;
+    color: var(--color-text-muted);
+  }
+
+  /* Semantic micro-scale utilities — use instead of text-[10px] / text-[11px] */
+  .text-micro {
+    font-size: 0.625rem; /* 10px */
+    line-height: 1.3;
+  }
+
+  .text-label {
+    font-size: 0.6875rem; /* 11px */
+    line-height: 1.4;
+  }
+
   .dashboard-tabs-list {
     display: flex;
     width: 100%;
     height: auto;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-start;
-    gap: 0.5rem;
+    gap: 0.25rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .dashboard-tabs-list::-webkit-scrollbar {
+    display: none;
   }
 
   .dashboard-tabs-trigger {
-    height: auto !important;
-    gap: 0.5rem !important;
-    padding: 0.625rem 1rem !important;
-    font-size: 12px !important;
-    font-weight: 700 !important;
-    letter-spacing: normal !important;
-    text-transform: none !important;
+    height: auto;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: normal;
+    text-transform: none;
   }
 
   .dashboard-tab-icon {
@@ -225,76 +261,102 @@
     color: var(--nf-text-muted);
   }
 
+  .dashboard-tabs-count {
+    border-radius: 9999px;
+    background-color: color-mix(in srgb, var(--color-bg-tertiary) 70%, transparent);
+    padding: 0.125rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: normal;
+    color: var(--color-text-muted);
+  }
+
+  .dashboard-table-head {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  .dashboard-status-badge {
+    border-radius: 9999px;
+    min-height: 1.3rem;
+    font-size: 0.68rem;
+    letter-spacing: 0.03em;
+    font-weight: 700;
+  }
+
+  .dashboard-action-button {
+    transition-property: background-color, border-color, color, box-shadow, transform;
+    transition-duration: 160ms;
+    transition-timing-function: ease;
+  }
+
+  .dashboard-action-button:active {
+    transform: translateY(0.5px);
+  }
+
+  .dashboard-action-button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 36%, transparent);
+  }
+
   .dashboard-alert-content {
-    border-radius: 36px !important;
-    border-color: var(--color-border-subtle) !important;
-    background: var(--color-bg-secondary) !important;
-    padding: 0 !important;
+    border-radius: 2rem;
+    border-color: var(--color-border-subtle);
+    background: var(--color-bg-secondary);
+    padding: 0;
   }
 
   .dashboard-alert-title {
-    font-size: 1.25rem !important;
-    letter-spacing: -0.02em !important;
+    font-size: 1.25rem;
+    letter-spacing: -0.02em;
   }
 
   .dashboard-alert-description {
-    font-style: normal !important;
-    font-size: 0.875rem !important;
-    font-weight: 500 !important;
-    color: var(--color-text-secondary) !important;
+    font-style: normal;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
   }
 
   .nf-glass {
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--glass-bg);
     backdrop-filter: blur(48px);
     -webkit-backdrop-filter: blur(48px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
-      0 12px 48px -12px rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--nf-shadow-card);
     border-radius: 24px;
   }
 
-  .light .dashboard-root .nf-glass {
-    background: rgba(255, 255, 255, 0.86);
-    backdrop-filter: blur(40px);
-    -webkit-backdrop-filter: blur(40px);
-    border: 1px solid rgba(255, 255, 255, 0.92);
-    box-shadow:
-      0 18px 48px rgba(15, 23, 42, 0.08),
-      inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  .glass-panel,
+  .nf-glass {
+    border-radius: 24px;
   }
 
+  .glass-surface,
   .nf-glass-2 {
-    background: var(--nf-bg-glass-2);
+    background: color-mix(in srgb, var(--glass-bg) 72%, transparent);
     backdrop-filter: blur(32px);
     -webkit-backdrop-filter: blur(32px);
-    border: 1px solid var(--nf-border-soft);
+    border: 1px solid var(--glass-border);
     box-shadow: var(--nf-shadow-soft);
   }
 
+  .glass-card,
   .nf-card {
     position: relative;
     isolation: isolate;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.02);
+    background: color-mix(in srgb, var(--glass-bg) 72%, transparent);
     backdrop-filter: blur(48px);
     -webkit-backdrop-filter: blur(48px);
     border-radius: 32px;
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--glass-border);
     border-top: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow:
-      0 10px 40px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+    box-shadow: var(--nf-shadow-soft);
     padding: 22px;
-  }
-
-  .light .nf-card {
-    background: rgba(255, 255, 255, 0.6);
-    border: 1px solid rgba(255, 255, 255, 1);
-    box-shadow:
-      0 15px 45px rgba(0, 0, 0, 0.05),
-      inset 0 2px 12px rgba(255, 255, 255, 0.8);
   }
 
   .nf-card::before {
@@ -343,82 +405,38 @@
   background: var(--nf-text-muted);
 }
 
-/* ── Light-mode overrides for existing Tailwind usage ──────────────── */
-/* Scoped to dashboard root to prevent global style collisions. */
+/* ── Light-mode legacy class compatibility (minimal) ──────────────── */
+/* Keep only transitional mappings still used by legacy pages.          */
+/* TODO: Remove this entire block once all pages migrate to semantic    */
+/*       classes (bg-bg-*, text-text-*, border-*). Target: next        */
+/*       milestone PR after SettingsPage/MonitoringPage migration.      */
 
 @layer utilities {
-  .light .dashboard-root .bg-gray-950 { background-color: var(--nf-bg-core) !important; }
-  .light .dashboard-root .bg-gray-900 { background-color: var(--nf-bg-surface) !important; }
-  .light .dashboard-root .bg-gray-800 { background-color: var(--nf-bg-raised) !important; }
-  .light .dashboard-root .bg-gray-800\/20 { background-color: rgba(0,0,0,0.03) !important; }
-  .light .dashboard-root .bg-gray-800\/60 { background-color: rgba(0,0,0,0.04) !important; }
+  .light .dashboard-root :is(.bg-gray-950) { background-color: var(--nf-bg-core); }
+  .light .dashboard-root :is(.bg-gray-900, .bg-gray-900\/50, .bg-gray-900\/30) {
+    background-color: var(--nf-bg-surface);
+  }
+  .light .dashboard-root :is(.bg-gray-800, .bg-gray-800\/20, .bg-gray-800\/60) {
+    background-color: var(--nf-bg-raised);
+  }
 
-  .light .dashboard-root .border-gray-800 { border-color: var(--nf-border) !important; }
-  .light .dashboard-root .border-gray-800\/50 { border-color: var(--nf-border) !important; }
-  .light .dashboard-root .border-gray-700 { border-color: var(--nf-border-strong) !important; }
+  .light .dashboard-root :is(.border-gray-800, .border-gray-800\/50) {
+    border-color: var(--nf-border);
+  }
+  .light .dashboard-root :is(.divide-gray-800, .divide-gray-800\/50) > :not(:last-child) {
+    border-color: var(--nf-border);
+  }
+  .light .dashboard-root :is(.border-gray-700, .hover\:border-gray-700:hover) {
+    border-color: var(--nf-border-strong);
+  }
 
-  .light .dashboard-root .text-white { color: var(--nf-text-high) !important; }
-  .light .dashboard-root .text-gray-200 { color: var(--nf-text-high) !important; }
-  .light .dashboard-root .text-gray-300 { color: var(--nf-text-high) !important; }
-  .light .dashboard-root .text-gray-400 { color: var(--nf-text-mid) !important; }
-  .light .dashboard-root .text-gray-500 { color: var(--nf-text-muted) !important; }
-  .light .dashboard-root .text-gray-600 { color: var(--nf-text-muted) !important; }
-  .light .dashboard-root .text-gray-700 { color: var(--nf-text-muted) !important; }
-
-  .light .dashboard-root .divide-gray-800\/50 > :not(:last-child) { border-color: var(--nf-border) !important; }
-  .light .dashboard-root .divide-gray-800 > :not(:last-child) { border-color: var(--nf-border) !important; }
-
-  /* Replace blue accent with cyan in light mode */
-  .light .dashboard-root .text-blue-400 { color: var(--color-nf-cyan-strong) !important; }
-  .light .dashboard-root .text-blue-300 { color: var(--color-nf-cyan) !important; }
-  .light .dashboard-root .bg-blue-600\/20 { background-color: var(--nf-sidebar-active) !important; }
-
-  .light .dashboard-root .bg-gray-900\/50 { background-color: rgba(241, 245, 249, 0.5) !important; }
-  .light .dashboard-root .bg-gray-900\/30 { background-color: rgba(241, 245, 249, 0.3) !important; }
-  .light .dashboard-root .bg-gray-700 { background-color: #E2E8F0 !important; }
-  .light .dashboard-root .bg-black\/70 { background-color: rgba(0, 0, 0, 0.4) !important; }
-  .light .dashboard-root .bg-black\/50 { background-color: rgba(0, 0, 0, 0.3) !important; }
-  .light .dashboard-root .bg-black\/75 { background-color: rgba(15, 23, 42, 0.36) !important; }
-
-  /* Badge / status light-mode backgrounds */
-  .light .dashboard-root .bg-green-900\/50 { background-color: rgba(0, 230, 118, 0.1) !important; }
-  .light .dashboard-root .bg-green-900\/30 { background-color: rgba(0, 230, 118, 0.08) !important; }
-  .light .dashboard-root .bg-yellow-900\/50 { background-color: rgba(248, 231, 28, 0.1) !important; }
-  .light .dashboard-root .bg-red-900\/50 { background-color: rgba(255, 42, 85, 0.1) !important; }
-  .light .dashboard-root .bg-red-900\/30 { background-color: rgba(255, 42, 85, 0.08) !important; }
-  .light .dashboard-root .bg-blue-900\/50 { background-color: rgba(0, 198, 209, 0.1) !important; }
-  .light .dashboard-root .bg-blue-600 { background-color: var(--color-nf-cyan-strong) !important; }
-  .light .dashboard-root .bg-blue-500\/10 { background-color: rgba(0, 198, 209, 0.1) !important; }
-  .light .dashboard-root .bg-blue-500\/50 { background-color: rgba(0, 198, 209, 0.3) !important; }
-  .light .dashboard-root .hover\:bg-blue-500:hover { background-color: var(--color-nf-cyan) !important; }
-  .light .dashboard-root .hover\:bg-gray-700:hover { background-color: #E2E8F0 !important; }
-  .light .dashboard-root .hover\:bg-gray-800:hover { background-color: var(--nf-bg-raised) !important; }
-  .light .dashboard-root .hover\:border-gray-700:hover { border-color: var(--nf-border-strong) !important; }
-  .light .dashboard-root .hover\:border-gray-500:hover { border-color: var(--nf-text-muted) !important; }
-  .light .dashboard-root .hover\:text-white:hover { color: var(--nf-text-high) !important; }
-  .light .dashboard-root .hover\:text-gray-300:hover { color: var(--nf-text-high) !important; }
-  .light .dashboard-root .border-gray-600 { border-color: var(--nf-border-strong) !important; }
-  .light .dashboard-root .border-blue-500 { border-color: var(--color-nf-cyan-strong) !important; }
-  .light .dashboard-root .border-blue-600 { border-color: var(--color-nf-cyan-strong) !important; }
-  .light .dashboard-root .border-red-500 { border-color: var(--color-nf-crimson) !important; }
-
-  /* Focus states */
-  .light .dashboard-root .focus\:border-blue-500:focus { border-color: var(--color-nf-cyan-strong) !important; }
-  .light .dashboard-root .focus\:ring-blue-500\/30:focus { --tw-ring-color: rgba(0, 198, 209, 0.3) !important; }
-
-  /* Placeholder */
-  .light .dashboard-root .placeholder-gray-600::placeholder { color: var(--nf-text-muted) !important; }
-
-  /* Gradient overlays in light mode */
-  .light .dashboard-root .from-blue-950\/40 { --tw-gradient-from: rgba(0, 198, 209, 0.06) !important; }
-  .light .dashboard-root .from-green-950\/30 { --tw-gradient-from: rgba(0, 230, 118, 0.06) !important; }
-  .light .dashboard-root .from-purple-950\/30 { --tw-gradient-from: rgba(124, 77, 255, 0.06) !important; }
-  .light .dashboard-root .from-yellow-950\/30 { --tw-gradient-from: rgba(248, 231, 28, 0.06) !important; }
-  .light .dashboard-root .to-gray-900 { --tw-gradient-to: var(--nf-bg-surface) !important; }
-
-  /* Button colors in light mode */
-  .light .dashboard-root .bg-red-600 { background-color: var(--color-nf-crimson) !important; }
-  .light .dashboard-root .hover\:bg-red-500:hover { background-color: #FF4D73 !important; }
-  .light .dashboard-root .disabled\:bg-gray-700:disabled { background-color: #E2E8F0 !important; }
-  .light .dashboard-root .disabled\:text-gray-500:disabled { color: var(--nf-text-muted) !important; }
+  .light .dashboard-root :is(.text-white, .text-gray-200, .text-gray-300, .hover\:text-white:hover, .hover\:text-gray-300:hover) {
+    color: var(--nf-text-high);
+  }
+  .light .dashboard-root :is(.text-gray-400, .text-gray-500, .text-gray-600, .text-gray-700, .disabled\:text-gray-500:disabled) {
+    color: var(--nf-text-muted);
+  }
+  .light .dashboard-root .placeholder-gray-600::placeholder {
+    color: var(--nf-text-muted);
+  }
 }

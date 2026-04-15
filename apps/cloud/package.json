@@ -31,7 +31,9 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "test:e2e:cli": "vitest run --config vitest.cli.config.ts",
     "test:e2e:console": "playwright test",
-    "test:e2e:console:ui": "playwright test --ui"
+    "test:e2e:console:ui": "playwright test --ui",
+    "test:e2e:console:visual": "playwright test e2e/console/visual-regression.spec.ts",
+    "test:e2e:console:visual:update": "playwright test e2e/console/visual-regression.spec.ts --update-snapshots"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.11",

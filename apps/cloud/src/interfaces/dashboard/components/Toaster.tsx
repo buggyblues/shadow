@@ -1,6 +1,6 @@
+import { Button } from '@shadowob/ui'
 import { clsx } from 'clsx'
 import { CheckCircle, Info, X, XCircle } from 'lucide-react'
-import { Button } from '@shadowob/ui'
 import { useToastStore } from '@/stores/toast'
 
 const icons = {

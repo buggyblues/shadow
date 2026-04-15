@@ -1,7 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from '@tanstack/react-router'
 import {
-  Badge,
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -10,10 +7,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  Badge,
   Button,
+  Card,
   EmptyState,
   Input,
-  Card,
   Modal,
   ModalBody,
   ModalButtonGroup,
@@ -22,6 +20,8 @@ import {
   ModalHeader,
   Search as SearchField,
 } from '@shadowob/ui'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link, useNavigate } from '@tanstack/react-router'
 import {
   Copy,
   Edit3,
@@ -35,9 +35,10 @@ import {
 } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Breadcrumb } from '@/components/Breadcrumb'
+import { PageShell } from '@/components/PageShell'
 import { parseTemplateAgents } from '@/components/TemplateDetailShared'
 import { useDebounce } from '@/hooks/useDebounce'
+import { useTypewriterPlaceholder } from '@/hooks/useTypewriterPlaceholder'
 import { api, type TemplateCatalogSummary } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/stores/toast'
@@ -96,34 +97,17 @@ function FilterPill({
   onClick: () => void
 }) {
   return (
-    <Button
-      type="button"
-      onClick={onClick}
-      variant="ghost"
-      size="sm"
-    >
+    <Button type="button" onClick={onClick} variant="ghost" size="sm">
       <span className="truncate">{label}</span>
-      <span className={cn('rounded-xl px-2 py-0.5 text-[11px]', active ? 'bg-primary/15 text-primary' : 'bg-bg-tertiary/80 text-text-muted')}>
+      <span
+        className={cn(
+          'rounded-xl px-2 py-0.5 text-[11px]',
+          active ? 'bg-primary/15 text-primary' : 'bg-bg-tertiary/80 text-text-muted',
+        )}
+      >
         {count}
       </span>
     </Button>
-  )
-}
-
-function InlineMetric({
-  icon,
-  value,
-  label,
-}: {
-  icon: ReactNode
-  value: string | number
-  label: string
-}) {
-  return (
-    <span className="inline-flex min-h-[40px] items-center gap-2.5 rounded-2xl border border-border-subtle bg-bg-secondary/70 px-3.5 py-2 text-xs font-semibold text-text-secondary whitespace-nowrap" title={label}>
-      <span className="text-primary">{icon}</span>
-      <span className="font-bold text-text-primary">{value}</span>
-    </span>
   )
 }
 
@@ -137,7 +121,10 @@ function CardMetric({
   label: string
 }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-xl border border-border-subtle bg-bg-primary/60 px-2.5 py-1.5 text-[11px] font-semibold text-text-secondary" title={label}>
+    <span
+      className="inline-flex items-center gap-1.5 rounded-xl border border-border-subtle bg-bg-primary/60 px-2.5 py-1.5 text-[11px] font-semibold text-text-secondary"
+      title={label}
+    >
       {icon}
       <span>{value}</span>
     </span>
@@ -179,129 +166,128 @@ function TemplateCard({
 
   return (
     <Card variant="surface">
-      <div className="flex items-start gap-4">
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-border-subtle bg-bg-primary/50 text-[28px] shadow-sm">
-          {displayEmoji}
-        </div>
+      <div className="flex h-full flex-col gap-4 p-5">
+        <div className="flex items-start gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-border-subtle bg-bg-primary/50 text-[28px] shadow-sm">
+            {displayEmoji}
+          </div>
 
-        <div className="min-w-0 flex-1 space-y-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 space-y-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <Link
-                  to="/my-templates/$name"
-                  params={{ name }}
-                  className="truncate text-[17px] font-extrabold tracking-[-0.02em] text-text-primary transition-colors hover:text-primary"
-                >
-                  {name}
-                </Link>
-                <Badge variant="neutral" size="sm">
-                  v{version}
-                </Badge>
-                <Badge
-                  variant={
-                    sourceType === 'store' ? 'info' : sourceType === 'git' ? 'success' : 'neutral'
-                  }
-                  size="sm"
-                >
-                  {t(`templates.filters.${sourceType}`)}
-                </Badge>
-                {baseTemplate?.featured && (
-                  <Badge variant="info" size="sm">
-                    <Sparkles size={10} />
-                    {t('store.featured')}
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Link
+                    to="/my-templates/$name"
+                    params={{ name }}
+                    className="truncate text-[17px] font-extrabold tracking-[-0.02em] text-text-primary transition-colors hover:text-primary"
+                  >
+                    {name}
+                  </Link>
+                  <Badge variant="neutral" size="sm">
+                    v{version}
                   </Badge>
-                )}
+                  <Badge
+                    variant={
+                      sourceType === 'store' ? 'info' : sourceType === 'git' ? 'success' : 'neutral'
+                    }
+                    size="sm"
+                  >
+                    {t(`templates.filters.${sourceType}`)}
+                  </Badge>
+                  {baseTemplate?.featured && (
+                    <Badge variant="info" size="sm">
+                      <Sparkles size={10} />
+                      {t('store.featured')}
+                    </Badge>
+                  )}
+                </div>
+
+                <p className="line-clamp-2 text-sm leading-6 text-text-secondary">{summaryText}</p>
               </div>
 
-              <p className="line-clamp-2 text-sm leading-6 text-text-secondary">
-                {summaryText}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                onClick={onShare}
-                variant="ghost"
-                size="icon"
-                title={t('common.share')}
-              >
-                <Copy size={14} />
-              </Button>
-              <Button
-                type="button"
-                onClick={onDelete}
-                variant="ghost"
-                size="icon"
-                title={t('common.delete')}
-              >
-                <Trash2 size={14} />
-              </Button>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-text-muted">
-            {templateSlug && (
-              sourceType === 'store' ? (
-                <Link
-                  to="/store/$name"
-                  params={{ name: templateSlug }}
-                  className="rounded-xl border border-border-subtle px-2.5 py-1 transition-colors hover:text-text-primary"
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={onShare}
+                  variant="ghost"
+                  size="icon"
+                  title={t('common.share')}
                 >
-                  {templateSlug}
-                </Link>
-              ) : (
+                  <Copy size={14} />
+                </Button>
+                <Button
+                  type="button"
+                  onClick={onDelete}
+                  variant="ghost"
+                  size="icon"
+                  title={t('common.delete')}
+                >
+                  <Trash2 size={14} />
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-text-muted">
+              {templateSlug &&
+                (sourceType === 'store' ? (
+                  <Link
+                    to="/store/$name"
+                    params={{ name: templateSlug }}
+                    className="rounded-xl border border-border-subtle px-2.5 py-1 transition-colors hover:text-text-primary"
+                  >
+                    {templateSlug}
+                  </Link>
+                ) : (
+                  <span className="rounded-xl border border-border-subtle px-2.5 py-1">
+                    {templateSlug}
+                  </span>
+                ))}
+
+              {overview.namespace && (
                 <span className="rounded-xl border border-border-subtle px-2.5 py-1">
-                  {templateSlug}
+                  {overview.namespace}
                 </span>
-              )
-            )}
+              )}
 
-            {overview.namespace && (
               <span className="rounded-xl border border-border-subtle px-2.5 py-1">
-                {overview.namespace}
+                {updatedLabel}
               </span>
-            )}
-
-            <span className="rounded-xl border border-border-subtle px-2.5 py-1">
-              {updatedLabel}
-            </span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="flex flex-wrap gap-2">
-        <CardMetric
-          icon={<Users size={11} className="text-primary" />}
-          value={overview.agentCount}
-          label={t('deploy.agentsLabel')}
-        />
-        <CardMetric
-          icon={<Sparkles size={11} className="text-primary" />}
-          value={overview.providerCount}
-          label={t('templateDetail.providers')}
-        />
-        <CardMetric
-          icon={<Copy size={11} className="text-primary" />}
-          value={`v${version}`}
-          label={t('templateDetail.version')}
-        />
-      </div>
+        <div className="flex flex-wrap gap-2">
+          <CardMetric
+            icon={<Users size={11} className="text-primary" />}
+            value={overview.agentCount}
+            label={t('deploy.agentsLabel')}
+          />
+          <CardMetric
+            icon={<Sparkles size={11} className="text-primary" />}
+            value={overview.providerCount}
+            label={t('templateDetail.providers')}
+          />
+          <CardMetric
+            icon={<Copy size={11} className="text-primary" />}
+            value={`v${version}`}
+            label={t('templateDetail.version')}
+          />
+        </div>
 
-      <div className="mt-auto flex flex-col items-stretch gap-2 border-t border-border-subtle pt-4 sm:flex-row">
-        <Button asChild variant="secondary">
-          <Link to="/my-templates/$name" params={{ name }}>
-            <Edit3 size={14} />
-            <span className="truncate">{t('templates.openEditor')}</span>
-          </Link>
-        </Button>
-        <Button asChild variant="primary">
-          <Link to="/store/$name/deploy" params={{ name: slug }}>
-            <Sparkles size={14} />
-            <span className="truncate">{t('templates.deployNow')}</span>
-          </Link>
-        </Button>
+        <div className="mt-auto flex flex-col items-stretch gap-2 border-t border-border-subtle pt-4 sm:flex-row">
+          <Button asChild variant="secondary">
+            <Link to="/my-templates/$name" params={{ name }}>
+              <Edit3 size={14} />
+              <span className="truncate">{t('templates.openEditor')}</span>
+            </Link>
+          </Button>
+          <Button asChild variant="primary">
+            <Link to="/store/$name/deploy" params={{ name: slug }}>
+              <Sparkles size={14} />
+              <span className="truncate">{t('templates.deployNow')}</span>
+            </Link>
+          </Button>
+        </div>
       </div>
     </Card>
   )
@@ -400,7 +386,14 @@ function ForkDialog({
                       size="sm"
                       style={{ background: active ? 'rgba(0, 209, 255, 0.08)' : 'transparent' }}
                     >
-                      <span className={cn('truncate font-semibold', active ? 'text-text-primary' : 'text-text-secondary')}>{template.name}</span>
+                      <span
+                        className={cn(
+                          'truncate font-semibold',
+                          active ? 'text-text-primary' : 'text-text-secondary',
+                        )}
+                      >
+                        {template.name}
+                      </span>
                       <span className="ml-2 shrink-0 text-xs text-text-muted">
                         {t('store.agentCount', { count: template.agentCount })}
                       </span>
@@ -553,6 +546,9 @@ export function MyTemplatesPage() {
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<TemplateSourceFilter>('all')
   const debouncedSearch = useDebounce(search)
+  const typewriterPlaceholder = useTypewriterPlaceholder(
+    t('templates.typewriterPhrases', { returnObjects: true }) as string[],
+  )
 
   const { data: myTemplates, isLoading } = useQuery({
     queryKey: ['my-templates'],
@@ -652,105 +648,65 @@ export function MyTemplatesPage() {
     })
   }, [activeFilter, catalogByName, debouncedSearch, sortedTemplates])
 
-  const hasFilters = activeFilter !== 'all' || Boolean(search.trim())
-
   return (
-    <div className="mx-auto max-w-[1440px] space-y-8 px-6 py-6 md:px-8">
-      <Breadcrumb items={[{ label: t('templates.title') }]} className="mb-1" />
-
-      <section className="space-y-5">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div className="max-w-3xl space-y-2">
-            <h1
-              className="text-[30px] font-extrabold tracking-[-0.04em] text-text-primary md:text-[34px]"
-            >
-              {t('templates.title')}
-            </h1>
-            <p className="max-w-2xl text-sm leading-7 text-text-secondary md:text-[15px]">
-              {t('templates.description')}
-            </p>
+    <PageShell
+      breadcrumb={[{ label: t('templates.title') }]}
+      title={t('templates.title')}
+      headerContent={
+        <div className="space-y-3">
+          <SearchField
+            value={search}
+            onChange={setSearch}
+            placeholder={typewriterPlaceholder || t('templates.searchSavedPlaceholder')}
+          />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-1.5">
+              {(
+                [
+                  ['all', t('templates.filters.all')],
+                  ['store', t('templates.filters.store')],
+                  ['git', t('templates.filters.git')],
+                  ['custom', t('templates.filters.custom')],
+                ] as Array<[TemplateSourceFilter, string]>
+              ).map(([key, label]) => (
+                <FilterPill
+                  key={key}
+                  label={label}
+                  count={sourceCounts[key]}
+                  active={activeFilter === key}
+                  onClick={() => setActiveFilter(key)}
+                />
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={() => setShowForkDialog(true)}
+              >
+                <GitFork size={14} />
+                <span className="truncate">{t('templates.forkFromStore')}</span>
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowGitImport(true)}
+              >
+                <GitBranch size={14} />
+                <span className="truncate">{t('templates.importGit')}</span>
+              </Button>
+            </div>
           </div>
-
-          <div className="flex flex-wrap gap-2">
-            <InlineMetric
-              icon={<Copy size={13} />}
-              value={sourceCounts.all}
-              label={t('templates.stats.saved')}
-            />
-            <InlineMetric
-              icon={<GitFork size={13} />}
-              value={sourceCounts.store}
-              label={t('templates.stats.storeForks')}
-            />
-            <InlineMetric
-              icon={<GitBranch size={13} />}
-              value={sourceCounts.git}
-              label={t('templates.stats.gitImports')}
-            />
-          </div>
-        </div>
-
-        <SearchField
-          value={search}
-          onChange={setSearch}
-          placeholder={t('templates.searchSavedPlaceholder')}
-        />
-
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                ['all', t('templates.filters.all')],
-                ['store', t('templates.filters.store')],
-                ['git', t('templates.filters.git')],
-                ['custom', t('templates.filters.custom')],
-              ] as Array<[TemplateSourceFilter, string]>
-            ).map(([key, label]) => (
-              <FilterPill
-                key={key}
-                label={label}
-                count={sourceCounts[key]}
-                active={activeFilter === key}
-                onClick={() => setActiveFilter(key)}
-              />
-            ))}
-          </div>
-
-          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-            <Button type="button" variant="primary" size="sm" onClick={() => setShowForkDialog(true)}>
-              <GitFork size={14} />
-              <span className="truncate">{t('templates.forkFromStore')}</span>
-            </Button>
-            <Button type="button" variant="secondary" size="sm" onClick={() => setShowGitImport(true)}>
-              <GitBranch size={14} />
-              <span className="truncate">{t('templates.importGit')}</span>
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-text-muted">
             {t('store.matchingTemplates', { count: filteredTemplates.length })}
             {activeFilter !== 'all' ? ` · ${t(`templates.filters.${activeFilter}`)}` : ''}
             {debouncedSearch ? ` · ${t('store.matchingQuery', { query: debouncedSearch })}` : ''}
           </p>
-
-          {hasFilters && (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                setSearch('')
-                setActiveFilter('all')
-              }}
-            >
-              {t('templates.clearFilters')}
-            </Button>
-          )}
         </div>
-      </section>
-
+      }
+    >
       {isLoading && (
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
           {Array.from({ length: 4 }).map((_, index) => (
@@ -768,7 +724,12 @@ export function MyTemplatesPage() {
           title={t('templates.noCustomTemplates')}
           description={t('templates.forkTemplateStart')}
           action={
-            <Button type="button" variant="primary" size="sm" onClick={() => setShowForkDialog(true)}>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={() => setShowForkDialog(true)}
+            >
               <GitFork size={14} />
               {t('templates.forkTemplate')}
             </Button>
@@ -839,9 +800,7 @@ export function MyTemplatesPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('common.delete')}
-            </AlertDialogTitle>
+            <AlertDialogTitle>{t('common.delete')}</AlertDialogTitle>
             <AlertDialogDescription>
               {templateToDelete ? t('templates.deleteConfirm', { name: templateToDelete }) : ''}
             </AlertDialogDescription>
@@ -849,9 +808,7 @@ export function MyTemplatesPage() {
 
           <AlertDialogFooter>
             <AlertDialogCancel asChild>
-              <Button variant="ghost">
-                {t('common.cancel')}
-              </Button>
+              <Button variant="ghost">{t('common.cancel')}</Button>
             </AlertDialogCancel>
             <AlertDialogAction asChild>
               <Button
@@ -887,6 +844,6 @@ export function MyTemplatesPage() {
           isPending={gitImportMutation.isPending}
         />
       )}
-    </div>
+    </PageShell>
   )
 }

@@ -1,7 +1,8 @@
+import { Badge, Button, EmptyState } from '@shadowob/ui'
 import { Code, Cpu, Layers, Server, Settings, Users, Zap } from 'lucide-react'
 import { useState } from 'react'
-import { Badge, Button, EmptyState } from '@shadowob/ui'
-import { cn, pluralize } from '@/lib/utils'
+import { useTranslation } from 'react-i18next'
+import { cn } from '@/lib/utils'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -71,6 +72,7 @@ export function parseAgents(templateData: unknown): AgentInfo[] {
 // ── Agent Card ────────────────────────────────────────────────────────────────
 
 export function AgentCard({ agent, index }: { agent: AgentInfo; index: number }) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
 
   return (
@@ -128,7 +130,7 @@ export function AgentCard({ agent, index }: { agent: AgentInfo; index: number })
           {agent.identity && (agent.identity.personality || agent.identity.systemPrompt) && (
             <div>
               <h5 className="text-[10px] uppercase text-gray-600 font-semibold mb-1.5 flex items-center gap-1">
-                <Users size={10} /> Identity
+                <Users size={10} /> {t('storeDetail.identity')}
               </h5>
               {agent.identity.personality && (
                 <p className="text-xs text-gray-400 bg-gray-950 rounded p-2.5 leading-relaxed line-clamp-4">
@@ -138,7 +140,7 @@ export function AgentCard({ agent, index }: { agent: AgentInfo; index: number })
               {agent.identity.systemPrompt && (
                 <details className="mt-2">
                   <summary className="text-[10px] text-gray-500 cursor-pointer hover:text-gray-400">
-                    System Prompt
+                    {t('storeDetail.systemPrompt')}
                   </summary>
                   <p className="text-xs text-gray-500 bg-gray-950 rounded p-2.5 mt-1 leading-relaxed max-h-32 overflow-y-auto">
                     {agent.identity.systemPrompt}
@@ -152,7 +154,7 @@ export function AgentCard({ agent, index }: { agent: AgentInfo; index: number })
           {agent.integrations && agent.integrations.length > 0 && (
             <div>
               <h5 className="text-[10px] uppercase text-gray-600 font-semibold mb-1.5 flex items-center gap-1">
-                <Layers size={10} /> Integrations
+                <Layers size={10} /> {t('storeDetail.integrations')}
               </h5>
               <div className="flex flex-wrap gap-2">
                 {agent.integrations.map((intg) => (
@@ -163,8 +165,7 @@ export function AgentCard({ agent, index }: { agent: AgentInfo; index: number })
                     <Zap size={10} /> {intg.name}
                     {intg.credentials && (
                       <span className="text-purple-500 text-[10px]">
-                        ({Object.keys(intg.credentials).length}{' '}
-                        {pluralize(Object.keys(intg.credentials).length, 'credential')})
+                        ({Object.keys(intg.credentials).length} {t('storeDetail.credentials')})
                       </span>
                     )}
                   </span>
@@ -177,12 +178,14 @@ export function AgentCard({ agent, index }: { agent: AgentInfo; index: number })
           {agent.resources && (
             <div>
               <h5 className="text-[10px] uppercase text-gray-600 font-semibold mb-1.5 flex items-center gap-1">
-                <Server size={10} /> Resources
+                <Server size={10} /> {t('storeDetail.resources')}
               </h5>
               <div className="grid grid-cols-2 gap-2">
                 {agent.resources.requests && (
                   <div className="bg-gray-950 rounded p-2">
-                    <span className="text-[10px] text-gray-600 block mb-1">Requests</span>
+                    <span className="text-[10px] text-gray-600 block mb-1">
+                      {t('templateDetail.requests')}
+                    </span>
                     {Object.entries(agent.resources.requests).map(([k, v]) => (
                       <div key={k} className="text-xs text-gray-400 flex justify-between">
                         <span className="text-gray-600">{k}</span>
@@ -193,7 +196,9 @@ export function AgentCard({ agent, index }: { agent: AgentInfo; index: number })
                 )}
                 {agent.resources.limits && (
                   <div className="bg-gray-950 rounded p-2">
-                    <span className="text-[10px] text-gray-600 block mb-1">Limits</span>
+                    <span className="text-[10px] text-gray-600 block mb-1">
+                      {t('templateDetail.limits')}
+                    </span>
                     {Object.entries(agent.resources.limits).map(([k, v]) => (
                       <div key={k} className="text-xs text-gray-400 flex justify-between">
                         <span className="text-gray-600">{k}</span>
@@ -210,7 +215,7 @@ export function AgentCard({ agent, index }: { agent: AgentInfo; index: number })
           {agent.configuration && (
             <div>
               <h5 className="text-[10px] uppercase text-gray-600 font-semibold mb-1.5 flex items-center gap-1">
-                <Settings size={10} /> Configuration
+                <Settings size={10} /> {t('storeDetail.configuration')}
               </h5>
               <pre className="text-xs text-gray-500 bg-gray-950 rounded p-2.5 overflow-x-auto max-h-40">
                 {JSON.stringify(agent.configuration, null, 2)}
@@ -221,7 +226,9 @@ export function AgentCard({ agent, index }: { agent: AgentInfo; index: number })
           {/* Tools */}
           {agent.tools && agent.tools.length > 0 && (
             <div>
-              <h5 className="text-[10px] uppercase text-gray-600 font-semibold mb-1.5">Tools</h5>
+              <h5 className="text-[10px] uppercase text-gray-600 font-semibold mb-1.5">
+                {t('storeDetail.tools')}
+              </h5>
               <div className="flex flex-wrap gap-1.5">
                 {agent.tools.map((tool) => (
                   <span
@@ -239,7 +246,7 @@ export function AgentCard({ agent, index }: { agent: AgentInfo; index: number })
           {agent.env && Object.keys(agent.env).length > 0 && (
             <div>
               <h5 className="text-[10px] uppercase text-gray-600 font-semibold mb-1.5 flex items-center gap-1">
-                <Code size={10} /> Environment
+                <Code size={10} /> {t('templateDetail.environment')}
               </h5>
               <div className="space-y-1">
                 {Object.entries(agent.env).map(([k, v]) => (
@@ -261,12 +268,14 @@ export function AgentCard({ agent, index }: { agent: AgentInfo; index: number })
 // ── Agents Tab ────────────────────────────────────────────────────────────────
 
 export function AgentsTab({ agents }: { agents: AgentInfo[] }) {
+  const { t } = useTranslation()
+
   if (agents.length === 0) {
     return (
       <EmptyState
         icon={Users}
-        title="Agent details unavailable"
-        description="Deploy this template to see the full agent configuration."
+        title={t('storeDetail.agentDetailsUnavailable')}
+        description={t('storeDetail.deployToSeeConfig')}
       />
     )
   }
@@ -274,7 +283,7 @@ export function AgentsTab({ agents }: { agents: AgentInfo[] }) {
   return (
     <div className="space-y-3">
       <p className="text-sm text-gray-500 mb-4">
-        This template includes {agents.length} {pluralize(agents.length, 'agent')}:
+        {t('storeDetail.includesAgents', { count: agents.length })}
       </p>
       {agents.map((agent, i) => (
         <AgentCard key={agent.id ?? agent.name} agent={agent} index={i} />

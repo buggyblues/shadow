@@ -1,15 +1,8 @@
-import { Cpu, Layers, Settings, Users, Zap } from 'lucide-react'
+import { Badge, Button, EmptyState, Tabs, TabsList, TabsTrigger } from '@shadowob/ui'
+import { ChevronRight, Cpu, Layers, Settings, Users, Zap } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  Badge,
-  Button,
-  EmptyState,
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from '@shadowob/ui'
 import { Breadcrumb } from '@/components/Breadcrumb'
 import { CodeBlock } from '@/components/CodeBlock'
 import { cn } from '@/lib/utils'
@@ -114,97 +107,98 @@ export function parseTemplateAgents(templateData: unknown): TemplateAgentInfo[] 
   return []
 }
 
+// CSS grid-template-rows expand/collapse — no JS layout measurement needed
+function ExpandBody({ open, children }: { open: boolean; children: ReactNode }) {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateRows: open ? '1fr' : '0fr',
+        transition: 'grid-template-rows 260ms cubic-bezier(0.4, 0, 0.2, 1)',
+      }}
+    >
+      <div style={{ overflow: 'hidden' }}>{children}</div>
+    </div>
+  )
+}
+
 function TemplateAgentCard({ agent, index }: { agent: TemplateAgentInfo; index: number }) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <div
-      className="overflow-hidden rounded-[26px] border transition-all duration-300"
-      style={{
-        background: 'var(--nf-bg-surface)',
-        borderColor: expanded ? 'rgba(0, 243, 255, 0.18)' : 'var(--nf-border)',
-        boxShadow: expanded ? 'var(--nf-shadow-soft)' : 'none',
-      }}
-    >
-      <Button
+    <div>
+      <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        variant="ghost"
-        className="!flex !w-full !items-start !justify-between !gap-3 !px-4 !py-4 !text-left"
+        className={cn(
+          'flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-bg-modifier-hover/40',
+          expanded && 'bg-bg-modifier-hover/20',
+        )}
       >
-        <div className="flex min-w-0 items-start gap-3">
-          <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border text-xs font-black"
-            style={{
-              background: 'rgba(0, 243, 255, 0.08)',
-              borderColor: 'rgba(0, 243, 255, 0.14)',
-              color: 'var(--color-nf-cyan)',
-            }}
-          >
-            {index + 1}
-          </div>
-          <div className="min-w-0">
-            <h4
-              className="flex flex-wrap items-center gap-2 text-sm font-black"
-              style={{ color: 'var(--nf-text-high)' }}
-            >
+        {/* Index badge */}
+        <div
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black"
+          style={{
+            background: 'rgba(0,243,255,0.08)',
+            border: '1px solid rgba(0,243,255,0.14)',
+            color: 'var(--color-nf-cyan)',
+          }}
+        >
+          {index + 1}
+        </div>
+
+        {/* Name + description */}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-black uppercase tracking-[0.08em] text-text-primary">
               {agent.identity?.name ?? agent.name}
-              {agent.runtime && (
-                <Badge variant="neutral" size="sm">
-                  {agent.runtime}
-                </Badge>
-              )}
-            </h4>
-            {(agent.role ?? agent.description) && (
-              <p className="mt-1 line-clamp-1 text-xs" style={{ color: 'var(--nf-text-muted)' }}>
-                {agent.role ?? agent.description}
-              </p>
+            </span>
+            {agent.runtime && (
+              <Badge variant="neutral" size="sm">
+                {agent.runtime}
+              </Badge>
+            )}
+            {agent.model && (
+              <Badge variant="neutral" size="sm" className="gap-1">
+                <Cpu size={9} />
+                {agent.model}
+              </Badge>
             )}
           </div>
-        </div>
-        <div className="ml-2 flex shrink-0 items-center gap-2">
-          {agent.model && (
-            <Badge variant="neutral" size="sm" className="gap-1">
-              <Cpu size={10} />
-              {agent.model}
-            </Badge>
+          {(agent.role ?? agent.description) && (
+            <p className="mt-0.5 line-clamp-1 text-[11px] uppercase tracking-[0.12em] text-text-muted">
+              {agent.role ?? agent.description}
+            </p>
           )}
+        </div>
+
+        {/* Right: integration count + chevron */}
+        <div className="flex shrink-0 items-center gap-2">
           {agent.integrations && agent.integrations.length > 0 && (
             <Badge variant="info" size="sm" className="gap-1">
-              <Layers size={10} />
+              <Layers size={9} />
               {agent.integrations.length}
             </Badge>
           )}
-          <span
-            className={cn('text-xs transition-transform', expanded && 'rotate-90')}
-            style={{ color: 'var(--nf-text-muted)' }}
-          >
-            ▸
-          </span>
+          <ChevronRight
+            size={14}
+            className={cn(
+              'text-text-muted transition-transform duration-200',
+              expanded && 'rotate-90',
+            )}
+          />
         </div>
-      </Button>
+      </button>
 
-      {expanded && (
-        <div
-          className="space-y-3 border-t px-4 pb-4 pt-3"
-          style={{ borderColor: 'var(--nf-border)' }}
-        >
+      <ExpandBody open={expanded}>
+        <div className="space-y-3 border-t border-border-subtle px-5 pb-5 pt-4">
           {agent.identity?.personality && (
             <div>
-              <h5
-                className="mb-1.5 text-[10px] font-black uppercase tracking-[0.16em]"
-                style={{ color: 'var(--nf-text-muted)' }}
-              >
+              <h5 className="mb-1.5 text-micro font-black uppercase tracking-[0.16em] text-text-muted">
                 {t('templateDetail.identity')}
               </h5>
-              <p
-                className="line-clamp-4 rounded-[18px] px-3 py-3 text-xs leading-6"
-                style={{
-                  background: 'var(--nf-bg-glass-2)',
-                  color: 'var(--nf-text-mid)',
-                }}
-              >
+              <p className="glass-surface line-clamp-4 rounded-[18px] px-3 py-3 text-xs leading-6 text-text-secondary">
                 {agent.identity.personality}
               </p>
             </div>
@@ -212,10 +206,7 @@ function TemplateAgentCard({ agent, index }: { agent: TemplateAgentInfo; index: 
 
           {agent.integrations && agent.integrations.length > 0 && (
             <div>
-              <h5
-                className="mb-1.5 text-[10px] font-black uppercase tracking-[0.16em]"
-                style={{ color: 'var(--nf-text-muted)' }}
-              >
+              <h5 className="mb-1.5 text-micro font-black uppercase tracking-[0.16em] text-text-muted">
                 {t('templateDetail.integrations')}
               </h5>
               <div className="flex flex-wrap gap-2">
@@ -236,54 +227,37 @@ function TemplateAgentCard({ agent, index }: { agent: TemplateAgentInfo; index: 
 
           {agent.resources && (
             <div>
-              <h5
-                className="mb-1.5 text-[10px] font-black uppercase tracking-[0.16em]"
-                style={{ color: 'var(--nf-text-muted)' }}
-              >
+              <h5 className="mb-1.5 text-micro font-black uppercase tracking-[0.16em] text-text-muted">
                 {t('templateDetail.resources')}
               </h5>
               <div className="grid grid-cols-2 gap-2">
                 {agent.resources.requests && (
-                  <div
-                    className="rounded-[18px] px-3 py-3"
-                    style={{ background: 'var(--nf-bg-glass-2)' }}
-                  >
-                    <span
-                      className="mb-1 block text-[10px] font-semibold"
-                      style={{ color: 'var(--nf-text-muted)' }}
-                    >
+                  <div className="glass-surface rounded-[18px] px-3 py-3">
+                    <span className="mb-1 block text-micro font-semibold text-text-muted">
                       {t('templateDetail.requests')}
                     </span>
                     {Object.entries(agent.resources.requests).map(([key, value]) => (
                       <div
                         key={key}
-                        className="flex justify-between gap-2 text-xs"
-                        style={{ color: 'var(--nf-text-mid)' }}
+                        className="flex justify-between gap-2 text-xs text-text-secondary"
                       >
-                        <span style={{ color: 'var(--nf-text-muted)' }}>{key}</span>
+                        <span className="text-text-muted">{key}</span>
                         <span className="font-mono">{value}</span>
                       </div>
                     ))}
                   </div>
                 )}
                 {agent.resources.limits && (
-                  <div
-                    className="rounded-[18px] px-3 py-3"
-                    style={{ background: 'var(--nf-bg-glass-2)' }}
-                  >
-                    <span
-                      className="mb-1 block text-[10px] font-semibold"
-                      style={{ color: 'var(--nf-text-muted)' }}
-                    >
+                  <div className="glass-surface rounded-[18px] px-3 py-3">
+                    <span className="mb-1 block text-micro font-semibold text-text-muted">
                       {t('templateDetail.limits')}
                     </span>
                     {Object.entries(agent.resources.limits).map(([key, value]) => (
                       <div
                         key={key}
-                        className="flex justify-between gap-2 text-xs"
-                        style={{ color: 'var(--nf-text-mid)' }}
+                        className="flex justify-between gap-2 text-xs text-text-secondary"
                       >
-                        <span style={{ color: 'var(--nf-text-muted)' }}>{key}</span>
+                        <span className="text-text-muted">{key}</span>
                         <span className="font-mono">{value}</span>
                       </div>
                     ))}
@@ -295,40 +269,28 @@ function TemplateAgentCard({ agent, index }: { agent: TemplateAgentInfo; index: 
 
           {agent.configuration && (
             <div>
-              <h5
-                className="mb-1.5 flex items-center gap-1 text-[10px] font-black uppercase tracking-[0.16em]"
-                style={{ color: 'var(--nf-text-muted)' }}
-              >
+              <h5 className="mb-1.5 flex items-center gap-1 text-micro font-black uppercase tracking-[0.16em] text-text-muted">
                 <Settings size={10} /> {t('storeDetail.configuration')}
               </h5>
-              <pre
-                className="max-h-40 overflow-x-auto rounded-[18px] px-3 py-3 text-xs"
-                style={{
-                  background: 'var(--nf-bg-glass-2)',
-                  color: 'var(--nf-text-mid)',
-                }}
-              >
-                {JSON.stringify(agent.configuration, null, 2)}
-              </pre>
+              <CodeBlock
+                code={JSON.stringify(agent.configuration, null, 2)}
+                language="json"
+                maxHeight="160px"
+              />
             </div>
           )}
 
           {agent.env && Object.keys(agent.env).length > 0 && (
             <div>
-              <h5
-                className="mb-1.5 text-[10px] font-black uppercase tracking-[0.16em]"
-                style={{ color: 'var(--nf-text-muted)' }}
-              >
+              <h5 className="mb-1.5 text-micro font-black uppercase tracking-[0.16em] text-text-muted">
                 {t('templateDetail.environment')}
               </h5>
               <div className="space-y-1">
                 {Object.entries(agent.env).map(([key, value]) => (
-                  <div key={key} className="text-xs font-mono flex gap-2">
+                  <div key={key} className="flex gap-2 font-mono text-xs">
                     <span style={{ color: 'var(--color-nf-yellow)' }}>{key}</span>
-                    <span style={{ color: 'var(--nf-text-muted)' }}>=</span>
-                    <span className="truncate" style={{ color: 'var(--nf-text-mid)' }}>
-                      {String(value)}
-                    </span>
+                    <span className="text-text-muted">=</span>
+                    <span className="truncate text-text-secondary">{String(value)}</span>
                   </div>
                 ))}
               </div>
@@ -337,21 +299,14 @@ function TemplateAgentCard({ agent, index }: { agent: TemplateAgentInfo; index: 
 
           {agent.tools && agent.tools.length > 0 && (
             <div>
-              <h5
-                className="mb-1.5 text-[10px] font-black uppercase tracking-[0.16em]"
-                style={{ color: 'var(--nf-text-muted)' }}
-              >
+              <h5 className="mb-1.5 text-micro font-black uppercase tracking-[0.16em] text-text-muted">
                 {t('templateDetail.tools')}
               </h5>
               <div className="flex flex-wrap gap-1.5">
                 {agent.tools.map((tool) => (
                   <span
                     key={tool}
-                    className="rounded-full px-2 py-1 text-[10px] font-mono"
-                    style={{
-                      background: 'var(--nf-bg-glass-2)',
-                      color: 'var(--nf-text-mid)',
-                    }}
+                    className="glass-surface rounded-full px-2 py-1 text-micro font-mono text-text-secondary"
                   >
                     {tool}
                   </span>
@@ -360,7 +315,7 @@ function TemplateAgentCard({ agent, index }: { agent: TemplateAgentInfo; index: 
             </div>
           )}
         </div>
-      )}
+      </ExpandBody>
     </div>
   )
 }
@@ -379,19 +334,19 @@ export function TemplateAgentsTab({
   const { t } = useTranslation()
 
   if (agents.length === 0) {
-    return (
-      <EmptyState icon={Users} title={emptyTitle} description={emptyDescription} />
-    )
+    return <EmptyState icon={Users} title={emptyTitle} description={emptyDescription} />
   }
 
   return (
     <div className="space-y-3">
-      <p className="mb-4 text-sm" style={{ color: 'var(--nf-text-muted)' }}>
+      <p className="text-sm text-text-muted">
         {introText ?? t('templateDetail.agentsCount', { count: agents.length })}
       </p>
-      {agents.map((agent, index) => (
-        <TemplateAgentCard key={agent.id} agent={agent} index={index} />
-      ))}
+      <div className="overflow-hidden rounded-[24px] border border-border-subtle divide-y divide-border-subtle">
+        {agents.map((agent, index) => (
+          <TemplateAgentCard key={agent.id} agent={agent} index={index} />
+        ))}
+      </div>
     </div>
   )
 }
@@ -410,9 +365,7 @@ export function TemplateConfigTab({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm" style={{ color: 'var(--nf-text-muted)' }}>
-        {description}
-      </p>
+      <p className="text-sm text-text-muted">{description}</p>
       <CodeBlock
         code={templateData ? configStr : t('common.loading')}
         language="json"
@@ -458,20 +411,14 @@ export function TemplateDetailShell({
   children: ReactNode
 }) {
   return (
-    <div className="mx-auto max-w-[1440px] space-y-5 px-6 py-6 md:px-8">
+    <div className="dashboard-page-shell space-y-5">
       <Breadcrumb items={breadcrumbItems} className="mb-1" />
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
         <div className="min-w-0 space-y-5">
           <div className="glass-panel p-6">
             <div className="flex flex-col gap-5 md:flex-row md:items-start">
-              <div
-                className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[28px] border"
-                style={{
-                  background: 'var(--nf-bg-glass-2)',
-                  borderColor: 'var(--nf-border)',
-                }}
-              >
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[28px] border border-border-subtle bg-bg-secondary/50">
                 {heroIcon}
               </div>
 
@@ -479,19 +426,11 @@ export function TemplateDetailShell({
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div className="min-w-0 space-y-3">
                     <div className="flex flex-wrap items-center gap-3">
-                      <h1
-                        className="text-[32px] font-black tracking-[-0.04em]"
-                        style={{ color: 'var(--nf-text-high)' }}
-                      >
-                        {title}
-                      </h1>
+                      <h1 className="dashboard-page-title text-text-primary">{title}</h1>
                       {titleMeta}
                     </div>
 
-                    <div
-                      className="max-w-3xl text-sm leading-7"
-                      style={{ color: 'var(--nf-text-mid)' }}
-                    >
+                    <div className="dashboard-page-description max-w-3xl text-text-secondary">
                       {description}
                     </div>
 
@@ -503,7 +442,9 @@ export function TemplateDetailShell({
 
                 {badges && <div className="flex flex-wrap items-center gap-2.5">{badges}</div>}
                 {chips && <div className="flex flex-wrap gap-2.5">{chips}</div>}
-                {actions && <div className="flex flex-wrap items-center gap-2.5 pt-1">{actions}</div>}
+                {actions && (
+                  <div className="flex flex-wrap items-center gap-2.5 pt-1">{actions}</div>
+                )}
               </div>
             </div>
           </div>
@@ -511,19 +452,11 @@ export function TemplateDetailShell({
           <Tabs value={activeTab} onChange={onTabChange}>
             <TabsList className="dashboard-tabs-list">
               {tabs.map((tab) => (
-                <TabsTrigger
-                  key={tab.id}
-                  value={tab.id}
-                  className="dashboard-tabs-trigger"
-                >
-                  {tab.icon && (
-                    <span className="dashboard-tab-icon">{tab.icon}</span>
-                  )}
+                <TabsTrigger key={tab.id} value={tab.id} className="dashboard-tabs-trigger">
+                  {tab.icon && <span className="dashboard-tab-icon">{tab.icon}</span>}
                   <span>{tab.label}</span>
                   {typeof tab.count === 'number' && (
-                    <span className="rounded-full bg-bg-tertiary/70 px-2 py-0.5 text-[10px] font-black tracking-normal text-text-muted">
-                      {tab.count}
-                    </span>
+                    <span className="dashboard-tabs-count text-micro">{tab.count}</span>
                   )}
                 </TabsTrigger>
               ))}

@@ -1,15 +1,25 @@
 import Editor from '@monaco-editor/react'
+import {
+  Button,
+  Card,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
-import { formatDistanceToNow, parseISO } from 'date-fns'
 import {
   Activity,
   BarChart3,
   Box,
   CheckCircle,
   Download,
-  Eye,
-  EyeOff,
   FileJson,
   FileText,
   FolderClock,
@@ -29,55 +39,24 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  Badge,
-  Button,
-  Card,
-  Checkbox,
-  EmptyState,
-  Input,
-  Modal,
-  ModalBody,
-  ModalButtonGroup,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from '@shadowob/ui'
 import { Breadcrumb } from '@/components/Breadcrumb'
+import { CliCommandSnippet } from '@/components/CliCommandSnippet'
+import { DangerConfirmDialog } from '@/components/DangerConfirmDialog'
+import { DashboardEmptyState } from '@/components/DashboardEmptyState'
+import { DashboardTaskCard } from '@/components/DashboardTaskCard'
+import { EnvVarEditorDialog } from '@/components/EnvVarEditorDialog'
+import { IconActionButton } from '@/components/IconActionButton'
+import { LogsPanel } from '@/components/LogsPanel'
 import { StatCard } from '@/components/StatCard'
-import { StatusDot } from '@/components/StatusDot'
+import { StatusBadge } from '@/components/StatusBadge'
+import { ToolbarActionButton } from '@/components/ToolbarActionButton'
 import { useSSEStream } from '@/hooks/useSSEStream'
 import { api, type Pod, type ValidateResult } from '@/lib/api'
-import { cn, pluralize } from '@/lib/utils'
+import { cn, formatTimestamp, getAge, pluralize } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/stores/toast'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function getAge(pod: Pod): string {
-  try {
-    return formatDistanceToNow(parseISO(pod.age), { addSuffix: true })
-  } catch {
-    return pod.age
-  }
-}
 
 function getPodStatusType(status: string): 'success' | 'warning' | 'error' | 'info' {
   if (status === 'Running') return 'success'
@@ -90,50 +69,60 @@ function getPodStatusType(status: string): 'success' | 'warning' | 'error' | 'in
 // ── Pods Tab ──────────────────────────────────────────────────────────────────
 
 function PodsTab({ pods, isLoading }: { pods: Pod[] | undefined; isLoading: boolean }) {
+  const { t } = useTranslation()
+
   if (isLoading) {
-    return <div className="py-10 text-center text-text-muted text-sm">Loading pods...</div>
+    return (
+      <div className="py-10 text-center text-text-muted text-sm">
+        {t('deploymentDetail.podsLoading')}
+      </div>
+    )
   }
 
   if (!pods || pods.length === 0) {
     return (
-      <Card variant="glass">
-        <EmptyState
-          icon={Box}
-          title="No pods found"
-          description="The deployment may be scaling up."
-        />
-      </Card>
+      <DashboardEmptyState
+        icon={Box}
+        title={t('deploymentDetail.podsEmptyTitle')}
+        description={t('deploymentDetail.podsEmptyDescription')}
+      />
     )
   }
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-text-muted">
-        {pods.length} {pluralize(pods.length, 'pod')} in this deployment.
+        {t('deploymentDetail.podsSummary', {
+          count: pods.length,
+          label: pluralize(pods.length, 'pod'),
+        })}
       </p>
 
       <Card variant="glass">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>STATUS</TableHead>
-              <TableHead>NAME</TableHead>
-              <TableHead>READY</TableHead>
-              <TableHead>RESTARTS</TableHead>
-              <TableHead>AGE</TableHead>
+              <TableHead className="dashboard-table-head">{t('clusters.status')}</TableHead>
+              <TableHead className="dashboard-table-head">{t('monitoring.name')}</TableHead>
+              <TableHead className="dashboard-table-head">{t('monitoring.ready')}</TableHead>
+              <TableHead className="dashboard-table-head">{t('deployments.restarts')}</TableHead>
+              <TableHead className="dashboard-table-head">{t('deployments.age')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {pods.map((pod) => (
               <TableRow key={pod.name}>
                 <TableCell>
-                  <StatusDot status={getPodStatusType(pod.status)} label={pod.status} />
+                  <StatusBadge
+                    dotStatus={getPodStatusType(pod.status)}
+                    dotLabel={pod.status}
+                    badgeVariant={pod.ready === '1/1' ? 'success' : 'warning'}
+                    badgeText={pod.ready}
+                  />
                 </TableCell>
                 <TableCell>{pod.name}</TableCell>
                 <TableCell>
-                  <Badge variant={pod.ready === '1/1' ? 'success' : 'warning'} size="sm">
-                    {pod.ready}
-                  </Badge>
+                  <span className="font-mono text-xs text-text-secondary">{pod.ready}</span>
                 </TableCell>
                 <TableCell>
                   {Number(pod.restarts) > 0 ? (
@@ -142,7 +131,7 @@ function PodsTab({ pods, isLoading }: { pods: Pod[] | undefined; isLoading: bool
                     pod.restarts
                   )}
                 </TableCell>
-                <TableCell>{getAge(pod)}</TableCell>
+                <TableCell>{getAge(pod.age)}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -155,6 +144,7 @@ function PodsTab({ pods, isLoading }: { pods: Pod[] | undefined; isLoading: bool
 // ── Logs Tab ──────────────────────────────────────────────────────────────────
 
 function LogsTab({ namespace, id }: { namespace: string; id: string }) {
+  const { t } = useTranslation()
   const logRef = useRef<HTMLDivElement>(null)
   const { lines, status, error, connect: sseConnect, clear, disconnect } = useSSEStream()
 
@@ -185,78 +175,62 @@ function LogsTab({ namespace, id }: { namespace: string; id: string }) {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-text-muted">
-          Real-time log stream from all pods in this deployment.
-        </p>
+        <p className="text-sm text-text-muted">{t('deploymentDetail.logsDescription')}</p>
         <div className="flex flex-wrap items-center gap-2">
           {lines.length > 0 && (
             <>
-              <Button
+              <ToolbarActionButton
                 type="button"
                 variant="glass"
-                size="sm"
                 onClick={handleDownload}
-              >
-                <Download size={11} />
-                Download
-              </Button>
+                icon={<Download size={11} />}
+                label={t('common.download')}
+              />
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
+                className="dashboard-action-button"
                 onClick={() => {
                   disconnect()
                   clear()
                 }}
               >
                 <XCircle size={11} />
-                Clear
+                {t('common.clear')}
               </Button>
             </>
           )}
-          <Button
+          <ToolbarActionButton
             type="button"
             variant={connected ? 'primary' : 'glass'}
-            size="sm"
             onClick={handleConnect}
-          >
-            <RefreshCw size={12} className={connected ? 'animate-spin' : ''} />
-            {connected ? 'Streaming' : 'Connect'}
-          </Button>
+            icon={<RefreshCw size={12} className={connected ? 'animate-spin' : ''} />}
+            label={connected ? t('deployments.streaming') : t('deployments.connectLogs')}
+          />
         </div>
       </div>
 
       {error && (
-        <div className="rounded-[20px] border border-danger/20 bg-danger/10 px-4 py-3 text-xs text-danger">
+        <div className="rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-xs text-danger">
           {error}
         </div>
       )}
 
-      <Card variant="glass">
-        <div className="flex items-center justify-between border-b border-border-subtle bg-bg-secondary/40 px-5 py-3">
-          <span className="font-mono text-xs text-text-muted">
+      <LogsPanel
+        headerLeft={
+          <span className="font-mono">
             {namespace}/{id}
           </span>
-          <span className="text-xs text-text-muted">{lines.length} lines</span>
-        </div>
-        <div
-          ref={logRef}
-          className="min-h-[16rem] max-h-[30rem] overflow-auto bg-bg-deep/80 p-4 font-mono text-xs text-text-secondary space-y-1"
-        >
-          {lines.length === 0 && !connected && (
-            <span className="text-text-muted">Click "Connect" to stream logs…</span>
-          )}
-          {lines.length === 0 && connected && (
-            <span className="text-text-muted">Waiting for log output…</span>
-          )}
-          {lines.map((line, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: log lines are append-only
-            <div key={i} className="leading-relaxed">
-              {line || '\u00a0'}
-            </div>
-          ))}
-        </div>
-      </Card>
+        }
+        headerRight={<span>{t('deploymentDetail.logsLines', { count: lines.length })}</span>}
+        lines={lines}
+        emptyText={
+          connected ? t('deploymentDetail.logsWaiting') : t('deploymentDetail.logsConnectHint')
+        }
+        bodyRef={logRef}
+        bodyClassName="max-h-[30rem] bg-bg-deep/80"
+      />
     </div>
   )
 }
@@ -272,6 +246,7 @@ function InfoTab({
   id: string
   pods: Pod[] | undefined
 }) {
+  const { t } = useTranslation()
   const running = pods?.filter((p) => p.status === 'Running').length ?? 0
   const totalRestarts = pods?.reduce((sum, p) => sum + Number(p.restarts), 0) ?? 0
 
@@ -279,54 +254,53 @@ function InfoTab({
     <div className="space-y-6">
       <Card variant="glass">
         <div className="flex items-center justify-between px-5 py-3">
-          <span className="text-xs text-text-muted">Deployment Name</span>
+          <span className="text-xs text-text-muted">
+            {t('deploymentDetail.info.deploymentName')}
+          </span>
           <span className="text-sm font-mono text-text-primary">{id}</span>
         </div>
         <div className="flex items-center justify-between px-5 py-3">
-          <span className="text-xs text-text-muted">Namespace</span>
+          <span className="text-xs text-text-muted">{t('deploymentDetail.info.namespace')}</span>
           <span className="text-sm font-mono text-text-secondary">{namespace}</span>
         </div>
         <div className="flex items-center justify-between px-5 py-3">
-          <span className="text-xs text-text-muted">Total Pods</span>
+          <span className="text-xs text-text-muted">{t('deploymentDetail.info.totalPods')}</span>
           <span className="text-sm text-text-primary">{pods?.length ?? '—'}</span>
         </div>
         <div className="flex items-center justify-between px-5 py-3">
-          <span className="text-xs text-text-muted">Running Pods</span>
+          <span className="text-xs text-text-muted">{t('deploymentDetail.info.runningPods')}</span>
           <span className="text-sm text-success">{running}</span>
         </div>
         <div className="flex items-center justify-between px-5 py-3">
-          <span className="text-xs text-text-muted">Total Restarts</span>
-          <span className={cn('text-sm', totalRestarts > 0 ? 'text-warning' : 'text-text-secondary')}>
+          <span className="text-xs text-text-muted">
+            {t('deploymentDetail.info.totalRestarts')}
+          </span>
+          <span
+            className={cn('text-sm', totalRestarts > 0 ? 'text-warning' : 'text-text-secondary')}
+          >
             {totalRestarts}
           </span>
         </div>
       </Card>
 
-      {/* CLI commands */}
       <Card variant="glass">
         <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-text-primary">
           <Terminal size={14} className="text-text-muted" />
-          CLI Commands
+          {t('deploymentDetail.info.cliCommands')}
         </h3>
         <div className="space-y-2">
-          <div>
-            <p className="mb-1 text-xs text-text-muted">View pods</p>
-            <code className="block rounded-[18px] bg-bg-deep/80 px-3 py-2 text-xs font-mono text-text-secondary">
-              kubectl get pods -n {namespace}
-            </code>
-          </div>
-          <div>
-            <p className="mb-1 text-xs text-text-muted">View logs</p>
-            <code className="block rounded-[18px] bg-bg-deep/80 px-3 py-2 text-xs font-mono text-text-secondary">
-              kubectl logs -n {namespace} -l app={id} --tail=100
-            </code>
-          </div>
-          <div>
-            <p className="mb-1 text-xs text-text-muted">Scale deployment</p>
-            <code className="block rounded-[18px] bg-bg-deep/80 px-3 py-2 text-xs font-mono text-text-secondary">
-              kubectl scale deployment {id} -n {namespace} --replicas=N
-            </code>
-          </div>
+          <CliCommandSnippet
+            title={t('deploymentDetail.info.viewPods')}
+            command={`kubectl get pods -n ${namespace}`}
+          />
+          <CliCommandSnippet
+            title={t('deploymentDetail.info.viewLogs')}
+            command={`kubectl logs -n ${namespace} -l app=${id} --tail=100`}
+          />
+          <CliCommandSnippet
+            title={t('deploymentDetail.info.scaleDeployment')}
+            command={`kubectl scale deployment ${id} -n ${namespace} --replicas=N`}
+          />
         </div>
       </Card>
     </div>
@@ -361,7 +335,7 @@ function ConfigTab() {
       setDirty(false)
       toast.success(t('common.saved'))
     },
-    onError: () => toast.error('Failed to save config'),
+    onError: () => toast.error(t('configEditor.saveFailed')),
   })
 
   const handleValidate = async () => {
@@ -370,7 +344,7 @@ function ConfigTab() {
       const result = await api.validate(parsed)
       setValidateResult(result)
     } catch {
-      toast.error('Invalid JSON')
+      toast.error(t('templateDetail.invalidJSONSyntax'))
     }
   }
 
@@ -379,7 +353,7 @@ function ConfigTab() {
       const parsed = JSON.parse(content)
       setContent(JSON.stringify(parsed, null, 2))
     } catch {
-      toast.error('Invalid JSON — cannot format')
+      toast.error(t('templateDetail.cannotFormat'))
     }
   }
 
@@ -402,6 +376,7 @@ function ConfigTab() {
             type="button"
             variant="glass"
             size="sm"
+            className="dashboard-action-button"
             onClick={handleFormat}
           >
             <FileJson size={11} />
@@ -411,6 +386,7 @@ function ConfigTab() {
             type="button"
             variant="glass"
             size="sm"
+            className="dashboard-action-button"
             onClick={handleValidate}
           >
             <CheckCircle size={11} />
@@ -420,6 +396,7 @@ function ConfigTab() {
             type="button"
             variant="primary"
             size="sm"
+            className="dashboard-action-button"
             onClick={() => saveMutation.mutate()}
             disabled={!dirty || saveMutation.isPending}
           >
@@ -437,15 +414,21 @@ function ConfigTab() {
       {validateResult && (
         <div
           className={cn(
-            'rounded-[20px] border px-4 py-3 text-xs',
+            'rounded-xl border px-4 py-3 text-xs',
             validateResult.valid
               ? 'border-success/20 bg-success/10 text-success'
               : 'border-danger/20 bg-danger/10 text-danger',
           )}
         >
           {validateResult.valid
-            ? `✓ Valid — ${validateResult.agents} agent(s), ${validateResult.configurations} config(s)`
-            : `✗ ${validateResult.violations?.length ?? 0} violation(s), ${validateResult.extendsErrors?.length ?? 0} extends error(s)`}
+            ? `✓ ${t('templateDetail.validationSummaryValid', {
+                agents: validateResult.agents,
+                configurations: validateResult.configurations,
+              })}`
+            : `✗ ${t('configEditor.validationSummaryInvalid', {
+                violations: validateResult.violations?.length ?? 0,
+                extendsErrors: validateResult.extendsErrors?.length ?? 0,
+              })}`}
         </div>
       )}
 
@@ -550,6 +533,7 @@ function EnvironmentTab() {
           type="button"
           variant="primary"
           size="sm"
+          className="dashboard-action-button"
           onClick={() => {
             setEditEntry(null)
             setDialogMode('create')
@@ -561,17 +545,15 @@ function EnvironmentTab() {
       </div>
 
       {envVars.length === 0 ? (
-        <Card variant="glass">
-          <EmptyState icon={Variable} title={t('secrets.noEnvVarsInGroup')} />
-        </Card>
+        <DashboardEmptyState icon={Variable} title={t('secrets.noEnvVarsInGroup')} />
       ) : (
         <Card variant="glass">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t('secrets.keyName')}</TableHead>
-                <TableHead>{t('secrets.secretValue')}</TableHead>
-                <TableHead>{t('common.actions')}</TableHead>
+                <TableHead className="dashboard-table-head">{t('secrets.keyName')}</TableHead>
+                <TableHead className="dashboard-table-head">{t('secrets.secretValue')}</TableHead>
+                <TableHead className="dashboard-table-head">{t('common.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -586,22 +568,22 @@ function EnvironmentTab() {
                   <TableCell>{entry.maskedValue}</TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
-                      <Button
+                      <IconActionButton
                         type="button"
                         variant="ghost"
-                        size="xs"
+                        label={t('common.edit')}
                         onClick={() => handleEditStart(entry)}
-                      >
-                        <Pencil size={12} />
-                      </Button>
-                      <Button
+                        icon={<Pencil size={12} />}
+                        className="h-8 w-8"
+                      />
+                      <IconActionButton
                         type="button"
                         variant="ghost"
-                        size="xs"
+                        label={t('common.delete')}
                         onClick={() => setDeleteKey(entry.key)}
-                      >
-                        <Trash2 size={12} />
-                      </Button>
+                        icon={<Trash2 size={12} />}
+                        className="h-8 w-8"
+                      />
                     </div>
                   </TableCell>
                 </TableRow>
@@ -613,10 +595,14 @@ function EnvironmentTab() {
 
       {/* Add/Edit dialog */}
       {dialogMode && (
-        <EnvInlineDialog
+        <EnvVarEditorDialog
           mode={dialogMode}
           initial={editEntry ?? undefined}
           isSubmitting={saveMutation.isPending}
+          titleCreate={t('secrets.addEnvironmentValue')}
+          titleEdit={t('secrets.editEnvironmentValue')}
+          subtitleCreate={t('secrets.environmentValuesDescription')}
+          subtitleEdit={t('secrets.environmentValuesDescription')}
           onSubmit={(form) => saveMutation.mutate(form)}
           onClose={() => {
             setDialogMode(null)
@@ -626,126 +612,23 @@ function EnvironmentTab() {
       )}
 
       {/* Delete confirm */}
-      <AlertDialog
+      <DangerConfirmDialog
         open={Boolean(deleteKey)}
         onOpenChange={(open) => {
           if (!open) setDeleteKey(null)
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('common.delete')}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleteKey ? `Delete environment variable "${deleteKey}"?` : ''}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel asChild>
-              <Button variant="ghost">{t('common.cancel')}</Button>
-            </AlertDialogCancel>
-            <AlertDialogAction asChild>
-              <Button
-                variant="danger"
-                loading={deleteMutation.isPending}
-                onClick={() => deleteKey && deleteMutation.mutate(deleteKey)}
-              >
-                {t('common.delete')}
-              </Button>
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title={t('common.delete')}
+        description={deleteKey ? t('deploymentDetail.deleteEnvConfirm', { key: deleteKey }) : ''}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
+        loading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deleteKey) {
+            deleteMutation.mutate(deleteKey)
+          }
+        }}
+      />
     </div>
-  )
-}
-
-function EnvInlineDialog({
-  mode,
-  initial,
-  isSubmitting,
-  onSubmit,
-  onClose,
-}: {
-  mode: 'create' | 'edit'
-  initial?: { key: string; value: string; isSecret: boolean }
-  isSubmitting: boolean
-  onSubmit: (data: { key: string; value: string; isSecret: boolean }) => void
-  onClose: () => void
-}) {
-  const { t } = useTranslation()
-  const [key, setKey] = useState(initial?.key ?? '')
-  const [value, setValue] = useState(initial?.value ?? '')
-  const [isSecret, setIsSecret] = useState(initial?.isSecret ?? true)
-  const [showValue, setShowValue] = useState(mode === 'create')
-
-  return (
-    <Modal open onClose={onClose}>
-      <ModalContent maxWidth="max-w-lg">
-        <ModalHeader
-          icon={<Variable size={18} />}
-          title={mode === 'edit' ? t('secrets.editEnvironmentValue') : t('secrets.addEnvironmentValue')}
-          onClose={onClose}
-        />
-        <ModalBody>
-          <Input
-            label={t('secrets.keyName')}
-            type="text"
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-            placeholder="OPENAI_API_KEY"
-            autoFocus
-            disabled={mode === 'edit'}
-          />
-          <div className="space-y-1.5">
-            <p className="ml-1 text-xs font-black uppercase tracking-[0.2em] text-text-muted">
-              {t('secrets.secretValue')}
-            </p>
-            <div className="relative">
-              <Input
-                type={showValue ? 'text' : 'password'}
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder={mode === 'edit' ? t('secrets.leaveEmptyKeep') : ''}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                onClick={() => setShowValue(!showValue)}
-              >
-                {showValue ? <EyeOff size={14} /> : <Eye size={14} />}
-              </Button>
-            </div>
-          </div>
-          <label className="flex cursor-pointer items-center gap-3 rounded-[24px] border border-border-subtle bg-bg-secondary/50 px-4 py-3 text-sm font-semibold text-text-secondary">
-            <Checkbox
-              checked={isSecret}
-              onCheckedChange={(checked) => setIsSecret(checked === true)}
-            />
-            <Lock size={14} className="text-text-muted" />
-            <span>{t('secrets.secret')}</span>
-          </label>
-        </ModalBody>
-        <ModalFooter>
-          <ModalButtonGroup>
-            <Button type="button" variant="ghost" onClick={onClose}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              onClick={() => key.trim() && onSubmit({ key: key.trim(), value, isSecret })}
-              disabled={!key.trim() || isSubmitting}
-            >
-              {isSubmitting && <Loader2 size={14} className="animate-spin" />}
-              {mode === 'edit' ? t('common.save') : t('common.add')}
-            </Button>
-          </ModalButtonGroup>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
   )
 }
 
@@ -773,11 +656,7 @@ function TasksTab({ namespace }: { namespace: string }) {
   }
 
   if (tasks.length === 0) {
-    return (
-      <Card variant="glass">
-        <EmptyState icon={FolderClock} title={t('deployTask.noTasks')} />
-      </Card>
-    )
+    return <DashboardEmptyState icon={FolderClock} title={t('deployTask.noTasks')} />
   }
 
   return (
@@ -794,28 +673,22 @@ function TasksTab({ namespace }: { namespace: string }) {
                 : ('neutral' as const)
 
         return (
-          <Card key={task.id} variant="glass">
-            <Link to="/deploy-tasks/$taskId" params={{ taskId: String(task.id) }} className="block">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-text-primary">#{task.id}</span>
-                  <Badge variant={statusVariant} size="sm">
-                    {t(`deployTask.statuses.${task.status}`)}
-                  </Badge>
-                  {running && <Loader2 size={12} className="animate-spin text-primary" />}
-                </div>
-                <span className="text-xs text-text-muted">
-                  {task.updatedAt
-                    ? formatDistanceToNow(parseISO(task.updatedAt), { addSuffix: true })
-                    : '—'}
-                </span>
-              </div>
-              <div className="mt-1.5 flex items-center gap-3 text-xs text-text-muted">
-                {task.templateSlug && <span>{task.templateSlug}</span>}
-                {task.error && <span className="truncate text-danger">{task.error}</span>}
-              </div>
-            </Link>
-          </Card>
+          <Link
+            key={task.id}
+            to="/deploy-tasks/$taskId"
+            params={{ taskId: String(task.id) }}
+            className="block"
+          >
+            <DashboardTaskCard
+              id={task.id}
+              statusLabel={t(`deployTask.statuses.${task.status}`)}
+              statusVariant={statusVariant}
+              running={running}
+              timestamp={formatTimestamp(task.updatedAt)}
+              meta={task.templateSlug ? <span>{task.templateSlug}</span> : undefined}
+              error={task.error}
+            />
+          </Link>
         )
       })}
     </div>
@@ -854,30 +727,30 @@ export function DeploymentDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pods', namespace, id] })
       queryClient.invalidateQueries({ queryKey: ['deployments'] })
-      toast.success(`Scaled to ${replicas} replicas`)
+      toast.success(t('deploymentDetail.scaleSuccess', { count: replicas ?? 0 }))
       addActivity({
         type: 'scale',
-        title: `Scaled ${id}`,
-        detail: `Replicas: ${replicas}`,
+        title: t('deploymentDetail.scaleActivityTitle', { agent: id }),
+        detail: t('deploymentDetail.scaleActivityDetail', { count: replicas ?? 0 }),
         namespace,
       })
     },
-    onError: () => toast.error('Failed to scale'),
+    onError: () => toast.error(t('deploymentDetail.scaleFailed')),
   })
 
   const destroyMutation = useMutation({
     mutationFn: () => api.destroy({ namespace }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deployments'] })
-      toast.success(`Destroyed namespace ${namespace}`)
+      toast.success(t('deploymentDetail.destroySuccess', { namespace }))
       addActivity({
         type: 'destroy',
-        title: `Destroyed namespace ${namespace}`,
+        title: t('deploymentDetail.destroyActivityTitle', { namespace }),
         namespace,
       })
       navigate({ to: '/deployments' })
     },
-    onError: () => toast.error('Failed to destroy'),
+    onError: () => toast.error(t('deployments.destroyNamespaceFailed')),
   })
 
   const handleScale = (delta: number) => {
@@ -892,43 +765,15 @@ export function DeploymentDetailPage() {
     const nsTasks = tasksResp.tasks.filter((t) => t.task.namespace === namespace)
     const latest = nsTasks[0]
     if (!latest) {
-      toast.error('No deploy task found for this namespace')
+      toast.error(t('deployments.noTaskToRedeploy'))
       return
     }
-    const res = await fetch(`/api/deploy-tasks/${latest.task.id}/redeploy`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    })
-    if (!res.ok) {
-      toast.error('Redeploy failed')
+    const nextTaskId = await api.deployTasks.redeployToTaskId(latest.task.id)
+    if (!nextTaskId) {
+      toast.error(t('deployments.redeployFailed'))
       return
     }
-    const reader = res.body?.getReader()
-    if (!reader) return
-    const decoder = new TextDecoder()
-    let buffer = ''
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() ?? ''
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6))
-            if (data.id) {
-              reader.cancel()
-              navigate({ to: '/deploy-tasks/$taskId', params: { taskId: String(data.id) } })
-              return
-            }
-          } catch {
-            /* ignore */
-          }
-        }
-      }
-    }
+    navigate({ to: '/deploy-tasks/$taskId', params: { taskId: String(nextTaskId) } })
   }
 
   const running = pods?.filter((p) => p.status === 'Running').length ?? 0
@@ -944,7 +789,7 @@ export function DeploymentDetailPage() {
   ]
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="dashboard-page-shell dashboard-page-shell--narrow space-y-6">
       <Breadcrumb
         items={[
           { label: t('deployments.title'), to: '/deployments' },
@@ -957,19 +802,21 @@ export function DeploymentDetailPage() {
       {/* Header */}
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="text-xl font-bold font-mono">{id}</h1>
+          <h1 className="dashboard-page-title font-mono text-3xl">{id}</h1>
           <p className="mt-1 text-sm text-text-muted">
-            Namespace: <span className="font-mono text-text-secondary">{namespace}</span>
+            {t('deploymentDetail.namespace')}:{' '}
+            <span className="font-mono text-text-secondary">{namespace}</span>
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           {/* Scale controls */}
-          <div className="flex items-center gap-1 rounded-[20px] border border-border-subtle bg-bg-secondary/50 p-1 shadow-[var(--shadow-soft)]">
+          <div className="flex items-center gap-1 rounded-xl border border-border-subtle bg-bg-secondary/50 p-1 shadow-sm">
             <Button
               type="button"
               variant="ghost"
               size="xs"
+              className="dashboard-action-button"
               onClick={() => handleScale(-1)}
               disabled={scaleMutation.isPending || (replicas ?? 0) <= 0}
             >
@@ -982,6 +829,7 @@ export function DeploymentDetailPage() {
               type="button"
               variant="ghost"
               size="xs"
+              className="dashboard-action-button"
               onClick={() => handleScale(1)}
               disabled={scaleMutation.isPending}
             >
@@ -993,6 +841,7 @@ export function DeploymentDetailPage() {
             type="button"
             variant="primary"
             size="sm"
+            className="dashboard-action-button"
             onClick={() => void handleRedeploy()}
           >
             <Rocket size={12} />
@@ -1003,27 +852,37 @@ export function DeploymentDetailPage() {
             type="button"
             variant="danger"
             size="sm"
+            className="dashboard-action-button"
             onClick={() => setShowDestroy(true)}
             disabled={destroyMutation.isPending}
           >
             <Trash2 size={12} />
-            Destroy
+            {t('deploymentDetail.destroy')}
           </Button>
         </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4 mb-6">
-        <StatCard label="Pods" value={podCount} icon={<Box size={13} />} />
-        <StatCard label="Running" value={running} icon={<CheckCircle size={13} />} color="green" />
         <StatCard
-          label="Not Ready"
+          label={t('deploymentDetail.stats.pods')}
+          value={podCount}
+          icon={<Box size={13} />}
+        />
+        <StatCard
+          label={t('deploymentDetail.stats.running')}
+          value={running}
+          icon={<CheckCircle size={13} />}
+          color="green"
+        />
+        <StatCard
+          label={t('deploymentDetail.stats.notReady')}
           value={podCount - running}
           icon={<XCircle size={13} />}
           color={podCount - running > 0 ? 'yellow' : 'default'}
         />
         <StatCard
-          label="Replicas"
+          label={t('deploymentDetail.stats.replicas')}
           value={replicas ?? '—'}
           icon={<BarChart3 size={13} />}
           color="blue"
@@ -1032,15 +891,13 @@ export function DeploymentDetailPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onChange={setActiveTab}>
-        <TabsList>
+        <TabsList className="dashboard-tabs-list">
           {tabs.map((tab) => (
-            <TabsTrigger key={tab.id} value={tab.id}>
-              <span>{tab.icon}</span>
+            <TabsTrigger key={tab.id} value={tab.id} className="dashboard-tabs-trigger">
+              <span className="dashboard-tab-icon">{tab.icon}</span>
               <span>{tab.label}</span>
               {typeof tab.count === 'number' && (
-                <span className="rounded-full bg-bg-tertiary/70 px-2 py-0.5 text-xs font-black tracking-normal text-text-muted">
-                  {tab.count}
-                </span>
+                <span className="dashboard-tabs-count">{tab.count}</span>
               )}
             </TabsTrigger>
           ))}
@@ -1056,31 +913,18 @@ export function DeploymentDetailPage() {
         {activeTab === 'info' && <InfoTab namespace={namespace} id={id} pods={pods} />}
       </div>
 
-      <AlertDialog
+      <DangerConfirmDialog
         open={showDestroy}
         onOpenChange={(open) => {
           if (!open) setShowDestroy(false)
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Destroy Namespace</AlertDialogTitle>
-            <AlertDialogDescription>
-              {`This will destroy all deployments in namespace "${namespace}". This cannot be undone.`}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel asChild>
-              <Button variant="ghost">{t('common.cancel')}</Button>
-            </AlertDialogCancel>
-            <AlertDialogAction asChild>
-              <Button variant="danger" loading={destroyMutation.isPending} onClick={() => destroyMutation.mutate()}>
-                Destroy
-              </Button>
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title={t('clusters.destroyNamespace')}
+        description={t('clusters.destroyWarning', { namespace })}
+        confirmText={t('deploymentDetail.destroy')}
+        cancelText={t('common.cancel')}
+        loading={destroyMutation.isPending}
+        onConfirm={() => destroyMutation.mutate()}
+      />
     </div>
   )
 }

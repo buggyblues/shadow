@@ -1,6 +1,19 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Badge,
+  Button,
+  EmptyState,
+  Search,
+} from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { formatDistanceToNow, parseISO } from 'date-fns'
 import {
   Box,
   CheckCircle,
@@ -16,26 +29,15 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  Badge,
-  Button,
-  EmptyState,
-  Search,
-} from '@shadowob/ui'
-import { Breadcrumb } from '@/components/Breadcrumb'
+import { DashboardLoadingState } from '@/components/DashboardState'
+import { IconActionButton } from '@/components/IconActionButton'
+import { PageShell } from '@/components/PageShell'
 import { StatCard } from '@/components/StatCard'
+import { StatsGrid } from '@/components/StatsGrid'
 import { StatusDot } from '@/components/StatusDot'
 import { useDebounce } from '@/hooks/useDebounce'
 import { api, type Deployment } from '@/lib/api'
-import { groupBy, pluralize } from '@/lib/utils'
+import { getAge, getReadyReplicas, groupBy, isDeploymentReady, pluralize } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/stores/toast'
 
@@ -46,21 +48,6 @@ interface NamespaceGroup {
   deployments: Deployment[]
   readyCount: number
   totalCount: number
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function isDeploymentReady(dep: Deployment): boolean {
-  const [r = 0, t = 0] = dep.ready.split('/').map(Number)
-  return r === t && t > 0
-}
-
-function getAge(dep: Deployment): string {
-  try {
-    return formatDistanceToNow(parseISO(dep.age), { addSuffix: true })
-  } catch {
-    return dep.age
-  }
 }
 
 // ── Namespace Card ────────────────────────────────────────────────────────────
@@ -77,10 +64,12 @@ function NamespaceCard({
   onDestroy: (ns: string) => void
 }) {
   const { t } = useTranslation()
+  const readyLabel = `${group.readyCount}/${group.totalCount} ${t('clusters.ready').toLowerCase()}`
+
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden hover:border-gray-700 transition-colors">
+    <div className="bg-bg-secondary border border-border-subtle rounded-xl overflow-hidden hover:border-border-dim transition-colors">
       {/* Header */}
-      <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+      <div className="px-5 py-4 border-b border-border-subtle flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-blue-900/20 rounded-lg">
             <FolderOpen size={16} className="text-blue-400" />
@@ -94,7 +83,7 @@ function NamespaceCard({
                 </span>
               )}
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-text-muted">
               {group.totalCount} {pluralize(group.totalCount, 'deployment')}
             </p>
           </div>
@@ -102,23 +91,25 @@ function NamespaceCard({
         <div className="flex items-center gap-2">
           <StatusDot
             status={group.readyCount === group.totalCount ? 'success' : 'warning'}
-            label={`${group.readyCount}/${group.totalCount} ready`}
+            label={readyLabel}
           />
-          <Button
+          <IconActionButton
             type="button"
+            label={t('clusters.destroyNamespace')}
             onClick={() => onDestroy(group.namespace)}
             variant="ghost"
-            size="xs"
             disabled={isDestroying}
-            title="Destroy namespace"
-          >
-            {isDestroying ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
-          </Button>
+            withTooltip={false}
+            className="h-7 w-7 rounded-lg text-text-muted hover:text-text-primary"
+            icon={
+              isDestroying ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />
+            }
+          />
         </div>
       </div>
 
       {/* Deployment rows */}
-      <div className="divide-y divide-gray-800/50">
+      <div className="divide-y divide-border-subtle">
         {group.deployments.map((dep) => (
           <DeploymentRow key={`${dep.namespace}/${dep.name}`} dep={dep} />
         ))}
@@ -128,32 +119,37 @@ function NamespaceCard({
 }
 
 function DeploymentRow({ dep }: { dep: Deployment }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const toast = useToast()
   const addActivity = useAppStore((s) => s.addActivity)
-  const ready = isDeploymentReady(dep)
+  const ready = isDeploymentReady(dep.ready)
   const [replicas, setReplicas] = useState<number | null>(null)
 
   const currentReplicas =
     replicas ??
     (() => {
-      const [r = 0] = dep.ready.split('/').map(Number)
-      return r
+      return getReadyReplicas(dep.ready)
     })()
 
   const scaleMutation = useMutation({
     mutationFn: (count: number) => api.deployments.scale(dep.namespace, dep.name, count),
-    onSuccess: () => {
+    onSuccess: (_data, count) => {
       queryClient.invalidateQueries({ queryKey: ['deployments'] })
-      toast.success(`Scaled ${dep.name} to ${replicas} replicas`)
+      toast.success(
+        t('deployments.scaledAgent', {
+          agent: dep.name,
+          count,
+        }),
+      )
       addActivity({
         type: 'scale',
-        title: `Scaled ${dep.name}`,
-        detail: `Replicas: ${replicas}`,
+        title: t('deploymentDetail.scaleActivityTitle', { agent: dep.name }),
+        detail: t('deploymentDetail.scaleActivityDetail', { count }),
         namespace: dep.namespace,
       })
     },
-    onError: () => toast.error(`Failed to scale ${dep.name}`),
+    onError: () => toast.error(t('deployments.scaleFailed', { agent: dep.name })),
   })
 
   const handleScale = (delta: number) => {
@@ -163,7 +159,7 @@ function DeploymentRow({ dep }: { dep: Deployment }) {
   }
 
   return (
-    <div className="px-5 py-3 flex items-center justify-between hover:bg-gray-800/20 transition-colors">
+    <div className="px-5 py-3 flex items-center justify-between hover:bg-bg-modifier-hover transition-colors">
       <div className="flex items-center gap-3 min-w-0">
         <StatusDot status={ready ? 'success' : 'warning'} />
         <div className="min-w-0">
@@ -174,7 +170,7 @@ function DeploymentRow({ dep }: { dep: Deployment }) {
           >
             {dep.name}
           </Link>
-          <span className="text-xs text-gray-600">{getAge(dep)}</span>
+          <span className="text-xs text-text-muted">{getAge(dep.age)}</span>
         </div>
       </div>
 
@@ -184,7 +180,7 @@ function DeploymentRow({ dep }: { dep: Deployment }) {
         </Badge>
 
         {/* Scale controls inline */}
-        <div className="flex items-center border border-gray-700 rounded">
+        <div className="flex items-center border border-border-dim rounded">
           <Button
             type="button"
             variant="ghost"
@@ -211,7 +207,7 @@ function DeploymentRow({ dep }: { dep: Deployment }) {
         <Link
           to="/deployments/$namespace"
           params={{ namespace: dep.namespace }}
-          className="text-gray-600 hover:text-white transition-colors"
+          className="text-text-muted hover:text-text-primary transition-colors"
         >
           <ChevronRight size={14} />
         </Link>
@@ -266,10 +262,10 @@ export function ClustersPage() {
       return { previousDeployments, previousHiddenNamespaces }
     },
     onSuccess: async (_, ns) => {
-      toast.success(`Destroyed namespace ${ns}`)
+      toast.success(t('deploymentDetail.destroySuccess', { namespace: ns }))
       addActivity({
         type: 'destroy',
-        title: `Destroyed namespace ${ns}`,
+        title: t('deploymentDetail.destroyActivityTitle', { namespace: ns }),
         namespace: ns,
       })
       setDestroyNs(null)
@@ -285,7 +281,7 @@ export function ClustersPage() {
       }
       setHiddenNamespaces(context?.previousHiddenNamespaces ?? [])
       setDestroyNs(null)
-      toast.error('Failed to destroy namespace')
+      toast.error(t('deployments.destroyNamespaceFailed'))
     },
   })
 
@@ -303,7 +299,7 @@ export function ClustersPage() {
     let result = Object.entries(grouped).map(([namespace, deps]) => ({
       namespace,
       deployments: deps,
-      readyCount: deps.filter(isDeploymentReady).length,
+      readyCount: deps.filter((deployment) => isDeploymentReady(deployment.ready)).length,
       totalCount: deps.length,
     }))
 
@@ -323,25 +319,19 @@ export function ClustersPage() {
     (deployment) => !hiddenNamespaces.includes(deployment.namespace),
   )
   const total = visibleDeployments.length
-  const ready = visibleDeployments.filter(isDeploymentReady).length
+  const ready = visibleDeployments.filter((deployment) =>
+    isDeploymentReady(deployment.ready),
+  ).length
   const namespaceCount = groups.length
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <Breadcrumb items={[{ label: t('nav.clusters') }]} className="mb-4" />
-
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold">{t('clusters.title')}</h1>
-          <p className="text-sm text-gray-500 mt-1">{t('clusters.description')}</p>
-        </div>
+    <PageShell
+      breadcrumb={[{ label: t('nav.clusters') }]}
+      title={t('clusters.title')}
+      description={t('clusters.description')}
+      actions={
         <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            onClick={() => refetch()}
-            variant="ghost"
-            size="sm"
-          >
+          <Button type="button" onClick={() => refetch()} variant="ghost" size="sm">
             <RefreshCw size={12} />
             {t('common.refresh')}
           </Button>
@@ -352,57 +342,41 @@ export function ClustersPage() {
             </Link>
           </Button>
         </div>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <StatCard
-          label={t('clusters.totalDeployments')}
-          value={total}
-          icon={<Box size={13} />}
-          color="default"
-        />
-        <StatCard
-          label={t('clusters.ready')}
-          value={ready}
-          icon={<CheckCircle size={13} />}
-          color="green"
-        />
-        <StatCard
-          label={t('clusters.notReady')}
-          value={total - ready}
-          icon={<XCircle size={13} />}
-          color={total - ready > 0 ? 'yellow' : 'default'}
-        />
-        <StatCard
-          label={t('overview.namespaces')}
-          value={namespaceCount}
-          icon={<FolderOpen size={13} />}
-          color="blue"
-        />
-      </div>
-
-      {/* Search */}
-      <Search
-        value={search}
-        onChange={setSearch}
-        placeholder={t('common.search') + '...'}
-      />
-
-      {/* Content */}
-      {isLoading && (
+      }
+      headerContent={
         <div className="space-y-4">
-          {[1, 2].map((i) => (
-            <div
-              key={i}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-4 animate-pulse"
-            >
-              <div className="h-5 w-32 bg-gray-800 rounded mb-4" />
-              <div className="h-12 bg-gray-800 rounded" />
-            </div>
-          ))}
+          <StatsGrid className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              label={t('clusters.totalDeployments')}
+              value={total}
+              icon={<Box size={13} />}
+              color="default"
+            />
+            <StatCard
+              label={t('clusters.ready')}
+              value={ready}
+              icon={<CheckCircle size={13} />}
+              color="green"
+            />
+            <StatCard
+              label={t('clusters.notReady')}
+              value={total - ready}
+              icon={<XCircle size={13} />}
+              color={total - ready > 0 ? 'yellow' : 'default'}
+            />
+            <StatCard
+              label={t('overview.namespaces')}
+              value={namespaceCount}
+              icon={<FolderOpen size={13} />}
+              color="blue"
+            />
+          </StatsGrid>
+
+          <Search value={search} onChange={setSearch} placeholder={t('common.search') + '...'} />
         </div>
-      )}
+      }
+    >
+      {isLoading && <DashboardLoadingState rows={2} />}
 
       {!isLoading && groups.length === 0 && (
         <EmptyState
@@ -444,9 +418,7 @@ export function ClustersPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('clusters.destroyNamespace')}
-            </AlertDialogTitle>
+            <AlertDialogTitle>{t('clusters.destroyNamespace')}</AlertDialogTitle>
             <AlertDialogDescription>
               {destroyNs ? t('clusters.destroyWarning', { namespace: destroyNs }) : ''}
             </AlertDialogDescription>
@@ -467,6 +439,6 @@ export function ClustersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   )
 }

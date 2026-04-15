@@ -1,3 +1,4 @@
+import { Badge, Button, EmptyState } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import {
@@ -22,7 +23,6 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Badge, Button, EmptyState } from '@shadowob/ui'
 import {
   parseTemplateAgents,
   TemplateAgentsTab,
@@ -62,32 +62,25 @@ function OverviewTab({
 
   return (
     <div className="space-y-6">
-      <div className="nf-card !p-5 space-y-4">
+      <div className="glass-card rounded-3xl p-5 space-y-4">
         {overview.map((paragraph) => (
-          <p key={paragraph} className="text-sm leading-7" style={{ color: 'var(--nf-text-mid)' }}>
+          <p key={paragraph} className="text-sm leading-7 text-text-secondary">
             {paragraph}
           </p>
         ))}
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <div className="nf-card !p-5 space-y-4">
-          <h3
-            className="text-sm font-black flex items-center gap-2"
-            style={{ color: 'var(--nf-text-high)' }}
-          >
-            <Zap size={14} style={{ color: 'var(--color-nf-yellow)' }} />
+        <div className="glass-card rounded-3xl p-5 space-y-4">
+          <h3 className="text-sm font-black flex items-center gap-2 text-text-primary">
+            <Zap size={14} className="text-accent" />
             {t('storeDetail.features')}
           </h3>
           <div className="grid grid-cols-1 gap-2">
             {features.map((feature) => (
               <div
                 key={feature}
-                className="flex items-center gap-2 rounded-[18px] px-4 py-3"
-                style={{
-                  background: 'var(--nf-bg-glass-2)',
-                  color: 'var(--nf-text-high)',
-                }}
+                className="flex items-center gap-2 rounded-xl border border-border-subtle bg-bg-tertiary/60 px-4 py-3 text-text-primary"
               >
                 <CheckCircle size={14} className="text-green-400 shrink-0" />
                 <span className="text-sm">{feature}</span>
@@ -96,24 +89,16 @@ function OverviewTab({
           </div>
         </div>
 
-        <div className="nf-card !p-5 space-y-4">
-          <h3
-            className="text-sm font-black flex items-center gap-2"
-            style={{ color: 'var(--nf-text-high)' }}
-          >
-            <Layers size={14} style={{ color: 'var(--color-nf-indigo)' }} />
+        <div className="glass-card rounded-3xl p-5 space-y-4">
+          <h3 className="text-sm font-black flex items-center gap-2 text-text-primary">
+            <Layers size={14} className="text-[var(--color-nf-indigo)]" />
             {t('storeDetail.useCases')}
           </h3>
           <div className="flex flex-wrap gap-2">
             {useCases.map((useCase) => (
               <span
                 key={useCase}
-                className="rounded-full border px-3 py-2 text-xs"
-                style={{
-                  background: 'var(--nf-bg-glass-2)',
-                  borderColor: 'rgba(124, 77, 255, 0.16)',
-                  color: 'var(--nf-text-mid)',
-                }}
+                className="rounded-full border border-[rgba(124,77,255,0.2)] bg-bg-tertiary/60 px-3 py-2 text-xs text-text-secondary"
               >
                 {useCase}
               </span>
@@ -122,23 +107,16 @@ function OverviewTab({
         </div>
       </div>
 
-      <div className="nf-card !p-5 space-y-4">
-        <h3
-          className="text-sm font-black flex items-center gap-2"
-          style={{ color: 'var(--nf-text-high)' }}
-        >
-          <Shield size={14} style={{ color: 'var(--color-nf-crimson)' }} />
+      <div className="glass-card rounded-3xl p-5 space-y-4">
+        <h3 className="text-sm font-black flex items-center gap-2 text-text-primary">
+          <Shield size={14} className="text-danger" />
           {t('storeDetail.requirements')}
         </h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {requirements.map((requirement) => (
             <div
               key={requirement}
-              className="rounded-[18px] px-4 py-3 text-sm"
-              style={{
-                background: 'var(--nf-bg-glass-2)',
-                color: 'var(--nf-text-mid)',
-              }}
+              className="rounded-xl border border-border-subtle bg-bg-tertiary/60 px-4 py-3 text-sm text-text-secondary"
             >
               {requirement}
             </div>
@@ -232,12 +210,8 @@ export function StoreDetailPage() {
       badges={
         detail ? (
           <>
-            <Badge variant="neutral">
-              {getCategoryLabel(detail.category, t)}
-            </Badge>
-            <Badge variant="neutral">
-              {getDifficultyLabel(detail.difficulty, t)}
-            </Badge>
+            <Badge variant="neutral">{getCategoryLabel(detail.category, t)}</Badge>
+            <Badge variant="neutral">{getDifficultyLabel(detail.difficulty, t)}</Badge>
             {detail.featured && (
               <Badge variant="info">
                 <Star size={10} />
@@ -253,14 +227,9 @@ export function StoreDetailPage() {
             {detail.highlights.map((highlight) => (
               <div
                 key={highlight}
-                className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-full border"
-                style={{
-                  background: 'var(--nf-bg-glass-2)',
-                  borderColor: 'var(--nf-border)',
-                  color: 'var(--nf-text-high)',
-                }}
+                className="flex items-center gap-1.5 rounded-full border border-border-subtle bg-bg-secondary/70 px-3 py-2 text-xs text-text-primary"
               >
-                <Zap size={11} style={{ color: 'var(--color-nf-yellow)' }} />
+                <Zap size={11} className="text-accent" />
                 {highlight}
               </div>
             ))}
@@ -294,136 +263,89 @@ export function StoreDetailPage() {
       }
       sidebar={
         detail ? (
-          <div className="nf-card !p-5 space-y-5">
-            <h3
-              className="text-xs font-black uppercase tracking-[0.2em]"
-              style={{ color: 'var(--nf-text-muted)' }}
-            >
+          <div className="glass-card rounded-3xl p-5 space-y-5">
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-text-muted">
               {t('templateDetail.quickInfo')}
             </h3>
 
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <span
-                  className="text-xs flex items-center gap-1.5"
-                  style={{ color: 'var(--nf-text-muted)' }}
-                >
+                <span className="text-xs flex items-center gap-1.5 text-text-muted">
                   <Users size={12} />
                   {t('deploy.agentsLabel')}
                 </span>
-                <span className="text-sm font-bold" style={{ color: 'var(--nf-text-high)' }}>
-                  {detail.agentCount}
-                </span>
+                <span className="text-sm font-bold text-text-primary">{detail.agentCount}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span
-                  className="text-xs flex items-center gap-1.5"
-                  style={{ color: 'var(--nf-text-muted)' }}
-                >
+                <span className="text-xs flex items-center gap-1.5 text-text-muted">
                   <FolderOpen size={12} />
                   {t('deploy.namespaceLabel')}
                 </span>
-                <code className="text-sm" style={{ color: 'var(--nf-text-high)' }}>
-                  {detail.namespace}
-                </code>
+                <code className="text-sm text-text-primary">{detail.namespace}</code>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span
-                  className="text-xs flex items-center gap-1.5"
-                  style={{ color: 'var(--nf-text-muted)' }}
-                >
+                <span className="text-xs flex items-center gap-1.5 text-text-muted">
                   <Clock size={12} />
                   {t('deploy.deployTimeLabel')}
                 </span>
-                <span className="text-sm" style={{ color: 'var(--nf-text-high)' }}>
-                  {detail.estimatedDeployTime}
-                </span>
+                <span className="text-sm text-text-primary">{detail.estimatedDeployTime}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span
-                  className="text-xs flex items-center gap-1.5"
-                  style={{ color: 'var(--nf-text-muted)' }}
-                >
+                <span className="text-xs flex items-center gap-1.5 text-text-muted">
                   <Cpu size={12} />
                   {t('storeDetail.team')}
                 </span>
-                <span className="text-sm" style={{ color: 'var(--nf-text-high)' }}>
-                  {detail.teamName}
-                </span>
+                <span className="text-sm text-text-primary">{detail.teamName}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span
-                  className="text-xs flex items-center gap-1.5"
-                  style={{ color: 'var(--nf-text-muted)' }}
-                >
+                <span className="text-xs flex items-center gap-1.5 text-text-muted">
                   <Star size={12} />
                   {t('storeDetail.popularity')}
                 </span>
-                <span className="text-sm" style={{ color: 'var(--nf-text-high)' }}>
-                  {detail.popularity}%
-                </span>
+                <span className="text-sm text-text-primary">{detail.popularity}%</span>
               </div>
             </div>
 
-            <div className="space-y-3 pt-4 border-t" style={{ borderColor: 'var(--nf-border)' }}>
+            <div className="space-y-3 border-t border-border-subtle pt-4">
               <div className="flex items-center justify-between gap-3">
-                <span
-                  className="text-xs flex items-center gap-1.5"
-                  style={{ color: 'var(--nf-text-muted)' }}
-                >
+                <span className="text-xs flex items-center gap-1.5 text-text-muted">
                   <FileText size={12} />
                   {t('storeDetail.file')}
                 </span>
-                <code className="text-[11px]" style={{ color: 'var(--nf-text-high)' }}>
-                  {detail.file}
-                </code>
+                <code className="text-[11px] text-text-primary">{detail.file}</code>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span
-                  className="text-xs flex items-center gap-1.5"
-                  style={{ color: 'var(--nf-text-muted)' }}
-                >
+                <span className="text-xs flex items-center gap-1.5 text-text-muted">
                   <CalendarClock size={12} />
                   {t('storeDetail.updated')}
                 </span>
-                <span className="text-xs" style={{ color: 'var(--nf-text-high)' }}>
+                <span className="text-xs text-text-primary">
                   {detail.lastUpdated
                     ? new Date(detail.lastUpdated).toLocaleDateString(i18n.language)
                     : t('common.none')}
                 </span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span
-                  className="text-xs flex items-center gap-1.5"
-                  style={{ color: 'var(--nf-text-muted)' }}
-                >
+                <span className="text-xs flex items-center gap-1.5 text-text-muted">
                   <Key size={12} />
                   {t('storeDetail.requiredEnvVars')}
                 </span>
-                <span className="text-sm font-bold" style={{ color: 'var(--nf-text-high)' }}>
+                <span className="text-sm font-bold text-text-primary">
                   {detail.requiredEnvVars.length}
                 </span>
               </div>
             </div>
 
             {detail.requiredEnvVars.length > 0 && (
-              <div className="space-y-2 pt-4 border-t" style={{ borderColor: 'var(--nf-border)' }}>
-                <div
-                  className="text-[11px] font-semibold"
-                  style={{ color: 'var(--nf-text-muted)' }}
-                >
+              <div className="space-y-2 border-t border-border-subtle pt-4">
+                <div className="text-[11px] font-semibold text-text-muted">
                   {t('storeDetail.requiredEnvVars')}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {detail.requiredEnvVars.map((envKey) => (
                     <code
                       key={envKey}
-                      className="px-2.5 py-1.5 rounded-full text-[11px]"
-                      style={{
-                        background: 'rgba(248, 231, 28, 0.12)',
-                        border: '1px solid rgba(248, 231, 28, 0.16)',
-                        color: 'var(--nf-text-high)',
-                      }}
+                      className="rounded-full border border-accent/25 bg-accent/10 px-2.5 py-1.5 text-[11px] text-text-primary"
                     >
                       {envKey}
                     </code>
@@ -432,17 +354,11 @@ export function StoreDetailPage() {
               </div>
             )}
 
-            <div className="space-y-2 pt-4 border-t" style={{ borderColor: 'var(--nf-border)' }}>
-              <div className="text-[11px] font-semibold" style={{ color: 'var(--nf-text-muted)' }}>
+            <div className="space-y-2 border-t border-border-subtle pt-4">
+              <div className="text-[11px] font-semibold text-text-muted">
                 {t('storeDetail.cliQuickDeploy')}
               </div>
-              <code
-                className="block rounded-2xl px-4 py-3 text-xs break-all"
-                style={{
-                  background: 'var(--nf-bg-raised)',
-                  color: 'var(--nf-text-high)',
-                }}
-              >
+              <code className="block break-all rounded-2xl border border-border-subtle bg-bg-tertiary px-4 py-3 text-xs text-text-primary">
                 shadowob-cloud deploy --template {name}
               </code>
             </div>

@@ -1,4 +1,3 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -10,15 +9,8 @@ import {
   AlertDialogTitle,
   Button,
   Card,
-  Checkbox,
   EmptyState,
   Input,
-  Modal,
-  ModalBody,
-  ModalButtonGroup,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
   Table,
   TableBody,
   TableCell,
@@ -29,9 +21,8 @@ import {
   TabsList,
   TabsTrigger,
 } from '@shadowob/ui'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Eye,
-  EyeOff,
   FolderPlus,
   Loader2,
   Lock,
@@ -44,7 +35,8 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Breadcrumb } from '@/components/Breadcrumb'
+import { EnvVarEditorDialog } from '@/components/EnvVarEditorDialog'
+import { PageShell } from '@/components/PageShell'
 import { api } from '@/lib/api'
 import { useToast } from '@/stores/toast'
 
@@ -89,11 +81,11 @@ function GroupTabs({
   }
 
   return (
-    <div className="flex flex-wrap items-start gap-3">
-      <Tabs value={activeGroup} onChange={onSelect}>
-        <TabsList>
+    <div className="flex items-center gap-2 overflow-x-auto">
+      <Tabs value={activeGroup} onChange={onSelect} className="min-w-0 flex-1">
+        <TabsList className="dashboard-tabs-list">
           {groups.map((group) => (
-            <TabsTrigger key={group} value={group}>
+            <TabsTrigger key={group} value={group} className="dashboard-tabs-trigger">
               {group}
             </TabsTrigger>
           ))}
@@ -101,24 +93,31 @@ function GroupTabs({
       </Tabs>
 
       {showAdd ? (
-        <div className="flex items-center gap-2 rounded-[24px] border border-border-subtle bg-bg-secondary/60 p-2 shadow-[var(--shadow-soft)]">
+        <div className="flex shrink-0 items-center gap-1.5">
           <Input
             type="text"
             value={groupName}
             onChange={(e) => setGroupName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && void handleCreate()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void handleCreate()
+              if (e.key === 'Escape') {
+                setShowAdd(false)
+                setGroupName('')
+              }
+            }}
             placeholder={t('secrets.groupNamePlaceholder')}
             disabled={isCreating}
             autoFocus
+            className="h-8 w-36 text-sm"
           />
           <Button
             type="button"
             variant="primary"
-            size="sm"
+            size="xs"
             onClick={() => void handleCreate()}
             disabled={!groupName.trim() || isCreating}
           >
-            {isCreating ? t('common.saving') : t('common.add')}
+            {isCreating ? <Loader2 size={11} className="animate-spin" /> : t('common.add')}
           </Button>
           <Button
             type="button"
@@ -130,126 +129,23 @@ function GroupTabs({
             }}
             disabled={isCreating}
           >
-            <X size={12} />
+            <X size={11} />
           </Button>
         </div>
       ) : (
         <Button
           type="button"
-          variant="glass"
-          size="sm"
+          variant="ghost"
+          size="xs"
+          className="shrink-0 gap-1.5 text-text-muted hover:text-text-primary"
           onClick={() => setShowAdd(true)}
           title={t('secrets.createGroup')}
         >
-          <FolderPlus size={14} />
-          {t('secrets.createGroup')}
+          <FolderPlus size={13} />
+          <span className="hidden sm:inline">{t('secrets.createGroup')}</span>
         </Button>
       )}
     </div>
-  )
-}
-
-// ── Add / Edit Dialog ─────────────────────────────────────────────────────────
-
-function EnvDialog({
-  mode,
-  groupName,
-  initial,
-  isSubmitting,
-  onSubmit,
-  onClose,
-}: {
-  mode: 'create' | 'edit'
-  groupName: string
-  initial?: { key: string; value: string; isSecret: boolean }
-  isSubmitting: boolean
-  onSubmit: (data: { key: string; value: string; isSecret: boolean }) => void
-  onClose: () => void
-}) {
-  const { t } = useTranslation()
-  const [key, setKey] = useState(initial?.key ?? '')
-  const [value, setValue] = useState(initial?.value ?? '')
-  const [isSecret, setIsSecret] = useState(initial?.isSecret ?? true)
-  const [showValue, setShowValue] = useState(mode === 'create')
-
-  const canSubmit = key.trim().length > 0 && !isSubmitting
-
-  return (
-    <Modal open onClose={onClose}>
-      <ModalContent maxWidth="max-w-lg">
-        <ModalHeader
-          overline={groupName}
-          icon={<Variable size={18} />}
-          title={mode === 'edit' ? t('secrets.editEnvironmentValue') : t('secrets.addEnvironmentValue')}
-          subtitle={
-            mode === 'edit'
-              ? t('secrets.editEnvironmentValueDescription', { group: groupName })
-              : t('secrets.addEnvironmentValueDescription', { group: groupName })
-          }
-          onClose={onClose}
-        />
-
-        <ModalBody>
-          <Input
-            label={t('secrets.keyName')}
-            type="text"
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-            placeholder="OPENAI_API_KEY"
-            autoFocus
-            disabled={mode === 'edit'}
-          />
-
-          <div className="space-y-1.5">
-            <p className="ml-1 text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
-              {t('secrets.secretValue')}
-            </p>
-            <div className="relative">
-              <Input
-                type={showValue ? 'text' : 'password'}
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder={mode === 'edit' ? t('secrets.leaveEmptyKeep') : ''}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                onClick={() => setShowValue(!showValue)}
-              >
-                {showValue ? <EyeOff size={14} /> : <Eye size={14} />}
-              </Button>
-            </div>
-          </div>
-
-          <label className="flex cursor-pointer items-center gap-3 rounded-[24px] border border-border-subtle bg-bg-secondary/50 px-4 py-3 text-sm font-semibold text-text-secondary">
-            <Checkbox
-              checked={isSecret}
-              onCheckedChange={(checked) => setIsSecret(checked === true)}
-            />
-            <Lock size={14} className="text-text-muted" />
-            <span>{t('secrets.secret')}</span>
-          </label>
-        </ModalBody>
-
-        <ModalFooter>
-          <ModalButtonGroup>
-            <Button type="button" variant="ghost" onClick={onClose}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              onClick={() => canSubmit && onSubmit({ key: key.trim(), value, isSecret })}
-              disabled={!canSubmit}
-            >
-              {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : null}
-              {mode === 'edit' ? t('common.save') : t('common.add')}
-            </Button>
-          </ModalButtonGroup>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
   )
 }
 
@@ -361,63 +257,58 @@ export function SecretsPage() {
   )
 
   return (
-    <div className="mx-auto max-w-[1280px] space-y-6 px-6 py-6 md:px-8">
-      <Breadcrumb items={[{ label: t('secrets.title') }]} className="mb-1" />
-
-      <section className="glass-panel p-6">
-        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <h1 className="flex items-center gap-3 text-[30px] font-black tracking-[-0.03em] text-text-primary">
-              <span className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-primary/12 text-primary">
-                <ShieldCheck size={20} />
-              </span>
-              {t('secrets.title')}
-            </h1>
-            <p className="mt-1 text-sm leading-7 text-text-muted">{t('secrets.description')}</p>
-          </div>
-
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            onClick={() => {
-              setEditingEntry(null)
-              setDialogMode('create')
-            }}
-          >
-            <Plus size={14} />
-            {t('secrets.addEnvironmentValue')}
-          </Button>
-        </div>
-
-        <Card variant="glass">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full border border-success/25 bg-success/10 text-success">
-              <ShieldCheck size={16} />
+    <PageShell
+      breadcrumb={[{ label: t('secrets.title') }]}
+      title={t('secrets.title')}
+      description={t('secrets.description')}
+      narrow
+      actions={
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          onClick={() => {
+            setEditingEntry(null)
+            setDialogMode('create')
+          }}
+        >
+          <Plus size={14} />
+          {t('secrets.addEnvironmentValue')}
+        </Button>
+      }
+      headerContent={
+        <div className="space-y-3">
+          {/* Encryption status banner */}
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-success/20 bg-success/5 px-4 py-2.5">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-success/10 text-success">
+              <ShieldCheck size={13} />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-black text-green-300">{t('secrets.encryptionActive')}</p>
-              <p className="mt-0.5 text-xs text-green-200/70">
-                {t('secrets.allSecretsEncrypted')}{' '}
-                <code className="rounded-full border border-green-500/20 bg-[rgba(0,0,0,0.12)] px-2 py-0.5 font-mono text-[11px] text-green-200">
-                  SHADOWOB_PASSPHRASE
-                </code>
-              </p>
+              <span className="text-sm font-semibold text-success">
+                {t('secrets.encryptionActive')}
+              </span>
+              <span className="ml-2 text-xs text-text-muted">
+                {t('secrets.allSecretsEncrypted')}
+              </span>
+              <code className="ml-1 rounded border border-success/20 bg-bg-primary/40 px-1.5 py-0.5 font-mono text-[11px] text-success/80">
+                SHADOWOB_PASSPHRASE
+              </code>
             </div>
-            <span className="rounded-full border border-success/25 bg-bg-primary/40 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-success/80">
+            <span className="shrink-0 rounded-full border border-success/20 bg-success/10 px-2.5 py-0.5 text-[11px] font-semibold text-success">
               {data?.envVars.length ?? 0} {t('secrets.encryptedValues')}
             </span>
           </div>
-        </Card>
 
-        <GroupTabs
-          groups={groups}
-          activeGroup={activeGroup}
-          onSelect={setActiveGroup}
-          onCreate={(name) => createGroup.mutateAsync(name).then(() => undefined)}
-        />
-      </section>
-
+          {/* Group selector */}
+          <GroupTabs
+            groups={groups}
+            activeGroup={activeGroup}
+            onSelect={setActiveGroup}
+            onCreate={(name) => createGroup.mutateAsync(name).then(() => undefined)}
+          />
+        </div>
+      }
+    >
       {isLoading ? (
         <div className="flex items-center justify-center py-20 text-sm text-text-muted">
           <Loader2 size={18} className="mr-2 animate-spin" />
@@ -450,14 +341,14 @@ export function SecretsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t('secrets.keyName')}</TableHead>
-                <TableHead>{t('secrets.secretValue')}</TableHead>
-                <TableHead>{t('common.actions')}</TableHead>
+                <TableHead className="dashboard-table-head">{t('secrets.keyName')}</TableHead>
+                <TableHead className="dashboard-table-head">{t('secrets.secretValue')}</TableHead>
+                <TableHead className="dashboard-table-head">{t('common.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {envVars.map((entry) => (
-                <TableRow key={`${entry.scope}-${entry.key}`}>
+                <TableRow key={`${entry.scope}-${entry.key}`} className="group">
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <code className="text-sm font-mono text-text-primary">{entry.key}</code>
@@ -468,24 +359,28 @@ export function SecretsPage() {
                     <span className="text-xs font-mono text-text-muted">{entry.maskedValue}</span>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <div className="flex items-center justify-end gap-1">
                       <Button
                         type="button"
                         variant="ghost"
                         size="xs"
+                        className="dashboard-action-button"
                         onClick={() => void handleStartEdit(entry)}
                         title={t('common.edit')}
                       >
                         <Pencil size={13} />
+                        <span className="sr-only">{t('common.edit')}</span>
                       </Button>
                       <Button
                         type="button"
                         variant="ghost"
                         size="xs"
+                        className="dashboard-action-button text-danger/70 hover:text-danger hover:bg-danger/10"
                         onClick={() => setDeleteTarget({ key: entry.key })}
                         title={t('common.delete')}
                       >
                         <Trash2 size={13} />
+                        <span className="sr-only">{t('common.delete')}</span>
                       </Button>
                     </div>
                   </TableCell>
@@ -498,11 +393,15 @@ export function SecretsPage() {
 
       {/* Add/Edit Dialog */}
       {dialogMode && (
-        <EnvDialog
+        <EnvVarEditorDialog
           mode={dialogMode}
-          groupName={activeGroup}
+          overline={activeGroup}
           initial={editingEntry ?? undefined}
           isSubmitting={saveValue.isPending}
+          titleCreate={t('secrets.addEnvironmentValue')}
+          titleEdit={t('secrets.editEnvironmentValue')}
+          subtitleCreate={t('secrets.addEnvironmentValueDescription', { group: activeGroup })}
+          subtitleEdit={t('secrets.editEnvironmentValueDescription', { group: activeGroup })}
           onSubmit={(data) => {
             saveValue.mutate({
               scope: 'global',
@@ -526,9 +425,7 @@ export function SecretsPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('common.delete')}
-            </AlertDialogTitle>
+            <AlertDialogTitle>{t('common.delete')}</AlertDialogTitle>
             <AlertDialogDescription>
               {deleteTarget ? `${t('common.delete')} ${deleteTarget.key}?` : ''}
             </AlertDialogDescription>
@@ -549,6 +446,6 @@ export function SecretsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   )
 }

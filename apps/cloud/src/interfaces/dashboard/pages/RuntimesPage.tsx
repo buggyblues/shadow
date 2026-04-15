@@ -1,53 +1,52 @@
+import { Button, Card, EmptyState } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { Cpu, Server } from 'lucide-react'
-import { Button, Card, EmptyState } from '@shadowob/ui'
+import { useTranslation } from 'react-i18next'
+import { DashboardErrorState, DashboardLoadingState } from '@/components/DashboardState'
+import { PageShell } from '@/components/PageShell'
+import { StatCard } from '@/components/StatCard'
 import { api, type RuntimeInfo } from '@/lib/api'
 
 export function RuntimesPage() {
+  const { t } = useTranslation()
+
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['runtimes'],
     queryFn: api.runtimes,
   })
 
   return (
-    <div className="p-6 max-w-3xl">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-semibold">Runtimes</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Available agent runtimes and their default images
-          </p>
-        </div>
+    <PageShell
+      breadcrumb={[{ label: t('runtimes.title') }]}
+      title={t('runtimes.title')}
+      description={t('runtimes.subtitle')}
+      narrow
+      actions={
         <Button type="button" onClick={() => refetch()} variant="ghost" size="sm">
-          Refresh
+          {t('common.refresh')}
         </Button>
-      </div>
-
-      {isLoading && (
-        <div className="text-center text-gray-500 text-sm py-8">Loading runtimes...</div>
-      )}
-      {error && (
-        <div className="text-center text-red-400 text-sm py-8">Failed to load runtimes</div>
-      )}
+      }
+    >
+      {isLoading && <DashboardLoadingState rows={1} />}
+      {error && <DashboardErrorState title={t('runtimes.loadFailed')} />}
 
       {data && data.length === 0 && (
         <EmptyState
           icon={Server}
-          title="No runtimes found"
-          description="Check runtime registration in your configuration."
+          title={t('runtimes.emptyTitle')}
+          description={t('runtimes.emptyDescription')}
         />
       )}
 
       {data && data.length > 0 && (
         <>
-          <Card variant="surface">
-            <div className="p-4 mb-6">
-              <div className="flex items-center gap-2 text-gray-400 text-xs mb-1">
-                <Cpu size={13} /> Available runtimes
-              </div>
-              <p className="text-2xl font-semibold">{data.length}</p>
-            </div>
-          </Card>
+          <StatCard
+            label={t('runtimes.availableRuntimes')}
+            value={data.length}
+            icon={<Cpu size={13} />}
+            color="blue"
+            className="mb-6 max-w-xs"
+          />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {data.map((rt: RuntimeInfo) => (
@@ -59,12 +58,14 @@ export function RuntimesPage() {
                   </div>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-xs">
-                      <span className="text-gray-500">ID:</span>
-                      <span className="font-mono text-gray-400">{rt.id}</span>
+                      <span className="text-text-muted">{t('runtimes.id')}:</span>
+                      <span className="font-mono text-text-secondary">{rt.id}</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
-                      <span className="text-gray-500">Image:</span>
-                      <span className="font-mono text-gray-400 truncate">{rt.defaultImage}</span>
+                      <span className="text-text-muted">{t('runtimes.image')}:</span>
+                      <span className="font-mono text-text-secondary truncate">
+                        {rt.defaultImage}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -73,6 +74,6 @@ export function RuntimesPage() {
           </div>
         </>
       )}
-    </div>
+    </PageShell>
   )
 }

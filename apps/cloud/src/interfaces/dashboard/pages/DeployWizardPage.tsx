@@ -1,3 +1,4 @@
+import { Badge, Button, Checkbox, Input, Progress } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import {
@@ -27,7 +28,6 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Badge, Button, Checkbox, Input, Progress } from '@shadowob/ui'
 import { Breadcrumb } from '@/components/Breadcrumb'
 import { useSSEStream } from '@/hooks/useSSEStream'
 import { api, type ProviderSettings } from '@/lib/api'
@@ -99,21 +99,25 @@ function StepOverview({ name, onNext }: { name: string; onNext: () => void }) {
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold mb-1">{t('deploy.reviewTemplate')}</h2>
-        <p className="text-sm text-gray-500">{t('deploy.confirmDeployKubernetes')}</p>
+        <p className="text-sm text-text-muted">{t('deploy.confirmDeployKubernetes')}</p>
       </div>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+      <div className="bg-bg-secondary border border-border-subtle rounded-xl p-6">
         <div className="flex items-start gap-4">
           <span className="text-4xl">{template?.emoji ?? '📦'}</span>
           <div className="flex-1">
             <h3 className="text-xl font-bold mb-1">{name}</h3>
-            <p className="text-sm text-gray-400 mb-3">
+            <p className="text-sm text-text-secondary mb-3">
               {template?.description ?? t('common.loading')}
             </p>
 
             <div className="flex items-center gap-2 mb-4">
-              {template && <Badge variant="neutral">{getCategoryLabel(template.category, t)}</Badge>}
-              {template && <Badge variant="neutral">{getDifficultyLabel(template.difficulty, t)}</Badge>}
+              {template && (
+                <Badge variant="neutral">{getCategoryLabel(template.category, t)}</Badge>
+              )}
+              {template && (
+                <Badge variant="neutral">{getDifficultyLabel(template.difficulty, t)}</Badge>
+              )}
               {template?.featured && (
                 <Badge variant="info">
                   <Sparkles size={10} />
@@ -124,22 +128,22 @@ function StepOverview({ name, onNext }: { name: string; onNext: () => void }) {
 
             {/* Quick stats */}
             <div className="grid grid-cols-3 gap-4">
-              <div className="bg-gray-950 border border-gray-800 rounded-lg p-3">
-                <div className="text-xs text-gray-500 flex items-center gap-1 mb-1">
+              <div className="bg-bg-deep border border-border-subtle rounded-lg p-3">
+                <div className="text-xs text-text-muted flex items-center gap-1 mb-1">
                   <Users size={11} />
                   {t('deploy.agentsLabel')}
                 </div>
                 <p className="text-lg font-semibold">{template?.agentCount ?? '—'}</p>
               </div>
-              <div className="bg-gray-950 border border-gray-800 rounded-lg p-3">
-                <div className="text-xs text-gray-500 flex items-center gap-1 mb-1">
+              <div className="bg-bg-deep border border-border-subtle rounded-lg p-3">
+                <div className="text-xs text-text-muted flex items-center gap-1 mb-1">
                   <FolderOpen size={11} />
                   {t('deploy.namespaceLabel')}
                 </div>
                 <p className="text-sm font-mono mt-1">{template?.namespace ?? '—'}</p>
               </div>
-              <div className="bg-gray-950 border border-gray-800 rounded-lg p-3">
-                <div className="text-xs text-gray-500 flex items-center gap-1 mb-1">
+              <div className="bg-bg-deep border border-border-subtle rounded-lg p-3">
+                <div className="text-xs text-text-muted flex items-center gap-1 mb-1">
                   <Clock size={11} />
                   {t('deploy.deployTimeLabel')}
                 </div>
@@ -158,7 +162,7 @@ function StepOverview({ name, onNext }: { name: string; onNext: () => void }) {
         </h4>
         <ul className="space-y-2">
           {(template?.highlights ?? []).map((highlight) => (
-            <li key={highlight} className="flex items-center gap-2 text-sm text-gray-300">
+            <li key={highlight} className="flex items-center gap-2 text-sm text-text-secondary">
               <CheckCircle size={13} className="text-green-400 shrink-0" />
               {highlight}
             </li>
@@ -175,7 +179,7 @@ function StepOverview({ name, onNext }: { name: string; onNext: () => void }) {
           </h4>
           <ul className="space-y-2">
             {(template?.requirements ?? []).map((requirement) => (
-              <li key={requirement} className="flex items-center gap-2 text-sm text-gray-400">
+              <li key={requirement} className="flex items-center gap-2 text-sm text-text-secondary">
                 <ChevronRight size={11} className="text-yellow-600 shrink-0" />
                 {requirement}
               </li>
@@ -185,11 +189,7 @@ function StepOverview({ name, onNext }: { name: string; onNext: () => void }) {
       )}
 
       <div className="flex justify-end">
-        <Button
-          type="button"
-          onClick={onNext}
-          variant="primary"
-        >
+        <Button type="button" onClick={onNext} variant="primary">
           {t('common.continue')}
           <ArrowRight size={16} />
         </Button>
@@ -345,15 +345,15 @@ function StepConfigure({
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold mb-1">{t('deploy.configureDeploy')}</h2>
-        <p className="text-sm text-gray-500">{t('deploy.setNamespaceEnv')}</p>
+        <p className="text-sm text-text-muted">{t('deploy.setNamespaceEnv')}</p>
       </div>
 
       {/* Namespace */}
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
+      <div className="bg-bg-secondary border border-border-subtle rounded-lg p-4">
         <label htmlFor="namespace" className="block text-sm font-medium mb-2">
           {t('deploy.namespace')}
         </label>
-        <p className="text-xs text-gray-500 mb-3">{t('deploy.kubernetesNamespaceDesc')}</p>
+        <p className="text-xs text-text-muted mb-3">{t('deploy.kubernetesNamespaceDesc')}</p>
         <Input
           id="namespace"
           type="text"
@@ -361,26 +361,26 @@ function StepConfigure({
           onChange={(e) => onChange({ ...config, namespace: e.target.value })}
           placeholder={template?.namespace ?? name}
         />
-        <p className="text-[10px] text-gray-600 mt-2">
+        <p className="text-[10px] text-text-muted mt-2">
           {t('deploy.default')}{' '}
-          <code className="font-mono text-gray-500">{template?.namespace ?? name}</code>
+          <code className="font-mono text-text-muted">{template?.namespace ?? name}</code>
         </p>
       </div>
 
       {/* Shadow Connection */}
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
+      <div className="bg-bg-secondary border border-border-subtle rounded-lg p-4">
         <div className="mb-3">
           <h3 className="text-sm font-medium flex items-center gap-2">
             <Unplug size={14} className="text-purple-400" />
             {t('deploy.shadowConnectionTitle')}
           </h3>
-          <p className="text-xs text-gray-500 mt-1">{t('deploy.shadowConnectionDescription')}</p>
+          <p className="text-xs text-text-muted mt-1">{t('deploy.shadowConnectionDescription')}</p>
         </div>
 
         <div className="space-y-3">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <label className="text-xs font-mono text-gray-300 flex items-center gap-2">
+              <label className="text-xs font-mono text-text-secondary flex items-center gap-2">
                 {hasShadowServerUrl ? (
                   <CheckCircle size={12} className="text-green-400" />
                 ) : (
@@ -428,7 +428,7 @@ function StepConfigure({
 
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <label className="text-xs font-mono text-gray-300 flex items-center gap-2">
+              <label className="text-xs font-mono text-text-secondary flex items-center gap-2">
                 {hasShadowUserToken ? (
                   <CheckCircle size={12} className="text-green-400" />
                 ) : (
@@ -476,9 +476,9 @@ function StepConfigure({
                   data-lpignore="true"
                   data-form-type="other"
                   className={cn(
-                    '!w-full !rounded !px-3 !py-2 !pr-8 !text-xs !font-mono !text-gray-200 placeholder:!text-gray-600',
+                    'w-full rounded px-3 py-2 pr-8 text-xs font-mono text-text-primary placeholder:text-text-muted',
                     !config.envVars.SHADOW_USER_TOKEN?.trim() && 'border-yellow-800/50',
-                    config.envVars.SHADOW_USER_TOKEN?.trim() && 'border-gray-700',
+                    config.envVars.SHADOW_USER_TOKEN?.trim() && 'border-border-dim',
                   )}
                 />
                 <Button
@@ -497,14 +497,14 @@ function StepConfigure({
 
       {/* Required Environment Variables */}
       {requiredVars.length > 0 && (
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
+        <div className="bg-bg-secondary border border-border-subtle rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="text-sm font-medium flex items-center gap-2">
                 <Key size={14} className="text-yellow-400" />
                 {t('deploy.requiredEnvVars')}
               </h3>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-text-muted mt-1">
                 {t('deploy.templateRequiresVars', { count: requiredVars.length })}{' '}
                 {t('deploy.envVarsAllRequired')}
               </p>
@@ -521,7 +521,7 @@ function StepConfigure({
               return (
                 <div key={key} className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <label className="text-xs font-mono text-gray-300 flex items-center gap-2">
+                    <label className="text-xs font-mono text-text-secondary flex items-center gap-2">
                       {isFilled ? (
                         <CheckCircle size={12} className="text-green-400" />
                       ) : (
@@ -591,11 +591,11 @@ function StepConfigure({
       )}
 
       {/* Extra env vars (optional) */}
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
+      <div className="bg-bg-secondary border border-border-subtle rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
           <div>
             <h3 className="text-sm font-medium">{t('deploy.additionalVariables')}</h3>
-            <p className="text-xs text-gray-500 mt-1">{t('deploy.optionalKeyValue')}</p>
+            <p className="text-xs text-text-muted mt-1">{t('deploy.optionalKeyValue')}</p>
           </div>
           <Button
             type="button"
@@ -609,7 +609,7 @@ function StepConfigure({
         </div>
 
         {extraVars.length === 0 && (
-          <div className="text-center py-4 text-xs text-gray-600 border border-dashed border-gray-800 rounded-lg">
+          <div className="text-center py-4 text-xs text-text-muted border border-dashed border-border-subtle rounded-lg">
             {t('deploy.noAdditionalVars')}
           </div>
         )}
@@ -630,9 +630,9 @@ function StepConfigure({
                     if (e.target.value) updateVar(e.target.value, env.value)
                   }}
                   placeholder="KEY"
-                  className="flex-1 rounded border-gray-700 bg-gray-950 px-3 py-2 text-xs font-mono text-gray-200 placeholder:text-gray-600"
+                  className="flex-1 rounded border-border-dim bg-bg-deep px-3 py-2 text-xs font-mono text-text-primary placeholder:text-text-muted"
                 />
-                <span className="text-gray-600">=</span>
+                <span className="text-text-muted">=</span>
                 <Input
                   type="text"
                   value={env.value}
@@ -645,7 +645,7 @@ function StepConfigure({
                     if (env.key) updateVar(env.key, e.target.value)
                   }}
                   placeholder="value"
-                  className="flex-1 rounded border-gray-700 bg-gray-950 px-3 py-2 text-xs font-mono text-gray-200 placeholder:text-gray-600"
+                  className="flex-1 rounded border-border-dim bg-bg-deep px-3 py-2 text-xs font-mono text-text-primary placeholder:text-text-muted"
                 />
                 <Button
                   type="button"
@@ -660,7 +660,7 @@ function StepConfigure({
                   }}
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 p-1 text-gray-600 hover:text-red-400"
+                  className="h-7 w-7 p-1 text-text-muted hover:text-red-400"
                 >
                   <Trash2 size={13} />
                 </Button>
@@ -680,19 +680,11 @@ function StepConfigure({
 
       {/* Navigation */}
       <div className="flex justify-between">
-        <Button
-          type="button"
-          onClick={onBack}
-          variant="ghost"
-        >
+        <Button type="button" onClick={onBack} variant="ghost">
           <ArrowLeft size={14} />
           {t('common.back')}
         </Button>
-        <Button
-          type="button"
-          onClick={handleNext}
-          variant="primary"
-        >
+        <Button type="button" onClick={handleNext} variant="primary">
           {t('common.continue')}
           <ArrowRight size={16} />
         </Button>
@@ -759,7 +751,7 @@ export function StepProviders({
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold mb-1">{t('deploy.providersTitle')}</h2>
-        <p className="text-sm text-gray-500">{t('deploy.providersDescription')}</p>
+        <p className="text-sm text-text-muted">{t('deploy.providersDescription')}</p>
       </div>
 
       {/* Use existing settings toggle */}
@@ -771,7 +763,7 @@ export function StepProviders({
               <p className="text-sm font-medium text-green-400">
                 {t('deploy.providersConfiguredInSettings', { count: existingProviders.length })}
               </p>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-xs text-text-muted mt-0.5">
                 {t('deploy.providersUseExistingDescription')}
               </p>
             </div>
@@ -786,7 +778,7 @@ export function StepProviders({
                 else onChange([])
               }}
             />
-            <span className="text-xs text-gray-400">{t('deploy.useExisting')}</span>
+            <span className="text-xs text-text-secondary">{t('deploy.useExisting')}</span>
           </label>
         </div>
       )}
@@ -796,38 +788,33 @@ export function StepProviders({
         {providers.map((provider, i) => (
           <div
             key={`${provider.id}-${i}`}
-            className="bg-gray-900 border border-gray-800 rounded-lg p-4"
+            className="bg-bg-secondary border border-border-subtle rounded-lg p-4"
           >
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <Key size={14} className="text-gray-500" />
+                <Key size={14} className="text-text-muted" />
                 <span className="text-sm font-medium">{provider.id}</span>
-                <span className="text-xs text-gray-600 font-mono">{provider.api}</span>
+                <span className="text-xs text-text-muted font-mono">{provider.api}</span>
               </div>
-              <Button
-                type="button"
-                onClick={() => removeProvider(i)}
-                variant="ghost"
-                size="icon"
-              >
+              <Button type="button" onClick={() => removeProvider(i)} variant="ghost" size="icon">
                 <Trash2 size={13} />
               </Button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="bg-gray-950 border border-gray-800 rounded px-3 py-2.5">
-                <label className="text-xs text-gray-500 mb-1 block">
+              <div className="bg-bg-deep border border-border-subtle rounded px-3 py-2.5">
+                <label className="text-xs text-text-muted mb-1 block">
                   {t('settings.secretEnvKey')}
                 </label>
                 <code className="text-xs font-mono text-yellow-400/90 break-all">
                   {getProviderSecretEnvName(provider.id)}
                 </code>
-                <p className="text-xs text-gray-600 mt-2">
+                <p className="text-xs text-text-muted mt-2">
                   {t('settings.credentialsManagedInSecrets')}
                 </p>
               </div>
               {provider.baseUrl !== undefined && (
                 <div>
-                  <label className="text-xs text-gray-500 mb-1 block">
+                  <label className="text-xs text-text-muted mb-1 block">
                     {t('settings.baseUrl')}
                   </label>
                   <Input
@@ -845,7 +832,7 @@ export function StepProviders({
 
       {/* Add provider */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-gray-600">{t('deploy.addProvider')}</span>
+        <span className="text-xs text-text-muted">{t('deploy.addProvider')}</span>
         {API_PRESETS.map((preset) => (
           <Button
             key={preset.id}
@@ -862,19 +849,11 @@ export function StepProviders({
 
       {/* Navigation */}
       <div className="flex justify-between">
-        <Button
-          type="button"
-          onClick={onBack}
-          variant="ghost"
-        >
+        <Button type="button" onClick={onBack} variant="ghost">
           <ArrowLeft size={14} />
           {t('common.back')}
         </Button>
-        <Button
-          type="button"
-          onClick={onNext}
-          variant="primary"
-        >
+        <Button type="button" onClick={onNext} variant="primary">
           {t('deploy.reviewDeploy')}
           <Rocket size={16} />
         </Button>
@@ -965,7 +944,7 @@ function StepDeploy({
         setDeploySuccess(false)
         throw new Error(
           result.error ||
-          t('deploy.deployFailedWithCode', { code: result.exitCode ?? t('common.none') }),
+            t('deploy.deployFailedWithCode', { code: result.exitCode ?? t('common.none') }),
         )
       }
 
@@ -1049,7 +1028,7 @@ function StepDeploy({
                 ? t('deploy.deploymentFailed')
                 : t('deploy.deploying')}
         </h2>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-text-muted">
           {!deployStarted
             ? t('deploy.reviewConfig')
             : isDone
@@ -1063,28 +1042,28 @@ function StepDeploy({
       {/* Review summary (before deploy) */}
       {!deployStarted && (
         <>
-          <div className="bg-gray-900 border border-gray-800 rounded-lg divide-y divide-gray-800">
+          <div className="bg-bg-secondary border border-border-subtle rounded-lg divide-y divide-border-subtle">
             <div className="px-5 py-3 flex items-center justify-between">
-              <span className="text-xs text-gray-500">{t('deploy.template')}</span>
+              <span className="text-xs text-text-muted">{t('deploy.template')}</span>
               <span className="text-sm font-medium flex items-center gap-2">
                 <span>{template?.emoji ?? '📦'}</span>
                 {name}
               </span>
             </div>
             <div className="px-5 py-3 flex items-center justify-between">
-              <span className="text-xs text-gray-500">{t('deploy.namespace')}</span>
-              <span className="text-sm font-mono text-gray-300">{targetNamespace}</span>
+              <span className="text-xs text-text-muted">{t('deploy.namespace')}</span>
+              <span className="text-sm font-mono text-text-secondary">{targetNamespace}</span>
             </div>
             <div className="px-5 py-3 flex items-center justify-between">
-              <span className="text-xs text-gray-500">{t('deploy.envVariables')}</span>
-              <span className="text-sm text-gray-300">
+              <span className="text-xs text-text-muted">{t('deploy.envVariables')}</span>
+              <span className="text-sm text-text-secondary">
                 {Object.keys(config.envVars).filter((k) => config.envVars[k]).length}{' '}
                 {t('deploy.configured')}
               </span>
             </div>
             <div className="px-5 py-3 flex items-center justify-between">
-              <span className="text-xs text-gray-500">{t('deploy.agentsLabel')}</span>
-              <span className="text-sm text-gray-300">
+              <span className="text-xs text-text-muted">{t('deploy.agentsLabel')}</span>
+              <span className="text-sm text-text-secondary">
                 {(template?.features.length ?? 0) > 0
                   ? `${t('deploy.includes')}: ${(template?.features ?? []).slice(0, 2).join(', ')}`
                   : t('deploy.asConfigured')}
@@ -1100,19 +1079,11 @@ function StepDeploy({
 
           {/* Action buttons */}
           <div className="flex justify-between">
-            <Button
-              type="button"
-              onClick={onBack}
-              variant="ghost"
-            >
+            <Button type="button" onClick={onBack} variant="ghost">
               <ArrowLeft size={14} />
               {t('common.back')}
             </Button>
-            <Button
-              type="button"
-              onClick={handleDeploy}
-              variant="primary"
-            >
+            <Button type="button" onClick={handleDeploy} variant="primary">
               <Rocket size={16} />
               {t('deploy.startDeployment')}
             </Button>
@@ -1148,26 +1119,23 @@ function StepDeploy({
                 {isDone && t('deploy.deploymentSuccessful')}
                 {isError && t('deploy.deploymentFailed')}
               </p>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-text-muted mt-1">
                 {t('deploy.logLinesReceived', { count: lines.length })}
               </p>
             </div>
           </div>
 
           {taskInfo && (
-            <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
+            <div className="bg-bg-secondary border border-border-subtle rounded-lg p-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-xs text-gray-500 mb-1">{t('deployTask.taskUrl')}</p>
-                  <code className="block text-xs font-mono text-gray-300 break-all">{taskUrl}</code>
+                  <p className="text-xs text-text-muted mb-1">{t('deployTask.taskUrl')}</p>
+                  <code className="block text-xs font-mono text-text-secondary break-all">
+                    {taskUrl}
+                  </code>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Button
-                    type="button"
-                    onClick={handleCopyTaskUrl}
-                    variant="ghost"
-                    size="sm"
-                  >
+                  <Button type="button" onClick={handleCopyTaskUrl} variant="ghost" size="sm">
                     <Copy size={12} />
                     {t('deployTask.copyLink')}
                   </Button>
@@ -1181,7 +1149,7 @@ function StepDeploy({
                   </Link>
                   <Link
                     to="/deployments"
-                    className="flex items-center gap-2 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-colors"
+                    className="flex items-center gap-2 text-xs text-text-secondary hover:text-text-primary border border-border-dim hover:border-border rounded-lg px-3 py-2 transition-colors"
                   >
                     <Activity size={12} />
                     {t('nav.deployments')}
@@ -1192,16 +1160,13 @@ function StepDeploy({
           )}
 
           {/* Log viewer */}
-          <div className="bg-gray-950 border border-gray-800 rounded-lg overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-800 bg-gray-900/50">
-              <span className="text-xs text-gray-500 font-medium">{t('deploy.deploymentLog')}</span>
+          <div className="bg-bg-deep border border-border-subtle rounded-lg overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle bg-bg-secondary/50">
+              <span className="text-xs text-text-muted font-medium">
+                {t('deploy.deploymentLog')}
+              </span>
               {lines.length > 0 && (
-                <Button
-                  type="button"
-                  onClick={handleDownloadLog}
-                  variant="ghost"
-                  size="sm"
-                >
+                <Button type="button" onClick={handleDownloadLog} variant="ghost" size="sm">
                   <Download size={11} />
                   {t('deploy.download')}
                 </Button>
@@ -1209,10 +1174,10 @@ function StepDeploy({
             </div>
             <div
               ref={logRef}
-              className="min-h-[16rem] max-h-[28rem] overflow-auto p-4 font-mono text-xs text-gray-300 space-y-1"
+              className="min-h-[16rem] max-h-[28rem] overflow-auto p-4 font-mono text-xs text-text-secondary space-y-1"
             >
               {lines.length === 0 && isDeploying && (
-                <span className="text-gray-600">{t('deploy.initializingDeployment')}</span>
+                <span className="text-text-muted">{t('deploy.initializingDeployment')}</span>
               )}
               {lines.map((line, i) => (
                 <div key={i} className="leading-relaxed">
@@ -1231,7 +1196,7 @@ function StepDeploy({
               <h3 className="text-xl font-semibold text-green-400 mb-2">
                 {t('deploy.deploymentSuccessful')}
               </h3>
-              <p className="text-sm text-gray-400 mb-8">
+              <p className="text-sm text-text-secondary mb-8">
                 {t('deploy.agentRunningInNamespace', { namespace: targetNamespace })}
               </p>
 
@@ -1246,13 +1211,13 @@ function StepDeploy({
                     })
                   }}
                   variant="ghost"
-                  className="h-auto rounded-lg border border-gray-800 bg-gray-800/50 p-4 transition-colors group hover:bg-gray-800"
+                  className="h-auto rounded-lg border border-border-subtle bg-bg-secondary/50 p-4 transition-colors group hover:bg-bg-secondary"
                 >
-                  <Server size={20} className="text-gray-400 mb-2" />
-                  <div className="text-sm font-medium text-gray-300 group-hover:text-gray-200">
+                  <Server size={20} className="text-text-secondary mb-2" />
+                  <div className="text-sm font-medium text-text-secondary group-hover:text-text-primary">
                     {t('deployTask.openTask')}
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-text-muted mt-1">
                     {t('deployTask.openTaskDescription')}
                   </p>
                 </Button>
@@ -1265,11 +1230,11 @@ function StepDeploy({
                   }
                   variant="ghost"
                 >
-                  <Activity size={20} className="text-gray-400 mb-2" />
-                  <div className="text-sm font-medium text-gray-300 group-hover:text-gray-200">
+                  <Activity size={20} className="text-text-secondary mb-2" />
+                  <div className="text-sm font-medium text-text-secondary group-hover:text-text-primary">
                     {t('deploy.openNamespace')}
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-text-muted mt-1">
                     {t('deploy.openNamespaceDescription')}
                   </p>
                 </Button>
@@ -1280,7 +1245,7 @@ function StepDeploy({
             <div className="flex items-center gap-3">
               <Link
                 to="/store"
-                className="flex items-center gap-2 text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2 rounded-lg transition-colors"
+                className="flex items-center gap-2 text-sm text-text-secondary hover:text-text-primary border border-border-dim hover:border-border px-4 py-2 rounded-lg transition-colors"
               >
                 {t('store.backToStore')}
               </Link>
@@ -1335,7 +1300,8 @@ export function DeployWizardPage() {
           />
           <div className="grid gap-2 sm:grid-cols-3">
             {steps.map((step, index) => {
-              const status = index < currentStep ? 'completed' : index === currentStep ? 'active' : 'upcoming'
+              const status =
+                index < currentStep ? 'completed' : index === currentStep ? 'active' : 'upcoming'
               return (
                 <div
                   key={step.id}
@@ -1368,7 +1334,9 @@ export function DeployWizardPage() {
                       {step.label}
                     </span>
                   </div>
-                  {step.description && <p className="text-xs text-text-muted">{step.description}</p>}
+                  {step.description && (
+                    <p className="text-xs text-text-muted">{step.description}</p>
+                  )}
                 </div>
               )
             })}

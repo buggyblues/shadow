@@ -1,10 +1,10 @@
 import {
-  Breadcrumb as UIBreadcrumb,
-  BreadcrumbItem as UIBreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
+  Breadcrumb as UIBreadcrumb,
+  BreadcrumbItem as UIBreadcrumbItem,
 } from '@shadowob/ui'
 import { Link } from '@tanstack/react-router'
 import { Home } from 'lucide-react'
@@ -31,7 +31,7 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
         <UIBreadcrumbItem>
           <BreadcrumbLink
             asChild
-            className="!flex !items-center !p-0.5 !text-text-muted hover:!text-text-primary"
+            className="flex items-center p-0.5 text-text-muted hover:text-text-primary"
           >
             <Link to="/" title={t('nav.agentStore')}>
               <Home size={14} />
@@ -46,12 +46,12 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
               {item.to ? (
                 <BreadcrumbLink
                   asChild
-                  className="!font-bold !tracking-[0.08em] !text-text-secondary hover:!text-text-primary"
+                  className="font-bold tracking-[0.08em] text-text-secondary hover:text-text-primary"
                 >
                   <Link to={item.to}>{item.label}</Link>
                 </BreadcrumbLink>
               ) : (
-                <BreadcrumbPage className="!tracking-[0.08em]">{item.label}</BreadcrumbPage>
+                <BreadcrumbPage className="tracking-[0.08em]">{item.label}</BreadcrumbPage>
               )}
             </UIBreadcrumbItem>
           </Fragment>

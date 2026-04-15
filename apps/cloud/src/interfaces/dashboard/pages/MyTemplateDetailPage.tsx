@@ -1,4 +1,17 @@
 import Editor, { type Monaco } from '@monaco-editor/react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Badge,
+  Button,
+  EmptyState,
+} from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import {
@@ -22,7 +35,6 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Badge, Button, EmptyState } from '@shadowob/ui'
 import { Breadcrumb } from '@/components/Breadcrumb'
 import {
   parseTemplateAgents,
@@ -136,7 +148,7 @@ function EditorTab({
     <div className="flex flex-col">
       {/* Toolbar */}
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2 text-xs text-gray-500">
+        <div className="flex items-center gap-2 text-xs text-text-muted">
           <span>
             {content.split('\n').length} {t('templateDetail.lines')}
           </span>
@@ -196,17 +208,17 @@ function EditorTab({
           <Shield size={14} />
           {validateResult.valid
             ? t('templateDetail.validationSummaryValid', {
-              agents: validateResult.agents,
-              configurations: validateResult.configurations,
-            })
+                agents: validateResult.agents,
+                configurations: validateResult.configurations,
+              })
             : t('templateDetail.validationSummaryInvalid', {
-              count: validateResult.violations.length,
-            })}
+                count: validateResult.violations.length,
+              })}
         </div>
       )}
 
       {/* Monaco Editor */}
-      <div className="border border-gray-700 rounded-lg overflow-hidden min-h-[500px]">
+      <div className="overflow-hidden rounded-xl border border-border-subtle min-h-[500px]">
         <Editor
           height="500px"
           language="json"
@@ -274,7 +286,7 @@ function VersionsTab({ name }: { name: string }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12 text-gray-500 text-sm">
+      <div className="flex items-center justify-center py-12 text-sm text-text-muted">
         <Loader2 size={16} className="animate-spin mr-2" />
         {t('templateDetail.loadingVersions')}
       </div>
@@ -295,7 +307,7 @@ function VersionsTab({ name }: { name: string }) {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-text-muted">
         {t('templateDetail.currentVersion')}{' '}
         <span className="text-white font-medium">v{data?.current ?? 1}</span>
         {' · '}
@@ -309,20 +321,20 @@ function VersionsTab({ name }: { name: string }) {
               'flex items-center justify-between px-4 py-3 rounded-lg border transition-colors',
               v.current
                 ? 'bg-blue-900/20 border-blue-800/50'
-                : 'bg-gray-900/50 border-gray-800 hover:border-gray-700',
+                : 'bg-bg-secondary/70 border-border-subtle hover:border-border-dim',
             )}
           >
             <div className="flex items-center gap-3">
               <div
                 className={cn(
                   'w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold',
-                  v.current ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400',
+                  v.current ? 'bg-primary text-black' : 'bg-bg-tertiary text-text-muted',
                 )}
               >
                 v{v.version}
               </div>
               <div>
-                <span className="text-sm text-gray-200">
+                <span className="text-sm text-text-primary">
                   {t('templateDetail.versionLabel', { version: v.version })}
                   {v.current && (
                     <Badge variant="info" size="sm">
@@ -331,7 +343,7 @@ function VersionsTab({ name }: { name: string }) {
                   )}
                 </span>
                 {v.createdAt && (
-                  <p className="text-xs text-gray-600 flex items-center gap-1 mt-0.5">
+                  <p className="mt-0.5 flex items-center gap-1 text-xs text-text-muted">
                     <Clock size={10} />
                     {new Date(v.createdAt).toLocaleString()}
                   </p>
@@ -363,6 +375,7 @@ export function MyTemplateDetailPage() {
   const { t } = useTranslation()
   const { name } = useParams({ strict: false }) as { name: string }
   const [activeTab, setActiveTab] = useState('overview')
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const navigate = useNavigate()
   const toast = useToast()
   const queryClient = useQueryClient()
@@ -413,7 +426,7 @@ export function MyTemplateDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20 text-gray-500 text-sm">
+      <div className="flex items-center justify-center py-20 text-sm text-text-muted">
         <Loader2 size={18} className="animate-spin mr-2" />
         {t('templateDetail.loadingTemplate')}
       </div>
@@ -441,162 +454,184 @@ export function MyTemplateDetailPage() {
   }
 
   return (
-    <TemplateDetailShell
-      breadcrumbItems={[{ label: t('templates.title'), to: '/my-templates' }, { label: name }]}
-      heroIcon={
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10">
-          <FileJson size={24} className="text-primary" />
-        </div>
-      }
-      title={name}
-      titleMeta={
-        <>
-          <Badge variant="neutral" size="sm">
-            v{data.version ?? 1}
-          </Badge>
-          {data.templateSlug && (
+    <>
+      <TemplateDetailShell
+        breadcrumbItems={[{ label: t('templates.title'), to: '/my-templates' }, { label: name }]}
+        heroIcon={
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10">
+            <FileJson size={24} className="text-primary" />
+          </div>
+        }
+        title={name}
+        titleMeta={
+          <>
             <Badge variant="neutral" size="sm">
-              <GitFork size={10} />
-              {data.templateSlug}
+              v{data.version ?? 1}
             </Badge>
-          )}
-        </>
-      }
-      description={
-        data.templateSlug
-          ? t('templateDetail.forkedDescription', { name: data.templateSlug })
-          : t('templateDetail.customDescription')
-      }
-      supportingText={
-        data.templateSlug ? (
-          <p className="text-xs text-gray-600 flex items-center gap-1">
-            <GitFork size={12} />
-            <span>{t('templateDetail.forkedFrom')}</span>
-            <Link
-              to="/store/$name"
-              params={{ name: data.templateSlug }}
-              className="text-gray-400 hover:text-blue-400 transition-colors"
+            {data.templateSlug && (
+              <Badge variant="neutral" size="sm">
+                <GitFork size={10} />
+                {data.templateSlug}
+              </Badge>
+            )}
+          </>
+        }
+        description={
+          data.templateSlug
+            ? t('templateDetail.forkedDescription', { name: data.templateSlug })
+            : t('templateDetail.customDescription')
+        }
+        supportingText={
+          data.templateSlug ? (
+            <p className="flex items-center gap-1 text-xs text-text-muted">
+              <GitFork size={12} />
+              <span>{t('templateDetail.forkedFrom')}</span>
+              <Link
+                to="/store/$name"
+                params={{ name: data.templateSlug }}
+                className="text-text-secondary transition-colors hover:text-primary"
+              >
+                {data.templateSlug}
+              </Link>
+            </p>
+          ) : null
+        }
+        chips={
+          <>
+            <div className="flex items-center gap-1.5 rounded-full border border-border-subtle bg-bg-secondary px-3 py-1.5 text-xs text-text-secondary">
+              <Users size={11} className="text-primary" />
+              {t('templateDetail.agentsCount', { count: agents.length })}
+            </div>
+            <div className="flex items-center gap-1.5 rounded-full border border-border-subtle bg-bg-secondary px-3 py-1.5 text-xs text-text-secondary">
+              <Layers size={11} className="text-primary" />
+              {Array.isArray(configurations) ? configurations.length : 0}{' '}
+              {t('templateDetail.configurations')}
+            </div>
+            <div className="flex items-center gap-1.5 rounded-full border border-border-subtle bg-bg-secondary px-3 py-1.5 text-xs text-text-secondary">
+              <Cpu size={11} className="text-primary" />
+              {Array.isArray(providers) ? providers.length : 0} {t('templateDetail.providers')}
+            </div>
+          </>
+        }
+        actions={
+          <>
+            <Button asChild variant="primary" size="sm">
+              <Link to="/store/$name/deploy" params={{ name: data.templateSlug ?? name }}>
+                <Rocket size={16} />
+                {t('common.deploy')}
+              </Link>
+            </Button>
+            <Button
+              type="button"
+              onClick={() => setDeleteDialogOpen(true)}
+              variant="ghost"
+              size="sm"
             >
-              {data.templateSlug}
-            </Link>
-          </p>
-        ) : null
-      }
-      chips={
-        <>
-          <div className="flex items-center gap-1.5 rounded-full border border-border-subtle bg-bg-secondary px-3 py-1.5 text-xs text-text-secondary">
-            <Users size={11} className="text-primary" />
-            {t('templateDetail.agentsCount', { count: agents.length })}
-          </div>
-          <div className="flex items-center gap-1.5 rounded-full border border-border-subtle bg-bg-secondary px-3 py-1.5 text-xs text-text-secondary">
-            <Layers size={11} className="text-primary" />
-            {Array.isArray(configurations) ? configurations.length : 0}{' '}
-            {t('templateDetail.configurations')}
-          </div>
-          <div className="flex items-center gap-1.5 rounded-full border border-border-subtle bg-bg-secondary px-3 py-1.5 text-xs text-text-secondary">
-            <Cpu size={11} className="text-primary" />
-            {Array.isArray(providers) ? providers.length : 0} {t('templateDetail.providers')}
-          </div>
-        </>
-      }
-      actions={
-        <>
-          <Button asChild variant="primary" size="sm">
-            <Link
-              to="/store/$name/deploy"
-              params={{ name: data.templateSlug ?? name }}
-            >
-              <Rocket size={16} />
-              {t('common.deploy')}
-            </Link>
-          </Button>
-          <Button
-            type="button"
-            onClick={() => {
-              if (confirm(t('templates.deleteConfirm', { name }))) deleteMutation.mutate()
-            }}
-            variant="ghost"
-            size="sm"
-          >
-            <Trash2 size={14} />
-            {t('common.delete')}
-          </Button>
-          <Button asChild variant="ghost" size="sm">
-            <Link to="/my-templates">
-              <ArrowLeft size={14} />
-              {t('common.back')}
-            </Link>
-          </Button>
-        </>
-      }
-      sidebar={
-        <div className="glass-panel space-y-4 rounded-[24px] p-5">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-            {t('templateDetail.quickInfo')}
-          </h3>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs text-text-muted">
-                <Users size={12} />
-                {t('templateDetail.agents')}
-              </span>
-              <span className="text-sm font-medium text-text-primary">{agents.length}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs text-text-muted">
-                <Layers size={12} />
-                {t('clusters.namespace')}
-              </span>
-              <span className="text-sm font-mono text-text-primary">
-                {namespace ?? t('common.none')}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs text-text-muted">
-                <Settings size={12} />
-                {t('templateDetail.configurations')}
-              </span>
-              <span className="text-sm text-text-primary">
-                {Array.isArray(configurations) ? configurations.length : 0}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs text-text-muted">
-                <Cpu size={12} />
-                {t('templateDetail.providers')}
-              </span>
-              <span className="text-sm text-text-primary">
-                {Array.isArray(providers) ? providers.length : 0}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs text-text-muted">
-                <History size={12} />
-                {t('templateDetail.version')}
-              </span>
-              <span className="text-sm font-mono text-text-primary">v{data.version ?? 1}</span>
+              <Trash2 size={14} />
+              {t('common.delete')}
+            </Button>
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/my-templates">
+                <ArrowLeft size={14} />
+                {t('common.back')}
+              </Link>
+            </Button>
+          </>
+        }
+        sidebar={
+          <div className="glass-panel space-y-4 rounded-2xl p-5">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+              {t('templateDetail.quickInfo')}
+            </h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs text-text-muted">
+                  <Users size={12} />
+                  {t('templateDetail.agents')}
+                </span>
+                <span className="text-sm font-medium text-text-primary">{agents.length}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs text-text-muted">
+                  <Layers size={12} />
+                  {t('clusters.namespace')}
+                </span>
+                <span className="text-sm font-mono text-text-primary">
+                  {namespace ?? t('common.none')}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs text-text-muted">
+                  <Settings size={12} />
+                  {t('templateDetail.configurations')}
+                </span>
+                <span className="text-sm text-text-primary">
+                  {Array.isArray(configurations) ? configurations.length : 0}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs text-text-muted">
+                  <Cpu size={12} />
+                  {t('templateDetail.providers')}
+                </span>
+                <span className="text-sm text-text-primary">
+                  {Array.isArray(providers) ? providers.length : 0}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs text-text-muted">
+                  <History size={12} />
+                  {t('templateDetail.version')}
+                </span>
+                <span className="text-sm font-mono text-text-primary">v{data.version ?? 1}</span>
+              </div>
             </div>
           </div>
-        </div>
-      }
-      tabs={tabs}
-      activeTab={activeTab}
-      onTabChange={setActiveTab}
-    >
-      {activeTab === 'overview' && <OverviewPanel content={data.content} agents={agents} />}
-      {activeTab === 'agents' && (
-        <TemplateAgentsTab
-          agents={agents}
-          emptyTitle={t('templateDetail.noAgents')}
-          emptyDescription={t('templateDetail.noAgents')}
-          introText={t('templateDetail.agentsInTemplate', { count: agents.length })}
-        />
-      )}
-      {activeTab === 'editor' && (
-        <EditorTab name={name} content={data.content} templateSlug={data.templateSlug} />
-      )}
-      {activeTab === 'versions' && <VersionsTab name={name} />}
-    </TemplateDetailShell>
+        }
+        tabs={tabs}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      >
+        {activeTab === 'overview' && <OverviewPanel content={data.content} agents={agents} />}
+        {activeTab === 'agents' && (
+          <TemplateAgentsTab
+            agents={agents}
+            emptyTitle={t('templateDetail.noAgents')}
+            emptyDescription={t('templateDetail.noAgents')}
+            introText={t('templateDetail.agentsInTemplate', { count: agents.length })}
+          />
+        )}
+        {activeTab === 'editor' && (
+          <EditorTab name={name} content={data.content} templateSlug={data.templateSlug} />
+        )}
+        {activeTab === 'versions' && <VersionsTab name={name} />}
+      </TemplateDetailShell>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('common.delete')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('templates.deleteConfirm', { name })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button variant="ghost">{t('common.cancel')}</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                variant="danger"
+                loading={deleteMutation.isPending}
+                onClick={() => deleteMutation.mutate()}
+              >
+                {t('common.delete')}
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
 
@@ -646,7 +681,7 @@ function OverviewPanel({ content, agents }: { content: unknown; agents: Template
       </div>
 
       {/* Agent summary */}
-      <div className="glass-panel rounded-[22px] p-4">
+      <div className="glass-panel rounded-2xl p-4">
         <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
           <Users size={14} className="text-primary" />
           {t('templateDetail.agentSummary')}
@@ -692,7 +727,7 @@ function StatCard({
   icon: React.ReactNode
 }) {
   return (
-    <div className="glass-panel rounded-[20px] p-3">
+    <div className="glass-panel rounded-2xl p-3">
       <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase text-text-muted">
         {icon}
         {label}

@@ -34,10 +34,11 @@ export function StatCard({
 
   return (
     <Card
-      variant="surface"
+      variant="stat"
+      hoverable={Boolean(onClick)}
       className={cn(
-        '!rounded-2xl !border-border-subtle !p-4 transition-all',
-        onClick && 'cursor-pointer hover:-translate-y-0.5 hover:!border-primary/20',
+        'p-4 transition-all',
+        onClick && 'cursor-pointer hover:-translate-y-0.5',
         className,
       )}
       onClick={onClick}

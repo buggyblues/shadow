@@ -44,6 +44,8 @@
     "noData": "No data found",
     "copied": "Copied!",
     "copy": "Copy",
+    "clear": "Clear",
+    "download": "Download",
     "retry": "Retry",
     "expand": "Expand",
     "collapse": "Collapse",
@@ -109,11 +111,50 @@
     "fail": "fail",
     "reRunChecks": "Re-run checks"
   },
+  "doctor": {
+    "title": "System Health",
+    "subtitle": "Prerequisites and dependency checks",
+    "recheck": "Re-check",
+    "runningTitle": "Running checks...",
+    "runningDescription": "Checking prerequisites and dependencies",
+    "failedTitle": "Failed to run health checks",
+    "failedDescription": "Please try again.",
+    "allChecksPassed": "All checks passed — system is ready"
+  },
+  "images": {
+    "title": "Images",
+    "subtitle": "Available container images for agents",
+    "loading": "Loading images...",
+    "loadFailed": "Failed to load images",
+    "emptyTitle": "No images found",
+    "emptyDescription": "Images are defined in your templates and configuration",
+    "totalImages": "Total images",
+    "withDockerfile": "With Dockerfile",
+    "withoutDockerfile": "No Dockerfile"
+  },
+  "runtimes": {
+    "title": "Runtimes",
+    "subtitle": "Available agent runtimes and their default images",
+    "loading": "Loading runtimes...",
+    "loadFailed": "Failed to load runtimes",
+    "emptyTitle": "No runtimes found",
+    "emptyDescription": "Check runtime registration in your configuration.",
+    "availableRuntimes": "Available runtimes",
+    "id": "ID",
+    "image": "Image"
+  },
   "store": {
     "title": "Agents Store",
     "heroTitle": "Deploy AI Agent Teams in One Click",
     "description": "Browse production-ready agent team templates. Each template includes pre-configured agents, workflows, and deployment settings — ready to deploy to your Kubernetes cluster.",
     "searchPlaceholder": "Search templates by name, category, or feature...",
+    "typewriterPhrases": [
+      "Find a code review team template...",
+      "Deploy a DevOps agent pipeline...",
+      "Search for security scanner templates...",
+      "Browse customer support agents...",
+      "Explore research automation teams..."
+    ],
     "totalTemplates": "templates",
     "totalAgents": "total agents",
     "totalCategories": "categories",
@@ -355,6 +396,8 @@
     "runningTasksCount": "{{count}} running tasks",
     "restarts": "Restarts",
     "age": "Age",
+    "rollbackInitiated": "Rollback initiated",
+    "rollbackFailed": "Rollback failed",
     "rollbackWarning": "This will roll back all deployments in namespace \"{{namespace}}\" to the previous state.",
     "configDescription": "Edit the cloud configuration JSON. Changes take effect after redeployment.",
     "format": "Format",
@@ -365,6 +408,42 @@
     "tabEnv": "Environment",
     "tabTasks": "Tasks",
     "tabInfo": "Info"
+  },
+  "deploymentDetail": {
+    "namespace": "Namespace",
+    "destroy": "Destroy",
+    "stats": {
+      "pods": "Pods",
+      "running": "Running",
+      "notReady": "Not Ready",
+      "replicas": "Replicas"
+    },
+    "podsLoading": "Loading pods...",
+    "podsEmptyTitle": "No pods found",
+    "podsEmptyDescription": "The deployment may be scaling up.",
+    "podsSummary": "{{count}} {{label}} in this deployment.",
+    "logsDescription": "Real-time log stream from all pods in this deployment.",
+    "logsLines": "{{count}} lines",
+    "logsConnectHint": "Click \"Connect\" to stream logs…",
+    "logsWaiting": "Waiting for log output…",
+    "info": {
+      "deploymentName": "Deployment Name",
+      "namespace": "Namespace",
+      "totalPods": "Total Pods",
+      "runningPods": "Running Pods",
+      "totalRestarts": "Total Restarts",
+      "cliCommands": "CLI Commands",
+      "viewPods": "View pods",
+      "viewLogs": "View logs",
+      "scaleDeployment": "Scale deployment"
+    },
+    "deleteEnvConfirm": "Delete environment variable \"{{key}}\"?",
+    "scaleSuccess": "Scaled to {{count}} replicas",
+    "scaleFailed": "Failed to scale deployment",
+    "destroySuccess": "Destroyed namespace {{namespace}}",
+    "scaleActivityTitle": "Scaled {{agent}}",
+    "scaleActivityDetail": "Replicas: {{count}}",
+    "destroyActivityTitle": "Destroyed namespace {{namespace}}"
   },
   "templates": {
     "title": "My Templates",
@@ -396,6 +475,12 @@
     "importAction": "Import",
     "loadingTemplates": "Loading templates...",
     "searchSavedPlaceholder": "Search saved templates by name, source, or namespace...",
+    "typewriterPhrases": [
+      "Search by template name...",
+      "Find templates by agent namespace...",
+      "Browse your store forks...",
+      "Filter by git-imported templates..."
+    ],
     "recentlyUpdated": "Recently Updated",
     "recentlyUpdatedDescription": "Jump back into what you edited most recently and keep shipping.",
     "openEditor": "Open Editor",
@@ -615,10 +700,13 @@
     "credentialsMoveNotice": "Provider API keys are now managed as encrypted environment values. Add keys like OPENAI_API_KEY on the Secrets & Environment page.",
     "saveSettings": "Save settings",
     "settingsSaved": "Settings saved",
+    "settingsSaveFailed": "Failed to save settings",
     "updatedProviderSettings": "Updated provider settings",
+    "configuredProviders": "{{count}} provider(s) configured",
     "system": "System",
     "apiStatus": "API Status",
     "healthy": "Healthy",
+    "unknown": "Unknown",
     "doctorChecks": "Doctor Checks",
     "passing": "passing",
     "dashboardPort": "Dashboard Port",
@@ -628,6 +716,7 @@
     "language": "Language",
     "timezone": "Timezone",
     "about": "About",
+    "consoleTagline": "AI Agent Cluster Management Platform",
     "aboutDescription": "Shadow Cloud Console provides full lifecycle management for AI agent clusters on Kubernetes. Deploy, monitor, scale, and manage your agent teams with an intuitive cloud-native interface.",
     "platform": "Platform",
     "interface": "Interface",
@@ -715,6 +804,9 @@
     "pasteConfig": "Paste your shadowob-cloud.json here...",
     "loadTemplate": "Load template",
     "validating": "Validating...",
+    "validationPassedToast": "Valid: {{agents}} agent(s)",
+    "validationFailedToast": "Invalid: {{count}} violation(s)",
+    "invalidJsonCannotValidate": "Invalid JSON — cannot validate",
     "validationError": "Validation Error",
     "configValid": "Config is valid!",
     "configHasIssues": "Config has issues",
@@ -725,6 +817,7 @@
     "secret": "secret",
     "file": "file",
     "inlineApiKeys": "Inline API Keys:",
+    "prefixLabel": "prefix",
     "extendsErrors": "Extends Errors:",
     "templateLoaded": "Template loaded"
   },
@@ -732,6 +825,9 @@
     "light": "Light",
     "dark": "Dark",
     "system": "System"
+  },
+  "errorBoundary": {
+    "title": "Something went wrong"
   },
   "confirmDialog": {
     "typeToConfirm": "Type {{text}} to confirm:"

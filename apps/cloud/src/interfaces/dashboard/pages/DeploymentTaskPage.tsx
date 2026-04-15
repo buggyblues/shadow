@@ -1,26 +1,19 @@
+import { Badge, Button, Card } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from '@tanstack/react-router'
-import { formatDistanceToNow, parseISO } from 'date-fns'
 import { CheckCircle2, Copy, FolderOpen, Loader2, RefreshCw, Terminal, XCircle } from 'lucide-react'
 import { useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Badge, Button, Card, EmptyState } from '@shadowob/ui'
 import { Breadcrumb } from '@/components/Breadcrumb'
+import { DashboardEmptyState } from '@/components/DashboardEmptyState'
+import { DashboardErrorState, DashboardLoadingState } from '@/components/DashboardState'
 import { StatCard } from '@/components/StatCard'
+import { StatsGrid } from '@/components/StatsGrid'
+import { ToolbarActionButton } from '@/components/ToolbarActionButton'
 import { useSSEStream } from '@/hooks/useSSEStream'
 import { api } from '@/lib/api'
-import { cn } from '@/lib/utils'
+import { cn, formatTimestamp } from '@/lib/utils'
 import { useToast } from '@/stores/toast'
-
-function formatTimestamp(value?: string | null): string {
-  if (!value) return '—'
-
-  try {
-    return formatDistanceToNow(parseISO(value), { addSuffix: true })
-  } catch {
-    return value
-  }
-}
 
 function getStatusVariant(status: string): 'neutral' | 'success' | 'warning' | 'danger' | 'info' {
   if (status === 'deployed') return 'success'
@@ -83,7 +76,7 @@ export function DeploymentTaskPage() {
   if (!Number.isInteger(taskId) || taskId <= 0) {
     return (
       <div className="p-6">
-        <EmptyState
+        <DashboardEmptyState
           icon={XCircle}
           title={t('deployTask.taskNotFound')}
           description={t('deployTask.invalidTaskId')}
@@ -93,19 +86,14 @@ export function DeploymentTaskPage() {
   }
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20 text-gray-500 text-sm">
-        <Loader2 size={18} className="animate-spin mr-2" />
-        {t('deployTask.loading')}
-      </div>
-    )
+    return <DashboardLoadingState inline />
   }
 
   if (queryError || !task) {
     return (
       <div className="p-6">
         <Breadcrumb items={[{ label: t('deployTask.title') }]} className="mb-4" />
-        <EmptyState
+        <DashboardErrorState
           icon={XCircle}
           title={t('deployTask.taskNotFound')}
           description={t('deployTask.taskNotFoundDescription')}
@@ -141,38 +129,34 @@ export function DeploymentTaskPage() {
               {t(`deployTask.statuses.${task.status}`)}
             </Badge>
           </h1>
-          <p className="text-sm text-gray-500 mt-1">{t('deployTask.description')}</p>
+          <p className="mt-1 text-sm text-text-muted">{t('deployTask.description')}</p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <Button
+          <ToolbarActionButton
             type="button"
             onClick={() => refetch()}
             variant="ghost"
-            size="sm"
-          >
-            <RefreshCw size={12} className={running ? 'animate-spin' : ''} />
-            {t('deployTask.refresh')}
-          </Button>
-          <Button
+            icon={<RefreshCw size={12} className={running ? 'animate-spin' : ''} />}
+            label={t('deployTask.refresh')}
+          />
+          <ToolbarActionButton
             type="button"
             onClick={copyTaskUrl}
             variant="ghost"
-            size="sm"
-          >
-            <Copy size={12} />
-            {t('deployTask.copyLink')}
-          </Button>
+            icon={<Copy size={12} />}
+            label={t('deployTask.copyLink')}
+          />
           <Link
             to="/deployments"
-            className="flex items-center gap-2 text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-colors"
+            className="flex items-center gap-2 rounded-lg border border-border-subtle bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary transition-colors hover:border-border-dim hover:text-text-primary"
           >
             <Terminal size={12} />
             {t('nav.deployments')}
           </Link>
           <Link
             to="/deployments"
-            className="flex items-center gap-2 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-3 py-2 transition-colors"
+            className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary px-3 py-2 text-xs text-black transition-colors hover:bg-primary/90"
           >
             <FolderOpen size={12} />
             {t('deployTask.openClusters')}
@@ -206,7 +190,7 @@ export function DeploymentTaskPage() {
                 {success && t('deployTask.successMessage')}
                 {failed && t('deployTask.failedMessage')}
               </p>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="mt-1 text-xs text-text-muted">
                 {running && t('deployTask.runningDescription')}
                 {success && t('deployTask.successDescription')}
                 {failed && t('deployTask.failedDescription')}
@@ -216,7 +200,7 @@ export function DeploymentTaskPage() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <StatsGrid className="lg:grid-cols-4">
         <StatCard
           label={t('deployTask.taskId')}
           value={`#${task.id}`}
@@ -240,30 +224,32 @@ export function DeploymentTaskPage() {
           icon={<Terminal size={13} />}
           color="green"
         />
-      </div>
+      </StatsGrid>
 
       <Card variant="surface">
         <div className="space-y-3">
           <div>
-            <p className="text-xs uppercase tracking-wider text-gray-600 mb-1">
+            <p className="mb-1 text-xs uppercase tracking-wider text-text-muted">
               {t('deployTask.taskUrl')}
             </p>
-            <code className="block rounded-lg px-3 py-2 text-xs font-mono text-gray-300 break-all bg-gray-950 border border-gray-800">
+            <code className="block break-all rounded-lg border border-border-subtle bg-bg-deep px-3 py-2 font-mono text-xs text-text-secondary">
               {taskUrl}
             </code>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
             <div>
-              <p className="text-gray-600 mb-1">{t('deployTask.created')}</p>
-              <p className="text-gray-300">{formatTimestamp(task.createdAt)}</p>
+              <p className="mb-1 text-text-muted">{t('deployTask.created')}</p>
+              <p className="text-text-secondary">{formatTimestamp(task.createdAt)}</p>
             </div>
             <div>
-              <p className="text-gray-600 mb-1">{t('deployTask.updated')}</p>
-              <p className="text-gray-300">{formatTimestamp(task.updatedAt)}</p>
+              <p className="mb-1 text-text-muted">{t('deployTask.updated')}</p>
+              <p className="text-text-secondary">{formatTimestamp(task.updatedAt)}</p>
             </div>
             <div>
-              <p className="text-gray-600 mb-1">{t('deployTask.streamStatus')}</p>
-              <p className="text-gray-300">{t(`deployTask.streamStatuses.${streamStatus}`)}</p>
+              <p className="mb-1 text-text-muted">{t('deployTask.streamStatus')}</p>
+              <p className="text-text-secondary">
+                {t(`deployTask.streamStatuses.${streamStatus}`)}
+              </p>
             </div>
           </div>
         </div>
@@ -277,16 +263,14 @@ export function DeploymentTaskPage() {
       )}
 
       {error && (
-        <div className="mb-6 bg-red-950/20 border border-red-900/30 rounded-xl p-4 text-sm text-red-300">
-          {error}
-        </div>
+        <DashboardErrorState className="mb-6" title={t('deployTask.error')} description={error} />
       )}
 
       <Card variant="surface">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-900/50">
+        <div className="flex items-center justify-between border-b border-border-subtle bg-bg-secondary/70 px-4 py-3">
           <div>
-            <p className="text-sm font-medium text-gray-200">{t('deployTask.logs')}</p>
-            <p className="text-xs text-gray-500 mt-1">{t('deployTask.logDescription')}</p>
+            <p className="text-sm font-medium text-text-primary">{t('deployTask.logs')}</p>
+            <p className="mt-1 text-xs text-text-muted">{t('deployTask.logDescription')}</p>
           </div>
           <Badge
             variant={running ? 'info' : success ? 'success' : failed ? 'danger' : 'neutral'}
@@ -297,10 +281,10 @@ export function DeploymentTaskPage() {
         </div>
         <div
           ref={logRef}
-          className="min-h-[16rem] max-h-[28rem] overflow-auto p-4 font-mono text-xs text-gray-300 space-y-1"
+          className="min-h-[16rem] max-h-[28rem] overflow-auto space-y-1 p-4 font-mono text-xs text-text-secondary"
         >
           {lines.length === 0 && (
-            <span className="text-gray-600">{t('deployTask.waitingForLogs')}</span>
+            <span className="text-text-muted">{t('deployTask.waitingForLogs')}</span>
           )}
           {lines.map((line, index) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: deploy logs are append-only

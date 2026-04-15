@@ -1,10 +1,10 @@
 import Editor, { type Monaco } from '@monaco-editor/react'
+import { Button, NativeSelect } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { clsx } from 'clsx'
 import { FileJson, Layers, Save, Shield } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Button, NativeSelect } from '@shadowob/ui'
 import { api, type ValidateResult } from '@/lib/api'
 import { useToast } from '@/stores/toast'
 
@@ -47,7 +47,7 @@ function CodeEditor({
   }
 
   return (
-    <div className="border border-gray-700 rounded-lg overflow-hidden flex-1">
+    <div className="border border-border-dim rounded-lg overflow-hidden flex-1">
       <Editor
         height="100%"
         language={language}
@@ -244,11 +244,11 @@ export function ConfigEditorPage() {
               </span>
             )}
           </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <p className="text-sm text-text-muted mt-0.5">
             {selectedTemplate ? (
               <span>
                 {t('configEditor.editing')}{' '}
-                <code className="font-mono text-xs text-gray-400">
+                <code className="font-mono text-xs text-text-secondary">
                   {selectedTemplate.startsWith('my:')
                     ? selectedTemplate.slice(3)
                     : selectedTemplate}
@@ -337,7 +337,7 @@ export function ConfigEditorPage() {
       </div>
 
       {isLoading && (
-        <div className="text-center text-gray-500 text-sm py-8">
+        <div className="text-center text-text-muted text-sm py-8">
           {t('configEditor.loadingConfig')}
         </div>
       )}
@@ -362,13 +362,13 @@ export function ConfigEditorPage() {
           <span className="text-sm">
             {validateResult.valid
               ? t('templateDetail.validationSummaryValid', {
-                agents: validateResult.agents,
-                configurations: validateResult.configurations,
-              })
+                  agents: validateResult.agents,
+                  configurations: validateResult.configurations,
+                })
               : t('configEditor.validationSummaryInvalid', {
-                violations: validateResult.violations.length,
-                extendsErrors: validateResult.extendsErrors.length,
-              })}
+                  violations: validateResult.violations.length,
+                  extendsErrors: validateResult.extendsErrors.length,
+                })}
           </span>
         </div>
       )}
@@ -383,7 +383,7 @@ export function ConfigEditorPage() {
       <CodeEditor value={content} onChange={handleContentChange} language="json" />
 
       {/* Status bar */}
-      <div className="flex items-center justify-between mt-2 text-xs text-gray-600">
+      <div className="flex items-center justify-between mt-2 text-xs text-text-muted">
         <div className="flex items-center gap-3">
           <span>
             {content.split('\n').length} {t('templateDetail.lines')}

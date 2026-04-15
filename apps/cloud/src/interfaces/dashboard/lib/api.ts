@@ -260,6 +260,41 @@ async function postRaw(path: string, body: unknown): Promise<Response> {
   return res
 }
 
+async function extractTaskIdFromSse(response: Response): Promise<number | null> {
+  const reader = response.body?.getReader()
+  if (!reader) return null
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      try {
+        const payload = JSON.parse(line.slice(6)) as { id?: number | string }
+        if (payload.id !== undefined && payload.id !== null) {
+          const taskId = Number(payload.id)
+          if (Number.isFinite(taskId)) {
+            void reader.cancel()
+            return taskId
+          }
+        }
+      } catch {
+        // ignore malformed SSE payloads
+      }
+    }
+  }
+
+  return null
+}
+
 // ── API ───────────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -407,6 +442,12 @@ export const api = {
       ),
     streamUrl: (id: number | string) =>
       `${BASE}/deploy-tasks/${encodeURIComponent(String(id))}/stream`,
+    redeploy: (id: number | string) =>
+      postRaw(`/deploy-tasks/${encodeURIComponent(String(id))}/redeploy`, {}),
+    redeployToTaskId: async (id: number | string) => {
+      const response = await postRaw(`/deploy-tasks/${encodeURIComponent(String(id))}/redeploy`, {})
+      return extractTaskIdFromSse(response)
+    },
     redeployUrl: (id: number | string) =>
       `${BASE}/deploy-tasks/${encodeURIComponent(String(id))}/redeploy`,
   },
@@ -447,7 +488,7 @@ export const api = {
 
   activity: {
     list: () => get<{ activities: Array<Record<string, unknown>> }>('/activity'),
-    record: (entry: Record<string, unknown>) => post<{ success: boolean }>('/activity', entry),
+    record: (entry: object) => post<{ success: boolean }>('/activity', entry),
   },
 
   secrets: {

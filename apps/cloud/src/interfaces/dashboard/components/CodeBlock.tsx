@@ -1,12 +1,8 @@
+import MonacoEditor from '@monaco-editor/react'
+import { Button } from '@shadowob/ui'
 import { Check, Copy } from 'lucide-react'
 import { useState } from 'react'
-import {
-  Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableRow,
-} from '@shadowob/ui'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
 interface CodeBlockProps {
@@ -20,12 +16,13 @@ interface CodeBlockProps {
 
 export function CodeBlock({
   code,
-  language,
+  language = 'json',
   title,
   className,
   maxHeight = '400px',
   showLineNumbers = false,
 }: CodeBlockProps) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
 
   const handleCopy = async () => {
@@ -34,17 +31,20 @@ export function CodeBlock({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const lines = code.split('\n')
-
   return (
-    <div className={cn('bg-gray-950 border border-gray-800 rounded-lg overflow-hidden', className)}>
+    <div
+      className={cn(
+        'overflow-hidden rounded-xl border border-border-subtle bg-[#1e1e1e]',
+        className,
+      )}
+    >
       {/* Header */}
       {(title || language) && (
-        <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-900/50">
+        <div className="flex items-center justify-between border-b border-white/8 bg-[#252526] px-4 py-2">
           <div className="flex items-center gap-2">
-            {title && <span className="text-xs text-gray-400">{title}</span>}
+            {title && <span className="text-xs text-[#cccccc]/70">{title}</span>}
             {language && (
-              <span className="text-[10px] text-gray-600 bg-gray-800 px-1.5 py-0.5 rounded">
+              <span className="rounded bg-white/8 px-1.5 py-0.5 text-[10px] text-[#cccccc]/50">
                 {language}
               </span>
             )}
@@ -54,37 +54,45 @@ export function CodeBlock({
             onClick={handleCopy}
             variant="ghost"
             size="xs"
-            className="!flex !items-center !gap-1 !text-xs !text-gray-500 hover:!text-gray-300 !transition-colors"
+            className="flex items-center gap-1 text-xs font-medium normal-case tracking-normal !text-[#cccccc]/60 transition-colors hover:!text-[#cccccc]"
           >
             {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
-            {copied ? 'Copied' : 'Copy'}
+            {copied ? t('common.copied') : t('common.copy')}
           </Button>
         </div>
       )}
 
-      {/* Code */}
-      <div className="overflow-auto" style={{ maxHeight }}>
-        <pre className="p-4 text-sm font-mono">
-          {showLineNumbers ? (
-            <Table className="!border-collapse">
-              <TableBody>
-                {lines.map((line, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="!pr-4 !text-right !text-gray-600 !select-none !align-top !text-xs !leading-relaxed">
-                      {i + 1}
-                    </TableCell>
-                    <TableCell className="!text-gray-300 !leading-relaxed !whitespace-pre">
-                      {line || '\u00a0'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <code className="text-gray-300 leading-relaxed whitespace-pre-wrap">{code}</code>
-          )}
-        </pre>
-      </div>
+      {/* Monaco readonly editor */}
+      <MonacoEditor
+        height={maxHeight}
+        language={language}
+        value={code}
+        theme="vs-dark"
+        options={{
+          readOnly: true,
+          minimap: { enabled: false },
+          fontSize: 13,
+          fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+          lineNumbers: showLineNumbers ? 'on' : 'off',
+          scrollBeyondLastLine: false,
+          wordWrap: 'off',
+          tabSize: 2,
+          automaticLayout: true,
+          padding: { top: 8, bottom: 8 },
+          folding: true,
+          renderLineHighlight: 'none',
+          overviewRulerBorder: false,
+          hideCursorInOverviewRuler: true,
+          scrollbar: {
+            vertical: 'auto',
+            horizontal: 'auto',
+            verticalScrollbarSize: 6,
+            horizontalScrollbarSize: 6,
+          },
+          contextmenu: false,
+          links: false,
+        }}
+      />
     </div>
   )
 }

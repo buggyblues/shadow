@@ -1,4 +1,5 @@
 import { type ClassValue, clsx } from 'clsx'
+import { formatDistanceToNow, parseISO } from 'date-fns'
 import { twMerge } from 'tailwind-merge'
 
 export function cn(...inputs: ClassValue[]) {
@@ -59,4 +60,38 @@ export function sortBy<T>(arr: T[], key: (item: T) => string | number, desc = fa
     if (va > vb) return desc ? -1 : 1
     return 0
   })
+}
+
+export function parseReadyStatus(ready: string): { ready: number; total: number } {
+  const [readyCount = 0, totalCount = 0] = ready.split('/').map(Number)
+  return {
+    ready: Number.isFinite(readyCount) ? readyCount : 0,
+    total: Number.isFinite(totalCount) ? totalCount : 0,
+  }
+}
+
+export function isDeploymentReady(ready: string): boolean {
+  const { ready: readyCount, total } = parseReadyStatus(ready)
+  return readyCount === total && total > 0
+}
+
+export function getReadyReplicas(ready: string): number {
+  return parseReadyStatus(ready).ready
+}
+
+export function formatTimestamp(value?: string | null): string {
+  if (!value) return '—'
+  try {
+    return formatDistanceToNow(parseISO(value), { addSuffix: true })
+  } catch {
+    return value
+  }
+}
+
+export function getAge(value: string): string {
+  try {
+    return formatDistanceToNow(parseISO(value), { addSuffix: true })
+  } catch {
+    return value
+  }
 }

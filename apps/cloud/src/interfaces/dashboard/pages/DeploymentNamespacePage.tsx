@@ -1,46 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate, useParams } from '@tanstack/react-router'
-import { formatDistanceToNow, parseISO } from 'date-fns'
 import {
-  Box,
-  CheckCircle,
-  DollarSign,
-  Download,
-  Eye,
-  EyeOff,
-  FileText,
-  FolderClock,
-  FolderOpen,
-  Info,
-  Loader2,
-  Lock,
-  Pencil,
-  Plus,
-  RefreshCw,
-  Rocket,
-  Server,
-  Terminal,
-  Trash2,
-  Variable,
-  X,
-  XCircle,
-} from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
   Badge,
   Button,
-  Checkbox,
-  EmptyState,
-  Input,
+  Card,
   NativeSelect,
   Table,
   TableBody,
@@ -52,41 +13,51 @@ import {
   TabsList,
   TabsTrigger,
 } from '@shadowob/ui'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link, useNavigate, useParams } from '@tanstack/react-router'
+import {
+  Box,
+  CheckCircle,
+  DollarSign,
+  Download,
+  FileText,
+  FolderClock,
+  FolderOpen,
+  Info,
+  Loader2,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Rocket,
+  Server,
+  Terminal,
+  Trash2,
+  Variable,
+  XCircle,
+} from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Breadcrumb } from '@/components/Breadcrumb'
+import { CliCommandSnippet } from '@/components/CliCommandSnippet'
+import { DangerConfirmDialog } from '@/components/DangerConfirmDialog'
+import { DashboardEmptyState } from '@/components/DashboardEmptyState'
+import { DashboardNamespaceCard } from '@/components/DashboardNamespaceCard'
+import { DashboardTaskCard } from '@/components/DashboardTaskCard'
+import { EnvVarEditorDialog } from '@/components/EnvVarEditorDialog'
+import { LogsPanel } from '@/components/LogsPanel'
 import { StatCard } from '@/components/StatCard'
+import { StatusBadge } from '@/components/StatusBadge'
 import { StatusDot } from '@/components/StatusDot'
+import { ToolbarActionButton } from '@/components/ToolbarActionButton'
 import { useSSEStream } from '@/hooks/useSSEStream'
 import { api, type Deployment, type EnvVarListEntry, type Pod } from '@/lib/api'
 import { formatUsdCost } from '@/lib/store-data'
-import { cn } from '@/lib/utils'
+import { cn, formatTimestamp, getAge, getReadyReplicas, isDeploymentReady } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/stores/toast'
 
-function isDeploymentReady(dep: Deployment): boolean {
-  const [ready = 0, total = 0] = dep.ready.split('/').map(Number)
-  return ready === total && total > 0
-}
-
 function getReplicas(dep: Deployment): number {
-  const [ready = 0] = dep.ready.split('/').map(Number)
-  return ready
-}
-
-function formatTimestamp(value?: string | null): string {
-  if (!value) return '—'
-  try {
-    return formatDistanceToNow(parseISO(value), { addSuffix: true })
-  } catch {
-    return value
-  }
-}
-
-function getAge(pod: Pod): string {
-  try {
-    return formatDistanceToNow(parseISO(pod.age), { addSuffix: true })
-  } catch {
-    return pod.age
-  }
+  return getReadyReplicas(dep.ready)
 }
 
 function getPodStatusType(status: string): 'success' | 'warning' | 'error' | 'info' {
@@ -95,104 +66,6 @@ function getPodStatusType(status: string): 'success' | 'warning' | 'error' | 'in
   if (status === 'Failed') return 'error'
   if (status === 'Succeeded') return 'info'
   return 'warning'
-}
-
-function NamespaceEnvDialog({
-  mode,
-  initial,
-  isSubmitting,
-  onSubmit,
-  onClose,
-}: {
-  mode: 'create' | 'edit'
-  initial?: { key: string; value: string; isSecret: boolean }
-  isSubmitting: boolean
-  onSubmit: (data: { key: string; value: string; isSecret: boolean }) => void
-  onClose: () => void
-}) {
-  const { t } = useTranslation()
-  const [key, setKey] = useState(initial?.key ?? '')
-  const [value, setValue] = useState(initial?.value ?? '')
-  const [isSecret, setIsSecret] = useState(initial?.isSecret ?? true)
-  const [showValue, setShowValue] = useState(mode === 'create')
-
-  return (
-    <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg space-y-4"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold flex items-center gap-2">
-            <Variable size={16} className="text-blue-400" />
-            {mode === 'edit' ? t('deployments.editScopedEnv') : t('deployments.addScopedEnv')}
-          </h3>
-          <Button type="button" variant="ghost" size="icon" onClick={onClose}>
-            <X size={16} />
-          </Button>
-        </div>
-
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-gray-400 mb-1.5 block">{t('secrets.keyName')}</label>
-            <Input
-              type="text"
-              value={key}
-              onChange={(event) => setKey(event.target.value)}
-              placeholder="OPENAI_API_KEY"
-              autoFocus
-              disabled={mode === 'edit'}
-            />
-          </div>
-          <div>
-            <label className="text-xs text-gray-400 mb-1.5 block">{t('secrets.secretValue')}</label>
-            <div className="relative">
-              <Input
-                type={showValue ? 'text' : 'password'}
-                value={value}
-                onChange={(event) => setValue(event.target.value)}
-                placeholder={mode === 'edit' ? t('secrets.leaveEmptyKeep') : ''}
-              />
-              <Button
-                type="button"
-                onClick={() => setShowValue((current) => !current)}
-                variant="ghost"
-                size="icon"
-              >
-                {showValue ? <EyeOff size={14} /> : <Eye size={14} />}
-              </Button>
-            </div>
-          </div>
-          <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
-            <Checkbox
-              checked={isSecret}
-              onCheckedChange={(checked) => setIsSecret(checked === true)}
-            />
-            <Lock size={12} />
-            {t('secrets.secret')}
-          </label>
-        </div>
-
-        <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" onClick={onClose} variant="ghost">
-            {t('common.cancel')}
-          </Button>
-          <Button
-            type="button"
-            onClick={() => key.trim() && onSubmit({ key: key.trim(), value, isSecret })}
-            disabled={!key.trim() || isSubmitting}
-            variant="primary"
-          >
-            {isSubmitting && <Loader2 size={14} className="animate-spin" />}
-            {mode === 'edit' ? t('common.save') : t('common.add')}
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
 }
 
 function AgentCard({
@@ -213,7 +86,7 @@ function AgentCard({
   const queryClient = useQueryClient()
   const addActivity = useAppStore((state) => state.addActivity)
   const [replicas, setReplicas] = useState<number | null>(null)
-  const ready = isDeploymentReady(deployment)
+  const ready = isDeploymentReady(deployment.ready)
   const currentReplicas = replicas ?? getReplicas(deployment)
 
   const scaleMutation = useMutation({
@@ -246,21 +119,23 @@ function AgentCard({
     <div
       className={cn(
         'rounded-xl border p-4 transition-colors',
-        selected ? 'border-blue-600 bg-blue-950/10' : 'border-gray-800 bg-gray-900',
+        selected
+          ? 'border-primary/60 bg-primary/10'
+          : 'border-border-subtle bg-bg-secondary hover:border-border-dim',
       )}
     >
       <div className="flex items-start justify-between gap-3 mb-3">
         <Button type="button" onClick={onSelect} variant="ghost" size="sm">
           <div className="flex items-center gap-2 min-w-0">
             <StatusDot status={ready ? 'success' : 'warning'} pulse={!ready} />
-            <p className="text-sm font-mono text-gray-200 truncate">{deployment.name}</p>
+            <p className="text-sm font-mono text-text-primary truncate">{deployment.name}</p>
             {selected && (
               <Badge variant="info" size="sm">
                 {t('deployments.currentSelection')}
               </Badge>
             )}
           </div>
-          <p className="text-xs text-gray-500 mt-1">{formatTimestamp(deployment.age)}</p>
+          <p className="text-xs text-text-muted mt-1">{getAge(deployment.age)}</p>
         </Button>
 
         <Button
@@ -268,21 +143,26 @@ function AgentCard({
           onClick={onOpenLogs}
           variant="ghost"
           size="sm"
+          className="dashboard-action-button"
         >
           {t('deployments.tabLogs')}
         </Button>
       </div>
 
       <div className="flex items-center justify-between gap-3">
-        <Badge variant={ready ? 'success' : 'warning'} size="sm">
-          {deployment.ready}
-        </Badge>
+        <StatusBadge
+          dotStatus={ready ? 'success' : 'warning'}
+          pulse={!ready}
+          badgeVariant={ready ? 'success' : 'warning'}
+          badgeText={deployment.ready}
+        />
 
-        <div className="flex items-center border border-gray-700 rounded">
+        <div className="flex items-center rounded-lg border border-border-dim">
           <Button
             type="button"
             variant="ghost"
             size="xs"
+            className="dashboard-action-button"
             onClick={() => handleScale(-1)}
             disabled={scaleMutation.isPending || currentReplicas <= 0}
           >
@@ -293,6 +173,7 @@ function AgentCard({
             type="button"
             variant="ghost"
             size="xs"
+            className="dashboard-action-button"
             onClick={() => handleScale(1)}
             disabled={scaleMutation.isPending}
           >
@@ -322,17 +203,12 @@ function PodsPanel({
   })
 
   if (!agent) {
-    return (
-      <div className="py-10 text-center text-gray-600 text-sm">
-        <Box size={24} className="mx-auto mb-2 text-gray-700" />
-        {t('deployments.noAgentSelected')}
-      </div>
-    )
+    return <DashboardEmptyState icon={Box} title={t('deployments.noAgentSelected')} />
   }
 
   if (isLoading) {
     return (
-      <div className="py-10 text-center text-gray-500 text-sm">
+      <div className="py-10 text-center text-text-muted text-sm">
         <Loader2 size={16} className="animate-spin inline mr-2" />
         {t('common.loading')}
       </div>
@@ -340,50 +216,46 @@ function PodsPanel({
   }
 
   if (!pods || pods.length === 0) {
-    return (
-      <div className="py-10 text-center text-gray-600 text-sm">
-        <Box size={24} className="mx-auto mb-2 text-gray-700" />
-        {t('deployments.noPodsForAgent', { agent })}
-      </div>
-    )
+    return <DashboardEmptyState icon={Box} title={t('deployments.noPodsForAgent', { agent })} />
   }
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-text-muted">
         {t('deployments.selectedPodsCount', { count: pods.length })}
       </p>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+      <Card variant="glass">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>{t('clusters.status')}</TableHead>
-              <TableHead>{t('monitoring.name')}</TableHead>
-              <TableHead>{t('monitoring.ready')}</TableHead>
-              <TableHead>{t('deployments.restarts')}</TableHead>
-              <TableHead>{t('deployments.age')}</TableHead>
+              <TableHead className="dashboard-table-head">{t('clusters.status')}</TableHead>
+              <TableHead className="dashboard-table-head">{t('monitoring.name')}</TableHead>
+              <TableHead className="dashboard-table-head">{t('monitoring.ready')}</TableHead>
+              <TableHead className="dashboard-table-head">{t('deployments.restarts')}</TableHead>
+              <TableHead className="dashboard-table-head">{t('deployments.age')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {pods.map((pod) => (
               <TableRow key={pod.name}>
                 <TableCell>
-                  <StatusDot status={getPodStatusType(pod.status)} label={pod.status} />
+                  <StatusBadge
+                    dotStatus={getPodStatusType(pod.status)}
+                    dotLabel={pod.status}
+                    badgeVariant={pod.ready === '1/1' ? 'success' : 'warning'}
+                    badgeText={pod.ready}
+                  />
                 </TableCell>
                 <TableCell>{pod.name}</TableCell>
-                <TableCell>
-                  <Badge variant={pod.ready === '1/1' ? 'success' : 'warning'} size="sm">
-                    {pod.ready}
-                  </Badge>
-                </TableCell>
+                <TableCell className="text-xs font-mono text-text-secondary">{pod.ready}</TableCell>
                 <TableCell>{pod.restarts}</TableCell>
-                <TableCell>{getAge(pod)}</TableCell>
+                <TableCell>{getAge(pod.age)}</TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
-      </div>
+      </Card>
     </div>
   )
 }
@@ -438,7 +310,7 @@ function NamespaceLogsTab({ namespace, agent }: { namespace: string; agent: stri
 
   if (!agent) {
     return (
-      <EmptyState
+      <DashboardEmptyState
         icon={FileText}
         title={t('deployments.noAgentSelected')}
         description={t('deployments.selectAgentForLogs')}
@@ -450,8 +322,8 @@ function NamespaceLogsTab({ namespace, agent }: { namespace: string; agent: stri
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-gray-200">{t('deployments.recentLogs')}</h3>
-          <p className="text-xs text-gray-500">
+          <h3 className="text-sm font-semibold text-text-primary">{t('deployments.recentLogs')}</h3>
+          <p className="text-xs text-text-muted">
             {t('deployments.logsHistoryDescription', { agent })}
           </p>
         </div>
@@ -469,34 +341,32 @@ function NamespaceLogsTab({ namespace, agent }: { namespace: string; agent: stri
               </option>
             ))}
           </NativeSelect>
-          <Button
+          <ToolbarActionButton
             type="button"
             onClick={() => refetch()}
             variant="ghost"
-            size="sm"
-          >
-            <RefreshCw size={12} />
-            {t('common.refresh')}
-          </Button>
-          <Button
+            icon={<RefreshCw size={12} />}
+            label={t('common.refresh')}
+          />
+          <ToolbarActionButton
             type="button"
             onClick={handleDownload}
             variant="ghost"
-            size="sm"
-          >
-            <Download size={12} />
-            {t('deploy.download')}
-          </Button>
+            icon={<Download size={12} />}
+            label={t('deploy.download')}
+          />
         </div>
       </div>
 
-      <div className="bg-gray-950 border border-gray-800 rounded-lg overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 border-b border-gray-800 bg-gray-900/40">
-          <div className="text-xs text-gray-500">
-            <span className="font-medium text-gray-400">{agent}</span>
+      <LogsPanel
+        headerLeft={
+          <>
+            <span className="font-medium text-text-secondary">{agent}</span>
             {history?.podName ? <span> · {history.podName}</span> : null}
             <span> · {t('deployments.pageLabel', { page })}</span>
-          </div>
+          </>
+        }
+        headerRight={
           <div className="flex items-center gap-2">
             <Button
               type="button"
@@ -517,27 +387,16 @@ function NamespaceLogsTab({ namespace, agent }: { namespace: string; agent: stri
               {t('deployments.olderLogs')}
             </Button>
           </div>
-        </div>
-        <div className="min-h-[14rem] max-h-[26rem] overflow-auto p-4 font-mono text-xs text-gray-300 space-y-1">
-          {isLoading ? (
-            <span className="text-gray-600">{t('common.loading')}</span>
-          ) : history?.lines.length ? (
-            history.lines.map((line, index) => (
-              <div key={`${page}-${index}`} className="leading-relaxed">
-                {line || '\u00a0'}
-              </div>
-            ))
-          ) : (
-            <span className="text-gray-600">{t('deployments.noLogsYet')}</span>
-          )}
-        </div>
-      </div>
+        }
+        lines={isLoading ? [] : (history?.lines ?? [])}
+        emptyText={isLoading ? t('common.loading') : t('deployments.noLogsYet')}
+      />
 
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-gray-200">{t('deployments.liveLogs')}</h3>
-            <p className="text-xs text-gray-500">{t('deployments.liveLogsDescription')}</p>
+            <h3 className="text-sm font-semibold text-text-primary">{t('deployments.liveLogs')}</h3>
+            <p className="text-xs text-text-muted">{t('deployments.liveLogsDescription')}</p>
           </div>
           <div className="flex items-center gap-2">
             {(lines.length > 0 || connected) && (
@@ -553,15 +412,13 @@ function NamespaceLogsTab({ namespace, agent }: { namespace: string; agent: stri
                 {t('common.clearAll')}
               </Button>
             )}
-            <Button
+            <ToolbarActionButton
               type="button"
               onClick={handleConnect}
               variant={connected ? 'secondary' : 'ghost'}
-              size="sm"
-            >
-              <RefreshCw size={12} className={connected ? 'animate-spin' : ''} />
-              {connected ? t('deployments.streaming') : t('deployments.connectLogs')}
-            </Button>
+              icon={<RefreshCw size={12} className={connected ? 'animate-spin' : ''} />}
+              label={connected ? t('deployments.streaming') : t('deployments.connectLogs')}
+            />
           </div>
         </div>
 
@@ -571,27 +428,12 @@ function NamespaceLogsTab({ namespace, agent }: { namespace: string; agent: stri
           </div>
         )}
 
-        <div className="bg-gray-950 border border-gray-800 rounded-lg overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-gray-800 bg-gray-900/40 text-xs text-gray-500">
-            {namespace}/{agent}
-          </div>
-          <div
-            ref={logRef}
-            className="min-h-[14rem] max-h-[26rem] overflow-auto p-4 font-mono text-xs text-gray-300 space-y-1"
-          >
-            {lines.length === 0 && !connected && (
-              <span className="text-gray-600">{t('deployments.connectLiveLogs')}</span>
-            )}
-            {lines.length === 0 && connected && (
-              <span className="text-gray-600">{t('deployments.waitingForLogs')}</span>
-            )}
-            {lines.map((line, index) => (
-              <div key={index} className="leading-relaxed">
-                {line || '\u00a0'}
-              </div>
-            ))}
-          </div>
-        </div>
+        <LogsPanel
+          headerLeft={`${namespace}/${agent}`}
+          lines={lines}
+          emptyText={connected ? t('deployments.waitingForLogs') : t('deployments.connectLiveLogs')}
+          bodyRef={logRef}
+        />
       </div>
     </div>
   )
@@ -660,7 +502,7 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
 
   if (scopedQuery.isLoading || effectiveQuery.isLoading) {
     return (
-      <div className="flex items-center justify-center py-14 text-gray-500 text-sm">
+      <div className="flex items-center justify-center py-14 text-text-muted text-sm">
         <Loader2 size={16} className="animate-spin mr-2" />
         {t('common.loading')}
       </div>
@@ -672,10 +514,10 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
       <div>
         <div className="flex items-center justify-between gap-3 mb-3">
           <div>
-            <h3 className="text-sm font-semibold text-gray-200">
+            <h3 className="text-sm font-semibold text-text-primary">
               {t('deployments.scopedEnvTitle')}
             </h3>
-            <p className="text-xs text-gray-500">{t('deployments.scopedEnvDescription')}</p>
+            <p className="text-xs text-text-muted">{t('deployments.scopedEnvDescription')}</p>
           </div>
           <Button
             type="button"
@@ -685,6 +527,7 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
             }}
             variant="primary"
             size="sm"
+            className="dashboard-action-button"
           >
             <Plus size={11} />
             {t('common.add')}
@@ -692,19 +535,16 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
         </div>
 
         {scopedEntries.length === 0 ? (
-          <div className="text-center py-10 border border-dashed border-gray-800 rounded-lg">
-            <Variable size={24} className="mx-auto mb-2 text-gray-700" />
-            <p className="text-sm text-gray-500">{t('deployments.noScopedEnv')}</p>
-          </div>
+          <DashboardEmptyState icon={Variable} title={t('deployments.noScopedEnv')} />
         ) : (
-          <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+          <Card variant="glass">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{t('secrets.keyName')}</TableHead>
-                  <TableHead>{t('secrets.secretValue')}</TableHead>
-                  <TableHead>{t('secrets.secret')}</TableHead>
-                  <TableHead>{t('common.actions')}</TableHead>
+                  <TableHead className="dashboard-table-head">{t('secrets.keyName')}</TableHead>
+                  <TableHead className="dashboard-table-head">{t('secrets.secretValue')}</TableHead>
+                  <TableHead className="dashboard-table-head">{t('secrets.secret')}</TableHead>
+                  <TableHead className="dashboard-table-head">{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -730,6 +570,7 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
                           onClick={() => void handleEditStart(entry)}
                           variant="ghost"
                           size="icon"
+                          className="dashboard-action-button"
                         >
                           <Pencil size={12} />
                         </Button>
@@ -738,6 +579,7 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
                           onClick={() => setDeleteKey(entry.key)}
                           variant="ghost"
                           size="icon"
+                          className="dashboard-action-button"
                         >
                           <Trash2 size={12} />
                         </Button>
@@ -747,29 +589,26 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
                 ))}
               </TableBody>
             </Table>
-          </div>
+          </Card>
         )}
       </div>
 
       <div>
-        <h3 className="text-sm font-semibold text-gray-200 mb-2">
+        <h3 className="text-sm font-semibold text-text-primary mb-2">
           {t('deployments.fallbackEnvTitle')}
         </h3>
-        <p className="text-xs text-gray-500 mb-3">{t('deployments.fallbackEnvDescription')}</p>
+        <p className="text-xs text-text-muted mb-3">{t('deployments.fallbackEnvDescription')}</p>
 
         {fallbackEntries.length === 0 ? (
-          <div className="text-center py-10 border border-dashed border-gray-800 rounded-lg">
-            <Variable size={24} className="mx-auto mb-2 text-gray-700" />
-            <p className="text-sm text-gray-500">{t('deployments.noFallbackEnv')}</p>
-          </div>
+          <DashboardEmptyState icon={Variable} title={t('deployments.noFallbackEnv')} />
         ) : (
-          <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+          <Card variant="glass">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{t('secrets.keyName')}</TableHead>
-                  <TableHead>{t('secrets.secretValue')}</TableHead>
-                  <TableHead>{t('secrets.scope')}</TableHead>
+                  <TableHead className="dashboard-table-head">{t('secrets.keyName')}</TableHead>
+                  <TableHead className="dashboard-table-head">{t('secrets.secretValue')}</TableHead>
+                  <TableHead className="dashboard-table-head">{t('secrets.scope')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -788,15 +627,19 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
                 ))}
               </TableBody>
             </Table>
-          </div>
+          </Card>
         )}
       </div>
 
       {dialogMode && (
-        <NamespaceEnvDialog
+        <EnvVarEditorDialog
           mode={dialogMode}
           initial={editEntry ?? undefined}
           isSubmitting={saveMutation.isPending}
+          titleCreate={t('deployments.addScopedEnv')}
+          titleEdit={t('deployments.editScopedEnv')}
+          subtitleCreate={t('deployments.scopedEnvDescription')}
+          subtitleEdit={t('deployments.scopedEnvDescription')}
           onSubmit={(form) => saveMutation.mutate(form)}
           onClose={() => {
             setDialogMode(null)
@@ -805,35 +648,22 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
         />
       )}
 
-      <AlertDialog
+      <DangerConfirmDialog
         open={Boolean(deleteKey)}
         onOpenChange={(open) => {
           if (!open) setDeleteKey(null)
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('common.delete')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleteKey ? t('deployments.deleteScopedEnvConfirm', { key: deleteKey }) : ''}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel asChild>
-              <Button variant="ghost">{t('common.cancel')}</Button>
-            </AlertDialogCancel>
-            <AlertDialogAction asChild>
-              <Button
-                variant="danger"
-                loading={deleteMutation.isPending}
-                onClick={() => deleteKey && deleteMutation.mutate(deleteKey)}
-              >
-                {t('common.delete')}
-              </Button>
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title={t('common.delete')}
+        description={deleteKey ? t('deployments.deleteScopedEnvConfirm', { key: deleteKey }) : ''}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
+        loading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deleteKey) {
+            deleteMutation.mutate(deleteKey)
+          }
+        }}
+      />
     </div>
   )
 }
@@ -854,7 +684,7 @@ function NamespaceTasksTab({ namespace }: { namespace: string }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-14 text-gray-500 text-sm">
+      <div className="flex items-center justify-center py-14 text-text-muted text-sm">
         <Loader2 size={16} className="animate-spin mr-2" />
         {t('common.loading')}
       </div>
@@ -863,7 +693,7 @@ function NamespaceTasksTab({ namespace }: { namespace: string }) {
 
   if (tasks.length === 0) {
     return (
-      <EmptyState
+      <DashboardEmptyState
         icon={FolderClock}
         title={t('deployTask.noTasks')}
         description={t('deployments.noTasksInNamespace')}
@@ -889,27 +719,17 @@ function NamespaceTasksTab({ namespace }: { namespace: string }) {
             key={task.id}
             to="/deploy-tasks/$taskId"
             params={{ taskId: String(task.id) }}
-            className={cn(
-              'block bg-gray-900 border rounded-lg px-4 py-3 hover:border-gray-600 transition-colors',
-              running ? 'border-blue-900/40' : 'border-gray-800',
-            )}
+            className="block"
           >
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-gray-200">#{task.id}</span>
-                <Badge variant={variant} size="sm">
-                  {t(`deployTask.statuses.${task.status}`)}
-                </Badge>
-                {running && <Loader2 size={12} className="animate-spin text-blue-400" />}
-              </div>
-              <span className="text-xs text-gray-600">
-                {formatTimestamp(task.updatedAt ?? task.createdAt)}
-              </span>
-            </div>
-            <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
-              {task.templateSlug && <span>{task.templateSlug}</span>}
-              {task.error && <span className="text-red-400 truncate">{task.error}</span>}
-            </div>
+            <DashboardTaskCard
+              id={task.id}
+              statusLabel={t(`deployTask.statuses.${task.status}`)}
+              statusVariant={variant}
+              running={running}
+              timestamp={formatTimestamp(task.updatedAt ?? task.createdAt)}
+              meta={task.templateSlug ? <span>{task.templateSlug}</span> : undefined}
+              error={task.error}
+            />
           </Link>
         )
       })}
@@ -928,7 +748,7 @@ function NamespaceCostTab({ namespace }: { namespace: string }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-14 text-gray-500 text-sm">
+      <div className="flex items-center justify-center py-14 text-text-muted text-sm">
         <Loader2 size={16} className="animate-spin mr-2" />
         {t('common.loading')}
       </div>
@@ -937,7 +757,7 @@ function NamespaceCostTab({ namespace }: { namespace: string }) {
 
   if (!data) {
     return (
-      <EmptyState
+      <DashboardEmptyState
         icon={DollarSign}
         title={t('deployments.costUnavailable')}
         description={t('deployments.costUnavailableDescription')}
@@ -968,30 +788,31 @@ function NamespaceCostTab({ namespace }: { namespace: string }) {
         />
       </div>
 
-      <div className="text-xs text-gray-500">
+      <div className="text-xs text-text-muted">
         {t('deployments.generatedAt')}: {formatTimestamp(data.generatedAt)}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {data.agents.map((agent) => (
-          <div key={agent.agentName} className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <div
+            key={agent.agentName}
+            className="bg-bg-secondary border border-border-subtle rounded-xl p-5"
+          >
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-mono text-gray-200">{agent.agentName}</p>
+                  <p className="text-sm font-mono text-text-primary">{agent.agentName}</p>
                   <Badge variant={agent.totalUsd !== null ? 'success' : 'neutral'} size="sm">
                     {agent.source}
                   </Badge>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {agent.podName ?? t('common.none')}
-                </p>
+                <p className="text-xs text-text-muted mt-1">{agent.podName ?? t('common.none')}</p>
               </div>
               <div className="text-right">
                 <p className="text-lg font-semibold text-green-400">
                   {formatUsdCost(agent.totalUsd, i18n.language)}
                 </p>
-                <p className="text-xs text-gray-600">{t('deployments.totalCost')}</p>
+                <p className="text-xs text-text-muted">{t('deployments.totalCost')}</p>
               </div>
             </div>
 
@@ -1002,18 +823,20 @@ function NamespaceCostTab({ namespace }: { namespace: string }) {
                     key={`${agent.agentName}-${provider.provider}`}
                     className="flex items-center justify-between gap-3 text-xs"
                   >
-                    <span className="text-gray-400">{provider.provider}</span>
+                    <span className="text-text-secondary">{provider.provider}</span>
                     <div className="text-right">
-                      <p className="text-gray-300">
+                      <p className="text-text-secondary">
                         {formatUsdCost(provider.amountUsd, i18n.language)}
                       </p>
-                      <p className="text-gray-600">{provider.usageLabel ?? provider.raw ?? '—'}</p>
+                      <p className="text-text-muted">
+                        {provider.usageLabel ?? provider.raw ?? '—'}
+                      </p>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-gray-600">{t('deployments.noProvidersReported')}</p>
+              <p className="text-xs text-text-muted">{t('deployments.noProvidersReported')}</p>
             )}
 
             {agent.message && <p className="text-xs text-yellow-500 mt-3">{agent.message}</p>}
@@ -1036,65 +859,61 @@ function NamespaceInfoTab({
   pods: Pod[] | undefined
 }) {
   const { t } = useTranslation()
-  const readyAgents = deployments.filter(isDeploymentReady).length
+  const readyAgents = deployments.filter((deployment) => isDeploymentReady(deployment.ready)).length
   const totalRestarts = pods?.reduce((sum, pod) => sum + Number(pod.restarts), 0) ?? 0
 
   return (
     <div className="space-y-6">
-      <div className="bg-gray-900 border border-gray-800 rounded-lg divide-y divide-gray-800">
+      <div className="bg-bg-secondary border border-border-subtle rounded-lg divide-y divide-border-subtle">
         <div className="px-5 py-3 flex items-center justify-between">
-          <span className="text-xs text-gray-500">{t('deployments.namespaceLabel')}</span>
-          <span className="text-sm font-mono text-gray-300">{namespace}</span>
+          <span className="text-xs text-text-muted">{t('deployments.namespaceLabel')}</span>
+          <span className="text-sm font-mono text-text-secondary">{namespace}</span>
         </div>
         <div className="px-5 py-3 flex items-center justify-between">
-          <span className="text-xs text-gray-500">{t('deployments.agents')}</span>
-          <span className="text-sm text-gray-300">{deployments.length}</span>
+          <span className="text-xs text-text-muted">{t('deployments.agents')}</span>
+          <span className="text-sm text-text-secondary">{deployments.length}</span>
         </div>
         <div className="px-5 py-3 flex items-center justify-between">
-          <span className="text-xs text-gray-500">{t('deployments.readyAgents')}</span>
+          <span className="text-xs text-text-muted">{t('deployments.readyAgents')}</span>
           <span className="text-sm text-green-400">{readyAgents}</span>
         </div>
         <div className="px-5 py-3 flex items-center justify-between">
-          <span className="text-xs text-gray-500">{t('deployments.currentAgent')}</span>
-          <span className="text-sm font-mono text-gray-300">{agent ?? t('common.none')}</span>
+          <span className="text-xs text-text-muted">{t('deployments.currentAgent')}</span>
+          <span className="text-sm font-mono text-text-secondary">{agent ?? t('common.none')}</span>
         </div>
         <div className="px-5 py-3 flex items-center justify-between">
-          <span className="text-xs text-gray-500">{t('deployments.selectedPods')}</span>
-          <span className="text-sm text-gray-300">{pods?.length ?? 0}</span>
+          <span className="text-xs text-text-muted">{t('deployments.selectedPods')}</span>
+          <span className="text-sm text-text-secondary">{pods?.length ?? 0}</span>
         </div>
         <div className="px-5 py-3 flex items-center justify-between">
-          <span className="text-xs text-gray-500">{t('deployments.totalRestarts')}</span>
-          <span className={cn('text-sm', totalRestarts > 0 ? 'text-yellow-400' : 'text-gray-400')}>
+          <span className="text-xs text-text-muted">{t('deployments.totalRestarts')}</span>
+          <span
+            className={cn('text-sm', totalRestarts > 0 ? 'text-yellow-400' : 'text-text-secondary')}
+          >
             {totalRestarts}
           </span>
         </div>
       </div>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
+      <div className="bg-bg-secondary border border-border-subtle rounded-lg p-4">
         <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
-          <Terminal size={14} className="text-gray-400" />
+          <Terminal size={14} className="text-text-muted" />
           {t('deployments.kubectlCommands')}
         </h3>
         <div className="space-y-2">
-          <div>
-            <p className="text-xs text-gray-600 mb-1">{t('deployments.viewAgents')}</p>
-            <code className="block text-xs font-mono text-gray-400 bg-gray-950 rounded px-3 py-2">
-              kubectl get deployments -n {namespace}
-            </code>
-          </div>
-          <div>
-            <p className="text-xs text-gray-600 mb-1">{t('deployments.viewPods')}</p>
-            <code className="block text-xs font-mono text-gray-400 bg-gray-950 rounded px-3 py-2">
-              kubectl get pods -n {namespace}
-            </code>
-          </div>
+          <CliCommandSnippet
+            title={t('deployments.viewAgents')}
+            command={`kubectl get deployments -n ${namespace}`}
+          />
+          <CliCommandSnippet
+            title={t('deployments.viewPods')}
+            command={`kubectl get pods -n ${namespace}`}
+          />
           {agent && (
-            <div>
-              <p className="text-xs text-gray-600 mb-1">{t('clusters.viewLogs')}</p>
-              <code className="block text-xs font-mono text-gray-400 bg-gray-950 rounded px-3 py-2">
-                kubectl logs -n {namespace} -l app={agent} --tail=200
-              </code>
-            </div>
+            <CliCommandSnippet
+              title={t('clusters.viewLogs')}
+              command={`kubectl logs -n ${namespace} -l app=${agent} --tail=200`}
+            />
           )}
         </div>
       </div>
@@ -1188,47 +1007,17 @@ export function DeploymentNamespacePage() {
       return
     }
 
-    const response = await fetch(`/api/deploy-tasks/${latestTask.task.id}/redeploy`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    })
-
-    if (!response.ok) {
+    const nextTaskId = await api.deployTasks.redeployToTaskId(latestTask.task.id)
+    if (!nextTaskId) {
       toast.error(t('deployments.redeployFailed'))
       return
     }
-
-    const reader = response.body?.getReader()
-    if (!reader) return
-
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() ?? ''
-
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue
-        try {
-          const data = JSON.parse(line.slice(6))
-          if (data.id) {
-            reader.cancel()
-            navigate({ to: '/deploy-tasks/$taskId', params: { taskId: String(data.id) } })
-            return
-          }
-        } catch {
-          /* ignore malformed SSE payloads */
-        }
-      }
-    }
+    navigate({ to: '/deploy-tasks/$taskId', params: { taskId: String(nextTaskId) } })
   }
 
-  const readyAgents = namespaceDeployments.filter(isDeploymentReady).length
+  const readyAgents = namespaceDeployments.filter((deployment) =>
+    isDeploymentReady(deployment.ready),
+  ).length
   const selectedPods = selectedPodsQuery.data ?? []
   const runningTasks = tasks.filter((item) => item.active || item.task.status === 'running').length
 
@@ -1253,12 +1042,12 @@ export function DeploymentNamespacePage() {
 
   if (!isLoading && namespaceDeployments.length === 0) {
     return (
-      <div className="p-6 max-w-6xl mx-auto">
+      <div className="dashboard-page-shell dashboard-page-shell--narrow space-y-6">
         <Breadcrumb
           items={[{ label: t('deployments.title'), to: '/deployments' }, { label: namespace }]}
           className="mb-4"
         />
-        <EmptyState
+        <DashboardEmptyState
           icon={FolderOpen}
           title={t('deployments.noDeploymentsInNamespace')}
           description={t('deployments.noDeploymentsInNamespaceDescription', { namespace })}
@@ -1276,7 +1065,7 @@ export function DeploymentNamespacePage() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="dashboard-page-shell dashboard-page-shell--narrow space-y-6">
       <Breadcrumb
         items={[{ label: t('deployments.title'), to: '/deployments' }, { label: namespace }]}
         className="mb-4"
@@ -1284,8 +1073,8 @@ export function DeploymentNamespacePage() {
 
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-xl font-bold font-mono">{namespace}</h1>
-          <p className="text-sm text-gray-500 mt-1">{t('deployments.namespaceDescription')}</p>
+          <h1 className="dashboard-page-title font-mono text-3xl">{namespace}</h1>
+          <p className="dashboard-page-description mt-1">{t('deployments.namespaceDescription')}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -1297,6 +1086,7 @@ export function DeploymentNamespacePage() {
             }}
             variant="ghost"
             size="sm"
+            className="dashboard-action-button"
           >
             <RefreshCw size={12} />
             {t('common.refresh')}
@@ -1307,6 +1097,7 @@ export function DeploymentNamespacePage() {
               onClick={() => void handleRedeploy()}
               variant="ghost"
               size="sm"
+              className="dashboard-action-button"
             >
               <Rocket size={12} />
               {t('deployTask.redeploy')}
@@ -1317,6 +1108,7 @@ export function DeploymentNamespacePage() {
             onClick={() => setDestroyOpen(true)}
             variant="ghost"
             size="sm"
+            className="dashboard-action-button"
           >
             <Trash2 size={12} />
             {t('clusters.destroy')}
@@ -1350,47 +1142,51 @@ export function DeploymentNamespacePage() {
         />
       </div>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+      <DashboardNamespaceCard
+        className="mb-6"
+        headerLeft={
           <div>
-            <h2 className="text-sm font-semibold text-gray-200">
+            <h2 className="text-sm font-semibold text-text-primary">
               {t('deployments.agentSelector')}
             </h2>
-            <p className="text-xs text-gray-500">{t('deployments.agentSelectorDescription')}</p>
+            <p className="text-xs text-text-muted">{t('deployments.agentSelectorDescription')}</p>
           </div>
-          <div className="flex items-center gap-2 text-xs text-gray-500">
+        }
+        headerRight={
+          <div className="flex items-center gap-2 text-xs text-text-muted">
             <FolderClock size={12} />
             {t('deployments.runningTasksCount', { count: runningTasks })}
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {namespaceDeployments.map((deployment) => (
-            <AgentCard
-              key={`${deployment.namespace}/${deployment.name}`}
-              deployment={deployment}
-              namespace={namespace}
-              selected={selectedAgent === deployment.name}
-              onSelect={() => setSelectedAgent(deployment.name)}
-              onOpenLogs={() => {
-                setSelectedAgent(deployment.name)
-                setActiveTab('logs')
-              }}
-            />
-          ))}
-        </div>
-      </div>
+        }
+        rows={
+          <div className="p-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {namespaceDeployments.map((deployment) => (
+                <AgentCard
+                  key={`${deployment.namespace}/${deployment.name}`}
+                  deployment={deployment}
+                  namespace={namespace}
+                  selected={selectedAgent === deployment.name}
+                  onSelect={() => setSelectedAgent(deployment.name)}
+                  onOpenLogs={() => {
+                    setSelectedAgent(deployment.name)
+                    setActiveTab('logs')
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        }
+      />
 
       <Tabs value={activeTab} onChange={setActiveTab}>
-        <TabsList>
+        <TabsList className="dashboard-tabs-list">
           {tabs.map((tab) => (
-            <TabsTrigger key={tab.id} value={tab.id}>
-              <span>{tab.icon}</span>
+            <TabsTrigger key={tab.id} value={tab.id} className="dashboard-tabs-trigger">
+              <span className="dashboard-tab-icon">{tab.icon}</span>
               <span>{tab.label}</span>
               {typeof tab.count === 'number' && (
-                <span className="rounded-full bg-bg-tertiary/70 px-2 py-0.5 text-xs font-black tracking-normal text-text-muted">
-                  {tab.count}
-                </span>
+                <span className="dashboard-tabs-count">{tab.count}</span>
               )}
             </TabsTrigger>
           ))}
@@ -1415,28 +1211,16 @@ export function DeploymentNamespacePage() {
         )}
       </div>
 
-      <AlertDialog open={destroyOpen} onOpenChange={setDestroyOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('clusters.destroyNamespace')}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('clusters.destroyWarning', { namespace })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel asChild>
-              <Button variant="ghost">{t('common.cancel')}</Button>
-            </AlertDialogCancel>
-            <AlertDialogAction asChild>
-              <Button variant="danger" loading={destroyMutation.isPending} onClick={() => destroyMutation.mutate()}>
-                {destroyMutation.isPending ? t('clusters.destroying') : t('clusters.destroy')}
-              </Button>
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DangerConfirmDialog
+        open={destroyOpen}
+        onOpenChange={setDestroyOpen}
+        title={t('clusters.destroyNamespace')}
+        description={t('clusters.destroyWarning', { namespace })}
+        confirmText={destroyMutation.isPending ? t('clusters.destroying') : t('clusters.destroy')}
+        cancelText={t('common.cancel')}
+        loading={destroyMutation.isPending}
+        onConfirm={() => destroyMutation.mutate()}
+      />
     </div>
   )
 }
