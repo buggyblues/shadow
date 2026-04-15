@@ -60,6 +60,11 @@ html.dark {
   --rp-c-brand-dark: #009aa3;
   --rp-c-brand-tint: rgba(0, 243, 255, 0.06);
 
+  /* Explicit text overrides so custom components always get light text on dark bg */
+  --rp-c-text-1: #f8fafc;
+  --rp-c-text-2: #94a3b8;
+  --rp-c-text-3: #64748b;
+
   --shadow-bg: #050508;
   --shadow-dot: rgba(255, 255, 255, 0.04);
   --shadow-text: #f8fafc;
@@ -868,9 +873,10 @@ html.dark .rspress-doc hr {
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.04);
 }
 html.dark .shadow-home-capsule-inner {
-  background: rgba(5, 5, 8, 0.85);
-  border-color: rgba(255, 255, 255, 0.09);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  /* Match preview-dark.html exactly: 0.6 opacity so blur shows through */
+  background: rgba(5, 5, 8, 0.6);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
 .shadow-home-logo {
   display: flex;

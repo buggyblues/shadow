@@ -72,7 +72,7 @@ function HomeCapsuleNav() {
             className="btn-primary zcool"
             style={{ textDecoration: 'none', padding: '12px 28px', fontSize: '13px' }}
           >
-            {isZh ? '启动！' : 'Enter App'}
+            {isZh ? '启动！' : 'Launch'}
           </a>
         </div>
       </div>
