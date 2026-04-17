@@ -87,6 +87,22 @@ export function mergePluginFragments(
         fragment.tools,
       ) as OpenClawConfig['tools']
     }
+
+    // Agents defaults: deep merge (only defaults — never overwrite agents.list)
+    // Used by plugins like gitagent to inject repoRoot, heartbeat, workspace config.
+    if (fragment.agents) {
+      const fragmentAgents = fragment.agents as Record<string, unknown>
+      const existingAgents = (result.agents ?? {}) as Record<string, unknown>
+      if (fragmentAgents.defaults) {
+        result.agents = {
+          ...existingAgents,
+          defaults: deepMergeObj(
+            (existingAgents.defaults ?? {}) as Record<string, unknown>,
+            fragmentAgents.defaults as Record<string, unknown>,
+          ),
+        } as OpenClawConfig['agents']
+      }
+    }
   }
 
   return result

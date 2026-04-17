@@ -3,7 +3,6 @@
  */
 
 import type * as pulumi from '@pulumi/pulumi'
-import { buildGitCloneCommand } from '../adapters/gitagent-k8s.js'
 import { buildOpenClawConfig } from '../config/parser.js'
 import type { CloudConfig } from '../config/schema.js'
 import type { ProvisionResult } from '../provisioning/index.js'
@@ -16,13 +15,13 @@ import {
   baseVolumes,
   DEFAULT_IMAGES,
   DEFAULT_RESOURCES,
-  GIT_INIT_IMAGE,
   HEALTH_PORT,
   LIVENESS_PROBE,
   READINESS_PROBE,
   STARTUP_PROBE,
 } from './constants.js'
 import { createNetworking } from './networking.js'
+import { collectPluginK8sArtifacts } from './plugin-k8s.js'
 import {
   buildContainerSecurityContext,
   buildNetworkPolicy,
@@ -98,6 +97,7 @@ export function createInfraProgram(options: InfraOptions) {
         agentName,
         agent,
         namespace,
+        config,
         configMapName: configRes.configMapName,
         secretName: configRes.secretName,
         extraEnv: env,
@@ -313,8 +313,6 @@ export function buildManifests(options: InfraOptions) {
     // Build volume mounts and volumes from shared constants
     const volumeMounts: Array<Record<string, unknown>> = baseVolumeMounts()
     const volumes: Array<Record<string, unknown>> = baseVolumes(`${agentName}-config`)
-
-    // Init containers (populated below if git source is configured)
     let initContainers: Array<Record<string, unknown>> = []
 
     // Shared workspace PVC
@@ -332,86 +330,21 @@ export function buildManifests(options: InfraOptions) {
       volumes.push({ name: 'skills', emptyDir: {} })
     }
 
-    // Git source overlay — init container clones repo at pod startup
-    const source = agent.source
-    const agentMountPath = source?.mountPath ?? '/agent'
-    const hasGitSource = source?.git && (source.strategy ?? 'init-container') === 'init-container'
-
-    if (hasGitSource && source?.git) {
-      // Shared EmptyDir for cloned agent files
-      volumes.push({ name: 'agent-source', emptyDir: {} })
-      volumeMounts.push({
-        name: 'agent-source',
-        mountPath: agentMountPath,
-        readOnly: true,
-      })
-
-      // SSH key volume if configured
-      if (source.git.sshKeySecret) {
-        volumes.push({
-          name: 'git-ssh-key',
-          secret: { secretName: source.git.sshKeySecret, defaultMode: 0o400 },
-        })
-      }
-
-      const ref = source.git.ref ?? 'main'
-      const depth = source.git.depth ?? 1
-      const cmd = buildGitCloneCommand({
-        url: source.git.url,
-        ref,
-        depth,
-        agentDir: source.git.dir,
-        mountPath: agentMountPath,
-        include: source.include,
-      })
-
-      const initContainerEnv: Array<Record<string, unknown>> = []
-      if (source.git.sshKeySecret) {
-        initContainerEnv.push({
-          name: 'GIT_SSH_COMMAND',
-          value: 'ssh -i /root/.ssh/id_rsa -o StrictHostKeyChecking=no',
-        })
-      }
-      if (source.git.tokenSecret && !source.git.tokenSecret.startsWith('${')) {
-        initContainerEnv.push({
-          name: 'GIT_TOKEN',
-          valueFrom: {
-            secretKeyRef: { name: source.git.tokenSecret, key: 'token', optional: true },
-          },
-        })
-      }
-
-      const initContainerMounts: Array<Record<string, unknown>> = [
-        { name: 'agent-source', mountPath: agentMountPath },
-      ]
-      if (source.git.sshKeySecret) {
-        initContainerMounts.push({ name: 'git-ssh-key', mountPath: '/root/.ssh', readOnly: true })
-      }
-
-      initContainers = [
-        {
-          name: 'git-clone',
-          image: GIT_INIT_IMAGE,
-          imagePullPolicy: 'IfNotPresent',
-          command: cmd,
-          env: initContainerEnv,
-          volumeMounts: initContainerMounts,
-          securityContext: {
-            runAsNonRoot: false,
-            allowPrivilegeEscalation: false,
-          },
-        },
-      ]
+    // Collect K8s artifacts from all plugins (init containers, volumes, env vars, labels)
+    const pluginK8s = collectPluginK8sArtifacts(agent, config, namespace)
+    for (const vol of pluginK8s.volumes) {
+      volumes.push({ name: vol.name, ...vol.spec })
     }
+    for (const vm of pluginK8s.volumeMounts) {
+      volumeMounts.push(vm)
+    }
+    initContainers = pluginK8s.initContainers as Array<Record<string, unknown>>
 
     const envList = [
       ...baseEnvVars(agentName),
       ...Object.entries(env).map(([name, value]) => ({ name, value })),
+      ...pluginK8s.envVars,
     ]
-    if (hasGitSource || source?.path) {
-      envList.push({ name: 'OPENCLAW_AGENT_DIR', value: agentMountPath })
-      envList.push({ name: 'AGENT_REPO_PATH', value: agentMountPath })
-    }
     if (hasSharedWorkspace) {
       envList.push({ name: 'SHARED_WORKSPACE_PATH', value: sharedMountPath })
     }

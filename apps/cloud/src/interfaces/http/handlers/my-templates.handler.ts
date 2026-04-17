@@ -87,7 +87,7 @@ export function createMyTemplatesHandler(ctx: HandlerContext): Hono {
   app.post('/my-templates/fork', async (c) => {
     try {
       const body = await c.req.json<{ source: string; name?: string }>()
-      const sourceContent = ctx.container.template.getTemplate(body.source)
+      const sourceContent = await ctx.container.template.getTemplate(body.source)
       if (!sourceContent) {
         return c.json({ error: `Source template not found: ${body.source}` }, 404)
       }

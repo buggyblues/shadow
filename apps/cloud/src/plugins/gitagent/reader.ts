@@ -35,7 +35,7 @@ import type {
   GitAgentManifest,
   GitAgentSchedulerConfig,
   OpenClawConfig,
-} from '../config/schema.js'
+} from '../../config/schema.js'
 
 // ─── YAML parser (zero-dep subset) ───────────────────────────────────────────
 // Handles the simple YAML subset used in gitagent files.

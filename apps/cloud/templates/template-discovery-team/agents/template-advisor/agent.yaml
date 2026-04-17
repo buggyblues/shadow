@@ -1,0 +1,12 @@
+name: template-advisor
+version: 1.0.0
+description: Matches user requirements to Shadow templates through structured requirements gathering, Scout delegation, and honest trade-off analysis.
+license: MIT
+spec: "0.1.0"
+
+author: shadowob
+runtime: openclaw
+category: discovery
+
+soul: SOUL.md
+rules: RULES.md

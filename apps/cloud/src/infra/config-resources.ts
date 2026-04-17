@@ -45,14 +45,12 @@ export function createConfigResources(options: ConfigResourcesOptions) {
     }
   }
 
-  // Add provisioned env vars as secrets (tokens, etc.)
+  // All provisioned env vars (tokens, URLs, credentials) go into the Secret
+  // so they are injected as environment variables via envFrom.secretRef.
+  // Only file content (config.json, SOUL.md, etc.) belongs in the ConfigMap.
   if (extraEnv) {
     for (const [key, value] of Object.entries(extraEnv)) {
-      if (key.includes('TOKEN') || key.includes('KEY') || key.includes('SECRET')) {
-        secretData[key] = value
-      } else {
-        configData[key] = value
-      }
+      secretData[key] = value
     }
   }
 

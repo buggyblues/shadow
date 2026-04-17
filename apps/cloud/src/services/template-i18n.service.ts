@@ -7,8 +7,7 @@
  * requests and keep presentation logic on the backend.
  */
 
-import { statSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { stat } from 'node:fs/promises'
 import { type TemplateMeta, TemplateService } from './template.service.js'
 
 export type TemplateCategoryId =
@@ -830,25 +829,25 @@ export class TemplateI18nService {
     ]
   }
 
-  listCatalog(locale?: string): TemplateCatalogResponse {
+  async listCatalog(locale?: string): Promise<TemplateCatalogResponse> {
     const resolvedLocale = normalizeLocale(locale)
+    const templates = await this.templateService.discover(locale)
     return {
-      templates: this.templateService
-        .discover(locale)
-        .map((template) => this.buildSummary(template, resolvedLocale)),
+      templates: templates.map((template) => this.buildSummary(template, resolvedLocale)),
       categories: this.getCategories(resolvedLocale),
     }
   }
 
-  getTemplateDetail(name: string, locale?: string): TemplateCatalogDetail | null {
+  async getTemplateDetail(name: string, locale?: string): Promise<TemplateCatalogDetail | null> {
     const resolvedLocale = normalizeLocale(locale)
-    const template = this.templateService.discover(locale).find((entry) => entry.name === name)
+    const templates = await this.templateService.discover(locale)
+    const template = templates.find((entry) => entry.name === name)
     if (!template) return null
 
     const summary = this.buildSummary(template, resolvedLocale)
-    const rawTemplate = this.templateService.getTemplate(name)
-    const filePath = resolve(this.templateService.getDir(), template.file)
-    const lastUpdated = this.safeStat(filePath)
+    const rawTemplate = await this.templateService.getTemplate(name)
+    const configPath = await this.templateService.getTemplatePath(name)
+    const lastUpdated = await this.safeStat(configPath)
 
     return {
       ...summary,
@@ -888,9 +887,10 @@ export class TemplateI18nService {
     return entry.translations[locale] ?? entry.translations.en
   }
 
-  private safeStat(filePath: string): string | null {
+  private async safeStat(filePath: string | null): Promise<string | null> {
+    if (!filePath) return null
     try {
-      return statSync(filePath).mtime.toISOString()
+      return (await stat(filePath)).mtime.toISOString()
     } catch {
       return null
     }

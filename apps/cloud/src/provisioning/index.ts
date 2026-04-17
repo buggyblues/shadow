@@ -370,7 +370,9 @@ export function buildProvisionedEnvVars(
     | undefined
   if (!plugin) return env
 
-  env.SHADOW_SERVER_URL = serverUrl
+  // SHADOW_AGENT_SERVER_URL lets callers specify a different URL for in-cluster use
+  // (e.g. http://host.docker.internal:3000) while still using localhost for provisioning API calls.
+  env.SHADOW_SERVER_URL = process.env.SHADOW_AGENT_SERVER_URL ?? serverUrl
 
   // Find bindings for this agent
   const bindings = plugin.bindings?.filter((b) => b.agentId === agentId) ?? []

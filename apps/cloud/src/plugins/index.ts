@@ -13,8 +13,8 @@ export {
   createSkillPlugin,
   loadManifest,
 } from './helpers.js'
-export { checkPluginHealth, executePluginProvisions } from './lifecycle.js'
 export type { ProvisionResults } from './lifecycle.js'
+export { checkPluginHealth, executePluginProvisions } from './lifecycle.js'
 export { loadAllPlugins, registerPlugin, validateManifest } from './loader.js'
 export { createPluginRegistry, getPluginRegistry, resetPluginRegistry } from './registry.js'
 export type {
@@ -33,6 +33,13 @@ export type {
   PluginEnvProvider,
   PluginInstallConfig,
   PluginInstanceConfig,
+  PluginK8sContext,
+  PluginK8sEnvVar,
+  PluginK8sInitContainer,
+  PluginK8sProvider,
+  PluginK8sResult,
+  PluginK8sVolume,
+  PluginK8sVolumeMount,
   PluginLifecycleProvider,
   PluginManifest,
   PluginMCPProvider,

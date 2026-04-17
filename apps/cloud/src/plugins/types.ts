@@ -108,6 +108,8 @@ export interface PluginBuildContext {
   secrets: Record<string, string>
   namespace: string
   pluginRegistry: PluginRegistry
+  /** Absolute directory to resolve relative paths against (replaces process.chdir). */
+  cwd?: string
 }
 
 export interface PluginProvisionContext {
@@ -130,6 +132,9 @@ export interface PluginConfigFragment {
   plugins?: Record<string, unknown>
   skills?: Record<string, unknown>
   tools?: Record<string, unknown>
+  /** Agent defaults (repoRoot, heartbeat, workspace) — merged by mergePluginFragments.
+   *  Never includes `list` — that must not be overwritten by plugins. */
+  agents?: { defaults?: Record<string, unknown>; [key: string]: unknown }
   [key: string]: unknown
 }
 
@@ -254,6 +259,84 @@ export interface PluginResourceProvider {
   ): Record<string, unknown>[]
 }
 
+// ─── K8s Provider ───────────────────────────────────────────────────────────
+
+/**
+ * K8s init container spec — minimal, platform-neutral representation.
+ * Consumed by both the Pulumi infra layer and the raw-manifest infra layer.
+ */
+export interface PluginK8sInitContainer {
+  name: string
+  image: string
+  imagePullPolicy?: string
+  command: string[]
+  env?: Array<{ name: string; value?: string; valueFrom?: Record<string, unknown> }>
+  volumeMounts: Array<{ name: string; mountPath: string; readOnly?: boolean }>
+  securityContext?: Record<string, unknown>
+}
+
+export interface PluginK8sVolume {
+  name: string
+  /** emptyDir, secret, persistentVolumeClaim, etc. */
+  spec: Record<string, unknown>
+}
+
+export interface PluginK8sVolumeMount {
+  name: string
+  mountPath: string
+  readOnly?: boolean
+}
+
+export interface PluginK8sEnvVar {
+  name: string
+  value?: string
+  valueFrom?: Record<string, unknown>
+}
+
+export interface PluginK8sResult {
+  /** Extra init containers to prepend to the agent pod */
+  initContainers?: PluginK8sInitContainer[]
+  /** Extra volumes to attach to the agent pod */
+  volumes?: PluginK8sVolume[]
+  /** Extra volume mounts for the main container */
+  volumeMounts?: PluginK8sVolumeMount[]
+  /** Extra env vars for the main container */
+  envVars?: PluginK8sEnvVar[]
+  /** Extra labels to merge into the Deployment metadata */
+  labels?: Record<string, string>
+  /** Extra annotations to merge into the Deployment metadata */
+  annotations?: Record<string, string>
+}
+
+export interface PluginK8sContext {
+  agent: AgentDeployment
+  config: CloudConfig
+  namespace: string
+}
+
+/**
+ * K8s provider — generates pod-level Kubernetes artifacts for an agent.
+ *
+ * Plugins that need to inject init containers, volumes, or env vars into the
+ * agent Deployment implement this provider. The infra layer iterates all active
+ * plugins and merges the results — no plugin-specific code in infra/.
+ */
+export interface PluginK8sProvider {
+  /**
+   * Return K8s artifacts to inject into the agent Deployment.
+   *
+   * Called once per agent by the infra layer.
+   * Return an empty object `{}` or `undefined` if nothing applies to this agent.
+   */
+  buildK8s(agent: AgentDeployment, ctx: PluginK8sContext): PluginK8sResult | undefined
+
+  /**
+   * Generate a multi-stage Dockerfile fragment for build-image strategy.
+   * Return `undefined` if this plugin does not affect the Dockerfile.
+   */
+  buildDockerfileStages?(agent: AgentDeployment, ctx: PluginK8sContext): string | undefined
+}
+
 // ─── Env Provider ───────────────────────────────────────────────────────────
 
 /** Env provider — generates environment variables and manages secrets. */
@@ -291,8 +374,9 @@ export interface PluginLifecycleProvider {
  */
 export interface PluginConfigResolver {
   /** Transform an agent deployment before OpenClaw config building.
-   *  Must return the (potentially modified) agent. */
-  resolveAgent(agent: AgentDeployment, config: CloudConfig): AgentDeployment
+   *  Must return the (potentially modified) agent.
+   *  @param cwd  Absolute directory to resolve relative paths against (avoids process.chdir). */
+  resolveAgent(agent: AgentDeployment, config: CloudConfig, cwd?: string): AgentDeployment
 }
 
 // ─── Validation Provider ────────────────────────────────────────────────────
@@ -358,8 +442,14 @@ export interface PluginDefinition {
 
   /** Custom OpenClaw config generation */
   configBuilder?: PluginConfigBuilder
-  /** Kubernetes resource generation */
+  /** Kubernetes resource generation (Ingress, CronJob, etc.) */
   resources?: PluginResourceProvider
+  /**
+   * Kubernetes pod-level artifacts (init containers, volumes, env vars).
+   * Use this when a plugin needs to inject a sidecar, init container, or
+   * extra volume into every agent Deployment.
+   */
+  k8s?: PluginK8sProvider
   /** Environment variables and secrets */
   env?: PluginEnvProvider
 

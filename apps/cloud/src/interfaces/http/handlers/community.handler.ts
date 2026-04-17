@@ -137,7 +137,7 @@ export function createCommunityHandler(ctx: HandlerContext): Hono {
     }
 
     // ── Local fallback ──────────────────────────────────────────────────────
-    const localCatalog = ctx.container.templateI18n.listCatalog(locale) as CatalogResponse
+    const localCatalog = (await ctx.container.templateI18n.listCatalog(locale)) as CatalogResponse
     return c.json({ ...localCatalog, source: 'local' })
   })
 

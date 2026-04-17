@@ -1,0 +1,12 @@
+name: deploy-mentor
+version: 1.0.0
+description: Step-by-step deployment guide for Shadow agent templates — covers prerequisites, local Docker Compose, and cloud Kubernetes deployment via the shadowob-cloud CLI.
+license: MIT
+spec: "0.1.0"
+
+author: shadowob
+runtime: openclaw
+category: deployment
+
+soul: SOUL.md
+rules: RULES.md

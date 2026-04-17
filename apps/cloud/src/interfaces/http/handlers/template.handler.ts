@@ -30,35 +30,35 @@ function extractEnvRefs(obj: unknown): string[] {
 export function createTemplateHandler(ctx: HandlerContext): Hono {
   const app = new Hono()
 
-  app.get('/templates', (c) => {
+  app.get('/templates', async (c) => {
     const locale = c.req.query('locale')
-    return c.json(ctx.container.template.list(locale))
+    return c.json(await ctx.container.template.list(locale))
   })
 
-  app.get('/templates/catalog', (c) => {
+  app.get('/templates/catalog', async (c) => {
     const locale = c.req.query('locale')
-    return c.json(ctx.container.templateI18n.listCatalog(locale))
+    return c.json(await ctx.container.templateI18n.listCatalog(locale))
   })
 
-  app.get('/templates/:name/details', (c) => {
+  app.get('/templates/:name/details', async (c) => {
     const name = c.req.param('name')
     const locale = c.req.query('locale')
-    const detail = ctx.container.templateI18n.getTemplateDetail(name, locale)
+    const detail = await ctx.container.templateI18n.getTemplateDetail(name, locale)
     if (!detail) return c.json({ error: `Template not found: ${name}` }, 404)
     return c.json({ template: detail })
   })
 
-  app.get('/templates/:name', (c) => {
+  app.get('/templates/:name', async (c) => {
     const name = c.req.param('name')
-    const content = ctx.container.template.getTemplate(name)
+    const content = await ctx.container.template.getTemplate(name)
     if (!content) return c.json({ error: `Template not found: ${name}` }, 404)
     return c.json(content)
   })
 
   /** Get required environment variables for a template */
-  app.get('/templates/:name/env-refs', (c) => {
+  app.get('/templates/:name/env-refs', async (c) => {
     const name = c.req.param('name')
-    const content = ctx.container.template.getTemplate(name)
+    const content = await ctx.container.template.getTemplate(name)
     if (!content) return c.json({ error: `Template not found: ${name}` }, 404)
     const refs = extractEnvRefs(content)
     return c.json({ template: name, requiredEnvVars: refs })

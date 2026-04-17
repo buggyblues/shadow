@@ -1,90 +1,103 @@
 /**
- * TemplateService — template discovery and reading.
+ * TemplateService — template discovery and metadata.
  *
- * Provides access to config templates for `init` and `serve` commands.
+ * All I/O is delegated to TemplateDao. This service handles
+ * business logic: i18n resolution, sorting, metadata mapping.
  */
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { parseJsonc } from '../utils/jsonc.js'
+import type { TemplateDao } from '../dao/template.dao.js'
 
 export interface TemplateMeta {
   name: string
+  /** Relative path to the config file from templatesDir */
   file: string
   description: string
   teamName: string
   agentCount: number
   namespace: string
+  /** Absolute path to the directory containing the config (for relative path resolution) */
+  dir: string
 }
 
 export class TemplateService {
-  private templatesDir: string
-
-  constructor(templatesDir?: string) {
-    // After tsup bundling, import.meta.url points to dist/index.js
-    // so we only need to go up 1 level to reach the package root.
-    this.templatesDir =
-      templatesDir ?? resolve(fileURLToPath(import.meta.url), '..', '..', 'templates')
-  }
+  constructor(private readonly dao: TemplateDao) {}
 
   /** Get the templates directory path. */
   getDir(): string {
-    return this.templatesDir
+    return this.dao.templatesDir
   }
 
   /** Discover all available config templates. */
-  discover(locale?: string): TemplateMeta[] {
-    if (!existsSync(this.templatesDir)) return []
-    return readdirSync(this.templatesDir)
-      .filter((f) => f.endsWith('.template.json'))
-      .map((file) => {
-        const name = file.replace(/\.template\.json$/, '')
-        const filePath = resolve(this.templatesDir, file)
-        try {
-          const raw = parseJsonc<Record<string, unknown>>(readFileSync(filePath, 'utf-8'), filePath)
-          const i18nDict = resolveI18nDict(raw, locale)
-          const team = raw.team as Record<string, unknown> | undefined
-          return {
-            name,
-            file,
-            description:
-              resolveI18nValue(raw.description, i18nDict) ?? (team?.description as string) ?? '',
-            teamName: resolveI18nValue(raw.name, i18nDict) ?? (team?.name as string) ?? name,
-            agentCount: (((raw.deployments as Record<string, unknown>)?.agents as unknown[]) ?? [])
-              .length,
-            namespace: (raw.deployments as Record<string, unknown>)?.namespace ?? name,
-          } as TemplateMeta
-        } catch {
-          return { name, file, description: '', teamName: name, agentCount: 0, namespace: name }
-        }
-      })
-      .sort((a, b) => {
-        if (a.name === 'shadowob-cloud') return -1
-        if (b.name === 'shadowob-cloud') return 1
-        return a.name.localeCompare(b.name)
-      })
-  }
+  async discover(locale?: string): Promise<TemplateMeta[]> {
+    const records = await this.dao.findAll()
+    const results: TemplateMeta[] = []
 
-  /** Read a template by name. Returns parsed JSON or null if not found. */
-  getTemplate(name: string): unknown | null {
-    const filePath = resolve(this.templatesDir, `${name}.template.json`)
-    if (!existsSync(filePath)) return null
-    try {
-      return parseJsonc(readFileSync(filePath, 'utf-8'), filePath)
-    } catch {
-      return null
+    for (const record of records) {
+      const raw = await this.dao.readJson(record.configPath)
+      if (!raw) {
+        results.push({
+          name: record.slug,
+          file: record.isFolder
+            ? `${record.slug}/shadowob-cloud.json`
+            : `${record.slug}.template.json`,
+          description: '',
+          teamName: record.slug,
+          agentCount: 0,
+          namespace: record.slug,
+          dir: record.dir,
+        })
+        continue
+      }
+
+      const indexMeta = record.indexPath ? await this.dao.readJson(record.indexPath) : null
+      const source = indexMeta ?? raw
+      const i18nDict = resolveI18nDict(source, locale)
+      const team = source.team as Record<string, unknown> | undefined
+
+      results.push({
+        name: record.slug,
+        file: record.isFolder
+          ? `${record.slug}/shadowob-cloud.json`
+          : `${record.slug}.template.json`,
+        dir: record.dir,
+        description:
+          resolveI18nValue(source.description, i18nDict) ?? (team?.description as string) ?? '',
+        teamName: resolveI18nValue(source.name, i18nDict) ?? (team?.name as string) ?? record.slug,
+        agentCount: (((raw.deployments as Record<string, unknown>)?.agents as unknown[]) ?? [])
+          .length,
+        namespace:
+          ((raw.deployments as Record<string, unknown>)?.namespace as string) ?? record.slug,
+      })
     }
+
+    return results.sort((a, b) => {
+      if (a.name === 'shadowob-cloud') return -1
+      if (b.name === 'shadowob-cloud') return 1
+      return a.name.localeCompare(b.name)
+    })
   }
 
-  /** List templates in a display-friendly format. */
-  list(locale?: string): Array<{
-    name: string
-    description: string
-    teamName: string
-    agentCount: number
-    namespace: string
-  }> {
+  /**
+   * Read a template config by name.
+   * Prefers folder layout over flat files.
+   */
+  async getTemplate(name: string): Promise<unknown | null> {
+    const record = await this.dao.findBySlug(name)
+    if (!record) return null
+    return this.dao.readJson(record.configPath)
+  }
+
+  /**
+   * Get the absolute path to a template's config file.
+   * Useful for resolving relative paths (e.g. gitagent source.path).
+   */
+  async getTemplatePath(name: string): Promise<string | null> {
+    const record = await this.dao.findBySlug(name)
+    return record?.configPath ?? null
+  }
+
+  /** List templates metadata (alias for discover). */
+  async list(locale?: string): Promise<TemplateMeta[]> {
     return this.discover(locale)
   }
 }
@@ -105,7 +118,6 @@ function resolveI18nDict(
 
 /**
  * Resolve a string value that may contain `${i18n:key}` references.
- * Returns the translated string if available, or the raw value as fallback.
  */
 function resolveI18nValue(value: unknown, i18nDict?: Record<string, string>): string | undefined {
   if (typeof value !== 'string') return undefined

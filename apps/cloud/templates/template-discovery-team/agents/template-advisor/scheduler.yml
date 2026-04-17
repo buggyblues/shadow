@@ -1,0 +1,5 @@
+schedules:
+  - name: daily-welcome
+    cron: "0 9 * * *"
+    prompt: "Post a friendly welcome message to the #discover channel reminding users they can describe any automation goal and you will find the best template for them."
+    enabled: true

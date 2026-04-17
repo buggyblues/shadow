@@ -10,9 +10,6 @@
  * that gets merged by the top-level buildOpenClawConfig.
  */
 
-import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { buildOpenClawFromGitAgent, readGitAgentDir } from '../adapters/gitagent.js'
 import {
   mergePluginFragments,
   resolveAgentPluginConfig,
@@ -34,7 +31,6 @@ import type {
   CloudConfig,
   OpenClawAgentConfig,
   OpenClawAgentDefaults,
-  OpenClawBinding,
   OpenClawConfig,
   OpenClawGatewayConfig,
   OpenClawModelConfig,
@@ -256,86 +252,6 @@ function buildProvidersConfig(config: CloudConfig): OpenClawConfig['models'] {
 }
 
 /**
- * Build Shadowob channel config from plugins + bindings.
- */
-function buildShadowobChannels(
-  agent: AgentDeployment,
-  config: CloudConfig,
-): { channels?: OpenClawConfig['channels']; bindings?: OpenClawBinding[] } {
-  type ShadowobBinding = {
-    agentId: string
-    targetId: string
-    replyPolicy?: {
-      mode: string
-      custom?: Record<string, unknown>
-    }
-  }
-
-  type ShadowobBuddy = {
-    id: string
-    name: string
-    description?: string
-  }
-
-  type ShadowobPluginConfig = {
-    bindings?: ShadowobBinding[]
-    buddies?: ShadowobBuddy[]
-  }
-
-  // Support both modern `use` array and deprecated `plugins.shadowob` patterns
-  let shadowobPlugin = config.plugins?.shadowob as ShadowobPluginConfig | undefined
-  if (!shadowobPlugin) {
-    const useEntry = config.use?.find((u) => u.plugin === 'shadowob')
-    if (useEntry?.options) {
-      shadowobPlugin = useEntry.options as ShadowobPluginConfig
-    }
-  }
-  if (!shadowobPlugin) return {}
-
-  const bindings =
-    shadowobPlugin.bindings?.filter((b: ShadowobBinding) => b.agentId === agent.id) ?? []
-  if (bindings.length === 0) return {}
-
-  const accounts: Record<string, Record<string, unknown>> = {}
-  const configBindings: OpenClawBinding[] = []
-
-  for (const binding of bindings) {
-    const buddy = shadowobPlugin.buddies?.find((b: ShadowobBuddy) => b.id === binding.targetId)
-    if (!buddy) continue
-
-    const account: Record<string, unknown> = {
-      token: `\${env:SHADOW_TOKEN_${binding.targetId.toUpperCase().replace(/-/g, '_')}}`,
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-      serverUrl: '${env:SHADOW_SERVER_URL}',
-      enabled: true,
-      buddyName: buddy.name,
-      ...(buddy.description ? { buddyDescription: buddy.description } : {}),
-      ...(buddy.id ? { buddyId: buddy.id } : {}),
-    }
-
-    if (binding.replyPolicy) {
-      const policy = binding.replyPolicy
-      account.replyPolicy = {
-        mode: policy.mode,
-        ...(policy.custom ? { config: policy.custom } : {}),
-      }
-    }
-
-    accounts[binding.targetId] = account
-    configBindings.push({
-      agentId: agent.id,
-      type: 'route',
-      match: { channel: 'shadowob', accountId: binding.targetId },
-    })
-  }
-
-  return {
-    channels: { shadowob: { enabled: true, accounts } },
-    bindings: configBindings,
-  }
-}
-
-/**
  * Build cloud-level skills config.
  */
 function buildCloudSkillsConfig(
@@ -379,58 +295,6 @@ function applySharedWorkspace(
   if (!agentsDefaults.defaults) agentsDefaults.defaults = {}
   if (!agentsDefaults.defaults.workspace) {
     agentsDefaults.defaults.workspace = agentWorkspace
-  }
-}
-
-/**
- * Apply gitagent source overlay → repoRoot.
- */
-function applyGitAgentSource(
-  agent: AgentDeployment,
-  agentEntry: OpenClawAgentConfig,
-  openclawConfig: OpenClawConfig,
-): void {
-  if (!agent.source) return
-
-  const mountPath = agent.source.mountPath ?? '/agent'
-  const useGitagent = agent.source.gitagent !== false
-
-  if (!useGitagent) return
-
-  if (!openclawConfig.agents) openclawConfig.agents = {}
-  if (!openclawConfig.agents.defaults) openclawConfig.agents.defaults = {}
-  if (!openclawConfig.agents.defaults.repoRoot) {
-    openclawConfig.agents.defaults.repoRoot = mountPath
-  }
-  if (!agentEntry.agentDir) {
-    agentEntry.agentDir = mountPath
-  }
-
-  if (agent.source.path) {
-    const localPath = resolve(agent.source.path)
-    if (existsSync(localPath)) {
-      const parsed = readGitAgentDir(localPath)
-      const additions = buildOpenClawFromGitAgent(parsed, mountPath)
-
-      if (additions.skills) {
-        if (!openclawConfig.skills) openclawConfig.skills = {}
-        const existingExtraDirs = openclawConfig.skills.load?.extraDirs ?? []
-        const newExtraDirs = additions.skills.load?.extraDirs ?? []
-        openclawConfig.skills = {
-          ...additions.skills,
-          ...openclawConfig.skills,
-          load: { extraDirs: [...new Set([...existingExtraDirs, ...newExtraDirs])] },
-          entries: {
-            ...(additions.skills.entries ?? {}),
-            ...(openclawConfig.skills.entries ?? {}),
-          },
-        }
-      }
-
-      if (additions.agents?.defaults?.heartbeat && !openclawConfig.agents.defaults.heartbeat) {
-        openclawConfig.agents.defaults.heartbeat = additions.agents.defaults.heartbeat
-      }
-    }
   }
 }
 
@@ -523,6 +387,7 @@ function applyPluginPipeline(
   agent: AgentDeployment,
   config: CloudConfig,
   openclawConfig: OpenClawConfig,
+  cwd?: string,
 ): Record<string, string> {
   const registry = getPluginRegistry()
   if (registry.size === 0) return {}
@@ -535,11 +400,21 @@ function applyPluginPipeline(
 
   for (const pluginDef of registry.getAll()) {
     const pluginId = pluginDef.manifest.id
-    // Skip shadowob — it's handled in step 9 via the legacy path
-    if (pluginId === 'shadowob') continue
 
+    // Resolved config from config.plugins[id] (global + per-agent override merged)
     const resolved = resolveAgentPluginConfig(pluginId, agent.id, config)
-    if (!resolved) continue
+
+    // Also collect options from top-level and agent-level `use` entries.
+    // This allows plugins like shadowob to be configured purely via use entries
+    // without requiring a separate config.plugins[id] entry.
+    const allUseEntries = [...(config.use ?? []), ...(agent.use ?? [])]
+    const useOptions = (allUseEntries.find((e) => e.plugin === pluginId)?.options ?? {}) as Record<
+      string,
+      unknown
+    >
+
+    // Skip plugins that have no config at all (neither plugins[id] nor use entry)
+    if (!resolved && Object.keys(useOptions).length === 0) continue
 
     const secrets = resolvePluginSecrets(pluginId, config, process.env)
     const context: PluginBuildContext = {
@@ -548,9 +423,12 @@ function applyPluginPipeline(
       secrets,
       namespace: config.deployments?.namespace ?? 'default',
       pluginRegistry: registry,
+      cwd,
     }
 
-    const agentConfig = (resolved.config ?? {}) as Record<string, unknown>
+    // agentConfig: use options as base, plugin instance config overrides
+    // Note: resolved IS the merged config (not a wrapper), use it directly.
+    const agentConfig: Record<string, unknown> = { ...useOptions, ...(resolved ?? {}) }
 
     // Build OpenClaw config fragment (new providers → legacy fallback)
     if (pluginDef.configBuilder) {
@@ -614,7 +492,11 @@ function applyPluginPipeline(
  * Build the official OpenClaw config.json for a specific agent deployment.
  * This is what gets written inside the container at ~/.openclaw/openclaw.json.
  */
-export function buildOpenClawConfig(agent: AgentDeployment, config: CloudConfig): OpenClawConfig {
+export function buildOpenClawConfig(
+  agent: AgentDeployment,
+  config: CloudConfig,
+  cwd?: string,
+): OpenClawConfig {
   const oc = agent.configuration.openclaw
   const openclawConfig: OpenClawConfig = {}
 
@@ -646,49 +528,36 @@ export function buildOpenClawConfig(agent: AgentDeployment, config: CloudConfig)
   const models = buildProvidersConfig(config)
   if (models) openclawConfig.models = models
 
-  // 9. Shadowob channels
-  const { channels, bindings } = buildShadowobChannels(agent, config)
-  if (channels) {
-    if (!openclawConfig.channels) openclawConfig.channels = {}
-    Object.assign(openclawConfig.channels, channels)
-  }
-  if (bindings) {
-    openclawConfig.bindings = [...(openclawConfig.bindings ?? []), ...bindings]
-  }
-
-  // 10. Cloud skills
+  // 9. Cloud skills
   openclawConfig.skills =
     buildCloudSkillsConfig(config, openclawConfig.skills) ?? openclawConfig.skills
 
-  // 11. Shared workspace
+  // 10. Shared workspace
   applySharedWorkspace(agent, config, openclawConfig.agents)
 
-  // 12. GitAgent source overlay
-  applyGitAgentSource(agent, agentEntry, openclawConfig)
-
-  // 13. Compliance → audit logging
+  // 11. Compliance → audit logging
   applyCompliance(agent, config, openclawConfig)
 
-  // 14. Logging + messages
+  // 12. Logging + messages
   if (oc?.logging) openclawConfig.logging = oc.logging
   if (oc?.messages) openclawConfig.messages = oc.messages
 
-  // 15. Gateway config
+  // 13. Gateway config
   openclawConfig.gateway = buildGatewayConfig(oc, openclawConfig.gateway)
 
-  // 16. Strip strict-schema-violating fields
+  // 14. Strip strict-schema-violating fields
   const workspaceFiles = stripAndCollectWorkspaceFiles(openclawConfig)
   if (Object.keys(workspaceFiles).length > 0) {
     openclawConfig._workspaceFiles = workspaceFiles
   }
 
-  // 17. Plugin pipeline — merge enabled plugin configs
-  const pluginEnvVars = applyPluginPipeline(agent, config, openclawConfig)
+  // 15. Plugin pipeline — all plugins (shadowob, gitagent, etc.) run here uniformly
+  const pluginEnvVars = applyPluginPipeline(agent, config, openclawConfig, cwd)
   if (Object.keys(pluginEnvVars).length > 0) {
     openclawConfig._pluginEnvVars = pluginEnvVars
   }
 
-  // 18. Ensure shadowob channel has a disabled fallback config so the
+  // 16. Ensure shadowob channel has a disabled fallback config so the
   //     always-installed openclaw-shadowob extension passes validation.
   const existingChannels = (openclawConfig as Record<string, unknown>).channels as
     | Record<string, unknown>

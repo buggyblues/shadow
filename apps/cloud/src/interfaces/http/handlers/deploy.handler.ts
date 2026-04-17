@@ -427,7 +427,7 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
     try {
       const body = await c.req.json<{ template?: string }>()
       const templateName = body.template ?? 'shadowob-cloud'
-      const content = ctx.container.template.getTemplate(templateName)
+      const content = await ctx.container.template.getTemplate(templateName)
       if (!content) {
         return c.json({ error: `Template not found: ${templateName}` }, 404)
       }
