@@ -35,6 +35,7 @@ import { useTranslation } from 'react-i18next'
 import { EnvVarEditorDialog } from '@/components/EnvVarEditorDialog'
 import { PageShell } from '@/components/PageShell'
 import { api } from '@/lib/api'
+import { cn } from '@/lib/utils'
 import { useToast } from '@/stores/toast'
 
 type EnvListResponse = Awaited<ReturnType<typeof api.env.list>>
