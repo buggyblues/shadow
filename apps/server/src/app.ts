@@ -9,6 +9,7 @@ import { createApiTokenHandler } from './handlers/api-token.handler'
 import { createAppHandler } from './handlers/app.handler'
 import { createAuthHandler } from './handlers/auth.handler'
 import { createChannelHandler } from './handlers/channel.handler'
+import { createCloudHandler } from './handlers/cloud.handler'
 import { createDiscoverHandler } from './handlers/discover.handler'
 import { createDmHandler } from './handlers/dm.handler'
 import { createFriendshipHandler } from './handlers/friendship.handler'
@@ -139,6 +140,9 @@ export function createApp(container: AppContainer) {
 
   // Discover endpoints (public)
   app.route('/api/discover', createDiscoverHandler(container))
+
+  // Cloud SaaS endpoints
+  app.route('/api/cloud', createCloudHandler(container))
 
   // 404 handler
   app.notFound((c) => c.json({ ok: false, error: 'Not Found' }, 404))

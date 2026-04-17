@@ -13,8 +13,8 @@ import { type AppContainer, createAppContainer } from './container'
 import { db } from './db'
 import { users } from './db/schema'
 import { randomFixedDigits } from './lib/id'
-import { logger } from './lib/logger'
 import { verifyToken } from './lib/jwt'
+import { logger } from './lib/logger'
 import { setupWebSocket } from './ws'
 
 const PORT = Number(process.env.PORT ?? 3002)
@@ -101,6 +101,16 @@ async function main() {
   const mediaService = container.resolve('mediaService')
   await mediaService.init()
 
+  // Seed official cloud templates from @shadowob/cloud package
+  try {
+    const cloudService = container.resolve('cloudService')
+    const templatesDir = path.resolve(process.cwd(), 'node_modules/@shadowob/cloud/templates')
+    await cloudService.seedOfficialTemplates(templatesDir)
+    logger.info('Cloud templates seeded')
+  } catch (err) {
+    logger.warn({ err }, 'Cloud template seeding skipped')
+  }
+
   // Create Hono app with DI container
   const app = createApp(container)
 
@@ -123,7 +133,9 @@ async function main() {
    * Extract and verify JWT token from WebSocket upgrade request.
    * Supports both query parameter (?token=...) and Authorization Bearer header.
    */
-  function extractWsAuthToken(req: import('http').IncomingMessage): { userId: string; email: string; username: string } | null {
+  function extractWsAuthToken(
+    req: import('http').IncomingMessage,
+  ): { userId: string; email: string; username: string } | null {
     // Try query parameter first (browser WebSocket API can't set custom headers)
     const reqUrl = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
     const queryToken = reqUrl.searchParams.get('token')

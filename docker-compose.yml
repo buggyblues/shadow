@@ -8,11 +8,11 @@ services:
       POSTGRES_PASSWORD: shadow
       POSTGRES_DB: shadow
     ports:
-      - '5432:5432'
+      - "5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U shadow']
+      test: [ "CMD-SHELL", "pg_isready -U shadow" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -21,11 +21,11 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - '16379:6379'
+      - "16379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -38,12 +38,12 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - '9000:9000'
-      - '9001:9001'
+      - "9000:9000"
+      - "9001:9001"
     volumes:
       - minio_data:/data
     healthcheck:
-      test: ['CMD', 'mc', 'ready', 'local']
+      test: [ "CMD", "mc", "ready", "local" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -55,7 +55,7 @@ services:
       dockerfile: apps/server/Dockerfile
     restart: unless-stopped
     ports:
-      - '3002:3002'
+      - "3002:3002"
     environment:
       DATABASE_URL: postgresql://shadow:shadow@postgres:5432/shadow
       REDIS_URL: redis://redis:6379
@@ -95,7 +95,7 @@ services:
       dockerfile: apps/web/Dockerfile
     restart: unless-stopped
     ports:
-      - '3000:3000'
+      - "3000:3000"
     depends_on:
       - server
 
@@ -105,9 +105,22 @@ services:
       dockerfile: apps/admin/Dockerfile
     restart: unless-stopped
     ports:
-      - '3001:3001'
+      - "3001:3001"
     depends_on:
       - server
+
+  cloud-worker:
+    build:
+      context: .
+      dockerfile: apps/cloud/Dockerfile.worker
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://shadow:shadow@postgres:5432/shadow
+      KMS_MASTER_KEY: ${KMS_MASTER_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      POLL_INTERVAL_MS: ${CLOUD_WORKER_POLL_INTERVAL_MS:-5000}
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   pg_data:

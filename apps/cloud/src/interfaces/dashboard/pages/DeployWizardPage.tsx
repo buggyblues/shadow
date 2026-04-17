@@ -137,7 +137,8 @@ function StepOverview({ name }: { name: string }) {
           <div className="flex-1">
             <h3 className="text-xl font-bold mb-1">{name}</h3>
             <p className="text-sm text-text-secondary mb-3">
-              {template?.description ?? (ownTemplate ? t('deploy.ownTemplateDescription') : t('common.loading'))}
+              {template?.description ??
+                (ownTemplate ? t('deploy.ownTemplateDescription') : t('common.loading'))}
             </p>
 
             <div className="flex items-center gap-2 mb-4">
@@ -185,16 +186,23 @@ function StepOverview({ name }: { name: string }) {
 
       {/* Highlights */}
       <AlertBanner variant="info" icon={Sparkles} title={t('deploy.whatYouWillGet')}>
-        <AlertBannerList variant="info" items={template?.highlights ?? []} bulletIcon={CheckCircle} />
+        <AlertBannerList
+          variant="info"
+          items={template?.highlights ?? []}
+          bulletIcon={CheckCircle}
+        />
       </AlertBanner>
 
       {/* Requirements */}
       {(template?.requirements.length ?? 0) > 0 && (
         <AlertBanner variant="warning" icon={AlertTriangle} title={t('deploy.prerequisites')}>
-          <AlertBannerList variant="warning" items={template?.requirements ?? []} bulletIcon={ChevronRight} />
+          <AlertBannerList
+            variant="warning"
+            items={template?.requirements ?? []}
+            bulletIcon={ChevronRight}
+          />
         </AlertBanner>
       )}
-
     </div>
   )
 }
@@ -271,7 +279,9 @@ function StepConfigure({
     enabled: Boolean(resolvedNamespace),
   })
 
-  const requiredVars = envRefsData?.requiredEnvVars ?? (isEnvRefsError ? extractClientEnvRefs(ownTemplateForEnv?.content) : [])
+  const requiredVars =
+    envRefsData?.requiredEnvVars ??
+    (isEnvRefsError ? extractClientEnvRefs(ownTemplateForEnv?.content) : [])
 
   // Build a lookup of saved env var keys → masked values (from effective deployment env)
   const savedLookup = useMemo(() => {
@@ -410,7 +420,9 @@ function StepConfigure({
         {isUsingSaved ? (
           <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success/8 px-3 py-2">
             <CheckCircle size={12} className="text-success shrink-0" />
-            <span className="flex-1 text-xs text-success font-mono">{t('deploy.usingSavedValue')}</span>
+            <span className="flex-1 text-xs text-success font-mono">
+              {t('deploy.usingSavedValue')}
+            </span>
             <button
               type="button"
               onClick={() => updateVar(envKey, '')}
@@ -505,7 +517,11 @@ function StepConfigure({
             <p className="text-xs text-text-muted">{t('deploy.shadowConnectionDescription')}</p>
           </div>
         </div>
-        <EnvVarRow envKey="SHADOW_SERVER_URL" placeholder="https://your-shadow-server.example.com" isPassword={false} />
+        <EnvVarRow
+          envKey="SHADOW_SERVER_URL"
+          placeholder="https://your-shadow-server.example.com"
+          isPassword={false}
+        />
         <EnvVarRow envKey="SHADOW_USER_TOKEN" placeholder="pat_..." />
       </div>
 
@@ -523,9 +539,15 @@ function StepConfigure({
             </div>
           </div>
           {requiredVars.map((key) => (
-            <EnvVarRow key={key} envKey={key} placeholder={
-              key.includes('KEY') || key.includes('TOKEN') || key.includes('SECRET') ? 'sk-...' : t('deploy.enterValue')
-            } />
+            <EnvVarRow
+              key={key}
+              envKey={key}
+              placeholder={
+                key.includes('KEY') || key.includes('TOKEN') || key.includes('SECRET')
+                  ? 'sk-...'
+                  : t('deploy.enterValue')
+              }
+            />
           ))}
         </div>
       )}
@@ -853,7 +875,7 @@ function StepDeploy({
         setDeploySuccess(false)
         throw new Error(
           result.error ||
-          t('deploy.deployFailedWithCode', { code: result.exitCode ?? t('common.none') }),
+            t('deploy.deployFailedWithCode', { code: result.exitCode ?? t('common.none') }),
         )
       }
 
@@ -1049,10 +1071,7 @@ function StepDeploy({
                     {t('deployTask.copyLink')}
                   </Button>
                   <Button asChild variant="primary" size="sm">
-                    <Link
-                      to="/deploy-tasks/$taskId"
-                      params={{ taskId: String(taskInfo.id) }}
-                    >
+                    <Link to="/deploy-tasks/$taskId" params={{ taskId: String(taskInfo.id) }}>
                       <Server size={12} />
                       {t('deployTask.openTask')}
                     </Link>
@@ -1191,11 +1210,7 @@ export function DeployWizardPage() {
 
   // Determine nav button label for current step
   const nextLabel =
-    currentStep === 0
-      ? t('common.continue')
-      : currentStep === 1
-        ? t('common.continue')
-        : null // step 2 has its own deploy button
+    currentStep === 0 ? t('common.continue') : currentStep === 1 ? t('common.continue') : null // step 2 has its own deploy button
 
   const handleBack = () => {
     if (currentStep > 0) setCurrentStep(currentStep - 1)
@@ -1235,11 +1250,12 @@ export function DeployWizardPage() {
                       <div
                         className={cn(
                           'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-all',
-                          status === 'active' && 'bg-primary text-white shadow-sm shadow-primary/40',
+                          status === 'active' &&
+                            'bg-primary text-white shadow-sm shadow-primary/40',
                           status === 'completed' &&
-                          'bg-success/15 text-success ring-1 ring-success/40 group-hover:bg-success group-hover:text-white',
+                            'bg-success/15 text-success ring-1 ring-success/40 group-hover:bg-success group-hover:text-white',
                           status === 'upcoming' &&
-                          'bg-bg-secondary text-text-muted ring-1 ring-border-subtle',
+                            'bg-bg-secondary text-text-muted ring-1 ring-border-subtle',
                         )}
                       >
                         {status === 'completed' ? <CheckCircle2 size={14} /> : index + 1}
@@ -1249,7 +1265,7 @@ export function DeployWizardPage() {
                           'text-sm font-medium hidden sm:inline whitespace-nowrap transition-colors',
                           status === 'active' && 'text-text-primary',
                           status === 'completed' &&
-                          'text-text-secondary group-hover:text-text-primary',
+                            'text-text-secondary group-hover:text-text-primary',
                           status === 'upcoming' && 'text-text-muted',
                         )}
                       >

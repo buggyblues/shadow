@@ -209,12 +209,12 @@ function EditorTab({
           <Shield size={14} />
           {validateResult.valid
             ? t('templateDetail.validationSummaryValid', {
-              agents: validateResult.agents,
-              configurations: validateResult.configurations,
-            })
+                agents: validateResult.agents,
+                configurations: validateResult.configurations,
+              })
             : t('templateDetail.validationSummaryInvalid', {
-              count: validateResult.violations.length,
-            })}
+                count: validateResult.violations.length,
+              })}
         </div>
       )}
 
@@ -537,7 +537,9 @@ export function MyTemplateDetailPage() {
               title={t('templateDetail.publishTooltip')}
             >
               <Upload size={14} />
-              {publishMutation.isPending ? t('templateDetail.publishing') : t('templateDetail.publishToCommunity')}
+              {publishMutation.isPending
+                ? t('templateDetail.publishing')
+                : t('templateDetail.publishToCommunity')}
             </Button>
             <Button
               type="button"

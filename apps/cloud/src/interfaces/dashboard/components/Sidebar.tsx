@@ -17,8 +17,8 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
-import { useAppStore } from '@/stores/app'
 import { SettingsModal } from '@/pages/SettingsPage'
+import { useAppStore } from '@/stores/app'
 
 interface NavItem {
   to: string

@@ -4,6 +4,7 @@ import { createAgentsCommand } from './commands/agents.js'
 import { createAppsCommand } from './commands/apps.js'
 import { createAuthCommand } from './commands/auth.js'
 import { createChannelsCommand } from './commands/channels.js'
+import { createCloudCommand } from './commands/cloud.js'
 import { createConfigCommand } from './commands/config.js'
 import { createDmsCommand } from './commands/dms.js'
 import { createFriendsCommand } from './commands/friends.js'
@@ -55,5 +56,6 @@ program.addCommand(createSearchCommand())
 program.addCommand(createConfigCommand())
 program.addCommand(createPingCommand())
 program.addCommand(createStatusCommand())
+program.addCommand(createCloudCommand())
 
 program.parse()

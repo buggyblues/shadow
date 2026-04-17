@@ -9,6 +9,20 @@ export { appSourceEnum, appStatusEnum, apps } from './apps'
 export { attachments } from './attachments'
 export { channelMembers } from './channel-members'
 export { channels, channelTypeEnum } from './channels'
+export {
+  cloudActivities,
+  cloudActivityTypeEnum,
+  cloudClusters,
+  cloudConfigs,
+  cloudDeploymentLogs,
+  cloudDeploymentStatusEnum,
+  cloudDeployments,
+  cloudEnvGroups,
+  cloudEnvVars,
+  cloudTemplateReviewStatusEnum,
+  cloudTemplateSourceEnum,
+  cloudTemplates,
+} from './cloud'
 export { dmAttachments } from './dm-attachments'
 export { dmChannels } from './dm-channels'
 export { dmMessages } from './dm-messages'

@@ -9,6 +9,12 @@ import { CartDao } from './dao/cart.dao'
 import { ChannelDao } from './dao/channel.dao'
 import { ChannelMemberDao } from './dao/channel-member.dao'
 import { ClawListingDao } from './dao/claw-listing.dao'
+import { CloudActivityDao } from './dao/cloud-activity.dao'
+import { CloudClusterDao } from './dao/cloud-cluster.dao'
+import { CloudConfigDao } from './dao/cloud-config.dao'
+import { CloudDeploymentDao } from './dao/cloud-deployment.dao'
+import { CloudEnvVarDao } from './dao/cloud-envvar.dao'
+import { CloudTemplateDao } from './dao/cloud-template.dao'
 import { EntitlementDao } from './dao/entitlement.dao'
 import { FriendshipDao } from './dao/friendship.dao'
 import { InviteCodeDao } from './dao/invite-code.dao'
@@ -43,6 +49,7 @@ import { AppService } from './services/app.service'
 import { AuthService } from './services/auth.service'
 import { CartService } from './services/cart.service'
 import { ChannelService } from './services/channel.service'
+import { CloudService } from './services/cloud.service'
 import { DmService } from './services/dm.service'
 import { EntitlementService } from './services/entitlement.service'
 import { ExternalOAuthService } from './services/external-oauth.service'
@@ -112,6 +119,17 @@ export interface Cradle {
   rentalContractDao: RentalContractDao
   rentalUsageDao: RentalUsageDao
   rentalViolationDao: RentalViolationDao
+
+  // Cloud DAOs
+  cloudDeploymentDao: CloudDeploymentDao
+  cloudTemplateDao: CloudTemplateDao
+  cloudConfigDao: CloudConfigDao
+  cloudEnvVarDao: CloudEnvVarDao
+  cloudClusterDao: CloudClusterDao
+  cloudActivityDao: CloudActivityDao
+
+  // Cloud Service
+  cloudService: CloudService
 
   // Profile Comment DAOs
   profileCommentDao: ProfileCommentDao
@@ -210,6 +228,14 @@ export function createAppContainer(db: Database): AppContainer {
     // Dashboard DAOs
     agentDashboardDao: asClass(AgentDashboardDao).singleton(),
 
+    // Cloud DAOs
+    cloudDeploymentDao: asClass(CloudDeploymentDao).singleton(),
+    cloudTemplateDao: asClass(CloudTemplateDao).singleton(),
+    cloudConfigDao: asClass(CloudConfigDao).singleton(),
+    cloudEnvVarDao: asClass(CloudEnvVarDao).singleton(),
+    cloudClusterDao: asClass(CloudClusterDao).singleton(),
+    cloudActivityDao: asClass(CloudActivityDao).singleton(),
+
     // Profile Comment DAOs
     profileCommentDao: asClass(ProfileCommentDao).singleton(),
 
@@ -248,6 +274,7 @@ export function createAppContainer(db: Database): AppContainer {
     rechargeService: asClass(RechargeService).singleton(),
     voiceEnhanceService: asClass(VoiceEnhanceService).singleton(),
     agentDashboardService: asClass(AgentDashboardService).singleton(),
+    cloudService: asClass(CloudService).singleton(),
   })
 
   return container

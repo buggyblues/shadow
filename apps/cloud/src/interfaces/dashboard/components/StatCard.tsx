@@ -45,9 +45,7 @@ export function StatCard({
     >
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2 text-xs">
-          <span className={cn('inline-flex items-center justify-center', colors.icon)}>
-            {icon}
-          </span>
+          <span className={cn('inline-flex items-center justify-center', colors.icon)}>{icon}</span>
           <span className="text-text-muted">{label}</span>
         </div>
         {trend && (

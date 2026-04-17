@@ -544,9 +544,7 @@ function CommunityTab() {
           <div
             className="flex h-10 w-10 items-center justify-center rounded-full"
             style={{
-              background: isConnected
-                ? 'rgba(0, 243, 255, 0.12)'
-                : 'rgba(255, 255, 255, 0.06)',
+              background: isConnected ? 'rgba(0, 243, 255, 0.12)' : 'rgba(255, 255, 255, 0.06)',
               border: isConnected
                 ? '1px solid rgba(0, 243, 255, 0.24)'
                 : '1px solid rgba(255,255,255,0.1)',
@@ -560,14 +558,14 @@ function CommunityTab() {
           </div>
           <div>
             <h3 className="text-sm font-bold text-text-primary">
-              {isConnected
-                ? t('settings.communityConnected')
-                : t('settings.communityNotConnected')}
+              {isConnected ? t('settings.communityConnected') : t('settings.communityNotConnected')}
             </h3>
             <p className="text-xs text-text-muted">{data?.baseUrl ?? 'https://shadowob.com'}</p>
           </div>
         </div>
-        <p className="text-sm leading-6 text-text-secondary">{t('settings.communityDescription')}</p>
+        <p className="text-sm leading-6 text-text-secondary">
+          {t('settings.communityDescription')}
+        </p>
       </div>
 
       {/* Server URL */}
@@ -631,7 +629,9 @@ function CommunityTab() {
 
       {/* Quick link to community */}
       <div className="glass-card p-5">
-        <h3 className="mb-2 text-sm font-bold text-text-primary">{t('settings.communityBrowse')}</h3>
+        <h3 className="mb-2 text-sm font-bold text-text-primary">
+          {t('settings.communityBrowse')}
+        </h3>
         <p className="mb-3 text-xs text-text-secondary">{t('settings.communityBrowseHint')}</p>
         <Button asChild variant="secondary" size="sm">
           <a href={effectiveBaseUrl} target="_blank" rel="noopener noreferrer">
@@ -680,7 +680,10 @@ export function SettingsModal({
 
   return (
     <Modal open={open} onClose={onClose}>
-      <ModalContent maxWidth="max-w-4xl" className="h-[min(85vh,720px)] flex flex-col overflow-hidden">
+      <ModalContent
+        maxWidth="max-w-4xl"
+        className="h-[min(85vh,720px)] flex flex-col overflow-hidden"
+      >
         <ModalHeader
           overline={t('nav.settings')}
           icon={<ActiveTabIcon size={18} />}

@@ -359,9 +359,16 @@ export function StorePage() {
             title={isCommunitySource ? t('store.communitySource') : t('store.localSource')}
           >
             {isCommunitySource ? <Wifi size={11} /> : <WifiOff size={11} />}
-            <span className="whitespace-nowrap">{isCommunitySource ? t('store.communitySource') : t('store.localSource')}</span>
+            <span className="whitespace-nowrap">
+              {isCommunitySource ? t('store.communitySource') : t('store.localSource')}
+            </span>
           </div>
-          <Button variant="ghost" size="sm" className="hidden sm:flex" onClick={() => openSettings('community')}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden sm:flex"
+            onClick={() => openSettings('community')}
+          >
             <Settings size={13} />
           </Button>
         </div>
@@ -373,7 +380,12 @@ export function StorePage() {
         <div className="glass-card flex items-center gap-3 px-5 py-4 text-sm">
           <AlertCircle size={16} className="shrink-0 text-warning" />
           <span className="text-text-secondary">{t('store.communityUnavailable')}</span>
-          <Button variant="secondary" size="sm" className="ml-auto shrink-0" onClick={() => openSettings('community')}>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="ml-auto shrink-0"
+            onClick={() => openSettings('community')}
+          >
             <Settings size={12} className="mr-1" />
             {t('community.configure')}
           </Button>

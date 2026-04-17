@@ -260,6 +260,13 @@
       "when": 1776000000000,
       "tag": "0036_add_api_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1745000000000,
+      "tag": "0037_add_cloud_schema",
+      "breakpoints": true
     }
   ]
 }
