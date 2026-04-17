@@ -9,11 +9,18 @@ import {
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { DashboardPage } from './pages/dashboard'
+import { ConfigManagementPage } from './pages/config-management'
+import { ConfirmDialogProvider } from './components/confirm-dialog'
 
 /* ── Routes ──────────────────────────────────────────── */
 
 const rootRoute = createRootRoute({
-  component: () => <Outlet />,
+  component: () => (
+    <>
+      <Outlet />
+      <ConfirmDialogProvider />
+    </>
+  ),
 })
 
 const dashboardRoute = createRoute({
@@ -22,7 +29,13 @@ const dashboardRoute = createRoute({
   component: DashboardPage,
 })
 
-const routeTree = rootRoute.addChildren([dashboardRoute])
+const configRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/config',
+  component: ConfigManagementPage,
+})
+
+const routeTree = rootRoute.addChildren([dashboardRoute, configRoute])
 
 const router = createRouter({ routeTree })
 

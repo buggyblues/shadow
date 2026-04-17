@@ -26,6 +26,8 @@ import { createServerHandler } from './handlers/server.handler'
 import { createShopHandler } from './handlers/shop.handler'
 import { createStripeWebhookHandler } from './handlers/stripe-webhook.handler'
 import { createTaskCenterHandler } from './handlers/task-center.handler'
+import { createConfigHandler } from './handlers/config.handler'
+import { createFeatureFlagsHandler } from './handlers/feature-flags.handler'
 import { createVoiceEnhanceHandler } from './handlers/voice-enhance.handler'
 import { createWorkspaceHandler } from './handlers/workspace.handler'
 import { logger } from './lib/logger'
@@ -106,6 +108,11 @@ export function createApp(container: AppContainer) {
     })
     return c.json(result)
   })
+
+  // Public config endpoints (must be registered before handlers that apply global auth)
+  // Feature flags first so /v1/config/flags isn't caught by config's /:schemaName param
+  app.route('/api', createFeatureFlagsHandler(container))
+  app.route('/api', createConfigHandler(container))
 
   // API routes
   app.route('/api/auth', createAuthHandler(container))

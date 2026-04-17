@@ -264,8 +264,15 @@
     {
       "idx": 37,
       "version": "7",
-      "when": 1745000000000,
+      "when": 1776086400000,
       "tag": "0037_add_cloud_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1776172800000,
+      "tag": "0038_add_config_management",
       "breakpoints": true
     }
   ]
