@@ -6,7 +6,7 @@
  */
 
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import type { CloudConfig } from '../config/schema.js'
 import type { ProvisionResult } from '../provisioning/index.js'
 import type { Logger } from '../utils/logger.js'
@@ -81,6 +81,12 @@ export class DeployService {
     if (!existsSync(filePath)) {
       throw new Error(`Config file not found: ${filePath}`)
     }
+
+    // The directory containing the config file is used as the working directory
+    // for resolving relative paths (e.g. gitagent path) throughout the pipeline.
+    // We pass it explicitly rather than mutating process.cwd() so concurrent
+    // invocations don't interfere with each other.
+    const configCwd = dirname(filePath)
 
     // 1. Parse config
     this.logger.step('Parsing config...')
@@ -170,7 +176,7 @@ export class DeployService {
     // 3. Resolve config (expand extends + templates)
     this.logger.step('Resolving config...')
     emit('Resolving config...\n')
-    const resolved = this.configService.resolve(config)
+    const resolved = this.configService.resolve(config, configCwd)
 
     // 3b. Execute plugin lifecycle provisions (async hooks)
     try {

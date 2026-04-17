@@ -21,10 +21,8 @@ import { DeploymentLogDao } from '../../dao/deployment-log.dao.js'
 import { EnvGroupDao } from '../../dao/env-group.dao.js'
 import { EnvVarDao } from '../../dao/envvar.dao.js'
 import { SecretDao } from '../../dao/secret.dao.js'
-import { TemplateDao } from '../../dao/template.dao.js'
 import { createDatabase } from '../../db/index.js'
 import { runMigrations } from '../../db/migrate.js'
-import { seedTemplates } from '../../db/seed.js'
 import type { ServiceContainer } from '../../services/container.js'
 import { toProviderSecretEnvKey } from '../../utils/env-names.js'
 import { createCloudApp } from './app.js'
@@ -36,9 +34,7 @@ import type { HandlerContext } from './handlers/types.js'
 function createHandlerContext(container: ServiceContainer, namespaces: string[]): HandlerContext {
   const db = createDatabase()
   runMigrations(db)
-  seedTemplates(db)
 
-  const templateDao = new TemplateDao(db)
   const configDao = new ConfigDao(db)
   const secretDao = new SecretDao(db)
   const deploymentDao = new DeploymentDao(db)
@@ -69,7 +65,6 @@ function createHandlerContext(container: ServiceContainer, namespaces: string[])
 
   return {
     container,
-    templateDao,
     configDao,
     secretDao,
     deploymentDao,

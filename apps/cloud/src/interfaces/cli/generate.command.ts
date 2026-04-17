@@ -63,15 +63,21 @@ export function createGenerateCommand(container: ServiceContainer) {
       .argument('<agent>', 'Agent ID')
       .option('-f, --file <path>', 'Config file path', 'shadowob-cloud.json')
       .option('-o, --output <path>', 'Output file path')
-      .action((agent: string, options: { file: string; output?: string }) => {
+      .action(async (agent: string, options: { file: string; output?: string }) => {
         const filePath = resolve(options.file)
         if (!existsSync(filePath)) {
           container.logger.error(`Config file not found: ${filePath}`)
           process.exit(1)
         }
 
+        const { loadAllPlugins, getPluginRegistry } = await import('../../plugins/index.js')
+        await loadAllPlugins(getPluginRegistry())
+
+        const outputPath = options.output ? resolve(options.output) : undefined
+        const configCwd = dirname(filePath)
+
         const config = container.config.parseFile(filePath)
-        const resolved = container.config.resolve(config)
+        const resolved = container.config.resolve(config, configCwd)
 
         const agentDef = resolved.deployments?.agents?.find((a) => a.id === agent)
         if (!agentDef) {
@@ -79,16 +85,12 @@ export function createGenerateCommand(container: ServiceContainer) {
           process.exit(1)
         }
 
-        const openclawConfig = container.config.buildOpenClawConfig(agentDef, resolved)
+        const openclawConfig = container.config.buildOpenClawConfig(agentDef, resolved, configCwd)
         delete openclawConfig._workspaceFiles
 
-        if (options.output) {
-          writeFileSync(
-            resolve(options.output),
-            `${JSON.stringify(openclawConfig, null, 2)}\n`,
-            'utf-8',
-          )
-          container.logger.success(`Config written to: ${options.output}`)
+        if (outputPath) {
+          writeFileSync(outputPath, `${JSON.stringify(openclawConfig, null, 2)}\n`, 'utf-8')
+          container.logger.success(`Config written to: ${outputPath}`)
         } else {
           console.log(JSON.stringify(openclawConfig, null, 2))
         }

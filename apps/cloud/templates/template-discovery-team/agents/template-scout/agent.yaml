@@ -1,0 +1,12 @@
+name: template-scout
+version: 1.0.0
+description: Queries the Shadow community template store API and returns filtered, structured search results.
+license: MIT
+spec: "0.1.0"
+
+author: shadowob
+runtime: openclaw
+category: discovery
+
+soul: SOUL.md
+rules: RULES.md

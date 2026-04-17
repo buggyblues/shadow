@@ -7,8 +7,8 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Command } from 'commander'
-import { generateGitAgentDockerfile } from '../../adapters/gitagent-k8s.js'
 import type { AgentDeployment } from '../../config/schema.js'
+import { collectPluginDockerfileStages } from '../../infra/plugin-k8s.js'
 import type { ServiceContainer } from '../../services/container.js'
 
 export function createBuildCommand(container: ServiceContainer) {
@@ -70,19 +70,8 @@ export function createBuildCommand(container: ServiceContainer) {
         container.logger.info(`Found ${targets.length} agent(s) to build`)
 
         for (const agent of targets) {
-          const git = agent.source!.git!
-          const runtimeAdapter = container.runtime.get(agent.runtime)
-          const dockerfile = generateGitAgentDockerfile({
-            baseImage:
-              agent.image ??
-              runtimeAdapter?.defaultImage ??
-              'ghcr.io/shadowob/openclaw-runner:latest',
-            gitUrl: git.url,
-            gitRef: git.ref ?? 'main',
-            agentDir: git.dir,
-            destPath: agent.source?.mountPath ?? '/agent',
-            include: agent.source?.include,
-          })
+          const stages = collectPluginDockerfileStages(agent, resolved, 'build')
+          const dockerfile = stages[0] ?? ''
           const imageTag =
             (options.agent ? options.tag : undefined) ??
             agent.image ??

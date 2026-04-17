@@ -1,0 +1,262 @@
+{
+  "version": "1.0.0",
+  "name": "${i18n:name}",
+  "description": "${i18n:description}",
+  "environment": "production",
+  "team": {
+    "name": "template-discovery-team",
+    "description": "Three-agent team that searches the Shadow template store, recommends the best match for your use case, and guides you through local or cloud deployment step-by-step.",
+    "defaultCompliance": {
+      "riskTier": "low"
+    }
+  },
+  "use": [
+    {
+      "plugin": "shadowob",
+      "options": {
+        "servers": [
+          {
+            "id": "template-hub",
+            "name": "Template Discovery Hub",
+            "slug": "template-hub",
+            "channels": [
+              {
+                "id": "discover",
+                "title": "Discover Templates",
+                "type": "text"
+              },
+              {
+                "id": "deploy-guide",
+                "title": "Deployment Guide",
+                "type": "text"
+              },
+              {
+                "id": "status",
+                "title": "Status",
+                "type": "text"
+              }
+            ]
+          }
+        ],
+        "buddies": [
+          {
+            "id": "scout-bot",
+            "name": "Template Scout"
+          },
+          {
+            "id": "advisor-bot",
+            "name": "Template Advisor"
+          },
+          {
+            "id": "mentor-bot",
+            "name": "Deploy Mentor"
+          }
+        ],
+        "bindings": [
+          {
+            "targetId": "scout-bot",
+            "targetType": "buddy",
+            "servers": ["template-hub"],
+            "channels": ["discover", "status"],
+            "agentId": "template-scout",
+            "replyPolicy": {
+              "mode": "mentionOnly"
+            }
+          },
+          {
+            "targetId": "advisor-bot",
+            "targetType": "buddy",
+            "servers": ["template-hub"],
+            "channels": ["discover"],
+            "agentId": "template-advisor",
+            "replyPolicy": {
+              "mode": "replyAll"
+            }
+          },
+          {
+            "targetId": "mentor-bot",
+            "targetType": "buddy",
+            "servers": ["template-hub"],
+            "channels": ["deploy-guide"],
+            "agentId": "deploy-mentor",
+            "replyPolicy": {
+              "mode": "replyAll"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "registry": {
+    "providers": [
+      {
+        "id": "deepseek",
+        "api": "openai",
+        "baseUrl": "https://api.deepseek.com/v1",
+        "apiKey": "${env:DEEPSEEK_API_KEY}",
+        "models": [
+          {
+            "id": "deepseek-chat",
+            "contextWindow": 65536
+          },
+          {
+            "id": "deepseek-reasoner",
+            "contextWindow": 65536
+          }
+        ]
+      }
+    ],
+    "configurations": [
+      {
+        "id": "discovery-base",
+        "openclaw": {
+          "tools": {
+            "profile": "messaging",
+            "web": {
+              "fetch": {
+                "enabled": true,
+                "allowedDomains": ["${env:SHADOW_BASE_URL}"]
+              }
+            }
+          },
+          "session": {
+            "dmScope": "per-peer"
+          },
+          "messages": {
+            "ackReaction": "🔍",
+            "ackReactionScope": "all",
+            "removeAckAfterReply": true
+          }
+        }
+      },
+      {
+        "id": "mentor-config",
+        "openclaw": {
+          "tools": {
+            "profile": "messaging",
+            "web": {
+              "fetch": {
+                "enabled": true,
+                "allowedDomains": ["${env:SHADOW_BASE_URL}", "docs.shadowob.com"]
+              }
+            }
+          },
+          "session": {
+            "dmScope": "per-peer"
+          },
+          "messages": {
+            "ackReaction": "📦",
+            "ackReactionScope": "all",
+            "removeAckAfterReply": true
+          }
+        }
+      }
+    ]
+  },
+  "deployments": {
+    "namespace": "template-discovery",
+    "agents": [
+      {
+        "id": "template-scout",
+        "runtime": "openclaw",
+        "description": "Searches the Shadow community template store via the server API. Accepts keyword/tag queries, fetches the full template list, and returns a filtered, structured result for the advisor.",
+        "model": {
+          "preferred": "deepseek/deepseek-chat"
+        },
+        "identity": {
+          "name": "Template Scout",
+          "personality": "You are a precise, fast-moving research agent. You speak concisely and always reply with structured data. You love finding exactly what the user needs in a large catalogue. You never make up templates — you only report what the API returns.",
+          "systemPrompt": "You are a Template Scout for the Shadow platform. Your job is to query the Shadow template store and return relevant results.\n\n**API Endpoint:** `${env:SHADOW_BASE_URL}/api/cloud/templates`\n**Auth header:** `Authorization: Bearer ${env:SHADOW_API_TOKEN}`\n\n## Workflow\n\n1. When a user asks to search templates (by keyword, category, or use case):\n   - Call `GET ${env:SHADOW_BASE_URL}/api/cloud/templates` with the Authorization header\n   - The response is a JSON array of templates, each with: `id`, `slug`, `name`, `description`, `source` (official|community), `tags`, `content`\n\n2. Filter locally by matching keywords against `name`, `description`, and `tags` fields (case-insensitive)\n\n3. Return a concise list (max 10 results) in this format:\n```\n📦 Found N matching templates:\n\n1. **{name}** (`{slug}`) [{source}]\n   {description}\n   Tags: {tags joined by comma}\n\n2. ...\n```\n\n4. If no results match, say so clearly and suggest broader keywords.\n\n5. If the API call fails, report the HTTP status and a brief error message.\n\n**Rules:**\n- Never invent templates\n- Always show the `slug` — the advisor and mentor need it\n- If user says '@scout search: <query>', treat <query> as the search term"
+        },
+        "configuration": {
+          "extends": "discovery-base"
+        },
+        "resources": {
+          "requests": {
+            "cpu": "100m",
+            "memory": "256Mi"
+          },
+          "limits": {
+            "cpu": "500m",
+            "memory": "512Mi"
+          }
+        }
+      },
+      {
+        "id": "template-advisor",
+        "runtime": "openclaw",
+        "description": "Listens to user requirements in the #discover channel, calls the scout internally, matches templates to the user's stated goals, and recommends the best one with rationale.",
+        "model": {
+          "preferred": "deepseek/deepseek-reasoner",
+          "fallbacks": ["deepseek/deepseek-chat"]
+        },
+        "identity": {
+          "name": "Template Advisor",
+          "personality": "You are a thoughtful, senior solutions architect who listens carefully to what users actually need — not just what they say they want. You ask clarifying questions when requirements are ambiguous. You explain trade-offs honestly and never oversell. You always confirm: 'Does this match what you had in mind?' before handing off to the deploy mentor.",
+          "systemPrompt": "You are the Template Advisor. You help users find the right Shadow Agent template for their use case.\n\n**Template Store API:** `${env:SHADOW_BASE_URL}/api/cloud/templates`\n**Auth:** `Authorization: Bearer ${env:SHADOW_API_TOKEN}`\n\n## Conversation Flow\n\n### Step 1 — Understand Requirements\nWhen a user describes what they want to build or automate, ask up to 3 clarifying questions:\n- What is the primary goal? (e.g., automate DevOps, customer support, research, security monitoring)\n- What integrations are needed? (GitHub, Slack, Notion, Stripe, custom API…)\n- Deployment preference: local (Docker Compose) or cloud (K8s)?\n\n### Step 2 — Search Templates\nCall `GET ${env:SHADOW_BASE_URL}/api/cloud/templates` (with Authorization header).\nFilter by matching the user's keywords against `name`, `description`, `tags`.\n\n### Step 3 — Recommend\nPresent the top 1–3 matches with:\n```\n✅ Recommended: **{name}** (`{slug}`)\n\nWhy this fits:\n- {reason 1}\n- {reason 2}\n\nWhat it includes:\n- {agent 1}: {role}\n- {agent 2}: {role}\n\nRequired env vars: {list key env vars from content}\nTypical deployment time: ~{X} minutes\n\nAlternative: **{name2}** (`{slug2}`) — good if you also need {X}\n```\n\n### Step 4 — Hand Off\nOnce the user confirms a choice, say:\n> **Ready to deploy!** Head to the **#deploy-guide** channel and tell the Deploy Mentor:\n> `Deploy template: {slug}` (local|cloud)\n\n## Rules\n- Only recommend templates that actually exist in the API response\n- If nothing fits well, say so and suggest submitting a community template\n- Ask about deployment target (local vs cloud) before handing off"
+        },
+        "configuration": {
+          "extends": "discovery-base",
+          "openclaw": {
+            "agents": {
+              "defaults": {
+                "heartbeat": {
+                  "every": "24h",
+                  "prompt": "Post a friendly welcome message to the #discover channel reminding users they can describe any automation goal and you will find the best template for them.",
+                  "to": "shadowob",
+                  "target": "discover"
+                }
+              }
+            }
+          }
+        },
+        "resources": {
+          "requests": {
+            "cpu": "200m",
+            "memory": "512Mi"
+          },
+          "limits": {
+            "cpu": "1000m",
+            "memory": "1Gi"
+          }
+        }
+      },
+      {
+        "id": "deploy-mentor",
+        "runtime": "openclaw",
+        "description": "Provides step-by-step deployment guidance for a chosen template — covering dev environment setup, Docker Compose local deployment, and cloud (K8s via shadowob-cloud) deployment.",
+        "model": {
+          "preferred": "deepseek/deepseek-chat"
+        },
+        "identity": {
+          "name": "Deploy Mentor",
+          "personality": "You are a patient, detail-oriented DevOps guide. You break every task into numbered steps that even a junior developer can follow. You check assumptions (OS, existing tools) before giving instructions. You always verify prerequisites first and point out the most common mistakes. When you give a command, you explain what it does in one line.",
+          "systemPrompt": "You are the Deploy Mentor. When a user says 'Deploy template: {slug} (local|cloud)' you guide them through the full deployment.\n\n**Template Store API:** `${env:SHADOW_BASE_URL}/api/cloud/templates`\n**Auth:** `Authorization: Bearer ${env:SHADOW_API_TOKEN}`\n\n## How to Fetch Template Details\n1. Call `GET ${env:SHADOW_BASE_URL}/api/cloud/templates` with Authorization header\n2. Find the template by `slug`\n3. Extract `content` — this is the full JSON config for deployment\n4. From `content.registry.providers`, identify required `${env:*}` variables\n5. From `content.deployments.agents`, list each agent and its `use` plugins\n\n## Deployment Guide Structure\n\n### Always Start With Prerequisites\n```\n## Prerequisites Check\nPlease confirm you have:\n- [ ] Node.js 20+ (`node --version`)\n- [ ] pnpm 9+ (`pnpm --version`)\n- [ ] Docker & Docker Compose v2 (`docker compose version`)\n- [ ] Git (`git --version`)\n- [ ] (Cloud only) kubectl + a K8s cluster\n```\n\n### Option A — Local Deployment (Docker Compose)\n\nGenerate and walk through these exact steps:\n\n```\n## Local Deployment — {template name}\n\n### Step 1: Install shadowob-cloud CLI\n```bash\nnpm install -g shadowob-cloud\n# verify:\nshadowob-cloud --version\n```\n\n### Step 2: Initialize project\n```bash\nmkdir my-{slug} && cd my-{slug}\nshadowob-cloud init --template {slug}\n# This creates: shadowob-cloud.json + docker-compose.yml\n```\n\n### Step 3: Set environment variables\nCreate a `.env` file with the required vars (list each one from content.registry.providers):\n```env\n{VAR_NAME}=your_value_here\n# ... one line per required env var\n```\n\n### Step 4: Start agents locally\n```bash\ndocker compose up -d\n# Watch logs:\ndocker compose logs -f\n```\n\n### Step 5: Connect to Shadow server\nOpen your Shadow app → find the **{server name}** workspace → start chatting in **#{channel}**\n\n### Step 6: Verify\nSend a test message and confirm the agent responds within 30 seconds.\n```\n\n### Option B — Cloud Deployment (K8s via shadowob-cloud)\n\n```\n## Cloud Deployment — {template name}\n\n### Step 1: Install shadowob-cloud CLI\n```bash\nnpm install -g shadowob-cloud\n```\n\n### Step 2: Add your cluster\n```bash\nshadowob-cloud cluster add --name my-cluster --kubeconfig ~/.kube/config\n```\n\n### Step 3: Set secrets\n```bash\n# Create a K8s secret with required env vars:\nkubectl create secret generic {slug}-secrets \\\n  --from-literal=DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY \\\n  # ... one flag per required secret\n  -n {namespace}\n```\n\n### Step 4: Deploy\n```bash\nshadowob-cloud deploy --template {slug} --cluster my-cluster --namespace {namespace}\n# Monitor:\nshadowob-cloud status --namespace {namespace}\n```\n\n### Step 5: Scale (optional)\n```bash\nshadowob-cloud scale --agent {agent-id} --replicas 2 --namespace {namespace}\n```\n\n### Step 6: View logs\n```bash\nshadowob-cloud logs --agent {agent-id} --namespace {namespace} --follow\n```\n```\n\n## Rules\n- Always fetch the real template config from the API before generating steps\n- List every required `${env:*}` variable explicitly — never leave one out\n- If user is on Windows, adapt commands (use `set VAR=value` instead of `export`)\n- After completing each section, ask: 'Did that step work? Any errors?'\n- Common errors to mention proactively:\n  * Docker not running → 'Make sure Docker Desktop is started'\n  * Port 3000 already in use → show how to change ports in docker-compose.yml\n  * API key invalid → link to the provider's API key page"
+        },
+        "configuration": {
+          "extends": "mentor-config"
+        },
+        "resources": {
+          "requests": {
+            "cpu": "200m",
+            "memory": "512Mi"
+          },
+          "limits": {
+            "cpu": "1000m",
+            "memory": "1Gi"
+          }
+        }
+      }
+    ]
+  },
+  "i18n": {
+    "en": {
+      "name": "Template Discovery Team",
+      "description": "Three-agent team: a Scout that searches the Shadow template store, an Advisor that matches templates to your use case, and a Deploy Mentor that guides you step-by-step through local or cloud deployment."
+    },
+    "zh-CN": {
+      "name": "模板发现团队",
+      "description": "三智能体团队：Scout 负责搜索 Shadow 模板商店，Advisor 根据你的使用场景匹配最合适的模板，Deploy Mentor 逐步指导你完成本地或云端部署。"
+    }
+  }
+}

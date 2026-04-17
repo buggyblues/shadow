@@ -5,6 +5,7 @@
  * as an injectable service with a clean interface.
  */
 
+import { dirname } from 'node:path'
 import {
   buildOpenClawConfig,
   deepMerge,
@@ -23,13 +24,13 @@ export class ConfigService {
   }
 
   /** Expand 'extends' references and resolve template variables. */
-  resolve(config: CloudConfig): CloudConfig {
-    return resolveConfig(config)
+  resolve(config: CloudConfig, cwd?: string): CloudConfig {
+    return resolveConfig(config, undefined, cwd)
   }
 
   /** Build OpenClaw config for a specific agent. */
-  buildOpenClawConfig(agent: AgentDeployment, config: CloudConfig) {
-    return buildOpenClawConfig(agent, config)
+  buildOpenClawConfig(agent: AgentDeployment, config: CloudConfig, cwd?: string) {
+    return buildOpenClawConfig(agent, config, cwd)
   }
 
   /**
@@ -48,7 +49,7 @@ export class ConfigService {
    */
   resolveFromFile(filePath: string): CloudConfig {
     const config = parseConfigFile(filePath)
-    return resolveConfig(config)
+    return resolveConfig(config, undefined, dirname(filePath))
   }
 
   /** Detect inline API keys in config (SEC-01). */

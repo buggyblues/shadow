@@ -99,7 +99,11 @@ export function parseConfigFile(filePath: string): CloudConfig {
  * Iterates plugins referenced in the agent's `use` array and calls
  * their `configResolver.resolveAgent()` to pre-process the agent.
  */
-function runPluginConfigResolvers(agent: AgentDeployment, config: CloudConfig): AgentDeployment {
+function runPluginConfigResolvers(
+  agent: AgentDeployment,
+  config: CloudConfig,
+  cwd?: string,
+): AgentDeployment {
   const useEntries = [...(config.use ?? []), ...(agent.use ?? [])]
   if (useEntries.length === 0) return agent
 
@@ -120,7 +124,7 @@ function runPluginConfigResolvers(agent: AgentDeployment, config: CloudConfig): 
   for (const pluginId of uniquePlugins) {
     const pluginDef = registry.get(pluginId)
     if (!pluginDef?.configResolver) continue
-    resolved = pluginDef.configResolver.resolveAgent(resolved, config)
+    resolved = pluginDef.configResolver.resolveAgent(resolved, config, cwd)
   }
 
   return resolved
@@ -133,7 +137,11 @@ function runPluginConfigResolvers(agent: AgentDeployment, config: CloudConfig): 
  * 3. Resolve template variables
  * Returns a new config with all agents having their final configuration.
  */
-export function resolveConfig(config: CloudConfig, templateCtx?: TemplateContext): CloudConfig {
+export function resolveConfig(
+  config: CloudConfig,
+  templateCtx?: TemplateContext,
+  cwd?: string,
+): CloudConfig {
   const configurations = config.registry?.configurations ?? []
   const resolved = { ...config }
 
@@ -148,7 +156,7 @@ export function resolveConfig(config: CloudConfig, templateCtx?: TemplateContext
         }
 
         // Run plugin configResolvers for any use entries on this agent
-        a = runPluginConfigResolvers(a, resolved)
+        a = runPluginConfigResolvers(a, resolved, cwd)
 
         return a
       }),

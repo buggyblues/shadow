@@ -1,7 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 import { buildOpenClawConfig, deepMerge, expandExtends } from '../../src/config/parser.js'
 import type { AgentConfiguration, CloudConfig, Configuration } from '../../src/config/schema.js'
+import { loadAllPlugins } from '../../src/plugins/loader.js'
+import { getPluginRegistry, resetPluginRegistry } from '../../src/plugins/registry.js'
+
+beforeAll(async () => {
+  resetPluginRegistry()
+  await loadAllPlugins(getPluginRegistry())
+})
 
 describe('parser', () => {
   describe('deepMerge', () => {
@@ -86,21 +93,24 @@ describe('parser', () => {
     it('should build config with shadowob channel bindings', () => {
       const config: CloudConfig = {
         version: '1',
-        plugins: {
-          shadowob: {
-            servers: [{ id: 'srv1', name: 'Test Server' }],
-            buddies: [{ id: 'bot-1', name: 'Bot One' }],
-            bindings: [
-              {
-                targetId: 'bot-1',
-                targetType: 'buddy',
-                servers: ['srv1'],
-                channels: ['ch1'],
-                agentId: 'agent-1',
-              },
-            ],
+        use: [
+          {
+            plugin: 'shadowob',
+            options: {
+              servers: [{ id: 'srv1', name: 'Test Server' }],
+              buddies: [{ id: 'bot-1', name: 'Bot One' }],
+              bindings: [
+                {
+                  targetId: 'bot-1',
+                  targetType: 'buddy',
+                  servers: ['srv1'],
+                  channels: ['ch1'],
+                  agentId: 'agent-1',
+                },
+              ],
+            },
           },
-        },
+        ],
         deployments: {
           agents: [
             {

@@ -25,6 +25,7 @@ import { createProvisionCommand } from './provision.command.js'
 import { createScaleCommand } from './scale.command.js'
 import { createServeCommand } from './serve.command.js'
 import { createStatusCommand } from './status.command.js'
+import { createTemplatesCommand } from './templates.command.js'
 import { createUpCommand } from './up.command.js'
 import { createValidateCommand } from './validate.command.js'
 
@@ -70,6 +71,7 @@ export function createCLI(container: ServiceContainer): Command {
   program.addCommand(createGenerateCommand(container))
   program.addCommand(createDoctorCommand(container))
   program.addCommand(createOnboardCommand(container))
+  program.addCommand(createTemplatesCommand(container))
 
   return program
 }

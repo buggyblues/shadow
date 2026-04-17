@@ -1,0 +1,209 @@
+{
+  "version": "1",
+  "environment": "development",
+  "plugins": {
+    "gitagent": {
+      "enabled": true
+    }
+  },
+  "use": [
+    {
+      "plugin": "shadowob",
+      "options": {
+        "servers": [
+          {
+            "id": "template-hub",
+            "name": "Template Discovery Hub",
+            "slug": "template-hub",
+            "channels": [
+              { "id": "discover", "title": "Discover Templates", "type": "text" },
+              { "id": "deploy-guide", "title": "Deployment Guide", "type": "text" },
+              { "id": "status", "title": "Status", "type": "text" }
+            ]
+          }
+        ],
+        "buddies": [
+          { "id": "scout-bot", "name": "Template Scout" },
+          { "id": "advisor-bot", "name": "Template Advisor" },
+          { "id": "mentor-bot", "name": "Deploy Mentor" }
+        ],
+        "bindings": [
+          {
+            "targetId": "scout-bot",
+            "targetType": "buddy",
+            "servers": ["template-hub"],
+            "channels": ["discover", "status"],
+            "agentId": "template-scout",
+            "replyPolicy": { "mode": "mentionOnly" }
+          },
+          {
+            "targetId": "advisor-bot",
+            "targetType": "buddy",
+            "servers": ["template-hub"],
+            "channels": ["discover"],
+            "agentId": "template-advisor",
+            "replyPolicy": { "mode": "replyAll" }
+          },
+          {
+            "targetId": "mentor-bot",
+            "targetType": "buddy",
+            "servers": ["template-hub"],
+            "channels": ["deploy-guide"],
+            "agentId": "deploy-mentor",
+            "replyPolicy": { "mode": "replyAll" }
+          }
+        ]
+      }
+    }
+  ],
+  "registry": {
+    "providers": [
+      {
+        "id": "deepseek",
+        "api": "openai",
+        "baseUrl": "https://api.deepseek.com/v1",
+        "apiKey": "${env:DEEPSEEK_API_KEY}",
+        "models": [
+          { "id": "deepseek-chat", "contextWindow": 65536 },
+          { "id": "deepseek-reasoner", "contextWindow": 65536 }
+        ]
+      }
+    ],
+    "configurations": [
+      {
+        "id": "discovery-base",
+        "openclaw": {
+          "tools": {
+            "profile": "messaging",
+            "web": {
+              "fetch": {
+                "enabled": true
+              }
+            }
+          },
+          "session": { "dmScope": "per-peer" },
+          "messages": {
+            "ackReaction": "🔍",
+            "ackReactionScope": "all",
+            "removeAckAfterReply": true
+          }
+        }
+      },
+      {
+        "id": "mentor-config",
+        "openclaw": {
+          "tools": {
+            "profile": "messaging",
+            "web": {
+              "fetch": {
+                "enabled": true
+              }
+            }
+          },
+          "session": { "dmScope": "per-peer" },
+          "messages": {
+            "ackReaction": "📦",
+            "ackReactionScope": "all",
+            "removeAckAfterReply": true
+          }
+        }
+      }
+    ]
+  },
+  "deployments": {
+    "namespace": "template-discovery",
+    "agents": [
+      {
+        "id": "template-scout",
+        "runtime": "openclaw",
+        "description": "Searches the Shadow community template store via the server API.",
+        "model": { "preferred": "deepseek/deepseek-chat" },
+        "use": [
+          {
+            "plugin": "gitagent",
+            "options": {
+              "path": "./agents/template-scout",
+              "git": {
+                "url": "https://github.com/shadowob/template-discovery-team",
+                "ref": "main",
+                "dir": "agents/template-scout"
+              }
+            }
+          }
+        ],
+        "identity": {
+          "systemPrompt": "You are a Template Scout for the Shadow platform. Your job is to query the Shadow template store and return relevant results.\n\n**API Endpoint:** `${env:SHADOW_BASE_URL}/api/cloud/templates`\n**Auth header:** `Authorization: Bearer ${env:SHADOW_API_TOKEN}`\n\n## Workflow\n\n1. When a user asks to search templates (by keyword, category, or use case):\n   - Call `GET ${env:SHADOW_BASE_URL}/api/cloud/templates` with the Authorization header\n   - The response is a JSON array of templates, each with: `id`, `slug`, `name`, `description`, `source` (official|community), `tags`, `content`\n\n2. Filter locally by matching keywords against `name`, `description`, and `tags` fields (case-insensitive)\n\n3. Return a concise list (max 10 results) in this format:\n```\n📦 Found N matching templates:\n\n1. **{name}** (`{slug}`) [{source}]\n   {description}\n   Tags: {tags joined by comma}\n```\n\n4. If no results match, say so clearly and suggest broader keywords.\n\n5. If the API call fails, report the HTTP status and a brief error message."
+        },
+        "configuration": { "extends": "discovery-base" },
+        "resources": {
+          "requests": { "cpu": "100m", "memory": "256Mi" },
+          "limits": { "cpu": "500m", "memory": "512Mi" }
+        }
+      },
+      {
+        "id": "template-advisor",
+        "runtime": "openclaw",
+        "description": "Matches templates to user requirements and recommends the best fit.",
+        "model": {
+          "preferred": "deepseek/deepseek-reasoner",
+          "fallbacks": ["deepseek/deepseek-chat"]
+        },
+        "use": [
+          {
+            "plugin": "gitagent",
+            "options": {
+              "path": "./agents/template-advisor",
+              "git": {
+                "url": "https://github.com/shadowob/template-discovery-team",
+                "ref": "main",
+                "dir": "agents/template-advisor"
+              }
+            }
+          }
+        ],
+        "identity": {
+          "systemPrompt": "You are the Template Advisor. You help users find the right Shadow Agent template for their use case.\n\n**Template Store API:** `${env:SHADOW_BASE_URL}/api/cloud/templates`\n**Auth:** `Authorization: Bearer ${env:SHADOW_API_TOKEN}`\n\n## Conversation Flow\n\n### Step 1 — Understand Requirements\nWhen a user describes what they want to build, ask up to 3 clarifying questions:\n- What is the primary goal?\n- What integrations are needed?\n- Deployment preference: local (Docker Compose) or cloud (K8s)?\n\n### Step 2 — Search Templates\nCall `GET ${env:SHADOW_BASE_URL}/api/cloud/templates` with Authorization header.\n\n### Step 3 — Recommend\nPresent the top 1–3 matches with clear rationale and trade-offs.\n\n### Step 4 — Hand Off\nOnce the user confirms, direct them to #deploy-guide:\n> **Ready to deploy!** Tell the Deploy Mentor: `Deploy template: {slug}` (local|cloud)"
+        },
+        "configuration": {
+          "extends": "discovery-base",
+          "openclaw": {
+            "agents": {
+              "defaults": {}
+            }
+          }
+        },
+        "resources": {
+          "requests": { "cpu": "200m", "memory": "512Mi" },
+          "limits": { "cpu": "1000m", "memory": "1Gi" }
+        }
+      },
+      {
+        "id": "deploy-mentor",
+        "runtime": "openclaw",
+        "description": "Guides users step-by-step through local or cloud deployment of a chosen template.",
+        "model": { "preferred": "deepseek/deepseek-chat" },
+        "use": [
+          {
+            "plugin": "gitagent",
+            "options": {
+              "path": "./agents/deploy-mentor",
+              "git": {
+                "url": "https://github.com/shadowob/template-discovery-team",
+                "ref": "main",
+                "dir": "agents/deploy-mentor"
+              }
+            }
+          }
+        ],
+        "identity": {
+          "systemPrompt": "You are the Deploy Mentor. When a user says 'Deploy template: {slug} (local|cloud)' you guide them through the full deployment.\n\n**Template Store API:** `${env:SHADOW_BASE_URL}/api/cloud/templates`\n**Auth:** `Authorization: Bearer ${env:SHADOW_API_TOKEN}`\n\n## How to Fetch Template Details\n1. Call `GET ${env:SHADOW_BASE_URL}/api/cloud/templates` with Authorization header\n2. Find the template by `slug`\n3. Extract `content` — this is the full JSON config\n4. List every required environment variable (look for `env:VAR_NAME` patterns) explicitly\n\n## Always Start With Prerequisites\n- Node.js 20+, pnpm 9+, Docker & Docker Compose v2, Git\n- (Cloud only) kubectl + a K8s cluster\n\nAfter each section ask: 'Did that step work? Any errors?'"
+        },
+        "configuration": { "extends": "mentor-config" },
+        "resources": {
+          "requests": { "cpu": "200m", "memory": "512Mi" },
+          "limits": { "cpu": "1000m", "memory": "1Gi" }
+        }
+      }
+    ]
+  }
+}

@@ -2,10 +2,19 @@
  * CLI: shadowob-cloud init — generate an shadowob-cloud.json config template.
  */
 
-import { cpSync, existsSync, writeFileSync } from 'node:fs'
+import { cp, stat, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { Command } from 'commander'
 import type { ServiceContainer } from '../../services/container.js'
+
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await stat(path)
+    return true
+  } catch {
+    return false
+  }
+}
 
 export function createInitCommand(container: ServiceContainer) {
   return new Command('init')
@@ -16,14 +25,14 @@ export function createInitCommand(container: ServiceContainer) {
     .option('--force', 'Overwrite existing file')
     .option('--quick', 'Quick init: read .env, pick default template, no prompts')
     .action(
-      (options: {
+      async (options: {
         output: string
         template: string
         list?: boolean
         force?: boolean
         quick?: boolean
       }) => {
-        const templates = container.template.discover()
+        const templates = await container.template.discover()
 
         // --list mode
         if (options.list) {
@@ -48,7 +57,7 @@ export function createInitCommand(container: ServiceContainer) {
         // --quick mode
         if (options.quick) {
           const outputPath = resolve(options.output)
-          if (existsSync(outputPath) && !options.force) {
+          if ((await fileExists(outputPath)) && !options.force) {
             container.logger.error(`File already exists: ${outputPath}`)
             container.logger.dim('Use --force to overwrite')
             process.exit(1)
@@ -56,7 +65,7 @@ export function createInitCommand(container: ServiceContainer) {
 
           const templateName = templates[0]?.name ?? 'shadowob-cloud'
           const content =
-            container.template.getTemplate(templateName) ??
+            (await container.template.getTemplate(templateName)) ??
             ({
               version: '1.0.0',
               environment: 'production',
@@ -83,7 +92,7 @@ export function createInitCommand(container: ServiceContainer) {
             container.logger.warn('No API keys found in environment. Add them to .env and re-run.')
           }
 
-          writeFileSync(outputPath, `${JSON.stringify(content, null, 2)}\n`, 'utf-8')
+          await writeFile(outputPath, `${JSON.stringify(content, null, 2)}\n`, 'utf-8')
           container.logger.success(`Quick init from "${templateName}": ${outputPath}`)
           container.logger.dim(
             `Edit the file and run: shadowob-cloud validate -f ${options.output}`,
@@ -93,7 +102,7 @@ export function createInitCommand(container: ServiceContainer) {
 
         const outputPath = resolve(options.output)
 
-        if (existsSync(outputPath) && !options.force) {
+        if ((await fileExists(outputPath)) && !options.force) {
           container.logger.error(`File already exists: ${outputPath}`)
           container.logger.dim('Use --force to overwrite')
           process.exit(1)
@@ -109,13 +118,10 @@ export function createInitCommand(container: ServiceContainer) {
           process.exit(1)
         }
 
-        const templatesDir = container.template.getDir()
-        const templateFilePath = meta
-          ? resolve(templatesDir, meta.file)
-          : resolve(templatesDir, 'shadowob-cloud.template.json')
+        const templateFilePath = meta ? await container.template.getTemplatePath(meta.name) : null
 
-        if (!existsSync(templateFilePath)) {
-          writeFileSync(
+        if (!templateFilePath || !(await fileExists(templateFilePath))) {
+          await writeFile(
             outputPath,
             `${JSON.stringify(
               {
@@ -134,7 +140,7 @@ export function createInitCommand(container: ServiceContainer) {
           return
         }
 
-        cpSync(templateFilePath, outputPath)
+        await cp(templateFilePath, outputPath)
         container.logger.success(`Created config from "${templateName}" template: ${outputPath}`)
         container.logger.dim(
           `Edit the file, then run: shadowob-cloud validate -f ${options.output}`,

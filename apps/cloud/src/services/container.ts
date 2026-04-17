@@ -8,6 +8,9 @@
  * For testing: pass overrides to createContainer({ logger: mockLogger })
  */
 
+import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { TemplateDao } from '../dao/template.dao.js'
 import { type Logger, log } from '../utils/logger.js'
 import { ConfigService } from './config.service.js'
 import { DeployService } from './deploy.service.js'
@@ -48,7 +51,9 @@ export function createContainer(overrides?: Partial<ServiceContainer>): ServiceC
   const config = overrides?.config ?? new ConfigService()
   const manifest = overrides?.manifest ?? new ManifestService()
   const provision = overrides?.provision ?? new ProvisionService()
-  const template = overrides?.template ?? new TemplateService()
+  const defaultTemplatesDir = resolve(fileURLToPath(import.meta.url), '..', '..', 'templates')
+  const templateDao = new TemplateDao(defaultTemplatesDir)
+  const template = overrides?.template ?? new TemplateService(templateDao)
   const runtime = overrides?.runtime ?? new RuntimeService()
   const image = overrides?.image ?? new ImageService(logger)
   const k8s = overrides?.k8s ?? new K8sService()
