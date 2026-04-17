@@ -7,220 +7,19 @@ import {
   ExternalLink,
   Globe,
   Info,
-  Key,
   Monitor,
   Moon,
-  Plus,
   Save,
   Server,
   Sun,
-  Trash2,
   Unplug,
 } from 'lucide-react'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { api, type ProviderSettings, type Settings } from '@/lib/api'
-import { API_PRESETS } from '@/lib/presets'
+import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { useAppStore } from '@/stores/app'
 import { type Theme, useThemeStore } from '@/stores/theme'
 import { useToast } from '@/stores/toast'
-
-function getProviderSecretEnvName(providerId: string): string {
-  return `${providerId.toUpperCase().replace(/-/g, '_')}_API_KEY`
-}
-
-// ── Provider Card ─────────────────────────────────────────────────────────────
-
-function ProviderCard({
-  provider,
-  onChange,
-  onRemove,
-}: {
-  provider: ProviderSettings
-  onChange: (updated: ProviderSettings) => void
-  onRemove: () => void
-}) {
-  const { t } = useTranslation()
-
-  return (
-    <div className="glass-surface space-y-4 rounded-[26px] border border-border-subtle p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <p className="truncate text-base font-semibold text-text-primary">{provider.id}</p>
-          <p className="truncate text-xs font-mono text-text-muted">{provider.api}</p>
-        </div>
-        <Button
-          type="button"
-          onClick={onRemove}
-          variant="ghost"
-          size="icon"
-          className="text-text-muted border-border-subtle"
-        >
-          <Trash2 size={14} />
-        </Button>
-      </div>
-
-      <div className="space-y-2">
-        <div className="rounded-[20px] border border-border-subtle bg-bg-secondary/50 px-4 py-3">
-          <p className="mb-1 text-micro font-semibold uppercase tracking-[0.18em] text-text-muted">
-            {t('settings.secretEnvKey')}
-          </p>
-          <code className="break-all text-xs font-mono" style={{ color: 'var(--color-nf-yellow)' }}>
-            {getProviderSecretEnvName(provider.id)}
-          </code>
-          <p className="mt-2 text-label text-text-muted">
-            {t('settings.credentialsManagedInSecrets')}
-          </p>
-        </div>
-
-        {provider.baseUrl !== undefined && (
-          <div>
-            <label
-              htmlFor={`baseurl-${provider.id}`}
-              className="mb-1.5 block text-xs font-semibold text-text-muted"
-            >
-              {t('settings.baseUrl')}
-            </label>
-            <Input
-              id={`baseurl-${provider.id}`}
-              type="text"
-              value={provider.baseUrl ?? ''}
-              onChange={(e) => onChange({ ...provider, baseUrl: e.target.value })}
-              placeholder="https://api.example.com/v1"
-            />
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── Providers Tab ─────────────────────────────────────────────────────────────
-
-function ProvidersTab({
-  providers,
-  setProviders,
-  data,
-  mutation,
-}: {
-  providers: ProviderSettings[]
-  setProviders: (p: ProviderSettings[]) => void
-  data: Settings | undefined
-  mutation: ReturnType<typeof useMutation<{ ok: boolean }, Error, Settings>>
-}) {
-  const { t } = useTranslation()
-  const toast = useToast()
-  const addActivity = useAppStore((s) => s.addActivity)
-
-  const addProvider = (preset: (typeof API_PRESETS)[number]) => {
-    const newProvider: ProviderSettings = {
-      id: preset.id,
-      api: preset.api,
-      ...(preset.baseUrl ? { baseUrl: preset.baseUrl } : {}),
-    }
-    setProviders([...providers, newProvider])
-  }
-
-  const updateProvider = (index: number, updated: ProviderSettings) => {
-    const next = [...providers]
-    next[index] = updated
-    setProviders(next)
-  }
-
-  const removeProvider = (index: number) => {
-    setProviders(providers.filter((_, i) => i !== index))
-  }
-
-  const handleSave = () => {
-    mutation.mutate(
-      { ...(data ?? {}), providers },
-      {
-        onSuccess: () => {
-          toast.success(t('settings.settingsSaved'))
-          addActivity({
-            type: 'config',
-            title: t('settings.updatedProviderSettings'),
-            detail: t('settings.configuredProviders', { count: providers.length }),
-          })
-        },
-        onError: () => toast.error(t('settings.settingsSaveFailed')),
-      },
-    )
-  }
-
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <p className="max-w-2xl text-sm leading-7 text-text-muted">
-          {t('settings.configureProvidersMetadata')}
-        </p>
-        <div className="relative group">
-          <Button type="button" variant="secondary" size="sm">
-            <Plus size={12} />
-            {t('settings.addProvider')}
-          </Button>
-          <div className="absolute right-0 top-full z-10 mt-2 hidden min-w-52 overflow-hidden rounded-[20px] border border-border-subtle shadow-xl group-hover:block bg-bg-secondary">
-            {API_PRESETS.map((preset) => (
-              <Button
-                type="button"
-                key={preset.id}
-                onClick={() => addProvider(preset)}
-                variant="ghost"
-              >
-                {preset.label}
-              </Button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div
-        className="rounded-[22px] border px-4 py-3 text-sm leading-6"
-        style={{
-          background: 'rgba(0, 243, 255, 0.08)',
-          borderColor: 'rgba(0, 243, 255, 0.16)',
-          color: 'var(--nf-text-mid)' /* dashboard-style-allow-inline */,
-        }}
-      >
-        {t('settings.credentialsMoveNotice')}
-      </div>
-
-      {providers.length === 0 && (
-        <div className="glass-surface rounded-[26px] border border-dashed border-border-strong px-6 py-10 text-center text-sm text-text-muted">
-          <Key size={24} className="mx-auto mb-3 text-text-muted" />
-          {t('settings.noProvidersConfigured')}
-        </div>
-      )}
-
-      <div className="space-y-3">
-        {providers.map((provider, i) => (
-          <ProviderCard
-            key={`${provider.id}-${i}`}
-            provider={provider}
-            onChange={(updated) => updateProvider(i, updated)}
-            onRemove={() => removeProvider(i)}
-          />
-        ))}
-      </div>
-
-      {providers.length > 0 && (
-        <div className="flex justify-end">
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            onClick={handleSave}
-            disabled={mutation.isPending}
-          >
-            <Save size={14} />
-            {mutation.isPending ? t('common.saving') : t('settings.saveSettings')}
-          </Button>
-        </div>
-      )}
-    </div>
-  )
-}
 
 function AppearanceOption({
   active,
@@ -656,17 +455,11 @@ export function SettingsModal({
   initialTab?: string
 }) {
   const { t } = useTranslation()
-  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState(initialTab)
 
   useEffect(() => {
     if (open) setActiveTab(initialTab)
   }, [open, initialTab])
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['settings'],
-    queryFn: api.settings.get,
-  })
 
   const tabs = [
     { id: 'community', label: t('settings.community'), icon: Globe },
@@ -723,17 +516,10 @@ export function SettingsModal({
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-6">
-            {isLoading && (
-              <div className="py-12 text-center text-sm text-text-muted">{t('common.loading')}</div>
-            )}
-            {!isLoading && (
-              <>
-                {activeTab === 'appearance' && <AppearanceTab />}
-                {activeTab === 'community' && <CommunityTab />}
-                {activeTab === 'system' && <SystemTab />}
-                {activeTab === 'about' && <AboutTab />}
-              </>
-            )}
+            {activeTab === 'appearance' && <AppearanceTab />}
+            {activeTab === 'community' && <CommunityTab />}
+            {activeTab === 'system' && <SystemTab />}
+            {activeTab === 'about' && <AboutTab />}
           </div>
         </ModalBody>
       </ModalContent>

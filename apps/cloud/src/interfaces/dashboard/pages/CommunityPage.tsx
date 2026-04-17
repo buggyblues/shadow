@@ -102,15 +102,17 @@ export function CommunityPage() {
   })
 
   const {
-    data: templates,
+    data: catalogData,
     isLoading,
     isError,
     refetch,
   } = useQuery({
     queryKey: ['community-templates'],
-    queryFn: api.community.templates,
+    queryFn: () => api.community.catalog('zh-CN'),
     retry: 1,
   })
+
+  const templates = catalogData?.templates
 
   const forkMutation = useMutation({
     mutationFn: (name: string) => api.myTemplates.fork(name),
