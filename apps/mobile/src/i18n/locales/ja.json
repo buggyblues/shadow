@@ -34,9 +34,7 @@
     "yes": "はい",
     "no": "いいえ",
     "search": "検索",
-    "noResults": "結果なし",
-    "avatarUploaded": "アバターがアップロードされました",
-    "uploadFailed": "アップロードに失敗しました"
+    "noResults": "結果なし"
   },
   "nav": {
     "features": "機能紹介",

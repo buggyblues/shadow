@@ -34,9 +34,7 @@
     "yes": "예",
     "no": "아니요",
     "search": "검색",
-    "noResults": "결과 없음",
-    "avatarUploaded": "아바타가 업로드되었습니다",
-    "uploadFailed": "업로드 실패"
+    "noResults": "결과 없음"
   },
   "nav": {
     "features": "기능 소개",

@@ -34,9 +34,7 @@
     "yes": "是",
     "no": "否",
     "search": "搜索",
-    "noResults": "暂无结果",
-    "avatarUploaded": "头像已上传",
-    "uploadFailed": "上传失败"
+    "noResults": "暂无结果"
   },
   "nav": {
     "features": "特色功能",
@@ -207,7 +205,8 @@
     "appearanceTitle": "外观设置",
     "darkTheme": "深色模式",
     "lightTheme": "浅色模式",
-    "systemTheme": "跟随系统"
+    "systemTheme": "跟随系统",
+    "sidebarTitle": "用户设置"
   },
   "server": {
     "home": "首页",

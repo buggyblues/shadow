@@ -34,9 +34,7 @@
     "yes": "是",
     "no": "否",
     "search": "搜尋",
-    "noResults": "暫無結果",
-    "avatarUploaded": "頭像已上傳",
-    "uploadFailed": "上傳失敗"
+    "noResults": "暫無結果"
   },
   "nav": {
     "features": "特色功能",
@@ -375,7 +373,10 @@
     "areTyping": "正在輸入...",
     "copy": "複製",
     "edit": "編輯",
-    "copied": "已複製"
+    "copied": "已複製",
+    "micPermissionDenied": "需要麥克風權限才能使用語音輸入",
+    "speechLang": "zh-TW",
+    "voiceInputUnavailable": "此版本無法使用語音輸入。請使用開發版本。"
   },
   "member": {
     "title": "成員",
