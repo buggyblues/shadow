@@ -2,11 +2,11 @@
  * Firecrawl plugin — web scraping, crawling, and structured data extraction.
  */
 
-import { createSkillPlugin } from '../helpers.js'
+import { defineSkillPlugin } from '../helpers.js'
 import type { PluginDefinition, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
+const plugin: PluginDefinition = defineSkillPlugin(manifest as PluginManifest, {
   skills: {
     bundled: ['web-crawl'],
     entries: [
@@ -21,13 +21,11 @@ const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
     install: { npmPackages: ['firecrawl-mcp'] },
   },
   mcp: {
-    server: {
-      transport: 'stdio',
-      command: 'npx',
-      args: ['-y', 'firecrawl-mcp'],
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-      env: { FIRECRAWL_API_KEY: '${env:FIRECRAWL_API_KEY}' },
-    },
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', 'firecrawl-mcp'],
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+    env: { FIRECRAWL_API_KEY: '${env:FIRECRAWL_API_KEY}' },
   },
 })
 

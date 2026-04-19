@@ -7,11 +7,11 @@
  * - MCP server as fallback for agent toolkit integration
  */
 
-import { createSkillPlugin } from '../helpers.js'
+import { defineSkillPlugin } from '../helpers.js'
 import type { PluginDefinition, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
+const plugin: PluginDefinition = defineSkillPlugin(manifest as PluginManifest, {
   skills: {
     bundled: ['stripe'],
     entries: [
@@ -25,25 +25,21 @@ const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
     ],
     install: { npmPackages: ['@stripe/agent-toolkit'] },
   },
-  cli: {
-    tools: [
-      {
-        name: 'stripe',
-        command: 'stripe',
-        description: 'Stripe CLI — manage payments, test webhooks',
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-        env: { STRIPE_API_KEY: '${env:STRIPE_SECRET_KEY}' },
-      },
-    ],
-  },
-  mcp: {
-    server: {
-      transport: 'stdio',
-      command: 'npx',
-      args: ['-y', '@stripe/agent-toolkit'],
+  cli: [
+    {
+      name: 'stripe',
+      command: 'stripe',
+      description: 'Stripe CLI — manage payments, test webhooks',
       // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-      env: { STRIPE_SECRET_KEY: '${env:STRIPE_SECRET_KEY}' },
+      env: { STRIPE_API_KEY: '${env:STRIPE_SECRET_KEY}' },
     },
+  ],
+  mcp: {
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', '@stripe/agent-toolkit'],
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+    env: { STRIPE_SECRET_KEY: '${env:STRIPE_SECRET_KEY}' },
   },
 })
 

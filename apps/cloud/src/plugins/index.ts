@@ -3,9 +3,10 @@
  */
 
 export {
-  createChannelPlugin,
-  createProviderPlugin,
-  createSkillPlugin,
+  defineChannelPlugin,
+  definePlugin,
+  defineProviderPlugin,
+  defineSkillPlugin,
   loadManifest,
 } from './helpers.js'
 export type { ProvisionResults } from './lifecycle.js'
@@ -13,6 +14,7 @@ export { checkPluginHealth, executePluginProvisions } from './lifecycle.js'
 export { loadAllPlugins, registerPlugin, validateManifest } from './loader.js'
 export { createPluginRegistry, getPluginRegistry, resetPluginRegistry } from './registry.js'
 export type {
+  PluginAPI,
   PluginAuth,
   PluginAuthField,
   PluginAuthType,
@@ -20,13 +22,12 @@ export type {
   PluginBuildContext,
   PluginCapability,
   PluginCategory,
-  PluginCLIProvider,
   PluginCLITool,
   PluginConfigFragment,
   PluginDefinition,
+  PluginHooks,
   PluginInstallConfig,
   PluginManifest,
-  PluginMCPProvider,
   PluginMCPServer,
   PluginOAuthConfig,
   PluginProvisionContext,

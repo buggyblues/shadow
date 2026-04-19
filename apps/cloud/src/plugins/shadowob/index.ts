@@ -6,14 +6,12 @@
  */
 
 import { provisionShadowResources } from '../../provisioning/index.js'
-import { createChannelPlugin } from '../helpers.js'
+import { defineChannelPlugin } from '../helpers.js'
 import type {
   PluginBuildContext,
   PluginConfigFragment,
-  PluginDefinition,
   PluginManifest,
   PluginProvisionContext,
-  PluginProvisionResult,
   PluginValidationError,
 } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
@@ -86,26 +84,20 @@ function buildShadowConfig(context: PluginBuildContext): PluginConfigFragment {
   }
 }
 
-const basePlugin = createChannelPlugin(manifest as PluginManifest, buildShadowConfig)
+export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig, (api) => {
+  api.onValidate((context) => {
+    const errors: PluginValidationError[] = []
 
-// Override validation with custom buddy/binding checks
-const plugin: PluginDefinition = {
-  ...basePlugin,
-  validate(context: PluginBuildContext) {
-    // Run base validation first (checks required auth fields)
-    const baseResult = basePlugin.validate!(context)
-    const errors: PluginValidationError[] = [...baseResult.errors]
-
-    // Custom: warn if SHADOW_SERVER_URL is missing
+    // Check required auth fields from manifest
     if (!context.secrets.SHADOW_SERVER_URL) {
       errors.push({
         path: 'secrets.SHADOW_SERVER_URL',
         message: 'Shadow server URL is required for shadowob channel',
-        severity: 'warning',
+        severity: 'error',
       })
     }
 
-    // Custom: error if bindings reference non-existent buddies
+    // Error if bindings reference non-existent buddies
     const shadowConfig = context.agentConfig as unknown as ShadowobPluginConfig
     const buddyIds = new Set((shadowConfig.buddies ?? []).map((b) => b.id))
     for (const binding of shadowConfig.bindings ?? []) {
@@ -122,9 +114,9 @@ const plugin: PluginDefinition = {
       valid: errors.filter((e) => e.severity === 'error').length === 0,
       errors,
     }
-  },
+  })
 
-  async provision(context: PluginProvisionContext): Promise<PluginProvisionResult> {
+  api.onProvision(async (context: PluginProvisionContext) => {
     const serverUrl = context.secrets.SHADOW_SERVER_URL
     const userToken = context.secrets.SHADOW_USER_TOKEN
     if (!serverUrl || !userToken) {
@@ -170,7 +162,5 @@ const plugin: PluginDefinition = {
       },
       secrets,
     }
-  },
-}
-
-export default plugin
+  })
+})

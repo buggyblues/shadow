@@ -2,11 +2,11 @@
  * Prisma Postgres plugin — ORM with managed Postgres via prisma mcp CLI.
  */
 
-import { createSkillPlugin } from '../helpers.js'
+import { defineSkillPlugin } from '../helpers.js'
 import type { PluginDefinition, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
+const plugin: PluginDefinition = defineSkillPlugin(manifest as PluginManifest, {
   skills: {
     bundled: ['prisma'],
     entries: [
@@ -20,23 +20,19 @@ const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
     ],
     install: { npmPackages: ['prisma'] },
   },
-  cli: {
-    tools: [
-      {
-        name: 'prisma',
-        command: 'prisma',
-        description: 'Prisma CLI — migrations, generate, studio, db push',
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-        env: { DATABASE_URL: '${env:DATABASE_URL}' },
-      },
-    ],
-  },
-  mcp: {
-    server: {
-      transport: 'stdio',
-      command: 'npx',
-      args: ['-y', 'prisma', 'mcp'],
+  cli: [
+    {
+      name: 'prisma',
+      command: 'prisma',
+      description: 'Prisma CLI — migrations, generate, studio, db push',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+      env: { DATABASE_URL: '${env:DATABASE_URL}' },
     },
+  ],
+  mcp: {
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', 'prisma', 'mcp'],
   },
 })
 

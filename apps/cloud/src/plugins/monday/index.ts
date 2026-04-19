@@ -2,11 +2,11 @@
  * monday.com plugin — board, item, column, group, and update management.
  */
 
-import { createSkillPlugin } from '../helpers.js'
+import { defineSkillPlugin } from '../helpers.js'
 import type { PluginDefinition, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
+const plugin: PluginDefinition = defineSkillPlugin(manifest as PluginManifest, {
   skills: {
     bundled: ['monday'],
     entries: [
@@ -21,13 +21,11 @@ const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
     install: { npmPackages: ['@mondaydotcomorg/monday-api-mcp'] },
   },
   mcp: {
-    server: {
-      transport: 'stdio',
-      command: 'npx',
-      args: ['-y', '@mondaydotcomorg/monday-api-mcp'],
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-      env: { MONDAY_API_TOKEN: '${env:MONDAY_API_TOKEN}' },
-    },
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', '@mondaydotcomorg/monday-api-mcp'],
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+    env: { MONDAY_API_TOKEN: '${env:MONDAY_API_TOKEN}' },
   },
 })
 

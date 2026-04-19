@@ -2,11 +2,11 @@
  * RevenueCat plugin — in-app subscription management.
  */
 
-import { createSkillPlugin } from '../helpers.js'
+import { defineSkillPlugin } from '../helpers.js'
 import type { PluginDefinition, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
+const plugin: PluginDefinition = defineSkillPlugin(manifest as PluginManifest, {
   skills: {
     bundled: ['revenucat'],
     entries: [
@@ -21,13 +21,11 @@ const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
     install: { npmPackages: ['revenuecat-mcp'] },
   },
   mcp: {
-    server: {
-      transport: 'stdio',
-      command: 'npx',
-      args: ['-y', 'revenuecat-mcp'],
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-      env: { REVENUECAT_SECRET_KEY: '${env:REVENUECAT_SECRET_KEY}' },
-    },
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', 'revenuecat-mcp'],
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+    env: { REVENUECAT_SECRET_KEY: '${env:REVENUECAT_SECRET_KEY}' },
   },
 })
 

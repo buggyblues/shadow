@@ -3,11 +3,11 @@
  *
  * Implements two plugin providers:
  *
- * 1. **configResolver** — During resolveConfig(), converts `use: [{ plugin: "gitagent" }]`
+ * 1. **onResolveAgent** — During resolveConfig(), converts `use: [{ plugin: "gitagent" }]`
  *    options into `agent.source` and enriches the agent from the local gitagent directory
  *    (SOUL.md, agent.yaml, skills/, etc.).
  *
- * 2. **configBuilder** — During OpenClaw build, reads `agent.source` to configure
+ * 2. **onBuildConfig** — During OpenClaw build, reads `agent.source` to configure
  *    repoRoot, agentDir, skills, and scheduler for the OpenClaw runtime.
  */
 
@@ -19,29 +19,21 @@ import {
   readGitAgentDir,
 } from '../../adapters/gitagent.js'
 import type { AgentDeployment, AgentSource } from '../../config/schema.js'
-import type {
-  PluginBuildContext,
-  PluginConfigFragment,
-  PluginDefinition,
-  PluginManifest,
-} from '../types.js'
+import { definePlugin } from '../helpers.js'
+import type { PluginBuildContext, PluginConfigFragment, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = {
-  manifest: manifest as PluginManifest,
-
+export default definePlugin(manifest as PluginManifest, (api) => {
   // ── Resolve hook ──
   // Pre-build: convert gitagent use entry → agent.source + enrich from local path
-  resolveAgent(agent, _config) {
+  api.onResolveAgent((agent, _config) => {
     const gitagentEntry = agent.use?.find((u) => u.plugin === 'gitagent')
     if (!gitagentEntry?.options) return agent
 
-    // Set source from use entry if not already set
     let a: AgentDeployment = agent.source
       ? agent
       : { ...agent, source: gitagentEntry.options as AgentSource }
 
-    // Enrich from local gitagent directory if a path is provided
     const localPath = a.source?.path ? resolve(a.source.path) : undefined
     if (localPath && existsSync(localPath)) {
       const parsed = readGitAgentDir(localPath)
@@ -49,11 +41,11 @@ const plugin: PluginDefinition = {
     }
 
     return a
-  },
+  })
 
   // ── Build hook ──
   // Build-time: generate OpenClaw config fragment from agent.source
-  buildConfig(context: PluginBuildContext): PluginConfigFragment {
+  api.onBuildConfig((context: PluginBuildContext): PluginConfigFragment => {
     const { agent } = context
     if (!agent.source) return {}
     const mountPath = agent.source.mountPath ?? '/agent'
@@ -69,7 +61,6 @@ const plugin: PluginDefinition = {
       },
     }
 
-    // If local path exists, read the gitagent directory and merge skills/scheduler
     if (agent.source.path) {
       const localPath = resolve(agent.source.path)
       if (existsSync(localPath)) {
@@ -89,7 +80,5 @@ const plugin: PluginDefinition = {
     }
 
     return fragment
-  },
-}
-
-export default plugin
+  })
+})

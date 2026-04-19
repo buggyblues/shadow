@@ -1,7 +1,7 @@
 /**
  * Google Chat plugin — channel integration for Google Workspace.
  */
-import { createChannelPlugin } from '../helpers.js'
+import { defineChannelPlugin } from '../helpers.js'
 import type {
   PluginBuildContext,
   PluginConfigFragment,
@@ -36,7 +36,7 @@ function buildGoogleChatConfig(context: PluginBuildContext): PluginConfigFragmen
   }
 }
 
-const plugin: PluginDefinition = createChannelPlugin(
+const plugin: PluginDefinition = defineChannelPlugin(
   manifest as PluginManifest,
   buildGoogleChatConfig,
 )

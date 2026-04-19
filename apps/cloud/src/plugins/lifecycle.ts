@@ -39,7 +39,7 @@ export async function executePluginProvisions(
     const pluginId = pluginDef.manifest.id
 
     // Only provision plugins with a provision hook
-    if (!pluginDef.provision) continue
+    if (!pluginDef._hooks.provision.length) continue
 
     const resolved = resolveAgentPluginConfig(pluginId, agent.id, config)
     if (!resolved) continue
@@ -58,13 +58,10 @@ export async function executePluginProvisions(
 
     try {
       logger.dim(`  Provisioning plugin: ${pluginDef.manifest.name}`)
-      const result = await pluginDef.provision(context)
-
-      if (result.state) {
-        results.states[pluginId] = result.state
-      }
-      if (result.secrets) {
-        Object.assign(results.secrets, result.secrets)
+      for (const fn of pluginDef._hooks.provision) {
+        const result = await fn(context)
+        if (result.state) results.states[pluginId] = result.state
+        if (result.secrets) Object.assign(results.secrets, result.secrets)
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -92,7 +89,7 @@ export async function checkPluginHealth(
   for (const pluginDef of registry.getAll()) {
     const pluginId = pluginDef.manifest.id
 
-    if (!pluginDef.healthCheck) continue
+    if (!pluginDef._hooks.healthCheck.length) continue
 
     const resolved = resolveAgentPluginConfig(pluginId, agentId, config)
     if (!resolved) continue
@@ -113,13 +110,15 @@ export async function checkPluginHealth(
     }
 
     try {
-      const result = await pluginDef.healthCheck(context)
-      results.push({
-        pluginId,
-        name: pluginDef.manifest.name,
-        healthy: result.healthy,
-        message: result.message,
-      })
+      for (const fn of pluginDef._hooks.healthCheck) {
+        const result = await fn(context)
+        results.push({
+          pluginId,
+          name: pluginDef.manifest.name,
+          healthy: result.healthy,
+          message: result.message,
+        })
+      }
     } catch (err) {
       results.push({
         pluginId,

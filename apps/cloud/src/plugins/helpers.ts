@@ -1,27 +1,29 @@
 /**
  * Plugin factory helpers — create plugins with minimal boilerplate.
  *
- * Three primary patterns:
- * 1. createSkillPlugin  — skill-based plugin (most common, skills+CLI first)
- * 2. createChannelPlugin — communication channel plugins
- * 3. createProviderPlugin — AI model provider plugins
+ * Core primitive:
+ *   definePlugin(manifest, setup)   — registers hooks via setup(api)
+ *
+ * Convenience factories for common patterns:
+ *   defineSkillPlugin    — skills + CLI + MCP config, auto env + validation
+ *   defineChannelPlugin  — channel config builder, auto env + validation
+ *   defineProviderPlugin — AI model provider config, auto env + validation
  */
 
 import { validateManifest } from './loader.js'
 import type {
+  PluginAPI,
   PluginBuildContext,
-  PluginCLIProvider,
+  PluginCLITool,
   PluginConfigFragment,
   PluginDefinition,
+  PluginHooks,
   PluginManifest,
-  PluginMCPProvider,
-  PluginSkillsProvider,
+  PluginMCPServer,
+  PluginSkillsConfig,
   PluginValidationResult,
 } from './types.js'
 
-// ─── Manifest Loader ────────────────────────────────────────────────────────
-
-/** Validates and returns the manifest. Throws if required fields are missing. */
 export function loadManifest(raw: Record<string, unknown>): PluginManifest {
   if (!validateManifest(raw)) {
     const id = typeof raw.id === 'string' ? raw.id : 'unknown'
@@ -30,9 +32,70 @@ export function loadManifest(raw: Record<string, unknown>): PluginManifest {
   return raw as unknown as PluginManifest
 }
 
-// ─── Shared Helpers ─────────────────────────────────────────────────────────
+function makeHooks(): PluginHooks {
+  return {
+    resolveAgent: [],
+    buildConfig: [],
+    buildEnv: [],
+    buildResources: [],
+    validate: [],
+    provision: [],
+    healthCheck: [],
+  }
+}
 
-function buildDefaultEnvVars(
+function makeAPI(
+  hooks: PluginHooks,
+  collected: { skills?: PluginSkillsConfig; cli?: PluginCLITool[]; mcp?: PluginMCPServer },
+): PluginAPI {
+  return {
+    addSkills: (s) => {
+      collected.skills = s
+    },
+    addCLI: (tools) => {
+      collected.cli = [...(collected.cli ?? []), ...tools]
+    },
+    setMCP: (server) => {
+      collected.mcp = server
+    },
+    onResolveAgent: (fn) => hooks.resolveAgent.push(fn),
+    onBuildConfig: (fn) => hooks.buildConfig.push(fn),
+    onBuildEnv: (fn) => hooks.buildEnv.push(fn),
+    onBuildResources: (fn) => hooks.buildResources.push(fn),
+    onValidate: (fn) => hooks.validate.push(fn),
+    onProvision: (fn) => hooks.provision.push(fn),
+    onHealthCheck: (fn) => hooks.healthCheck.push(fn),
+  }
+}
+
+// ─── Core primitive ──────────────────────────────────────────────────────────
+
+/**
+ * Define a plugin by registering hooks via a setup(api) function.
+ *
+ * This is the lowest-level primitive. Use factory helpers for common patterns.
+ */
+export function definePlugin(
+  manifest: PluginManifest,
+  setup: (api: PluginAPI) => void,
+): PluginDefinition {
+  const hooks = makeHooks()
+  const collected: { skills?: PluginSkillsConfig; cli?: PluginCLITool[]; mcp?: PluginMCPServer } =
+    {}
+  const api = makeAPI(hooks, collected)
+  setup(api)
+  return {
+    manifest,
+    skills: collected.skills,
+    cli: collected.cli,
+    mcp: collected.mcp,
+    _hooks: hooks,
+  }
+}
+
+// ─── Shared defaults ─────────────────────────────────────────────────────────
+
+function defaultEnvVars(
   manifest: PluginManifest,
   context: PluginBuildContext,
 ): Record<string, string> {
@@ -44,7 +107,7 @@ function buildDefaultEnvVars(
   return envVars
 }
 
-function buildDefaultValidation(
+function defaultValidation(
   manifest: PluginManifest,
   context: PluginBuildContext,
 ): PluginValidationResult {
@@ -61,46 +124,34 @@ function buildDefaultValidation(
   return { valid: errors.filter((e) => e.severity === 'error').length === 0, errors }
 }
 
-// ─── Skill Plugin Factory ───────────────────────────────────────────────────
+// ─── Factory helpers ─────────────────────────────────────────────────────────
 
 /**
- * Create a skill-based plugin (the industry-standard pattern).
- *
- * Skills are bundled agent procedures + CLI tools that agents can invoke.
- * This is preferred over MCP for most integrations.
+ * Create a skill-based plugin (the most common pattern).
  *
  * @example
- * createSkillPlugin(manifest, {
- *   skills: { bundled: ['github'], entries: [{ id: 'github', name: 'GitHub', ... }] },
- *   cli: { tools: [{ name: 'gh', command: 'gh', description: 'GitHub CLI' }] },
+ * defineSkillPlugin(manifest, {
+ *   skills: { bundled: ['github'], entries: [...] },
+ *   cli: [{ name: 'gh', command: 'gh', description: 'GitHub CLI' }],
+ *   mcp: { transport: 'stdio', command: 'npx', args: [...] },
  * })
  */
-export function createSkillPlugin(
+export function defineSkillPlugin(
   manifest: PluginManifest,
-  options: {
-    skills?: PluginSkillsProvider
-    cli?: PluginCLIProvider
-    mcp?: PluginMCPProvider
-  },
+  options: { skills?: PluginSkillsConfig; cli?: PluginCLITool[]; mcp?: PluginMCPServer },
+  extraSetup?: (api: PluginAPI) => void,
 ): PluginDefinition {
-  return {
-    manifest,
+  return definePlugin(manifest, (api) => {
+    if (options.skills) api.addSkills(options.skills)
+    if (options.cli?.length) api.addCLI(options.cli)
+    if (options.mcp) api.setMCP(options.mcp)
 
-    // ── Capability Providers ──
-    skills: options.skills,
-    cli: options.cli?.tools,
-    mcp: options.mcp?.server,
-
-    // ── Config Builder (auto-derived from skills+CLI+MCP) ──
-    buildConfig(_context: PluginBuildContext): PluginConfigFragment {
+    api.onBuildConfig((_ctx): PluginConfigFragment => {
       const fragment: PluginConfigFragment = {}
 
-      // Skills → skills.allowBundled + skills.entries
       if (options.skills) {
-        const skillsConfig: Record<string, unknown> = {}
-        if (options.skills.bundled?.length) {
-          skillsConfig.allowBundled = options.skills.bundled
-        }
+        const sc: Record<string, unknown> = {}
+        if (options.skills.bundled?.length) sc.allowBundled = options.skills.bundled
         if (options.skills.entries?.length) {
           const entries: Record<string, unknown> = {}
           for (const skill of options.skills.entries) {
@@ -110,94 +161,73 @@ export function createSkillPlugin(
               ...(skill.env ? { env: skill.env } : {}),
             }
           }
-          skillsConfig.entries = entries
+          sc.entries = entries
         }
-        if (options.skills.install) {
-          skillsConfig.install = options.skills.install
-        }
-        fragment.skills = skillsConfig
+        if (options.skills.install) sc.install = options.skills.install
+        fragment.skills = sc
       }
 
-      // CLI tools → tools.allow
-      if (options.cli?.tools.length) {
-        fragment.tools = {
-          allow: options.cli.tools.map((t) => t.name),
-        }
+      if (options.cli?.length) {
+        fragment.tools = { allow: options.cli.map((t) => t.name) }
       }
 
-      // MCP server (fallback for plugins that genuinely need it)
-      if (options.mcp?.server) {
-        const { server } = options.mcp
+      if (options.mcp) {
+        const s = options.mcp
         fragment.plugins = {
           entries: {
             [manifest.id]: {
               enabled: true,
-              transport: server.transport,
-              command: server.command,
-              ...(server.args ? { args: server.args } : {}),
-              ...(server.env ? { env: server.env } : {}),
+              transport: s.transport,
+              command: s.command,
+              ...(s.args ? { args: s.args } : {}),
+              ...(s.env ? { env: s.env } : {}),
             },
           },
         }
       }
 
       return fragment
-    },
+    })
 
-    // ── Env ──
-    buildEnv: (context) => buildDefaultEnvVars(manifest, context),
-
-    // ── Validation ──
-    validate: (context) => buildDefaultValidation(manifest, context),
-  }
+    api.onBuildEnv((ctx) => defaultEnvVars(manifest, ctx))
+    api.onValidate((ctx) => defaultValidation(manifest, ctx))
+    extraSetup?.(api)
+  })
 }
-
-// ─── Channel Plugin Factory ─────────────────────────────────────────────────
 
 /**
  * Create a channel plugin for communication integrations.
  *
- * Channel plugins configure OpenClaw channels (Slack, Discord, Telegram, etc.)
- * and create agent routing bindings.
+ * @example
+ * defineChannelPlugin(manifest, buildSlackConfig)
  */
-export function createChannelPlugin(
+export function defineChannelPlugin(
   manifest: PluginManifest,
-  channelBuilder: (context: PluginBuildContext) => PluginConfigFragment,
+  channelBuilder: (ctx: PluginBuildContext) => PluginConfigFragment,
+  extraSetup?: (api: PluginAPI) => void,
 ): PluginDefinition {
-  return {
-    manifest,
-
-    // ── Config Builder (delegates to channel builder) ──
-    buildConfig: channelBuilder,
-
-    // ── Env ──
-    buildEnv: (context) => buildDefaultEnvVars(manifest, context),
-
-    // ── Validation ──
-    validate: (context) => buildDefaultValidation(manifest, context),
-  }
+  return definePlugin(manifest, (api) => {
+    api.onBuildConfig(channelBuilder)
+    api.onBuildEnv((ctx) => defaultEnvVars(manifest, ctx))
+    api.onValidate((ctx) => defaultValidation(manifest, ctx))
+    extraSetup?.(api)
+  })
 }
-
-// ─── Provider Plugin Factory ────────────────────────────────────────────────
 
 /**
  * Create an AI model provider plugin.
  *
- * Provider plugins configure model providers (OpenAI, Anthropic, etc.)
- * in the OpenClaw config.
+ * @example
+ * defineProviderPlugin(manifest, { provider: { id: 'openai', api: 'openai' } })
  */
-export function createProviderPlugin(
+export function defineProviderPlugin(
   manifest: PluginManifest,
-  options: {
-    provider: { id: string; api: string; baseUrl?: string }
-  },
+  options: { provider: { id: string; api: string; baseUrl?: string } },
+  extraSetup?: (api: PluginAPI) => void,
 ): PluginDefinition {
-  return {
-    manifest,
-
-    // ── Config Builder ──
-    buildConfig(context: PluginBuildContext): PluginConfigFragment {
-      const { agentConfig } = context
+  return definePlugin(manifest, (api) => {
+    api.onBuildConfig((ctx): PluginConfigFragment => {
+      const { agentConfig } = ctx
       const apiKeyField = manifest.auth.fields.find((f) => f.required && f.sensitive)
       const providerEntry: Record<string, unknown> = {
         ...(apiKeyField ? { apiKey: `\${env:${apiKeyField.key}}` } : {}),
@@ -209,29 +239,19 @@ export function createProviderPlugin(
       }
       if (agentConfig.models) providerEntry.models = agentConfig.models
       if (options.provider.api) {
-        const API_TYPE_MAP: Record<string, string> = {
+        const MAP: Record<string, string> = {
           anthropic: 'anthropic-messages',
           openai: 'openai-completions',
           google: 'google-generative-ai',
           gemini: 'google-generative-ai',
         }
-        providerEntry.api = API_TYPE_MAP[options.provider.api] ?? options.provider.api
+        providerEntry.api = MAP[options.provider.api] ?? options.provider.api
       }
+      return { models: { mode: 'merge', providers: { [options.provider.id]: providerEntry } } }
+    })
 
-      return {
-        models: {
-          mode: 'merge',
-          providers: {
-            [options.provider.id]: providerEntry,
-          },
-        },
-      }
-    },
-
-    // ── Env ──
-    buildEnv: (context) => buildDefaultEnvVars(manifest, context),
-
-    // ── Validation ──
-    validate: (context) => buildDefaultValidation(manifest, context),
-  }
+    api.onBuildEnv((ctx) => defaultEnvVars(manifest, ctx))
+    api.onValidate((ctx) => defaultValidation(manifest, ctx))
+    extraSetup?.(api)
+  })
 }

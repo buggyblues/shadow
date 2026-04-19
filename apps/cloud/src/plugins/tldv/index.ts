@@ -2,11 +2,11 @@
  * tl;dv plugin — meeting listing, transcripts, and AI-generated highlights.
  */
 
-import { createSkillPlugin } from '../helpers.js'
+import { defineSkillPlugin } from '../helpers.js'
 import type { PluginDefinition, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
+const plugin: PluginDefinition = defineSkillPlugin(manifest as PluginManifest, {
   skills: {
     bundled: ['meeting-recording'],
     entries: [
@@ -21,13 +21,11 @@ const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
     install: { npmPackages: ['tldv-mcp'] },
   },
   mcp: {
-    server: {
-      transport: 'stdio',
-      command: 'npx',
-      args: ['-y', 'tldv-mcp'],
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-      env: { TLDV_API_KEY: '${env:TLDV_API_KEY}' },
-    },
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', 'tldv-mcp'],
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+    env: { TLDV_API_KEY: '${env:TLDV_API_KEY}' },
   },
 })
 

@@ -2,11 +2,11 @@
  * Google Drive plugin — file listing, reading, and search over Google Drive.
  */
 
-import { createSkillPlugin } from '../helpers.js'
+import { defineSkillPlugin } from '../helpers.js'
 import type { PluginDefinition, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
+const plugin: PluginDefinition = defineSkillPlugin(manifest as PluginManifest, {
   skills: {
     bundled: ['google-drive'],
     entries: [
@@ -27,18 +27,16 @@ const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
     install: { npmPackages: ['@modelcontextprotocol/server-gdrive'] },
   },
   mcp: {
-    server: {
-      transport: 'stdio',
-      command: 'npx',
-      args: ['-y', '@modelcontextprotocol/server-gdrive'],
-      env: {
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-        GDRIVE_CLIENT_ID: '${env:GOOGLE_CLIENT_ID}',
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-        GDRIVE_CLIENT_SECRET: '${env:GOOGLE_CLIENT_SECRET}',
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-        GDRIVE_REFRESH_TOKEN: '${env:GOOGLE_REFRESH_TOKEN}',
-      },
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-gdrive'],
+    env: {
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+      GDRIVE_CLIENT_ID: '${env:GOOGLE_CLIENT_ID}',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+      GDRIVE_CLIENT_SECRET: '${env:GOOGLE_CLIENT_SECRET}',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+      GDRIVE_REFRESH_TOKEN: '${env:GOOGLE_REFRESH_TOKEN}',
     },
   },
 })

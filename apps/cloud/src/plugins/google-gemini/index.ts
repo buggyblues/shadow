@@ -1,10 +1,10 @@
 /** Google Gemini plugin — AI model provider. */
 
-import { createProviderPlugin } from '../helpers.js'
+import { defineProviderPlugin } from '../helpers.js'
 import type { PluginDefinition, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = createProviderPlugin(manifest as PluginManifest, {
+const plugin: PluginDefinition = defineProviderPlugin(manifest as PluginManifest, {
   provider: {
     id: 'google-gemini',
     api: 'google',

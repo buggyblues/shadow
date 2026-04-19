@@ -2,11 +2,11 @@
  * n8n plugin — workflow automation, execution triggering, and credential operations.
  */
 
-import { createSkillPlugin } from '../helpers.js'
+import { defineSkillPlugin } from '../helpers.js'
 import type { PluginDefinition, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
+const plugin: PluginDefinition = defineSkillPlugin(manifest as PluginManifest, {
   skills: {
     bundled: ['n8n'],
     entries: [
@@ -25,16 +25,14 @@ const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
     install: { npmPackages: ['@leonardsellem/n8n-mcp-server'] },
   },
   mcp: {
-    server: {
-      transport: 'stdio',
-      command: 'npx',
-      args: ['-y', '@leonardsellem/n8n-mcp-server'],
-      env: {
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-        N8N_API_KEY: '${env:N8N_API_KEY}',
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-        N8N_BASE_URL: '${env:N8N_BASE_URL}',
-      },
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', '@leonardsellem/n8n-mcp-server'],
+    env: {
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+      N8N_API_KEY: '${env:N8N_API_KEY}',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+      N8N_BASE_URL: '${env:N8N_BASE_URL}',
     },
   },
 })

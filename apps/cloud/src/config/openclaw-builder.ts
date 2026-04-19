@@ -410,20 +410,20 @@ function applyPluginPipeline(
     }
 
     // Build OpenClaw config fragment
-    if (pluginDef.buildConfig) {
-      const fragment = pluginDef.buildConfig(context)
-      Object.assign(openclawConfig, mergePluginFragments(openclawConfig, fragment))
+    for (const fn of pluginDef._hooks.buildConfig) {
+      const fragment = fn(context)
+      if (fragment) Object.assign(openclawConfig, mergePluginFragments(openclawConfig, fragment))
     }
 
     // Build env vars
-    if (pluginDef.buildEnv) {
-      Object.assign(envVars, pluginDef.buildEnv(context))
+    for (const fn of pluginDef._hooks.buildEnv) {
+      const vars = fn(context)
+      if (vars) Object.assign(envVars, vars)
     }
 
     // Collect K8s resources
-    if (pluginDef.buildResources) {
-      const resources = pluginDef.buildResources(context)
-      pluginResources.push(...resources)
+    for (const fn of pluginDef._hooks.buildResources) {
+      pluginResources.push(...fn(context))
     }
   }
 

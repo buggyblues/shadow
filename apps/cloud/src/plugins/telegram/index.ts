@@ -1,7 +1,7 @@
 /**
  * Telegram plugin — channel integration for Telegram.
  */
-import { createChannelPlugin } from '../helpers.js'
+import { defineChannelPlugin } from '../helpers.js'
 import type {
   PluginBuildContext,
   PluginConfigFragment,
@@ -39,7 +39,7 @@ function buildTelegramConfig(context: PluginBuildContext): PluginConfigFragment 
   }
 }
 
-const plugin: PluginDefinition = createChannelPlugin(
+const plugin: PluginDefinition = defineChannelPlugin(
   manifest as PluginManifest,
   buildTelegramConfig,
 )

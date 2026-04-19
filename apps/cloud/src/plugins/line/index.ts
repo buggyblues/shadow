@@ -1,7 +1,7 @@
 /**
  * LINE plugin — channel integration for LINE messaging.
  */
-import { createChannelPlugin } from '../helpers.js'
+import { defineChannelPlugin } from '../helpers.js'
 import type {
   PluginBuildContext,
   PluginConfigFragment,
@@ -37,5 +37,5 @@ function buildLineConfig(context: PluginBuildContext): PluginConfigFragment {
   }
 }
 
-const plugin: PluginDefinition = createChannelPlugin(manifest as PluginManifest, buildLineConfig)
+const plugin: PluginDefinition = defineChannelPlugin(manifest as PluginManifest, buildLineConfig)
 export default plugin

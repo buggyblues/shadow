@@ -3,11 +3,11 @@
  * Uses the official Postman CLI (postman-cli npm package).
  */
 
-import { createSkillPlugin } from '../helpers.js'
+import { defineSkillPlugin } from '../helpers.js'
 import type { PluginDefinition, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
+const plugin: PluginDefinition = defineSkillPlugin(manifest as PluginManifest, {
   skills: {
     bundled: ['postman'],
     entries: [
@@ -21,18 +21,16 @@ const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
     ],
     install: { npmPackages: ['postman-cli'] },
   },
-  cli: {
-    tools: [
-      {
-        name: 'postman',
-        command: 'postman',
-        description: 'Postman CLI — run collections, tests, and API monitoring',
-        npmPackage: 'postman-cli',
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-        env: { POSTMAN_API_KEY: '${env:POSTMAN_API_KEY}' },
-      },
-    ],
-  },
+  cli: [
+    {
+      name: 'postman',
+      command: 'postman',
+      description: 'Postman CLI — run collections, tests, and API monitoring',
+      npmPackage: 'postman-cli',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+      env: { POSTMAN_API_KEY: '${env:POSTMAN_API_KEY}' },
+    },
+  ],
 })
 
 export default plugin

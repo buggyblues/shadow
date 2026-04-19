@@ -2,11 +2,11 @@
  * Ahrefs plugin — SEO analytics, backlink analysis, and keyword research.
  */
 
-import { createSkillPlugin } from '../helpers.js'
+import { defineSkillPlugin } from '../helpers.js'
 import type { PluginDefinition, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
+const plugin: PluginDefinition = defineSkillPlugin(manifest as PluginManifest, {
   skills: {
     bundled: ['seo-analysis'],
     entries: [
@@ -21,13 +21,11 @@ const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
     install: { npmPackages: ['@ahrefs/mcp'] },
   },
   mcp: {
-    server: {
-      transport: 'stdio',
-      command: 'npx',
-      args: ['-y', '@ahrefs/mcp@latest'],
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-      env: { API_KEY: '${env:AHREFS_API_KEY}' },
-    },
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', '@ahrefs/mcp@latest'],
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+    env: { API_KEY: '${env:AHREFS_API_KEY}' },
   },
 })
 

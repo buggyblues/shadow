@@ -2,11 +2,11 @@
  * Todoist plugin — task management, projects, labels, and filters.
  */
 
-import { createSkillPlugin } from '../helpers.js'
+import { defineSkillPlugin } from '../helpers.js'
 import type { PluginDefinition, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
+const plugin: PluginDefinition = defineSkillPlugin(manifest as PluginManifest, {
   skills: {
     bundled: ['todoist'],
     entries: [
@@ -21,13 +21,11 @@ const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
     install: { npmPackages: ['@greirson/mcp-todoist'] },
   },
   mcp: {
-    server: {
-      transport: 'stdio',
-      command: 'npx',
-      args: ['-y', '@greirson/mcp-todoist'],
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-      env: { TODOIST_API_TOKEN: '${env:TODOIST_API_TOKEN}' },
-    },
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', '@greirson/mcp-todoist'],
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+    env: { TODOIST_API_TOKEN: '${env:TODOIST_API_TOKEN}' },
   },
 })
 

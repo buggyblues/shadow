@@ -7,12 +7,13 @@
  * - MCP server for real-time integration (fallback)
  */
 
-import { createSkillPlugin } from '../helpers.js'
-import type { PluginDefinition, PluginManifest } from '../types.js'
+import { defineSkillPlugin } from '../helpers.js'
+import type { PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = {
-  ...createSkillPlugin(manifest as PluginManifest, {
+export default defineSkillPlugin(
+  manifest as PluginManifest,
+  {
     skills: {
       bundled: ['github'],
       entries: [
@@ -26,45 +27,41 @@ const plugin: PluginDefinition = {
       ],
       install: { npmPackages: ['@modelcontextprotocol/server-github'] },
     },
-    cli: {
-      tools: [
-        {
-          name: 'gh',
-          command: 'gh',
-          description: 'GitHub CLI — create issues, PRs, manage repos',
-          // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-          env: { GH_TOKEN: '${env:GITHUB_PERSONAL_ACCESS_TOKEN}' },
-        },
-      ],
-    },
-    mcp: {
-      server: {
-        transport: 'stdio',
-        command: 'npx',
-        args: ['-y', '@modelcontextprotocol/server-github'],
+    cli: [
+      {
+        name: 'gh',
+        command: 'gh',
+        description: 'GitHub CLI — create issues, PRs, manage repos',
         // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-        env: { GITHUB_PERSONAL_ACCESS_TOKEN: '${env:GITHUB_PERSONAL_ACCESS_TOKEN}' },
+        env: { GH_TOKEN: '${env:GITHUB_PERSONAL_ACCESS_TOKEN}' },
       },
+    ],
+    mcp: {
+      transport: 'stdio',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-github'],
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+      env: { GITHUB_PERSONAL_ACCESS_TOKEN: '${env:GITHUB_PERSONAL_ACCESS_TOKEN}' },
     },
-  }),
-  async healthCheck(context) {
-    const token = context.secrets.GITHUB_PERSONAL_ACCESS_TOKEN
-    if (!token) {
-      return { healthy: false, message: 'GITHUB_PERSONAL_ACCESS_TOKEN not configured' }
-    }
-    try {
-      const res = await fetch('https://api.github.com/user', {
-        headers: { Authorization: `token ${token}` },
-      })
-      if (res.ok) {
-        const user = (await res.json()) as { login: string }
-        return { healthy: true, message: `Authenticated as ${user.login}` }
-      }
-      return { healthy: false, message: `GitHub API returned ${res.status}` }
-    } catch (err) {
-      return { healthy: false, message: `GitHub API unreachable: ${err}` }
-    }
   },
-}
-
-export default plugin
+  (api) => {
+    api.onHealthCheck(async (context) => {
+      const token = context.secrets.GITHUB_PERSONAL_ACCESS_TOKEN
+      if (!token) {
+        return { healthy: false, message: 'GITHUB_PERSONAL_ACCESS_TOKEN not configured' }
+      }
+      try {
+        const res = await fetch('https://api.github.com/user', {
+          headers: { Authorization: `token ${token}` },
+        })
+        if (res.ok) {
+          const user = (await res.json()) as { login: string }
+          return { healthy: true, message: `Authenticated as ${user.login}` }
+        }
+        return { healthy: false, message: `GitHub API returned ${res.status}` }
+      } catch (err) {
+        return { healthy: false, message: `GitHub API unreachable: ${err}` }
+      }
+    })
+  },
+)

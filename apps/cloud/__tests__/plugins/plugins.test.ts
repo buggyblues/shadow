@@ -63,6 +63,7 @@ function makeBuildContext(overrides: Partial<PluginBuildContext> = {}): PluginBu
     } as unknown as PluginBuildContext['config'],
     secrets: { TEST_API_KEY: 'sk-test-123' },
     namespace: 'test-ns',
+    agentConfig: {},
     pluginRegistry: createPluginRegistry(),
     ...overrides,
   }
@@ -199,37 +200,37 @@ describe('createSkillPlugin', () => {
   it('should create a valid plugin definition', () => {
     const plugin = makePlugin(makeManifest())
     expect(plugin.manifest.id).toBe('test-plugin')
-    expect(plugin.configBuilder).toBeDefined()
-    expect(plugin.env).toBeDefined()
-    expect(plugin.validation).toBeDefined()
+    expect(plugin._hooks.buildConfig.length).toBeGreaterThan(0)
+    expect(plugin._hooks.buildEnv.length).toBeGreaterThan(0)
+    expect(plugin._hooks.validate.length).toBeGreaterThan(0)
   })
 
   it('should generate OpenClaw config with skills', () => {
     const plugin = makePlugin(makeManifest())
     const ctx = makeBuildContext()
-    const fragment = plugin.configBuilder!.build({ customOpt: true }, ctx)
+    const fragment = plugin._hooks.buildConfig[0]!(ctx)
 
-    expect(fragment.skills).toBeDefined()
-    const skills = fragment.skills as Record<string, unknown>
+    expect(fragment?.skills).toBeDefined()
+    const skills = fragment?.skills as Record<string, unknown>
     expect(skills.allowBundled).toEqual(['test-plugin'])
   })
 
   it('should build env vars from secrets', () => {
     const plugin = makePlugin(makeManifest())
     const ctx = makeBuildContext({ secrets: { TEST_API_KEY: 'sk-123', TEST_ORG: 'org-1' } })
-    const envVars = plugin.env!.build({}, ctx)
+    const envVars = plugin._hooks.buildEnv[0]!(ctx)
 
-    expect(envVars.TEST_API_KEY).toBe('sk-123')
+    expect(envVars?.TEST_API_KEY).toBe('sk-123')
   })
 
   it('should validate required secrets', () => {
     const plugin = makePlugin(makeManifest())
 
     const validCtx = makeBuildContext({ secrets: { TEST_API_KEY: 'sk-123' } })
-    expect(plugin.validation!.validate({}, validCtx).valid).toBe(true)
+    expect(plugin._hooks.validate[0]!(validCtx)?.valid).toBe(true)
 
     const invalidCtx = makeBuildContext({ secrets: {} })
-    const result = plugin.validation!.validate({}, invalidCtx)
+    const result = plugin._hooks.validate[0]!(invalidCtx)!
     expect(result.valid).toBe(false)
     expect(result.errors).toHaveLength(1)
     expect(result.errors[0].path).toBe('secrets.TEST_API_KEY')
@@ -240,10 +241,7 @@ describe('createSkillPlugin', () => {
 
 describe('createChannelPlugin', () => {
   it('should use custom channel builder for config', () => {
-    const channelBuilder = (
-      _config: Record<string, unknown>,
-      ctx: PluginBuildContext,
-    ): PluginConfigFragment => ({
+    const channelBuilder = (ctx: PluginBuildContext): PluginConfigFragment => ({
       channels: {
         'test-channel': { enabled: true, accounts: { [ctx.agent.id]: { token: 'tok' } } },
       },
@@ -252,10 +250,10 @@ describe('createChannelPlugin', () => {
 
     const plugin = createChannelPlugin(makeManifest({ capabilities: ['channel'] }), channelBuilder)
     const ctx = makeBuildContext()
-    const fragment = plugin.configBuilder!.build({}, ctx)
+    const fragment = plugin._hooks.buildConfig[0]!(ctx)
 
-    expect(fragment.channels).toBeDefined()
-    expect(fragment.bindings).toHaveLength(1)
+    expect(fragment?.channels).toBeDefined()
+    expect(fragment?.bindings).toHaveLength(1)
   })
 
   it('should still provide env vars and validation', () => {
@@ -263,8 +261,8 @@ describe('createChannelPlugin', () => {
     const plugin = createChannelPlugin(makeManifest(), channelBuilder)
     const ctx = makeBuildContext({ secrets: { TEST_API_KEY: 'sk-x' } })
 
-    expect(plugin.env!.build({}, ctx)).toEqual({ TEST_API_KEY: 'sk-x' })
-    expect(plugin.validation!.validate({}, ctx).valid).toBe(true)
+    expect(plugin._hooks.buildEnv[0]!(ctx)).toEqual({ TEST_API_KEY: 'sk-x' })
+    expect(plugin._hooks.validate[0]!(ctx)?.valid).toBe(true)
   })
 })
 
@@ -410,26 +408,32 @@ describe('Channel plugins', () => {
     expect(plugin.manifest.id).toBe('discord')
     expect(plugin.manifest.capabilities).toContain('channel')
 
-    const ctx = makeBuildContext({ secrets: { DISCORD_BOT_TOKEN: 'tok' } })
-    const fragment = plugin.configBuilder!.build({ channels: ['123'], guildId: 'guild-1' }, ctx)
-    expect(fragment.channels).toHaveProperty('discord')
-    expect(fragment.bindings).toHaveLength(1)
+    const ctx = makeBuildContext({
+      secrets: { DISCORD_BOT_TOKEN: 'tok' },
+      agentConfig: { channels: ['123'], guildId: 'guild-1' },
+    })
+    const fragment = plugin._hooks.buildConfig[0]!(ctx)
+    expect(fragment?.channels).toHaveProperty('discord')
+    expect(fragment?.bindings).toHaveLength(1)
   })
 
   it('telegram plugin should produce channel config', async () => {
     const mod = await import('../../src/plugins/telegram/index.js')
     const plugin = mod.default as PluginDefinition
-    const ctx = makeBuildContext({ secrets: { TELEGRAM_BOT_TOKEN: 'tok' } })
-    const fragment = plugin.configBuilder!.build({}, ctx)
-    expect(fragment.channels).toHaveProperty('telegram')
+    const ctx = makeBuildContext({ secrets: { TELEGRAM_BOT_TOKEN: 'tok' }, agentConfig: {} })
+    const fragment = plugin._hooks.buildConfig[0]!(ctx)
+    expect(fragment?.channels).toHaveProperty('telegram')
   })
 
   it('slack plugin should produce channel config', async () => {
     const mod = await import('../../src/plugins/slack/index.js')
     const plugin = mod.default as PluginDefinition
-    const ctx = makeBuildContext({ secrets: { SLACK_BOT_TOKEN: 'tok' } })
-    const fragment = plugin.configBuilder!.build({ channels: ['general'] }, ctx)
-    expect(fragment.channels).toHaveProperty('slack')
+    const ctx = makeBuildContext({
+      secrets: { SLACK_BOT_TOKEN: 'tok' },
+      agentConfig: { channels: ['general'] },
+    })
+    const fragment = plugin._hooks.buildConfig[0]!(ctx)
+    expect(fragment?.channels).toHaveProperty('slack')
   })
 
   it('line plugin should produce channel config', async () => {
@@ -437,9 +441,10 @@ describe('Channel plugins', () => {
     const plugin = mod.default as PluginDefinition
     const ctx = makeBuildContext({
       secrets: { LINE_CHANNEL_ACCESS_TOKEN: 'tok', LINE_CHANNEL_SECRET: 'sec' },
+      agentConfig: {},
     })
-    const fragment = plugin.configBuilder!.build({}, ctx)
-    expect(fragment.channels).toHaveProperty('line')
+    const fragment = plugin._hooks.buildConfig[0]!(ctx)
+    expect(fragment?.channels).toHaveProperty('line')
   })
 })
 
@@ -451,9 +456,9 @@ describe('Tool plugins', () => {
     const plugin = mod.default as PluginDefinition
     expect(plugin.manifest.id).toBe('github')
 
-    const ctx = makeBuildContext({ secrets: { GITHUB_TOKEN: 'ghp_xxx' } })
-    const fragment = plugin.configBuilder!.build({}, ctx)
-    expect(fragment.plugins).toBeDefined()
+    const ctx = makeBuildContext({ secrets: { GITHUB_TOKEN: 'ghp_xxx' }, agentConfig: {} })
+    const fragment = plugin._hooks.buildConfig[0]!(ctx)
+    expect(fragment?.plugins).toBeDefined()
   })
 
   it('stripe plugin should produce plugin entry', async () => {
@@ -461,16 +466,16 @@ describe('Tool plugins', () => {
     const plugin = mod.default as PluginDefinition
     expect(plugin.manifest.id).toBe('stripe')
 
-    const ctx = makeBuildContext({ secrets: { STRIPE_SECRET_KEY: 'sk_test' } })
-    const result = plugin.validation!.validate({}, ctx)
-    expect(result.valid).toBe(true)
+    const ctx = makeBuildContext({ secrets: { STRIPE_SECRET_KEY: 'sk_test' }, agentConfig: {} })
+    const result = plugin._hooks.validate[0]!(ctx)
+    expect(result?.valid).toBe(true)
   })
 
   it('openai plugin should validate missing API key', async () => {
     const mod = await import('../../src/plugins/openai/index.js')
     const plugin = mod.default as PluginDefinition
-    const ctx = makeBuildContext({ secrets: {} })
-    const result = plugin.validation!.validate({}, ctx)
+    const ctx = makeBuildContext({ secrets: {}, agentConfig: {} })
+    const result = plugin._hooks.validate[0]!(ctx)!
     expect(result.valid).toBe(false)
     expect(result.errors[0].message).toContain('API Key')
   })

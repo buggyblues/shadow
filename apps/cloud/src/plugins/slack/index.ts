@@ -5,13 +5,8 @@
  * per-agent account binding and message routing.
  */
 
-import { createChannelPlugin } from '../helpers.js'
-import type {
-  PluginBuildContext,
-  PluginConfigFragment,
-  PluginDefinition,
-  PluginManifest,
-} from '../types.js'
+import { defineChannelPlugin } from '../helpers.js'
+import type { PluginBuildContext, PluginConfigFragment, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
 function buildSlackConfig(context: PluginBuildContext): PluginConfigFragment {
@@ -44,9 +39,8 @@ function buildSlackConfig(context: PluginBuildContext): PluginConfigFragment {
   }
 }
 
-const plugin: PluginDefinition = {
-  ...createChannelPlugin(manifest as PluginManifest, buildSlackConfig),
-  async healthCheck(context) {
+export default defineChannelPlugin(manifest as PluginManifest, buildSlackConfig, (api) => {
+  api.onHealthCheck(async (context) => {
     const token = context.secrets.SLACK_BOT_TOKEN
     if (!token) {
       return { healthy: false, message: 'SLACK_BOT_TOKEN not configured' }
@@ -75,7 +69,5 @@ const plugin: PluginDefinition = {
     } catch (err) {
       return { healthy: false, message: `Slack API unreachable: ${err}` }
     }
-  },
-}
-
-export default plugin
+  })
+})
