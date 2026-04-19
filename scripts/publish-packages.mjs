@@ -8,6 +8,10 @@ import readline from 'node:readline'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
 const PACKAGES_DIR = path.join(ROOT, 'packages')
+const FLASH_PACKAGES_DIR = path.join(ROOT, 'apps', 'flash', 'packages')
+
+/** All directories that may contain publishable packages. */
+const PUBLISHABLE_SCAN_DIRS = [PACKAGES_DIR, FLASH_PACKAGES_DIR]
 
 const BUMP_TYPES = ['patch', 'minor', 'major']
 
@@ -45,7 +49,7 @@ function fail(msg) {
 }
 
 function buildWorkspaceFilters(selected) {
-  return selected.map((pkg) => `--filter=./packages/${pkg.dir}`).join(' ')
+  return selected.map((pkg) => `--filter=${pkg.name}`).join(' ')
 }
 
 function parseSemver(version) {
@@ -78,38 +82,43 @@ function bumpSemver(version, bumpType) {
 // ─── Package Discovery ────────────────────────────────────────────
 
 function getPublishablePackages() {
-  const dirs = fs
-    .readdirSync(PACKAGES_DIR)
-    .filter((d) => fs.statSync(path.join(PACKAGES_DIR, d)).isDirectory())
-
   const packages = []
-  for (const dir of dirs) {
-    const pkgJsonPath = path.join(PACKAGES_DIR, dir, 'package.json')
-    if (!fs.existsSync(pkgJsonPath)) continue
-    const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
-    if (pkg.private) continue
-    packages.push({
-      dir,
-      name: pkg.name,
-      version: pkg.version,
-      pkgDir: path.join(PACKAGES_DIR, dir),
-      pkgJsonPath,
-    })
+  for (const scanDir of PUBLISHABLE_SCAN_DIRS) {
+    if (!fs.existsSync(scanDir)) continue
+    const dirs = fs
+      .readdirSync(scanDir)
+      .filter((d) => fs.statSync(path.join(scanDir, d)).isDirectory())
+    for (const dir of dirs) {
+      const pkgJsonPath = path.join(scanDir, dir, 'package.json')
+      if (!fs.existsSync(pkgJsonPath)) continue
+      const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
+      if (pkg.private) continue
+      packages.push({
+        dir,
+        name: pkg.name,
+        version: pkg.version,
+        pkgDir: path.join(scanDir, dir),
+        pkgJsonPath,
+      })
+    }
   }
   return packages
 }
 
 /** Build a name→version map of every workspace package (including private). */
 function getWorkspaceVersionMap() {
-  const dirs = fs
-    .readdirSync(PACKAGES_DIR)
-    .filter((d) => fs.statSync(path.join(PACKAGES_DIR, d)).isDirectory())
   const map = new Map()
-  for (const dir of dirs) {
-    const p = path.join(PACKAGES_DIR, dir, 'package.json')
-    if (!fs.existsSync(p)) continue
-    const pkg = JSON.parse(fs.readFileSync(p, 'utf8'))
-    map.set(pkg.name, { version: pkg.version, private: !!pkg.private })
+  for (const scanDir of PUBLISHABLE_SCAN_DIRS) {
+    if (!fs.existsSync(scanDir)) continue
+    const dirs = fs
+      .readdirSync(scanDir)
+      .filter((d) => fs.statSync(path.join(scanDir, d)).isDirectory())
+    for (const dir of dirs) {
+      const p = path.join(scanDir, dir, 'package.json')
+      if (!fs.existsSync(p)) continue
+      const pkg = JSON.parse(fs.readFileSync(p, 'utf8'))
+      map.set(pkg.name, { version: pkg.version, private: !!pkg.private })
+    }
   }
   return map
 }

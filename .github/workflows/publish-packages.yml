@@ -71,7 +71,8 @@ jobs:
       - name: Install SDK workspace dependencies
         run: |
           pnpm install --frozen-lockfile \
-            --filter ./packages/*...
+            --filter ./packages/*... \
+            --filter ./apps/flash/packages/*...
 
       - name: Compute publish targets and unified release version
         id: publish_targets
@@ -81,11 +82,11 @@ jobs:
           const fs = require('node:fs')
           const path = require('node:path')
 
-          const packagesDir = path.resolve(process.cwd(), 'packages')
-          const dirs = fs.readdirSync(packagesDir).filter((d) => {
-            const full = path.join(packagesDir, d)
-            return fs.statSync(full).isDirectory()
-          })
+          const cwd = process.cwd()
+          const scanDirs = [
+            path.resolve(cwd, 'packages'),
+            path.resolve(cwd, 'apps', 'flash', 'packages'),
+          ]
 
           function parseSemver(version) {
             const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version)
@@ -114,15 +115,23 @@ jobs:
 
           const filters = []
           const versions = []
-          for (const dir of dirs) {
-            const pkgJsonPath = path.join(packagesDir, dir, 'package.json')
-            if (!fs.existsSync(pkgJsonPath)) continue
-            const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
-            if (pkg.private) continue
-            filters.push(`--filter=./packages/${dir}`)
-            versions.push(pkg.version)
+          for (const scanDir of scanDirs) {
+            if (!fs.existsSync(scanDir)) continue
+            const dirs = fs.readdirSync(scanDir).filter((d) => {
+              const full = path.join(scanDir, d)
+              return fs.statSync(full).isDirectory()
+            })
+            for (const dir of dirs) {
+              const pkgJsonPath = path.join(scanDir, dir, 'package.json')
+              if (!fs.existsSync(pkgJsonPath)) continue
+              const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
+              if (pkg.private) continue
+              filters.push(`--filter=${pkg.name}`)
+              versions.push(pkg.version)
+            }
           }
 
+          const packagesDir = path.resolve(cwd, 'packages')
           const pyproject = fs.readFileSync(path.join(packagesDir, 'sdk-python', 'pyproject.toml'), 'utf8')
           const pyMatch = pyproject.match(/^version\s*=\s*"([^"]+)"/m)
           if (pyMatch) versions.push(pyMatch[1])
@@ -148,7 +157,7 @@ jobs:
           RELEASE_VERSION=$(node -e "const d=JSON.parse(process.argv[1]); process.stdout.write(d.releaseVersion)" "$TARGETS")
 
           if [ -z "$FILTERS" ]; then
-            echo "No publishable npm packages found under packages/."
+            echo "No publishable npm packages found under packages/ or apps/flash/packages/."
             exit 1
           fi
 
@@ -219,7 +228,7 @@ jobs:
           VERSION="${SDK_VERSION}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add packages/*/package.json packages/sdk-python/pyproject.toml pnpm-lock.yaml
+          git add packages/*/package.json apps/flash/packages/*/package.json packages/sdk-python/pyproject.toml pnpm-lock.yaml
           git commit -m "chore(release): packages v${VERSION}"
           git tag "sdk-v${VERSION}"
           git push
@@ -235,5 +244,5 @@ jobs:
             SDK release version: `${{ env.SDK_VERSION }}`
 
             Published packages:
-            - npm: all public packages under `packages/`
+            - npm: all public packages under `packages/` and `apps/flash/packages/`
             - PyPI: `shadowob-sdk==${{ env.SDK_VERSION }}`

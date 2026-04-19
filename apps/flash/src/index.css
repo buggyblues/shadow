@@ -1,0 +1,1096 @@
+@import "tailwindcss";
+
+/* ── Custom Fonts ────────────────────────────────────────── */
+@font-face {
+  font-family: "AlimamaFangHeiti";
+  src: url("/fonts/AlimamaFangHeiti-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "AlibabaPuHuiTi";
+  src: url("/fonts/AlibabaPuHuiTi-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-300: #93c5fd;
+  --color-brand-400: #60a5fa;
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-brand-700: #1d4ed8;
+  --color-brand-800: #1e40af;
+  --color-brand-900: #1e3a8a;
+  --color-brand-950: #172554;
+
+  --color-surface: #09090b;
+  --color-surface-2: #18181b;
+  --color-surface-3: #27272a;
+  --color-surface-card: #18181b;
+  --color-surface-hover: #27272a;
+  --color-border: #27272a;
+  --color-border-hover: #3f3f46;
+  --color-border-active: #52525b;
+
+  --color-sidebar: #0c0c0f;
+  --color-toolbar: #111113;
+
+  --font-sans:
+    "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Noto Sans SC", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: var(--color-surface);
+  color: #d4d4d8;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  height: 100vh;
+}
+
+#root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
+/* Hide scrollbar for filter tabs */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 16px 3px rgba(59, 130, 246, 0.15);
+  }
+}
+
+@keyframes streaming {
+  0% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes cardAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s ease-out;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.25s ease-out;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s infinite;
+}
+
+.animate-streaming {
+  animation: streaming 1.5s ease-in-out infinite;
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.05) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* ═══ Physics Desk — Joker card psychedelic gaming table ═══ */
+
+.physics-desk {
+  /* ── velvet fabric texture (fine cross-fiber) ── */
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 2px,
+      rgba(120, 40, 60, 0.015) 2px,
+      rgba(120, 40, 60, 0.015) 3px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 2px,
+      rgba(80, 30, 100, 0.012) 2px,
+      rgba(80, 30, 100, 0.012) 3px
+    ),
+    /* ── psychedelic vortex glow (center) ── */
+    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(120, 30, 80, 0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 35% at 35% 45%, rgba(80, 20, 130, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse 35% 30% at 65% 55%, rgba(140, 20, 60, 0.07) 0%, transparent 50%),
+    /* ── table edge vignette (heavy vignette) ── */
+    radial-gradient(ellipse 120% 120% at 50% 50%, transparent 30%, rgba(0, 0, 0, 0.6) 100%),
+    /* ── deep dark red/purple/black velvet base color ── */
+    linear-gradient(
+      150deg,
+      #0a0508 0%,
+      #0e0710 20%,
+      #120812 40%,
+      #0d0610 60%,
+      #0a050c 80%,
+      #080408 100%
+    );
+  overflow: hidden;
+  position: relative;
+}
+
+/* ── psychedelic shimmer scan layer (slowly rotating color vortex) ── */
+.physics-desk::before {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(
+    from 0deg at 50% 50%,
+    rgba(120, 20, 80, 0.06) 0deg,
+    rgba(60, 10, 100, 0.04) 60deg,
+    transparent 120deg,
+    rgba(140, 30, 60, 0.05) 180deg,
+    rgba(80, 15, 120, 0.04) 240deg,
+    transparent 300deg,
+    rgba(120, 20, 80, 0.06) 360deg
+  );
+  animation: deskVortexSpin 25s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── velvet microlight particle layer ── */
+.physics-desk::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  /* micro-sparkle points (simulating luster particles on velvet) */
+  background:
+    radial-gradient(circle 1px at 20% 30%, rgba(255, 180, 200, 0.08) 0%, transparent 100%),
+    radial-gradient(circle 1px at 60% 20%, rgba(200, 160, 255, 0.06) 0%, transparent 100%),
+    radial-gradient(circle 1px at 80% 70%, rgba(255, 140, 180, 0.07) 0%, transparent 100%),
+    radial-gradient(circle 1px at 40% 80%, rgba(180, 120, 255, 0.05) 0%, transparent 100%),
+    radial-gradient(circle 1px at 15% 65%, rgba(255, 200, 220, 0.06) 0%, transparent 100%),
+    radial-gradient(circle 1.5px at 75% 40%, rgba(220, 160, 255, 0.08) 0%, transparent 100%),
+    /* extremely faint velvet horizontal fibers */
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 4px,
+      rgba(180, 100, 140, 0.006) 4px,
+      rgba(180, 100, 140, 0.006) 5px
+    );
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes deskVortexSpin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* desktop shimmer overlay */
+.desk-texture {
+  background:
+    radial-gradient(ellipse 60% 45% at 50% 40%, rgba(180, 200, 170, 0.012) 0%, transparent 70%),
+    radial-gradient(ellipse 35% 35% at 25% 25%, rgba(160, 180, 150, 0.008) 0%, transparent 50%);
+}
+
+/* ═══ Card items — cards scattered on desk ═══ */
+
+.desk-card {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* transform controlled by matter.js */
+  will-change: transform;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Desk cards need no enter animation — physics engine controls position */
+.desk-card.card-item {
+  animation: none;
+}
+
+/* Card being dragged by physics engine — lift effect */
+.desk-card.card-item:active {
+  z-index: 999;
+  box-shadow:
+    0 12px 40px -8px rgba(0, 0, 0, 0.5),
+    0 20px 60px -12px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 248, 230, 0.08),
+    inset -1px 0 0 rgba(255, 248, 230, 0.04),
+    inset 1px 0 0 rgba(255, 248, 230, 0.04);
+}
+
+.card-item {
+  animation: cardAppear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* vintage cream paper tone — warm paper texture in dark mode */
+  background: linear-gradient(165deg, #1e1d1a 0%, #1b1a18 30%, #1a1916 60%, #1c1b19 100%);
+  border-radius: 0.75rem;
+  /* physical card paper thickness shadow */
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.25),
+    0 2px 4px rgba(0, 0, 0, 0.15),
+    0 6px 16px -4px rgba(0, 0, 0, 0.2),
+    /* paper edge micro-glow */
+    inset 0 1px 0 rgba(255, 248, 230, 0.04),
+    inset -1px 0 0 rgba(255, 248, 230, 0.02),
+    inset 1px 0 0 rgba(255, 248, 230, 0.02);
+  /* 3D flip base */
+  transform-style: preserve-3d;
+  transition: box-shadow 0.3s ease;
+  will-change: transform;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── paper texture overlay — extremely faint linen grain ── */
+.card-item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  /* horizontal fibers */
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 18px,
+      rgba(255, 248, 230, 0.008) 18px,
+      rgba(255, 248, 230, 0.008) 19px
+    ),
+    /* micro-noise — simulated with extremely faint gradient */
+    radial-gradient(circle at 20% 30%, rgba(255, 200, 120, 0.012) 0%, transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(200, 180, 150, 0.01) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── top colorful tape strip — collage style ── */
+.card-item::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 20px;
+  width: 48px;
+  height: 14px;
+  background: var(--card-tape, rgba(234, 179, 8, 0.25));
+  border-radius: 0 0 3px 3px;
+  /* semi-transparent tape effect */
+  backdrop-filter: blur(1px);
+  opacity: 0.7;
+  transition: opacity 0.2s;
+  z-index: 3;
+  /* slightly skewed — handmade feel */
+  transform: rotate(-1.5deg);
+}
+
+/* ── mouse hover — lift + deeper shadow ── */
+.card-item:hover {
+  box-shadow:
+    0 8px 28px -6px rgba(0, 0, 0, 0.35),
+    0 16px 44px -10px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 248, 230, 0.06),
+    inset -1px 0 0 rgba(255, 248, 230, 0.03),
+    inset 1px 0 0 rgba(255, 248, 230, 0.03);
+}
+
+.card-item:hover::after {
+  opacity: 1;
+}
+
+/* Dragging */
+.card-item:active {
+  cursor: grabbing;
+}
+
+/* ═══ Card type tape color ═══ */
+.card-item[data-kind="quote"] {
+  --card-tape: rgba(236, 72, 153, 0.35);
+}
+.card-item[data-kind="summary"] {
+  --card-tape: rgba(59, 130, 246, 0.35);
+}
+.card-item[data-kind="argument"] {
+  --card-tape: rgba(249, 115, 22, 0.35);
+}
+.card-item[data-kind="data"] {
+  --card-tape: rgba(6, 182, 212, 0.35);
+}
+.card-item[data-kind="table"] {
+  --card-tape: rgba(20, 184, 166, 0.35);
+}
+.card-item[data-kind="image"] {
+  --card-tape: rgba(168, 85, 247, 0.35);
+}
+.card-item[data-kind="code"] {
+  --card-tape: rgba(132, 204, 22, 0.35);
+}
+.card-item[data-kind="chart"] {
+  --card-tape: rgba(245, 158, 11, 0.35);
+}
+.card-item[data-kind="idea"] {
+  --card-tape: rgba(234, 179, 8, 0.35);
+}
+.card-item[data-kind="text"] {
+  --card-tape: rgba(161, 161, 170, 0.2);
+}
+.card-item[data-kind="keypoint"] {
+  --card-tape: rgba(99, 102, 241, 0.35);
+}
+.card-item[data-kind="definition"] {
+  --card-tape: rgba(139, 92, 246, 0.35);
+}
+.card-item[data-kind="example"] {
+  --card-tape: rgba(14, 165, 233, 0.35);
+}
+.card-item[data-kind="reference"] {
+  --card-tape: rgba(156, 163, 175, 0.25);
+}
+.card-item[data-kind="inspiration"] {
+  --card-tape: rgba(217, 70, 239, 0.4);
+}
+.card-item[data-kind="audio"] {
+  --card-tape: rgba(16, 185, 129, 0.35);
+}
+.card-item[data-kind="video"] {
+  --card-tape: rgba(244, 63, 94, 0.35);
+}
+
+/* ── Inspiration card special — warmer base + gradient tape ── */
+.card-item[data-kind="inspiration"] {
+  background: linear-gradient(165deg, #201a22 0%, #1c1720 60%, #1e1924 100%);
+}
+.card-item[data-kind="inspiration"]::after {
+  background: linear-gradient(
+    90deg,
+    rgba(217, 70, 239, 0.3),
+    rgba(236, 72, 153, 0.3),
+    rgba(99, 102, 241, 0.3)
+  );
+  width: 56px;
+  animation: tapeShimmer 3s ease-in-out infinite alternate;
+}
+
+@keyframes tapeShimmer {
+  0% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* ── left decorative edge — torn paper edge ── */
+.card-item-edge {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--card-tape, rgba(234, 179, 8, 0.3));
+  border-radius: 0.75rem 0 0 0.75rem;
+  opacity: 0.6;
+}
+
+/* ── bottom stamp/seal decoration area ── */
+.card-item-stamp {
+  position: relative;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  /* perforation divider effect */
+  border-top: 1px dashed rgba(255, 248, 230, 0.06);
+}
+
+/* ── card corner decoration — top-right fold corner ── */
+.card-corner-fold {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(225deg, rgba(30, 29, 26, 0) 50%, rgba(255, 248, 230, 0.03) 50%);
+  border-radius: 0 0.75rem 0 0;
+  z-index: 4;
+}
+
+/* ═══ Masonry Grid — narrow drawer fallback layout ═══ */
+.masonry-grid {
+  columns: 1;
+  column-gap: 1rem;
+}
+
+/* When in full-screen knowledge view (sufficient width), use multi-column */
+@media (min-width: 640px) {
+  .masonry-grid {
+    columns: 2;
+  }
+}
+@media (min-width: 1024px) {
+  .masonry-grid {
+    columns: 3;
+  }
+}
+@media (min-width: 1400px) {
+  .masonry-grid {
+    columns: 4;
+  }
+}
+
+/* In the right drawer (narrow width), maintain single column */
+.w-\[340px\] .masonry-grid {
+  columns: 1 !important;
+}
+
+.masonry-item {
+  break-inside: avoid;
+  margin-bottom: 1rem;
+  display: inline-block;
+  width: 100%;
+}
+
+/* Masonry appear animation — staggered */
+.masonry-item:nth-child(1) {
+  animation-delay: 0ms;
+}
+.masonry-item:nth-child(2) {
+  animation-delay: 30ms;
+}
+.masonry-item:nth-child(3) {
+  animation-delay: 60ms;
+}
+.masonry-item:nth-child(4) {
+  animation-delay: 90ms;
+}
+.masonry-item:nth-child(5) {
+  animation-delay: 120ms;
+}
+.masonry-item:nth-child(6) {
+  animation-delay: 150ms;
+}
+.masonry-item:nth-child(n + 7) {
+  animation-delay: 180ms;
+}
+
+/* Drop zone active state */
+.drop-active {
+  border-color: rgba(59, 130, 246, 0.6) !important;
+  background: rgba(59, 130, 246, 0.08) !important;
+}
+
+/* Task Center animations */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseRing {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.2s ease-out;
+}
+
+.animate-pulse-ring {
+  animation: pulseRing 1.5s infinite;
+}
+
+/* Notion-style inline add line */
+@keyframes lineReveal {
+  from {
+    opacity: 0;
+    transform: scaleX(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+.notion-add-line {
+  animation: lineReveal 0.15s ease-out;
+}
+
+/* Heartbeat pulse animation */
+@keyframes heartbeat {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+
+.animate-heartbeat {
+  animation: heartbeat 2s ease-in-out infinite;
+}
+
+/* ═══ v7: Instruction-Driven UI Styles ═══ */
+
+/* ═══ Floating CommandHub — bottom frosted glass floating panel ═══ */
+
+/* Container: floating at bottom center, shifted up significantly to avoid Dock overlap */
+.command-hub-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: 100%;
+  max-width: 720px;
+  padding: 0 1rem 5.5rem;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
+}
+
+.command-hub-overlay > * {
+  pointer-events: auto;
+}
+
+.command-hub-overlay-collapsed {
+  max-width: 560px;
+}
+
+/* ═══ Floating panel — shimmering glass texture + light overflow ═══ */
+.command-hub-floating {
+  position: relative;
+  border-radius: 1rem;
+  border: 1.5px solid rgba(255, 255, 255, 0.08);
+  /* frosted glass base — high opacity */
+  background: rgba(14, 14, 18, 0.97);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 -8px 40px rgba(0, 0, 0, 0.4),
+    0 -2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.02);
+  pointer-events: auto;
+  overflow: visible;
+  isolation: isolate;
+}
+
+/* ── animated rainbow border on all sides ── */
+.command-hub-floating::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: calc(1rem + 2px);
+  background: conic-gradient(
+    from var(--hub-rainbow-angle, 0deg),
+    #6366f1,
+    #8b5cf6,
+    #a855f7,
+    #d946ef,
+    #ec4899,
+    #f43f5e,
+    #f97316,
+    #eab308,
+    #22d3ee,
+    #3b82f6,
+    #6366f1
+  );
+  z-index: -1;
+  animation: hubRainbowSpin 3s linear infinite;
+}
+
+/* Inner mask — only exposes the border */
+.command-hub-floating::after {
+  content: "";
+  position: absolute;
+  inset: 1.5px;
+  border-radius: calc(1rem - 0.5px);
+  background: rgba(14, 14, 18, 0.97);
+  backdrop-filter: blur(32px) saturate(1.4);
+  -webkit-backdrop-filter: blur(32px) saturate(1.4);
+  z-index: -1;
+}
+
+/* Outer glow layer */
+.command-hub-floating > .command-hub-rainbow-glow {
+  position: absolute;
+  inset: -8px;
+  border-radius: calc(1rem + 8px);
+  background: conic-gradient(
+    from var(--hub-rainbow-angle, 0deg),
+    rgba(99, 102, 241, 0.25),
+    rgba(168, 85, 247, 0.3),
+    rgba(236, 72, 153, 0.25),
+    rgba(249, 115, 22, 0.2),
+    rgba(34, 211, 238, 0.25),
+    rgba(59, 130, 246, 0.25),
+    rgba(99, 102, 241, 0.25)
+  );
+  filter: blur(16px);
+  z-index: -2;
+  pointer-events: none;
+  animation: hubRainbowSpin 3s linear infinite;
+}
+
+@property --hub-rainbow-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes hubRainbowSpin {
+  0% {
+    --hub-rainbow-angle: 0deg;
+  }
+  100% {
+    --hub-rainbow-angle: 360deg;
+  }
+}
+
+@keyframes hubRainbowFlow {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+/* ── inner glass reflection layer ── */
+.command-hub-glow-inner {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse 80% 50% at 30% 0%, rgba(139, 92, 246, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 70% 100%, rgba(236, 72, 153, 0.04) 0%, transparent 50%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── streamline scan-light effect — slowly sweeps left to right ── */
+.command-hub-scanline {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.command-hub-scanline::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    105deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.015) 35%,
+    rgba(255, 255, 255, 0.04) 50%,
+    rgba(255, 255, 255, 0.015) 65%,
+    transparent 80%
+  );
+  animation: hubSweep 4s ease-in-out infinite;
+}
+
+@keyframes hubSweep {
+  0% {
+    left: -100%;
+  }
+  60% {
+    left: 150%;
+  }
+  100% {
+    left: 150%;
+  }
+}
+
+/* ── top highlight line ── */
+.command-hub-highlight {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 10%,
+    rgba(255, 255, 255, 0.12) 30%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.12) 70%,
+    transparent 90%
+  );
+  z-index: 2;
+}
+
+/* Ensure content is above all light effects */
+.command-hub-floating > .command-hub-content {
+  position: relative;
+  z-index: 5;
+}
+
+/* Collapsed state */
+.command-hub-collapsed {
+  padding: 0.5rem 0.75rem;
+  animation: hubSlideUp 0.25s ease-out;
+}
+
+/* Expanded state */
+.command-hub-expanded {
+  padding: 0.75rem 1rem;
+  animation: hubSlideDown 0.3s ease-out;
+}
+
+@keyframes hubSlideUp {
+  from {
+    opacity: 0.5;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes hubSlideDown {
+  from {
+    opacity: 0.5;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* On focus — border brightens + overflow glow intensifies */
+.command-hub-expanded:focus-within {
+  border-color: rgba(139, 92, 246, 0.2);
+  box-shadow:
+    0 -8px 40px rgba(0, 0, 0, 0.4),
+    0 -2px 8px rgba(0, 0, 0, 0.3),
+    0 0 60px -10px rgba(139, 92, 246, 0.15),
+    0 0 30px -5px rgba(236, 72, 153, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Working — rainbow spins faster + glow intensifies (stays surrounding on all sides) */
+.command-hub-active::before {
+  animation: hubRainbowSpin 1.2s linear infinite;
+  opacity: 1;
+}
+.command-hub-active > .command-hub-rainbow-glow {
+  animation: hubRainbowSpin 1.2s linear infinite;
+  opacity: 1;
+  filter: blur(20px);
+}
+.command-hub-active {
+  border-color: rgba(139, 92, 246, 0.15);
+}
+
+/* ═══ Running Tasks Float — floating above CommandHub ═══ */
+.running-tasks-float {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 29;
+  width: 100%;
+  max-width: 720px;
+  pointer-events: none;
+}
+
+.running-tasks-float > * {
+  pointer-events: auto;
+}
+
+/* ═══ Markdown render base styles ═══ */
+.card-markdown h1,
+.card-markdown h2,
+.card-markdown h3,
+.card-markdown h4,
+.card-markdown h5,
+.card-markdown h6 {
+  font-weight: 600;
+  color: #e4e4e7;
+  margin: 0.25rem 0;
+}
+.card-markdown h1 {
+  font-size: 0.8125rem;
+}
+.card-markdown h2 {
+  font-size: 0.75rem;
+}
+.card-markdown h3 {
+  font-size: 0.6875rem;
+}
+.card-markdown p {
+  margin: 0.15rem 0;
+  line-height: 1.5;
+}
+.card-markdown ul,
+.card-markdown ol {
+  padding-left: 1.25rem;
+  margin: 0.15rem 0;
+}
+.card-markdown li {
+  margin: 0.1rem 0;
+}
+.card-markdown li::marker {
+  color: #71717a;
+}
+.card-markdown strong {
+  font-weight: 600;
+  color: #d4d4d8;
+}
+.card-markdown em {
+  font-style: italic;
+  color: #a1a1aa;
+}
+.card-markdown code {
+  font-size: 0.625rem;
+  background: rgba(39, 39, 42, 0.6);
+  border: 1px solid rgba(63, 63, 70, 0.4);
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.3rem;
+  font-family: var(--font-mono);
+  color: #a78bfa;
+}
+.card-markdown pre {
+  margin: 0.25rem 0;
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  background: rgba(13, 17, 23, 0.8);
+  border: 1px solid rgba(39, 39, 42, 0.3);
+  overflow-x: auto;
+}
+.card-markdown pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #d4d4d8;
+  font-size: 0.625rem;
+}
+.card-markdown blockquote {
+  border-left: 2px solid rgba(59, 130, 246, 0.3);
+  padding-left: 0.75rem;
+  margin: 0.25rem 0;
+  color: #a1a1aa;
+  font-style: italic;
+}
+.card-markdown a {
+  color: #60a5fa;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.card-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.625rem;
+  margin: 0.25rem 0;
+}
+.card-markdown th,
+.card-markdown td {
+  border: 1px solid rgba(63, 63, 70, 0.3);
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+}
+.card-markdown th {
+  background: rgba(39, 39, 42, 0.3);
+  font-weight: 600;
+  color: #a1a1aa;
+}
+.card-markdown hr {
+  border: none;
+  border-top: 1px solid rgba(63, 63, 70, 0.3);
+  margin: 0.5rem 0;
+}
+
+/* Pipeline item entrance */
+@keyframes pipelineEnter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.pipeline-item-enter {
+  animation: pipelineEnter 0.2s ease-out;
+}
+
+/* Smooth drawer transition */
+@keyframes drawerSlide {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.drawer-enter {
+  animation: drawerSlide 0.2s ease-out;
+}
+
+/* Canvas placeholder breathing */
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.02);
+    opacity: 1;
+  }
+}
+
+.canvas-breathe {
+  animation: breathe 4s ease-in-out infinite;
+}
+
+/* Task carousel fade */
+@keyframes carouselFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.carousel-item {
+  animation: carouselFadeIn 0.3s ease-out;
+}
+
+/* KaTeX dark mode overrides */
+.katex-formula .katex,
+.katex-formula .katex-html,
+.katex-formula .katex-display {
+  color: #e4e4e7;
+}
+.katex-formula .katex-display {
+  margin: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}

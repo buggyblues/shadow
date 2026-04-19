@@ -133,7 +133,7 @@ function buildModelConfig(
   config: CloudConfig,
   agentsDefaults: NonNullable<OpenClawConfig['agents']>,
 ): void {
-  const effectiveModel = agent.model ?? config.team?.defaultModel
+  const effectiveModel = agent.model ?? agent.configuration.model ?? config.team?.defaultModel
   if (!effectiveModel) return
 
   if (!agentsDefaults.defaults) agentsDefaults.defaults = {}

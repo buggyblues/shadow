@@ -1,0 +1,24 @@
+{
+  "name": "@shadowob/flash-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.0",
+    "@shadowob/flash-types": "workspace:*",
+    "hono": "^4.7.0",
+    "multer": "^1.4.5-lts.1"
+  },
+  "devDependencies": {
+    "@types/multer": "^1.4.13",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  }
+}

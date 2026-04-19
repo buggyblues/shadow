@@ -67,3 +67,7 @@ docs/e2e/session.json
 
 # Expo
 .expo/
+
+# Flash app runtime data and generated outputs
+apps/flash/data/
+apps/flash/output/

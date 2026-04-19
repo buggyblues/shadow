@@ -1,0 +1,47 @@
+{
+  "name": "@shadowob/flash",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:server": "node server.js",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node server.js",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/matter-js": "^0.20.2",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.183.1",
+    "@vitejs/plugin-react": "^6.0.1",
+    "@webgpu/types": "^0.1.69",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.8"
+  },
+  "dependencies": {
+    "@shadowob/flash-types": "workspace:*",
+    "@shadowob/flash-cards": "workspace:*",
+    "@types/katex": "^0.16.8",
+    "express": "^5.1.0",
+    "katex": "^0.16.45",
+    "lottie-web": "^5.13.0",
+    "lucide-react": "^0.511.0",
+    "matter-js": "^0.20.0",
+    "multer": "^2.0.1",
+    "pixi-live2d-display": "^0.4.0",
+    "pixi.js": "^7.4.2",
+    "qrcode": "^1.5.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-dropzone": "^14.3.8",
+    "three": "^0.183.2",
+    "bitecs": "^0.4.0"
+  }
+}

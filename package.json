@@ -31,6 +31,11 @@
       "openclaw": ">=2026.3.24",
       "tar": ">=7.5.11"
     },
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "typia>typescript": ">=5.7.0"
+      }
+    },
     "auditConfig": {
       "ignoreCves": [
         "CVE-2023-30533",
@@ -78,7 +83,7 @@
     "db:migrate": "pnpm --filter @shadowob/server db:migrate",
     "db:studio": "pnpm --filter @shadowob/server db:studio",
     "publish:packages": "node scripts/publish-packages.mjs",
-    "prepare": "husky"
+    "prepare": "husky && node scripts/fix-flash-symlinks.mjs"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,json,css,md}": [

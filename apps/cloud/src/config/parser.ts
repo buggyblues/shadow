@@ -44,8 +44,38 @@ export function deepMerge<T extends Record<string, unknown>>(base: T, override: 
 }
 
 /**
+ * Recursively resolve a Configuration from the registry, following the
+ * `extends` chain. Child fields override parent fields (deep merge).
+ */
+function resolveConfigurationChain(
+  id: string,
+  configurations: Configuration[],
+  visited: Set<string> = new Set(),
+): Omit<Configuration, 'id'> {
+  if (visited.has(id)) {
+    throw new Error(`Circular extends detected in registry.configurations: ${id}`)
+  }
+  visited.add(id)
+
+  const config = configurations.find((c) => c.id === id)
+  if (!config) {
+    throw new Error(
+      `Configuration "${id}" not found in registry.configurations. ` +
+        `Available: ${configurations.map((c) => c.id).join(', ')}`,
+    )
+  }
+
+  const { id: _id, extends: parentId, ...fields } = config
+  if (!parentId) return fields
+
+  const parentFields = resolveConfigurationChain(parentId, configurations, visited)
+  return deepMerge(parentFields as Record<string, unknown>, fields) as Omit<Configuration, 'id'>
+}
+
+/**
  * Expand the 'extends' field in an agent configuration by merging
  * with the referenced base configuration from registry.configurations.
+ * Supports chained Configuration extends (Configuration → Configuration).
  */
 export function expandExtends(
   agentConfig: AgentConfiguration,
@@ -53,20 +83,10 @@ export function expandExtends(
 ): AgentConfiguration {
   if (!agentConfig.extends) return agentConfig
 
-  const baseId = agentConfig.extends
-  const base = configurations.find((c) => c.id === baseId)
-  if (!base) {
-    throw new Error(
-      `Configuration "${baseId}" not found in registry.configurations. ` +
-        `Available: ${configurations.map((c) => c.id).join(', ')}`,
-    )
-  }
-
-  // Remove the 'extends' and 'id' fields, merge remaining
-  const { id: _id, ...baseFields } = base
+  const resolvedBase = resolveConfigurationChain(agentConfig.extends, configurations)
   const { extends: _extends, ...agentFields } = agentConfig
 
-  return deepMerge(baseFields, agentFields) as AgentConfiguration
+  return deepMerge(resolvedBase as Record<string, unknown>, agentFields) as AgentConfiguration
 }
 
 /**

@@ -1,0 +1,16 @@
+{
+  "project": {
+    "id": "default",
+    "title": "",
+    "materials": [],
+    "cards": [],
+    "decks": [],
+    "todos": [],
+    "tasks": [],
+    "skills": [],
+    "researchSessions": [],
+    "status": "idle",
+    "createdAt": 0,
+    "updatedAt": 0
+  }
+}
