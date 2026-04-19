@@ -3,47 +3,49 @@
  */
 
 import { createSkillPlugin } from '../helpers.js'
-import type { PluginDefinition } from '../types.js'
+import type { PluginDefinition, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = createSkillPlugin(
-  manifest as unknown as PluginDefinition['manifest'],
-  {
-    skills: {
-      bundled: ['atlassian'],
-      entries: [
-        {
-          id: 'atlassian',
-          name: 'Atlassian',
-          description: 'Jira issues, projects, sprints, Confluence wiki pages, search',
-          env: {
-            // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-            ATLASSIAN_API_TOKEN: '${env:ATLASSIAN_API_TOKEN}',
-            // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-            ATLASSIAN_EMAIL: '${env:ATLASSIAN_EMAIL}',
-            // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-            ATLASSIAN_URL: '${env:ATLASSIAN_URL}',
-          },
-        },
-      ],
-      install: { npmPackages: ['@aashari/mcp-server-atlassian-jira', '@aashari/mcp-server-atlassian-confluence'] },
-    },
-    mcp: {
-      server: {
-        transport: 'stdio',
-        command: 'npx',
-        args: ['-y', 'mcp-remote'],
+const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
+  skills: {
+    bundled: ['atlassian'],
+    entries: [
+      {
+        id: 'atlassian',
+        name: 'Atlassian',
+        description: 'Jira issues, projects, sprints, Confluence wiki pages, search',
         env: {
           // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
           ATLASSIAN_API_TOKEN: '${env:ATLASSIAN_API_TOKEN}',
           // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-          ATLASSIAN_USER_EMAIL: '${env:ATLASSIAN_EMAIL}',
+          ATLASSIAN_EMAIL: '${env:ATLASSIAN_EMAIL}',
           // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-          ATLASSIAN_SITE_NAME: '${env:ATLASSIAN_URL}',
+          ATLASSIAN_URL: '${env:ATLASSIAN_URL}',
         },
+      },
+    ],
+    install: {
+      npmPackages: [
+        '@aashari/mcp-server-atlassian-jira',
+        '@aashari/mcp-server-atlassian-confluence',
+      ],
+    },
+  },
+  mcp: {
+    server: {
+      transport: 'stdio',
+      command: 'npx',
+      args: ['-y', 'mcp-remote'],
+      env: {
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+        ATLASSIAN_API_TOKEN: '${env:ATLASSIAN_API_TOKEN}',
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+        ATLASSIAN_USER_EMAIL: '${env:ATLASSIAN_EMAIL}',
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+        ATLASSIAN_SITE_NAME: '${env:ATLASSIAN_URL}',
       },
     },
   },
-)
+})
 
 export default plugin

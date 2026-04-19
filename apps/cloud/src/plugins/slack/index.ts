@@ -6,7 +6,12 @@
  */
 
 import { createChannelPlugin } from '../helpers.js'
-import type { PluginBuildContext, PluginConfigFragment, PluginDefinition } from '../types.js'
+import type {
+  PluginBuildContext,
+  PluginConfigFragment,
+  PluginDefinition,
+  PluginManifest,
+} from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
 function buildSlackConfig(
@@ -42,10 +47,7 @@ function buildSlackConfig(
 }
 
 const plugin: PluginDefinition = {
-  ...createChannelPlugin(
-    manifest as unknown as PluginDefinition['manifest'],
-    buildSlackConfig,
-  ),
+  ...createChannelPlugin(manifest as PluginManifest, buildSlackConfig),
   lifecycle: {
     async healthCheck(_agentConfig, context) {
       const token = context.secrets.SLACK_BOT_TOKEN
@@ -61,7 +63,12 @@ const plugin: PluginDefinition = {
           },
         })
         if (res.ok) {
-          const data = (await res.json()) as { ok: boolean; user?: string; team?: string; error?: string }
+          const data = (await res.json()) as {
+            ok: boolean
+            user?: string
+            team?: string
+            error?: string
+          }
           if (data.ok) {
             return { healthy: true, message: `Connected as ${data.user} in ${data.team}` }
           }

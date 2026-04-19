@@ -1,30 +1,32 @@
 /**
  * Plugin factory helpers — create plugins with minimal boilerplate.
  *
- * Three primary patterns (industry paradigm order):
+ * Three primary patterns:
  * 1. createSkillPlugin  — skill-based plugin (most common, skills+CLI first)
- * 2. createChannelPlugin — communication channel plugin
- * 3. createProviderPlugin — AI model provider plugin
- *
- * Legacy compatibility:
- * - createToolPlugin — MCP-style tool plugin (deprecated, use createSkillPlugin)
+ * 2. createChannelPlugin — communication channel plugins
+ * 3. createProviderPlugin — AI model provider plugins
  */
 
+import { validateManifest } from './loader.js'
 import type {
   PluginBuildContext,
+  PluginCLIProvider,
   PluginConfigFragment,
   PluginDefinition,
   PluginManifest,
-  PluginSkillsProvider,
-  PluginCLIProvider,
   PluginMCPProvider,
+  PluginSkillsProvider,
   PluginValidationResult,
 } from './types.js'
 
 // ─── Manifest Loader ────────────────────────────────────────────────────────
 
-/** Type-safe manifest loader — avoids `as unknown as` casts in plugins. */
+/** Validates and returns the manifest. Throws if required fields are missing. */
 export function loadManifest(raw: Record<string, unknown>): PluginManifest {
+  if (!validateManifest(raw)) {
+    const id = typeof raw.id === 'string' ? raw.id : 'unknown'
+    throw new Error(`Invalid plugin manifest for "${id}": missing required fields`)
+  }
   return raw as unknown as PluginManifest
 }
 
@@ -74,14 +76,13 @@ function buildDefaultValidation(
  * })
  */
 export function createSkillPlugin(
-  rawManifest: PluginManifest | Record<string, unknown>,
+  manifest: PluginManifest,
   options: {
     skills?: PluginSkillsProvider
     cli?: PluginCLIProvider
     mcp?: PluginMCPProvider
   },
 ): PluginDefinition {
-  const manifest = rawManifest as PluginManifest
   return {
     manifest,
 
@@ -93,8 +94,8 @@ export function createSkillPlugin(
     // ── Config Builder (auto-derived from skills+CLI+MCP) ──
     configBuilder: {
       build(
-        agentConfig: Record<string, unknown>,
-        context: PluginBuildContext,
+        _agentConfig: Record<string, unknown>,
+        _context: PluginBuildContext,
       ): PluginConfigFragment {
         const fragment: PluginConfigFragment = {}
 
@@ -157,17 +158,6 @@ export function createSkillPlugin(
     validation: {
       validate: (_agentConfig, context) => buildDefaultValidation(manifest, context),
     },
-
-    // ── Legacy compat (auto-delegate to new providers) ──
-    buildOpenClawConfig(agentConfig, context) {
-      return this.configBuilder!.build(agentConfig, context)
-    },
-    buildEnvVars(_agentConfig, context) {
-      return buildDefaultEnvVars(manifest, context)
-    },
-    validate(_agentConfig, context) {
-      return buildDefaultValidation(manifest, context)
-    },
   }
 }
 
@@ -180,25 +170,16 @@ export function createSkillPlugin(
  * and create agent routing bindings.
  */
 export function createChannelPlugin(
-  rawManifest: PluginManifest | Record<string, unknown>,
+  manifest: PluginManifest,
   channelBuilder: (
     agentConfig: Record<string, unknown>,
     context: PluginBuildContext,
   ) => PluginConfigFragment,
 ): PluginDefinition {
-  const manifest = rawManifest as PluginManifest
-  const channelType = manifest.id
-
   return {
     manifest,
 
-    // ── Channel Provider ──
-    channel: {
-      type: channelType,
-      buildChannel: channelBuilder,
-    },
-
-    // ── Config Builder (delegates to channel) ──
+    // ── Config Builder (delegates to channel builder) ──
     configBuilder: {
       build: channelBuilder,
     },
@@ -212,15 +193,6 @@ export function createChannelPlugin(
     validation: {
       validate: (_agentConfig, context) => buildDefaultValidation(manifest, context),
     },
-
-    // ── Legacy compat ──
-    buildOpenClawConfig: channelBuilder,
-    buildEnvVars(_agentConfig, context) {
-      return buildDefaultEnvVars(manifest, context)
-    },
-    validate(_agentConfig, context) {
-      return buildDefaultValidation(manifest, context)
-    },
   }
 }
 
@@ -233,33 +205,47 @@ export function createChannelPlugin(
  * in the OpenClaw config.
  */
 export function createProviderPlugin(
-  rawManifest: PluginManifest | Record<string, unknown>,
+  manifest: PluginManifest,
   options: {
     provider: { id: string; api: string; baseUrl?: string }
+    /** @deprecated defaultModel is not written to models.providers; configure it at the agent level instead */
     defaultModel?: string
   },
 ): PluginDefinition {
-  const manifest = rawManifest as PluginManifest
   return {
     manifest,
 
     // ── Config Builder ──
     configBuilder: {
-      build(agentConfig: Record<string, unknown>, _context: PluginBuildContext): PluginConfigFragment {
+      build(
+        agentConfig: Record<string, unknown>,
+        _context: PluginBuildContext,
+      ): PluginConfigFragment {
         const apiKeyField = manifest.auth.fields.find((f) => f.required && f.sensitive)
-        const config: Record<string, unknown> = {
+        const providerEntry: Record<string, unknown> = {
           ...(apiKeyField ? { apiKey: `\${env:${apiKeyField.key}}` } : {}),
-          defaultModel: agentConfig.defaultModel ?? options.defaultModel,
+          models: [],
+          request: { allowPrivateNetwork: true },
         }
         if (agentConfig.baseUrl || options.provider.baseUrl) {
-          config.baseUrl = agentConfig.baseUrl ?? options.provider.baseUrl
+          providerEntry.baseUrl = agentConfig.baseUrl ?? options.provider.baseUrl
         }
-        if (agentConfig.models) config.models = agentConfig.models
+        if (agentConfig.models) providerEntry.models = agentConfig.models
+        if (options.provider.api) {
+          const API_TYPE_MAP: Record<string, string> = {
+            anthropic: 'anthropic-messages',
+            openai: 'openai-completions',
+            google: 'google-generative-ai',
+            gemini: 'google-generative-ai',
+          }
+          providerEntry.api = API_TYPE_MAP[options.provider.api] ?? options.provider.api
+        }
 
         return {
-          plugins: {
-            entries: {
-              [manifest.id]: { enabled: true, config },
+          models: {
+            mode: 'merge',
+            providers: {
+              [options.provider.id]: providerEntry,
             },
           },
         }
@@ -274,63 +260,6 @@ export function createProviderPlugin(
     // ── Validation Provider ──
     validation: {
       validate: (_agentConfig, context) => buildDefaultValidation(manifest, context),
-    },
-
-    // ── Legacy compat ──
-    buildOpenClawConfig(agentConfig, context) {
-      return this.configBuilder!.build(agentConfig, context)
-    },
-    buildEnvVars(_agentConfig, context) {
-      return buildDefaultEnvVars(manifest, context)
-    },
-    validate(_agentConfig, context) {
-      return buildDefaultValidation(manifest, context)
-    },
-  }
-}
-
-// ─── Legacy Factory (deprecated) ────────────────────────────────────────────
-
-/**
- * @deprecated Use createSkillPlugin instead. This creates an MCP-based tool plugin.
- */
-export function createToolPlugin(rawManifest: PluginManifest | Record<string, unknown>): PluginDefinition {
-  const manifest = rawManifest as PluginManifest
-  return {
-    manifest,
-
-    buildOpenClawConfig(
-      agentConfig: Record<string, unknown>,
-      _context: PluginBuildContext,
-    ): PluginConfigFragment {
-      const entry: Record<string, unknown> = {
-        enabled: true,
-        config: { ...agentConfig },
-      }
-
-      const apiKeyField = manifest.auth.fields.find((f) => f.required && f.sensitive)
-      if (apiKeyField) {
-        entry.config = {
-          ...(entry.config as Record<string, unknown>),
-          apiKey: `\${env:${apiKeyField.key}}`,
-        }
-      }
-
-      return {
-        plugins: {
-          entries: {
-            [manifest.id]: entry,
-          },
-        },
-      }
-    },
-
-    buildEnvVars(_agentConfig, context) {
-      return buildDefaultEnvVars(manifest, context)
-    },
-
-    validate(_agentConfig, context) {
-      return buildDefaultValidation(manifest, context)
     },
   }
 }

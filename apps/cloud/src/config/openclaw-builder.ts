@@ -19,11 +19,7 @@ import {
   resolvePluginSecrets,
 } from '../plugins/config-merger.js'
 import { getPluginRegistry } from '../plugins/registry.js'
-import type {
-  PluginBuildContext,
-  PluginConfigFragment,
-  PluginInstanceConfig,
-} from '../plugins/types.js'
+import type { PluginBuildContext } from '../plugins/types.js'
 import { getRuntime } from '../runtimes/index.js'
 import { registerAllRuntimes } from '../runtimes/loader.js'
 
@@ -171,7 +167,7 @@ function buildModelConfig(
 function applyPermissions(agent: AgentDeployment, openclawConfig: OpenClawConfig): void {
   if (!agent.permissions) return
 
-  const PERM_MAP: Record<string, string> = {
+  const PERM_MAP: Record<string, NonNullable<NonNullable<OpenClawConfig['tools']>['profile']>> = {
     'always-allow': 'dangerously-skip-permissions',
     'approve-reads': 'approve-reads',
     'always-ask': 'approve-all',
@@ -181,7 +177,7 @@ function applyPermissions(agent: AgentDeployment, openclawConfig: OpenClawConfig
   if (!openclawConfig.tools) openclawConfig.tools = {}
   const mappedDefault = PERM_MAP[agent.permissions.default]
   if (mappedDefault) {
-    openclawConfig.tools.profile = mappedDefault as 'minimal' | 'coding' | 'messaging' | 'full'
+    openclawConfig.tools.profile = mappedDefault
   }
 
   // nonInteractive: what happens when approval is needed but no human is present
@@ -248,6 +244,9 @@ function buildProvidersConfig(config: CloudConfig): OpenClawConfig['models'] {
         if (m.maxTokens != null) entry.maxTokens = m.maxTokens
         return entry
       })
+    } else {
+      // OpenClaw requires models to be an array (even if empty) — omitting it causes config validation failure
+      providerEntry.models = []
     }
     providers[providerId] = providerEntry
   }
@@ -512,12 +511,9 @@ function stripAndCollectWorkspaceFiles(openclawConfig: OpenClawConfig): Record<s
 }
 
 /**
- * Run the plugin pipeline — iterate enabled plugins, call their hooks, and merge results.
+ * Run the plugin pipeline — iterate enabled plugins, call their providers, and merge results.
  *
- * Resolution order (new OS-like providers take priority over legacy hooks):
- * 1. configBuilder.build / channel.buildChannel (new structured providers)
- * 2. buildOpenClawConfig (legacy hook, fallback)
- * 3. env.build / buildEnvVars for environment variables
+ * All plugins use structured providers: configBuilder, env, resources, lifecycle.
  */
 function applyPluginPipeline(
   agent: AgentDeployment,
@@ -527,7 +523,6 @@ function applyPluginPipeline(
   const registry = getPluginRegistry()
   if (registry.size === 0) return {}
 
-  const pluginsMap = (config.plugins ?? {}) as Record<string, PluginInstanceConfig>
   const envVars: Record<string, string> = {}
 
   // Collect K8s resources from resource providers
@@ -535,7 +530,7 @@ function applyPluginPipeline(
 
   for (const pluginDef of registry.getAll()) {
     const pluginId = pluginDef.manifest.id
-    // Skip shadowob — it's handled in step 9 via the legacy path
+    // Skip shadowob — it's handled separately in buildShadowobChannels
     if (pluginId === 'shadowob') continue
 
     const resolved = resolveAgentPluginConfig(pluginId, agent.id, config)
@@ -552,31 +547,20 @@ function applyPluginPipeline(
 
     const agentConfig = (resolved.config ?? {}) as Record<string, unknown>
 
-    // Build OpenClaw config fragment (new providers → legacy fallback)
+    // Build OpenClaw config fragment via configBuilder provider
     if (pluginDef.configBuilder) {
       const fragment = pluginDef.configBuilder.build(agentConfig, context)
       Object.assign(openclawConfig, mergePluginFragments(openclawConfig, fragment))
-    } else if (pluginDef.channel) {
-      const fragment = pluginDef.channel.buildChannel(agentConfig, context)
-      Object.assign(openclawConfig, mergePluginFragments(openclawConfig, fragment))
-    } else if (pluginDef.buildOpenClawConfig) {
-      const fragment = pluginDef.buildOpenClawConfig(agentConfig, context)
-      Object.assign(openclawConfig, mergePluginFragments(openclawConfig, fragment))
     }
 
-    // Build env vars (new provider → legacy fallback)
+    // Build env vars via env provider
     if (pluginDef.env) {
       Object.assign(envVars, pluginDef.env.build(agentConfig, context))
-    } else if (pluginDef.buildEnvVars) {
-      Object.assign(envVars, pluginDef.buildEnvVars(agentConfig, context))
     }
 
-    // Collect K8s resources (new provider → legacy fallback)
+    // Collect K8s resources via resources provider
     if (pluginDef.resources) {
       const resources = pluginDef.resources.build(agentConfig, context)
-      pluginResources.push(...resources)
-    } else if (pluginDef.buildK8sResources) {
-      const resources = pluginDef.buildK8sResources(agentConfig, context)
       pluginResources.push(...resources)
     }
 

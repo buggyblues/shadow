@@ -7,41 +7,15 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getPluginRegistry } from '../plugins/registry.js'
+import { deepMerge } from '../utils/deep-merge.js'
 import { parseJsonc } from '../utils/jsonc.js'
 import type { AgentConfiguration, AgentDeployment, CloudConfig, Configuration } from './schema.js'
 import { validateCloudConfig } from './schema.js'
 import { resolveTemplates, type TemplateContext } from './template.js'
 
+export { deepMerge } from '../utils/deep-merge.js'
 // Re-export buildOpenClawConfig from its dedicated module
 export { buildOpenClawConfig } from './openclaw-builder.js'
-
-/**
- * Deep merge two objects. Arrays are replaced, not merged.
- */
-export function deepMerge<T extends Record<string, unknown>>(base: T, override: Partial<T>): T {
-  const result = { ...base }
-  for (const key of Object.keys(override) as Array<keyof T>) {
-    const baseVal = result[key]
-    const overVal = override[key]
-    if (
-      overVal !== undefined &&
-      typeof baseVal === 'object' &&
-      baseVal !== null &&
-      !Array.isArray(baseVal) &&
-      typeof overVal === 'object' &&
-      overVal !== null &&
-      !Array.isArray(overVal)
-    ) {
-      result[key] = deepMerge(
-        baseVal as Record<string, unknown>,
-        overVal as Record<string, unknown>,
-      ) as T[keyof T]
-    } else if (overVal !== undefined) {
-      result[key] = overVal as T[keyof T]
-    }
-  }
-  return result
-}
 
 /**
  * Expand the 'extends' field in an agent configuration by merging

@@ -67,14 +67,6 @@ interface TeamConfig {
 
   defaultModel?: AgentModel              // 团队默认模型配置
   defaultCompliance?: AgentCompliance    // 团队默认合规配置
-  sharedWorkspace?: boolean              // 等价于 workspace.enabled = true
-
-  defaultChannels?: {                    // 默认通信渠道
-    telegram?: boolean
-    discord?: boolean
-    slack?: boolean
-    shadowob?: boolean
-  }
 }
 ```
 

@@ -3,34 +3,17 @@
  */
 
 import { createSkillPlugin } from '../helpers.js'
-import type { PluginDefinition } from '../types.js'
+import type { PluginDefinition, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = createSkillPlugin(
-  manifest as unknown as PluginDefinition['manifest'],
-  {
-    skills: {
-      bundled: ['n8n'],
-      entries: [
-        {
-          id: 'n8n',
-          name: 'n8n',
-          description: 'Workflow management, execution triggering, and credential operations',
-          env: {
-            // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-            N8N_API_KEY: '${env:N8N_API_KEY}',
-            // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-            N8N_BASE_URL: '${env:N8N_BASE_URL}',
-          },
-        },
-      ],
-      install: { npmPackages: ['@leonardsellem/n8n-mcp-server'] },
-    },
-    mcp: {
-      server: {
-        transport: 'stdio',
-        command: 'npx',
-        args: ['-y', '@leonardsellem/n8n-mcp-server'],
+const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
+  skills: {
+    bundled: ['n8n'],
+    entries: [
+      {
+        id: 'n8n',
+        name: 'n8n',
+        description: 'Workflow management, execution triggering, and credential operations',
         env: {
           // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
           N8N_API_KEY: '${env:N8N_API_KEY}',
@@ -38,8 +21,22 @@ const plugin: PluginDefinition = createSkillPlugin(
           N8N_BASE_URL: '${env:N8N_BASE_URL}',
         },
       },
+    ],
+    install: { npmPackages: ['@leonardsellem/n8n-mcp-server'] },
+  },
+  mcp: {
+    server: {
+      transport: 'stdio',
+      command: 'npx',
+      args: ['-y', '@leonardsellem/n8n-mcp-server'],
+      env: {
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+        N8N_API_KEY: '${env:N8N_API_KEY}',
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+        N8N_BASE_URL: '${env:N8N_BASE_URL}',
+      },
     },
   },
-)
+})
 
 export default plugin

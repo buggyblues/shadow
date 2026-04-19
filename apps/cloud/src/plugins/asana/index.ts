@@ -3,35 +3,32 @@
  */
 
 import { createSkillPlugin } from '../helpers.js'
-import type { PluginDefinition } from '../types.js'
+import type { PluginDefinition, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = createSkillPlugin(
-  manifest as unknown as PluginDefinition['manifest'],
-  {
-    skills: {
-      bundled: ['asana'],
-      entries: [
-        {
-          id: 'asana',
-          name: 'Asana',
-          description: 'Workspace, project, task, comment, section, and tag management',
-          // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-          env: { ASANA_ACCESS_TOKEN: '${env:ASANA_ACCESS_TOKEN}' },
-        },
-      ],
-      install: { npmPackages: ['@roychri/mcp-server-asana'] },
-    },
-    mcp: {
-      server: {
-        transport: 'stdio',
-        command: 'npx',
-        args: ['-y', '@roychri/mcp-server-asana'],
+const plugin: PluginDefinition = createSkillPlugin(manifest as PluginManifest, {
+  skills: {
+    bundled: ['asana'],
+    entries: [
+      {
+        id: 'asana',
+        name: 'Asana',
+        description: 'Workspace, project, task, comment, section, and tag management',
         // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
         env: { ASANA_ACCESS_TOKEN: '${env:ASANA_ACCESS_TOKEN}' },
       },
+    ],
+    install: { npmPackages: ['@roychri/mcp-server-asana'] },
+  },
+  mcp: {
+    server: {
+      transport: 'stdio',
+      command: 'npx',
+      args: ['-y', '@roychri/mcp-server-asana'],
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+      env: { ASANA_ACCESS_TOKEN: '${env:ASANA_ACCESS_TOKEN}' },
     },
   },
-)
+})
 
 export default plugin

@@ -3,18 +3,13 @@
  */
 
 export {
-  mergePluginFragments,
-  resolveAgentPluginConfig,
-  resolvePluginSecrets,
-} from './config-merger.js'
-export {
   createChannelPlugin,
   createProviderPlugin,
   createSkillPlugin,
   loadManifest,
 } from './helpers.js'
-export { checkPluginHealth, executePluginProvisions } from './lifecycle.js'
 export type { ProvisionResults } from './lifecycle.js'
+export { checkPluginHealth, executePluginProvisions } from './lifecycle.js'
 export { loadAllPlugins, registerPlugin, validateManifest } from './loader.js'
 export { createPluginRegistry, getPluginRegistry, resetPluginRegistry } from './registry.js'
 export type {
@@ -24,7 +19,6 @@ export type {
   PluginBuildContext,
   PluginCapability,
   PluginCategory,
-  PluginChannelProvider,
   PluginCLIProvider,
   PluginCLITool,
   PluginConfigBuilder,

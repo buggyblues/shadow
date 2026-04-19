@@ -5,15 +5,12 @@
  */
 
 import { createProviderPlugin } from '../helpers.js'
-import type { PluginDefinition } from '../types.js'
+import type { PluginDefinition, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = createProviderPlugin(
-  manifest as unknown as PluginDefinition['manifest'],
-  {
-    provider: { id: 'openai', api: 'openai' },
-    defaultModel: 'gpt-4o',
-  },
-)
+const plugin: PluginDefinition = createProviderPlugin(manifest as PluginManifest, {
+  provider: { id: 'openai', api: 'openai' },
+  defaultModel: 'gpt-4o',
+})
 
 export default plugin

@@ -19,11 +19,16 @@ import {
   readGitAgentDir,
 } from '../../adapters/gitagent.js'
 import type { AgentDeployment, AgentSource } from '../../config/schema.js'
-import type { PluginBuildContext, PluginConfigFragment, PluginDefinition } from '../types.js'
+import type {
+  PluginBuildContext,
+  PluginConfigFragment,
+  PluginDefinition,
+  PluginManifest,
+} from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
 const plugin: PluginDefinition = {
-  manifest: manifest as unknown as PluginDefinition['manifest'],
+  manifest: manifest as PluginManifest,
 
   // ── Config Resolver ──
   // Pre-build: convert gitagent use entry → agent.source + enrich from local path

@@ -2,38 +2,14 @@
  * Plugin Config Merger — merges plugin config fragments into OpenClaw config.
  */
 
-import type { CloudConfig, OpenClawBinding, OpenClawConfig } from '../config/schema.js'
-import type { PluginConfigFragment, PluginInstanceConfig } from './types.js'
-
-/**
- * Deep merge helper for objects. Arrays are concatenated, objects are recursively merged.
- */
-function deepMergeObj(
-  target: Record<string, unknown>,
-  source: Record<string, unknown>,
-): Record<string, unknown> {
-  const result = { ...target }
-  for (const key of Object.keys(source)) {
-    const targetVal = result[key]
-    const sourceVal = source[key]
-    if (
-      targetVal &&
-      sourceVal &&
-      typeof targetVal === 'object' &&
-      typeof sourceVal === 'object' &&
-      !Array.isArray(targetVal) &&
-      !Array.isArray(sourceVal)
-    ) {
-      result[key] = deepMergeObj(
-        targetVal as Record<string, unknown>,
-        sourceVal as Record<string, unknown>,
-      )
-    } else {
-      result[key] = sourceVal
-    }
-  }
-  return result
-}
+import type {
+  CloudConfig,
+  CloudPluginInstanceConfig,
+  OpenClawBinding,
+  OpenClawConfig,
+} from '../config/schema.js'
+import { deepMerge } from '../utils/deep-merge.js'
+import type { PluginConfigFragment } from './types.js'
 
 /**
  * Merge plugin config fragment(s) into a base OpenClaw config.
@@ -49,9 +25,9 @@ export function mergePluginFragments(
   for (const fragment of fragments) {
     // Channels: deep merge (each plugin owns its channel namespace)
     if (fragment.channels) {
-      result.channels = deepMergeObj(
+      result.channels = deepMerge(
         (result.channels ?? {}) as Record<string, unknown>,
-        fragment.channels,
+        fragment.channels as Record<string, unknown>,
       ) as OpenClawConfig['channels']
     }
 
@@ -64,28 +40,37 @@ export function mergePluginFragments(
     // Plugins/MCP: deep merge
     if (fragment.plugins) {
       if (!result.plugins) result.plugins = {} as Record<string, unknown>
-      result.plugins = deepMergeObj(
+      result.plugins = deepMerge(
         result.plugins as Record<string, unknown>,
-        fragment.plugins,
+        fragment.plugins as Record<string, unknown>,
       ) as OpenClawConfig['plugins']
     }
 
     // Skills: deep merge
     if (fragment.skills) {
       if (!result.skills) result.skills = {} as Record<string, unknown>
-      result.skills = deepMergeObj(
+      result.skills = deepMerge(
         result.skills as Record<string, unknown>,
-        fragment.skills,
+        fragment.skills as Record<string, unknown>,
       ) as OpenClawConfig['skills']
     }
 
     // Tools: deep merge
     if (fragment.tools) {
       if (!result.tools) result.tools = {} as Record<string, unknown>
-      result.tools = deepMergeObj(
+      result.tools = deepMerge(
         result.tools as Record<string, unknown>,
-        fragment.tools,
+        fragment.tools as Record<string, unknown>,
       ) as OpenClawConfig['tools']
+    }
+
+    // Models: deep merge (provider plugins contribute to models.providers)
+    if (fragment.models) {
+      if (!result.models) result.models = {} as Record<string, unknown>
+      result.models = deepMerge(
+        result.models as Record<string, unknown>,
+        fragment.models as Record<string, unknown>,
+      ) as OpenClawConfig['models']
     }
   }
 
@@ -96,28 +81,36 @@ export function mergePluginFragments(
  * Resolve the effective plugin config for a specific agent.
  * Merges: plugin defaults → global config → per-agent override.
  * Returns null if the plugin is disabled for this agent.
+ *
+ * Checks both the legacy `plugins` map and the new `use` array.
  */
 export function resolveAgentPluginConfig(
   pluginId: string,
   agentId: string,
   config: CloudConfig,
 ): Record<string, unknown> | null {
+  // Legacy plugins map path
   const pluginInstanceConfig = (
-    config.plugins as Record<string, PluginInstanceConfig> | undefined
+    config.plugins as Record<string, CloudPluginInstanceConfig> | undefined
   )?.[pluginId]
-  if (!pluginInstanceConfig) return null
-  if (pluginInstanceConfig.enabled === false) return null
+  if (pluginInstanceConfig) {
+    if (pluginInstanceConfig.enabled === false) return null
 
-  // Start with global plugin config
-  const globalConfig = pluginInstanceConfig.config ?? {}
+    const globalConfig = pluginInstanceConfig.config ?? {}
+    const agentOverride = pluginInstanceConfig.agents?.[agentId]
+    if (agentOverride?.enabled === false) return null
 
-  // Check per-agent override
-  const agentOverride = pluginInstanceConfig.agents?.[agentId]
-  if (agentOverride?.enabled === false) return null
+    const agentConfig = agentOverride?.config ?? {}
+    return { ...globalConfig, ...agentConfig }
+  }
 
-  // Merge global + per-agent config
-  const agentConfig = agentOverride?.config ?? {}
-  return { ...globalConfig, ...agentConfig }
+  // New `use` array path
+  const useEntry = config.use?.find((e) => e.plugin === pluginId)
+  if (useEntry) {
+    return useEntry.options ?? {}
+  }
+
+  return null
 }
 
 /**
@@ -129,8 +122,9 @@ export function resolvePluginSecrets(
   config: CloudConfig,
   processEnv: Record<string, string | undefined>,
 ): Record<string, string> {
+  // Only the legacy plugins map carries secrets; use-array plugins resolve at build time via env refs.
   const pluginInstanceConfig = (
-    config.plugins as Record<string, PluginInstanceConfig> | undefined
+    config.plugins as Record<string, CloudPluginInstanceConfig> | undefined
   )?.[pluginId]
   if (!pluginInstanceConfig?.secrets) return {}
 

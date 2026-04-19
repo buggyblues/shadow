@@ -8,11 +8,7 @@
 import type { AgentDeployment, CloudConfig } from '../config/schema.js'
 import { resolveAgentPluginConfig, resolvePluginSecrets } from './config-merger.js'
 import { getPluginRegistry } from './registry.js'
-import type {
-  PluginBuildContext,
-  PluginInstanceConfig,
-  PluginProvisionContext,
-} from './types.js'
+import type { PluginBuildContext, PluginProvisionContext } from './types.js'
 
 export interface ProvisionResults {
   secrets: Record<string, string>
@@ -82,6 +78,7 @@ export async function executePluginProvisions(
  */
 export async function checkPluginHealth(
   config: CloudConfig,
+  agentId = '',
 ): Promise<Array<{ pluginId: string; name: string; healthy: boolean; message: string }>> {
   const registry = getPluginRegistry()
   const results: Array<{ pluginId: string; name: string; healthy: boolean; message: string }> = []
@@ -93,13 +90,17 @@ export async function checkPluginHealth(
 
     if (!pluginDef.lifecycle?.healthCheck) continue
 
-    const resolved = resolveAgentPluginConfig(pluginId, '', config)
+    const resolved = resolveAgentPluginConfig(pluginId, agentId, config)
     if (!resolved) continue
 
     const secrets = resolvePluginSecrets(pluginId, config, process.env)
 
     const context: PluginBuildContext = {
-      agent: { id: '', runtime: 'openclaw', configuration: { openclaw: {} } } as AgentDeployment,
+      agent: {
+        id: agentId,
+        runtime: 'openclaw',
+        configuration: { openclaw: {} },
+      } as AgentDeployment,
       config,
       secrets,
       namespace: config.deployments?.namespace ?? 'default',

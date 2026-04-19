@@ -8,7 +8,7 @@
  * Industry paradigm: skills + CLI first, MCP for real-time connections only.
  */
 
-import type { AgentDeployment, CloudConfig, OpenClawConfig } from '../config/schema.js'
+import type { AgentDeployment, CloudConfig } from '../config/schema.js'
 
 // ─── Plugin Manifest (metadata from manifest.json) ─────────────────────────
 
@@ -130,6 +130,7 @@ export interface PluginConfigFragment {
   plugins?: Record<string, unknown>
   skills?: Record<string, unknown>
   tools?: Record<string, unknown>
+  models?: Record<string, unknown>
   [key: string]: unknown
 }
 
@@ -222,19 +223,6 @@ export interface PluginMCPProvider {
   server: PluginMCPServer
 }
 
-// ─── Channel Provider ───────────────────────────────────────────────────────
-
-/** Channel provider — for communication plugins (Slack, Discord, Telegram, etc.). */
-export interface PluginChannelProvider {
-  /** Channel type (slack, discord, telegram, etc.) */
-  type: string
-  /** Build channel-specific OpenClaw configuration */
-  buildChannel(
-    agentConfig: Record<string, unknown>,
-    context: PluginBuildContext,
-  ): PluginConfigFragment
-}
-
 // ─── Config Builder ─────────────────────────────────────────────────────────
 
 /** Config builder — custom OpenClaw config generation beyond auto-derivation. */
@@ -324,14 +312,6 @@ export interface PluginValidationProvider {
  * }
  *
  * @example
- * // Channel plugin (communication)
- * const plugin: PluginDefinition = {
- *   manifest,
- *   channel: { type: 'slack', buildChannel: (config, ctx) => ({...}) },
- *   env: { build: (_, ctx) => ({ SLACK_BOT_TOKEN: ctx.secrets.SLACK_BOT_TOKEN }) },
- * }
- *
- * @example
  * // AI provider plugin
  * const plugin: PluginDefinition = {
  *   manifest,
@@ -351,8 +331,6 @@ export interface PluginDefinition {
   cli?: PluginCLIProvider
   /** MCP server (for real-time connections only — prefer skills+CLI) */
   mcp?: PluginMCPProvider
-  /** Channel integration (Slack, Discord, Telegram, etc.) */
-  channel?: PluginChannelProvider
 
   // ── Infrastructure ──
 
@@ -371,38 +349,6 @@ export interface PluginDefinition {
   lifecycle?: PluginLifecycleProvider
   /** Configuration validation */
   validation?: PluginValidationProvider
-
-  // ── Legacy Hooks (backward compat, will be deprecated) ──
-
-  /** @deprecated Use configBuilder.build */
-  buildOpenClawConfig?(
-    agentConfig: Record<string, unknown>,
-    context: PluginBuildContext,
-  ): PluginConfigFragment
-
-  /** @deprecated Use env.build */
-  buildEnvVars?(
-    agentConfig: Record<string, unknown>,
-    context: PluginBuildContext,
-  ): Record<string, string>
-
-  /** @deprecated Use resources.build */
-  buildK8sResources?(
-    agentConfig: Record<string, unknown>,
-    context: PluginBuildContext,
-  ): Record<string, unknown>[]
-
-  /** @deprecated Use lifecycle.provision */
-  provision?(
-    agentConfig: Record<string, unknown>,
-    context: PluginProvisionContext,
-  ): Promise<PluginProvisionResult>
-
-  /** @deprecated Use validation.validate */
-  validate?(
-    agentConfig: Record<string, unknown>,
-    context: PluginBuildContext,
-  ): PluginValidationResult
 }
 
 // ─── Plugin Registry Interface ──────────────────────────────────────────────

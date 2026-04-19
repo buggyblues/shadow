@@ -2,7 +2,12 @@
  * Gmail plugin — channel integration for email via Gmail.
  */
 import { createChannelPlugin } from '../helpers.js'
-import type { PluginBuildContext, PluginConfigFragment, PluginDefinition } from '../types.js'
+import type {
+  PluginBuildContext,
+  PluginConfigFragment,
+  PluginDefinition,
+  PluginManifest,
+} from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
 function buildGmailConfig(
@@ -38,8 +43,5 @@ function buildGmailConfig(
   }
 }
 
-const plugin: PluginDefinition = createChannelPlugin(
-  manifest as unknown as PluginDefinition['manifest'],
-  buildGmailConfig,
-)
+const plugin: PluginDefinition = createChannelPlugin(manifest as PluginManifest, buildGmailConfig)
 export default plugin

@@ -5,8 +5,14 @@
  * mapping agent deployments to buddy accounts with routing and reply policies.
  */
 
-import type { PluginBuildContext, PluginConfigFragment, PluginDefinition, PluginValidationError } from '../types.js'
 import { createChannelPlugin } from '../helpers.js'
+import type {
+  PluginBuildContext,
+  PluginConfigFragment,
+  PluginDefinition,
+  PluginManifest,
+  PluginValidationError,
+} from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
 interface ShadowBuddy {
@@ -77,10 +83,7 @@ function buildShadowConfig(
   }
 }
 
-const basePlugin = createChannelPlugin(
-  manifest as unknown as PluginDefinition['manifest'],
-  buildShadowConfig,
-)
+const basePlugin = createChannelPlugin(manifest as PluginManifest, buildShadowConfig)
 
 // Override validation with custom buddy/binding checks
 const plugin: PluginDefinition = {

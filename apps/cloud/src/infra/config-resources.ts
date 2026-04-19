@@ -6,6 +6,7 @@ import * as k8s from '@pulumi/kubernetes'
 import type * as pulumi from '@pulumi/pulumi'
 import { buildOpenClawConfig } from '../config/parser.js'
 import type { AgentDeployment, CloudConfig } from '../config/schema.js'
+import { getPluginRegistry } from '../plugins/registry.js'
 
 export interface ConfigResourcesOptions {
   agentName: string
@@ -28,24 +29,37 @@ export function createConfigResources(options: ConfigResourcesOptions) {
   const configMapName = `${agentName}-config`
   const secretName = `${agentName}-secrets`
 
-  // Separate secrets from env vars
+  // Collect secrets from plugin manifests + resolved plugin secrets
+  const registry = getPluginRegistry()
   const secretData: Record<string, string> = {}
   const configData: Record<string, string> = {
     'config.json': JSON.stringify(openclawConfig, null, 2),
     ...workspaceFiles,
   }
 
-  // Extract API keys and tokens into secrets
-  if (config.registry?.providers) {
-    for (const provider of config.registry.providers) {
-      if (provider.apiKey) {
-        const envKey = `${(provider.id ?? 'custom').toUpperCase().replace(/-/g, '_')}_API_KEY`
-        secretData[envKey] = provider.apiKey
+  // Extract secrets from enabled plugins based on manifest auth fields
+  const pluginsMap = (config.plugins ?? {}) as Record<string, Record<string, unknown>>
+  for (const pluginDef of registry.getAll()) {
+    const pluginId = pluginDef.manifest.id
+    const pluginInstance = pluginsMap[pluginId]
+    if (!pluginInstance?.enabled) continue
+
+    // Collect resolved secret refs from plugin instance
+    const pluginSecrets = (pluginInstance.secrets ?? {}) as Record<string, string>
+    for (const [secretKey, secretRef] of Object.entries(pluginSecrets)) {
+      // Resolve ${env:VAR} references
+      const envMatch = secretRef.match(/^\$\{env:(\w+)\}$/)
+      if (envMatch?.[1]) {
+        const envVal = process.env[envMatch[1]]
+        if (envVal) secretData[secretKey] = envVal
+      } else {
+        // Literal value — store as secret since manifest marks it sensitive
+        secretData[secretKey] = secretRef
       }
     }
   }
 
-  // Add provisioned env vars as secrets (tokens, etc.)
+  // Add provisioned env vars — sensitive keys go to Secret, rest to ConfigMap
   if (extraEnv) {
     for (const [key, value] of Object.entries(extraEnv)) {
       if (key.includes('TOKEN') || key.includes('KEY') || key.includes('SECRET')) {
