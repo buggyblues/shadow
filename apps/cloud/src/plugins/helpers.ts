@@ -88,73 +88,67 @@ export function createSkillPlugin(
 
     // ── Capability Providers ──
     skills: options.skills,
-    cli: options.cli,
-    mcp: options.mcp,
+    cli: options.cli?.tools,
+    mcp: options.mcp?.server,
 
     // ── Config Builder (auto-derived from skills+CLI+MCP) ──
-    configBuilder: {
-      build(_context: PluginBuildContext): PluginConfigFragment {
-        const fragment: PluginConfigFragment = {}
+    buildConfig(_context: PluginBuildContext): PluginConfigFragment {
+      const fragment: PluginConfigFragment = {}
 
-        // Skills → skills.allowBundled + skills.entries
-        if (options.skills) {
-          const skillsConfig: Record<string, unknown> = {}
-          if (options.skills.bundled?.length) {
-            skillsConfig.allowBundled = options.skills.bundled
-          }
-          if (options.skills.entries?.length) {
-            const entries: Record<string, unknown> = {}
-            for (const skill of options.skills.entries) {
-              entries[skill.id] = {
-                enabled: true,
-                ...(skill.apiKey ? { apiKey: skill.apiKey } : {}),
-                ...(skill.env ? { env: skill.env } : {}),
-              }
+      // Skills → skills.allowBundled + skills.entries
+      if (options.skills) {
+        const skillsConfig: Record<string, unknown> = {}
+        if (options.skills.bundled?.length) {
+          skillsConfig.allowBundled = options.skills.bundled
+        }
+        if (options.skills.entries?.length) {
+          const entries: Record<string, unknown> = {}
+          for (const skill of options.skills.entries) {
+            entries[skill.id] = {
+              enabled: true,
+              ...(skill.apiKey ? { apiKey: skill.apiKey } : {}),
+              ...(skill.env ? { env: skill.env } : {}),
             }
-            skillsConfig.entries = entries
           }
-          if (options.skills.install) {
-            skillsConfig.install = options.skills.install
-          }
-          fragment.skills = skillsConfig
+          skillsConfig.entries = entries
         }
-
-        // CLI tools → tools.allow
-        if (options.cli?.tools.length) {
-          fragment.tools = {
-            allow: options.cli.tools.map((t) => t.name),
-          }
+        if (options.skills.install) {
+          skillsConfig.install = options.skills.install
         }
+        fragment.skills = skillsConfig
+      }
 
-        // MCP server (fallback for plugins that genuinely need it)
-        if (options.mcp?.server) {
-          const { server } = options.mcp
-          fragment.plugins = {
-            entries: {
-              [manifest.id]: {
-                enabled: true,
-                transport: server.transport,
-                command: server.command,
-                ...(server.args ? { args: server.args } : {}),
-                ...(server.env ? { env: server.env } : {}),
-              },
+      // CLI tools → tools.allow
+      if (options.cli?.tools.length) {
+        fragment.tools = {
+          allow: options.cli.tools.map((t) => t.name),
+        }
+      }
+
+      // MCP server (fallback for plugins that genuinely need it)
+      if (options.mcp?.server) {
+        const { server } = options.mcp
+        fragment.plugins = {
+          entries: {
+            [manifest.id]: {
+              enabled: true,
+              transport: server.transport,
+              command: server.command,
+              ...(server.args ? { args: server.args } : {}),
+              ...(server.env ? { env: server.env } : {}),
             },
-          }
+          },
         }
+      }
 
-        return fragment
-      },
+      return fragment
     },
 
-    // ── Env Provider ──
-    env: {
-      build: (context) => buildDefaultEnvVars(manifest, context),
-    },
+    // ── Env ──
+    buildEnv: (context) => buildDefaultEnvVars(manifest, context),
 
-    // ── Validation Provider ──
-    validation: {
-      validate: (context) => buildDefaultValidation(manifest, context),
-    },
+    // ── Validation ──
+    validate: (context) => buildDefaultValidation(manifest, context),
   }
 }
 
@@ -174,19 +168,13 @@ export function createChannelPlugin(
     manifest,
 
     // ── Config Builder (delegates to channel builder) ──
-    configBuilder: {
-      build: channelBuilder,
-    },
+    buildConfig: channelBuilder,
 
-    // ── Env Provider ──
-    env: {
-      build: (context) => buildDefaultEnvVars(manifest, context),
-    },
+    // ── Env ──
+    buildEnv: (context) => buildDefaultEnvVars(manifest, context),
 
-    // ── Validation Provider ──
-    validation: {
-      validate: (context) => buildDefaultValidation(manifest, context),
-    },
+    // ── Validation ──
+    validate: (context) => buildDefaultValidation(manifest, context),
   }
 }
 
@@ -208,48 +196,42 @@ export function createProviderPlugin(
     manifest,
 
     // ── Config Builder ──
-    configBuilder: {
-      build(context: PluginBuildContext): PluginConfigFragment {
-        const { agentConfig } = context
-        const apiKeyField = manifest.auth.fields.find((f) => f.required && f.sensitive)
-        const providerEntry: Record<string, unknown> = {
-          ...(apiKeyField ? { apiKey: `\${env:${apiKeyField.key}}` } : {}),
-          models: [],
-          request: { allowPrivateNetwork: true },
+    buildConfig(context: PluginBuildContext): PluginConfigFragment {
+      const { agentConfig } = context
+      const apiKeyField = manifest.auth.fields.find((f) => f.required && f.sensitive)
+      const providerEntry: Record<string, unknown> = {
+        ...(apiKeyField ? { apiKey: `\${env:${apiKeyField.key}}` } : {}),
+        models: [],
+        request: { allowPrivateNetwork: true },
+      }
+      if (agentConfig.baseUrl || options.provider.baseUrl) {
+        providerEntry.baseUrl = agentConfig.baseUrl ?? options.provider.baseUrl
+      }
+      if (agentConfig.models) providerEntry.models = agentConfig.models
+      if (options.provider.api) {
+        const API_TYPE_MAP: Record<string, string> = {
+          anthropic: 'anthropic-messages',
+          openai: 'openai-completions',
+          google: 'google-generative-ai',
+          gemini: 'google-generative-ai',
         }
-        if (agentConfig.baseUrl || options.provider.baseUrl) {
-          providerEntry.baseUrl = agentConfig.baseUrl ?? options.provider.baseUrl
-        }
-        if (agentConfig.models) providerEntry.models = agentConfig.models
-        if (options.provider.api) {
-          const API_TYPE_MAP: Record<string, string> = {
-            anthropic: 'anthropic-messages',
-            openai: 'openai-completions',
-            google: 'google-generative-ai',
-            gemini: 'google-generative-ai',
-          }
-          providerEntry.api = API_TYPE_MAP[options.provider.api] ?? options.provider.api
-        }
+        providerEntry.api = API_TYPE_MAP[options.provider.api] ?? options.provider.api
+      }
 
-        return {
-          models: {
-            mode: 'merge',
-            providers: {
-              [options.provider.id]: providerEntry,
-            },
+      return {
+        models: {
+          mode: 'merge',
+          providers: {
+            [options.provider.id]: providerEntry,
           },
-        }
-      },
+        },
+      }
     },
 
-    // ── Env Provider ──
-    env: {
-      build: (context) => buildDefaultEnvVars(manifest, context),
-    },
+    // ── Env ──
+    buildEnv: (context) => buildDefaultEnvVars(manifest, context),
 
-    // ── Validation Provider ──
-    validation: {
-      validate: (context) => buildDefaultValidation(manifest, context),
-    },
+    // ── Validation ──
+    validate: (context) => buildDefaultValidation(manifest, context),
   }
 }

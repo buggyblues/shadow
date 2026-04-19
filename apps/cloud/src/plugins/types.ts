@@ -1,16 +1,36 @@
 /**
- * Core plugin system types — OS-like structured API.
+ * Core plugin system types.
  *
  * Every plugin exports a PluginDefinition from its index.ts.
- * The interface is organized into structured "providers" — each representing
- * a category of capability (skills, CLI, channels, config, resources, etc.).
  *
- * Industry paradigm: skills + CLI first, MCP for real-time connections only.
+ * Design principles:
+ * - Flat hooks: no wrapper objects — if a plugin does something, it's a method
+ * - Declarative data for static capabilities (skills, cli, mcp)
+ * - Single context object carries everything a hook needs
+ *
+ * @example
+ * // Skill plugin
+ * const plugin: PluginDefinition = {
+ *   manifest,
+ *   skills: { bundled: ['github'] },
+ *   cli: [{ name: 'gh', command: 'gh', description: 'GitHub CLI' }],
+ *   buildEnv: (ctx) => ({ GITHUB_TOKEN: ctx.secrets.GITHUB_TOKEN }),
+ * }
+ *
+ * @example
+ * // Channel plugin
+ * const plugin: PluginDefinition = {
+ *   manifest,
+ *   buildConfig: (ctx) => ({ channels: { slack: { ... } } }),
+ *   buildEnv: (ctx) => ({ SLACK_BOT_TOKEN: ctx.secrets.SLACK_BOT_TOKEN }),
+ *   provision: async (ctx) => { ... },
+ *   healthCheck: async (ctx) => ({ healthy: true, message: 'OK' }),
+ * }
  */
 
 import type { AgentDeployment, CloudConfig } from '../config/schema.js'
 
-// ─── Plugin Manifest (metadata from manifest.json) ─────────────────────────
+// ─── Plugin Manifest ────────────────────────────────────────────────────────
 
 export type PluginCategory =
   | 'communication'
@@ -84,8 +104,9 @@ export interface PluginManifest {
   popularity?: number
 }
 
-// ─── Build Context ──────────────────────────────────────────────────────────
+// ─── Context Types ──────────────────────────────────────────────────────────
 
+/** Base context shared across all plugin hooks */
 export interface PluginBaseContext {
   /** The agent being deployed */
   agent: AgentDeployment
@@ -95,23 +116,27 @@ export interface PluginBaseContext {
   secrets: Record<string, string>
   /** K8s namespace being deployed to */
   namespace: string
-  /** Resolved plugin options for this specific agent — the plugin's own config */
+  /** Resolved plugin options for this specific agent */
   agentConfig: Record<string, unknown>
 }
 
+/** Context passed to build-time hooks: buildConfig, buildEnv, buildResources, validate, healthCheck */
 export interface PluginBuildContext extends PluginBaseContext {
   pluginRegistry: PluginRegistry
 }
 
+/** Context passed to the provision hook (async, has logger and previous state) */
 export interface PluginProvisionContext extends PluginBaseContext {
   logger: { info: (msg: string) => void; dim: (msg: string) => void }
   dryRun: boolean
-  /** This plugin's persisted state from the previous run (for dedup) */
+  /** This plugin's persisted state from the previous provision run */
   previousState: Record<string, unknown> | null
 }
 
+// ─── Hook Return Types ───────────────────────────────────────────────────────
+
 export interface PluginProvisionResult {
-  /** State to persist for this plugin (stored as plugins[pluginId] in ProvisionState) */
+  /** State to persist (stored as plugins[pluginId]) */
   state?: Record<string, unknown>
   /** Secrets to inject into the agent container as env vars */
   secrets?: Record<string, string>
@@ -138,208 +163,108 @@ export interface PluginValidationResult {
   errors: PluginValidationError[]
 }
 
-// ─── Skills Provider ────────────────────────────────────────────────────────
+// ─── Static Capability Types ─────────────────────────────────────────────────
 
 /** A bundled or custom skill that an agent can execute. */
 export interface PluginSkillEntry {
-  /** Skill ID (e.g., 'github', 'web-search', 'code-review') */
   id: string
-  /** Human-readable skill name */
   name: string
-  /** What the skill does */
   description: string
-  /** Environment variables required for this skill */
   env?: Record<string, string>
-  /** API key reference (${env:VAR} format) */
   apiKey?: string
 }
 
 /** Install configuration for skill dependencies. */
 export interface PluginInstallConfig {
-  /** NPM packages to install (e.g., ['@modelcontextprotocol/server-github']) */
   npmPackages?: string[]
-  /** Prefer Homebrew for CLI tools on macOS */
   preferBrew?: boolean
-  /** Node package manager preference */
   nodeManager?: 'npm' | 'pnpm' | 'yarn'
 }
 
-/** Skills provider — declares bundled skills and custom skill entries. */
-export interface PluginSkillsProvider {
-  /** Bundled OpenClaw skill IDs to activate (maps to skills.allowBundled) */
+/** Static skills configuration — bundled skill IDs + custom entries. */
+export interface PluginSkillsConfig {
   bundled?: string[]
-  /** Custom skill entries with per-skill configuration */
   entries?: PluginSkillEntry[]
-  /** Dependency installation preferences */
   install?: PluginInstallConfig
 }
 
-// ─── CLI Provider ───────────────────────────────────────────────────────────
-
-/** A CLI tool exposed to agents via the tools system. */
+/** A CLI tool exposed to agents. */
 export interface PluginCLITool {
-  /** Tool command name (e.g., 'gh', 'stripe', 'vercel') */
   name: string
-  /** Full command to execute */
   command: string
-  /** Description shown to the agent */
   description: string
-  /** NPM package for global install */
   npmPackage?: string
-  /** Environment variables for this tool */
   env?: Record<string, string>
 }
 
-/** CLI provider — declares CLI tools available to agents. */
-export interface PluginCLIProvider {
-  /** CLI tools this plugin exposes */
-  tools: PluginCLITool[]
-}
-
-// ─── MCP Provider ───────────────────────────────────────────────────────────
-
-/** MCP server configuration (use sparingly — prefer skills+CLI). */
+/** MCP server configuration (prefer skills+cli for most integrations). */
 export interface PluginMCPServer {
-  /** Transport type */
   transport: 'stdio' | 'sse'
-  /** Command to run */
   command: string
-  /** Command arguments */
   args?: string[]
-  /** Environment variables */
   env?: Record<string, string>
 }
 
-/** MCP provider — for plugins that genuinely need a real-time MCP server. */
-export interface PluginMCPProvider {
-  /** MCP server configuration */
-  server: PluginMCPServer
-}
-
-// ─── Config Builder ─────────────────────────────────────────────────────────
-
-/** Config builder — custom OpenClaw config generation beyond auto-derivation. */
-export interface PluginConfigBuilder {
-  /** Build the OpenClaw config fragment for this plugin */
-  build(context: PluginBuildContext): PluginConfigFragment
-}
-
-// ─── Resource Provider ──────────────────────────────────────────────────────
-
-/** Resource provider — generates Kubernetes resources (Ingress, CronJob, etc.). */
-export interface PluginResourceProvider {
-  /** Generate K8s resource manifests */
-  build(context: PluginBuildContext): Record<string, unknown>[]
-}
-
-// ─── Env Provider ───────────────────────────────────────────────────────────
-
-/** Env provider — generates environment variables and manages secrets. */
-export interface PluginEnvProvider {
-  /** Build environment variables map */
-  build(context: PluginBuildContext): Record<string, string>
-}
-
-// ─── Lifecycle Provider ─────────────────────────────────────────────────────
-
-/** Lifecycle provider — hooks for provisioning and health checking. */
-export interface PluginLifecycleProvider {
-  /** Provision external resources (webhooks, OAuth apps, etc.) */
-  provision?(context: PluginProvisionContext): Promise<PluginProvisionResult>
-
-  /** Health check for this plugin's dependencies */
-  healthCheck?(context: PluginBuildContext): Promise<{ healthy: boolean; message: string }>
-}
-
-// ─── Config Resolver ────────────────────────────────────────────────────────
+// ─── Plugin Definition ───────────────────────────────────────────────────────
 
 /**
- * Config resolver — pre-processes agent deployments before OpenClaw build.
+ * Plugin definition — flat interface of what a plugin IS and DOES.
  *
- * Called during resolveConfig(), before any build step:
- * - Convert plugin `use` entries into agent fields (e.g., gitagent → agent.source)
- * - Enrich agent metadata from external sources (git repos, APIs)
- * - Validate and normalize plugin-specific options
- */
-export interface PluginConfigResolver {
-  /** Transform an agent deployment before OpenClaw config building.
-   *  Must return the (potentially modified) agent. */
-  resolveAgent(agent: AgentDeployment, config: CloudConfig): AgentDeployment
-}
-
-// ─── Validation Provider ────────────────────────────────────────────────────
-
-/** Validation provider — validates plugin configuration. */
-export interface PluginValidationProvider {
-  /** Validate the plugin configuration and secrets */
-  validate(context: PluginBuildContext): PluginValidationResult
-}
-
-// ─── Plugin Definition (the core interface) ─────────────────────────────────
-
-/**
- * The OS-like plugin interface.
+ * Static capabilities (data):
+ *   skills    — bundled skill IDs and custom entries
+ *   cli       — CLI tools exposed to agents
+ *   mcp       — MCP server config (use sparingly)
  *
- * Each aspect of plugin capability is structured into its own provider.
- * Plugins implement only the providers they need.
+ * Build hooks (synchronous, called during config generation):
+ *   resolveAgent   — pre-process AgentDeployment before build
+ *   buildConfig    — emit OpenClaw config fragment
+ *   buildEnv       — emit environment variables for the agent container
+ *   buildResources — emit extra Kubernetes resources
+ *   validate       — validate plugin config and secrets
  *
- * All providers receive a single context object that includes:
- * - context.agent       the agent being deployed
- * - context.config      full cloud config
- * - context.agentConfig resolved plugin options for this agent
- * - context.secrets     resolved auth secrets
- * - context.namespace   K8s namespace
- *
- * @example
- * // Skill-based plugin (most common pattern)
- * const plugin: PluginDefinition = {
- *   manifest,
- *   skills: { bundled: ['github'], entries: [{ id: 'github', ... }] },
- *   cli: { tools: [{ name: 'gh', command: 'gh', description: 'GitHub CLI' }] },
- *   env: { build: (ctx) => ({ GITHUB_TOKEN: ctx.secrets.GITHUB_TOKEN }) },
- * }
- *
- * @example
- * // AI provider plugin
- * const plugin: PluginDefinition = {
- *   manifest,
- *   configBuilder: { build: (ctx) => ({...}) },
- *   env: { build: (ctx) => ({ OPENAI_API_KEY: ctx.secrets.OPENAI_API_KEY }) },
- * }
+ * Lifecycle hooks (async, called during deploy):
+ *   provision    — create/update external resources (webhooks, accounts, etc.)
+ *   healthCheck  — check plugin dependencies are reachable
  */
 export interface PluginDefinition {
-  /** Plugin manifest (metadata) */
   manifest: PluginManifest
 
-  // ── Capability Providers ──
+  // ── Static capabilities (declarative data) ──
 
-  /** Skills this plugin provides to agents */
-  skills?: PluginSkillsProvider
+  /** Skills this plugin provides (bundled IDs + custom entries) */
+  skills?: PluginSkillsConfig
   /** CLI tools this plugin exposes to agents */
-  cli?: PluginCLIProvider
-  /** MCP server (for real-time connections only — prefer skills+CLI) */
-  mcp?: PluginMCPProvider
+  cli?: PluginCLITool[]
+  /** MCP server (for real-time connections only — prefer skills+cli) */
+  mcp?: PluginMCPServer
 
-  // ── Infrastructure ──
+  // ── Build hooks ──
 
-  /** Custom OpenClaw config generation */
-  configBuilder?: PluginConfigBuilder
-  /** Kubernetes resource generation */
-  resources?: PluginResourceProvider
-  /** Environment variables and secrets */
-  env?: PluginEnvProvider
+  /** Pre-process an AgentDeployment before config building (e.g. resolve `use` entries) */
+  resolveAgent?(agent: AgentDeployment, config: CloudConfig): AgentDeployment
 
-  // ── Lifecycle ──
+  /** Emit an OpenClaw config fragment */
+  buildConfig?(ctx: PluginBuildContext): PluginConfigFragment
 
-  /** Pre-build agent transformation (resolves use entries into agent fields) */
-  configResolver?: PluginConfigResolver
-  /** Plugin lifecycle (provisioning, health) */
-  lifecycle?: PluginLifecycleProvider
-  /** Configuration validation */
-  validation?: PluginValidationProvider
+  /** Emit environment variables to inject into the agent container */
+  buildEnv?(ctx: PluginBuildContext): Record<string, string>
+
+  /** Emit extra Kubernetes resource manifests */
+  buildResources?(ctx: PluginBuildContext): Record<string, unknown>[]
+
+  /** Validate plugin configuration and required secrets */
+  validate?(ctx: PluginBuildContext): PluginValidationResult
+
+  // ── Lifecycle hooks ──
+
+  /** Provision external resources (runs during deploy) */
+  provision?(ctx: PluginProvisionContext): Promise<PluginProvisionResult>
+
+  /** Check plugin dependencies are reachable */
+  healthCheck?(ctx: PluginBuildContext): Promise<{ healthy: boolean; message: string }>
 }
 
-// ─── Plugin Registry Interface ──────────────────────────────────────────────
+// ─── Plugin Registry ─────────────────────────────────────────────────────────
 
 export interface PluginRegistry {
   readonly size: number
@@ -351,91 +276,15 @@ export interface PluginRegistry {
   search(query: string): PluginDefinition[]
 }
 
-export interface PluginValidationError {
-  path: string
-  message: string
-  severity: 'error' | 'warning'
-}
+// ─── Legacy aliases (for helpers.ts factory backward compat) ─────────────────
 
-export interface PluginValidationResult {
-  valid: boolean
-  errors: PluginValidationError[]
-}
-
-// ─── Skills Provider ────────────────────────────────────────────────────────
-
-/** A bundled or custom skill that an agent can execute. */
-export interface PluginSkillEntry {
-  /** Skill ID (e.g., 'github', 'web-search', 'code-review') */
-  id: string
-  /** Human-readable skill name */
-  name: string
-  /** What the skill does */
-  description: string
-  /** Environment variables required for this skill */
-  env?: Record<string, string>
-  /** API key reference (${env:VAR} format) */
-  apiKey?: string
-}
-
-/** Install configuration for skill dependencies. */
-export interface PluginInstallConfig {
-  /** NPM packages to install (e.g., ['@modelcontextprotocol/server-github']) */
-  npmPackages?: string[]
-  /** Prefer Homebrew for CLI tools on macOS */
-  preferBrew?: boolean
-  /** Node package manager preference */
-  nodeManager?: 'npm' | 'pnpm' | 'yarn'
-}
-
-/** Skills provider — declares bundled skills and custom skill entries. */
-export interface PluginSkillsProvider {
-  /** Bundled OpenClaw skill IDs to activate (maps to skills.allowBundled) */
-  bundled?: string[]
-  /** Custom skill entries with per-skill configuration */
-  entries?: PluginSkillEntry[]
-  /** Dependency installation preferences */
-  install?: PluginInstallConfig
-}
-
-// ─── CLI Provider ───────────────────────────────────────────────────────────
-
-/** A CLI tool exposed to agents via the tools system. */
-export interface PluginCLITool {
-  /** Tool command name (e.g., 'gh', 'stripe', 'vercel') */
-  name: string
-  /** Full command to execute */
-  command: string
-  /** Description shown to the agent */
-  description: string
-  /** NPM package for global install */
-  npmPackage?: string
-  /** Environment variables for this tool */
-  env?: Record<string, string>
-}
-
-/** CLI provider — declares CLI tools available to agents. */
+/** @deprecated Use PluginSkillsConfig */
+export type PluginSkillsProvider = PluginSkillsConfig
+/** @deprecated Use PluginCLITool[] directly on PluginDefinition */
 export interface PluginCLIProvider {
-  /** CLI tools this plugin exposes */
   tools: PluginCLITool[]
 }
-
-// ─── MCP Provider ───────────────────────────────────────────────────────────
-
-/** MCP server configuration (use sparingly — prefer skills+CLI). */
-export interface PluginMCPServer {
-  /** Transport type */
-  transport: 'stdio' | 'sse'
-  /** Command to run */
-  command: string
-  /** Command arguments */
-  args?: string[]
-  /** Environment variables */
-  env?: Record<string, string>
-}
-
-/** MCP provider — for plugins that genuinely need a real-time MCP server. */
+/** @deprecated Use PluginMCPServer directly on PluginDefinition */
 export interface PluginMCPProvider {
-  /** MCP server configuration */
   server: PluginMCPServer
 }

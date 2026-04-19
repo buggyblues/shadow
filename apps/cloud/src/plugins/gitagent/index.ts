@@ -30,69 +30,65 @@ import manifest from './manifest.json' with { type: 'json' }
 const plugin: PluginDefinition = {
   manifest: manifest as PluginManifest,
 
-  // ── Config Resolver ──
+  // ── Resolve hook ──
   // Pre-build: convert gitagent use entry → agent.source + enrich from local path
-  configResolver: {
-    resolveAgent(agent, _config) {
-      const gitagentEntry = agent.use?.find((u) => u.plugin === 'gitagent')
-      if (!gitagentEntry?.options) return agent
+  resolveAgent(agent, _config) {
+    const gitagentEntry = agent.use?.find((u) => u.plugin === 'gitagent')
+    if (!gitagentEntry?.options) return agent
 
-      // Set source from use entry if not already set
-      let a: AgentDeployment = agent.source
-        ? agent
-        : { ...agent, source: gitagentEntry.options as AgentSource }
+    // Set source from use entry if not already set
+    let a: AgentDeployment = agent.source
+      ? agent
+      : { ...agent, source: gitagentEntry.options as AgentSource }
 
-      // Enrich from local gitagent directory if a path is provided
-      const localPath = a.source?.path ? resolve(a.source.path) : undefined
-      if (localPath && existsSync(localPath)) {
-        const parsed = readGitAgentDir(localPath)
-        a = enrichAgentFromGitAgent(a, parsed)
-      }
+    // Enrich from local gitagent directory if a path is provided
+    const localPath = a.source?.path ? resolve(a.source.path) : undefined
+    if (localPath && existsSync(localPath)) {
+      const parsed = readGitAgentDir(localPath)
+      a = enrichAgentFromGitAgent(a, parsed)
+    }
 
-      return a
-    },
+    return a
   },
 
-  // ── Config Builder ──
+  // ── Build hook ──
   // Build-time: generate OpenClaw config fragment from agent.source
-  configBuilder: {
-    build(context: PluginBuildContext): PluginConfigFragment {
-      const { agent } = context
-      if (!agent.source) return {}
-      const mountPath = agent.source.mountPath ?? '/agent'
-      const useGitagent = agent.source.gitagent !== false
+  buildConfig(context: PluginBuildContext): PluginConfigFragment {
+    const { agent } = context
+    if (!agent.source) return {}
+    const mountPath = agent.source.mountPath ?? '/agent'
+    const useGitagent = agent.source.gitagent !== false
 
-      if (!useGitagent) return {}
+    if (!useGitagent) return {}
 
-      const fragment: PluginConfigFragment = {
-        agents: {
-          defaults: {
-            repoRoot: mountPath,
-          },
+    const fragment: PluginConfigFragment = {
+      agents: {
+        defaults: {
+          repoRoot: mountPath,
         },
-      }
+      },
+    }
 
-      // If local path exists, read the gitagent directory and merge skills/scheduler
-      if (agent.source.path) {
-        const localPath = resolve(agent.source.path)
-        if (existsSync(localPath)) {
-          const parsed = readGitAgentDir(localPath)
-          const additions = buildOpenClawFromGitAgent(parsed, mountPath)
+    // If local path exists, read the gitagent directory and merge skills/scheduler
+    if (agent.source.path) {
+      const localPath = resolve(agent.source.path)
+      if (existsSync(localPath)) {
+        const parsed = readGitAgentDir(localPath)
+        const additions = buildOpenClawFromGitAgent(parsed, mountPath)
 
-          if (additions.skills) {
-            fragment.skills = additions.skills as Record<string, unknown>
-          }
-          if (additions.agents?.defaults?.heartbeat) {
-            ;(fragment.agents as Record<string, unknown>).defaults = {
-              ...((fragment.agents as Record<string, unknown>).defaults as Record<string, unknown>),
-              heartbeat: additions.agents.defaults.heartbeat,
-            }
+        if (additions.skills) {
+          fragment.skills = additions.skills as Record<string, unknown>
+        }
+        if (additions.agents?.defaults?.heartbeat) {
+          ;(fragment.agents as Record<string, unknown>).defaults = {
+            ...((fragment.agents as Record<string, unknown>).defaults as Record<string, unknown>),
+            heartbeat: additions.agents.defaults.heartbeat,
           }
         }
       }
+    }
 
-      return fragment
-    },
+    return fragment
   },
 }
 

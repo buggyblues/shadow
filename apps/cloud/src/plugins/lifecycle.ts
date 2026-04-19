@@ -38,8 +38,8 @@ export async function executePluginProvisions(
   for (const pluginDef of registry.getAll()) {
     const pluginId = pluginDef.manifest.id
 
-    // Only provision plugins with lifecycle.provision
-    if (!pluginDef.lifecycle?.provision) continue
+    // Only provision plugins with a provision hook
+    if (!pluginDef.provision) continue
 
     const resolved = resolveAgentPluginConfig(pluginId, agent.id, config)
     if (!resolved) continue
@@ -58,7 +58,7 @@ export async function executePluginProvisions(
 
     try {
       logger.dim(`  Provisioning plugin: ${pluginDef.manifest.name}`)
-      const result = await pluginDef.lifecycle.provision(context)
+      const result = await pluginDef.provision(context)
 
       if (result.state) {
         results.states[pluginId] = result.state
@@ -92,7 +92,7 @@ export async function checkPluginHealth(
   for (const pluginDef of registry.getAll()) {
     const pluginId = pluginDef.manifest.id
 
-    if (!pluginDef.lifecycle?.healthCheck) continue
+    if (!pluginDef.healthCheck) continue
 
     const resolved = resolveAgentPluginConfig(pluginId, agentId, config)
     if (!resolved) continue
@@ -113,7 +113,7 @@ export async function checkPluginHealth(
     }
 
     try {
-      const result = await pluginDef.lifecycle.healthCheck(context)
+      const result = await pluginDef.healthCheck(context)
       results.push({
         pluginId,
         name: pluginDef.manifest.name,

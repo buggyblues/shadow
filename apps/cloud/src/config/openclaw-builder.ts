@@ -409,20 +409,20 @@ function applyPluginPipeline(
       pluginRegistry: registry,
     }
 
-    // Build OpenClaw config fragment via configBuilder provider
-    if (pluginDef.configBuilder) {
-      const fragment = pluginDef.configBuilder.build(context)
+    // Build OpenClaw config fragment
+    if (pluginDef.buildConfig) {
+      const fragment = pluginDef.buildConfig(context)
       Object.assign(openclawConfig, mergePluginFragments(openclawConfig, fragment))
     }
 
-    // Build env vars via env provider
-    if (pluginDef.env) {
-      Object.assign(envVars, pluginDef.env.build(context))
+    // Build env vars
+    if (pluginDef.buildEnv) {
+      Object.assign(envVars, pluginDef.buildEnv(context))
     }
 
-    // Collect K8s resources via resources provider
-    if (pluginDef.resources) {
-      const resources = pluginDef.resources.build(context)
+    // Collect K8s resources
+    if (pluginDef.buildResources) {
+      const resources = pluginDef.buildResources(context)
       pluginResources.push(...resources)
     }
   }

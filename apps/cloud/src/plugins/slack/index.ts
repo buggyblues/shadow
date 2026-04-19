@@ -46,37 +46,35 @@ function buildSlackConfig(context: PluginBuildContext): PluginConfigFragment {
 
 const plugin: PluginDefinition = {
   ...createChannelPlugin(manifest as PluginManifest, buildSlackConfig),
-  lifecycle: {
-    async healthCheck(context) {
-      const token = context.secrets.SLACK_BOT_TOKEN
-      if (!token) {
-        return { healthy: false, message: 'SLACK_BOT_TOKEN not configured' }
-      }
-      try {
-        const res = await fetch('https://slack.com/api/auth.test', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-        })
-        if (res.ok) {
-          const data = (await res.json()) as {
-            ok: boolean
-            user?: string
-            team?: string
-            error?: string
-          }
-          if (data.ok) {
-            return { healthy: true, message: `Connected as ${data.user} in ${data.team}` }
-          }
-          return { healthy: false, message: `Slack auth failed: ${data.error}` }
+  async healthCheck(context) {
+    const token = context.secrets.SLACK_BOT_TOKEN
+    if (!token) {
+      return { healthy: false, message: 'SLACK_BOT_TOKEN not configured' }
+    }
+    try {
+      const res = await fetch('https://slack.com/api/auth.test', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      })
+      if (res.ok) {
+        const data = (await res.json()) as {
+          ok: boolean
+          user?: string
+          team?: string
+          error?: string
         }
-        return { healthy: false, message: `Slack API returned ${res.status}` }
-      } catch (err) {
-        return { healthy: false, message: `Slack API unreachable: ${err}` }
+        if (data.ok) {
+          return { healthy: true, message: `Connected as ${data.user} in ${data.team}` }
+        }
+        return { healthy: false, message: `Slack auth failed: ${data.error}` }
       }
-    },
+      return { healthy: false, message: `Slack API returned ${res.status}` }
+    } catch (err) {
+      return { healthy: false, message: `Slack API unreachable: ${err}` }
+    }
   },
 }
 

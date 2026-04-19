@@ -47,25 +47,23 @@ const plugin: PluginDefinition = {
       },
     },
   }),
-  lifecycle: {
-    async healthCheck(context) {
-      const token = context.secrets.GITHUB_PERSONAL_ACCESS_TOKEN
-      if (!token) {
-        return { healthy: false, message: 'GITHUB_PERSONAL_ACCESS_TOKEN not configured' }
+  async healthCheck(context) {
+    const token = context.secrets.GITHUB_PERSONAL_ACCESS_TOKEN
+    if (!token) {
+      return { healthy: false, message: 'GITHUB_PERSONAL_ACCESS_TOKEN not configured' }
+    }
+    try {
+      const res = await fetch('https://api.github.com/user', {
+        headers: { Authorization: `token ${token}` },
+      })
+      if (res.ok) {
+        const user = (await res.json()) as { login: string }
+        return { healthy: true, message: `Authenticated as ${user.login}` }
       }
-      try {
-        const res = await fetch('https://api.github.com/user', {
-          headers: { Authorization: `token ${token}` },
-        })
-        if (res.ok) {
-          const user = (await res.json()) as { login: string }
-          return { healthy: true, message: `Authenticated as ${user.login}` }
-        }
-        return { healthy: false, message: `GitHub API returned ${res.status}` }
-      } catch (err) {
-        return { healthy: false, message: `GitHub API unreachable: ${err}` }
-      }
-    },
+      return { healthy: false, message: `GitHub API returned ${res.status}` }
+    } catch (err) {
+      return { healthy: false, message: `GitHub API unreachable: ${err}` }
+    }
   },
 }
 

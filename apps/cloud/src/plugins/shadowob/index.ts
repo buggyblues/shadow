@@ -91,89 +91,85 @@ const basePlugin = createChannelPlugin(manifest as PluginManifest, buildShadowCo
 // Override validation with custom buddy/binding checks
 const plugin: PluginDefinition = {
   ...basePlugin,
-  validation: {
-    validate(context: PluginBuildContext) {
-      // Run base validation first (checks required auth fields)
-      const baseResult = basePlugin.validation!.validate(context)
-      const errors: PluginValidationError[] = [...baseResult.errors]
+  validate(context: PluginBuildContext) {
+    // Run base validation first (checks required auth fields)
+    const baseResult = basePlugin.validate!(context)
+    const errors: PluginValidationError[] = [...baseResult.errors]
 
-      // Custom: warn if SHADOW_SERVER_URL is missing
-      if (!context.secrets.SHADOW_SERVER_URL) {
+    // Custom: warn if SHADOW_SERVER_URL is missing
+    if (!context.secrets.SHADOW_SERVER_URL) {
+      errors.push({
+        path: 'secrets.SHADOW_SERVER_URL',
+        message: 'Shadow server URL is required for shadowob channel',
+        severity: 'warning',
+      })
+    }
+
+    // Custom: error if bindings reference non-existent buddies
+    const shadowConfig = context.agentConfig as unknown as ShadowobPluginConfig
+    const buddyIds = new Set((shadowConfig.buddies ?? []).map((b) => b.id))
+    for (const binding of shadowConfig.bindings ?? []) {
+      if (!buddyIds.has(binding.targetId)) {
         errors.push({
-          path: 'secrets.SHADOW_SERVER_URL',
-          message: 'Shadow server URL is required for shadowob channel',
-          severity: 'warning',
+          path: `bindings.${binding.targetId}`,
+          message: `Binding references non-existent buddy "${binding.targetId}"`,
+          severity: 'error',
         })
       }
+    }
 
-      // Custom: error if bindings reference non-existent buddies
-      const shadowConfig = context.agentConfig as unknown as ShadowobPluginConfig
-      const buddyIds = new Set((shadowConfig.buddies ?? []).map((b) => b.id))
-      for (const binding of shadowConfig.bindings ?? []) {
-        if (!buddyIds.has(binding.targetId)) {
-          errors.push({
-            path: `bindings.${binding.targetId}`,
-            message: `Binding references non-existent buddy "${binding.targetId}"`,
-            severity: 'error',
-          })
-        }
-      }
-
-      return {
-        valid: errors.filter((e) => e.severity === 'error').length === 0,
-        errors,
-      }
-    },
+    return {
+      valid: errors.filter((e) => e.severity === 'error').length === 0,
+      errors,
+    }
   },
 
-  lifecycle: {
-    async provision(context: PluginProvisionContext): Promise<PluginProvisionResult> {
-      const serverUrl = context.secrets.SHADOW_SERVER_URL
-      const userToken = context.secrets.SHADOW_USER_TOKEN
-      if (!serverUrl || !userToken) {
-        context.logger.dim(
-          '  shadowob provision skipped: SHADOW_SERVER_URL / SHADOW_USER_TOKEN not set',
-        )
-        return { state: {} }
-      }
+  async provision(context: PluginProvisionContext): Promise<PluginProvisionResult> {
+    const serverUrl = context.secrets.SHADOW_SERVER_URL
+    const userToken = context.secrets.SHADOW_USER_TOKEN
+    if (!serverUrl || !userToken) {
+      context.logger.dim(
+        '  shadowob provision skipped: SHADOW_SERVER_URL / SHADOW_USER_TOKEN not set',
+      )
+      return { state: {} }
+    }
 
-      const result = await provisionShadowResources(context.config, {
-        serverUrl,
-        userToken,
-        dryRun: context.dryRun,
-        existingState: context.previousState as {
-          servers?: Record<string, string>
-          channels?: Record<string, string>
-          buddies?: Record<string, { agentId: string; userId: string; token: string }>
-          shadowServerUrl?: string
-        } | null,
-        logger: context.logger as import('../../utils/logger.js').Logger,
-      })
+    const result = await provisionShadowResources(context.config, {
+      serverUrl,
+      userToken,
+      dryRun: context.dryRun,
+      existingState: context.previousState as {
+        servers?: Record<string, string>
+        channels?: Record<string, string>
+        buddies?: Record<string, { agentId: string; userId: string; token: string }>
+        shadowServerUrl?: string
+      } | null,
+      logger: context.logger as import('../../utils/logger.js').Logger,
+    })
 
-      // Expose token secrets so they become env vars in the agent container
-      const secrets: Record<string, string> = {
-        SHADOW_SERVER_URL: serverUrl,
-      }
-      for (const [buddyId, { token }] of result.buddies) {
-        const key = `SHADOW_TOKEN_${buddyId.toUpperCase().replace(/-/g, '_')}`
-        secrets[key] = token
-      }
+    // Expose token secrets so they become env vars in the agent container
+    const secrets: Record<string, string> = {
+      SHADOW_SERVER_URL: serverUrl,
+    }
+    for (const [buddyId, { token }] of result.buddies) {
+      const key = `SHADOW_TOKEN_${buddyId.toUpperCase().replace(/-/g, '_')}`
+      secrets[key] = token
+    }
 
-      return {
-        state: {
-          shadowServerUrl: serverUrl,
-          servers: Object.fromEntries(result.servers),
-          channels: Object.fromEntries(result.channels),
-          buddies: Object.fromEntries(
-            [...result.buddies.entries()].map(([k, v]) => [
-              k,
-              { agentId: v.agentId, userId: v.userId, token: v.token },
-            ]),
-          ),
-        },
-        secrets,
-      }
-    },
+    return {
+      state: {
+        shadowServerUrl: serverUrl,
+        servers: Object.fromEntries(result.servers),
+        channels: Object.fromEntries(result.channels),
+        buddies: Object.fromEntries(
+          [...result.buddies.entries()].map(([k, v]) => [
+            k,
+            { agentId: v.agentId, userId: v.userId, token: v.token },
+          ]),
+        ),
+      },
+      secrets,
+    }
   },
 }
 

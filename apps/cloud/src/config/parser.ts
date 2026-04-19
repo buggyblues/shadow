@@ -92,8 +92,8 @@ function runPluginConfigResolvers(agent: AgentDeployment, config: CloudConfig): 
   let resolved = agent
   for (const pluginId of uniquePlugins) {
     const pluginDef = registry.get(pluginId)
-    if (!pluginDef?.configResolver) continue
-    resolved = pluginDef.configResolver.resolveAgent(resolved, config)
+    if (!pluginDef?.resolveAgent) continue
+    resolved = pluginDef.resolveAgent(resolved, config)
   }
 
   return resolved
