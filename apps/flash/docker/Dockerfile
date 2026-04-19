@@ -6,8 +6,8 @@
 #   Port 8080 — Hono API server (serves static UI + proxies to OpenClaw)
 #   Port 3100 — OpenClaw Gateway (internal, not exposed)
 #
-# Build:
-#   docker build -t flash-aio -f docker/Dockerfile .
+# Build (from monorepo root):
+#   docker build -t flash-aio -f apps/flash/docker/Dockerfile .
 #
 # Run:
 #   docker run -p 8080:8080 \
@@ -24,33 +24,37 @@ WORKDIR /build
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Copy workspace config
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* tsconfig.base.json ./
+# Copy workspace config from monorepo root
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* tsconfig.json .npmrc* ./
 
-# Copy package.json files for all packages
-COPY packages/types/package.json packages/types/tsconfig.json packages/types/
-COPY packages/cards/package.json packages/cards/tsconfig.json packages/cards/
-COPY packages/server/package.json packages/server/tsconfig.json packages/server/
-COPY packages/ui/package.json packages/ui/tsconfig.json packages/ui/tsconfig.app.json packages/ui/vite.config.ts packages/ui/
+# Copy package manifests for all flash packages (enables pnpm dep resolution)
+COPY apps/flash/package.json apps/flash/tsconfig.json apps/flash/tsconfig.app.json apps/flash/vite.config.ts apps/flash/
+COPY apps/flash/packages/types/package.json apps/flash/packages/types/tsconfig.json apps/flash/packages/types/
+COPY apps/flash/packages/cards/package.json apps/flash/packages/cards/tsconfig.json apps/flash/packages/cards/tsup.config.ts apps/flash/packages/cards/
+COPY apps/flash/packages/server/package.json apps/flash/packages/server/tsconfig.json apps/flash/packages/server/.npmrc apps/flash/packages/server/
 
-# Install all dependencies
+# Copy symlink fix script (workaround for pnpm depth bug with scoped packages)
+COPY scripts/fix-flash-symlinks.mjs scripts/
+
+# Install dependencies (only flash workspace packages will be discovered)
 RUN pnpm install --frozen-lockfile || pnpm install
 
+# Fix potential symlink depth issues for scoped packages in deep workspace paths
+RUN node scripts/fix-flash-symlinks.mjs || true
+
 # Copy source code
-COPY packages/types/src/ packages/types/src/
-COPY packages/cards/src/ packages/cards/src/
-COPY packages/server/src/ packages/server/src/
-COPY packages/ui/src/ packages/ui/src/
-COPY packages/ui/index.html packages/ui/
-COPY packages/ui/public/ packages/ui/public/
+COPY apps/flash/packages/types/src/ apps/flash/packages/types/src/
+COPY apps/flash/packages/cards/src/ apps/flash/packages/cards/src/
+COPY apps/flash/packages/server/src/ apps/flash/packages/server/src/
+COPY apps/flash/src/ apps/flash/src/
+COPY apps/flash/index.html apps/flash/
+COPY apps/flash/public/ apps/flash/public/
 
-# Build types first, then cards, then server and UI
-RUN cd packages/types && pnpm build
-RUN cd packages/cards && pnpm build
-RUN cd packages/server && pnpm build
-RUN cd packages/ui && pnpm build
-
-# Prune to production deps (kept in pnpm virtual store, installed fresh in runtime)
+# Build in dependency order: types → cards → server → UI
+RUN cd apps/flash/packages/types && pnpm build
+RUN cd apps/flash/packages/cards && pnpm build
+RUN cd apps/flash/packages/server && pnpm build
+RUN cd apps/flash && pnpm build
 
 # ---- Stage 2: Runtime ----
 FROM node:22-bookworm-slim
@@ -72,15 +76,15 @@ RUN npm install -g openclaw@latest && npm cache clean --force
 WORKDIR /app
 
 # ---- Frontend UI (from build stage) ----
-COPY --from=build /build/packages/ui/dist /app/ui
+COPY --from=build /build/apps/flash/dist /app/ui
 
 # ---- API Server (compiled) ----
-COPY --from=build /build/packages/server/dist /app/server/dist
-COPY --from=build /build/packages/server/package.json /app/server/
+COPY --from=build /build/apps/flash/packages/server/dist /app/server/dist
+COPY --from=build /build/apps/flash/packages/server/package.json /app/server/
 
 # ---- Types package (placed in node_modules for Node resolution) ----
-COPY --from=build /build/packages/types/dist /app/node_modules/@shadowob/flash-types/dist
-COPY --from=build /build/packages/types/package.json /app/node_modules/@shadowob/flash-types/
+COPY --from=build /build/apps/flash/packages/types/dist /app/node_modules/@shadowob/flash-types/dist
+COPY --from=build /build/apps/flash/packages/types/package.json /app/node_modules/@shadowob/flash-types/
 
 # ---- Install server production deps (remove workspace dep first, then npm install) ----
 RUN cd /app/server \
@@ -88,7 +92,7 @@ RUN cd /app/server \
     && npm install --production --no-package-lock
 
 # ---- Agent workspace ----
-COPY packages/agent/ /app/workspace/
+COPY apps/flash/packages/agent/ /app/workspace/
 
 # ---- OpenClaw config ----
 RUN mkdir -p /root/.openclaw && cat > /root/.openclaw/openclaw.json <<'OCJSON'
@@ -127,7 +131,7 @@ RUN mkdir -p /root/.openclaw && cat > /root/.openclaw/openclaw.json <<'OCJSON'
 OCJSON
 
 # ---- Entrypoint ----
-COPY docker/entrypoint.sh /entrypoint.sh
+COPY apps/flash/docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 RUN mkdir -p /output /data/projects
