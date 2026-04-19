@@ -46,7 +46,7 @@ function makeHooks(): PluginHooks {
 
 function makeAPI(
   hooks: PluginHooks,
-  collected: { skills?: PluginSkillsConfig; cli?: PluginCLITool[]; mcp?: PluginMCPServer },
+  collected: { skills?: PluginSkillsConfig; cli?: PluginCLITool[]; mcp?: PluginMCPServer[] },
 ): PluginAPI {
   return {
     addSkills: (s) => {
@@ -55,8 +55,8 @@ function makeAPI(
     addCLI: (tools) => {
       collected.cli = [...(collected.cli ?? []), ...tools]
     },
-    setMCP: (server) => {
-      collected.mcp = server
+    addMCP: (server) => {
+      collected.mcp = [...(collected.mcp ?? []), server]
     },
     onResolveAgent: (fn) => hooks.resolveAgent.push(fn),
     onBuildConfig: (fn) => hooks.buildConfig.push(fn),
@@ -80,7 +80,7 @@ export function definePlugin(
   setup: (api: PluginAPI) => void,
 ): PluginDefinition {
   const hooks = makeHooks()
-  const collected: { skills?: PluginSkillsConfig; cli?: PluginCLITool[]; mcp?: PluginMCPServer } =
+  const collected: { skills?: PluginSkillsConfig; cli?: PluginCLITool[]; mcp?: PluginMCPServer[] } =
     {}
   const api = makeAPI(hooks, collected)
   setup(api)
@@ -138,13 +138,20 @@ function defaultValidation(
  */
 export function defineSkillPlugin(
   manifest: PluginManifest,
-  options: { skills?: PluginSkillsConfig; cli?: PluginCLITool[]; mcp?: PluginMCPServer },
+  options: {
+    skills?: PluginSkillsConfig
+    cli?: PluginCLITool[]
+    mcp?: PluginMCPServer | PluginMCPServer[]
+  },
   extraSetup?: (api: PluginAPI) => void,
 ): PluginDefinition {
   return definePlugin(manifest, (api) => {
     if (options.skills) api.addSkills(options.skills)
     if (options.cli?.length) api.addCLI(options.cli)
-    if (options.mcp) api.setMCP(options.mcp)
+    if (options.mcp) {
+      const mcps = Array.isArray(options.mcp) ? options.mcp : [options.mcp]
+      for (const s of mcps) api.addMCP(s)
+    }
 
     api.onBuildConfig((_ctx): PluginConfigFragment => {
       const fragment: PluginConfigFragment = {}
@@ -171,19 +178,20 @@ export function defineSkillPlugin(
         fragment.tools = { allow: options.cli.map((t) => t.name) }
       }
 
-      if (options.mcp) {
-        const s = options.mcp
-        fragment.plugins = {
-          entries: {
-            [manifest.id]: {
-              enabled: true,
-              transport: s.transport,
-              command: s.command,
-              ...(s.args ? { args: s.args } : {}),
-              ...(s.env ? { env: s.env } : {}),
-            },
-          },
+      const mcps = Array.isArray(options.mcp) ? options.mcp : options.mcp ? [options.mcp] : []
+      if (mcps.length) {
+        const entries: Record<string, unknown> = {}
+        for (const [i, s] of mcps.entries()) {
+          const key = mcps.length === 1 ? manifest.id : `${manifest.id}-${i}`
+          entries[key] = {
+            enabled: true,
+            transport: s.transport,
+            command: s.command,
+            ...(s.args ? { args: s.args } : {}),
+            ...(s.env ? { env: s.env } : {}),
+          }
         }
+        fragment.plugins = { entries }
       }
 
       return fragment

@@ -228,7 +228,7 @@ export interface PluginAPI {
   addCLI(tools: PluginCLITool[]): void
 
   /** Declare an MCP server (use sparingly — prefer skills+cli) */
-  setMCP(server: PluginMCPServer): void
+  addMCP(server: PluginMCPServer): void
 
   // ── Build hooks (synchronous) ──
 
@@ -289,8 +289,8 @@ export interface PluginDefinition {
   skills?: PluginSkillsConfig
   /** Declared CLI tools (from api.addCLI) */
   cli?: PluginCLITool[]
-  /** Declared MCP server (from api.setMCP) */
-  mcp?: PluginMCPServer
+  /** Declared MCP servers (from api.addMCP) */
+  mcp?: PluginMCPServer[]
 
   /** All registered hooks, collected during setup() */
   _hooks: PluginHooks
