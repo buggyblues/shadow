@@ -1,0 +1,145 @@
+// ══════════════════════════════════════════════════════════════
+// Components barrel export — all bitECS components, stores, helpers
+// ══════════════════════════════════════════════════════════════
+
+export { type CanvasData, CCanvas, canvasStore } from './canvasComponent'
+export { type CardDataData, CCardData, cardDataStore } from './cardDataComponent'
+export {
+  CFlip,
+  createFlip,
+  Flip,
+  type FlipData,
+  isFlipped,
+  toggleFlipTarget,
+} from './flipComponent'
+export { CGLState, type GLStateData, glStateStore } from './glStateComponent'
+export { CGPUState, type GPUStateData, gpuStateStore } from './gpuStateComponent'
+export {
+  CIcon,
+  type IconData,
+  type IconDrawFn,
+  iconStore,
+  KIND_ICON_DRAWERS,
+  resolveIcon,
+} from './iconComponent'
+export {
+  CInteraction,
+  createInteraction,
+  Interaction,
+  type InteractionData,
+} from './interactionComponent'
+export {
+  advance,
+  CLayout,
+  createLayout,
+  hasSpace,
+  type LayoutData,
+  layoutStore,
+  remainingH,
+} from './layoutComponent'
+export {
+  argumentMetaStore,
+  CArgumentMeta,
+  CChartMeta,
+  CCodeMeta,
+  CColorMeta,
+  CCommentMeta,
+  CComparisonMeta,
+  CCountdownMeta,
+  CDataMeta,
+  CDefinitionMeta,
+  CEventMeta,
+  CExampleMeta,
+  CFileMeta,
+  CGifMeta,
+  CImageMeta,
+  CInspirationMeta,
+  CKeypointMeta,
+  CLinkMeta,
+  CLive2DMeta,
+  CLottieMeta,
+  CMathMeta,
+  CPersonMeta,
+  CPokerMeta,
+  CPositionMeta,
+  CProcessMeta,
+  CQrcodeMeta,
+  CQuoteMeta,
+  CRawMeta,
+  CReferenceMeta,
+  CSocialMeta,
+  CStoryMeta,
+  CSummaryMeta,
+  CTableMeta,
+  CTarotMeta,
+  CTerminalMeta,
+  CThreeDMeta,
+  CTimelineMeta,
+  CTimestampMeta,
+  CTodoMeta,
+  CVoiceMeta,
+  CWebpageMeta,
+  chartMetaStore,
+  codeMetaStore,
+  colorMetaStore,
+  commentMetaStore,
+  comparisonMetaStore,
+  countdownMetaStore,
+  dataMetaStore,
+  definitionMetaStore,
+  eventMetaStore,
+  exampleMetaStore,
+  fileMetaStore,
+  gifMetaStore,
+  imageMetaStore,
+  inspirationMetaStore,
+  keypointMetaStore,
+  linkMetaStore,
+  live2dMetaStore,
+  lottieMetaStore,
+  mathMetaStore,
+  personMetaStore,
+  pokerMetaStore,
+  positionMetaStore,
+  processMetaStore,
+  qrcodeMetaStore,
+  quoteMetaStore,
+  rawMetaStore,
+  referenceMetaStore,
+  socialMetaStore,
+  storyMetaStore,
+  summaryMetaStore,
+  tableMetaStore,
+  tarotMetaStore,
+  terminalMetaStore,
+  threeDMetaStore,
+  timelineMetaStore,
+  timestampMetaStore,
+  todoMetaStore,
+  voiceMetaStore,
+  webpageMetaStore,
+} from './metaComponent'
+export { CRenderOrder, RenderOrder, type RenderOrderData } from './renderOrderComponent'
+export {
+  CShaderStyle,
+  KIND_INDEX,
+  resolveShaderStyle,
+  type ShaderStyleData,
+  shaderStyleStore,
+  TAPE_COLORS,
+} from './shaderStyleComponent'
+// ── Content rendering (Canvas 2D) ──
+export {
+  CStyle,
+  KIND_COLORS,
+  KIND_LABELS,
+  KIND_PIPS,
+  KIND_RANKS,
+  resolveStyle,
+  type StyleData,
+  styleStore,
+} from './styleComponent'
+// ── Scene graph (bitECS SoA components) ──
+export { CTransform, Transform, type TransformData } from './transformComponent'
+export { CViewport, type ViewportData } from './viewportComponent'
+export { CVisibility, Visibility, type VisibilityData } from './visibilityComponent'

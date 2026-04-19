@@ -1,0 +1,212 @@
+[
+  [
+    "analyze",
+    {
+      "id": "analyze",
+      "name": "analyze",
+      "emoji": "🧠",
+      "category": "utility",
+      "description": "Generate structured outlines from materials and knowledge cards — intelligently arrange page structure and card references.",
+      "builtin": true,
+      "status": "installed",
+      "version": "2.0.0",
+      "skillPath": "/app/workspace/skills/analyze",
+      "source": "local"
+    }
+  ],
+  [
+    "card-context",
+    {
+      "id": "card-context",
+      "name": "card-context",
+      "emoji": "🃏",
+      "category": "utility",
+      "description": "Knowledge card context injection spec — guides AI on how to correctly use existing card content.",
+      "builtin": true,
+      "status": "installed",
+      "version": "1.0.0",
+      "skillPath": "/app/workspace/skills/card-context",
+      "source": "local"
+    }
+  ],
+  [
+    "case-study",
+    {
+      "id": "case-study",
+      "name": "case-study",
+      "emoji": "📋",
+      "category": "research",
+      "description": "Find and analyze relevant real-world cases, extract reusable lessons and insights.",
+      "builtin": true,
+      "status": "installed",
+      "version": "1.0.0",
+      "skillPath": "/app/workspace/skills/case-study",
+      "source": "local"
+    }
+  ],
+  [
+    "counter-argument",
+    {
+      "id": "counter-argument",
+      "name": "counter-argument",
+      "emoji": "⚖️",
+      "category": "research",
+      "description": "Examine viewpoints from the opposing side, surface potential risks and rebuttal evidence.",
+      "builtin": true,
+      "status": "installed",
+      "version": "1.0.0",
+      "skillPath": "/app/workspace/skills/counter-argument",
+      "source": "local"
+    }
+  ],
+  [
+    "curate",
+    {
+      "id": "curate",
+      "name": "curate",
+      "emoji": "📋",
+      "category": "utility",
+      "description": "Extract, classify, and link knowledge cards from uploaded raw materials — the core material curation capability.",
+      "builtin": true,
+      "status": "installed",
+      "version": "2.0.0",
+      "skillPath": "/app/workspace/skills/curate",
+      "source": "local"
+    }
+  ],
+  [
+    "data-evidence",
+    {
+      "id": "data-evidence",
+      "name": "data-evidence",
+      "emoji": "📊",
+      "category": "research",
+      "description": "Collect and analyze relevant data, statistics, and metrics to support arguments.",
+      "builtin": true,
+      "status": "installed",
+      "version": "1.0.0",
+      "skillPath": "/app/workspace/skills/data-evidence",
+      "source": "local"
+    }
+  ],
+  [
+    "deep-analysis",
+    {
+      "id": "deep-analysis",
+      "name": "deep-analysis",
+      "emoji": "🔬",
+      "category": "research",
+      "description": "Perform multi-layered deep analysis of a topic, uncovering core logic and hidden relationships.",
+      "builtin": true,
+      "status": "installed",
+      "version": "1.0.0",
+      "skillPath": "/app/workspace/skills/deep-analysis",
+      "source": "local"
+    }
+  ],
+  [
+    "design-system",
+    {
+      "id": "design-system",
+      "name": "design-system",
+      "emoji": "✨",
+      "category": "utility",
+      "description": "Apply professional design principles — color theory, typography, layout patterns, and visual hierarchy.",
+      "builtin": true,
+      "status": "installed",
+      "version": "1.0.0",
+      "skillPath": "/app/workspace/skills/design-system",
+      "source": "local"
+    }
+  ],
+  [
+    "fragment-curation",
+    {
+      "id": "fragment-curation",
+      "name": "Card Curation",
+      "emoji": "🔧",
+      "category": "utility",
+      "description": "Card curation and fragment management.",
+      "builtin": true,
+      "status": "installed",
+      "version": "1.0.0",
+      "skillPath": "/app/workspace/skills/fragment-curation",
+      "source": "local"
+    }
+  ],
+  [
+    "inspire",
+    {
+      "id": "inspire",
+      "name": "inspire",
+      "emoji": "💡",
+      "category": "utility",
+      "description": "Generate creative inspiration suggestions based on the current project state — find content gaps, optimize structure, spark ideas.",
+      "builtin": true,
+      "status": "installed",
+      "version": "2.0.0",
+      "skillPath": "/app/workspace/skills/inspire",
+      "source": "local"
+    }
+  ],
+  [
+    "material-analysis",
+    {
+      "id": "material-analysis",
+      "name": "Material Analysis & Card Extraction",
+      "emoji": "🔧",
+      "category": "utility",
+      "description": "Analyze materials and extract structured knowledge cards.",
+      "builtin": true,
+      "status": "installed",
+      "version": "1.0.0",
+      "skillPath": "/app/workspace/skills/material-analysis",
+      "source": "local"
+    }
+  ],
+  [
+    "research",
+    {
+      "id": "research",
+      "name": "research",
+      "emoji": "🔬",
+      "category": "utility",
+      "description": "Multi-angle deep research assistant — uses search tools to find the latest information online and produces high-quality knowledge cards.",
+      "builtin": true,
+      "status": "installed",
+      "version": "2.0.0",
+      "skillPath": "/app/workspace/skills/research",
+      "source": "local"
+    }
+  ],
+  [
+    "smart-summary",
+    {
+      "id": "smart-summary",
+      "name": "smart-summary",
+      "emoji": "📄",
+      "category": "utility",
+      "description": "Intelligently summarize long documents and multiple materials into refined, concise content.",
+      "builtin": true,
+      "status": "installed",
+      "version": "1.0.0",
+      "skillPath": "/app/workspace/skills/smart-summary",
+      "source": "local"
+    }
+  ],
+  [
+    "web-search",
+    {
+      "id": "web-search",
+      "name": "web-search",
+      "emoji": "🌐",
+      "category": "data",
+      "description": "Search the internet for the latest information, data, and articles to enrich content.",
+      "builtin": true,
+      "status": "installed",
+      "version": "1.0.0",
+      "skillPath": "/app/workspace/skills/web-search",
+      "source": "local"
+    }
+  ]
+]

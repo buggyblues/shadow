@@ -172,6 +172,11 @@ export interface SharedWorkspaceConfig {
 export interface AgentConfiguration {
   /** Base configuration ID to extend from registry.configurations */
   extends?: string
+  /**
+   * Model preferences resolved from registry.configurations preset.
+   * Populated after extends resolution; lower priority than agent.model.
+   */
+  model?: AgentModel
   /** OpenClaw config overrides (official format) */
   openclaw?: Partial<import('./openclaw.schema.js').OpenClawConfig>
   /** Additional pass-through fields */
@@ -303,6 +308,17 @@ export interface DeploymentsConfig {
 export interface Configuration {
   /** Unique configuration ID */
   id: string
+  /**
+   * Base configuration to inherit from.
+   * Resolved recursively — child fields override parent.
+   */
+  extends?: string
+  /**
+   * Model preset for agents using this configuration.
+   * After extends resolution, merged into AgentConfiguration.model.
+   * Priority: agent.model > configuration.model > team.defaultModel.
+   */
+  model?: AgentModel
   /** OpenClaw config values */
   openclaw?: Partial<import('./openclaw.schema.js').OpenClawConfig>
   /** Additional pass-through fields */

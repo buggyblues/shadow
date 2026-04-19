@@ -1,0 +1,15 @@
+{
+  "userSettings": {
+    "displayName": "",
+    "language": "zh-CN",
+    "aiLanguage": "zh",
+    "defaultResearchGoals": [],
+    "autoCurate": false,
+    "autoPipeline": false,
+    "notifications": true,
+    "autoInspire": false,
+    "autoResearch": false,
+    "heartbeatInterval": 120,
+    "autoConsumeTodos": false
+  }
+}
