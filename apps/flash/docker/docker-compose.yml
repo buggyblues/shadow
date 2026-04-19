@@ -1,20 +1,20 @@
 # ============================================================================
 # Flash All-in-One — Docker Compose
 #
-# Usage:
-#   docker compose up --build
+# Usage (from monorepo root or apps/flash/docker/):
+#   docker compose -f apps/flash/docker/docker-compose.yml up --build
 #
 # Then open:
 #   http://localhost:8080
 #
-# Data is stored in ./data/ and ./output/
+# Data is stored in apps/flash/data/ and apps/flash/output/
 # ============================================================================
 
 services:
   flash:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: ../../..
+      dockerfile: apps/flash/docker/Dockerfile
     ports:
       - "8080:8080"
     environment:
