@@ -2,12 +2,7 @@
  * Discord plugin — channel integration for Discord servers.
  */
 import { defineChannelPlugin } from '../helpers.js'
-import type {
-  PluginBuildContext,
-  PluginConfigFragment,
-  PluginDefinition,
-  PluginManifest,
-} from '../types.js'
+import type { PluginBuildContext, PluginConfigFragment, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
 function buildDiscordConfig(context: PluginBuildContext): PluginConfigFragment {
@@ -42,5 +37,4 @@ function buildDiscordConfig(context: PluginBuildContext): PluginConfigFragment {
   }
 }
 
-const plugin: PluginDefinition = defineChannelPlugin(manifest as PluginManifest, buildDiscordConfig)
-export default plugin
+export default defineChannelPlugin(manifest as PluginManifest, buildDiscordConfig)

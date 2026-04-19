@@ -3,10 +3,10 @@
  */
 
 import { defineSkillPlugin } from '../helpers.js'
-import type { PluginDefinition, PluginManifest } from '../types.js'
+import type { PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = defineSkillPlugin(manifest as PluginManifest, {
+export default defineSkillPlugin(manifest as PluginManifest, {
   skills: {
     bundled: ['wix'],
     entries: [
@@ -25,5 +25,3 @@ const plugin: PluginDefinition = defineSkillPlugin(manifest as PluginManifest, {
     args: ['-y', '@wix/mcp'],
   },
 })
-
-export default plugin

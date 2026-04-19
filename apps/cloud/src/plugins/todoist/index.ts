@@ -3,10 +3,10 @@
  */
 
 import { defineSkillPlugin } from '../helpers.js'
-import type { PluginDefinition, PluginManifest } from '../types.js'
+import type { PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = defineSkillPlugin(manifest as PluginManifest, {
+export default defineSkillPlugin(manifest as PluginManifest, {
   skills: {
     bundled: ['todoist'],
     entries: [
@@ -28,5 +28,3 @@ const plugin: PluginDefinition = defineSkillPlugin(manifest as PluginManifest, {
     env: { TODOIST_API_TOKEN: '${env:TODOIST_API_TOKEN}' },
   },
 })
-
-export default plugin

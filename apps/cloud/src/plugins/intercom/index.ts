@@ -2,12 +2,7 @@
  * Intercom plugin — channel integration for customer support.
  */
 import { defineChannelPlugin } from '../helpers.js'
-import type {
-  PluginBuildContext,
-  PluginConfigFragment,
-  PluginDefinition,
-  PluginManifest,
-} from '../types.js'
+import type { PluginBuildContext, PluginConfigFragment, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
 function buildIntercomConfig(context: PluginBuildContext): PluginConfigFragment {
@@ -36,8 +31,4 @@ function buildIntercomConfig(context: PluginBuildContext): PluginConfigFragment 
   }
 }
 
-const plugin: PluginDefinition = defineChannelPlugin(
-  manifest as PluginManifest,
-  buildIntercomConfig,
-)
-export default plugin
+export default defineChannelPlugin(manifest as PluginManifest, buildIntercomConfig)
