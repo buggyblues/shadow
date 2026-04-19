@@ -65,7 +65,7 @@ export function createProvisionCommand(container: ServiceContainer) {
             userToken: shadowToken,
             dryRun: options.dryRun,
             force: options.force,
-            existingState: existing,
+            existingState: existing?.plugins?.shadowob ?? null,
           })
 
           if (!options.dryRun) {

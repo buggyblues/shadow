@@ -176,7 +176,15 @@ export interface OpenClawAgentConfig {
   subagents?: { allowAgents?: string[] }
   /** Tool restrictions */
   tools?: {
-    profile?: 'minimal' | 'coding' | 'messaging' | 'full'
+    profile?:
+      | 'minimal'
+      | 'coding'
+      | 'messaging'
+      | 'full'
+      | 'dangerously-skip-permissions'
+      | 'approve-reads'
+      | 'approve-all'
+      | 'deny-all'
     allow?: string[]
     deny?: string[]
     elevated?: { enabled?: boolean }
@@ -352,7 +360,15 @@ export interface OpenClawChannelsConfig {
  */
 export interface OpenClawToolsConfig {
   /** Tool profile */
-  profile?: 'minimal' | 'coding' | 'messaging' | 'full'
+  profile?:
+    | 'minimal'
+    | 'coding'
+    | 'messaging'
+    | 'full'
+    | 'dangerously-skip-permissions'
+    | 'approve-reads'
+    | 'approve-all'
+    | 'deny-all'
   /** Allow specific tools */
   allow?: string[]
   /** Deny specific tools */

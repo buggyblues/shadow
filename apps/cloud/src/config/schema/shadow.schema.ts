@@ -118,29 +118,3 @@ export interface ShadowobPluginConfig {
   /** Binding rules connecting buddies to agents */
   bindings?: ShadowBinding[]
 }
-
-/**
- * @deprecated Use UseEntry[] instead. Kept for migration compatibility.
- */
-export interface PluginInstanceConfig {
-  enabled?: boolean
-  config?: Record<string, unknown>
-  secrets?: Record<string, string>
-  /** Per-agent overrides for this plugin */
-  agents?: Record<
-    string,
-    {
-      enabled?: boolean
-      config?: Record<string, unknown>
-      role?: string
-    }
-  >
-}
-
-/**
- * @deprecated Use top-level `use: UseEntry[]` instead. Kept for migration compatibility.
- */
-export interface PluginsConfig {
-  shadowob?: ShadowobPluginConfig
-  [pluginId: string]: PluginInstanceConfig | ShadowobPluginConfig | undefined
-}

@@ -16,11 +16,7 @@ import {
   resolvePluginSecrets,
 } from '../plugins/config-merger.js'
 import { getPluginRegistry } from '../plugins/registry.js'
-import type {
-  PluginBuildContext,
-  PluginConfigFragment,
-  PluginInstanceConfig,
-} from '../plugins/types.js'
+import type { PluginBuildContext } from '../plugins/types.js'
 import { getRuntime } from '../runtimes/index.js'
 import { registerAllRuntimes } from '../runtimes/loader.js'
 
@@ -167,7 +163,7 @@ function buildModelConfig(
 function applyPermissions(agent: AgentDeployment, openclawConfig: OpenClawConfig): void {
   if (!agent.permissions) return
 
-  const PERM_MAP: Record<string, string> = {
+  const PERM_MAP: Record<string, NonNullable<NonNullable<OpenClawConfig['tools']>['profile']>> = {
     'always-allow': 'dangerously-skip-permissions',
     'approve-reads': 'approve-reads',
     'always-ask': 'approve-all',
@@ -177,7 +173,7 @@ function applyPermissions(agent: AgentDeployment, openclawConfig: OpenClawConfig
   if (!openclawConfig.tools) openclawConfig.tools = {}
   const mappedDefault = PERM_MAP[agent.permissions.default]
   if (mappedDefault) {
-    openclawConfig.tools.profile = mappedDefault as 'minimal' | 'coding' | 'messaging' | 'full'
+    openclawConfig.tools.profile = mappedDefault
   }
 
   // nonInteractive: what happens when approval is needed but no human is present
@@ -244,6 +240,9 @@ function buildProvidersConfig(config: CloudConfig): OpenClawConfig['models'] {
         if (m.maxTokens != null) entry.maxTokens = m.maxTokens
         return entry
       })
+    } else {
+      // OpenClaw requires models to be an array (even if empty) — omitting it causes config validation failure
+      providerEntry.models = []
     }
     providers[providerId] = providerEntry
   }
@@ -376,11 +375,9 @@ function stripAndCollectWorkspaceFiles(openclawConfig: OpenClawConfig): Record<s
 }
 
 /**
- * Run the plugin pipeline — iterate enabled plugins, call their hooks, and merge results.
+ * Run the plugin pipeline — iterate enabled plugins, call their providers, and merge results.
  *
- * Resolution order:
- * 1. configBuilder.build / channel.buildChannel
- * 2. env.build for environment variables
+ * All plugins use structured providers: configBuilder, env, resources, lifecycle.
  */
 function applyPluginPipeline(
   agent: AgentDeployment,
@@ -391,7 +388,6 @@ function applyPluginPipeline(
   const registry = getPluginRegistry()
   if (registry.size === 0) return {}
 
-  const pluginsMap = (config.plugins ?? {}) as Record<string, PluginInstanceConfig>
   const envVars: Record<string, string> = {}
 
   // Collect K8s resources from resource providers
@@ -419,54 +415,28 @@ function applyPluginPipeline(
     const context: PluginBuildContext = {
       agent,
       config,
+      agentConfig: resolved,
       secrets,
       namespace: config.deployments?.namespace ?? 'default',
       pluginRegistry: registry,
       cwd: cwd ?? process.cwd(),
     }
 
-    // agentConfig: use options as base, plugin instance config overrides
-    // Note: resolved IS the merged config (not a wrapper), use it directly.
-    const agentConfig: Record<string, unknown> = { ...useOptions, ...(resolved ?? {}) }
-
     // Build OpenClaw config fragment
-    if (pluginDef.configBuilder) {
-      const fragment = pluginDef.configBuilder.build(agentConfig, context)
-      Object.assign(openclawConfig, mergePluginFragments(openclawConfig, fragment))
-    } else if (pluginDef.channel) {
-      const fragment = pluginDef.channel.buildChannel(agentConfig, context)
-      Object.assign(openclawConfig, mergePluginFragments(openclawConfig, fragment))
+    for (const fn of pluginDef._hooks.buildConfig) {
+      const fragment = fn(context)
+      if (fragment) Object.assign(openclawConfig, mergePluginFragments(openclawConfig, fragment))
     }
 
     // Build env vars
-    if (pluginDef.env) {
-      Object.assign(envVars, pluginDef.env.build(agentConfig, context))
+    for (const fn of pluginDef._hooks.buildEnv) {
+      const vars = fn(context)
+      if (vars) Object.assign(envVars, vars)
     }
 
     // Collect K8s resources
-    if (pluginDef.k8sManifests) {
-      const resources = pluginDef.k8sManifests.build(agentConfig, context)
-      pluginResources.push(...resources)
-    }
-
-    // Collect lifecycle provisioning tasks (async — deferred for infra layer)
-    if (pluginDef.lifecycle?.provision) {
-      if (!openclawConfig._pluginProvisions) {
-        openclawConfig._pluginProvisions = []
-      }
-      ;(openclawConfig._pluginProvisions as unknown[]).push({
-        pluginId,
-        provision: pluginDef.lifecycle.provision.bind(pluginDef.lifecycle),
-        context: {
-          agent,
-          config,
-          secrets,
-          logger: { info: () => {}, dim: () => {} },
-          dryRun: false,
-          existingState: null,
-        },
-        agentConfig,
-      })
+    for (const fn of pluginDef._hooks.buildResources) {
+      pluginResources.push(...fn(context))
     }
   }
 
@@ -529,26 +499,26 @@ export function buildOpenClawConfig(
   // 11. Compliance → audit logging
   applyCompliance(agent, config, openclawConfig)
 
-  // 12. Logging + messages
+  // 13. Logging + messages
   if (oc?.logging) openclawConfig.logging = oc.logging
   if (oc?.messages) openclawConfig.messages = oc.messages
 
-  // 13. Gateway config
+  // 14. Gateway config
   openclawConfig.gateway = buildGatewayConfig(oc, openclawConfig.gateway)
 
-  // 14. Strip strict-schema-violating fields
+  // 15. Strip strict-schema-violating fields
   const workspaceFiles = stripAndCollectWorkspaceFiles(openclawConfig)
   if (Object.keys(workspaceFiles).length > 0) {
     openclawConfig._workspaceFiles = workspaceFiles
   }
 
-  // 15. Plugin pipeline — all plugins (shadowob, gitagent, etc.) run here uniformly
+  // 16. Plugin pipeline — merge enabled plugin configs (channels, bindings, env, resources)
   const pluginEnvVars = applyPluginPipeline(agent, config, openclawConfig, cwd)
   if (Object.keys(pluginEnvVars).length > 0) {
     openclawConfig._pluginEnvVars = pluginEnvVars
   }
 
-  // 16. Ensure shadowob channel has a disabled fallback config so the
+  // 17. Ensure shadowob channel has a disabled fallback config so the
   //     always-installed openclaw-shadowob extension passes validation.
   const existingChannels = (openclawConfig as Record<string, unknown>).channels as
     | Record<string, unknown>

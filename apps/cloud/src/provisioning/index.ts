@@ -10,7 +10,14 @@
 import { ShadowClient } from '@shadowob/sdk'
 import type { CloudConfig, ShadowBinding, ShadowBuddy, ShadowServer } from '../config/schema.js'
 import { log as defaultLog, type Logger } from '../utils/logger.js'
-import type { ProvisionState } from '../utils/state.js'
+
+// The shadowob plugin's per-plugin state blob (stored under plugins.shadowob in ProvisionState)
+type ShadowobState = {
+  servers?: Record<string, string>
+  channels?: Record<string, string>
+  buddies?: Record<string, { agentId: string; userId: string; token: string }>
+  shadowServerUrl?: string
+}
 
 /**
  * Module-level logger reference. Default is the global logger.
@@ -30,8 +37,8 @@ export interface ProvisionOptions {
   dryRun?: boolean
   /** Force re-provisioning even when state indicates resources exist */
   force?: boolean
-  /** Existing provision state for dedup (if available) */
-  existingState?: ProvisionState | null
+  /** Existing shadowob plugin state for dedup (if available) */
+  existingState?: ShadowobState | null
   /** Optional logger — defaults to the global console logger */
   logger?: Logger
 }
@@ -131,7 +138,7 @@ export async function provisionShadowResources(
  * Logs warnings for orphaned resources (doesn't delete — user must clean up).
  */
 function detectOrphans(
-  state: ProvisionState,
+  state: ShadowobState,
   plugin: import('../config/schema.js').ShadowobPluginConfig,
 ): void {
   if (!plugin) return
@@ -142,17 +149,17 @@ function detectOrphans(
   )
   const configBuddyIds = new Set(plugin.buddies?.map((b) => b.id) ?? [])
 
-  for (const id of Object.keys(state.servers)) {
+  for (const id of Object.keys(state.servers ?? {})) {
     if (!configServerIds.has(id)) {
       log.warn(`  Orphaned server in state: "${id}" (not in current config)`)
     }
   }
-  for (const id of Object.keys(state.channels)) {
+  for (const id of Object.keys(state.channels ?? {})) {
     if (!configChannelIds.has(id)) {
       log.warn(`  Orphaned channel in state: "${id}" (not in current config)`)
     }
   }
-  for (const id of Object.keys(state.buddies)) {
+  for (const id of Object.keys(state.buddies ?? {})) {
     if (!configBuddyIds.has(id)) {
       log.warn(`  Orphaned buddy in state: "${id}" (not in current config)`)
     }
@@ -162,7 +169,7 @@ function detectOrphans(
 async function provisionServer(
   client: ShadowClient,
   serverDef: ShadowServer,
-  state: ProvisionState | null,
+  state: ShadowobState | null,
 ): Promise<string> {
   // Check state first — if server exists in state, verify via API
   const existingId = state?.servers?.[serverDef.id]
@@ -207,7 +214,7 @@ async function provisionChannel(
   client: ShadowClient,
   serverId: string,
   channelDef: { id: string; title: string; type?: string; description?: string },
-  state: ProvisionState | null,
+  state: ShadowobState | null,
 ): Promise<string> {
   // Check state first
   const existingId = state?.channels?.[channelDef.id]
@@ -243,7 +250,7 @@ async function provisionChannel(
 async function provisionBuddy(
   client: ShadowClient,
   buddyDef: ShadowBuddy,
-  state: ProvisionState | null,
+  state: ShadowobState | null,
 ): Promise<{ agentId: string; token: string; userId: string }> {
   // Check state first — reuse existing token to avoid invalidating old ones
   const existingBuddy = state?.buddies?.[buddyDef.id]

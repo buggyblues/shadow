@@ -10,12 +10,7 @@ import { dirname, resolve } from 'node:path'
 import type { CloudConfig } from '../config/schema.js'
 import type { ProvisionResult } from '../provisioning/index.js'
 import type { Logger } from '../utils/logger.js'
-import {
-  loadProvisionState,
-  mergeProvisionState,
-  provisionResultToState,
-  saveProvisionState,
-} from '../utils/state.js'
+import { loadProvisionState } from '../utils/state.js'
 import type { ConfigService } from './config.service.js'
 import type { K8sService } from './k8s.service.js'
 import type { ManifestService } from './manifest.service.js'
@@ -125,88 +120,66 @@ export class DeployService {
       this.logger.warn('kubectl cannot reach a cluster. Use --local to auto-create a kind cluster.')
     }
 
-    // 2. Provision Shadow resources
-    let provision: ProvisionResult | undefined
-    if (!options.skipProvision && config.use?.some((u) => u.plugin === 'shadowob')) {
-      const shadowUrl = options.shadowUrl ?? process.env.SHADOW_SERVER_URL
-      const shadowToken = options.shadowToken ?? process.env.SHADOW_USER_TOKEN
-
-      if (!shadowUrl || !shadowToken) {
-        this.logger.warn(
-          'Shadow provisioning skipped: --shadow-url and --shadow-token required ' +
-            '(or SHADOW_SERVER_URL / SHADOW_USER_TOKEN env vars)',
-        )
-      } else {
-        this.logger.step('Provisioning Shadow resources...')
-        emit('Provisioning Shadow resources...\n')
-        try {
-          const existingState = loadProvisionState(filePath, options.stateDir)
-          provision = await this.provisionService.provision(config, {
-            serverUrl: shadowUrl,
-            userToken: shadowToken,
-            dryRun: options.dryRun,
-            existingState,
-          })
-
-          if (!options.dryRun) {
-            this.logger.success(
-              `Provisioned: ${provision.servers.size} server(s), ` +
-                `${provision.channels.size} channel(s), ` +
-                `${provision.buddies.size} buddy/buddies`,
-            )
-
-            const newState = provisionResultToState(provision, shadowUrl, {
-              stackName: options.stack ?? 'dev',
-              namespace,
-            })
-            const merged = mergeProvisionState(existingState, newState)
-            const statePath = saveProvisionState(filePath, merged, options.stateDir)
-            this.logger.dim(`  State saved: ${statePath}`)
-          }
-        } catch (provisionError) {
-          const msg = (provisionError as Error).message
-          emit(`Shadow provisioning failed: ${msg}\n`)
-          throw new Error(
-            `Shadow provisioning failed. Check that SHADOW_SERVER_URL is reachable and SHADOW_USER_TOKEN is valid.\n${msg}`,
-          )
-        }
-      }
-    }
+    // 2. Build extra secrets from CLI-provided credentials (passed directly to plugin lifecycle)
+    const extraSecrets: Record<string, string> = {}
+    if (options.shadowUrl) extraSecrets.SHADOW_SERVER_URL = options.shadowUrl
+    if (options.shadowToken) extraSecrets.SHADOW_USER_TOKEN = options.shadowToken
 
     // 3. Resolve config (expand extends + templates)
     this.logger.step('Resolving config...')
     emit('Resolving config...\n')
     const resolved = await this.configService.resolve(config, configCwd)
 
-    // 3b. Execute plugin lifecycle provisions (async hooks)
-    try {
-      const { executePluginProvisions, loadAllPlugins, getPluginRegistry } = await import(
-        '../plugins/index.js'
-      )
+    // 3b. Execute plugin lifecycle provisions (async hooks — runs for all plugins)
+    let provision: ProvisionResult | undefined
+    if (!options.skipProvision) {
       try {
-        await loadAllPlugins(getPluginRegistry())
-      } catch {
-        /* already loaded */
-      }
-      for (const agent of agents) {
-        const provisionResults = await executePluginProvisions(
-          agent,
-          resolved,
-          this.logger,
-          options.dryRun,
+        const { executePluginProvisions, loadAllPlugins, getPluginRegistry } = await import(
+          '../plugins/index.js'
         )
-        if (provisionResults.errors.length > 0) {
-          for (const e of provisionResults.errors) {
-            this.logger.warn(`Plugin provision error (${e.pluginId}): ${e.error}`)
+        try {
+          await loadAllPlugins(getPluginRegistry())
+        } catch {
+          /* already loaded */
+        }
+        for (const agent of agents) {
+          const existingState = loadProvisionState(filePath, options.stateDir)
+          const provisionResults = await executePluginProvisions(
+            agent,
+            resolved,
+            namespace,
+            this.logger,
+            options.dryRun,
+            extraSecrets,
+            existingState,
+          )
+          if (provisionResults.errors.length > 0) {
+            for (const e of provisionResults.errors) {
+              this.logger.warn(`Plugin provision error (${e.pluginId}): ${e.error}`)
+            }
+          }
+          // Merge provisioned secrets into agent env
+          if (Object.keys(provisionResults.secrets).length > 0) {
+            agent.env = { ...(agent.env ?? {}), ...provisionResults.secrets }
+
+            // Persist provision state for future dedup
+            if (!options.dryRun && Object.keys(provisionResults.states).length > 0) {
+              const { mergeProvisionState, saveProvisionState } = await import('../utils/state.js')
+              const newState: import('../utils/state.js').ProvisionState = {
+                provisionedAt: new Date().toISOString(),
+                stackName: options.stack ?? 'dev',
+                namespace,
+                plugins: provisionResults.states,
+              }
+              const merged = mergeProvisionState(existingState, newState)
+              const statePath = saveProvisionState(filePath, merged, options.stateDir)
+              this.logger.dim(`  State saved: ${statePath}`)
+            }
           }
         }
-        // Merge provisioned secrets into agent env
-        if (Object.keys(provisionResults.secrets).length > 0) {
-          agent.env = { ...(agent.env ?? {}), ...provisionResults.secrets }
-        }
+      } catch {
+        // Plugin provisioning is optional — continue if plugin system unavailable
       }
-    } catch {
-      // Plugin provisioning is optional — continue if plugin system unavailable
     }
 
     // 4. Output manifests to directory if requested

@@ -7,51 +7,45 @@
  * - MCP server for real-time integration (fallback)
  */
 
-import { createSkillPlugin } from '../helpers.js'
-import type { PluginDefinition } from '../types.js'
+import { defineSkillPlugin } from '../helpers.js'
+import type { PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = {
-  ...createSkillPlugin(
-    manifest as unknown as PluginDefinition['manifest'],
-    {
-      skills: {
-        bundled: ['github'],
-        entries: [
-          {
-            id: 'github',
-            name: 'GitHub',
-            description: 'Repository management, issues, PRs, code search',
-            // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-            env: { GITHUB_PERSONAL_ACCESS_TOKEN: '${env:GITHUB_PERSONAL_ACCESS_TOKEN}' },
-          },
-        ],
-        install: { npmPackages: ['@modelcontextprotocol/server-github'] },
-      },
-      cli: {
-        tools: [
-          {
-            name: 'gh',
-            command: 'gh',
-            description: 'GitHub CLI — create issues, PRs, manage repos',
-            // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-            env: { GH_TOKEN: '${env:GITHUB_PERSONAL_ACCESS_TOKEN}' },
-          },
-        ],
-      },
-      mcp: {
-        server: {
-          transport: 'stdio',
-          command: 'npx',
-          args: ['-y', '@modelcontextprotocol/server-github'],
+export default defineSkillPlugin(
+  manifest as PluginManifest,
+  {
+    skills: {
+      bundled: ['github'],
+      entries: [
+        {
+          id: 'github',
+          name: 'GitHub',
+          description: 'Repository management, issues, PRs, code search',
           // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
           env: { GITHUB_PERSONAL_ACCESS_TOKEN: '${env:GITHUB_PERSONAL_ACCESS_TOKEN}' },
         },
-      },
+      ],
+      install: { npmPackages: ['@modelcontextprotocol/server-github'] },
     },
-  ),
-  lifecycle: {
-    async healthCheck(_agentConfig, context) {
+    cli: [
+      {
+        name: 'gh',
+        command: 'gh',
+        description: 'GitHub CLI — create issues, PRs, manage repos',
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+        env: { GH_TOKEN: '${env:GITHUB_PERSONAL_ACCESS_TOKEN}' },
+      },
+    ],
+    mcp: {
+      transport: 'stdio',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-github'],
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+      env: { GITHUB_PERSONAL_ACCESS_TOKEN: '${env:GITHUB_PERSONAL_ACCESS_TOKEN}' },
+    },
+  },
+  (api) => {
+    api.onHealthCheck(async (context) => {
       const token = context.secrets.GITHUB_PERSONAL_ACCESS_TOKEN
       if (!token) {
         return { healthy: false, message: 'GITHUB_PERSONAL_ACCESS_TOKEN not configured' }
@@ -68,8 +62,6 @@ const plugin: PluginDefinition = {
       } catch (err) {
         return { healthy: false, message: `GitHub API unreachable: ${err}` }
       }
-    },
+    })
   },
-}
-
-export default plugin
+)

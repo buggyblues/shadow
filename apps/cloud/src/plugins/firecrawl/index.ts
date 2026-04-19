@@ -2,36 +2,29 @@
  * Firecrawl plugin — web scraping, crawling, and structured data extraction.
  */
 
-import { createSkillPlugin } from '../helpers.js'
-import type { PluginDefinition } from '../types.js'
+import { defineSkillPlugin } from '../helpers.js'
+import type { PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = createSkillPlugin(
-  manifest as unknown as PluginDefinition['manifest'],
-  {
-    skills: {
-      bundled: ['web-crawl'],
-      entries: [
-        {
-          id: 'firecrawl',
-          name: 'Firecrawl',
-          description: 'Web scraping, crawling, search, and structured data extraction',
-          // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
-          env: { FIRECRAWL_API_KEY: '${env:FIRECRAWL_API_KEY}' },
-        },
-      ],
-      install: { npmPackages: ['firecrawl-mcp'] },
-    },
-    mcp: {
-      server: {
-        transport: 'stdio',
-        command: 'npx',
-        args: ['-y', 'firecrawl-mcp'],
+export default defineSkillPlugin(manifest as PluginManifest, {
+  skills: {
+    bundled: ['web-crawl'],
+    entries: [
+      {
+        id: 'firecrawl',
+        name: 'Firecrawl',
+        description: 'Web scraping, crawling, search, and structured data extraction',
         // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
         env: { FIRECRAWL_API_KEY: '${env:FIRECRAWL_API_KEY}' },
       },
-    },
+    ],
+    install: { npmPackages: ['firecrawl-mcp'] },
   },
-)
-
-export default plugin
+  mcp: {
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', 'firecrawl-mcp'],
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
+    env: { FIRECRAWL_API_KEY: '${env:FIRECRAWL_API_KEY}' },
+  },
+})

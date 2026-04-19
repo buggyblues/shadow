@@ -1,14 +1,12 @@
 /**
  * Discord plugin — channel integration for Discord servers.
  */
-import { createChannelPlugin } from '../helpers.js'
-import type { PluginBuildContext, PluginConfigFragment, PluginDefinition } from '../types.js'
+import { defineChannelPlugin } from '../helpers.js'
+import type { PluginBuildContext, PluginConfigFragment, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-function buildDiscordConfig(
-  agentConfig: Record<string, unknown>,
-  context: PluginBuildContext,
-): PluginConfigFragment {
+function buildDiscordConfig(context: PluginBuildContext): PluginConfigFragment {
+  const { agentConfig } = context
   const channels = (agentConfig.channels as string[]) ?? []
   const mentionOnly = agentConfig.mentionOnly !== false
 
@@ -39,8 +37,4 @@ function buildDiscordConfig(
   }
 }
 
-const plugin: PluginDefinition = createChannelPlugin(
-  manifest as unknown as PluginDefinition['manifest'],
-  buildDiscordConfig,
-)
-export default plugin
+export default defineChannelPlugin(manifest as PluginManifest, buildDiscordConfig)

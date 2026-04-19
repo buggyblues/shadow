@@ -1,14 +1,12 @@
 /**
  * Outlook Mail plugin — channel integration for Microsoft email.
  */
-import { createChannelPlugin } from '../helpers.js'
-import type { PluginBuildContext, PluginConfigFragment, PluginDefinition } from '../types.js'
+import { defineChannelPlugin } from '../helpers.js'
+import type { PluginBuildContext, PluginConfigFragment, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-function buildOutlookMailConfig(
-  agentConfig: Record<string, unknown>,
-  context: PluginBuildContext,
-): PluginConfigFragment {
+function buildOutlookMailConfig(context: PluginBuildContext): PluginConfigFragment {
+  const { agentConfig } = context
   const folders = (agentConfig.folders as string[]) ?? ['Inbox']
   return {
     channels: {
@@ -37,8 +35,4 @@ function buildOutlookMailConfig(
   }
 }
 
-const plugin: PluginDefinition = createChannelPlugin(
-  manifest as unknown as PluginDefinition['manifest'],
-  buildOutlookMailConfig,
-)
-export default plugin
+export default defineChannelPlugin(manifest as PluginManifest, buildOutlookMailConfig)

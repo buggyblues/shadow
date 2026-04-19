@@ -71,39 +71,47 @@ import manifest from './manifest.json' with { type: 'json' }
 const plugin: PluginDefinition = {
   manifest,
 
-  buildOpenClawConfig(agentConfig, context) {
-    // Return OpenClaw config fragment for this plugin
-    return {
-      plugins: {
-        entries: {
-          'my-service': {
-            enabled: true,
-            config: {
-              workspace: agentConfig.workspace,
-              apiKey: `\${env:MY_SERVICE_API_KEY}`,
+  // ── Config Builder: returns an OpenClaw config fragment ──
+  configBuilder: {
+    build(agentConfig, context) {
+      return {
+        plugins: {
+          entries: {
+            'my-service': {
+              enabled: true,
+              config: {
+                workspace: agentConfig.workspace,
+                apiKey: `\${env:MY_SERVICE_API_KEY}`,
+              },
             },
           },
         },
-      },
-    }
+      }
+    },
   },
 
-  buildEnvVars(agentConfig, context) {
-    return {
-      MY_SERVICE_WORKSPACE: String(agentConfig.workspace),
-    }
+  // ── Env Provider: injects environment variables for the agent ──
+  env: {
+    build(agentConfig, _context) {
+      return {
+        MY_SERVICE_WORKSPACE: String(agentConfig.workspace),
+      }
+    },
   },
 
-  validate(agentConfig, context) {
-    const errors = []
-    if (!agentConfig.workspace) {
-      errors.push({
-        path: 'config.workspace',
-        message: 'Workspace ID is required',
-        severity: 'error' as const,
-      })
-    }
-    return { valid: errors.length === 0, errors }
+  // ── Validation Provider: checks required config before deploy ──
+  validation: {
+    validate(agentConfig, _context) {
+      const errors = []
+      if (!agentConfig.workspace) {
+        errors.push({
+          path: 'config.workspace',
+          message: 'Workspace ID is required',
+          severity: 'error' as const,
+        })
+      }
+      return { valid: errors.length === 0, errors }
+    },
   },
 }
 
@@ -111,6 +119,21 @@ export default plugin
 ```
 
 ### Step 3: Use in config
+
+```json
+{
+  "use": [
+    {
+      "plugin": "my-service",
+      "options": {
+        "workspace": "ws_abc123"
+      }
+    }
+  ]
+}
+```
+
+> **Legacy format:** The older `plugins` map format is still supported for backward compatibility, but new configs should use the `use` array above.
 
 ```json
 {
@@ -122,11 +145,6 @@ export default plugin
       },
       "config": {
         "workspace": "ws_abc123"
-      },
-      "agents": {
-        "assistant": {
-          "config": { "syncInterval": 60 }
-        }
       }
     }
   }

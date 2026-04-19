@@ -3,38 +3,14 @@
  */
 
 import type { UseEntry } from '../config/schema/shadow.schema.js'
-import type { CloudConfig, OpenClawBinding, OpenClawConfig } from '../config/schema.js'
-import type { PluginConfigFragment, PluginInstanceConfig } from './types.js'
-
-/**
- * Deep merge helper for objects. Arrays are concatenated, objects are recursively merged.
- */
-function deepMergeObj(
-  target: Record<string, unknown>,
-  source: Record<string, unknown>,
-): Record<string, unknown> {
-  const result = { ...target }
-  for (const key of Object.keys(source)) {
-    const targetVal = result[key]
-    const sourceVal = source[key]
-    if (
-      targetVal &&
-      sourceVal &&
-      typeof targetVal === 'object' &&
-      typeof sourceVal === 'object' &&
-      !Array.isArray(targetVal) &&
-      !Array.isArray(sourceVal)
-    ) {
-      result[key] = deepMergeObj(
-        targetVal as Record<string, unknown>,
-        sourceVal as Record<string, unknown>,
-      )
-    } else {
-      result[key] = sourceVal
-    }
-  }
-  return result
-}
+import type {
+  CloudConfig,
+  CloudPluginInstanceConfig,
+  OpenClawBinding,
+  OpenClawConfig,
+} from '../config/schema.js'
+import { deepMerge } from '../utils/deep-merge.js'
+import type { PluginConfigFragment } from './types.js'
 
 /**
  * Merge plugin config fragment(s) into a base OpenClaw config.
@@ -50,9 +26,9 @@ export function mergePluginFragments(
   for (const fragment of fragments) {
     // Channels: deep merge (each plugin owns its channel namespace)
     if (fragment.channels) {
-      result.channels = deepMergeObj(
+      result.channels = deepMerge(
         (result.channels ?? {}) as Record<string, unknown>,
-        fragment.channels,
+        fragment.channels as Record<string, unknown>,
       ) as OpenClawConfig['channels']
     }
 
@@ -65,27 +41,27 @@ export function mergePluginFragments(
     // Plugins/MCP: deep merge
     if (fragment.plugins) {
       if (!result.plugins) result.plugins = {} as Record<string, unknown>
-      result.plugins = deepMergeObj(
+      result.plugins = deepMerge(
         result.plugins as Record<string, unknown>,
-        fragment.plugins,
+        fragment.plugins as Record<string, unknown>,
       ) as OpenClawConfig['plugins']
     }
 
     // Skills: deep merge
     if (fragment.skills) {
       if (!result.skills) result.skills = {} as Record<string, unknown>
-      result.skills = deepMergeObj(
+      result.skills = deepMerge(
         result.skills as Record<string, unknown>,
-        fragment.skills,
+        fragment.skills as Record<string, unknown>,
       ) as OpenClawConfig['skills']
     }
 
     // Tools: deep merge
     if (fragment.tools) {
       if (!result.tools) result.tools = {} as Record<string, unknown>
-      result.tools = deepMergeObj(
+      result.tools = deepMerge(
         result.tools as Record<string, unknown>,
-        fragment.tools,
+        fragment.tools as Record<string, unknown>,
       ) as OpenClawConfig['tools']
     }
 
@@ -97,12 +73,21 @@ export function mergePluginFragments(
       if (fragmentAgents.defaults) {
         result.agents = {
           ...existingAgents,
-          defaults: deepMergeObj(
+          defaults: deepMerge(
             (existingAgents.defaults ?? {}) as Record<string, unknown>,
             fragmentAgents.defaults as Record<string, unknown>,
           ),
         } as OpenClawConfig['agents']
       }
+    }
+
+    // Models: deep merge (provider plugins contribute to models.providers)
+    if (fragment.models) {
+      if (!result.models) result.models = {} as Record<string, unknown>
+      result.models = deepMerge(
+        result.models as Record<string, unknown>,
+        fragment.models as Record<string, unknown>,
+      ) as OpenClawConfig['models']
     }
   }
 
@@ -113,6 +98,8 @@ export function mergePluginFragments(
  * Resolve the effective plugin config for a specific agent.
  * Merges: plugin defaults → global config → per-agent override.
  * Returns null if the plugin is disabled for this agent.
+ *
+ * Checks both the legacy `plugins` map and the new `use` array.
  */
 export function resolveAgentPluginConfig(
   pluginId: string,
@@ -136,21 +123,26 @@ export function resolveAgentPluginConfig(
 
   // Legacy: plugins map
   const pluginInstanceConfig = (
-    config.plugins as Record<string, PluginInstanceConfig> | undefined
+    config.plugins as Record<string, CloudPluginInstanceConfig> | undefined
   )?.[pluginId]
-  if (!pluginInstanceConfig) return null
-  if (pluginInstanceConfig.enabled === false) return null
+  if (pluginInstanceConfig) {
+    if (pluginInstanceConfig.enabled === false) return null
 
-  // Start with global plugin config
-  const globalConfig = pluginInstanceConfig.config ?? {}
+    const globalConfig = pluginInstanceConfig.config ?? {}
+    const agentOverride = pluginInstanceConfig.agents?.[agentId]
+    if (agentOverride?.enabled === false) return null
 
-  // Check per-agent override
-  const agentOverride = pluginInstanceConfig.agents?.[agentId]
-  if (agentOverride?.enabled === false) return null
+    const agentConfig = agentOverride?.config ?? {}
+    return { ...globalConfig, ...agentConfig }
+  }
 
-  // Merge global + per-agent config
-  const agentConfig = agentOverride?.config ?? {}
-  return { ...globalConfig, ...agentConfig }
+  // New `use` array path
+  const useEntry = config.use?.find((e) => e.plugin === pluginId)
+  if (useEntry) {
+    return useEntry.options ?? {}
+  }
+
+  return null
 }
 
 /**
@@ -162,19 +154,32 @@ export function resolvePluginSecrets(
   config: CloudConfig,
   processEnv: Record<string, string | undefined>,
 ): Record<string, string> {
-  // New-style: use array — options can contain secret refs
-  if (config.use?.length) {
-    const entry = config.use.find((e) => e.plugin === pluginId)
-    if (!entry?.options) return {}
-    return resolveSecretRefs(entry.options as Record<string, string>, processEnv)
+  // Legacy plugins map: explicit secrets map with ${env:VAR} support
+  const pluginInstanceConfig = (
+    config.plugins as Record<string, CloudPluginInstanceConfig> | undefined
+  )?.[pluginId]
+
+  const secretsMap: Record<string, string> = pluginInstanceConfig?.secrets ?? {}
+
+  // New `use` array: plugins may declare required env vars in options
+  // Resolve any ${env:VAR} references found in use entry options
+  if (!pluginInstanceConfig) {
+    const useEntry = config.use?.find((e) => e.plugin === pluginId)
+    if (useEntry?.options) {
+      for (const [, val] of Object.entries(useEntry.options)) {
+        if (typeof val === 'string') {
+          const envMatch = val.match(/^\$\{env:(\w+)\}$/)
+          if (envMatch?.[1]) {
+            const envKey = envMatch[1]
+            const envVal = processEnv[envKey]
+            if (envVal !== undefined) secretsMap[envKey] = envVal
+          }
+        }
+      }
+    }
   }
 
-  // Legacy: plugins map
-  const pluginInstanceConfig = (
-    config.plugins as Record<string, PluginInstanceConfig> | undefined
-  )?.[pluginId]
-  if (!pluginInstanceConfig?.secrets) return {}
-  return resolveSecretRefs(pluginInstanceConfig.secrets, processEnv)
+  return resolveSecretRefs(secretsMap, processEnv)
 }
 
 function resolveSecretRefs(
@@ -183,7 +188,6 @@ function resolveSecretRefs(
 ): Record<string, string> {
   const resolved: Record<string, string> = {}
   for (const [key, ref] of Object.entries(secrets)) {
-    if (typeof ref !== 'string') continue
     // Resolve ${env:VAR_NAME} references
     const envMatch = ref.match(/^\$\{env:(\w+)\}$/)
     if (envMatch) {

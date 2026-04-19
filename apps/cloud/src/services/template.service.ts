@@ -28,53 +28,32 @@ export class TemplateService {
   }
 
   /** Discover all available config templates. */
-  async discover(locale?: string): Promise<TemplateMeta[]> {
-    const records = await this.dao.findAll()
-    const results: TemplateMeta[] = []
-
-    for (const record of records) {
-      const raw = await this.dao.readJson(record.configPath)
-      if (!raw) {
-        results.push({
-          name: record.slug,
-          file: record.isFolder
-            ? `${record.slug}/shadowob-cloud.json`
-            : `${record.slug}.template.json`,
-          description: '',
-          teamName: record.slug,
-          agentCount: 0,
-          namespace: record.slug,
-          dir: record.dir,
-        })
-        continue
-      }
-
-      const indexMeta = record.indexPath ? await this.dao.readJson(record.indexPath) : null
-      const source = indexMeta ?? raw
-      const i18nDict = resolveI18nDict(source, locale)
-      const team = source.team as Record<string, unknown> | undefined
-
-      results.push({
-        name: record.slug,
-        file: record.isFolder
-          ? `${record.slug}/shadowob-cloud.json`
-          : `${record.slug}.template.json`,
-        dir: record.dir,
-        description:
-          resolveI18nValue(source.description, i18nDict) ?? (team?.description as string) ?? '',
-        teamName: resolveI18nValue(source.name, i18nDict) ?? (team?.name as string) ?? record.slug,
-        agentCount: (((raw.deployments as Record<string, unknown>)?.agents as unknown[]) ?? [])
-          .length,
-        namespace:
-          ((raw.deployments as Record<string, unknown>)?.namespace as string) ?? record.slug,
+  discover(locale?: string): TemplateMeta[] {
+    if (!existsSync(this.templatesDir)) return []
+    return readdirSync(this.templatesDir)
+      .filter((f) => f.endsWith('.template.json'))
+      .map((file) => {
+        const name = file.replace(/\.template\.json$/, '')
+        const filePath = resolve(this.templatesDir, file)
+        try {
+          const raw = parseJsonc<Record<string, unknown>>(readFileSync(filePath, 'utf-8'), filePath)
+          const i18nDict = resolveI18nDict(raw, locale)
+          const team = raw.team as Record<string, unknown> | undefined
+          return {
+            name,
+            file,
+            description:
+              resolveI18nValue(raw.description, i18nDict) ?? (team?.description as string) ?? '',
+            teamName: resolveI18nValue(raw.name, i18nDict) ?? (team?.name as string) ?? name,
+            agentCount: (((raw.deployments as Record<string, unknown>)?.agents as unknown[]) ?? [])
+              .length,
+            namespace: (raw.deployments as Record<string, unknown>)?.namespace ?? name,
+          } as TemplateMeta
+        } catch {
+          return { name, file, description: '', teamName: name, agentCount: 0, namespace: name }
+        }
       })
-    }
-
-    return results.sort((a, b) => {
-      if (a.name === 'shadowob-cloud') return -1
-      if (b.name === 'shadowob-cloud') return 1
-      return a.name.localeCompare(b.name)
-    })
+      .sort((a, b) => a.name.localeCompare(b.name))
   }
 
   /**

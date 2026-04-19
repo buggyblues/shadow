@@ -1,14 +1,12 @@
 /**
  * Telegram plugin — channel integration for Telegram.
  */
-import { createChannelPlugin } from '../helpers.js'
-import type { PluginBuildContext, PluginConfigFragment, PluginDefinition } from '../types.js'
+import { defineChannelPlugin } from '../helpers.js'
+import type { PluginBuildContext, PluginConfigFragment, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-function buildTelegramConfig(
-  agentConfig: Record<string, unknown>,
-  context: PluginBuildContext,
-): PluginConfigFragment {
+function buildTelegramConfig(context: PluginBuildContext): PluginConfigFragment {
+  const { agentConfig } = context
   const allowedChats = (agentConfig.allowedChats as string[]) ?? []
   const polling = agentConfig.polling !== false
 
@@ -36,8 +34,4 @@ function buildTelegramConfig(
   }
 }
 
-const plugin: PluginDefinition = createChannelPlugin(
-  manifest as unknown as PluginDefinition['manifest'],
-  buildTelegramConfig,
-)
-export default plugin
+export default defineChannelPlugin(manifest as PluginManifest, buildTelegramConfig)

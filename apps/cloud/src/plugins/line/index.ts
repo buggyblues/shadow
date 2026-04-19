@@ -1,14 +1,12 @@
 /**
  * LINE plugin — channel integration for LINE messaging.
  */
-import { createChannelPlugin } from '../helpers.js'
-import type { PluginBuildContext, PluginConfigFragment, PluginDefinition } from '../types.js'
+import { defineChannelPlugin } from '../helpers.js'
+import type { PluginBuildContext, PluginConfigFragment, PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-function buildLineConfig(
-  agentConfig: Record<string, unknown>,
-  context: PluginBuildContext,
-): PluginConfigFragment {
+function buildLineConfig(context: PluginBuildContext): PluginConfigFragment {
+  const { agentConfig } = context
   return {
     channels: {
       line: {
@@ -34,8 +32,4 @@ function buildLineConfig(
   }
 }
 
-const plugin: PluginDefinition = createChannelPlugin(
-  manifest as unknown as PluginDefinition['manifest'],
-  buildLineConfig,
-)
-export default plugin
+export default defineChannelPlugin(manifest as PluginManifest, buildLineConfig)

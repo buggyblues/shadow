@@ -1,6 +1,5 @@
 export {
   buildOpenClawConfig,
-  deepMerge,
   expandExtends,
   parseConfigFile,
   resolveConfig,

@@ -1,15 +1,13 @@
 /** Hugging Face plugin — AI model provider. */
 
-import { createProviderPlugin } from '../helpers.js'
-import type { PluginDefinition } from '../types.js'
+import { defineProviderPlugin } from '../helpers.js'
+import type { PluginManifest } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const plugin: PluginDefinition = createProviderPlugin(
-  manifest as unknown as PluginDefinition['manifest'],
-  {
-    provider: { id: 'hugging-face', api: 'openai', baseUrl: 'https://api-inference.huggingface.co/v1' },
-    defaultModel: 'meta-llama/Llama-3-70b-chat-hf',
+export default defineProviderPlugin(manifest as PluginManifest, {
+  provider: {
+    id: 'hugging-face',
+    api: 'openai',
+    baseUrl: 'https://api-inference.huggingface.co/v1',
   },
-)
-
-export default plugin
+})
