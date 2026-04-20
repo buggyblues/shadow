@@ -211,16 +211,28 @@ export const saasApiAdapter: CloudApiClient = {
     logsUrl: (namespace: string, _id: string) => saasApi.deployments.logsUrl(namespace),
     logsHistory: (namespace: string, agent: string, _page = 1, limit = 200) =>
       Promise.resolve({ namespace, agent, limit, lines: [], hasMore: false }),
-    env: (namespace: string, _name: string) =>
-      saasApi.envvars.list(namespace).then((vars) => ({
-        envVars: vars.map((v) => ({
-          scope: v.scope,
-          key: v.key,
-          maskedValue: '****',
-          isSecret: true,
-          groupName: v.groupId ?? 'default',
+    env: {
+      list: (namespace: string, _mode?: string) =>
+        saasApi.envvars.list(namespace).then((vars) => ({
+          namespace,
+          scope: namespace,
+          mode: 'effective' as const,
+          envVars: vars.map((v) => ({
+            scope: v.scope,
+            key: v.key,
+            maskedValue: '****',
+            isSecret: true,
+            groupName: v.groupId ?? 'default',
+          })),
         })),
-      })),
+      getOne: (namespace: string, key: string) =>
+        Promise.resolve({
+          envVar: { scope: namespace, key, value: '', isSecret: false, groupName: 'default' },
+        }),
+      upsert: (namespace: string, key: string, value: string) =>
+        saasApi.envvars.update(namespace, [{ key, value }]).then(() => ({ ok: true })),
+      delete: (_namespace: string, _key: string) => Promise.resolve({ ok: true }),
+    },
   },
 
   // ── Deploy Tasks (stubs — no saas equivalent) ────────────────────────────
@@ -268,5 +280,37 @@ export const saasApiAdapter: CloudApiClient = {
         })),
       })),
     record: (entry: object) => api.activity.record(entry),
+  },
+
+  // ── Init (returns template content for the deploy wizard) ────────────────
+  init: (template?: string) =>
+    template
+      ? saasApi.templates.get(template).then((t) => ({
+          ...(t.content as Record<string, unknown>),
+          templateSlug: t.slug,
+        }))
+      : Promise.resolve({}),
+
+  // ── SaaS deploy — bypasses local SSE /api/deploy ─────────────────────────
+  deployFn: async (config: {
+    templateSlug: string
+    namespace: string
+    name: string
+    resourceTier?: string
+    envVars?: Record<string, string>
+  }) => {
+    try {
+      await saasApi.deployments.create({
+        namespace: config.namespace,
+        name: config.name,
+        templateSlug: config.templateSlug,
+        resourceTier: (config.resourceTier as import('./api').ResourceTier) ?? 'lightweight',
+        agentCount: 1,
+        configSnapshot: config.envVars ?? {},
+      })
+      return { success: true }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
   },
 }

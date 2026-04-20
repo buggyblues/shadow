@@ -849,7 +849,7 @@ function StepDeploy({
       // Step 1: Initialize from template (returns template JSON and persists to DB)
       const templateConfig = await initMutation.mutateAsync()
 
-      // Step 2: Deploy with the template config directly (no need for separate config.get)
+      // Step 2: Deploy — SaaS mode uses api.deployFn if available
       const deployConfig = typeof templateConfig === 'object' ? { ...templateConfig } : {}
       deployConfig.templateSlug = name
       if (config.namespace) {
@@ -860,21 +860,34 @@ function StepDeploy({
         deployConfig.envVars = config.envVars
       }
 
-      const result = await startFetch('/api/deploy', deployConfig, {
-        onEvent: (event, data) => {
-          if (
-            event === 'task' &&
-            data &&
-            typeof data === 'object' &&
-            'id' in data &&
-            'url' in data &&
-            typeof data.id === 'number' &&
-            typeof data.url === 'string'
-          ) {
-            setTaskInfo({ id: data.id, url: data.url })
-          }
-        },
-      })
+      let result: { success: boolean; error?: string }
+
+      if (typeof (api as { deployFn?: unknown }).deployFn === 'function') {
+        // SaaS mode: use the injected deployFn (bypasses local SSE /api/deploy)
+        result = await (api as { deployFn: typeof api.deployFn & Function }).deployFn({
+          templateSlug: name,
+          namespace: targetNamespace,
+          name: targetNamespace,
+          resourceTier: 'lightweight',
+          envVars: config.envVars,
+        })
+      } else {
+        result = await startFetch('/api/deploy', deployConfig, {
+          onEvent: (event, data) => {
+            if (
+              event === 'task' &&
+              data &&
+              typeof data === 'object' &&
+              'id' in data &&
+              'url' in data &&
+              typeof data.id === 'number' &&
+              typeof data.url === 'string'
+            ) {
+              setTaskInfo({ id: data.id, url: data.url })
+            }
+          },
+        })
+      }
 
       if (!result.success) {
         setDeploySuccess(false)
