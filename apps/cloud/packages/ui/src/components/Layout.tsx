@@ -4,7 +4,7 @@ import { Toaster } from './Toaster'
 
 export function Layout({ children }: { children: ReactNode }) {
   return (
-    <div className="dashboard-root relative flex min-h-screen">
+    <div className="dashboard-root relative flex h-full min-h-screen">
       {/* Atmosphere orbs — ambient depth matching web quality */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
         <div
