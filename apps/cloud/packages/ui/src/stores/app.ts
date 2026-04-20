@@ -2,6 +2,12 @@ import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { api } from '@/lib/api'
 
+// Allow saas adapter to inject a record function so we don't call local /api/activity
+let _activityRecord: ((entry: object) => Promise<unknown>) | null = null
+export function setActivityRecordFn(fn: (entry: object) => Promise<unknown>) {
+  _activityRecord = fn
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type ActivityType = 'deploy' | 'destroy' | 'scale' | 'config' | 'init' | 'settings'
@@ -89,7 +95,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const next = { ...s, activities }
       persistState(next)
       // Also record server-side for persistence
-      api.activity.record(activity).catch(() => {
+      ;(_activityRecord ?? api.activity.record.bind(api.activity))(activity).catch(() => {
         /* ignore — server may not be available */
       })
       return { activities }

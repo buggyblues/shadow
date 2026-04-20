@@ -8,9 +8,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import '@shadowob/cloud-ui/i18n'
+import { setActivityRecordFn } from '@shadowob/cloud-ui/stores/app'
 import { applyTheme, useThemeStore } from '@shadowob/cloud-ui/stores/theme'
 import { router } from './router'
 import '@shadowob/cloud-ui/styles/globals.css'
+
+// Suppress local /api/activity calls — SaaS server records activity internally
+setActivityRecordFn(() => Promise.resolve({ success: true }))
 
 const queryClient = new QueryClient({
   defaultOptions: {
