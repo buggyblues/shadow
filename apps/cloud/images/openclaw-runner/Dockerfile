@@ -15,6 +15,9 @@ FROM node:22-alpine AS builder
 
 WORKDIR /build
 
+# git is required by some npm packages during install
+RUN apk add --no-cache git
+
 # Install OpenClaw and shadowob plugin
 RUN npm init -y && \
     npm install openclaw@latest @shadowob/openclaw-shadowob@latest && \
