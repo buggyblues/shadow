@@ -23,7 +23,7 @@ export default function App() {
 
 // ── Actual layout ──
 function AppLayout() {
-  const storeCtx = __useAppDirect()
+  const storeCtx = useContext(AppContext)
   const { state, dispatch } = storeCtx
 
   const [showSettings, setShowSettings] = useState(false)
@@ -416,9 +416,4 @@ function AppLayout() {
       )}
     </div>
   )
-}
-
-// ── Direct AppContext usage (avoid circular imports) ──
-function __useAppDirect() {
-  return useContext(AppContext)
 }

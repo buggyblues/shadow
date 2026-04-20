@@ -8,7 +8,7 @@ import type {
 } from '../../types'
 import { SimpleMarkdown } from './MarkdownRenderer'
 
-export function extractMermaidNodes(mermaid: string): string[] {
+function extractMermaidNodes(mermaid: string): string[] {
   const nodes: string[] = []
   const nodeRegex = /(\w+)\s*[\[\(\{]+([^}\]\)]+)[\]\)\}]+/g
   let m

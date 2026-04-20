@@ -83,12 +83,6 @@ export interface ApiResponse<T = unknown> {
 /** Card filter */
 export type CardFilter = 'all' | CardKind
 
-/** Drag and drop data */
-export interface DragCardData {
-  cardId: string
-  sourceType: 'cardGrid' | 'outline'
-}
-
 // ── Pipeline ──
 
 export type PipelineStatus = 'idle' | 'running' | 'completed' | 'error' | 'paused'
@@ -166,11 +160,4 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   autoResearch: true,
   heartbeatInterval: 120,
   autoConsumeTodos: true,
-}
-
-/** Card-to-requirement request */
-export interface CardToRequirementRequest {
-  cardId: string
-  strategy: 'auto' | 'expand' | 'refine' | 'decompose'
-  context?: string
 }

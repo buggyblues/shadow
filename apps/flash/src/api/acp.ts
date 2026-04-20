@@ -97,14 +97,6 @@ export function analyzeAndOutline(
   )
 }
 
-export function analyzeMaterial(
-  projectId: string,
-  material: Material,
-  onEvent?: (evt: { type: string; data: string }) => void,
-): { cancel: () => void } {
-  return createAcpStream({ action: 'analyze_material', projectId, payload: { material } }, onEvent)
-}
-
 export function startResearch(
   projectId: string,
   topic: string,
