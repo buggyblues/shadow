@@ -19,6 +19,38 @@ import { saasApi } from './api'
 export const saasApiAdapter: CloudApiClient = {
   ...api,
 
+  // ── Community (StorePage uses api.community.catalog) ─────────────────────
+  community: {
+    ...api.community,
+    catalog: (_locale: string) =>
+      saasApi.templates.list().then((rows) => ({
+        source: 'community' as const,
+        templates: rows.map((t) => ({
+          name: t.slug,
+          namespace: '',
+          description: t.description ?? '',
+          teamName: 'Shadow Cloud',
+          agentCount: 0,
+          tags: Array.isArray(t.tags) ? t.tags : [],
+          category:
+            (t.category as import('@shadowob/cloud-ui/lib/api').TemplateCategoryId) ?? 'demo',
+          emoji: '☁️',
+          featured: t.source === 'official',
+          popularity: t.deployCount,
+          difficulty: (t.category === 'advanced'
+            ? 'expert'
+            : t.category === 'intermediate'
+              ? 'intermediate'
+              : 'beginner') as 'beginner' | 'intermediate' | 'expert',
+          estimatedDeployTime: '5 min',
+          overview: [],
+          features: [],
+          highlights: [],
+        })),
+        categories: [],
+      })),
+  },
+
   // ── Templates ────────────────────────────────────────────────────────────
   templates: {
     ...api.templates,

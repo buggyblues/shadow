@@ -5,8 +5,13 @@
 
 const BASE = '/api/cloud-saas'
 
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('accessToken')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`)
+  const res = await fetch(`${BASE}${path}`, { headers: getAuthHeaders() })
   if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`)
   return res.json() as Promise<T>
 }
@@ -14,7 +19,7 @@ async function get<T>(path: string): Promise<T> {
 async function post<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
   if (!res.ok) throw new Error(`POST ${path} failed: ${res.status}`)
@@ -24,7 +29,7 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
 async function put<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) throw new Error(`PUT ${path} failed: ${res.status}`)
@@ -32,7 +37,7 @@ async function put<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function del<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { method: 'DELETE' })
+  const res = await fetch(`${BASE}${path}`, { method: 'DELETE', headers: getAuthHeaders() })
   if (!res.ok) throw new Error(`DELETE ${path} failed: ${res.status}`)
   return res.json() as Promise<T>
 }
@@ -131,8 +136,7 @@ export const saasApi = {
         baseCost?: number
       },
     ) => put<SaasTemplate>(`/templates/${encodeURIComponent(slug)}`, data),
-    submit: (slug: string) =>
-      post<SaasTemplate>(`/templates/${encodeURIComponent(slug)}/submit`),
+    submit: (slug: string) => post<SaasTemplate>(`/templates/${encodeURIComponent(slug)}/submit`),
   },
 
   // Deployments
