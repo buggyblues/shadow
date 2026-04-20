@@ -510,9 +510,25 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.get('/wallet', async (c) => {
     const user = c.get('user') as { userId: string }
     const walletService = container.resolve('walletService')
-    const wallet = await walletService.getWallet(user.userId)
+    const wallet = await walletService.getOrCreateWallet(user.userId)
     return c.json({ balance: wallet?.balance ?? 0 })
   })
+
+  /**
+   * POST /api/cloud-saas/wallet/topup
+   * Top up the user's Shrimp Coin balance (dev/demo only).
+   */
+  h.post(
+    '/wallet/topup',
+    zValidator('json', z.object({ amount: z.number().int().min(1).max(100000) })),
+    async (c) => {
+      const user = c.get('user') as { userId: string }
+      const { amount } = c.req.valid('json')
+      const walletService = container.resolve('walletService')
+      const wallet = await walletService.topUp(user.userId, amount, '虾币充值')
+      return c.json({ ok: true, balance: wallet?.balance ?? 0 })
+    },
+  )
 
   // ─── Global Env Vars (not scoped to a single deployment) ──────────────────
 

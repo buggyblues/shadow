@@ -9,9 +9,14 @@
  * Only the intersection of shared pages is wired here.
  */
 
-import type { EnvVarListEntry } from '@shadowob/cloud-ui/lib/api'
+import type {
+  EnvVarListEntry,
+  TemplateCategoryId,
+  TemplateDifficulty,
+} from '@shadowob/cloud-ui/lib/api'
 import { api } from '@shadowob/cloud-ui/lib/api'
 import type { CloudApiClient } from '@shadowob/cloud-ui/lib/api-context'
+import type { ResourceTier } from './api'
 import { saasApi } from './api'
 
 // Helper to map a SaasTemplate to the dashboard TemplateCatalogSummary shape
@@ -23,7 +28,7 @@ function toTemplateSummary(t: Awaited<ReturnType<typeof saasApi.templates.list>>
     teamName: 'Shadow Cloud',
     agentCount: 0,
     tags: Array.isArray(t.tags) ? t.tags : [],
-    category: (t.category as import('@shadowob/cloud-ui/lib/api').TemplateCategoryId) ?? 'demo',
+    category: (t.category as TemplateCategoryId) ?? 'demo',
     emoji: '☁️',
     featured: t.source === 'official',
     popularity: t.deployCount,
@@ -31,7 +36,7 @@ function toTemplateSummary(t: Awaited<ReturnType<typeof saasApi.templates.list>>
       ? 'advanced'
       : t.category === 'intermediate'
         ? 'intermediate'
-        : 'beginner') as import('@shadowob/cloud-ui/lib/api').TemplateDifficulty,
+        : 'beginner') as TemplateDifficulty,
     estimatedDeployTime: '5 min',
     overview: [],
     features: [],
@@ -232,18 +237,26 @@ export const saasApiAdapter: CloudApiClient = {
       Promise.resolve({ namespace, agent, limit, lines: [], hasMore: false }),
     env: {
       list: (namespace: string, _mode?: string) =>
-        saasApi.envvars.list(namespace).then((vars) => ({
-          namespace,
-          scope: namespace,
-          mode: 'effective' as const,
-          envVars: vars.map((v) => ({
-            scope: v.scope,
-            key: v.key,
-            maskedValue: '****',
-            isSecret: true,
-            groupName: v.groupId ?? 'default',
-          })),
-        })),
+        // Only call envvars API if namespace is a real UUID deployment ID
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(namespace)
+          ? saasApi.envvars.list(namespace).then((vars) => ({
+              namespace,
+              scope: namespace,
+              mode: 'effective' as const,
+              envVars: vars.map((v) => ({
+                scope: v.scope,
+                key: v.key,
+                maskedValue: '****',
+                isSecret: true,
+                groupName: v.groupId ?? 'default',
+              })),
+            }))
+          : Promise.resolve({
+              namespace,
+              scope: namespace,
+              mode: 'effective' as const,
+              envVars: [],
+            }),
       getOne: (namespace: string, key: string) =>
         Promise.resolve({
           envVar: { scope: namespace, key, value: '', isSecret: false, groupName: 'default' },
@@ -339,7 +352,7 @@ export const saasApiAdapter: CloudApiClient = {
         namespace: config.namespace,
         name: config.name,
         templateSlug: config.templateSlug,
-        resourceTier: (config.resourceTier as import('./api').ResourceTier) ?? 'lightweight',
+        resourceTier: (config.resourceTier as ResourceTier) ?? 'lightweight',
         agentCount: 1,
         configSnapshot: config.envVars ?? {},
       })
@@ -347,5 +360,11 @@ export const saasApiAdapter: CloudApiClient = {
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
+  },
+
+  // ── Wallet ────────────────────────────────────────────────────────────────
+  wallet: {
+    get: () => saasApi.wallet.get(),
+    topUp: (amount: number) => saasApi.wallet.topUp(amount),
   },
 }

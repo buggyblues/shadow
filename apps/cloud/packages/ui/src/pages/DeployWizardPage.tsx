@@ -827,6 +827,21 @@ function StepDeploy({
   const template = detailData?.template
   const targetNamespace = config.namespace || template?.namespace || name
 
+  // Fetch wallet balance
+  const { data: walletData } = useQuery({
+    queryKey: ['wallet'],
+    queryFn: () =>
+      (api as { wallet?: { get: () => Promise<{ balance: number }> } }).wallet?.get?.() ??
+      Promise.resolve({ balance: null as number | null }),
+    retry: false,
+  })
+  const walletBalance = walletData?.balance ?? null
+
+  // Cost tiers (Shrimp Coins / month)
+  const TIER_COSTS: Record<string, number> = { lightweight: 500, standard: 1200, pro: 2800 }
+  const monthlyCost = TIER_COSTS['lightweight'] ?? 500
+  const hasEnoughBalance = walletBalance === null || walletBalance >= monthlyCost
+
   const taskUrl = taskInfo ? new URL(taskInfo.url, window.location.origin).toString() : ''
 
   // Auto-scroll log
@@ -1020,6 +1035,47 @@ function StepDeploy({
             </div>
           </div>
 
+          {/* Cost & balance info */}
+          <div className="bg-bg-secondary border border-border-subtle rounded-lg divide-y divide-border-subtle">
+            <div className="px-5 py-3 flex items-center justify-between">
+              <span className="text-xs text-text-muted">{t('deploy.estimatedCost')}</span>
+              <span className="text-sm font-medium">
+                {monthlyCost} {t('deploy.shrimpCoinsPerMonth')}
+              </span>
+            </div>
+            <div className="px-5 py-3 flex items-center justify-between">
+              <span className="text-xs text-text-muted">{t('deploy.walletBalance')}</span>
+              <span
+                className={`text-sm font-medium ${!hasEnoughBalance ? 'text-red-500' : 'text-green-600'}`}
+              >
+                {walletBalance === null ? '...' : walletBalance} {t('deploy.shrimpCoins')}
+              </span>
+            </div>
+          </div>
+
+          {!hasEnoughBalance && (
+            <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-center justify-between gap-4">
+              <p className="text-xs text-red-700 dark:text-red-400">
+                <strong>{t('deploy.insufficientBalance')}</strong>{' '}
+                {t('deploy.insufficientBalanceDesc')}
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="shrink-0"
+                onClick={async () => {
+                  await (
+                    api as { wallet?: { topUp: (amount: number) => Promise<{ balance: number }> } }
+                  ).wallet?.topUp?.(10000)
+                  queryClient.invalidateQueries({ queryKey: ['wallet'] })
+                }}
+              >
+                {t('deploy.topUp')}
+              </Button>
+            </div>
+          )}
+
           <div className="bg-primary/8 border border-primary/25 rounded-lg p-4">
             <p className="text-xs text-primary">
               <strong>{t('deploy.whatHappensNext')}</strong> {t('deploy.whatHappensNextDesc')}
@@ -1032,7 +1088,12 @@ function StepDeploy({
               <ArrowLeft size={14} />
               {t('common.back')}
             </Button>
-            <Button type="button" onClick={handleDeploy} variant="primary">
+            <Button
+              type="button"
+              onClick={handleDeploy}
+              variant="primary"
+              disabled={!hasEnoughBalance}
+            >
               <Rocket size={16} />
               {t('deploy.startDeployment')}
             </Button>

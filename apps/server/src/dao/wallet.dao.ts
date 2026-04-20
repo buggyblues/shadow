@@ -16,7 +16,8 @@ export class WalletDao {
   async getOrCreate(userId: string) {
     let wallet = await this.findByUserId(userId)
     if (!wallet) {
-      const r = await this.db.insert(wallets).values({ userId }).returning()
+      // New wallets start with 10000 Shrimp Coins (free trial)
+      const r = await this.db.insert(wallets).values({ userId, balance: 10000 }).returning()
       wallet = r[0] ?? null
     }
     return wallet!
