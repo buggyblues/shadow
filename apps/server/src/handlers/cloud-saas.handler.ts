@@ -565,7 +565,7 @@ export function createCloudSaasHandler(container: AppContainer) {
           key,
           encryptedValue: encrypt(value),
           scope: 'global',
-          groupId: groupName ?? 'default',
+          groupId: null,
         })
       }
       return c.json({ ok: true })
