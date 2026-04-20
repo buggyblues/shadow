@@ -37,11 +37,11 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:3002',
+        target: 'http://[::1]:3002',
         changeOrigin: true,
       },
       '/socket.io': {
-        target: 'http://localhost:3002',
+        target: 'http://[::1]:3002',
         ws: true,
       },
       '/shadow': {
