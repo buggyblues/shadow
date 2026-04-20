@@ -9,12 +9,6 @@ import type { Card } from '@shadowob/flash-types'
 import { bootstrapCards } from '../core/bootstrap'
 import { runPipeline } from '../core/world'
 import { setupCanvas } from './canvasManager'
-
-// Ensure built-in plugins are always registered before any texture render,
-// regardless of whether CardRenderer has been instantiated yet.
-// bootstrapCards() is idempotent (no-op after first call).
-bootstrapCards()
-
 import {
   type CardTextureInfo,
   cardHash,
@@ -23,6 +17,11 @@ import {
   removeCachedTexture,
   setCachedTexture,
 } from './textureCache'
+
+// Ensure built-in plugins are always registered before any texture render,
+// regardless of whether CardRenderer has been instantiated yet.
+// bootstrapCards() is idempotent (no-op after first call).
+bootstrapCards()
 
 export type { CardTextureInfo }
 
