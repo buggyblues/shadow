@@ -19,7 +19,8 @@ import { useTranslation } from 'react-i18next'
 import { PageShell } from '@/components/PageShell'
 import { useDebounce } from '@/hooks/useDebounce'
 import { useTypewriterPlaceholder } from '@/hooks/useTypewriterPlaceholder'
-import { api, type TemplateCatalogSummary, type TemplateCategoryId } from '@/lib/api'
+import { type TemplateCatalogSummary, type TemplateCategoryId } from '@/lib/api'
+import { useApiClient } from '@/lib/api-context'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
 
@@ -248,6 +249,7 @@ function StoreAppCard({
 
 export function StorePage() {
   const { t, i18n } = useTranslation()
+  const api = useApiClient()
   const openSettings = useAppStore((state) => state.openSettings)
   const [search, setSearch] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<TemplateCategoryId | 'all'>('all')
