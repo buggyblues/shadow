@@ -18,6 +18,7 @@ import { MyTemplatesPage } from '@shadowob/cloud-ui/pages/MyTemplatesPage'
 import { SecretsPage } from '@shadowob/cloud-ui/pages/SecretsPage'
 import { StoreDetailPage } from '@shadowob/cloud-ui/pages/StoreDetailPage'
 import { StorePage } from '@shadowob/cloud-ui/pages/StorePage'
+import { WalletPage } from '@shadowob/cloud-ui/pages/WalletPage'
 import {
   createMemoryHistory,
   createRootRoute,
@@ -124,6 +125,14 @@ const secretsRoute = createRoute({
   component: withErrorBoundary(SecretsPage),
 })
 
+// ── Wallet / Billing ───────────────────────────────────────────────────────
+
+const walletRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/wallet',
+  component: withErrorBoundary(WalletPage),
+})
+
 // ── Route tree ─────────────────────────────────────────────────────────────
 
 const routeTree = rootRoute.addChildren([
@@ -137,6 +146,7 @@ const routeTree = rootRoute.addChildren([
   myTemplatesRoute,
   myTemplateDetailRoute,
   secretsRoute,
+  walletRoute,
 ])
 
 const memoryHistory = createMemoryHistory({ initialEntries: ['/'] })
