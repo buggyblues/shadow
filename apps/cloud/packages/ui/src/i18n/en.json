@@ -586,7 +586,7 @@
     "publishToCommunity": "Publish to Community",
     "publishing": "Publishing...",
     "publishSuccess": "Template published to community.",
-    "publishFailed": "Failed to publish template. Check your community token in Settings.",
+    "publishFailed": "Failed to publish. Please try again.",
     "publishTooltip": "Publish this template to the community server"
   },
   "secrets": {

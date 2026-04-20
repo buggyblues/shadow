@@ -82,7 +82,16 @@ export const saasApiAdapter: CloudApiClient = {
         categories: [],
       })),
     publish: (name: string, _data?: unknown) =>
-      saasApi.templates.submit(name).then(() => ({ ok: true })),
+      saasApi.templates
+        .submit(name)
+        .then(() => ({ ok: true }))
+        .catch((err: unknown) => {
+          // 422 = Already pending review — treat as success in SaaS mode
+          if (err instanceof Error && err.message.includes(': 422')) {
+            return { ok: true }
+          }
+          throw err
+        }),
   },
 
   // ── Templates ────────────────────────────────────────────────────────────
@@ -176,7 +185,7 @@ export const saasApiAdapter: CloudApiClient = {
     restoreVersion: (_name: string, _version: number) =>
       Promise.resolve({ ok: true, restoredVersion: _version }),
     share: (name: string) =>
-      saasApi.templates.get(name).then((t) => ({
+      saasApi.templates.mineOne(name).then((t) => ({
         name: t.slug,
         templateSlug: t.slug,
         version: 1,
