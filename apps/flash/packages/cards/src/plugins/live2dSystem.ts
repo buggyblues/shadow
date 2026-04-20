@@ -112,30 +112,24 @@ export function live2dSystem(eid: number): boolean {
     return true
   }
 
-  // ── Skip blit if the model hasn't rendered a new frame ──
-  // animationManager.tick() increments state.frameVersion after each render.
-  // If frameVersion hasn't changed since the last time we baked this card,
-  // there is no new pixel data — skip drawImage to avoid a redundant texture upload.
+  // ── Blit Live2D canvas if model has a new frame ──
+  // frameVersion is incremented by animationManager.tick() after each PIXI render.
+  // If unchanged, skip drawImage (the dirty flag already ensures the GL texture
+  // won't be re-uploaded, so no work is lost).
+  // CRITICAL: always return true regardless — returning false here would let the
+  // next content system paint over this card, causing a rendering corruption bug.
   const currentVersion = animationManager.getLive2DFrameVersion(card.id)
   const lastVersion = _lastBlitVersion.get(eid) ?? -1
-  if (currentVersion === lastVersion) {
-    // Layout still needs to advance so downstream decorators position correctly.
-    advance(layout, viewH + 8)
-    const name = safeStr(meta.name)
-    if (name && remainingH(layout) > 10) advance(layout, 12)
-    // Return false: no pixel changes → caller should NOT mark this card dirty.
-    return false
+  if (currentVersion !== lastVersion) {
+    _lastBlitVersion.set(eid, currentVersion)
+
+    ctx.save()
+    ctx.beginPath()
+    ctx.roundRect(vX, vY, viewW, viewH, 8)
+    ctx.clip()
+    ctx.drawImage(live2dCanvas, vX, vY, viewW, viewH)
+    ctx.restore()
   }
-  _lastBlitVersion.set(eid, currentVersion)
-
-  // ── Blit Live2D canvas (transparent, direct render, no bg fill) ──
-  ctx.save()
-  ctx.beginPath()
-  ctx.roundRect(vX, vY, viewW, viewH, 8)
-  ctx.clip()
-
-  ctx.drawImage(live2dCanvas, vX, vY, viewW, viewH)
-  ctx.restore()
 
   advance(layout, viewH + 8)
 
