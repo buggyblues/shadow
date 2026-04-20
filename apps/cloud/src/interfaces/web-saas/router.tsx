@@ -5,6 +5,19 @@
  * LOCAL-ONLY pages (doctor, validate, config editor, images, runtimes, deploy-tasks)
  * are NOT included — they don't apply in SaaS mode.
  */
+
+import { ErrorBoundary } from '@shadowob/cloud-ui/components/ErrorBoundary'
+import { Layout } from '@shadowob/cloud-ui/components/Layout'
+import { ApiClientContext } from '@shadowob/cloud-ui/lib/api-context'
+import { DeploymentNamespacePage } from '@shadowob/cloud-ui/pages/DeploymentNamespacePage'
+import { DeploymentsPage } from '@shadowob/cloud-ui/pages/DeploymentsPage'
+import { DeployWizardPage } from '@shadowob/cloud-ui/pages/DeployWizardPage'
+import { MonitoringPage } from '@shadowob/cloud-ui/pages/MonitoringPage'
+import { MyTemplateDetailPage } from '@shadowob/cloud-ui/pages/MyTemplateDetailPage'
+import { MyTemplatesPage } from '@shadowob/cloud-ui/pages/MyTemplatesPage'
+import { SecretsPage } from '@shadowob/cloud-ui/pages/SecretsPage'
+import { StoreDetailPage } from '@shadowob/cloud-ui/pages/StoreDetailPage'
+import { StorePage } from '@shadowob/cloud-ui/pages/StorePage'
 import {
   createRootRoute,
   createRoute,
@@ -13,18 +26,6 @@ import {
   redirect,
 } from '@tanstack/react-router'
 import React from 'react'
-import { ApiClientContext } from '@/lib/api-context'
-import { ErrorBoundary } from '@/components/ErrorBoundary'
-import { Layout } from '@/components/Layout'
-import { DeploymentNamespacePage } from '@/pages/DeploymentNamespacePage'
-import { DeploymentsPage } from '@/pages/DeploymentsPage'
-import { DeployWizardPage } from '@/pages/DeployWizardPage'
-import { MonitoringPage } from '@/pages/MonitoringPage'
-import { MyTemplateDetailPage } from '@/pages/MyTemplateDetailPage'
-import { MyTemplatesPage } from '@/pages/MyTemplatesPage'
-import { SecretsPage } from '@/pages/SecretsPage'
-import { StoreDetailPage } from '@/pages/StoreDetailPage'
-import { StorePage } from '@/pages/StorePage'
 import { saasApiAdapter } from './api-adapter'
 
 function withErrorBoundary(Page: React.ComponentType) {
@@ -53,7 +54,9 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  beforeLoad: () => { throw redirect({ to: '/store' }) },
+  beforeLoad: () => {
+    throw redirect({ to: '/store' })
+  },
 })
 
 // ── Template Store ─────────────────────────────────────────────────────────
