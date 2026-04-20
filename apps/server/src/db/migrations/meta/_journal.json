@@ -281,6 +281,13 @@
       "when": 1776259200000,
       "tag": "0039_cloud_saas_extensions",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1776345600000,
+      "tag": "0040_seed_official_templates",
+      "breakpoints": true
     }
   ]
 }

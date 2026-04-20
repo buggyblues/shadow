@@ -447,10 +447,11 @@ function DashboardContent() {
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
-                className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition ${tab === t.key
+                className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition ${
+                  tab === t.key
                     ? 'bg-indigo-600 text-white'
                     : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
-                  }`}
+                }`}
               >
                 {t.label}
               </button>
@@ -460,6 +461,12 @@ function DashboardContent() {
               className="block w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition text-zinc-400 hover:bg-zinc-800 hover:text-white"
             >
               🔧 Config Platform
+            </a>
+            <a
+              href="/templates"
+              className="block w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition text-zinc-400 hover:bg-zinc-800 hover:text-white"
+            >
+              📋 Template Review
             </a>
           </nav>
         </aside>
@@ -633,12 +640,13 @@ function DashboardContent() {
                         <td className="px-4 py-3 text-zinc-400">{u.email}</td>
                         <td className="px-4 py-3">
                           <span
-                            className={`inline-block w-2 h-2 rounded-full mr-1 ${u.status === 'online'
+                            className={`inline-block w-2 h-2 rounded-full mr-1 ${
+                              u.status === 'online'
                                 ? 'bg-green-400'
                                 : u.status === 'idle'
                                   ? 'bg-amber-400'
                                   : 'bg-zinc-500'
-                              }`}
+                            }`}
                           />
                           {u.status}
                         </td>
@@ -939,12 +947,14 @@ function DashboardContent() {
                       <button
                         type="button"
                         onClick={() => setEditServerForm((f) => ({ ...f, isPublic: !f.isPublic }))}
-                        className={`relative w-11 h-6 rounded-full transition-colors ${editServerForm.isPublic ? 'bg-indigo-600' : 'bg-zinc-700'
-                          }`}
+                        className={`relative w-11 h-6 rounded-full transition-colors ${
+                          editServerForm.isPublic ? 'bg-indigo-600' : 'bg-zinc-700'
+                        }`}
                       >
                         <span
-                          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${editServerForm.isPublic ? 'translate-x-5' : ''
-                            }`}
+                          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
+                            editServerForm.isPublic ? 'translate-x-5' : ''
+                          }`}
                         />
                       </button>
                     </div>
@@ -1029,12 +1039,13 @@ function DashboardContent() {
                         </td>
                         <td className="px-4 py-3">
                           <span
-                            className={`text-xs px-2 py-0.5 rounded-full ${agent.status === 'running'
+                            className={`text-xs px-2 py-0.5 rounded-full ${
+                              agent.status === 'running'
                                 ? 'bg-green-500/20 text-green-400'
                                 : agent.status === 'error'
                                   ? 'bg-red-500/20 text-red-400'
                                   : 'bg-zinc-700 text-zinc-300'
-                              }`}
+                            }`}
                           >
                             {agent.status === 'running'
                               ? '在线'

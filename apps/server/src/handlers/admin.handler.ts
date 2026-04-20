@@ -1,10 +1,10 @@
 import { randomBytes } from 'node:crypto'
 import { zValidator } from '@hono/zod-validator'
-import { sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
-import { channels, messages } from '../db/schema'
+import { channels, cloudTemplates, messages } from '../db/schema'
 import { authMiddleware } from '../middleware/auth.middleware'
 import { updateServerSchema } from '../validators/server.schema'
 
@@ -309,6 +309,51 @@ export function createAdminHandler(container: AppContainer) {
       ? await passwordChangeLogDao.countByUserId(userId)
       : await passwordChangeLogDao.count()
     return c.json({ count })
+  })
+
+  // ── Cloud Template Review ─────────────────────────────────────────────────
+
+  adminHandler.get('/cloud-templates', async (c) => {
+    const status = c.req.query('status') // 'pending' | 'approved' | 'rejected' | undefined (all)
+    const limit = Math.min(Number(c.req.query('limit')) || 50, 200)
+    const offset = Math.max(Number(c.req.query('offset')) || 0, 0)
+    const db = container.resolve('db')
+    const rows = await db
+      .select()
+      .from(cloudTemplates)
+      .where(
+        status
+          ? eq(cloudTemplates.reviewStatus, status as 'pending' | 'approved' | 'rejected')
+          : undefined,
+      )
+      .orderBy(cloudTemplates.createdAt)
+      .limit(limit)
+      .offset(offset)
+    return c.json(rows)
+  })
+
+  adminHandler.post('/cloud-templates/:id/approve', async (c) => {
+    const id = c.req.param('id')
+    const db = container.resolve('db')
+    const [updated] = await db
+      .update(cloudTemplates)
+      .set({ reviewStatus: 'approved', updatedAt: new Date() })
+      .where(eq(cloudTemplates.id, id))
+      .returning()
+    if (!updated) return c.json({ ok: false, error: 'Template not found' }, 404)
+    return c.json(updated)
+  })
+
+  adminHandler.post('/cloud-templates/:id/reject', async (c) => {
+    const id = c.req.param('id')
+    const db = container.resolve('db')
+    const [updated] = await db
+      .update(cloudTemplates)
+      .set({ reviewStatus: 'rejected', updatedAt: new Date() })
+      .where(eq(cloudTemplates.id, id))
+      .returning()
+    if (!updated) return c.json({ ok: false, error: 'Template not found' }, 404)
+    return c.json(updated)
   })
 
   return adminHandler

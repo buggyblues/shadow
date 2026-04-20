@@ -8,9 +8,10 @@ import {
 } from '@tanstack/react-router'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { DashboardPage } from './pages/dashboard'
-import { ConfigManagementPage } from './pages/config-management'
 import { ConfirmDialogProvider } from './components/confirm-dialog'
+import { ConfigManagementPage } from './pages/config-management'
+import { DashboardPage } from './pages/dashboard'
+import { TemplateReviewPage } from './pages/template-review'
 
 /* ── Routes ──────────────────────────────────────────── */
 
@@ -35,7 +36,13 @@ const configRoute = createRoute({
   component: ConfigManagementPage,
 })
 
-const routeTree = rootRoute.addChildren([dashboardRoute, configRoute])
+const templateReviewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/templates',
+  component: TemplateReviewPage,
+})
+
+const routeTree = rootRoute.addChildren([dashboardRoute, configRoute, templateReviewRoute])
 
 const router = createRouter({ routeTree })
 
