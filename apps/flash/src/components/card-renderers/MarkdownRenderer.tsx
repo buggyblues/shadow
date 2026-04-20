@@ -1,4 +1,4 @@
-export function renderMarkdownToHtml(md: string): string {
+function renderMarkdownToHtml(md: string): string {
   let html = md.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
   html = html.replace(

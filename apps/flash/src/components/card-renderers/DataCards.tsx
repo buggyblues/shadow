@@ -68,7 +68,7 @@ export function DataDashboard({ meta, title }: { meta: DataCardMeta; title: stri
 
 const DEFAULT_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4']
 
-export function PieChart({ meta, colors }: { meta: ChartCardMeta; colors: string[] }) {
+function PieChart({ meta, colors }: { meta: ChartCardMeta; colors: string[] }) {
   const data = meta.series[0]?.data || []
   const total = data.reduce((a, b) => a + b, 0) || 1
   let cumAngle = 0

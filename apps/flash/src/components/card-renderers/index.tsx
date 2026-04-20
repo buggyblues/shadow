@@ -52,13 +52,7 @@ import {
   isTimelineMeta,
 } from './typeGuards'
 
-export function StructuredCardContent({
-  card,
-  compact = false,
-}: {
-  card: Card
-  compact?: boolean
-}) {
+function StructuredCardContent({ card, compact = false }: { card: Card; compact?: boolean }) {
   const { kind, meta, content, title } = card
 
   switch (kind) {

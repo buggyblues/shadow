@@ -14,6 +14,3 @@ export function updateDeck(project: Project, deckId: string, updater: (d: Deck) 
 export function getActiveDeck(project: Project): Deck | undefined {
   return project.decks.find((d) => d.id === project.activeDeckId)
 }
-
-/** Utility: cast partial AppState back to full (for slice returns). */
-export type SliceResult = AppState | undefined

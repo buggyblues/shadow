@@ -25,7 +25,3 @@ export async function addTextMaterial(
   })
   return res.json()
 }
-
-export function getMaterialDownloadUrl(materialId: string): string {
-  return `${BASE}/materials/${materialId}/download`
-}
