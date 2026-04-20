@@ -115,6 +115,7 @@ export const saasApi = {
       const query = qs.toString()
       return get<SaasTemplate[]>(`/templates${query ? `?${query}` : ''}`)
     },
+    mine: () => get<SaasTemplate[]>('/templates/mine'),
     get: (slug: string) => get<SaasTemplate>(`/templates/${encodeURIComponent(slug)}`),
     create: (data: {
       slug: string
@@ -179,5 +180,29 @@ export const saasApi = {
       get<SaasActivityEntry[]>(
         `/activity${params ? `?limit=${params.limit ?? 50}&offset=${params.offset ?? 0}` : ''}`,
       ),
+  },
+
+  // Global Env Vars (Secrets page — not scoped to a deployment)
+  globalEnvVars: {
+    list: () =>
+      get<{
+        envVars: Array<{
+          scope: string
+          key: string
+          maskedValue: string
+          isSecret: boolean
+          groupName: string
+        }>
+        groups: string[]
+      }>('/global-envvars'),
+    getOne: (key: string) =>
+      get<{
+        envVar: { scope: string; key: string; value: string; isSecret: boolean; groupName: string }
+      }>(`/global-envvars/${encodeURIComponent(key)}`),
+    upsert: (key: string, value: string, isSecret?: boolean, groupName?: string) =>
+      put<{ ok: boolean }>('/global-envvars', { key, value, isSecret, groupName }),
+    delete: (key: string) => del<{ ok: boolean }>(`/global-envvars/${encodeURIComponent(key)}`),
+    createGroup: (name: string) => Promise.resolve({ ok: true, name }), // groups stored implicitly
+    deleteGroup: (name: string) => Promise.resolve({ ok: true }),
   },
 }

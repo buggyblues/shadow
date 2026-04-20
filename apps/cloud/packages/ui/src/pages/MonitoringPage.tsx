@@ -156,7 +156,11 @@ function ActivityList({ activities, limit }: { activities: ActivityEntry[]; limi
   return (
     <div>
       {visibleActivities.map((activity) => {
-        const config = activityTypeConfig[activity.type]
+        const config = activityTypeConfig[activity.type as keyof typeof activityTypeConfig] ?? {
+          label: activity.type,
+          icon: <Activity size={12} />,
+          variant: 'neutral' as const,
+        }
         const time = new Date(activity.timestamp)
         const isValidDate = !Number.isNaN(time.getTime())
 

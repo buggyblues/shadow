@@ -46,6 +46,22 @@ export function createCloudSaasHandler(container: AppContainer) {
   })
 
   /**
+   * GET /api/cloud-saas/templates/mine
+   * List templates authored by the current user (any review status).
+   */
+  h.get('/templates/mine', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const db = container.resolve('db')
+    const { eq } = await import('drizzle-orm')
+    const templates = await db
+      .select()
+      .from(cloudTemplates)
+      .where(eq(cloudTemplates.authorId, user.userId))
+      .orderBy(cloudTemplates.updatedAt)
+    return c.json(templates)
+  })
+
+  /**
    * GET /api/cloud-saas/templates/:slug
    * Get a single approved template by slug.
    */
@@ -68,7 +84,11 @@ export function createCloudSaasHandler(container: AppContainer) {
     zValidator(
       'json',
       z.object({
-        slug: z.string().min(1).max(255).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase kebab-case'),
+        slug: z
+          .string()
+          .min(1)
+          .max(255)
+          .regex(/^[a-z0-9-]+$/, 'Slug must be lowercase kebab-case'),
         name: z.string().min(1).max(255),
         description: z.string().optional(),
         content: z.record(z.unknown()),
@@ -413,9 +433,7 @@ export function createCloudSaasHandler(container: AppContainer) {
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
     const envDao = container.resolve('cloudEnvVarDao')
     const vars = await envDao.listByUser(user.userId, deploymentId)
-    return c.json(
-      vars.map(({ encryptedValue: _e, ...rest }) => rest),
-    )
+    return c.json(vars.map(({ encryptedValue: _e, ...rest }) => rest))
   })
 
   /**
@@ -469,6 +487,107 @@ export function createCloudSaasHandler(container: AppContainer) {
     const walletService = container.resolve('walletService')
     const wallet = await walletService.getWallet(user.userId)
     return c.json({ balance: wallet?.balance ?? 0 })
+  })
+
+  // ─── Global Env Vars (not scoped to a single deployment) ──────────────────
+
+  /**
+   * GET /api/cloud-saas/global-envvars
+   * List global env vars (groups + entries) for the current user.
+   */
+  h.get('/global-envvars', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const envDao = container.resolve('cloudEnvVarDao')
+    const vars = await envDao.listByUser(user.userId, 'global')
+    const groups: string[] = [
+      'default',
+      ...new Set(vars.map((v) => v.groupId ?? 'default').filter((g) => g !== 'default')),
+    ]
+    return c.json({
+      envVars: vars.map(({ encryptedValue: _e, ...rest }) => ({
+        scope: rest.scope ?? 'global',
+        key: rest.key,
+        maskedValue: '****',
+        isSecret: true,
+        groupName: rest.groupId ?? 'default',
+      })),
+      groups,
+    })
+  })
+
+  /**
+   * PUT /api/cloud-saas/global-envvars
+   * Upsert a single global env var.
+   */
+  h.put(
+    '/global-envvars',
+    zValidator(
+      'json',
+      z.object({
+        key: z.string().min(1),
+        value: z.string(),
+        isSecret: z.boolean().optional(),
+        groupName: z.string().optional(),
+      }),
+    ),
+    async (c) => {
+      const user = c.get('user') as { userId: string }
+      const { key, value, isSecret: _isSecret, groupName } = c.req.valid('json')
+      const { encrypt } = await import('../lib/kms')
+      const envDao = container.resolve('cloudEnvVarDao')
+      // Delete existing entry with same key first (upsert pattern)
+      const existing = await envDao.listByUser(user.userId, 'global')
+      const found = existing.find((v) => v.key === key)
+      if (found) {
+        await envDao.update(found.id, user.userId, encrypt(value))
+      } else {
+        await envDao.create({
+          userId: user.userId,
+          key,
+          encryptedValue: encrypt(value),
+          scope: 'global',
+          groupId: groupName ?? 'default',
+        })
+      }
+      return c.json({ ok: true })
+    },
+  )
+
+  /**
+   * DELETE /api/cloud-saas/global-envvars/:key
+   * Delete a global env var.
+   */
+  h.delete('/global-envvars/:key', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const key = c.req.param('key')
+    const envDao = container.resolve('cloudEnvVarDao')
+    const vars = await envDao.listByUser(user.userId, 'global')
+    const found = vars.find((v) => v.key === key)
+    if (found) await envDao.delete(found.id, user.userId)
+    return c.json({ ok: true })
+  })
+
+  /**
+   * GET /api/cloud-saas/global-envvars/:key
+   * Get a single global env var (value decrypted for display in edit form).
+   */
+  h.get('/global-envvars/:key', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const key = c.req.param('key')
+    const envDao = container.resolve('cloudEnvVarDao')
+    const vars = await envDao.listByUser(user.userId, 'global')
+    const found = vars.find((v) => v.key === key)
+    if (!found) return c.json({ ok: false, error: 'Not found' }, 404)
+    const { decrypt } = await import('../lib/kms')
+    return c.json({
+      envVar: {
+        scope: 'global',
+        key: found.key,
+        value: decrypt(found.encryptedValue),
+        isSecret: true,
+        groupName: found.groupId ?? 'default',
+      },
+    })
   })
 
   // ─── Activity ──────────────────────────────────────────────────────────────
