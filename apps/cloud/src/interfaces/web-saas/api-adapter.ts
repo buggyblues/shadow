@@ -133,7 +133,7 @@ export const saasApiAdapter: CloudApiClient = {
   myTemplates: {
     list: () => saasApi.templates.mine().then((rows) => rows.map(toMyTemplate)),
     get: (name: string) =>
-      saasApi.templates.get(name).then((t) => ({
+      saasApi.templates.mineOne(name).then((t) => ({
         name: t.slug,
         slug: t.slug,
         templateSlug: t.slug,

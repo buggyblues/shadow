@@ -62,6 +62,24 @@ export function createCloudSaasHandler(container: AppContainer) {
   })
 
   /**
+   * GET /api/cloud-saas/templates/mine/:slug
+   * Get a single template authored by the current user (any review status).
+   */
+  h.get('/templates/mine/:slug', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const slug = c.req.param('slug')
+    const db = container.resolve('db')
+    const { eq, and } = await import('drizzle-orm')
+    const [template] = await db
+      .select()
+      .from(cloudTemplates)
+      .where(and(eq(cloudTemplates.slug, slug), eq(cloudTemplates.authorId, user.userId)))
+      .limit(1)
+    if (!template) return c.json({ ok: false, error: 'Template not found' }, 404)
+    return c.json(template)
+  })
+
+  /**
    * GET /api/cloud-saas/templates/:slug
    * Get a single approved template by slug.
    */
@@ -278,10 +296,11 @@ export function createCloudSaasHandler(container: AppContainer) {
 
       // Deduct Shrimp Coins
       const walletService = container.resolve('walletService')
+      const deployRefId = crypto.randomUUID()
       await walletService.debit(
         user.userId,
         monthlyCost,
-        `cloud_deploy_${input.namespace}`,
+        deployRefId,
         'cloud_deploy',
         `部署 ${template.name} (${input.resourceTier})`,
       )

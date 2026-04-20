@@ -116,6 +116,7 @@ export const saasApi = {
       return get<SaasTemplate[]>(`/templates${query ? `?${query}` : ''}`)
     },
     mine: () => get<SaasTemplate[]>('/templates/mine'),
+    mineOne: (slug: string) => get<SaasTemplate>(`/templates/mine/${encodeURIComponent(slug)}`),
     get: (slug: string) => get<SaasTemplate>(`/templates/${encodeURIComponent(slug)}`),
     create: (data: {
       slug: string
