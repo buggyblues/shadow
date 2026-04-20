@@ -53,7 +53,9 @@ function toMyTemplate(t: Awaited<ReturnType<typeof saasApi.templates.list>>[numb
     content: t.content,
     version: 1,
     updatedAt: t.updatedAt,
-    reviewStatus: t.reviewStatus as 'pending' | 'approved' | 'rejected' | undefined,
+    reviewStatus: t.reviewStatus as 'draft' | 'pending' | 'approved' | 'rejected' | undefined,
+    reviewNote: t.reviewNote ?? null,
+    source: t.source as 'official' | 'community' | undefined,
   }
 }
 
@@ -87,7 +89,6 @@ export const saasApiAdapter: CloudApiClient = {
         .submit(name)
         .then(() => ({ ok: true }))
         .catch((err: unknown) => {
-          // 422 = Already pending review — treat as success in SaaS mode
           if (err instanceof Error && err.message.includes(': 422')) {
             return { ok: true }
           }
@@ -154,7 +155,9 @@ export const saasApiAdapter: CloudApiClient = {
         templateSlug: t.slug,
         content: t.content,
         version: 1,
-        reviewStatus: t.reviewStatus as 'pending' | 'approved' | 'rejected' | undefined,
+        reviewStatus: t.reviewStatus as 'draft' | 'pending' | 'approved' | 'rejected' | undefined,
+        reviewNote: t.reviewNote ?? null,
+        source: t.source as 'official' | 'community' | undefined,
       })),
     save: (name: string, content: unknown, _templateSlug?: string) =>
       saasApi.templates
@@ -174,14 +177,7 @@ export const saasApiAdapter: CloudApiClient = {
           }),
         )
         .then((t) => ({ name: t.slug, slug: t.slug })),
-    delete: (name: string) =>
-      saasApi.templates
-        .get(name)
-        .then(() =>
-          // No delete endpoint — just resolve ok (templates persist, but removed from "mine" view)
-          Promise.resolve({ ok: true }),
-        )
-        .catch(() => Promise.resolve({ ok: true })),
+    delete: (name: string) => saasApi.templates.delete(name),
     versions: (_name: string) =>
       Promise.resolve({ current: 1, versions: [{ version: 1, createdAt: now(), current: true }] }),
     restoreVersion: (_name: string, _version: number) =>
@@ -225,27 +221,46 @@ export const saasApiAdapter: CloudApiClient = {
         const ns = [...new Set(rows.map((d) => d.namespace))]
         return { configured: ns, discovered: [], all: ns }
       }),
-    scale: (namespace: string, _id: string, agentCount: number) =>
-      saasApi.deployments.scale(namespace, agentCount).then(() => ({ ok: true })),
+    scale: (_namespace: string, id: string, agentCount: number) =>
+      saasApi.deployments.scale(id, agentCount).then(() => ({ ok: true })),
     costs: () =>
-      Promise.resolve({
-        totalUsd: null,
-        namespaces: [],
+      saasApi.deployments.list().then((rows) => ({
+        totalUsd: rows.reduce((sum, d) => sum + (d.monthlyCost ?? 0), 0) || null,
+        namespaces: rows.map((d) => ({
+          namespace: d.namespace,
+          totalUsd: d.monthlyCost ?? null,
+        })),
         generatedAt: now(),
-      }),
+      })),
     namespaceCosts: (namespace: string) =>
-      Promise.resolve({
-        namespace,
-        totalUsd: null,
-        agents: [],
-        availableAgents: 0,
-        unavailableAgents: 0,
-        generatedAt: now(),
+      saasApi.deployments.list().then((rows) => {
+        const match = rows.find((d) => d.namespace === namespace)
+        return {
+          namespace,
+          totalUsd: match?.monthlyCost ?? null,
+          agents: [],
+          availableAgents: match?.status === 'deployed' ? (match.agentCount ?? 1) : 0,
+          unavailableAgents: match?.status !== 'deployed' ? (match?.agentCount ?? 1) : 0,
+          generatedAt: now(),
+        }
       }),
     pods: (_namespace: string, _id: string) => Promise.resolve([]),
     logsUrl: (namespace: string, _id: string) => saasApi.deployments.logsUrl(namespace),
     logsHistory: (namespace: string, agent: string, _page = 1, limit = 200) =>
-      Promise.resolve({ namespace, agent, limit, lines: [], hasMore: false }),
+      saasApi.deployments
+        .list()
+        .then((rows) => rows.find((d) => d.namespace === namespace))
+        .then((d) =>
+          d
+            ? saasApi.deployments.logsHistory(d.id).then((r) => ({
+                namespace,
+                agent,
+                limit,
+                lines: r.lines.slice(0, limit).map((l) => l.message),
+                hasMore: r.total > limit,
+              }))
+            : { namespace, agent, limit, lines: [], hasMore: false },
+        ),
     env: {
       list: (namespace: string, _mode?: string) =>
         // Only call envvars API if namespace is a real UUID deployment ID
@@ -269,12 +284,17 @@ export const saasApiAdapter: CloudApiClient = {
               envVars: [],
             }),
       getOne: (namespace: string, key: string) =>
-        Promise.resolve({
-          envVar: { scope: namespace, key, value: '', isSecret: false, groupName: 'default' },
-        }),
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(namespace)
+          ? saasApi.envvars.getOne(namespace, key)
+          : Promise.resolve({
+              envVar: { scope: namespace, key, value: '', isSecret: false, groupName: 'default' },
+            }),
       upsert: (namespace: string, key: string, value: string) =>
         saasApi.envvars.update(namespace, [{ key, value }]).then(() => ({ ok: true })),
-      delete: (_namespace: string, _key: string) => Promise.resolve({ ok: true }),
+      delete: (namespace: string, key: string) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(namespace)
+          ? saasApi.envvars.delete(namespace, key)
+          : Promise.resolve({ ok: true }),
     },
   },
 

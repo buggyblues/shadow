@@ -119,6 +119,13 @@ services:
       DATABASE_URL: postgresql://shadow:shadow@postgres:5432/shadow
       KMS_MASTER_KEY: ${KMS_MASTER_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
       POLL_INTERVAL_MS: ${CLOUD_WORKER_POLL_INTERVAL_MS:-5000}
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://server:3000}
+      KUBECONFIG: ${KUBECONFIG:-}
+      KUBECONFIG_CONTEXT: ${KUBECONFIG_CONTEXT:-}
+      PULUMI_CONFIG_PASSPHRASE: ${PULUMI_CONFIG_PASSPHRASE:-}
+      PULUMI_BACKEND_URL: ${PULUMI_BACKEND_URL:-}
+    volumes:
+      - ${KUBECONFIG_HOST_PATH:-/dev/null}:${KUBECONFIG:-/dev/null}:ro
     depends_on:
       postgres:
         condition: service_healthy

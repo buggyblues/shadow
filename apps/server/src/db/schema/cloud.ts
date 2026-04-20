@@ -26,6 +26,7 @@ export const cloudDeploymentStatusEnum = pgEnum('cloud_deployment_status', [
 export const cloudTemplateSourceEnum = pgEnum('cloud_template_source', ['official', 'community'])
 
 export const cloudTemplateReviewStatusEnum = pgEnum('cloud_template_review_status', [
+  'draft',
   'pending',
   'approved',
   'rejected',
@@ -60,6 +61,7 @@ export const cloudTemplates = pgTable(
     description: text('description'),
     source: cloudTemplateSourceEnum('source').default('official').notNull(),
     reviewStatus: cloudTemplateReviewStatusEnum('review_status').default('approved').notNull(),
+    reviewNote: text('review_note'),
     submittedByUserId: uuid('submitted_by_user_id').references(() => users.id, {
       onDelete: 'set null',
     }),

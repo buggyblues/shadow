@@ -55,10 +55,12 @@ function EditorTab({
   name,
   content: initialContent,
   templateSlug,
+  readOnly = false,
 }: {
   name: string
   content: unknown
   templateSlug: string | null
+  readOnly?: boolean
 }) {
   const api = useApiClient()
   const { t } = useTranslation()
@@ -188,7 +190,7 @@ function EditorTab({
           <Button
             type="button"
             onClick={handleSave}
-            disabled={!isValidJson || saveMutation.isPending}
+            disabled={readOnly || !isValidJson || saveMutation.isPending}
             variant="secondary"
             size="sm"
           >
@@ -226,7 +228,7 @@ function EditorTab({
           height="500px"
           language="json"
           value={content}
-          onChange={handleChange}
+          onChange={readOnly ? undefined : handleChange}
           onMount={async (_editor, monaco: Monaco) => {
             try {
               const schema = await api.schema()
@@ -258,6 +260,7 @@ function EditorTab({
             formatOnPaste: true,
             automaticLayout: true,
             padding: { top: 8 },
+            readOnly,
           }}
         />
       </div>
@@ -390,6 +393,11 @@ export function MyTemplateDetailPage() {
     queryKey: ['my-template', name],
     queryFn: () => api.myTemplates.get(name),
   })
+
+  const reviewStatus = data?.reviewStatus
+  const canEdit = !reviewStatus || reviewStatus === 'draft' || reviewStatus === 'rejected'
+  const canSubmit = !reviewStatus || reviewStatus === 'draft' || reviewStatus === 'rejected'
+  const isResubmit = reviewStatus === 'rejected'
 
   const deleteMutation = useMutation({
     mutationFn: () => api.myTemplates.delete(name),
@@ -541,19 +549,36 @@ export function MyTemplateDetailPage() {
                 {t('common.deploy')}
               </Link>
             </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={publishMutation.isPending}
-              onClick={() => setPublishDialogOpen(true)}
-              title={t('templateDetail.publishTooltip')}
-            >
-              <Upload size={14} />
-              {publishMutation.isPending
-                ? t('templateDetail.publishing')
-                : t('templateDetail.publishToCommunity')}
-            </Button>
+            {/* Review status action — state machine */}
+            {canSubmit && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={publishMutation.isPending}
+                onClick={() => setPublishDialogOpen(true)}
+                title={t('templateDetail.publishTooltip')}
+              >
+                <Upload size={14} />
+                {publishMutation.isPending
+                  ? t('templateDetail.publishing')
+                  : isResubmit
+                    ? t('templateDetail.resubmitToCommunity')
+                    : t('templateDetail.publishToCommunity')}
+              </Button>
+            )}
+            {reviewStatus === 'pending' && (
+              <div className="flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 px-3 py-1.5 text-xs text-warning">
+                <Loader2 size={11} className="animate-spin" />
+                {t('templateDetail.reviewStatusPending')}
+              </div>
+            )}
+            {reviewStatus === 'approved' && (
+              <div className="flex items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-3 py-1.5 text-xs text-success">
+                <Shield size={11} />
+                {t('templateDetail.reviewStatusApproved')}
+              </div>
+            )}
             <Button
               type="button"
               onClick={() => setDeleteDialogOpen(true)}
@@ -618,28 +643,41 @@ export function MyTemplateDetailPage() {
                 </span>
                 <span className="text-sm font-mono text-text-primary">v{data.version ?? 1}</span>
               </div>
-              {(data as { reviewStatus?: string }).reviewStatus && (
+              {data.reviewStatus && (
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1.5 text-xs text-text-muted">
                     <Shield size={12} />
-                    {t('templateDetail.publishToCommunity')}
+                    {t('templateDetail.reviewStatusLabel')}
                   </span>
                   <Badge
                     variant={
-                      (data as { reviewStatus?: string }).reviewStatus === 'approved'
+                      data.reviewStatus === 'approved'
                         ? 'success'
-                        : (data as { reviewStatus?: string }).reviewStatus === 'rejected'
+                        : data.reviewStatus === 'rejected'
                           ? 'destructive'
-                          : 'warning'
+                          : data.reviewStatus === 'pending'
+                            ? 'warning'
+                            : 'neutral'
                     }
                     className="text-xs"
                   >
-                    {(data as { reviewStatus?: string }).reviewStatus === 'pending'
-                      ? t('templateDetail.reviewStatusPending')
-                      : (data as { reviewStatus?: string }).reviewStatus === 'approved'
-                        ? t('templateDetail.reviewStatusApproved')
-                        : t('templateDetail.reviewStatusRejected')}
+                    {data.reviewStatus === 'draft'
+                      ? t('templateDetail.reviewStatusDraft')
+                      : data.reviewStatus === 'pending'
+                        ? t('templateDetail.reviewStatusPending')
+                        : data.reviewStatus === 'approved'
+                          ? t('templateDetail.reviewStatusApproved')
+                          : t('templateDetail.reviewStatusRejected')}
                   </Badge>
+                </div>
+              )}
+              {data.reviewStatus === 'rejected' && data.reviewNote && (
+                <div className="mt-1 rounded-lg border border-red-800/40 bg-red-900/20 p-3">
+                  <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-red-400">
+                    <Shield size={11} />
+                    {t('templateDetail.reviewNoteLabel')}
+                  </p>
+                  <p className="text-xs leading-relaxed text-red-300">{data.reviewNote}</p>
                 </div>
               )}
             </div>
@@ -659,7 +697,29 @@ export function MyTemplateDetailPage() {
           />
         )}
         {activeTab === 'editor' && (
-          <EditorTab name={name} content={data.content} templateSlug={data.templateSlug} />
+          <>
+            {!canEdit && (
+              <div
+                className={cn(
+                  'mb-4 rounded-lg border p-3 flex items-center gap-2 text-sm',
+                  reviewStatus === 'pending'
+                    ? 'bg-yellow-900/20 border-yellow-800/40 text-yellow-300'
+                    : 'bg-blue-900/20 border-blue-800/40 text-blue-300',
+                )}
+              >
+                <Shield size={14} />
+                {reviewStatus === 'pending'
+                  ? t('templateDetail.editorLockedPending')
+                  : t('templateDetail.editorLockedApproved')}
+              </div>
+            )}
+            <EditorTab
+              name={name}
+              content={data.content}
+              templateSlug={data.templateSlug}
+              readOnly={!canEdit}
+            />
+          </>
         )}
         {activeTab === 'versions' && <VersionsTab name={name} />}
       </TemplateDetailShell>
@@ -692,9 +752,15 @@ export function MyTemplateDetailPage() {
       <AlertDialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('templateDetail.publishConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {isResubmit
+                ? t('templateDetail.resubmitConfirmTitle')
+                : t('templateDetail.publishConfirmTitle')}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {t('templateDetail.publishConfirmDescription')}
+              {isResubmit
+                ? t('templateDetail.resubmitConfirmDescription')
+                : t('templateDetail.publishConfirmDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -708,7 +774,9 @@ export function MyTemplateDetailPage() {
                 onClick={() => publishMutation.mutate()}
               >
                 <Upload size={14} />
-                {t('templateDetail.publishToCommunity')}
+                {isResubmit
+                  ? t('templateDetail.resubmitToCommunity')
+                  : t('templateDetail.publishToCommunity')}
               </Button>
             </AlertDialogAction>
           </AlertDialogFooter>

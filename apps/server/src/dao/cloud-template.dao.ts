@@ -82,10 +82,18 @@ export class CloudTemplateDao {
     return result[0]
   }
 
-  async updateReviewStatus(id: string, reviewStatus: 'pending' | 'approved' | 'rejected') {
+  async updateReviewStatus(
+    id: string,
+    reviewStatus: 'draft' | 'pending' | 'approved' | 'rejected',
+    reviewNote?: string | null,
+  ) {
     const result = await this.db
       .update(cloudTemplates)
-      .set({ reviewStatus, updatedAt: new Date() })
+      .set({
+        reviewStatus,
+        reviewNote: reviewNote !== undefined ? reviewNote : null,
+        updatedAt: new Date(),
+      })
       .where(eq(cloudTemplates.id, id))
       .returning()
     return result[0] ?? null
