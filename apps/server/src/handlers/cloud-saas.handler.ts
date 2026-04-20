@@ -530,6 +530,22 @@ export function createCloudSaasHandler(container: AppContainer) {
     },
   )
 
+  /**
+   * GET /api/cloud-saas/wallet/transactions
+   * Return transaction history for the current user's wallet.
+   */
+  h.get('/wallet/transactions', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const limit = Math.min(Number(c.req.query('limit')) || 50, 100)
+    const offset = Math.max(Number(c.req.query('offset')) || 0, 0)
+    const walletService = container.resolve('walletService')
+    const [transactions, total] = await Promise.all([
+      walletService.getTransactions(user.userId, limit, offset),
+      walletService.getTransactionCount(user.userId),
+    ])
+    return c.json({ transactions, total, limit, offset })
+  })
+
   // ─── Global Env Vars (not scoped to a single deployment) ──────────────────
 
   /**

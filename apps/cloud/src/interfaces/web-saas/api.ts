@@ -95,6 +95,17 @@ export interface SaasWallet {
   balance: number
 }
 
+export interface SaasTransaction {
+  id: string
+  type: string
+  amount: number
+  balanceAfter: number
+  referenceId: string | null
+  referenceType: string | null
+  note: string | null
+  createdAt: string
+}
+
 export interface SaasActivityEntry {
   id: string
   type: string
@@ -174,6 +185,10 @@ export const saasApi = {
   wallet: {
     get: () => get<SaasWallet>('/wallet'),
     topUp: (amount: number) => post<SaasWallet>('/wallet/topup', { amount }),
+    transactions: (params?: { limit?: number; offset?: number }) =>
+      get<{ transactions: SaasTransaction[]; total: number; limit: number; offset: number }>(
+        `/wallet/transactions${params ? `?limit=${params.limit ?? 50}&offset=${params.offset ?? 0}` : ''}`,
+      ),
   },
 
   // Activity

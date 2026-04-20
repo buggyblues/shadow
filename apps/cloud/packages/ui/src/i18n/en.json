@@ -16,7 +16,8 @@
     "shadowCloud": "Shadow Cloud",
     "console": "Console",
     "community": "Community",
-    "shrimp": "Shadow Store"
+    "shrimp": "Shadow Store",
+    "wallet": "Wallet & Billing"
   },
   "common": {
     "save": "Save",
@@ -66,7 +67,9 @@
     "darkMode": "Dark mode",
     "lightMode": "Light mode",
     "language": "Language",
-    "breadcrumb": "Breadcrumb"
+    "breadcrumb": "Breadcrumb",
+    "prev": "Previous",
+    "next": "Next"
   },
   "configEditor": {
     "title": "Config Editor",
@@ -891,5 +894,23 @@
     "errorTitle": "Could not load community templates",
     "errorHint": "Check your community server URL and token in Settings → Community.",
     "configure": "Configure"
+  },
+  "wallet": {
+    "title": "Wallet & Billing",
+    "description": "Your Shrimp Coin balance and transaction history.",
+    "currentBalance": "Current Balance",
+    "shrimpCoins": "Shrimp Coins",
+    "topUp": "Top Up",
+    "topUpSuccess": "Successfully topped up 10,000 Shrimp Coins!",
+    "topUpFailed": "Top-up failed. Please try again.",
+    "transactionHistory": "Transaction History",
+    "noTransactions": "No transactions yet",
+    "noTransactionsDesc": "Your billing history will appear here once you deploy an app.",
+    "txType": "Type",
+    "txNote": "Description",
+    "txAmount": "Amount",
+    "txBalance": "Balance",
+    "txDate": "Date",
+    "page": "Page {{current}} / {{total}}"
   }
 }
