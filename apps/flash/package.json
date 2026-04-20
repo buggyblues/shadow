@@ -38,8 +38,8 @@
     "pixi-live2d-display": "^0.4.0",
     "pixi.js": "^7.4.2",
     "qrcode": "^1.5.4",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
     "react-dropzone": "^14.3.8",
     "three": "^0.183.2",
     "bitecs": "^0.4.0"

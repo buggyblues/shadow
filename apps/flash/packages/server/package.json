@@ -11,9 +11,9 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@hono/node-server": "^1.14.0",
+    "@hono/node-server": "^1.19.14",
     "@shadowob/flash-types": "workspace:*",
-    "hono": "^4.7.0",
+    "hono": "^4.12.14",
     "multer": "^1.4.5-lts.1"
   },
   "devDependencies": {
