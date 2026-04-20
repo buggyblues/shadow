@@ -312,7 +312,14 @@
     "deployFailedWithCode": "部署失败（退出码 {{code}}）",
     "successfullyDeployed": "已成功部署 {{name}}！",
     "unknownError": "未知错误",
-    "deployFailedWithMessage": "部署失败：{{message}}"
+    "deployFailedWithMessage": "部署失败：{{message}}",
+    "estimatedCost": "预计费用",
+    "shrimpCoinsPerMonth": "虾币 / 月",
+    "walletBalance": "当前余额",
+    "shrimpCoins": "虾币",
+    "insufficientBalance": "余额不足。",
+    "insufficientBalanceDesc": "虾币余额不足以部署此应用，请先充值虾币。",
+    "topUp": "充值"
   },
   "clusters": {
     "title": "集群管理",

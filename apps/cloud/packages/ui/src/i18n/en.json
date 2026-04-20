@@ -312,7 +312,14 @@
     "deployFailedWithCode": "Deploy failed (exit code {{code}})",
     "successfullyDeployed": "Successfully deployed {{name}}!",
     "unknownError": "Unknown error",
-    "deployFailedWithMessage": "Deploy failed: {{message}}"
+    "deployFailedWithMessage": "Deploy failed: {{message}}",
+    "estimatedCost": "Estimated Cost",
+    "shrimpCoinsPerMonth": "Shrimp Coins / month",
+    "walletBalance": "Your Balance",
+    "shrimpCoins": "Shrimp Coins",
+    "insufficientBalance": "Insufficient balance.",
+    "insufficientBalanceDesc": "You don't have enough Shrimp Coins to deploy this app. Top up to continue.",
+    "topUp": "Top Up"
   },
   "clusters": {
     "title": "Cluster Management",

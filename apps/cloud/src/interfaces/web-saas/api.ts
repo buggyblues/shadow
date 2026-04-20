@@ -173,6 +173,7 @@ export const saasApi = {
   // Wallet
   wallet: {
     get: () => get<SaasWallet>('/wallet'),
+    topUp: (amount: number) => post<SaasWallet>('/wallet/topup', { amount }),
   },
 
   // Activity
