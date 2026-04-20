@@ -7,10 +7,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from '@tanstack/react-router'
 import { useEffect } from 'react'
-import '@/i18n'
+import '@shadowob/cloud-ui/i18n'
+import { applyTheme, useThemeStore } from '@shadowob/cloud-ui/stores/theme'
 import { router } from './router'
-import { applyTheme, useThemeStore } from '@/stores/theme'
-import '@/styles/globals.css'
+import '@shadowob/cloud-ui/styles/globals.css'
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -9,8 +9,8 @@
  * Only the intersection of shared pages is wired here.
  */
 
-import { api } from '@/lib/api'
-import type { CloudApiClient } from '@/lib/api-context'
+import { api } from '@shadowob/cloud-ui/lib/api'
+import type { CloudApiClient } from '@shadowob/cloud-ui/lib/api-context'
 import { saasApi } from './api'
 
 // Build a partial override that matches CloudApiClient shape
@@ -43,7 +43,8 @@ export const saasApiAdapter: CloudApiClient = {
           teamName: 'Shadow Cloud',
           agentCount: 0,
           tags: t.tags ?? [],
-          category: (t.category as import('@/lib/api').TemplateCategoryId) ?? 'demo',
+          category:
+            (t.category as import('@shadowob/cloud-ui/lib/api').TemplateCategoryId) ?? 'demo',
           emoji: '☁️',
           featured: t.source === 'official',
           popularity: t.deployCount,
@@ -64,7 +65,8 @@ export const saasApiAdapter: CloudApiClient = {
           teamName: 'Shadow Cloud',
           agentCount: 0,
           tags: t.tags ?? [],
-          category: (t.category as import('@/lib/api').TemplateCategoryId) ?? 'demo',
+          category:
+            (t.category as import('@shadowob/cloud-ui/lib/api').TemplateCategoryId) ?? 'demo',
           emoji: '☁️',
           featured: t.source === 'official',
           popularity: t.deployCount,

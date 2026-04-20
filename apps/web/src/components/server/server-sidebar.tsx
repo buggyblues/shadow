@@ -30,6 +30,7 @@ import {
   Lock,
   LogOut,
   Plus,
+  UserPlus,
   Volume2,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'

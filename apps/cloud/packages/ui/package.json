@@ -12,6 +12,6 @@
     "./i18n": "./src/i18n/index.ts",
     "./lib/*": "./src/lib/*",
     "./styles/*": "./src/styles/*",
-    "./web-saas": "../../src/interfaces/web-saas/index.tsx"
+    "./web-saas": "./web-saas/index.tsx"
   }
 }
