@@ -290,6 +290,18 @@ export const saasApiAdapter: CloudApiClient = {
   // ── Schema (not available in saas mode) ──────────────────────────────────
   schema: () => Promise.resolve({}),
 
+  // ── Destroy (remove a namespace/deployment in SaaS) ──────────────────────
+  destroy: (options: { namespace?: string; stack?: string }) =>
+    saasApi.deployments
+      .list()
+      .then(async (rows) => {
+        const ns = options.namespace ?? options.stack
+        const match = rows.find((d) => d.namespace === ns)
+        if (match) await saasApi.deployments.delete(match.id)
+        return { ok: true }
+      })
+      .catch(() => ({ ok: true })),
+
   // ── Activity ─────────────────────────────────────────────────────────────
   activity: {
     list: () =>

@@ -52,11 +52,11 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.get('/templates/mine', async (c) => {
     const user = c.get('user') as { userId: string }
     const db = container.resolve('db')
-    const { eq } = await import('drizzle-orm')
+    const { eq, and, ne } = await import('drizzle-orm')
     const templates = await db
       .select()
       .from(cloudTemplates)
-      .where(eq(cloudTemplates.authorId, user.userId))
+      .where(and(eq(cloudTemplates.authorId, user.userId), ne(cloudTemplates.source, 'official')))
       .orderBy(cloudTemplates.updatedAt)
     return c.json(templates)
   })
@@ -69,11 +69,17 @@ export function createCloudSaasHandler(container: AppContainer) {
     const user = c.get('user') as { userId: string }
     const slug = c.req.param('slug')
     const db = container.resolve('db')
-    const { eq, and } = await import('drizzle-orm')
+    const { eq, and, ne } = await import('drizzle-orm')
     const [template] = await db
       .select()
       .from(cloudTemplates)
-      .where(and(eq(cloudTemplates.slug, slug), eq(cloudTemplates.authorId, user.userId)))
+      .where(
+        and(
+          eq(cloudTemplates.slug, slug),
+          eq(cloudTemplates.authorId, user.userId),
+          ne(cloudTemplates.source, 'official'),
+        ),
+      )
       .limit(1)
     if (!template) return c.json({ ok: false, error: 'Template not found' }, 404)
     return c.json(template)

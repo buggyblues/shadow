@@ -867,7 +867,7 @@ function StepDeploy({
         result = await (api as { deployFn: typeof api.deployFn & Function }).deployFn({
           templateSlug: name,
           namespace: targetNamespace,
-          name: targetNamespace,
+          name: `${targetNamespace}-${Date.now()}`,
           resourceTier: 'lightweight',
           envVars: config.envVars,
         })
