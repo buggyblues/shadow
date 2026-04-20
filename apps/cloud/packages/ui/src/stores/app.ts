@@ -78,8 +78,8 @@ const persisted = loadPersisted()
 export const useAppStore = create<AppState>((set, get) => ({
   // Settings modal
   settingsOpen: false,
-  settingsTab: 'providers',
-  openSettings: (tab = 'providers') => set({ settingsOpen: true, settingsTab: tab }),
+  settingsTab: 'community',
+  openSettings: (tab = 'community') => set({ settingsOpen: true, settingsTab: tab }),
   closeSettings: () => set({ settingsOpen: false }),
 
   // Activity log
