@@ -115,7 +115,7 @@ async function main() {
           path.resolve(process.cwd(), 'node_modules/@shadowob/cloud/templates'), // installed pkg
         ]
         const { existsSync } = require('node:fs')
-        return candidates.find(existsSync) ?? candidates[0]
+        return (candidates.find(existsSync) ?? candidates[0]) as string
       })()
     await cloudService.seedOfficialTemplates(templatesDir)
     logger.info('Cloud templates seeded')

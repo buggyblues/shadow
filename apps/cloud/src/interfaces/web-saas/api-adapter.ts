@@ -131,7 +131,7 @@ export const saasApiAdapter: CloudApiClient = {
 
   // ── My Templates (user-owned templates in SaaS = community submissions) ──
   myTemplates: {
-    list: () => saasApi.templates.list().then((rows) => rows.map(toMyTemplate)),
+    list: () => saasApi.templates.mine().then((rows) => rows.map(toMyTemplate)),
     get: (name: string) =>
       saasApi.templates.get(name).then((t) => ({
         name: t.slug,
@@ -144,9 +144,28 @@ export const saasApiAdapter: CloudApiClient = {
       saasApi.templates
         .update(name, { content: content as Record<string, unknown> })
         .then(() => ({ ok: true })),
-    fork: (_sourceTemplate: string, _newName?: string) =>
-      Promise.resolve({ name: _newName ?? _sourceTemplate, slug: _newName ?? _sourceTemplate }),
-    delete: (_name: string) => Promise.resolve({ ok: true }),
+    fork: (sourceTemplate: string, newName?: string) =>
+      saasApi.templates
+        .get(sourceTemplate)
+        .then((t) =>
+          saasApi.templates.create({
+            slug: newName ?? `${t.slug}-copy-${Date.now()}`,
+            name: newName ?? `${t.name} (Copy)`,
+            description: t.description ?? undefined,
+            content: t.content,
+            tags: t.tags ?? [],
+            category: t.category ?? undefined,
+          }),
+        )
+        .then((t) => ({ name: t.slug, slug: t.slug })),
+    delete: (name: string) =>
+      saasApi.templates
+        .get(name)
+        .then(() =>
+          // No delete endpoint — just resolve ok (templates persist, but removed from "mine" view)
+          Promise.resolve({ ok: true }),
+        )
+        .catch(() => Promise.resolve({ ok: true })),
     versions: (_name: string) =>
       Promise.resolve({ current: 1, versions: [{ version: 1, createdAt: now(), current: true }] }),
     restoreVersion: (_name: string, _version: number) =>
@@ -244,21 +263,15 @@ export const saasApiAdapter: CloudApiClient = {
 
   // ── Env Vars (global scope in SaaS — stubs) ──────────────────────────────
   env: {
-    list: () =>
-      Promise.resolve({
-        envVars: [] as EnvVarListEntry[],
-        groups: [],
-      }),
-    groups: () => Promise.resolve({ groups: [] }),
-    createGroup: (name: string) => Promise.resolve({ ok: true, name }),
-    deleteGroup: (_name: string) => Promise.resolve({ ok: true }),
+    list: () => saasApi.globalEnvVars.list(),
+    groups: () => saasApi.globalEnvVars.list().then((r) => ({ groups: r.groups })),
+    createGroup: (name: string) => saasApi.globalEnvVars.createGroup(name),
+    deleteGroup: (name: string) => saasApi.globalEnvVars.deleteGroup(name),
     getByScope: (_scope: string) => Promise.resolve({ envVars: [] }),
-    getOne: (scope: string, key: string) =>
-      Promise.resolve({
-        envVar: { scope, key, value: '', isSecret: false, groupName: 'default' },
-      }),
-    upsert: (_scope: string, _key: string, _value: string) => Promise.resolve({ ok: true }),
-    delete: (_scope: string, _key: string) => Promise.resolve({ ok: true }),
+    getOne: (_scope: string, key: string) => saasApi.globalEnvVars.getOne(key),
+    upsert: (_scope: string, key: string, value: string, isSecret?: boolean, groupName?: string) =>
+      saasApi.globalEnvVars.upsert(key, value, isSecret, groupName),
+    delete: (_scope: string, key: string) => saasApi.globalEnvVars.delete(key),
   },
 
   // ── Settings (stub — saas doesn't expose provider config) ────────────────
@@ -266,6 +279,16 @@ export const saasApiAdapter: CloudApiClient = {
     get: () => Promise.resolve({ providers: [] }),
     put: () => Promise.resolve({ ok: true }),
   },
+
+  // ── Doctor (saas: no local infra checks — return empty healthy result) ────
+  doctor: () =>
+    Promise.resolve({
+      checks: [],
+      summary: { pass: 0, warn: 0, fail: 0 },
+    }),
+
+  // ── Schema (not available in saas mode) ──────────────────────────────────
+  schema: () => Promise.resolve({}),
 
   // ── Activity ─────────────────────────────────────────────────────────────
   activity: {
