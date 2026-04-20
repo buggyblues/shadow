@@ -285,9 +285,10 @@ function CommunityTab() {
   const queryClient = useQueryClient()
   const toast = useToast()
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['community-settings'],
     queryFn: api.community.getSettings,
+    retry: 0,
   })
 
   const [baseUrl, setBaseUrl] = useState('')
@@ -331,6 +332,20 @@ function CommunityTab() {
 
   if (isLoading) {
     return <div className="py-12 text-center text-sm text-text-muted">{t('common.loading')}</div>
+  }
+
+  if (isError) {
+    return (
+      <div className="space-y-5">
+        <div className="glass-card p-6 space-y-3">
+          <h2 className="text-sm font-bold text-text-primary">{t('settings.community')}</h2>
+          <p className="text-sm text-text-muted">{t('settings.communityBrowseHint')}</p>
+          <div className="glass-card p-4 rounded-xl border border-border-subtle">
+            <p className="text-xs text-text-muted">{t('store.communityUnavailable')}</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   const isConnected = data?.oauthConnected || data?.hasToken
