@@ -573,4 +573,17 @@ export const api = {
 }
 
 // ── API Client type for dependency injection (e.g. web-saas mode) ──────────
-export type CloudApiClient = typeof api
+export type CloudApiClient = typeof api & {
+  /**
+   * Optional SaaS-mode deploy override. When present, the deploy wizard calls
+   * this instead of POSTing to the local `/api/deploy` SSE endpoint.
+   * Should resolve to an SSEResult-like object: { success: boolean; error?: string }.
+   */
+  deployFn?: (config: {
+    templateSlug: string
+    namespace: string
+    name: string
+    resourceTier?: string
+    envVars?: Record<string, string>
+  }) => Promise<{ success: boolean; error?: string }>
+}
