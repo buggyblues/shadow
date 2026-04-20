@@ -9,12 +9,18 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.json ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/ui/package.json packages/ui/
 COPY apps/web/package.json apps/web/
+COPY apps/cloud/package.json apps/cloud/
+COPY apps/cloud/packages/ui/package.json apps/cloud/packages/ui/
 COPY website/package.json website/
 
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 COPY packages/ packages/
 COPY apps/web/ apps/web/
+COPY apps/cloud/packages/ui/src/ apps/cloud/packages/ui/src/
+COPY apps/cloud/src/interfaces/web-saas/ apps/cloud/src/interfaces/web-saas/
+# Recreate the symlink that packages/ui/web-saas -> ../../src/interfaces/web-saas
+RUN ln -sf /app/apps/cloud/src/interfaces/web-saas /app/apps/cloud/packages/ui/web-saas
 COPY docs/e2e/screenshots/ /tmp/screenshots/
 COPY website/ website/
 RUN rm -rf website/docs/public/screenshots && cp -r /tmp/screenshots website/docs/public/screenshots
