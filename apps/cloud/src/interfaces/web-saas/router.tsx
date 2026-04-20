@@ -19,6 +19,7 @@ import { SecretsPage } from '@shadowob/cloud-ui/pages/SecretsPage'
 import { StoreDetailPage } from '@shadowob/cloud-ui/pages/StoreDetailPage'
 import { StorePage } from '@shadowob/cloud-ui/pages/StorePage'
 import {
+  createMemoryHistory,
   createRootRoute,
   createRoute,
   createRouter,
@@ -138,4 +139,6 @@ const routeTree = rootRoute.addChildren([
   secretsRoute,
 ])
 
-export const router = createRouter({ routeTree })
+const memoryHistory = createMemoryHistory({ initialEntries: ['/'] })
+
+export const router = createRouter({ routeTree, history: memoryHistory })
