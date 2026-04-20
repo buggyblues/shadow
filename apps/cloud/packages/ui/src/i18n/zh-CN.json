@@ -586,7 +586,7 @@
     "publishToCommunity": "发布到社区",
     "publishing": "发布中...",
     "publishSuccess": "模版已成功发布到社区。",
-    "publishFailed": "发布失败，请在设置中检查社区 Token。",
+    "publishFailed": "发布失败，请重试。",
     "publishTooltip": "将此模版发布到社区服务器"
   },
   "secrets": {
