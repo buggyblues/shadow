@@ -332,29 +332,122 @@ export function createAdminHandler(container: AppContainer) {
     return c.json(rows)
   })
 
+  adminHandler.post(
+    '/cloud-templates',
+    zValidator(
+      'json',
+      z.object({
+        slug: z.string().min(1).max(255),
+        name: z.string().min(1).max(255),
+        description: z.string().optional(),
+        source: z.enum(['official', 'community']).default('official'),
+        reviewStatus: z.enum(['draft', 'pending', 'approved', 'rejected']).default('approved'),
+        tags: z.array(z.string()).default([]),
+        category: z.string().optional(),
+        baseCost: z.number().int().min(0).optional(),
+        content: z.record(z.unknown()).default({}),
+      }),
+    ),
+    async (c) => {
+      const input = c.req.valid('json')
+      const db = container.resolve('db')
+      const { cloudTemplates: tbl } = await import('../db/schema')
+      const [created] = await db
+        .insert(tbl)
+        .values({
+          slug: input.slug,
+          name: input.name,
+          description: input.description ?? null,
+          source: input.source,
+          reviewStatus: input.reviewStatus,
+          tags: input.tags,
+          category: input.category ?? null,
+          baseCost: input.baseCost ?? null,
+          content: input.content,
+        })
+        .returning()
+      return c.json(created, 201)
+    },
+  )
+
+  adminHandler.patch(
+    '/cloud-templates/:id',
+    zValidator(
+      'json',
+      z.object({
+        slug: z.string().min(1).max(255).optional(),
+        name: z.string().min(1).max(255).optional(),
+        description: z.string().nullable().optional(),
+        source: z.enum(['official', 'community']).optional(),
+        reviewStatus: z.enum(['draft', 'pending', 'approved', 'rejected']).optional(),
+        reviewNote: z.string().nullable().optional(),
+        tags: z.array(z.string()).optional(),
+        category: z.string().nullable().optional(),
+        baseCost: z.number().int().min(0).nullable().optional(),
+        content: z.record(z.unknown()).optional(),
+      }),
+    ),
+    async (c) => {
+      const id = c.req.param('id')
+      const input = c.req.valid('json')
+      const db = container.resolve('db')
+      const { cloudTemplates: tbl } = await import('../db/schema')
+      const [updated] = await db
+        .update(tbl)
+        .set({ ...input, updatedAt: new Date() })
+        .where(eq(tbl.id, id))
+        .returning()
+      if (!updated) return c.json({ ok: false, error: 'Template not found' }, 404)
+      return c.json(updated)
+    },
+  )
+
+  adminHandler.delete('/cloud-templates/:id', async (c) => {
+    const id = c.req.param('id')
+    const db = container.resolve('db')
+    const { cloudTemplates: tbl } = await import('../db/schema')
+    const [deleted] = await db.delete(tbl).where(eq(tbl.id, id)).returning()
+    if (!deleted) return c.json({ ok: false, error: 'Template not found' }, 404)
+    return c.json({ ok: true })
+  })
+
   adminHandler.post('/cloud-templates/:id/approve', async (c) => {
     const id = c.req.param('id')
     const db = container.resolve('db')
     const [updated] = await db
       .update(cloudTemplates)
-      .set({ reviewStatus: 'approved', updatedAt: new Date() })
+      .set({ reviewStatus: 'approved', reviewNote: null, updatedAt: new Date() })
       .where(eq(cloudTemplates.id, id))
       .returning()
     if (!updated) return c.json({ ok: false, error: 'Template not found' }, 404)
     return c.json(updated)
   })
 
-  adminHandler.post('/cloud-templates/:id/reject', async (c) => {
-    const id = c.req.param('id')
-    const db = container.resolve('db')
-    const [updated] = await db
-      .update(cloudTemplates)
-      .set({ reviewStatus: 'rejected', updatedAt: new Date() })
-      .where(eq(cloudTemplates.id, id))
-      .returning()
-    if (!updated) return c.json({ ok: false, error: 'Template not found' }, 404)
-    return c.json(updated)
-  })
+  adminHandler.post(
+    '/cloud-templates/:id/reject',
+    zValidator(
+      'json',
+      z.object({
+        note: z.string().min(1).max(500).optional(),
+      }),
+    ),
+    async (c) => {
+      const id = c.req.param('id')
+      const { note } = c.req.valid('json')
+      const db = container.resolve('db')
+      const [updated] = await db
+        .update(cloudTemplates)
+        .set({
+          reviewStatus: 'rejected',
+          reviewNote: note ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(cloudTemplates.id, id))
+        .returning()
+      if (!updated) return c.json({ ok: false, error: 'Template not found' }, 404)
+      return c.json(updated)
+    },
+  )
 
   return adminHandler
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ConfigManagementPage } from './config-management'
 
 const API_BASE = '/api/admin'
 
@@ -111,7 +112,15 @@ function StatCard({
 }
 
 /* ── Tabs ────────────────────────────────────────────── */
-type Tab = 'stats' | 'invites' | 'users' | 'servers' | 'agents' | 'passwordLogs'
+type Tab =
+  | 'stats'
+  | 'invites'
+  | 'users'
+  | 'servers'
+  | 'agents'
+  | 'passwordLogs'
+  | 'templates'
+  | 'config'
 
 interface Stats {
   totalUsers: number
@@ -195,6 +204,26 @@ interface AdminAgent {
   } | null
 }
 
+interface CloudTemplate {
+  id: string
+  slug: string
+  name: string
+  description: string | null
+  source: 'official' | 'community'
+  reviewStatus: 'draft' | 'pending' | 'approved' | 'rejected'
+  reviewNote: string | null
+  tags: string[]
+  category: string | null
+  baseCost: number | null
+  deployCount: number
+  content: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+  authorId: string | null
+}
+
+type TplStatusFilter = 'all' | 'draft' | 'pending' | 'approved' | 'rejected'
+
 interface PasswordChangeLog {
   id: string
   userId: string
@@ -234,6 +263,42 @@ function DashboardContent() {
   }>({ name: '', slug: '', description: '', isPublic: false })
   const [adminAgents, setAdminAgents] = useState<AdminAgent[]>([])
   const [passwordLogs, setPasswordLogs] = useState<PasswordChangeLog[]>([])
+
+  // Templates state
+  const [templates, setTemplates] = useState<CloudTemplate[]>([])
+  const [tplFilter, setTplFilter] = useState<TplStatusFilter>('all')
+  const [tplLoading, setTplLoading] = useState(false)
+  const [tplSelected, setTplSelected] = useState<CloudTemplate | null>(null)
+  const [tplActionLoading, setTplActionLoading] = useState<string | null>(null)
+  const [tplRejectDialogOpen, setTplRejectDialogOpen] = useState(false)
+  const [tplRejectNote, setTplRejectNote] = useState('')
+  const [tplRejectTargetId, setTplRejectTargetId] = useState<string | null>(null)
+  const [tplEditOpen, setTplEditOpen] = useState(false)
+  const [tplEditTarget, setTplEditTarget] = useState<CloudTemplate | null>(null)
+  const [tplCreateOpen, setTplCreateOpen] = useState(false)
+  type TplForm = {
+    slug: string
+    name: string
+    description: string
+    source: 'official' | 'community'
+    reviewStatus: 'draft' | 'pending' | 'approved' | 'rejected'
+    tags: string
+    category: string
+    baseCost: string
+    content: string
+  }
+  const emptyTplForm: TplForm = {
+    slug: '',
+    name: '',
+    description: '',
+    source: 'official',
+    reviewStatus: 'approved',
+    tags: '',
+    category: '',
+    baseCost: '',
+    content: '{}',
+  }
+  const [tplForm, setTplForm] = useState<TplForm>(emptyTplForm)
 
   const loadStats = async () => {
     try {
@@ -293,6 +358,19 @@ function DashboardContent() {
     }
   }
 
+  const loadTemplates = async (status: TplStatusFilter = tplFilter) => {
+    setTplLoading(true)
+    try {
+      const qs = status === 'all' ? '' : `?status=${status}`
+      const data = await apiFetch<CloudTemplate[]>(`/cloud-templates${qs}`)
+      setTemplates(data)
+    } catch {
+      /* */
+    } finally {
+      setTplLoading(false)
+    }
+  }
+
   const loadPasswordLogs = async () => {
     try {
       setPasswordLogs(await apiFetch<PasswordChangeLog[]>('/password-logs'))
@@ -313,6 +391,7 @@ function DashboardContent() {
     if (tab === 'servers') loadServers()
     if (tab === 'agents') loadAgents()
     if (tab === 'passwordLogs') loadPasswordLogs()
+    if (tab === 'templates') loadTemplates(tplFilter)
   }, [tab])
 
   const generateCodes = async () => {
@@ -418,6 +497,8 @@ function DashboardContent() {
     { key: 'servers', label: '🖥️ 服务器管理' },
     { key: 'agents', label: '🐱 Buddy 管理' },
     { key: 'passwordLogs', label: '🔐 密码日志' },
+    { key: 'templates', label: '🛍️ 商店模版' },
+    { key: 'config', label: '🔧 Config Platform' },
   ]
 
   return (
@@ -456,18 +537,6 @@ function DashboardContent() {
                 {t.label}
               </button>
             ))}
-            <a
-              href="/config"
-              className="block w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition text-zinc-400 hover:bg-zinc-800 hover:text-white"
-            >
-              🔧 Config Platform
-            </a>
-            <a
-              href="/templates"
-              className="block w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition text-zinc-400 hover:bg-zinc-800 hover:text-white"
-            >
-              📋 Template Review
-            </a>
           </nav>
         </aside>
 
@@ -1152,6 +1221,572 @@ function DashboardContent() {
               </div>
             </div>
           )}
+          {/* Templates Tab */}
+          {tab === 'templates' && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold">商店模版管理</h2>
+                <button
+                  onClick={() => {
+                    setTplForm(emptyTplForm)
+                    setTplCreateOpen(true)
+                  }}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition"
+                >
+                  + 新建模版
+                </button>
+              </div>
+
+              {/* Filter */}
+              <div className="flex gap-2 mb-4">
+                {(['all', 'pending', 'approved', 'rejected', 'draft'] as TplStatusFilter[]).map(
+                  (s) => (
+                    <button
+                      key={s}
+                      onClick={() => {
+                        setTplFilter(s)
+                        void loadTemplates(s)
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${tplFilter === s ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'}`}
+                    >
+                      {s === 'all'
+                        ? '全部'
+                        : s === 'pending'
+                          ? '待审核'
+                          : s === 'approved'
+                            ? '已上架'
+                            : s === 'rejected'
+                              ? '已拒绝'
+                              : '草稿'}
+                    </button>
+                  ),
+                )}
+              </div>
+
+              <div className="flex gap-4">
+                {/* List */}
+                <div className="flex-1 min-w-0">
+                  {tplLoading ? (
+                    <div className="text-zinc-500 text-sm py-8 text-center">加载中…</div>
+                  ) : templates.length === 0 ? (
+                    <div className="text-zinc-500 text-sm py-8 text-center">暂无模版</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {templates.map((t) => {
+                        const badge: Record<string, string> = {
+                          draft: 'bg-zinc-500/20 text-zinc-300',
+                          pending: 'bg-yellow-500/20 text-yellow-300',
+                          approved: 'bg-green-500/20 text-green-300',
+                          rejected: 'bg-red-500/20 text-red-300',
+                        }
+                        return (
+                          <div
+                            key={t.id}
+                            onClick={() => setTplSelected(t)}
+                            className={`p-4 rounded-xl border cursor-pointer transition ${tplSelected?.id === t.id ? 'border-indigo-500 bg-zinc-800' : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700'}`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-medium text-white">{t.name}</span>
+                                  <span
+                                    className={`px-2 py-0.5 rounded text-xs font-medium ${badge[t.reviewStatus]}`}
+                                  >
+                                    {t.reviewStatus}
+                                  </span>
+                                  <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded">
+                                    {t.source}
+                                  </span>
+                                  {t.category && (
+                                    <span className="text-xs text-zinc-500">{t.category}</span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-zinc-500 font-mono mt-0.5">{t.slug}</p>
+                                {t.description && (
+                                  <p className="text-sm text-zinc-400 mt-1 line-clamp-1">
+                                    {t.description}
+                                  </p>
+                                )}
+                                {t.reviewStatus === 'rejected' && t.reviewNote && (
+                                  <p className="text-xs text-red-400 mt-1">✕ {t.reviewNote}</p>
+                                )}
+                              </div>
+                              <div
+                                className="flex gap-2 shrink-0"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {t.reviewStatus === 'pending' && (
+                                  <>
+                                    <button
+                                      onClick={() => {
+                                        setTplActionLoading(t.id)
+                                        apiFetch(`/cloud-templates/${t.id}/approve`, {
+                                          method: 'POST',
+                                        })
+                                          .then(() => {
+                                            setTemplates((p) =>
+                                              p.map((x) =>
+                                                x.id === t.id
+                                                  ? {
+                                                      ...x,
+                                                      reviewStatus: 'approved',
+                                                      reviewNote: null,
+                                                    }
+                                                  : x,
+                                              ),
+                                            )
+                                            if (tplSelected?.id === t.id)
+                                              setTplSelected(
+                                                (s) =>
+                                                  s && {
+                                                    ...s,
+                                                    reviewStatus: 'approved',
+                                                    reviewNote: null,
+                                                  },
+                                              )
+                                          })
+                                          .catch(() => {})
+                                          .finally(() => setTplActionLoading(null))
+                                      }}
+                                      disabled={tplActionLoading === t.id}
+                                      className="px-3 py-1 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-medium disabled:opacity-50 transition"
+                                    >
+                                      通过
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setTplRejectTargetId(t.id)
+                                        setTplRejectNote('')
+                                        setTplRejectDialogOpen(true)
+                                      }}
+                                      disabled={tplActionLoading === t.id}
+                                      className="px-3 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium disabled:opacity-50 transition"
+                                    >
+                                      拒绝
+                                    </button>
+                                  </>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    setTplForm({
+                                      slug: t.slug,
+                                      name: t.name,
+                                      description: t.description ?? '',
+                                      source: t.source,
+                                      reviewStatus: t.reviewStatus,
+                                      tags: t.tags.join(', '),
+                                      category: t.category ?? '',
+                                      baseCost: t.baseCost != null ? String(t.baseCost) : '',
+                                      content: JSON.stringify(t.content, null, 2),
+                                    })
+                                    setTplEditTarget(t)
+                                    setTplEditOpen(true)
+                                  }}
+                                  className="px-3 py-1 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-medium transition"
+                                >
+                                  编辑
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (!confirm('确定要删除该模版？')) return
+                                    apiFetch(`/cloud-templates/${t.id}`, { method: 'DELETE' })
+                                      .then(() => {
+                                        setTemplates((p) => p.filter((x) => x.id !== t.id))
+                                        if (tplSelected?.id === t.id) setTplSelected(null)
+                                      })
+                                      .catch(() => {})
+                                  }}
+                                  className="px-3 py-1 rounded-lg bg-red-900/40 hover:bg-red-700 text-red-400 hover:text-white text-xs font-medium transition"
+                                >
+                                  删除
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Detail panel */}
+                {tplSelected && (
+                  <div className="w-80 shrink-0 bg-zinc-900 rounded-xl border border-zinc-800 p-5 self-start sticky top-6">
+                    <div className="flex items-start justify-between mb-3">
+                      <h3 className="font-semibold text-white text-sm">{tplSelected.name}</h3>
+                      <button
+                        onClick={() => setTplSelected(null)}
+                        className="text-zinc-500 hover:text-white transition text-lg leading-none"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className="space-y-2.5 text-xs">
+                      {[
+                        [
+                          'Slug',
+                          <span className="font-mono text-zinc-300">{tplSelected.slug}</span>,
+                        ],
+                        ['Source', tplSelected.source],
+                        ['Category', tplSelected.category ?? '—'],
+                        [
+                          'Base Cost',
+                          tplSelected.baseCost != null ? `${tplSelected.baseCost} coins` : '—',
+                        ],
+                        ['Deploy Count', tplSelected.deployCount],
+                        ['Created', new Date(tplSelected.createdAt).toLocaleString()],
+                        ['Updated', new Date(tplSelected.updatedAt).toLocaleString()],
+                      ].map(([label, val]) => (
+                        <div key={String(label)}>
+                          <span className="text-zinc-500">{label}</span>
+                          <div className="mt-0.5 text-zinc-300">{val}</div>
+                        </div>
+                      ))}
+                      {tplSelected.tags.length > 0 && (
+                        <div>
+                          <span className="text-zinc-500">Tags</span>
+                          <div className="mt-0.5 flex flex-wrap gap-1">
+                            {tplSelected.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-300"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {tplSelected.description && (
+                        <div>
+                          <span className="text-zinc-500">Description</span>
+                          <p className="mt-0.5 text-zinc-300">{tplSelected.description}</p>
+                        </div>
+                      )}
+                      {tplSelected.reviewStatus === 'rejected' && tplSelected.reviewNote && (
+                        <div className="rounded-lg bg-red-900/20 border border-red-800/40 p-2">
+                          <span className="text-red-400 font-semibold">拒绝原因</span>
+                          <p className="mt-1 text-red-300">{tplSelected.reviewNote}</p>
+                        </div>
+                      )}
+                    </div>
+                    {tplSelected.reviewStatus === 'pending' && (
+                      <div className="mt-4 flex gap-2">
+                        <button
+                          onClick={() => {
+                            setTplActionLoading(tplSelected.id)
+                            apiFetch(`/cloud-templates/${tplSelected.id}/approve`, {
+                              method: 'POST',
+                            })
+                              .then(() => {
+                                setTemplates((p) =>
+                                  p.map((x) =>
+                                    x.id === tplSelected.id
+                                      ? { ...x, reviewStatus: 'approved', reviewNote: null }
+                                      : x,
+                                  ),
+                                )
+                                setTplSelected(
+                                  (s) => s && { ...s, reviewStatus: 'approved', reviewNote: null },
+                                )
+                              })
+                              .catch(() => {})
+                              .finally(() => setTplActionLoading(null))
+                          }}
+                          disabled={tplActionLoading === tplSelected.id}
+                          className="flex-1 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-medium disabled:opacity-50 transition"
+                        >
+                          通过
+                        </button>
+                        <button
+                          onClick={() => {
+                            setTplRejectTargetId(tplSelected.id)
+                            setTplRejectNote('')
+                            setTplRejectDialogOpen(true)
+                          }}
+                          disabled={tplActionLoading === tplSelected.id}
+                          className="flex-1 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium disabled:opacity-50 transition"
+                        >
+                          拒绝
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Create/Edit modal */}
+              {(tplCreateOpen || tplEditOpen) && (
+                <div
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+                  onClick={() => {
+                    setTplCreateOpen(false)
+                    setTplEditOpen(false)
+                  }}
+                >
+                  <div
+                    className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <h3 className="text-lg font-semibold text-white mb-4">
+                      {tplCreateOpen ? '新建模版' : '编辑模版'}
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs text-zinc-400 mb-1">Slug *</label>
+                        <input
+                          value={tplForm.slug}
+                          onChange={(e) => setTplForm((f) => ({ ...f, slug: e.target.value }))}
+                          placeholder="my-template"
+                          className="w-full bg-zinc-800 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                          disabled={tplEditOpen}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-zinc-400 mb-1">名称 *</label>
+                        <input
+                          value={tplForm.name}
+                          onChange={(e) => setTplForm((f) => ({ ...f, name: e.target.value }))}
+                          placeholder="模版名称"
+                          className="w-full bg-zinc-800 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-xs text-zinc-400 mb-1">描述</label>
+                        <input
+                          value={tplForm.description}
+                          onChange={(e) =>
+                            setTplForm((f) => ({ ...f, description: e.target.value }))
+                          }
+                          placeholder="模版简介"
+                          className="w-full bg-zinc-800 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-zinc-400 mb-1">Source</label>
+                        <select
+                          value={tplForm.source}
+                          onChange={(e) =>
+                            setTplForm((f) => ({
+                              ...f,
+                              source: e.target.value as 'official' | 'community',
+                            }))
+                          }
+                          className="w-full bg-zinc-800 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                          <option value="official">official</option>
+                          <option value="community">community</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-zinc-400 mb-1">状态</label>
+                        <select
+                          value={tplForm.reviewStatus}
+                          onChange={(e) =>
+                            setTplForm((f) => ({
+                              ...f,
+                              reviewStatus: e.target.value as CloudTemplate['reviewStatus'],
+                            }))
+                          }
+                          className="w-full bg-zinc-800 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                          <option value="approved">approved</option>
+                          <option value="pending">pending</option>
+                          <option value="draft">draft</option>
+                          <option value="rejected">rejected</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-zinc-400 mb-1">Category</label>
+                        <input
+                          value={tplForm.category}
+                          onChange={(e) => setTplForm((f) => ({ ...f, category: e.target.value }))}
+                          placeholder="demo / starter / advanced…"
+                          className="w-full bg-zinc-800 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-zinc-400 mb-1">
+                          Base Cost (coins)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={tplForm.baseCost}
+                          onChange={(e) => setTplForm((f) => ({ ...f, baseCost: e.target.value }))}
+                          placeholder="0"
+                          className="w-full bg-zinc-800 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-xs text-zinc-400 mb-1">Tags (逗号分隔)</label>
+                        <input
+                          value={tplForm.tags}
+                          onChange={(e) => setTplForm((f) => ({ ...f, tags: e.target.value }))}
+                          placeholder="chat, ai, productivity"
+                          className="w-full bg-zinc-800 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-xs text-zinc-400 mb-1">模版内容 (JSON)</label>
+                        <textarea
+                          value={tplForm.content}
+                          onChange={(e) => setTplForm((f) => ({ ...f, content: e.target.value }))}
+                          rows={10}
+                          className="w-full bg-zinc-800 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 font-mono resize-y"
+                          spellCheck={false}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-3 mt-6">
+                      <button
+                        onClick={() => {
+                          setTplCreateOpen(false)
+                          setTplEditOpen(false)
+                        }}
+                        className="px-4 py-2 text-zinc-400 hover:text-white transition text-sm"
+                      >
+                        取消
+                      </button>
+                      <button
+                        disabled={!tplForm.slug.trim() || !tplForm.name.trim()}
+                        onClick={async () => {
+                          let content: Record<string, unknown> = {}
+                          try {
+                            content = JSON.parse(tplForm.content)
+                          } catch {
+                            alert('模版内容 JSON 格式错误')
+                            return
+                          }
+                          const body = {
+                            slug: tplForm.slug,
+                            name: tplForm.name,
+                            description: tplForm.description || undefined,
+                            source: tplForm.source,
+                            reviewStatus: tplForm.reviewStatus,
+                            tags: tplForm.tags
+                              .split(',')
+                              .map((s) => s.trim())
+                              .filter(Boolean),
+                            category: tplForm.category || undefined,
+                            baseCost: tplForm.baseCost ? Number(tplForm.baseCost) : undefined,
+                            content,
+                          }
+                          try {
+                            if (tplCreateOpen) {
+                              const created = await apiFetch<CloudTemplate>('/cloud-templates', {
+                                method: 'POST',
+                                body: JSON.stringify(body),
+                              })
+                              setTemplates((p) => [created, ...p])
+                            } else if (tplEditTarget) {
+                              const updated = await apiFetch<CloudTemplate>(
+                                `/cloud-templates/${tplEditTarget.id}`,
+                                { method: 'PATCH', body: JSON.stringify(body) },
+                              )
+                              setTemplates((p) =>
+                                p.map((x) => (x.id === tplEditTarget.id ? updated : x)),
+                              )
+                              if (tplSelected?.id === tplEditTarget.id) setTplSelected(updated)
+                            }
+                            setTplCreateOpen(false)
+                            setTplEditOpen(false)
+                          } catch (e) {
+                            alert(e instanceof Error ? e.message : '操作失败')
+                          }
+                        }}
+                        className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition disabled:opacity-50"
+                      >
+                        {tplCreateOpen ? '创建' : '保存'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Reject dialog */}
+              {tplRejectDialogOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+                  <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+                    <h3 className="text-lg font-semibold text-white mb-3">拒绝模版</h3>
+                    <p className="text-sm text-zinc-400 mb-3">
+                      填写拒绝原因（可选），作者将收到该反馈。
+                    </p>
+                    <textarea
+                      value={tplRejectNote}
+                      onChange={(e) => setTplRejectNote(e.target.value)}
+                      placeholder="例如：模版内容不完整，缺少必要的 Agent 配置…"
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-800 text-white text-sm p-3 resize-none h-28 focus:outline-none focus:border-red-500"
+                      maxLength={500}
+                    />
+                    <p className="text-xs text-zinc-500 mt-1 text-right">
+                      {tplRejectNote.length}/500
+                    </p>
+                    <div className="flex gap-3 mt-4">
+                      <button
+                        onClick={() => {
+                          setTplRejectDialogOpen(false)
+                          setTplRejectNote('')
+                          setTplRejectTargetId(null)
+                        }}
+                        className="flex-1 py-2 rounded-lg border border-zinc-700 text-zinc-300 text-sm hover:bg-zinc-800 transition"
+                      >
+                        取消
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!tplRejectTargetId) return
+                          const id = tplRejectTargetId
+                          setTplRejectDialogOpen(false)
+                          setTplActionLoading(id)
+                          const body = tplRejectNote.trim() ? { note: tplRejectNote.trim() } : {}
+                          try {
+                            await apiFetch(`/cloud-templates/${id}/reject`, {
+                              method: 'POST',
+                              body: JSON.stringify(body),
+                            })
+                            setTemplates((p) =>
+                              p.map((x) =>
+                                x.id === id
+                                  ? {
+                                      ...x,
+                                      reviewStatus: 'rejected',
+                                      reviewNote: tplRejectNote.trim() || null,
+                                    }
+                                  : x,
+                              ),
+                            )
+                            if (tplSelected?.id === id)
+                              setTplSelected((s) =>
+                                s
+                                  ? {
+                                      ...s,
+                                      reviewStatus: 'rejected',
+                                      reviewNote: tplRejectNote.trim() || null,
+                                    }
+                                  : s,
+                              )
+                          } catch {
+                            /* */
+                          } finally {
+                            setTplActionLoading(null)
+                            setTplRejectTargetId(null)
+                            setTplRejectNote('')
+                          }
+                        }}
+                        className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition"
+                      >
+                        确认拒绝
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Config Platform Tab */}
+          {tab === 'config' && <ConfigManagementPage />}
         </main>
       </div>
     </div>

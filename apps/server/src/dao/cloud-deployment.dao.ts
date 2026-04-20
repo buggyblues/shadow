@@ -44,6 +44,14 @@ export class CloudDeploymentDao {
       .orderBy(cloudDeployments.createdAt)
   }
 
+  async listDestroying() {
+    return this.db
+      .select()
+      .from(cloudDeployments)
+      .where(eq(cloudDeployments.status, 'destroying'))
+      .orderBy(cloudDeployments.createdAt)
+  }
+
   async create(data: {
     userId: string
     clusterId?: string | null

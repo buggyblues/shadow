@@ -399,6 +399,9 @@ export const api = {
           content: unknown
           version: number
           updatedAt: string
+          reviewStatus?: 'draft' | 'pending' | 'approved' | 'rejected'
+          reviewNote?: string | null
+          source?: 'official' | 'community'
         }>
       >('/my-templates'),
     get: (name: string) =>
@@ -408,6 +411,9 @@ export const api = {
         templateSlug: string | null
         content: unknown
         version: number
+        reviewStatus?: 'draft' | 'pending' | 'approved' | 'rejected'
+        reviewNote?: string | null
+        source?: 'official' | 'community'
       }>(`/my-templates/${encodeURIComponent(name)}`),
     save: (name: string, content: unknown, templateSlug?: string) =>
       put<{ ok: boolean }>(`/my-templates/${encodeURIComponent(name)}`, { content, templateSlug }),

@@ -139,7 +139,7 @@ export function createCloudSaasHandler(container: AppContainer) {
           content: input.content,
           tags: input.tags ?? [],
           source: 'community',
-          reviewStatus: 'pending',
+          reviewStatus: 'draft',
           submittedByUserId: user.userId,
           authorId: user.userId,
           category: input.category ?? null,
@@ -183,8 +183,8 @@ export function createCloudSaasHandler(container: AppContainer) {
       if (template.authorId !== user.userId) {
         return c.json({ ok: false, error: 'Forbidden' }, 403)
       }
-      if (template.reviewStatus === 'approved') {
-        return c.json({ ok: false, error: 'Cannot edit an approved template' }, 422)
+      if (template.reviewStatus === 'approved' || template.reviewStatus === 'pending') {
+        return c.json({ ok: false, error: 'Cannot edit an approved or pending template' }, 422)
       }
       const db = container.resolve('db')
       const [updated] = await db
@@ -196,7 +196,7 @@ export function createCloudSaasHandler(container: AppContainer) {
           ...(input.tags !== undefined && { tags: input.tags }),
           ...(input.category !== undefined && { category: input.category }),
           ...(input.baseCost !== undefined && { baseCost: input.baseCost }),
-          reviewStatus: 'pending',
+          // Keep current review status (draft or rejected) — don't auto-submit
           updatedAt: new Date(),
         })
         .where(eq(cloudTemplates.slug, slug))
@@ -225,7 +225,11 @@ export function createCloudSaasHandler(container: AppContainer) {
     if (template.reviewStatus === 'pending') {
       return c.json({ ok: false, error: 'Already pending review' }, 422)
     }
-    const updated = await dao.updateReviewStatus(template.id, 'pending')
+    if (template.reviewStatus === 'approved') {
+      return c.json({ ok: false, error: 'Template already approved' }, 422)
+    }
+    // Clear reviewNote when resubmitting
+    const updated = await dao.updateReviewStatus(template.id, 'pending', null)
     const activityDao = container.resolve('cloudActivityDao')
     await activityDao.log({
       userId: user.userId,
@@ -233,6 +237,31 @@ export function createCloudSaasHandler(container: AppContainer) {
       meta: { slug },
     })
     return c.json(updated)
+  })
+
+  /**
+   * DELETE /api/cloud-saas/templates/:slug
+   * Delete own community template (any review status).
+   * If approved, also removes it from the community store.
+   */
+  h.delete('/templates/:slug', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const slug = c.req.param('slug')
+    const dao = container.resolve('cloudTemplateDao')
+    const template = await dao.findBySlug(slug)
+    if (!template) return c.json({ ok: false, error: 'Template not found' }, 404)
+    if (template.authorId !== user.userId) {
+      return c.json({ ok: false, error: 'Forbidden' }, 403)
+    }
+    const db = container.resolve('db')
+    await db.delete(cloudTemplates).where(eq(cloudTemplates.slug, slug))
+    const activityDao = container.resolve('cloudActivityDao')
+    await activityDao.log({
+      userId: user.userId,
+      type: 'template_delete',
+      meta: { slug, wasApproved: template.reviewStatus === 'approved' },
+    })
+    return c.json({ ok: true })
   })
 
   // ─── Deployments ───────────────────────────────────────────────────────────
@@ -382,6 +411,8 @@ export function createCloudSaasHandler(container: AppContainer) {
   /**
    * POST /api/cloud-saas/deployments/:id/scale
    * Scale a deployment to a new agent count.
+   * Updates agentCount in DB and re-enqueues the deployment so the worker
+   * runs a Pulumi update to reconcile the desired agent count.
    */
   h.post(
     '/deployments/:id/scale',
@@ -393,10 +424,38 @@ export function createCloudSaasHandler(container: AppContainer) {
       const dao = container.resolve('cloudDeploymentDao')
       const deployment = await dao.findById(id, user.userId)
       if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+      if (deployment.status === 'deploying' || deployment.status === 'destroying') {
+        return c.json({ ok: false, error: 'Deployment is currently in progress' }, 422)
+      }
+
+      // Patch the configSnapshot to reflect the new agentCount if possible
+      let configSnapshot = deployment.configSnapshot as Record<string, unknown> | null
+      if (configSnapshot && typeof configSnapshot === 'object') {
+        const deployments = configSnapshot.deployments as Record<string, unknown> | undefined
+        if (deployments && Array.isArray(deployments.agents)) {
+          // Set replicas on all agents (Pulumi infra program reads this)
+          configSnapshot = {
+            ...configSnapshot,
+            deployments: {
+              ...deployments,
+              agents: (deployments.agents as Array<Record<string, unknown>>).map((agent) => ({
+                ...agent,
+                replicas: agentCount,
+              })),
+            },
+          }
+        }
+      }
+
       const db = container.resolve('db')
       const [updated] = await db
         .update(cloudDeployments)
-        .set({ agentCount, updatedAt: new Date() })
+        .set({
+          agentCount,
+          configSnapshot: configSnapshot ?? deployment.configSnapshot,
+          status: 'pending', // re-enqueue for worker to apply via Pulumi
+          updatedAt: new Date(),
+        })
         .where(eq(cloudDeployments.id, id))
         .returning()
       const activityDao = container.resolve('cloudActivityDao')
@@ -459,6 +518,72 @@ export function createCloudSaasHandler(container: AppContainer) {
     const envDao = container.resolve('cloudEnvVarDao')
     const vars = await envDao.listByUser(user.userId, deploymentId)
     return c.json(vars.map(({ encryptedValue: _e, ...rest }) => rest))
+  })
+
+  /**
+   * GET /api/cloud-saas/envvars/:deploymentId/:key
+   * Get a single env var value for a deployment (decrypted, for editing).
+   */
+  h.get('/envvars/:deploymentId/:key', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const deploymentId = c.req.param('deploymentId')
+    const key = c.req.param('key')
+    const deploymentDao = container.resolve('cloudDeploymentDao')
+    const deployment = await deploymentDao.findById(deploymentId, user.userId)
+    if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+    const envDao = container.resolve('cloudEnvVarDao')
+    const vars = await envDao.listByUser(user.userId, deploymentId)
+    const found = vars.find((v) => v.key === key)
+    if (!found) return c.json({ ok: false, error: 'Not found' }, 404)
+    const { decrypt } = await import('../lib/kms')
+    return c.json({
+      envVar: {
+        scope: deploymentId,
+        key: found.key,
+        value: decrypt(found.encryptedValue),
+        isSecret: true,
+        groupName: found.groupId ?? 'default',
+      },
+    })
+  })
+
+  /**
+   * DELETE /api/cloud-saas/envvars/:deploymentId/:key
+   * Delete a single env var for a deployment.
+   */
+  h.delete('/envvars/:deploymentId/:key', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const deploymentId = c.req.param('deploymentId')
+    const key = c.req.param('key')
+    const deploymentDao = container.resolve('cloudDeploymentDao')
+    const deployment = await deploymentDao.findById(deploymentId, user.userId)
+    if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+    const envDao = container.resolve('cloudEnvVarDao')
+    const vars = await envDao.listByUser(user.userId, deploymentId)
+    const found = vars.find((v) => v.key === key)
+    if (found) await envDao.delete(found.id, user.userId)
+    return c.json({ ok: true })
+  })
+
+  /**
+   * GET /api/cloud-saas/deployments/:id/logs/history
+   * Return deployment logs as a plain JSON array (non-streaming).
+   */
+  h.get('/deployments/:id/logs/history', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const id = c.req.param('id')
+    const dao = container.resolve('cloudDeploymentDao')
+    const deployment = await dao.findById(id, user.userId)
+    if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+    const logs = await dao.getLogs(id)
+    return c.json({
+      lines: logs.map((l) => ({
+        level: l.level,
+        message: l.message,
+        createdAt: l.createdAt,
+      })),
+      total: logs.length,
+    })
   })
 
   /**

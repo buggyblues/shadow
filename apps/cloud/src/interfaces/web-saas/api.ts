@@ -52,7 +52,8 @@ export interface SaasTemplate {
   name: string
   description: string | null
   source: 'official' | 'community'
-  reviewStatus: 'pending' | 'approved' | 'rejected'
+  reviewStatus: 'draft' | 'pending' | 'approved' | 'rejected'
+  reviewNote: string | null
   tags: string[] | null
   category: string | null
   deployCount: number
@@ -150,6 +151,7 @@ export const saasApi = {
       },
     ) => put<SaasTemplate>(`/templates/${encodeURIComponent(slug)}`, data),
     submit: (slug: string) => post<SaasTemplate>(`/templates/${encodeURIComponent(slug)}/submit`),
+    delete: (slug: string) => del<{ ok: boolean }>(`/templates/${encodeURIComponent(slug)}`),
   },
 
   // Deployments
@@ -171,6 +173,10 @@ export const saasApi = {
     scale: (id: string, agentCount: number) =>
       post<SaasDeployment>(`/deployments/${encodeURIComponent(id)}/scale`, { agentCount }),
     logsUrl: (id: string) => `${BASE}/deployments/${encodeURIComponent(id)}/logs`,
+    logsHistory: (id: string) =>
+      get<{ lines: Array<{ level: string; message: string; createdAt: string }>; total: number }>(
+        `/deployments/${encodeURIComponent(id)}/logs/history`,
+      ),
   },
 
   // Env vars
@@ -179,6 +185,14 @@ export const saasApi = {
       get<SaasEnvVar[]>(`/envvars/${encodeURIComponent(deploymentId)}`),
     update: (deploymentId: string, vars: Array<{ key: string; value: string }>) =>
       put<{ ok: boolean }>(`/envvars/${encodeURIComponent(deploymentId)}`, { vars }),
+    getOne: (deploymentId: string, key: string) =>
+      get<{
+        envVar: { scope: string; key: string; value: string; isSecret: boolean; groupName: string }
+      }>(`/envvars/${encodeURIComponent(deploymentId)}/${encodeURIComponent(key)}`),
+    delete: (deploymentId: string, key: string) =>
+      del<{ ok: boolean }>(
+        `/envvars/${encodeURIComponent(deploymentId)}/${encodeURIComponent(key)}`,
+      ),
   },
 
   // Wallet

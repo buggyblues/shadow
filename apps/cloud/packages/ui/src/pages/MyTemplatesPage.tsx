@@ -142,6 +142,7 @@ function TemplateCard({
   baseTemplate,
   version,
   updatedAt,
+  reviewStatus,
   onDelete,
   onShare,
 }: {
@@ -152,6 +153,7 @@ function TemplateCard({
   baseTemplate?: TemplateCatalogSummary
   version: number
   updatedAt: string
+  reviewStatus?: 'draft' | 'pending' | 'approved' | 'rejected'
   onDelete: () => void
   onShare: () => void
 }) {
@@ -202,6 +204,28 @@ function TemplateCard({
                     <Badge variant="info" size="sm">
                       <Sparkles size={10} />
                       {t('store.featured')}
+                    </Badge>
+                  )}
+                  {reviewStatus && (
+                    <Badge
+                      variant={
+                        reviewStatus === 'approved'
+                          ? 'success'
+                          : reviewStatus === 'rejected'
+                            ? 'destructive'
+                            : reviewStatus === 'pending'
+                              ? 'warning'
+                              : 'neutral'
+                      }
+                      size="sm"
+                    >
+                      {reviewStatus === 'draft'
+                        ? t('templateDetail.reviewStatusDraft')
+                        : reviewStatus === 'pending'
+                          ? t('templateDetail.reviewStatusPending')
+                          : reviewStatus === 'approved'
+                            ? t('templateDetail.reviewStatusApproved')
+                            : t('templateDetail.reviewStatusRejected')}
                     </Badge>
                   )}
                 </div>
@@ -549,7 +573,10 @@ export function MyTemplatesPage() {
   const navigate = useNavigate()
   const [showForkDialog, setShowForkDialog] = useState(false)
   const [showGitImport, setShowGitImport] = useState(false)
-  const [templateToDelete, setTemplateToDelete] = useState<string | null>(null)
+  const [templateToDelete, setTemplateToDelete] = useState<{
+    name: string
+    reviewStatus?: 'draft' | 'pending' | 'approved' | 'rejected'
+  } | null>(null)
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<TemplateSourceFilter>('all')
   const debouncedSearch = useDebounce(search)
@@ -597,7 +624,7 @@ export function MyTemplatesPage() {
       queryClient.invalidateQueries({ queryKey: ['my-templates'] })
       toast.success(t('templates.templateDeleted'))
     },
-    onError: () => toast.error(t('templates.deleteFailed')),
+    onError: (err) => toast.error(t('templates.deleteFailed', { message: (err as Error).message })),
   })
 
   const templates = myTemplates ?? []
@@ -781,6 +808,7 @@ export function MyTemplatesPage() {
               }
               version={template.version ?? 1}
               updatedAt={template.updatedAt}
+              reviewStatus={template.reviewStatus}
               onShare={async () => {
                 try {
                   const shareData = await api.myTemplates.share(template.name)
@@ -792,7 +820,7 @@ export function MyTemplatesPage() {
                 }
               }}
               onDelete={() => {
-                setTemplateToDelete(template.name)
+                setTemplateToDelete({ name: template.name, reviewStatus: template.reviewStatus })
               }}
             />
           ))}
@@ -807,9 +835,19 @@ export function MyTemplatesPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('common.delete')}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {templateToDelete?.reviewStatus === 'approved'
+                ? t('templates.deleteApprovedTitle')
+                : t('common.delete')}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {templateToDelete ? t('templates.deleteConfirm', { name: templateToDelete }) : ''}
+              {templateToDelete?.reviewStatus === 'approved'
+                ? t('templates.deleteApprovedConfirm', { name: templateToDelete.name })
+                : templateToDelete?.reviewStatus === 'pending'
+                  ? t('templates.deletePendingConfirm', { name: templateToDelete.name })
+                  : templateToDelete
+                    ? t('templates.deleteConfirm', { name: templateToDelete.name })
+                    : ''}
             </AlertDialogDescription>
           </AlertDialogHeader>
 
@@ -823,7 +861,7 @@ export function MyTemplatesPage() {
                 loading={deleteMutation.isPending}
                 onClick={() => {
                   if (templateToDelete) {
-                    deleteMutation.mutate(templateToDelete)
+                    deleteMutation.mutate(templateToDelete.name)
                   }
                   setTemplateToDelete(null)
                 }}

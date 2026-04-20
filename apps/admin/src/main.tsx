@@ -9,9 +9,7 @@ import {
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { ConfirmDialogProvider } from './components/confirm-dialog'
-import { ConfigManagementPage } from './pages/config-management'
 import { DashboardPage } from './pages/dashboard'
-import { TemplateReviewPage } from './pages/template-review'
 
 /* ── Routes ──────────────────────────────────────────── */
 
@@ -30,19 +28,17 @@ const dashboardRoute = createRoute({
   component: DashboardPage,
 })
 
-const configRoute = createRoute({
+// Redirect /config and /templates to root (everything is now in the dashboard)
+const redirectRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/config',
-  component: ConfigManagementPage,
+  path: '/$',
+  component: () => {
+    window.location.replace('/')
+    return null
+  },
 })
 
-const templateReviewRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/templates',
-  component: TemplateReviewPage,
-})
-
-const routeTree = rootRoute.addChildren([dashboardRoute, configRoute, templateReviewRoute])
+const routeTree = rootRoute.addChildren([dashboardRoute, redirectRoute])
 
 const router = createRouter({ routeTree })
 

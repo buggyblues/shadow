@@ -46,6 +46,7 @@ export function WalletPage() {
   const toast = useToast()
 
   const [offset, setOffset] = useState(0)
+  const [topUpAmount, setTopUpAmount] = useState(1000)
 
   const { data: walletData, isLoading: walletLoading } = useQuery({
     queryKey: ['wallet'],
@@ -60,7 +61,7 @@ export function WalletPage() {
   })
 
   const topUpMutation = useMutation({
-    mutationFn: () => api.wallet?.topUp?.(10000) ?? Promise.resolve({ balance: 0 }),
+    mutationFn: () => api.wallet?.topUp?.(topUpAmount) ?? Promise.resolve({ balance: 0 }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wallet'] })
       queryClient.invalidateQueries({ queryKey: ['wallet-transactions'] })
@@ -77,7 +78,11 @@ export function WalletPage() {
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1
 
   return (
-    <PageShell title={t('wallet.title')} description={t('wallet.description')}>
+    <PageShell
+      breadcrumb={[{ label: t('nav.wallet') }]}
+      title={t('wallet.title')}
+      description={t('wallet.description')}
+    >
       {/* Balance card */}
       <Card className="p-6 flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -98,18 +103,31 @@ export function WalletPage() {
             )}
           </div>
         </div>
-        <Button
-          variant="primary"
-          onClick={() => topUpMutation.mutate()}
-          disabled={topUpMutation.isPending}
-        >
-          {topUpMutation.isPending ? (
-            <Loader2 size={14} className="animate-spin mr-1" />
-          ) : (
-            <Coins size={14} className="mr-1" />
-          )}
-          {t('wallet.topUp')} +10,000
-        </Button>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min={1}
+            max={100000}
+            step={100}
+            value={topUpAmount}
+            onChange={(e) =>
+              setTopUpAmount(Math.max(1, Math.min(100000, Number(e.target.value) || 1000)))
+            }
+            className="w-28 rounded border border-border bg-transparent px-2 py-1 text-sm text-right"
+          />
+          <Button
+            variant="primary"
+            onClick={() => topUpMutation.mutate()}
+            disabled={topUpMutation.isPending}
+          >
+            {topUpMutation.isPending ? (
+              <Loader2 size={14} className="animate-spin mr-1" />
+            ) : (
+              <Coins size={14} className="mr-1" />
+            )}
+            {t('wallet.topUp')}
+          </Button>
+        </div>
       </Card>
 
       {/* Transaction history */}
@@ -121,7 +139,7 @@ export function WalletPage() {
           </div>
         ) : transactions.length === 0 ? (
           <EmptyState
-            icon={<Coins size={32} />}
+            icon={Coins}
             title={t('wallet.noTransactions')}
             description={t('wallet.noTransactionsDesc')}
           />
