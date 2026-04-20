@@ -1,15 +1,4 @@
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@shadowob/ui'
+import { Badge, Button, Card, EmptyState } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Coins, Loader2, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 import { useState } from 'react'
@@ -138,50 +127,52 @@ export function WalletPage() {
           />
         ) : (
           <>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('wallet.txType')}</TableHead>
-                  <TableHead>{t('wallet.txNote')}</TableHead>
-                  <TableHead className="text-right">{t('wallet.txAmount')}</TableHead>
-                  <TableHead className="text-right">{t('wallet.txBalance')}</TableHead>
-                  <TableHead>{t('wallet.txDate')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {transactions.map((tx) => (
-                  <TableRow key={tx.id}>
-                    <TableCell>
-                      <Badge variant={tx.amount > 0 ? 'success' : 'warning'} className="text-xs">
-                        {TX_TYPE_LABELS[tx.type] ?? tx.type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-text-secondary max-w-[200px] truncate">
-                      {tx.note ?? '-'}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      <span
-                        className={
-                          tx.amount > 0
-                            ? 'text-green-600 flex items-center justify-end gap-1'
-                            : 'text-red-500 flex items-center justify-end gap-1'
-                        }
-                      >
-                        {tx.amount > 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                        {tx.amount > 0 ? '+' : ''}
-                        {tx.amount.toLocaleString()}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-sm text-text-secondary">
-                      {tx.balanceAfter.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-xs text-text-muted whitespace-nowrap">
-                      {new Date(tx.createdAt).toLocaleString()}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-bg-secondary text-text-muted">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left font-medium">{t('wallet.txType')}</th>
+                    <th className="px-4 py-2.5 text-left font-medium">{t('wallet.txNote')}</th>
+                    <th className="px-4 py-2.5 text-right font-medium">{t('wallet.txAmount')}</th>
+                    <th className="px-4 py-2.5 text-right font-medium">{t('wallet.txBalance')}</th>
+                    <th className="px-4 py-2.5 text-left font-medium">{t('wallet.txDate')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {transactions.map((tx) => (
+                    <tr key={tx.id} className="hover:bg-bg-secondary/50 transition-colors">
+                      <td className="px-4 py-2.5">
+                        <Badge variant={tx.amount > 0 ? 'success' : 'warning'} className="text-xs">
+                          {TX_TYPE_LABELS[tx.type] ?? tx.type}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-2.5 text-text-secondary max-w-[200px] truncate">
+                        {tx.note ?? '-'}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono">
+                        <span
+                          className={
+                            tx.amount > 0
+                              ? 'text-green-600 flex items-center justify-end gap-1'
+                              : 'text-red-500 flex items-center justify-end gap-1'
+                          }
+                        >
+                          {tx.amount > 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                          {tx.amount > 0 ? '+' : ''}
+                          {tx.amount.toLocaleString()}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono text-sm text-text-secondary">
+                        {tx.balanceAfter.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-text-muted whitespace-nowrap">
+                        {new Date(tx.createdAt).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-4">

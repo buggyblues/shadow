@@ -53,6 +53,7 @@ function toMyTemplate(t: Awaited<ReturnType<typeof saasApi.templates.list>>[numb
     content: t.content,
     version: 1,
     updatedAt: t.updatedAt,
+    reviewStatus: t.reviewStatus as 'pending' | 'approved' | 'rejected' | undefined,
   }
 }
 
@@ -153,6 +154,7 @@ export const saasApiAdapter: CloudApiClient = {
         templateSlug: t.slug,
         content: t.content,
         version: 1,
+        reviewStatus: t.reviewStatus as 'pending' | 'approved' | 'rejected' | undefined,
       })),
     save: (name: string, content: unknown, _templateSlug?: string) =>
       saasApi.templates

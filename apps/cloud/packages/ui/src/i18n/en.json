@@ -585,9 +585,14 @@
     "noAgents": "No agent definitions found in this template.",
     "publishToCommunity": "Publish to Community",
     "publishing": "Publishing...",
-    "publishSuccess": "Template published to community.",
+    "publishSuccess": "Template submitted for review. The admin will review it shortly.",
     "publishFailed": "Failed to publish. Please try again.",
-    "publishTooltip": "Publish this template to the community server"
+    "publishTooltip": "Publish this template to the community server",
+    "publishConfirmTitle": "Publish to Community?",
+    "publishConfirmDescription": "Your template will be submitted for admin review. It won't be visible publicly until approved.",
+    "reviewStatusPending": "Pending Review",
+    "reviewStatusApproved": "Approved",
+    "reviewStatusRejected": "Rejected"
   },
   "secrets": {
     "title": "Secrets & Environment",

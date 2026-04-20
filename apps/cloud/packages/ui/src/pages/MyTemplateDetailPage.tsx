@@ -381,6 +381,7 @@ export function MyTemplateDetailPage() {
   const { name } = useParams({ strict: false }) as { name: string }
   const [activeTab, setActiveTab] = useState('overview')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false)
   const navigate = useNavigate()
   const toast = useToast()
   const queryClient = useQueryClient()
@@ -402,8 +403,16 @@ export function MyTemplateDetailPage() {
 
   const publishMutation = useMutation({
     mutationFn: () => api.community.publish(name),
-    onSuccess: () => toast.success(t('templateDetail.publishSuccess')),
-    onError: () => toast.error(t('templateDetail.publishFailed')),
+    onSuccess: () => {
+      setPublishDialogOpen(false)
+      queryClient.invalidateQueries({ queryKey: ['my-template', name] })
+      queryClient.invalidateQueries({ queryKey: ['my-templates'] })
+      toast.success(t('templateDetail.publishSuccess'))
+    },
+    onError: () => {
+      setPublishDialogOpen(false)
+      toast.error(t('templateDetail.publishFailed'))
+    },
   })
 
   const agents = useMemo(
@@ -537,7 +546,7 @@ export function MyTemplateDetailPage() {
               variant="secondary"
               size="sm"
               disabled={publishMutation.isPending}
-              onClick={() => publishMutation.mutate()}
+              onClick={() => setPublishDialogOpen(true)}
               title={t('templateDetail.publishTooltip')}
             >
               <Upload size={14} />
@@ -609,6 +618,30 @@ export function MyTemplateDetailPage() {
                 </span>
                 <span className="text-sm font-mono text-text-primary">v{data.version ?? 1}</span>
               </div>
+              {(data as { reviewStatus?: string }).reviewStatus && (
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-xs text-text-muted">
+                    <Shield size={12} />
+                    {t('templateDetail.publishToCommunity')}
+                  </span>
+                  <Badge
+                    variant={
+                      (data as { reviewStatus?: string }).reviewStatus === 'approved'
+                        ? 'success'
+                        : (data as { reviewStatus?: string }).reviewStatus === 'rejected'
+                          ? 'destructive'
+                          : 'warning'
+                    }
+                    className="text-xs"
+                  >
+                    {(data as { reviewStatus?: string }).reviewStatus === 'pending'
+                      ? t('templateDetail.reviewStatusPending')
+                      : (data as { reviewStatus?: string }).reviewStatus === 'approved'
+                        ? t('templateDetail.reviewStatusApproved')
+                        : t('templateDetail.reviewStatusRejected')}
+                  </Badge>
+                </div>
+              )}
             </div>
           </div>
         }
@@ -650,6 +683,32 @@ export function MyTemplateDetailPage() {
                 onClick={() => deleteMutation.mutate()}
               >
                 {t('common.delete')}
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('templateDetail.publishConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('templateDetail.publishConfirmDescription')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button variant="ghost">{t('common.cancel')}</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                variant="primary"
+                loading={publishMutation.isPending}
+                onClick={() => publishMutation.mutate()}
+              >
+                <Upload size={14} />
+                {t('templateDetail.publishToCommunity')}
               </Button>
             </AlertDialogAction>
           </AlertDialogFooter>
