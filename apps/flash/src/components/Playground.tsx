@@ -9,11 +9,20 @@
 //   • Zero dependency on the real API/backend
 // ══════════════════════════════════════════════════════════════
 
-import { DeskLoop, getHighlight } from '@shadowob/flash-cards'
+import {
+  animationManager,
+  arenaEdgeHitTest,
+  CARD_H,
+  CARD_RADIUS,
+  CARD_W,
+  DeskLoop,
+  drawArenas,
+  drawConstraints,
+  getHighlight,
+} from '@shadowob/flash-cards'
 import type Matter from 'matter-js'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { arenaEdgeHitTest, CARD_H, CARD_RADIUS, CARD_W, drawArenas, drawConstraints } from '../ecs'
-import { animationManager } from '../ecs/resources/animationManager'
+
 import type { Card, CardKind, CardPriority } from '../types'
 
 // ─────────────────────────────────────

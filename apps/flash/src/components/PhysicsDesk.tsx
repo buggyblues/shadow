@@ -6,7 +6,16 @@
 // ══════════════════════════════════════════════════════════════
 
 import type { CommandResult } from '@shadowob/flash-cards'
-import { drawArenas } from '@shadowob/flash-cards'
+import {
+  animationManager,
+  CARD_H,
+  CARD_W,
+  DeskLoop,
+  drawArenas,
+  drawConstraints,
+  drawHighlight,
+  getHighlight,
+} from '@shadowob/flash-cards'
 import {
   ArrowRight,
   Bot,
@@ -30,9 +39,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { CARD_H, CARD_W, drawConstraints, drawHighlight, getHighlight } from '../ecs'
-import { DeskLoop } from '../ecs/DeskLoop'
-import { animationManager } from '../ecs/resources/animationManager'
+
 import type { Card } from '../types'
 
 // ─────────────────────────────────────

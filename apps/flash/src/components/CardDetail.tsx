@@ -7,7 +7,7 @@ import { getCardFileUrl } from '../api'
 import { CARD_KIND_META, FILE_CARD_KINDS } from '../constants/cardKind'
 import { useApp } from '../store'
 import type { Card } from '../types'
-import { StructuredCardDetail } from './CardRenderers'
+import { StructuredCardDetail } from './card-renderers'
 import { StarRating } from './StarRating'
 
 interface CardDetailProps {
