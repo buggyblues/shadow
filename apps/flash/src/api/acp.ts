@@ -120,19 +120,6 @@ export function startResearch(
   )
 }
 
-export function smartAssignCards(
-  projectId: string,
-  cardIds: string[],
-  decks: Deck[],
-  cards: Card[],
-  onEvent?: (evt: { type: string; data: string }) => void,
-): { cancel: () => void } {
-  return createAcpStream(
-    { action: 'smart_assign', projectId, payload: { cardIds, decks, cards } },
-    onEvent,
-  )
-}
-
 export function requestInspiration(
   projectId: string,
   materials: Material[],
@@ -143,20 +130,6 @@ export function requestInspiration(
 ): { cancel: () => void } {
   return createAcpStream(
     { action: 'inspire', projectId, payload: { materials, cards, outline, todos } },
-    onEvent,
-  )
-}
-
-export function reviewSlides(
-  projectId: string,
-  deckId: string,
-  outline: OutlineItem[],
-  cards: Card[],
-  theme: ThemePreset,
-  onEvent?: (evt: { type: string; data: string }) => void,
-): { cancel: () => void } {
-  return createAcpStream(
-    { action: 'review_slides', projectId, payload: { deckId, outline, cards, theme } },
     onEvent,
   )
 }
