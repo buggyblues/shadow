@@ -11,7 +11,7 @@ import { type RuntimeAdapter, registerRuntime } from './index.js'
 const openclawAdapter: RuntimeAdapter = {
   id: 'openclaw',
   name: 'OpenClaw Gateway',
-  defaultImage: 'ghcr.io/shadowob/openclaw-runner:latest',
+  defaultImage: 'ghcr.io/buggyblues/openclaw-runner:latest',
   packages: [],
   requiresGit: false,
 

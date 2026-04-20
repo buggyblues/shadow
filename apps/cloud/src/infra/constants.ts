@@ -28,7 +28,7 @@ export const GIT_INIT_IMAGE = 'alpine/git:latest'
 
 /** Default container images per runtime */
 export const DEFAULT_IMAGES: Record<string, string> = {
-  openclaw: 'ghcr.io/shadowob/openclaw-runner:latest',
+  openclaw: 'ghcr.io/buggyblues/openclaw-runner:latest',
   'claude-code': 'ghcr.io/shadowob/claude-runner:latest',
 }
 

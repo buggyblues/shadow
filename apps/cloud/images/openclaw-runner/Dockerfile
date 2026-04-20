@@ -7,7 +7,7 @@
 # Config: /etc/openclaw              (ConfigMap mount, read-only)
 # Logs:   /var/log/openclaw          (emptyDir mount)
 #
-# Build: docker build -t ghcr.io/shadowob/openclaw-runner:latest .
+# Build: docker build -t ghcr.io/buggyblues/openclaw-runner:latest .
 # ──────────────────────────────────────────────────────────────────────────
 
 # ── Stage 1: Builder ─────────────────────────────────────────────────────
