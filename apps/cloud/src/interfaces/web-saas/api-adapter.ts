@@ -212,7 +212,7 @@ export const saasApiAdapter: CloudApiClient = {
     namespaces: () =>
       saasApi.deployments.list().then((rows) => {
         const ns = [...new Set(rows.map((d) => d.namespace))]
-        return { configured: ns, discovered: ns, all: ns }
+        return { configured: ns, discovered: [], all: ns }
       }),
     scale: (namespace: string, _id: string, agentCount: number) =>
       saasApi.deployments.scale(namespace, agentCount).then(() => ({ ok: true })),
@@ -366,5 +366,7 @@ export const saasApiAdapter: CloudApiClient = {
   wallet: {
     get: () => saasApi.wallet.get(),
     topUp: (amount: number) => saasApi.wallet.topUp(amount),
+    transactions: (params?: { limit?: number; offset?: number }) =>
+      saasApi.wallet.transactions(params),
   },
 }

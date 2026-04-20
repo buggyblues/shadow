@@ -16,7 +16,8 @@
     "shadowCloud": "Shadow Cloud",
     "console": "控制台",
     "shrimp": "虾豆商店",
-    "community": "社区"
+    "community": "社区",
+    "wallet": "钱包与账单"
   },
   "common": {
     "save": "保存",
@@ -66,7 +67,9 @@
     "darkMode": "深色模式",
     "lightMode": "浅色模式",
     "language": "语言",
-    "breadcrumb": "面包屑导航"
+    "breadcrumb": "面包屑导航",
+    "prev": "上一页",
+    "next": "下一页"
   },
   "configEditor": {
     "title": "配置编辑器",
@@ -891,5 +894,23 @@
     "errorTitle": "无法加载社区模版",
     "errorHint": "请在 设置 → 社区 中检查社区服务器地址和令牌。",
     "configure": "配置"
+  },
+  "wallet": {
+    "title": "钱包与账单",
+    "description": "虾币余额和消费流水记录。",
+    "currentBalance": "当前余额",
+    "shrimpCoins": "虾币",
+    "topUp": "充值",
+    "topUpSuccess": "充值成功！已充入 10,000 虾币。",
+    "topUpFailed": "充值失败，请重试。",
+    "transactionHistory": "交易记录",
+    "noTransactions": "暂无交易记录",
+    "noTransactionsDesc": "部署应用后，交易记录将在此显示。",
+    "txType": "类型",
+    "txNote": "说明",
+    "txAmount": "金额",
+    "txBalance": "余额",
+    "txDate": "时间",
+    "page": "第 {{current}} / {{total}} 页"
   }
 }

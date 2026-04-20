@@ -8,6 +8,7 @@ import {
 import { Link, useRouterState } from '@tanstack/react-router'
 import {
   BarChart3,
+  Coins,
   Copy,
   Layers,
   type LucideIcon,
@@ -49,6 +50,7 @@ const NAV_SECTIONS: NavSection[] = [
       { to: '/monitoring', labelKey: 'nav.monitoring', icon: BarChart3 },
       { to: '/deployments', labelKey: 'nav.deployments', icon: Layers },
       { to: '/secrets', labelKey: 'nav.secrets', icon: ShieldCheck },
+      { to: '/wallet', labelKey: 'nav.wallet', icon: Coins },
     ],
   },
 ]
