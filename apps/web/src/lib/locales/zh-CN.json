@@ -285,6 +285,7 @@
     "createServer": "创建服务器",
     "settings": "设置",
     "serverName": "服务器名称",
+    "shadowCloud": "虾豆云",
     "joinServer": "加入服务器",
     "joinServerDesc": "输入邀请码加入已有的服务器",
     "inviteCodePlaceholder": "输入邀请码",

@@ -1,5 +1,6 @@
 packages:
   - "apps/*"
+  - "apps/cloud/packages/*"
   - "apps/flash/packages/*"
   - "packages/*"
   - "website"

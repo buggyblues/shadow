@@ -285,6 +285,7 @@
     "createServer": "建立伺服器",
     "settings": "設定",
     "serverName": "伺服器名稱",
+    "shadowCloud": "蝦豆雲",
     "joinServer": "加入伺服器",
     "joinServerDesc": "輸入邀請碼加入已有的伺服器",
     "inviteCodePlaceholder": "輸入邀請碼",

@@ -22,6 +22,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
   Check,
+  Cloud,
   Compass,
   Copy,
   Globe,
@@ -29,7 +30,6 @@ import {
   Lock,
   LogOut,
   Plus,
-  UserPlus,
   Volume2,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -373,9 +373,9 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                 variant="ghost"
                 size="icon"
                 className="w-[48px] h-[48px] rounded-2xl bg-white/5 hover:bg-white/10 text-text-muted hover:text-primary transition-all bouncy"
-                onClick={() => setShowJoin(!showJoin)}
+                onClick={() => navigate({ to: '/cloud' })}
               >
-                <UserPlus size={20} />
+                <Cloud size={20} />
               </Button>
             </TooltipTrigger>
             <TooltipPortal>
@@ -383,7 +383,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                 side="right"
                 className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
               >
-                {t('server.joinServer')}
+                {t('server.shadowCloud')}
               </TooltipContent>
             </TooltipPortal>
           </Tooltip>

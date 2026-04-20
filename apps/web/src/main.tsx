@@ -7,7 +7,7 @@ import {
   RouterProvider,
   redirect,
 } from '@tanstack/react-router'
-import React from 'react'
+import React, { lazy, Suspense } from 'react'
 import ReactDOM from 'react-dom/client'
 import { AppLayout } from './components/layout/app-layout'
 import { RootLayout } from './components/layout/root-layout'
@@ -37,6 +37,10 @@ import { UserProfilePage } from './pages/user-profile'
 import { WorkspacePageRoute } from './pages/workspace'
 import { useAuthStore } from './stores/auth.store'
 import './styles/globals.css'
+
+const CloudSaasApp = lazy(() =>
+  import('@shadowob/cloud-ui/web-saas').then((m) => ({ default: m.CloudSaasApp })),
+)
 
 // Routes
 const rootRoute = createRootRoute({
@@ -270,6 +274,16 @@ const dmChatRoute = createRoute({
   component: DmChatPage,
 })
 
+const cloudRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/cloud',
+  component: () => (
+    <Suspense fallback={null}>
+      <CloudSaasApp />
+    </Suspense>
+  ),
+})
+
 // Router
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -300,6 +314,7 @@ const routeTree = rootRoute.addChildren([
     userProfileRoute,
     buddyDashboardRoute,
     dmChatRoute,
+    cloudRoute,
   ]),
 ])
 

@@ -257,6 +257,7 @@
     "createServer": "サーバー作成",
     "settings": "設定",
     "serverName": "サーバー名",
+    "shadowCloud": "Shadow Cloud",
     "joinServer": "サーバーに参加",
     "joinServerDesc": "招待コードを入力してサーバーに参加",
     "inviteCodePlaceholder": "招待コードを入力",

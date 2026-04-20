@@ -285,6 +285,7 @@
     "createServer": "Create Server",
     "settings": "Settings",
     "serverName": "Server Name",
+    "shadowCloud": "Shadow Cloud",
     "joinServer": "Join Server",
     "joinServerDesc": "Enter an invite code to join an existing server",
     "inviteCodePlaceholder": "Enter invite code",
