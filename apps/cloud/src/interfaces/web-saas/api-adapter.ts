@@ -38,10 +38,10 @@ export const saasApiAdapter: CloudApiClient = {
           featured: t.source === 'official',
           popularity: t.deployCount,
           difficulty: (t.category === 'advanced'
-            ? 'expert'
+            ? 'advanced'
             : t.category === 'intermediate'
               ? 'intermediate'
-              : 'beginner') as 'beginner' | 'intermediate' | 'expert',
+              : 'beginner') as import('@shadowob/cloud-ui/lib/api').TemplateDifficulty,
           estimatedDeployTime: '5 min',
           overview: [],
           features: [],
