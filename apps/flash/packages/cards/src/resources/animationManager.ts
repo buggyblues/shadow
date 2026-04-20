@@ -65,8 +65,6 @@ export interface Live2DState {
   error: boolean
   w: number
   h: number
-  /** Incremented each time a new frame is rendered; read by live2dSystem to skip redundant uploads */
-  frameVersion: number
 }
 
 type AnimState = LottieState | ThreeState | CountdownState | ImageState | Live2DState
@@ -91,9 +89,6 @@ class AnimationManager {
   private pixiInitPromise: Promise<any> | null = null
   /** Last render timestamp per live2d card — used for 30fps throttle on autoplay */
   private _live2dLastRender = new Map<string, number>()
-  /** Last known renderer dimensions — avoid calling renderer.resize() when unchanged */
-  private _pixiRendererW = 0
-  private _pixiRendererH = 0
 
   setMountElement(el: HTMLElement) {
     this.mountEl = el
@@ -193,15 +188,10 @@ class AnimationManager {
             if (timestamp - last < 32) continue
             this._live2dLastRender.set(id, timestamp)
           }
-          // Only resize the shared PIXI renderer when the target card dimensions
-          // actually differ from the current renderer size.  Calling renderer.resize()
-          // with identical values still triggers a WebGL viewport + framebuffer reset
-          // in most PIXI versions, which is a significant per-frame GPU stall.
-          if (this._pixiRendererW !== state.w || this._pixiRendererH !== state.h) {
-            renderer.resize(state.w, state.h)
-            this._pixiRendererW = state.w
-            this._pixiRendererH = state.h
-          }
+          // Resize renderer to this card's dimensions and render directly to pixi canvas.
+          // drawImage from a WebGL canvas uses the GPU compositor path in Chrome/Firefox
+          // (avoids a CPU gl.readPixels stall unlike extract.canvas()).
+          renderer.resize(state.w, state.h)
           renderer.clear()
           const container = state.model._container ?? state.model
           renderer.render(container)
@@ -210,7 +200,6 @@ class AnimationManager {
             ctx2d.clearRect(0, 0, state.w, state.h)
             ctx2d.drawImage(renderer.view, 0, 0)
           }
-          state.frameVersion++
           this.dirty.add(id)
         }
       }
@@ -454,11 +443,6 @@ class AnimationManager {
     const existing = this.states.get(cardId)
     if (existing?.kind === 'live2d') return existing.loading ? null : existing.canvas
 
-    // Live2D cards always animate (they have continuous skeletal/physics updates).
-    // Register as autoplay here — NOT in live2dSystem — so it only runs once
-    // rather than on every content-pipeline pass.
-    this.autoplayIds.add(cardId)
-
     // Per-card 2D canvas that we blit image data into
     const canvas = document.createElement('canvas')
     canvas.width = w
@@ -475,7 +459,6 @@ class AnimationManager {
       error: false,
       w,
       h,
-      frameVersion: 0,
     }
     this.states.set(cardId, state)
 
@@ -576,12 +559,6 @@ class AnimationManager {
   getLive2DCanvas(cardId: string): HTMLCanvasElement | null {
     const s = this.states.get(cardId)
     return s?.kind === 'live2d' && !s.loading && !s.error ? s.canvas : null
-  }
-
-  /** Return the current frame version for a live2d card (increments each rendered frame). */
-  getLive2DFrameVersion(cardId: string): number {
-    const s = this.states.get(cardId)
-    return s?.kind === 'live2d' ? s.frameVersion : 0
   }
 
   isLive2DLoading(cardId: string): boolean {

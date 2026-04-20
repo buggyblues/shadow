@@ -8,13 +8,6 @@
 //
 // The card renders the model directly — no extra background/border unless
 // the meta explicitly sets `background`.
-//
-// Performance contract:
-//  - animationManager.registerLive2D() registers the card as autoplay (once).
-//  - animationManager.tick() renders new frames and increments frameVersion.
-//  - live2dSystem checks frameVersion: if the model hasn't rendered a new frame
-//    since the last card bake, we skip the drawImage + texture re-upload entirely.
-//    This prevents a full GL texture upload every frame when there is no new pixel data.
 
 import { canvasStore } from '../components/canvasComponent'
 import { cardDataStore } from '../components/cardDataComponent'
@@ -24,9 +17,6 @@ import { live2dMetaStore } from '../components/metaComponent'
 import { styleStore } from '../components/styleComponent'
 import { animationManager } from '../resources/animationManager'
 import { fillRoundRect, fontStr, hexAlpha, safeStr } from '../utils/canvasUtils'
-
-/** Per-entity cache of the last live2d frameVersion that was blit into the card canvas. */
-const _lastBlitVersion = new Map<number, number>()
 
 export function live2dSystem(eid: number): boolean {
   const meta = live2dMetaStore[eid]
@@ -55,8 +45,8 @@ export function live2dSystem(eid: number): boolean {
     )
   }
 
-  // NOTE: markAutoplay is NOT called here; it is registered once inside
-  // animationManager.registerLive2D() so it doesn't run on every pipeline pass.
+  // ── Autoplay: always animate live2d cards ──
+  animationManager.markAutoplay(card.id)
 
   // ── Get or create the Live2D render canvas ──────────────
   let live2dCanvas = animationManager.getLive2DCanvas(card.id)
@@ -112,24 +102,14 @@ export function live2dSystem(eid: number): boolean {
     return true
   }
 
-  // ── Blit Live2D canvas if model has a new frame ──
-  // frameVersion is incremented by animationManager.tick() after each PIXI render.
-  // If unchanged, skip drawImage (the dirty flag already ensures the GL texture
-  // won't be re-uploaded, so no work is lost).
-  // CRITICAL: always return true regardless — returning false here would let the
-  // next content system paint over this card, causing a rendering corruption bug.
-  const currentVersion = animationManager.getLive2DFrameVersion(card.id)
-  const lastVersion = _lastBlitVersion.get(eid) ?? -1
-  if (currentVersion !== lastVersion) {
-    _lastBlitVersion.set(eid, currentVersion)
+  // ── Blit Live2D canvas (transparent, direct render, no bg fill) ──
+  ctx.save()
+  ctx.beginPath()
+  ctx.roundRect(vX, vY, viewW, viewH, 8)
+  ctx.clip()
 
-    ctx.save()
-    ctx.beginPath()
-    ctx.roundRect(vX, vY, viewW, viewH, 8)
-    ctx.clip()
-    ctx.drawImage(live2dCanvas, vX, vY, viewW, viewH)
-    ctx.restore()
-  }
+  ctx.drawImage(live2dCanvas, vX, vY, viewW, viewH)
+  ctx.restore()
 
   advance(layout, viewH + 8)
 
