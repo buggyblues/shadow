@@ -5,8 +5,6 @@
 import type * as pulumi from '@pulumi/pulumi'
 import { buildOpenClawConfig } from '../config/parser.js'
 import type { CloudConfig } from '../config/schema.js'
-import type { ProvisionResult } from '../provisioning/index.js'
-import { buildProvisionedEnvVars } from '../provisioning/index.js'
 import { createAgentDeployment } from './agent-deployment.js'
 import { createConfigResources } from './config-resources.js'
 import {
@@ -32,7 +30,6 @@ import { createSharedResources } from './shared.js'
 export interface InfraOptions {
   config: CloudConfig
   namespace: string
-  provision?: ProvisionResult
   shadowServerUrl?: string
   /** kubectl context for K8s provider — defaults to KUBECONFIG_CONTEXT or 'rancher-desktop' */
   kubeContext?: string
@@ -51,7 +48,7 @@ export interface InfraOptions {
  */
 export function createInfraProgram(options: InfraOptions) {
   return async () => {
-    const { config, namespace, provision, shadowServerUrl, imagePullPolicy } = options
+    const { config, namespace, shadowServerUrl, imagePullPolicy } = options
     const agents = config.deployments?.agents ?? []
 
     const outputs: Record<string, pulumi.Output<string>> = {}
@@ -76,14 +73,8 @@ export function createInfraProgram(options: InfraOptions) {
     for (const agent of agents) {
       const agentName = agent.id
 
-      // Build env vars from provisioned resources
-      const provisionedEnv =
-        provision && shadowServerUrl
-          ? buildProvisionedEnvVars(agent.id, config, provision, shadowServerUrl)
-          : {}
-
-      // Merge with agent-level env
-      const env = { ...provisionedEnv, ...(agent.env ?? {}) }
+      // Build env vars from agent-level env (populated by plugin onProvision hooks)
+      const env = { ...(agent.env ?? {}) }
 
       // The k8s shadow URL (pod-shadow-url) must override the provision URL
       // that onProvision wrote into agent.env.SHADOW_SERVER_URL.
@@ -142,7 +133,7 @@ export function buildManifests(options: InfraOptions) {
   const {
     config,
     namespace,
-    provision,
+
     shadowServerUrl,
     imagePullPolicy = 'IfNotPresent',
   } = options
@@ -202,11 +193,7 @@ export function buildManifests(options: InfraOptions) {
 
   for (const agent of agents) {
     const agentName = agent.id
-    const provisionedEnv =
-      provision && shadowServerUrl
-        ? buildProvisionedEnvVars(agent.id, config, provision, shadowServerUrl)
-        : {}
-    const env = { ...provisionedEnv, ...(agent.env ?? {}) }
+    const env = { ...(agent.env ?? {}) }
 
     // The k8s shadow URL (pod-shadow-url) must override the provision URL
     // that onProvision wrote into agent.env.SHADOW_SERVER_URL.

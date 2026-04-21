@@ -56,6 +56,7 @@ export async function loadAllPlugins(registry: PluginRegistry): Promise<void> {
   // Each plugin directory exports a default PluginDefinition
   const pluginModules = await Promise.all([
     import('./shadowob/index.js'),
+    import('./model-provider/index.js'),
     import('./slack/index.js'),
     import('./discord/index.js'),
     import('./telegram/index.js'),

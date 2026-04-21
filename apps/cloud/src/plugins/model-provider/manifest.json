@@ -1,0 +1,18 @@
+{
+  "id": "model-provider",
+  "name": "Model Provider",
+  "description": "Auto-discovers AI model providers from environment variables. Injects provider configs for any detected API keys (Anthropic, OpenAI, DeepSeek, Gemini, Grok, OpenRouter, or custom OpenAI-compatible endpoints) — no manual registry.providers needed.",
+  "version": "1.0.0",
+  "category": "ai-provider",
+  "icon": "cpu",
+  "auth": {
+    "type": "none",
+    "fields": []
+  },
+  "config": {
+    "type": "object",
+    "properties": {}
+  },
+  "capabilities": [],
+  "tags": []
+}
