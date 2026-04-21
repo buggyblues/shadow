@@ -177,6 +177,37 @@ export const saasApi = {
       get<{ lines: Array<{ level: string; message: string; createdAt: string }>; total: number }>(
         `/deployments/${encodeURIComponent(id)}/logs/history`,
       ),
+    cancel: (id: string) =>
+      post<{ ok: boolean }>(`/deployments/${encodeURIComponent(id)}/cancel`, {}),
+    pods: (id: string) =>
+      get<{
+        pods: Array<{
+          name: string
+          status: string
+          ready: string
+          restarts: number
+          age: string
+          containers: string[]
+        }>
+      }>(`/deployments/${encodeURIComponent(id)}/pods`),
+    podLogsUrl: (id: string, pod: string, opts?: { tail?: number; container?: string }) => {
+      const qs = new URLSearchParams({ pod })
+      if (opts?.tail) qs.set('tail', String(opts.tail))
+      if (opts?.container) qs.set('container', opts.container)
+      return `${BASE}/deployments/${encodeURIComponent(id)}/pod-logs?${qs.toString()}`
+    },
+    listOrphans: () =>
+      get<{
+        items: SaasDeployment[]
+        _orphans?: string[]
+      }>(`/deployments?includeOrphans=1`),
+    claimOrphan: (namespace: string) =>
+      post<{ ok: boolean; deployment: SaasDeployment }>(
+        `/deployments/orphans/${encodeURIComponent(namespace)}/claim`,
+        {},
+      ),
+    cleanupOrphan: (namespace: string) =>
+      post<{ ok: boolean }>(`/deployments/orphans/${encodeURIComponent(namespace)}/cleanup`, {}),
   },
 
   // Env vars
@@ -196,9 +227,10 @@ export const saasApi = {
   },
 
   // Wallet
+  // NOTE: top-up is intentionally not exposed here. Use the host app's Stripe
+  // recharge flow (window event 'shadow:open-recharge') instead.
   wallet: {
     get: () => get<SaasWallet>('/wallet'),
-    topUp: (amount: number) => post<SaasWallet>('/wallet/topup', { amount }),
     transactions: (params?: { limit?: number; offset?: number }) =>
       get<{ transactions: SaasTransaction[]; total: number; limit: number; offset: number }>(
         `/wallet/transactions${params ? `?limit=${params.limit ?? 50}&offset=${params.offset ?? 0}` : ''}`,

@@ -394,6 +394,18 @@ export function buildManifests(options: InfraOptions) {
                 readinessProbe: READINESS_PROBE,
                 startupProbe: STARTUP_PROBE,
               },
+              // Plugin-contributed helper containers (e.g. gitagent git-pull loop)
+              ...pluginK8s.sidecars.map((sc) => ({
+                name: sc.name,
+                image: sc.image,
+                imagePullPolicy: sc.imagePullPolicy,
+                command: sc.command,
+                args: sc.args,
+                env: sc.env,
+                volumeMounts: sc.volumeMounts,
+                resources: sc.resources,
+                securityContext: sc.securityContext,
+              })),
             ],
             volumes,
             ...(initContainers.length > 0 ? { initContainers } : {}),

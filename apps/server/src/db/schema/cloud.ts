@@ -21,6 +21,7 @@ export const cloudDeploymentStatusEnum = pgEnum('cloud_deployment_status', [
   'failed',
   'destroying',
   'destroyed',
+  'cancelling',
 ])
 
 export const cloudTemplateSourceEnum = pgEnum('cloud_template_source', ['official', 'community'])
@@ -42,6 +43,7 @@ export const cloudActivityTypeEnum = pgEnum('cloud_activity_type', [
   'envvar_update',
   'template_submit',
   'template_update',
+  'template_delete',
   'template_approved',
   'template_rejected',
   'billing_deduct',

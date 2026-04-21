@@ -36,6 +36,17 @@ export interface DeployOptions {
   cluster?: string
   /** Explicit path to a kubeconfig file (overrides cluster and k8sContext) */
   kubeConfigPath?: string
+  /**
+   * Optional callback invoked once the Pulumi Stack object exists.
+   * Callers can store the reference and later invoke `stack.cancel()` to
+   * abort an in-progress `up` operation cooperatively.
+   */
+  onStackReady?: (stack: { cancel: () => Promise<void> }) => void
+  /**
+   * Optional cooperative-cancel checker. Polled at safe boundaries; if it
+   * returns `true`, the deploy aborts before performing further side-effects.
+   */
+  isCancelled?: () => boolean
 }
 
 export interface DeployResult {
@@ -301,6 +312,20 @@ export class DeployService {
       } else {
         throw err
       }
+    }
+
+    // Expose the stack so the worker can call stack.cancel() if the user
+    // requests cancellation while the up() operation is running.
+    if (options.onStackReady) {
+      try {
+        options.onStackReady(stack as unknown as { cancel: () => Promise<void> })
+      } catch {
+        /* never let a callback throw kill the deploy */
+      }
+    }
+
+    if (options.isCancelled?.()) {
+      throw new Error('Deployment cancelled before stack apply')
     }
 
     await this.k8s.deployStack(stack, {

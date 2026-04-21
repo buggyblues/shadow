@@ -322,7 +322,9 @@
     "shrimpCoins": "Shrimp Coins",
     "insufficientBalance": "Insufficient balance.",
     "insufficientBalanceDesc": "You don't have enough Shrimp Coins to deploy this app. Top up to continue.",
-    "topUp": "Top Up"
+    "topUp": "Top Up",
+    "preparingDeployment": "Preparing…",
+    "rechargeUnavailable": "Recharge is only available inside the Shadow app."
   },
   "clusters": {
     "title": "Cluster Management",

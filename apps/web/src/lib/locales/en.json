@@ -1592,5 +1592,31 @@
     "updateCategoryError": "Failed to update category",
     "categoryDeleted": "Category deleted",
     "deleteCategoryError": "Failed to delete category"
+  },
+  "developers": {
+    "cloud": {
+      "heroBadge": "Shadow Cloud for Developers",
+      "heroTitle": "Ship agents, not YAML.",
+      "heroSubtitle": "Deploy your agent team from a Git repo to a managed Kubernetes cluster in minutes. Live git-pull, per-pod observability, Stripe-backed billing — all plugged into the Shadow platform.",
+      "ctaOpenConsole": "Open Cloud Console",
+      "ctaBrowseApps": "Browse the App Store",
+      "featureGitTitle": "Deploy from Git",
+      "featureGitDesc": "Your agents live in a repo. A git-pull sidecar keeps SOUL.md / skills / tools / hooks fresh without restarting the pod.",
+      "featureK8sTitle": "Managed Kubernetes",
+      "featureK8sDesc": "Bring your own cluster (BYOK) or run on the platform tier. Cancel or destroy any deploy with one click.",
+      "featureBillingTitle": "Transparent billing",
+      "featureBillingDesc": "Priced in Shrimp Coins. Stripe-backed recharge. No hidden markups on the compute you own.",
+      "featureObsTitle": "Live observability",
+      "featureObsDesc": "Stream real pod logs, see agent health, and reconcile orphan namespaces — right in the dashboard.",
+      "howTitle": "How it works",
+      "step1Title": "Point to a git repo",
+      "step1Desc": "A template or your own repo following the gitagent file layout (SOUL.md, agent.yaml, skills/, ...).",
+      "step2Title": "Pick resources & env",
+      "step2Desc": "Choose a tier, set secrets once, and we take care of the rest.",
+      "step3Title": "Deploy & iterate",
+      "step3Desc": "Push to main; the sidecar pulls the change on its next tick. No redeploy needed.",
+      "pricingTitle": "You keep the compute.",
+      "pricingDesc": "Shop revenue funds the compute cost — creators absorb the infra and own the resources."
+    }
   }
 }

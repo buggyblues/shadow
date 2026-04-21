@@ -34,6 +34,46 @@ export function createAdminHandler(container: AppContainer) {
     await next()
   })
 
+  // ── Dev/Demo Wallet Grant ─────────────────────────
+  // SECURITY: Replaces the previously-public /wallet/topup endpoints.
+  // Requires:
+  //   - admin role (handled by middleware above)
+  //   - ENABLE_DEV_TOPUP=1 environment flag (NEVER set in production)
+  // Use only for local dev, demos, and manual support adjustments.
+  adminHandler.post(
+    '/wallet/grant',
+    zValidator(
+      'json',
+      z.object({
+        userId: z.string().uuid().optional(),
+        amount: z.number().int().min(1).max(1_000_000),
+        note: z.string().max(200).optional(),
+      }),
+    ),
+    async (c) => {
+      if (process.env.ENABLE_DEV_TOPUP !== '1') {
+        return c.json(
+          {
+            ok: false,
+            error:
+              'Wallet grant is disabled. Set ENABLE_DEV_TOPUP=1 (non-production environments only).',
+          },
+          403,
+        )
+      }
+      const actor = c.get('user') as { userId: string }
+      const { userId, amount, note } = c.req.valid('json')
+      const targetUserId = userId ?? actor.userId
+      const walletService = container.resolve('walletService')
+      const wallet = await walletService.topUp(
+        targetUserId,
+        amount,
+        note ?? `[admin grant] by=${actor.userId}`,
+      )
+      return c.json({ ok: true, balance: wallet?.balance ?? 0, targetUserId })
+    },
+  )
+
   // ── Stats ─────────────────────────────────────────
   adminHandler.get('/stats', async (c) => {
     const userDao = container.resolve('userDao')

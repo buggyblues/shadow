@@ -295,6 +295,20 @@
       "when": 1745150000000,
       "tag": "0041_template_review_workflow",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1745236400000,
+      "tag": "0042_cloud_deployment_cancelling",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1745236500000,
+      "tag": "0043_cloud_activity_template_delete",
+      "breakpoints": true
     }
   ]
 }

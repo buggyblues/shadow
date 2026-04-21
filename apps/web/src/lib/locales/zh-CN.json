@@ -1592,5 +1592,31 @@
     "updateCategoryError": "更新分类失败",
     "categoryDeleted": "分类已删除",
     "deleteCategoryError": "删除分类失败"
+  },
+  "developers": {
+    "cloud": {
+      "heroBadge": "开发者的 Shadow Cloud",
+      "heroTitle": "交付 Agent，不是 YAML。",
+      "heroSubtitle": "从 Git 仓库到托管 Kubernetes 集群，分钟级上线你的 agent 队伍。支持热更新、实时日志、Stripe 结算，深度融入 Shadow 平台。",
+      "ctaOpenConsole": "打开云控制台",
+      "ctaBrowseApps": "浏览应用市场",
+      "featureGitTitle": "从 Git 部署",
+      "featureGitDesc": "你的 agent 住在仓库中。sidecar 定时 git pull，SOUL.md / skills / tools / hooks 更新无需重启 Pod。",
+      "featureK8sTitle": "托管 Kubernetes",
+      "featureK8sDesc": "自带集群（BYOK）或使用平台集群，每次部署都可一键取消或销毁。",
+      "featureBillingTitle": "透明计费",
+      "featureBillingDesc": "用虹币计费，Stripe 完成充值。自有算力不被加价。",
+      "featureObsTitle": "实时可观测",
+      "featureObsDesc": "流式查看 Pod 日志、agent 健康状态，对账孤儿集群 — 全部在控制台完成。",
+      "howTitle": "三步上线",
+      "step1Title": "指向一个 Git 仓库",
+      "step1Desc": "使用模板或你自己遵循 gitagent 约定的仓库（SOUL.md、agent.yaml、skills/ 等）。",
+      "step2Title": "选配额、填证凭",
+      "step2Desc": "选个资源档，填好 Secret 后其余交给我们。",
+      "step3Title": "部署并迭代",
+      "step3Desc": "推 main，sidecar 下一轮 pull 就会拉到最新版本。无需重新部署。",
+      "pricingTitle": "算力你全有。",
+      "pricingDesc": "Shop 的收入覆盖算力成本 — 创作者承担基础设施，同时保留资源归属。"
+    }
   }
 }

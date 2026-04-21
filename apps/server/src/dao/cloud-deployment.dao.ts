@@ -52,6 +52,31 @@ export class CloudDeploymentDao {
       .orderBy(cloudDeployments.createdAt)
   }
 
+  /**
+   * Deployments the user has asked to cancel mid-flight.
+   * The cloud worker picks these up and signals the in-progress deploy
+   * subprocess to terminate.
+   */
+  async listCancelling() {
+    return this.db
+      .select()
+      .from(cloudDeployments)
+      .where(eq(cloudDeployments.status, 'cancelling'))
+      .orderBy(cloudDeployments.createdAt)
+  }
+
+  /**
+   * Reconcile-only: deployments the platform considers "live" right now.
+   * Used by the orphan-cluster reconciler to compare against k8s state.
+   */
+  async listLive() {
+    const { inArray } = await import('drizzle-orm')
+    return this.db
+      .select()
+      .from(cloudDeployments)
+      .where(inArray(cloudDeployments.status, ['deployed', 'deploying', 'cancelling']))
+  }
+
   async create(data: {
     userId: string
     clusterId?: string | null
@@ -77,7 +102,14 @@ export class CloudDeploymentDao {
 
   async updateStatus(
     id: string,
-    status: 'pending' | 'deploying' | 'deployed' | 'failed' | 'destroying' | 'destroyed',
+    status:
+      | 'pending'
+      | 'deploying'
+      | 'deployed'
+      | 'failed'
+      | 'destroying'
+      | 'destroyed'
+      | 'cancelling',
     errorMessage?: string | null,
   ) {
     const result = await this.db

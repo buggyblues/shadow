@@ -322,7 +322,9 @@
     "shrimpCoins": "虾币",
     "insufficientBalance": "余额不足。",
     "insufficientBalanceDesc": "虾币余额不足以部署此应用，请先充值虾币。",
-    "topUp": "充值"
+    "topUp": "充值",
+    "preparingDeployment": "准备中…",
+    "rechargeUnavailable": "充值需在 Shadow 主应用内完成"
   },
   "clusters": {
     "title": "集群管理",

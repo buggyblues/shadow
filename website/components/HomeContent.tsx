@@ -290,7 +290,7 @@ async function loadRemoteConfig() {
     _topics = topicsData
     _categoryMeta = categoryData
     for (const fn of configListeners) fn()
-  } catch { }
+  } catch {}
 }
 
 function useRemoteData() {
@@ -299,7 +299,9 @@ function useRemoteData() {
     const refresh = () => forceUpdate((n) => n + 1)
     configListeners.add(refresh)
     void loadRemoteConfig()
-    return () => { configListeners.delete(refresh) }
+    return () => {
+      configListeners.delete(refresh)
+    }
   }, [])
   return { plays: _plays, topics: _topics, categoryMeta: _categoryMeta }
 }
@@ -1126,12 +1128,12 @@ function TopicCard({ topic, isZh }: { topic: Topic; isZh: boolean }) {
           cursor: 'pointer',
         }}
         onMouseEnter={(e) => {
-          ; (e.currentTarget as HTMLElement).style.transform = 'translateY(-4px)'
-            ; (e.currentTarget as HTMLElement).style.boxShadow = '0 16px 40px rgba(0,0,0,0.3)'
+          ;(e.currentTarget as HTMLElement).style.transform = 'translateY(-4px)'
+          ;(e.currentTarget as HTMLElement).style.boxShadow = '0 16px 40px rgba(0,0,0,0.3)'
         }}
         onMouseLeave={(e) => {
-          ; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
-            ; (e.currentTarget as HTMLElement).style.boxShadow = 'none'
+          ;(e.currentTarget as HTMLElement).style.transform = 'translateY(0)'
+          ;(e.currentTarget as HTMLElement).style.boxShadow = 'none'
         }}
       >
         <img
@@ -1521,6 +1523,20 @@ function DevCta({ isZh }: { isZh: boolean }) {
           style={{ textDecoration: 'none', flexShrink: 0, fontSize: '14px', padding: '14px 32px' }}
         >
           {isZh ? '探索开放平台 →' : 'Explore Open Platform →'}
+        </a>
+        {/* Shadow Cloud CTA — jumps straight into the creator console. */}
+        <a
+          href="/app/developers/cloud"
+          className="btn-secondary"
+          style={{
+            textDecoration: 'none',
+            flexShrink: 0,
+            fontSize: '14px',
+            padding: '14px 32px',
+            marginLeft: '12px',
+          }}
+        >
+          {isZh ? '部署到 Shadow Cloud →' : 'Deploy to Shadow Cloud →'}
         </a>
       </div>
     </section>

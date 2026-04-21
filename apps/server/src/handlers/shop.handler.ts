@@ -10,7 +10,6 @@ import {
   createReviewSchema,
   createSupportTicketSchema,
   replyReviewSchema,
-  topUpSchema,
   updateCartItemSchema,
   updateCategorySchema,
   updateOrderStatusSchema,
@@ -379,12 +378,10 @@ export function createShopHandler(container: AppContainer) {
     return c.json(await walletService.getWallet(user.userId))
   })
 
-  h.post('/wallet/topup', zValidator('json', topUpSchema), async (c) => {
-    const user = c.get('user')
-    const walletService = container.resolve('walletService')
-    const input = c.req.valid('json')
-    return c.json(await walletService.topUp(user.userId, input.amount, input.note))
-  })
+  // NOTE: POST /wallet/topup intentionally removed.
+  // Top-ups must go through Stripe (POST /api/v1/recharge/create-intent).
+  // For dev/demo top-ups, see POST /api/admin/wallet/grant (admin-only,
+  // additionally guarded by ENABLE_DEV_TOPUP=1).
 
   h.get('/wallet/transactions', async (c) => {
     const user = c.get('user')

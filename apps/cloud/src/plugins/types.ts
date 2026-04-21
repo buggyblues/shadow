@@ -226,6 +226,24 @@ export interface PluginK8sInitContainer {
   securityContext?: Record<string, unknown>
 }
 
+/**
+ * Long-running helper container that runs alongside the main agent container.
+ * Used e.g. by gitagent for periodic `git pull` loops (live refresh without
+ * restarting the pod). Shape is a subset of k8s.types.input.core.v1.Container
+ * to keep the plugin API independent of Pulumi types.
+ */
+export interface PluginK8sSidecar {
+  name: string
+  image: string
+  imagePullPolicy?: string
+  command?: string[]
+  args?: string[]
+  env?: Array<{ name: string; value?: string; valueFrom?: Record<string, unknown> }>
+  volumeMounts: Array<{ name: string; mountPath: string; readOnly?: boolean }>
+  resources?: Record<string, unknown>
+  securityContext?: Record<string, unknown>
+}
+
 export interface PluginK8sVolume {
   name: string
   spec: Record<string, unknown>
@@ -245,6 +263,8 @@ export interface PluginK8sEnvVar {
 
 export interface PluginK8sResult {
   initContainers?: PluginK8sInitContainer[]
+  /** Helper containers that run for the lifetime of the pod. */
+  sidecars?: PluginK8sSidecar[]
   volumes?: PluginK8sVolume[]
   volumeMounts?: PluginK8sVolumeMount[]
   envVars?: PluginK8sEnvVar[]

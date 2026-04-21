@@ -30,6 +30,7 @@ export class CloudActivityDao {
       | 'envvar_update'
       | 'template_submit'
       | 'template_update'
+      | 'template_delete'
       | 'template_approved'
       | 'template_rejected'
       | 'billing_deduct'

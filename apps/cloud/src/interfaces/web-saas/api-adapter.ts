@@ -244,8 +244,21 @@ export const saasApiAdapter: CloudApiClient = {
           generatedAt: now(),
         }
       }),
-    pods: (_namespace: string, _id: string) => Promise.resolve([]),
-    logsUrl: (namespace: string, _id: string) => saasApi.deployments.logsUrl(namespace),
+    pods: (_namespace: string, id: string) =>
+      saasApi.deployments
+        .pods(id)
+        .then((r) =>
+          r.pods.map((p) => ({
+            name: p.name,
+            status: p.status,
+            ready: p.ready,
+            restarts: p.restarts,
+            age: p.age,
+            containers: p.containers,
+          })),
+        )
+        .catch(() => []),
+    logsUrl: (_namespace: string, id: string) => saasApi.deployments.logsUrl(id),
     logsHistory: (namespace: string, agent: string, _page = 1, limit = 200) =>
       saasApi.deployments
         .list()
@@ -394,9 +407,10 @@ export const saasApiAdapter: CloudApiClient = {
   },
 
   // ── Wallet ────────────────────────────────────────────────────────────────
+  // top-up is performed via the apps/web Stripe recharge modal (host app),
+  // triggered by the 'shadow:open-recharge' DOM event from WalletPage.
   wallet: {
     get: () => saasApi.wallet.get(),
-    topUp: (amount: number) => saasApi.wallet.topUp(amount),
     transactions: (params?: { limit?: number; offset?: number }) =>
       saasApi.wallet.transactions(params),
   },

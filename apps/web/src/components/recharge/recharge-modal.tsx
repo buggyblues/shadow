@@ -11,7 +11,7 @@ import { Elements } from '@stripe/react-stripe-js'
 import { loadStripe } from '@stripe/stripe-js'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import { showToast } from '../../lib/toast'
@@ -35,6 +35,19 @@ export function RechargeModal() {
     setLoading,
     closeModal,
   } = useRechargeStore()
+
+  // Cross-bundle entry point: cloud-ui (mounted under /cloud) and any other
+  // sub-app can dispatch `shadow:open-recharge` to surface the global Stripe
+  // recharge modal. Reply with `shadow:open-recharge:ack` so callers can
+  // detect the host listener and skip a fallback redirect.
+  useEffect(() => {
+    const handler = () => {
+      useRechargeStore.getState().openModal()
+      window.dispatchEvent(new CustomEvent('shadow:open-recharge:ack'))
+    }
+    window.addEventListener('shadow:open-recharge', handler)
+    return () => window.removeEventListener('shadow:open-recharge', handler)
+  }, [])
 
   // Fetch recharge config (tiers, Stripe publishable key)
   const { data: config } = useQuery({

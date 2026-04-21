@@ -1064,11 +1064,27 @@ function StepDeploy({
                 size="sm"
                 variant="ghost"
                 className="shrink-0"
-                onClick={async () => {
-                  await (
-                    api as { wallet?: { topUp: (amount: number) => Promise<{ balance: number }> } }
-                  ).wallet?.topUp?.(10000)
-                  queryClient.invalidateQueries({ queryKey: ['wallet'] })
+                onClick={() => {
+                  // Bridge to host-app Stripe recharge modal (apps/web).
+                  // The host listens for `shadow:open-recharge` and shows the modal.
+                  if (typeof window !== 'undefined') {
+                    let acked = false
+                    const onAck = () => {
+                      acked = true
+                      window.removeEventListener('shadow:open-recharge:ack', onAck)
+                    }
+                    window.addEventListener('shadow:open-recharge:ack', onAck)
+                    window.dispatchEvent(
+                      new CustomEvent('shadow:open-recharge', {
+                        detail: { source: 'deploy-wizard', amount: 10000 },
+                      }),
+                    )
+                    setTimeout(() => {
+                      if (!acked) {
+                        toast.error(t('deploy.rechargeUnavailable'))
+                      }
+                    }, 500)
+                  }
                 }}
               >
                 {t('deploy.topUp')}
@@ -1084,7 +1100,12 @@ function StepDeploy({
 
           {/* Action buttons */}
           <div className="flex justify-between">
-            <Button type="button" onClick={onBack} variant="ghost">
+            <Button
+              type="button"
+              onClick={onBack}
+              variant="ghost"
+              disabled={initMutation.isPending}
+            >
               <ArrowLeft size={14} />
               {t('common.back')}
             </Button>
@@ -1092,10 +1113,16 @@ function StepDeploy({
               type="button"
               onClick={handleDeploy}
               variant="primary"
-              disabled={!hasEnoughBalance}
+              disabled={!hasEnoughBalance || initMutation.isPending}
             >
-              <Rocket size={16} />
-              {t('deploy.startDeployment')}
+              {initMutation.isPending ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Rocket size={16} />
+              )}
+              {initMutation.isPending
+                ? t('deploy.preparingDeployment')
+                : t('deploy.startDeployment')}
             </Button>
           </div>
         </>
@@ -1389,7 +1416,7 @@ export function DeployWizardPage() {
       </div>
 
       {/* Step content */}
-      <div className="p-6">
+      <div className="p-6 pb-12">
         {currentStep === 0 && <StepOverview name={name} />}
         {currentStep === 1 && (
           <StepConfigure

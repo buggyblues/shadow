@@ -15,11 +15,77 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { AgentDeployment, AgentSource } from '../../config/schema.js'
 import { definePlugin } from '../helpers.js'
-import type { PluginBuildContext, PluginConfigFragment, PluginManifest } from '../types.js'
+import type {
+  PluginBuildContext,
+  PluginConfigFragment,
+  PluginK8sProvider,
+  PluginK8sResult,
+  PluginManifest,
+} from '../types.js'
+import { buildGitCloneCommand, buildGitSyncSidecar, parsePollInterval } from './k8s.js'
 import manifest from './manifest.json' with { type: 'json' }
 import { buildOpenClawFromGitAgent, enrichAgentFromGitAgent, readGitAgentDir } from './reader.js'
 
-export default definePlugin(manifest as PluginManifest, (api) => {
+// ── K8s provider ──
+// Emits an init container (initial clone) plus an optional sidecar for
+// periodic git pull when `agent.source.poll` is set. This enables live
+// refresh of SOUL.md / AGENTS.md / skills/ without restarting the agent pod.
+const gitagentK8sProvider: PluginK8sProvider = {
+  buildK8s(agent, _ctx): PluginK8sResult | undefined {
+    const src = agent.source as AgentSource | undefined
+    if (!src) return undefined
+    const useGitagent = src.gitagent !== false
+    if (!useGitagent) return undefined
+    const git = (src as { git?: { url?: string; ref?: string; depth?: number; dir?: string } }).git
+    if (!git?.url) return undefined
+
+    const mountPath = src.mountPath ?? '/agent'
+    const ref = git.ref ?? 'main'
+    const depth = git.depth ?? 1
+    const include = (src as { include?: string[] }).include
+    const poll = (src as { poll?: string | number }).poll
+    const intervalSec = parsePollInterval(poll)
+
+    const result: PluginK8sResult = {
+      initContainers: [
+        {
+          name: 'gitagent-clone',
+          image: 'alpine/git:latest',
+          imagePullPolicy: 'IfNotPresent',
+          command: buildGitCloneCommand({
+            url: git.url,
+            ref,
+            depth,
+            agentDir: git.dir,
+            mountPath,
+            include,
+          }),
+          volumeMounts: [{ name: 'gitagent-src', mountPath }],
+        },
+      ],
+      volumes: [{ name: 'gitagent-src', spec: { emptyDir: {} } }],
+      volumeMounts: [{ name: 'gitagent-src', mountPath }],
+      envVars: [{ name: 'OPENCLAW_AGENT_DIR', value: mountPath }],
+      labels: { 'gitagent.url': git.url.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 63) },
+    }
+
+    const sidecar = buildGitSyncSidecar({
+      name: 'gitagent-sync',
+      url: git.url,
+      ref,
+      depth,
+      agentDir: git.dir,
+      mountPath,
+      include,
+      intervalSec,
+    })
+    if (sidecar) result.sidecars = [sidecar]
+
+    return result
+  },
+}
+
+const plugin = definePlugin(manifest as PluginManifest, (api) => {
   // ── Resolve hook ──
   // Pre-build: convert gitagent use entry → agent.source + enrich from local path
   api.onResolveAgent((agent, _config) => {
@@ -78,3 +144,8 @@ export default definePlugin(manifest as PluginManifest, (api) => {
     return fragment
   })
 })
+
+// Attach the K8s provider to the plugin definition so plugin-k8s.ts picks it up.
+plugin.k8s = gitagentK8sProvider
+
+export default plugin

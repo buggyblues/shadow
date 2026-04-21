@@ -1,16 +1,14 @@
 import { Badge, Button, Card, EmptyState } from '@shadowob/ui'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Coins, Loader2, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PageShell } from '@/components/PageShell'
 import { useApiClient } from '@/lib/api-context'
-import { useToast } from '@/stores/toast'
 
 type WalletApi = {
   wallet?: {
     get: () => Promise<{ balance: number }>
-    topUp: (amount: number) => Promise<{ balance: number }>
     transactions: (params?: {
       limit?: number
       offset?: number
@@ -42,11 +40,8 @@ const PAGE_SIZE = 20
 export function WalletPage() {
   const { t } = useTranslation()
   const api = useApiClient() as WalletApi
-  const queryClient = useQueryClient()
-  const toast = useToast()
 
   const [offset, setOffset] = useState(0)
-  const [topUpAmount, setTopUpAmount] = useState(1000)
 
   const { data: walletData, isLoading: walletLoading } = useQuery({
     queryKey: ['wallet'],
@@ -60,17 +55,27 @@ export function WalletPage() {
       Promise.resolve({ transactions: [], total: 0, limit: PAGE_SIZE, offset }),
   })
 
-  const topUpMutation = useMutation({
-    mutationFn: () => api.wallet?.topUp?.(topUpAmount) ?? Promise.resolve({ balance: 0 }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['wallet'] })
-      queryClient.invalidateQueries({ queryKey: ['wallet-transactions'] })
-      toast.success(t('wallet.topUpSuccess'))
-    },
-    onError: () => {
-      toast.error(t('wallet.topUpFailed'))
-    },
-  })
+  /**
+   * Open the apps/web global Stripe recharge modal.
+   * The host app listens for 'shadow:open-recharge' and dispatches to its zustand store.
+   * Falls back to navigating to /shop if the listener is not present (standalone dashboard).
+   */
+  const openRecharge = () => {
+    const evt = new CustomEvent('shadow:open-recharge')
+    let handled = false
+    const ack = () => {
+      handled = true
+    }
+    window.addEventListener('shadow:open-recharge:ack', ack, { once: true })
+    window.dispatchEvent(evt)
+    setTimeout(() => {
+      window.removeEventListener('shadow:open-recharge:ack', ack)
+      if (!handled) {
+        // Standalone dashboard fallback
+        window.location.assign('/shop')
+      }
+    }, 50)
+  }
 
   const total = txData?.total ?? 0
   const transactions = txData?.transactions ?? []
@@ -104,27 +109,8 @@ export function WalletPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <input
-            type="number"
-            min={1}
-            max={100000}
-            step={100}
-            value={topUpAmount}
-            onChange={(e) =>
-              setTopUpAmount(Math.max(1, Math.min(100000, Number(e.target.value) || 1000)))
-            }
-            className="w-28 rounded border border-border bg-transparent px-2 py-1 text-sm text-right"
-          />
-          <Button
-            variant="primary"
-            onClick={() => topUpMutation.mutate()}
-            disabled={topUpMutation.isPending}
-          >
-            {topUpMutation.isPending ? (
-              <Loader2 size={14} className="animate-spin mr-1" />
-            ) : (
-              <Coins size={14} className="mr-1" />
-            )}
+          <Button variant="primary" onClick={openRecharge}>
+            <Coins size={14} className="mr-1" />
             {t('wallet.topUp')}
           </Button>
         </div>

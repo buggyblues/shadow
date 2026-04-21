@@ -375,8 +375,15 @@ export function DeploymentsPage() {
   } = useQuery({
     queryKey: ['deployments'],
     queryFn: api.deployments.list,
-    refetchInterval: 10_000,
-    staleTime: 5_000,
+    // Fast-poll while any deployment row is mid-transition; slow otherwise.
+    refetchInterval: (q) => {
+      const rows = (q.state.data as Array<{ ready?: string; available?: string }>) ?? []
+      const transitioning = rows.some(
+        (r) => (r.ready && !r.ready.startsWith('1/')) || r.available === '0',
+      )
+      return transitioning ? 3_000 : 30_000
+    },
+    staleTime: 2_000,
   })
 
   const { data: nsInfo } = useQuery({

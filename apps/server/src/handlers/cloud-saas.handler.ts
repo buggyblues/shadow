@@ -4,6 +4,8 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
 import { cloudDeployments, cloudTemplates } from '../db/schema'
+import { listManagedNamespaces, listPods, spawnPodLogStream } from '../lib/k8s-cli'
+import { decrypt } from '../lib/kms'
 import { authMiddleware } from '../middleware/auth.middleware'
 
 // ─── Resource tier cost map (Shrimp Coins / month) ──────────────────────────
@@ -269,11 +271,18 @@ export function createCloudSaasHandler(container: AppContainer) {
   /**
    * GET /api/cloud-saas/deployments
    * List current user's deployments (SaaS mode only).
+   *
+   * If `includeOrphans=1` is supplied, the response also includes a
+   * `_orphans` array listing K8s namespaces tagged as managed by Shadow Cloud
+   * but with no DB row for the current user. These are typically the result
+   * of a DB reset or a worker bug; the dashboard surfaces them so the user
+   * can claim or clean them up.
    */
   h.get('/deployments', async (c) => {
     const user = c.get('user') as { userId: string }
     const limit = Math.min(Number(c.req.query('limit')) || 50, 100)
     const offset = Math.max(Number(c.req.query('offset')) || 0, 0)
+    const includeOrphans = c.req.query('includeOrphans') === '1'
     const db = container.resolve('db')
     const rows = await db
       .select()
@@ -282,7 +291,19 @@ export function createCloudSaasHandler(container: AppContainer) {
       .orderBy(cloudDeployments.createdAt)
       .limit(limit)
       .offset(offset)
-    return c.json(rows)
+
+    if (!includeOrphans) {
+      return c.json(rows)
+    }
+
+    const known = new Set(rows.map((r) => r.namespace))
+    // Reconcile only against the platform default cluster — BYOK clusters
+    // would require iterating users' clusters and decrypting each kubeconfig,
+    // which is too heavy for a list endpoint. Orphans on BYOK are detected
+    // by the worker's reconcile loop instead.
+    const ns = listManagedNamespaces() ?? []
+    const orphans = ns.filter((n) => !known.has(n))
+    return c.json({ items: rows, _orphans: orphans })
   })
 
   /**
@@ -406,6 +427,29 @@ export function createCloudSaasHandler(container: AppContainer) {
       meta: { deploymentId: id },
     })
     return c.json({ ok: true })
+  })
+
+  /**
+   * POST /api/cloud-saas/deployments/:id/cancel
+   * Request cancellation of an in-progress deploy.
+   * Worker watches for status='cancelling' and SIGTERMs the deploy subprocess.
+   * Allowed when status ∈ {pending, deploying}; otherwise 422.
+   */
+  h.post('/deployments/:id/cancel', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const id = c.req.param('id')
+    const dao = container.resolve('cloudDeploymentDao')
+    const deployment = await dao.findById(id, user.userId)
+    if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+    if (deployment.status !== 'pending' && deployment.status !== 'deploying') {
+      return c.json(
+        { ok: false, error: `Cannot cancel deployment in status "${deployment.status}"` },
+        422,
+      )
+    }
+    await dao.updateStatus(id, 'cancelling')
+    await dao.appendLog(id, '[cancel] User requested cancellation', 'warn')
+    return c.json({ ok: true, status: 'cancelling' })
   })
 
   /**
@@ -586,6 +630,188 @@ export function createCloudSaasHandler(container: AppContainer) {
     })
   })
 
+  // ─── Live K8s pod inspection (SaaS) ────────────────────────────────────────
+
+  /**
+   * Resolve a deployment's effective kubeconfig (BYOK only). Returns null if
+   * the deployment uses the platform's default cluster — callers should then
+   * spawn kubectl without `--kubeconfig` and rely on the server's KUBECONFIG
+   * env var.
+   */
+  async function resolveKubeconfig(deployment: {
+    clusterId: string | null
+  }): Promise<string | null> {
+    if (!deployment.clusterId) return null
+    const clusterDao = container.resolve('cloudClusterDao')
+    const cluster = await clusterDao.findByIdOnly(deployment.clusterId)
+    if (!cluster?.kubeconfigEncrypted) return null
+    return decrypt(cluster.kubeconfigEncrypted)
+  }
+
+  /**
+   * GET /api/cloud-saas/deployments/:id/pods
+   * List pods running in the deployment's namespace, with status snapshot.
+   */
+  h.get('/deployments/:id/pods', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const id = c.req.param('id')
+    const dao = container.resolve('cloudDeploymentDao')
+    const deployment = await dao.findById(id, user.userId)
+    if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+    const kubeconfig = (await resolveKubeconfig(deployment)) ?? undefined
+    const pods = listPods(deployment.namespace, kubeconfig)
+    return c.json({ pods })
+  })
+
+  /**
+   * GET /api/cloud-saas/deployments/:id/pod-logs?pod=<name>&tail=200
+   * Stream live K8s pod logs over Server-Sent Events.
+   *
+   * Replaces the stub /logs endpoint that only replayed deploy-script output.
+   */
+  h.get('/deployments/:id/pod-logs', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const id = c.req.param('id')
+    const podParam = c.req.query('pod')
+    const tail = Math.min(Number(c.req.query('tail')) || 200, 2000)
+    const containerParam = c.req.query('container')
+
+    const dao = container.resolve('cloudDeploymentDao')
+    const deployment = await dao.findById(id, user.userId)
+    if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+
+    const kubeconfig = (await resolveKubeconfig(deployment)) ?? undefined
+
+    // If no pod is specified, pick the first running pod in the namespace.
+    let pod: string | undefined = podParam
+    if (!pod) {
+      const pods = listPods(deployment.namespace, kubeconfig)
+      pod = pods.find((p) => p.status === 'Running')?.name ?? pods[0]?.name ?? undefined
+    }
+    if (!pod) {
+      return c.json({ ok: false, error: 'No pods found for this deployment' }, 404)
+    }
+
+    return c.body(
+      new ReadableStream({
+        start(controller) {
+          const enc = new TextEncoder()
+          const send = (payload: unknown, event?: string) =>
+            controller.enqueue(
+              enc.encode(`${event ? `event: ${event}\n` : ''}data: ${JSON.stringify(payload)}\n\n`),
+            )
+
+          const { proc, cleanup } = spawnPodLogStream({
+            namespace: deployment.namespace,
+            pod: pod as string,
+            container: containerParam,
+            follow: true,
+            tail,
+            kubeconfig,
+          })
+
+          let stdoutBuf = ''
+          proc.stdout?.on('data', (chunk: Buffer) => {
+            stdoutBuf += chunk.toString('utf-8')
+            const lines = stdoutBuf.split('\n')
+            stdoutBuf = lines.pop() ?? ''
+            for (const line of lines) {
+              if (line.length > 0) send({ stream: 'stdout', line })
+            }
+          })
+          proc.stderr?.on('data', (chunk: Buffer) => {
+            send({ stream: 'stderr', line: chunk.toString('utf-8').trimEnd() })
+          })
+          proc.on('close', (code) => {
+            send({ exitCode: code ?? 0 }, 'end')
+            cleanup()
+            controller.close()
+          })
+          proc.on('error', (err) => {
+            send({ error: err.message }, 'error')
+            cleanup()
+            try {
+              controller.close()
+            } catch {
+              /* already closed */
+            }
+          })
+
+          // Abort handling: when client disconnects, kill kubectl.
+          c.req.raw.signal.addEventListener('abort', () => {
+            try {
+              proc.kill('SIGTERM')
+            } catch {
+              /* ignore */
+            }
+          })
+        },
+      }),
+      200,
+      {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      },
+    )
+  })
+
+  /**
+   * POST /api/cloud-saas/deployments/orphans/:namespace/claim
+   * Adopt a Shadow-Cloud-managed namespace that has no DB row.
+   * Creates a `cloud_deployments` row owned by the calling user so they can
+   * destroy it through the normal flow.
+   */
+  h.post('/deployments/orphans/:namespace/claim', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const namespace = c.req.param('namespace')
+    const dao = container.resolve('cloudDeploymentDao')
+    const created = await dao.create({
+      userId: user.userId,
+      namespace,
+      name: `orphan-${namespace}`,
+      agentCount: 0,
+      configSnapshot: null,
+    })
+    if (!created) {
+      return c.json({ ok: false, error: 'Failed to create deployment row' }, 500)
+    }
+    // Bypass the normal "pending → deploying → deployed" pipeline.
+    await dao.updateStatus(created.id, 'deployed')
+    await dao.appendLog(created.id, '[reconcile] Adopted orphan namespace', 'info')
+    return c.json({ ok: true, deployment: created })
+  })
+
+  /**
+   * POST /api/cloud-saas/deployments/orphans/:namespace/cleanup
+   * Force-delete an orphan namespace (no DB row). Admin-only safety check
+   * is enforced via the namespace label `shadowob-cloud/managed=true`.
+   */
+  h.post('/deployments/orphans/:namespace/cleanup', async (c) => {
+    const namespace = c.req.param('namespace')
+    const managed = listManagedNamespaces() ?? []
+    if (!managed.includes(namespace)) {
+      return c.json(
+        {
+          ok: false,
+          error: 'Refusing to delete: namespace is not labeled shadowob-cloud/managed=true',
+        },
+        422,
+      )
+    }
+    const { execSync } = await import('node:child_process')
+    try {
+      execSync(`kubectl delete namespace ${namespace} --wait=false`, {
+        encoding: 'utf-8',
+        timeout: 15_000,
+      })
+      return c.json({ ok: true })
+    } catch (err) {
+      return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 500)
+    }
+  })
+
   /**
    * PUT /api/cloud-saas/envvars/:deploymentId
    * Upsert env vars for a deployment.
@@ -639,21 +865,10 @@ export function createCloudSaasHandler(container: AppContainer) {
     return c.json({ balance: wallet?.balance ?? 0 })
   })
 
-  /**
-   * POST /api/cloud-saas/wallet/topup
-   * Top up the user's Shrimp Coin balance (dev/demo only).
-   */
-  h.post(
-    '/wallet/topup',
-    zValidator('json', z.object({ amount: z.number().int().min(1).max(100000) })),
-    async (c) => {
-      const user = c.get('user') as { userId: string }
-      const { amount } = c.req.valid('json')
-      const walletService = container.resolve('walletService')
-      const wallet = await walletService.topUp(user.userId, amount, '虾币充值')
-      return c.json({ ok: true, balance: wallet?.balance ?? 0 })
-    },
-  )
+  // NOTE: POST /wallet/topup intentionally removed.
+  // Top-ups must go through Stripe (POST /api/v1/recharge/create-intent).
+  // For dev/demo top-ups, see POST /api/admin/wallet/grant (admin-only,
+  // additionally guarded by ENABLE_DEV_TOPUP=1).
 
   /**
    * GET /api/cloud-saas/wallet/transactions
