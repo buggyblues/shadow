@@ -6,12 +6,7 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Command } from 'commander'
 import type { ServiceContainer } from '../../services/container.js'
-import {
-  loadProvisionState,
-  mergeProvisionState,
-  provisionResultToState,
-  saveProvisionState,
-} from '../../utils/state.js'
+import { loadProvisionState, mergeProvisionState, saveProvisionState } from '../../utils/state.js'
 
 export function createProvisionCommand(container: ServiceContainer) {
   return new Command('provision')
@@ -41,6 +36,7 @@ export function createProvisionCommand(container: ServiceContainer) {
         }
 
         const config = await container.config.parseFile(filePath)
+        const resolved = await container.config.resolve(config, filePath)
         const shadowUrl = options.provisionUrl ?? process.env.SHADOW_SERVER_URL
         const shadowToken = options.provisionToken ?? process.env.SHADOW_USER_TOKEN
 
@@ -58,43 +54,88 @@ export function createProvisionCommand(container: ServiceContainer) {
         }
 
         try {
-          const existing = loadProvisionState(filePath, options.stateDir)
+          const { executePluginProvisions, loadAllPlugins, getPluginRegistry } = await import(
+            '../../plugins/index.js'
+          )
+          try {
+            await loadAllPlugins(getPluginRegistry())
+          } catch {
+            /* already loaded */
+          }
 
-          const result = await container.provision.provision(config, {
-            serverUrl: shadowUrl,
-            userToken: shadowToken,
-            dryRun: options.dryRun,
-            force: options.force,
-            existingState: existing?.plugins?.shadowob ?? null,
-          })
+          const agents = resolved.deployments?.agents ?? []
+          const namespace = resolved.deployments?.namespace ?? 'shadowob-cloud'
+          const existing = loadProvisionState(filePath, options.stateDir)
+          const extraSecrets: Record<string, string> = {
+            SHADOW_SERVER_URL: shadowUrl,
+            SHADOW_USER_TOKEN: shadowToken,
+          }
+
+          // Track merged states and last result for display
+          const mergedStates: Record<string, Record<string, unknown>> = {}
+
+          for (const agent of agents) {
+            const provisionResults = await executePluginProvisions(
+              agent,
+              resolved,
+              namespace,
+              container.logger,
+              options.dryRun,
+              extraSecrets,
+              existing,
+            )
+            for (const [pluginId, state] of Object.entries(provisionResults.states)) {
+              mergedStates[pluginId] = { ...(mergedStates[pluginId] ?? {}), ...state }
+            }
+            if (provisionResults.errors.length > 0) {
+              for (const e of provisionResults.errors) {
+                container.logger.warn(`Plugin provision error (${e.pluginId}): ${e.error}`)
+              }
+            }
+          }
 
           if (!options.dryRun) {
+            const shadowobState = (mergedStates.shadowob ?? {}) as {
+              servers?: Record<string, string>
+              channels?: Record<string, string>
+              buddies?: Record<string, { agentId: string; userId: string; token: string }>
+              listings?: Record<string, string>
+            }
+
+            const serversCount = Object.keys(shadowobState.servers ?? {}).length
+            const channelsCount = Object.keys(shadowobState.channels ?? {}).length
+            const buddiesCount = Object.keys(shadowobState.buddies ?? {}).length
             container.logger.success(
-              `Provisioned: ${result.servers.size} server(s), ` +
-                `${result.channels.size} channel(s), ` +
-                `${result.buddies.size} buddy/buddies`,
+              `Provisioned: ${serversCount} server(s), ${channelsCount} channel(s), ${buddiesCount} buddy/buddies`,
             )
 
-            const newState = provisionResultToState(result, shadowUrl)
-            const merged = mergeProvisionState(existing, newState)
-            const statePath = saveProvisionState(filePath, merged, options.stateDir)
-            container.logger.success(`Provision state saved: ${statePath}`)
+            // Persist updated state
+            if (Object.keys(mergedStates).length > 0) {
+              const newState = {
+                provisionedAt: new Date().toISOString(),
+                namespace,
+                plugins: mergedStates,
+              }
+              const merged = mergeProvisionState(existing, newState)
+              const statePath = saveProvisionState(filePath, merged, options.stateDir)
+              container.logger.success(`Provision state saved: ${statePath}`)
+            }
 
-            if (result.servers.size > 0) {
+            if (Object.keys(shadowobState.servers ?? {}).length > 0) {
               container.logger.info('Server IDs:')
-              for (const [id, realId] of result.servers) {
+              for (const [id, realId] of Object.entries(shadowobState.servers ?? {})) {
                 container.logger.dim(`  ${id} → ${realId}`)
               }
             }
-            if (result.channels.size > 0) {
+            if (Object.keys(shadowobState.channels ?? {}).length > 0) {
               container.logger.info('Channel IDs:')
-              for (const [id, realId] of result.channels) {
+              for (const [id, realId] of Object.entries(shadowobState.channels ?? {})) {
                 container.logger.dim(`  ${id} → ${realId}`)
               }
             }
-            if (result.buddies.size > 0) {
+            if (Object.keys(shadowobState.buddies ?? {}).length > 0) {
               container.logger.info('Buddy agents:')
-              for (const [id, info] of result.buddies) {
+              for (const [id, info] of Object.entries(shadowobState.buddies ?? {})) {
                 container.logger.dim(`  ${id} → agent: ${info.agentId}  user: ${info.userId}`)
               }
             }
@@ -102,7 +143,7 @@ export function createProvisionCommand(container: ServiceContainer) {
             if (options.output) {
               const { writeFileSync } = await import('node:fs')
               const outData: Record<string, unknown> = {}
-              for (const [id, info] of result.buddies) {
+              for (const [id, info] of Object.entries(shadowobState.buddies ?? {})) {
                 outData[id] = { agentId: info.agentId, token: info.token, userId: info.userId }
               }
               writeFileSync(

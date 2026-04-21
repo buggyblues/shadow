@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CloudConfig } from '../../src/config/schema.js'
-import type { ProvisionResult } from '../../src/provisioning/index.js'
-import { buildProvisionedEnvVars } from '../../src/provisioning/index.js'
+import type { ProvisionResult } from '../../src/plugins/shadowob/provisioning.js'
+import { buildProvisionedEnvVars } from '../../src/plugins/shadowob/provisioning.js'
 
 describe('provisioning', () => {
   describe('buildProvisionedEnvVars', () => {

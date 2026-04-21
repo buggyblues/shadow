@@ -464,18 +464,51 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
 
       try {
         const config = await ctx.container.config.parseFile(tmpFile)
-        const result = await ctx.container.provision.provision(config, {
-          serverUrl: shadowUrl,
-          userToken: shadowToken,
-          dryRun: body.dryRun,
-        })
+        const resolved = await ctx.container.config.resolve(config, tmpFile)
+        const namespace = resolved.deployments?.namespace ?? 'shadowob-cloud'
+        const agents = resolved.deployments?.agents ?? []
+        const extraSecrets: Record<string, string> = {
+          SHADOW_SERVER_URL: shadowUrl,
+          SHADOW_USER_TOKEN: shadowToken,
+        }
+
+        const { executePluginProvisions, loadAllPlugins, getPluginRegistry } = await import(
+          '../../../plugins/index.js'
+        )
+        try {
+          await loadAllPlugins(getPluginRegistry())
+        } catch {
+          /* already loaded */
+        }
+
+        const mergedStates: Record<string, Record<string, unknown>> = {}
+        for (const agent of agents) {
+          const provisionResults = await executePluginProvisions(
+            agent,
+            resolved,
+            namespace,
+            ctx.container.logger,
+            body.dryRun,
+            extraSecrets,
+            null,
+          )
+          for (const [pluginId, state] of Object.entries(provisionResults.states)) {
+            mergedStates[pluginId] = { ...(mergedStates[pluginId] ?? {}), ...state }
+          }
+        }
+
+        const shadowobState = (mergedStates.shadowob ?? {}) as {
+          servers?: Record<string, string>
+          channels?: Record<string, string>
+          buddies?: Record<string, { agentId: string; userId: string; token: string }>
+        }
 
         return c.json({
           ok: true,
-          servers: Object.fromEntries(result.servers),
-          channels: Object.fromEntries(result.channels),
+          servers: shadowobState.servers ?? {},
+          channels: shadowobState.channels ?? {},
           buddies: Object.fromEntries(
-            [...result.buddies].map(([id, info]) => [
+            Object.entries(shadowobState.buddies ?? {}).map(([id, info]) => [
               id,
               { agentId: info.agentId, userId: info.userId },
             ]),

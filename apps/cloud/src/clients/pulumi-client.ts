@@ -12,7 +12,6 @@ import * as automation from '@pulumi/pulumi/automation/index.js'
 import { PulumiCommand } from '@pulumi/pulumi/automation/index.js'
 import type { CloudConfig } from '../config/schema.js'
 import { createInfraProgram, type InfraOptions } from '../infra/index.js'
-import type { ProvisionResult } from '../provisioning/index.js'
 
 /** Cached PulumiCommand instance (installed once). */
 let cachedPulumiCommand: automation.PulumiCommand | null = null
@@ -22,7 +21,6 @@ export interface StackOptions {
   stackName: string
   config: CloudConfig
   namespace: string
-  provision?: ProvisionResult
   shadowServerUrl?: string
   /** Directory to store Pulumi local state — defaults to ~/.shadowob/pulumi */
   stateDir?: string
@@ -48,7 +46,6 @@ export async function getOrCreateStack(options: StackOptions) {
   const infraOpts: InfraOptions = {
     config: options.config,
     namespace: options.namespace,
-    provision: options.provision,
     shadowServerUrl: options.shadowServerUrl,
     kubeContext: options.kubeContext ?? process.env.KUBECONFIG_CONTEXT ?? 'rancher-desktop',
     kubeConfigPath: options.kubeConfigPath,

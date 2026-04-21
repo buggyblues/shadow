@@ -18,7 +18,6 @@ import { DeployService } from './deploy.service.js'
 import { ImageService } from './image.service.js'
 import { K8sService } from './k8s.service.js'
 import { ManifestService } from './manifest.service.js'
-import { ProvisionService } from './provision.service.js'
 import { RuntimeService } from './runtime.service.js'
 import { TemplateService } from './template.service.js'
 import { TemplateI18nService } from './template-i18n.service.js'
@@ -31,7 +30,6 @@ export interface ServiceContainer {
   logger: Logger
   config: ConfigService
   manifest: ManifestService
-  provision: ProvisionService
   deploy: DeployService
   template: TemplateService
   templateI18n: TemplateI18nService
@@ -52,7 +50,6 @@ export function createContainer(overrides?: Partial<ServiceContainer>): ServiceC
   const logger = overrides?.logger ?? log
   const config = overrides?.config ?? new ConfigService()
   const manifest = overrides?.manifest ?? new ManifestService()
-  const provision = overrides?.provision ?? new ProvisionService()
   const defaultTemplatesDir = resolve(fileURLToPath(import.meta.url), '..', '..', 'templates')
   const templateDao = new TemplateDao(defaultTemplatesDir)
   const template = overrides?.template ?? new TemplateService(templateDao)
@@ -61,14 +58,13 @@ export function createContainer(overrides?: Partial<ServiceContainer>): ServiceC
   const k8s = overrides?.k8s ?? new K8sService()
   const templateI18n = overrides?.templateI18n ?? new TemplateI18nService(template)
   const usageCost = overrides?.usageCost ?? new UsageCostService(k8s)
-  const deploy = overrides?.deploy ?? new DeployService(config, manifest, provision, k8s, logger)
+  const deploy = overrides?.deploy ?? new DeployService(config, manifest, k8s, logger)
   const cluster = overrides?.cluster ?? new ClusterService()
 
   return {
     logger,
     config,
     manifest,
-    provision,
     deploy,
     template,
     templateI18n,
@@ -87,7 +83,6 @@ export { type DeployOptions, type DeployResult, DeployService } from './deploy.s
 export { IMAGES, type ImageBuildOptions, ImageService } from './image.service.js'
 export { K8sService } from './k8s.service.js'
 export { ManifestService } from './manifest.service.js'
-export { ProvisionService } from './provision.service.js'
 export { RuntimeService } from './runtime.service.js'
 export { type TemplateMeta, TemplateService } from './template.service.js'
 export {

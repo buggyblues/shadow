@@ -10,8 +10,6 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import type { ProvisionResult } from '../provisioning/index.js'
-
 // ─── State Types ──────────────────────────────────────────────────────────────
 
 export interface ProvisionState {
@@ -76,52 +74,6 @@ export function saveProvisionState(
   mkdirSync(stateDir, { recursive: true })
   writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf-8')
   return statePath
-}
-
-/**
- * Convert a ProvisionResult (Maps) into a ProvisionState for the shadowob plugin.
- * Stored under plugins.shadowob.
- */
-export function provisionResultToState(
-  result: ProvisionResult,
-  shadowServerUrl: string,
-  opts?: { stackName?: string; namespace?: string },
-): ProvisionState {
-  return {
-    provisionedAt: new Date().toISOString(),
-    stackName: opts?.stackName,
-    namespace: opts?.namespace,
-    plugins: {
-      shadowob: {
-        shadowServerUrl,
-        servers: Object.fromEntries(result.servers),
-        channels: Object.fromEntries(result.channels),
-        buddies: Object.fromEntries(
-          Array.from(result.buddies.entries()).map(([id, info]) => [
-            id,
-            { agentId: info.agentId, userId: info.userId, token: info.token },
-          ]),
-        ),
-      },
-    },
-  }
-}
-
-/**
- * Convert the shadowob plugin state back to ProvisionResult (Maps).
- * Used when loading state for follow-up operations.
- */
-export function stateToProvisionResult(state: ProvisionState): ProvisionResult {
-  const s = (state.plugins?.shadowob ?? {}) as {
-    servers?: Record<string, string>
-    channels?: Record<string, string>
-    buddies?: Record<string, { agentId: string; userId: string; token: string }>
-  }
-  return {
-    servers: new Map(Object.entries(s.servers ?? {})),
-    channels: new Map(Object.entries(s.channels ?? {})),
-    buddies: new Map(Object.entries(s.buddies ?? {})),
-  }
 }
 
 /**

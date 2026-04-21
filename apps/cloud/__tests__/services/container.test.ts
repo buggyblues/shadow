@@ -11,7 +11,6 @@ import { DeployService } from '../../src/services/deploy.service.js'
 import { ImageService } from '../../src/services/image.service.js'
 import { K8sService } from '../../src/services/k8s.service.js'
 import { ManifestService } from '../../src/services/manifest.service.js'
-import { ProvisionService } from '../../src/services/provision.service.js'
 import { RuntimeService } from '../../src/services/runtime.service.js'
 import { TemplateService } from '../../src/services/template.service.js'
 
@@ -22,7 +21,6 @@ describe('createContainer', () => {
     expect(container.logger).toBeDefined()
     expect(container.config).toBeInstanceOf(ConfigService)
     expect(container.manifest).toBeInstanceOf(ManifestService)
-    expect(container.provision).toBeInstanceOf(ProvisionService)
     expect(container.deploy).toBeInstanceOf(DeployService)
     expect(container.template).toBeInstanceOf(TemplateService)
     expect(container.runtime).toBeInstanceOf(RuntimeService)

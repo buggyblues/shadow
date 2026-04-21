@@ -9,16 +9,18 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { ProvisionResult } from '../../src/provisioning/index.js'
+import type { ProvisionResult } from '../../src/plugins/shadowob/provisioning.js'
+import {
+  provisionResultToState,
+  stateToProvisionResult,
+} from '../../src/plugins/shadowob/provisioning.js'
 import {
   getStateDir,
   getStatePath,
   loadProvisionState,
   mergeProvisionState,
   type ProvisionState,
-  provisionResultToState,
   saveProvisionState,
-  stateToProvisionResult,
 } from '../../src/utils/state.js'
 
 describe('State Utilities', () => {
