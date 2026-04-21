@@ -9,13 +9,11 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { loadKubeconfigPath } from '../cluster/kubeconfig.js'
 import type { CloudConfig } from '../config/schema.js'
-import type { ProvisionResult } from '../provisioning/index.js'
 import type { Logger } from '../utils/logger.js'
 import { loadProvisionState } from '../utils/state.js'
 import type { ConfigService } from './config.service.js'
 import type { K8sService } from './k8s.service.js'
 import type { ManifestService } from './manifest.service.js'
-import type { ProvisionService } from './provision.service.js'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -44,7 +42,6 @@ export interface DeployResult {
   namespace: string
   agentCount: number
   config: CloudConfig
-  provision?: ProvisionResult
   manifests?: Array<Record<string, unknown>>
   outputs?: Record<string, unknown>
 }
@@ -63,7 +60,6 @@ export class DeployService {
   constructor(
     private configService: ConfigService,
     private manifestService: ManifestService,
-    private provisionService: ProvisionService,
     private k8s: K8sService,
     private logger: Logger,
   ) {}
@@ -143,18 +139,23 @@ export class DeployService {
     emit('Resolving config...\n')
     const resolved = await this.configService.resolve(config, configCwd)
 
+    // Always load plugins so the build pipeline (applyPluginPipeline) works regardless
+    // of whether provisioning is skipped.
+    try {
+      const { loadAllPlugins, getPluginRegistry } = await import('../plugins/index.js')
+      try {
+        await loadAllPlugins(getPluginRegistry())
+      } catch {
+        /* already loaded */
+      }
+    } catch {
+      // Plugin system unavailable — continue without plugins
+    }
+
     // 3b. Execute plugin lifecycle provisions (async hooks — runs for all plugins)
-    let provision: ProvisionResult | undefined
     if (!options.skipProvision) {
       try {
-        const { executePluginProvisions, loadAllPlugins, getPluginRegistry } = await import(
-          '../plugins/index.js'
-        )
-        try {
-          await loadAllPlugins(getPluginRegistry())
-        } catch {
-          /* already loaded */
-        }
+        const { executePluginProvisions, getPluginRegistry } = await import('../plugins/index.js')
         for (const agent of agents) {
           const existingState = loadProvisionState(filePath, options.stateDir)
           const provisionResults = await executePluginProvisions(
@@ -206,7 +207,6 @@ export class DeployService {
       const manifests = this.manifestService.build({
         config: resolved,
         namespace,
-        provision,
         shadowServerUrl: options.shadowUrl ?? process.env.SHADOW_SERVER_URL,
       })
 
@@ -225,7 +225,7 @@ export class DeployService {
       }
 
       this.logger.success(`Manifests written to: ${outDir}`)
-      return { namespace, agentCount: agents.length, config: resolved, provision, manifests }
+      return { namespace, agentCount: agents.length, config: resolved, manifests }
     }
 
     // 5. Deploy via Pulumi automation API
@@ -244,7 +244,6 @@ export class DeployService {
         stackName: options.stack ?? 'dev',
         config: resolved,
         namespace,
-        provision,
         shadowServerUrl: k8sShadowUrl,
         kubeContext: options.k8sContext,
         kubeConfigPath,
@@ -262,7 +261,6 @@ export class DeployService {
               stackName: options.stack ?? 'dev',
               config: resolved,
               namespace,
-              provision,
               shadowServerUrl: k8sShadowUrl,
               kubeContext: options.k8sContext,
               kubeConfigPath,
@@ -295,7 +293,6 @@ export class DeployService {
           stackName: options.stack ?? 'dev',
           config: resolved,
           namespace,
-          provision,
           shadowServerUrl: k8sShadowUrl,
           kubeContext: options.k8sContext,
           kubeConfigPath,
@@ -314,7 +311,7 @@ export class DeployService {
     if (options.dryRun) {
       this.logger.success('Preview complete')
       emit('Preview complete\n')
-      return { namespace, agentCount: agents.length, config: resolved, provision }
+      return { namespace, agentCount: agents.length, config: resolved }
     }
 
     this.logger.success('Deployment complete!')
@@ -333,7 +330,6 @@ export class DeployService {
       namespace,
       agentCount: agents.length,
       config: resolved,
-      provision,
       outputs: Object.fromEntries(Object.entries(outputs).map(([k, v]) => [k, v.value])),
     }
   }

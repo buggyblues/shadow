@@ -403,13 +403,17 @@ function applyPluginPipeline(
     // This allows plugins like shadowob to be configured purely via use entries
     // without requiring a separate config.plugins[id] entry.
     const allUseEntries = [...(config.use ?? []), ...(agent.use ?? [])]
-    const useOptions = (allUseEntries.find((e) => e.plugin === pluginId)?.options ?? {}) as Record<
+    // Prefer per-agent use entry options; fall back to template-level.
+    const agentUseEntry = agent.use?.find((e) => e.plugin === pluginId)
+    const templateUseEntry = config.use?.find((e) => e.plugin === pluginId)
+    const useOptions = ((agentUseEntry ?? templateUseEntry)?.options ?? {}) as Record<
       string,
       unknown
     >
+    const isInUse = allUseEntries.some((e) => e.plugin === pluginId)
 
     // Skip plugins that have no config at all (neither plugins[id] nor use entry)
-    if (!resolved && Object.keys(useOptions).length === 0) continue
+    if (!resolved && !isInUse) continue
 
     const secrets = resolvePluginSecrets(pluginId, config, process.env)
     const context: PluginBuildContext = {
