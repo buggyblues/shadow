@@ -110,6 +110,33 @@ export interface ShadowBinding {
   replyPolicy?: ShadowReplyPolicy
 }
 
+/**
+ * A rental listing for a buddy on the Shadow claw marketplace.
+ *
+ * When specified, the provisioner will create or update a public listing
+ * so other Shadow users can discover and rent this buddy.
+ */
+export interface ShadowListing {
+  /**
+   * References the buddy id in the `buddies` array.
+   * The buddy's agentId is resolved at provision time and used as the listing's agentId.
+   */
+  buddyId: string
+  /** Listing title shown on the marketplace */
+  title: string
+  /** Listing description shown on the marketplace */
+  description: string
+  /** Hourly rental price in the platform's token currency */
+  pricePerHour: number
+  /** Tags for discoverability (e.g. ["coding", "research", "writing"]) */
+  tags?: string[]
+  /**
+   * Whether the listing should be active (publicly visible) after provisioning.
+   * Defaults to true. Set to false to create a draft listing.
+   */
+  active?: boolean
+}
+
 export interface ShadowobPluginConfig {
   /** Shadow servers to provision */
   servers?: ShadowServer[]
@@ -117,4 +144,9 @@ export interface ShadowobPluginConfig {
   buddies?: ShadowBuddy[]
   /** Binding rules connecting buddies to agents */
   bindings?: ShadowBinding[]
+  /**
+   * Rental listings to publish on the Shadow claw marketplace.
+   * Each entry creates or updates a public listing for the referenced buddy.
+   */
+  listings?: ShadowListing[]
 }

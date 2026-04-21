@@ -5,7 +5,6 @@
  * mapping agent deployments to buddy accounts with routing and reply policies.
  */
 
-import { provisionShadowResources } from '../../provisioning/index.js'
 import { defineChannelPlugin } from '../helpers.js'
 import type {
   PluginBuildContext,
@@ -15,6 +14,7 @@ import type {
   PluginValidationError,
 } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
+import { provisionShadowResources } from './provisioning.js'
 
 interface ShadowBuddy {
   id: string
@@ -134,6 +134,7 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
         servers?: Record<string, string>
         channels?: Record<string, string>
         buddies?: Record<string, { agentId: string; userId: string; token: string }>
+        listings?: Record<string, string>
         shadowServerUrl?: string
       } | null,
       logger: context.logger as import('../../utils/logger.js').Logger,
@@ -159,6 +160,7 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
             { agentId: v.agentId, userId: v.userId, token: v.token },
           ]),
         ),
+        ...(result.listings.size > 0 ? { listings: Object.fromEntries(result.listings) } : {}),
       },
       secrets,
     }

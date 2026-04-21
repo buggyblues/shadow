@@ -39,6 +39,10 @@
         "$ref": "#/definitions/UseEntry"
       }
     },
+    "plugins": {
+      "description": "Legacy plugin declarations map.\nPrefer `use`, but keep this field for compatibility during migration.",
+      "$ref": "#/definitions/Record%3Cstring%2CCloudPluginInstanceConfig%3E"
+    },
     "registry": {
       "description": "Reusable provider/configuration registry.\nAlso contains vault definitions (registry.vaults) for secret isolation.",
       "$ref": "#/definitions/RegistryConfig"
@@ -72,9 +76,373 @@
         "description": {
           "description": "What this team does — appears in console and CLI output",
           "type": "string"
+        },
+        "defaultModel": {
+          "description": "Default model applied to agents that don't set `agent.model`",
+          "$ref": "#/definitions/AgentModel"
+        },
+        "defaultCompliance": {
+          "description": "Default compliance policy applied to agents that don't set `agent.compliance`",
+          "$ref": "#/definitions/AgentCompliance"
         }
       },
       "required": ["name"]
+    },
+    "AgentModel": {
+      "description": "Agent model configuration — mirrors gitagent's model section.\nSpecifies primary model with ordered fallbacks and inference constraints.",
+      "type": "object",
+      "properties": {
+        "preferred": {
+          "description": "Primary model in \"provider/model\" format (e.g. \"anthropic/claude-sonnet-4-5\")",
+          "type": "string"
+        },
+        "fallbacks": {
+          "description": "Ordered fallback models tried if primary is unavailable",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "constraints": {
+          "description": "Inference constraints",
+          "type": "object",
+          "properties": {
+            "temperature": {
+              "description": "Sampling temperature 0.0–2.0",
+              "allOf": [
+                {
+                  "description": "Inclusive minimum value constraint (value >= min).\n\n`Minimum<N>` is a type tag that validates numeric values are greater than or\nequal to the specified bound. Apply it to `number` or `bigint` properties\nusing TypeScript intersection types.\n\nThis constraint is **mutually exclusive** with {@link ExclusiveMinimum} - you\ncannot use both on the same property. Use `Minimum` for inclusive bounds (>=)\nand `ExclusiveMinimum` for exclusive bounds (>).\n\nThe constraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It also generates `minimum` in JSON Schema output.",
+                  "type": "object",
+                  "properties": {
+                    "typia.tag": {
+                      "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                      "type": "object",
+                      "properties": {
+                        "target": {
+                          "type": "string",
+                          "const": "number"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "minimum"
+                        },
+                        "value": {
+                          "description": "The minimum allowed value (inclusive)",
+                          "type": "number",
+                          "const": 0
+                        },
+                        "validate": {
+                          "type": "string",
+                          "const": "0 <= $input"
+                        },
+                        "exclusive": {
+                          "type": "array",
+                          "items": [
+                            {
+                              "type": "string",
+                              "const": "minimum"
+                            },
+                            {
+                              "type": "string",
+                              "const": "exclusiveMinimum"
+                            }
+                          ],
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "minimum": {
+                              "description": "The minimum allowed value (inclusive)",
+                              "type": "number",
+                              "const": 0
+                            }
+                          },
+                          "required": ["minimum"]
+                        }
+                      },
+                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                    }
+                  }
+                },
+                {
+                  "description": "Inclusive maximum value constraint (value <= max).\n\n`Maximum<N>` is a type tag that validates numeric values are less than or\nequal to the specified bound. Apply it to `number` or `bigint` properties\nusing TypeScript intersection types.\n\nThis constraint is **mutually exclusive** with {@link ExclusiveMaximum} - you\ncannot use both on the same property. Use `Maximum` for inclusive bounds (<=)\nand `ExclusiveMaximum` for exclusive bounds (<).\n\nThe constraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It also generates `maximum` in JSON Schema output.",
+                  "type": "object",
+                  "properties": {
+                    "typia.tag": {
+                      "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                      "type": "object",
+                      "properties": {
+                        "target": {
+                          "type": "string",
+                          "const": "number"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "maximum"
+                        },
+                        "value": {
+                          "description": "The maximum allowed value (inclusive)",
+                          "type": "number",
+                          "const": 2
+                        },
+                        "validate": {
+                          "type": "string",
+                          "const": "$input <= 2"
+                        },
+                        "exclusive": {
+                          "type": "array",
+                          "items": [
+                            {
+                              "type": "string",
+                              "const": "maximum"
+                            },
+                            {
+                              "type": "string",
+                              "const": "exclusiveMaximum"
+                            }
+                          ],
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "maximum": {
+                              "description": "The maximum allowed value (inclusive)",
+                              "type": "number",
+                              "const": 2
+                            }
+                          },
+                          "required": ["maximum"]
+                        }
+                      },
+                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                    }
+                  }
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "maxTokens": {
+              "description": "Max output tokens",
+              "allOf": [
+                {
+                  "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+                  "type": "object",
+                  "properties": {
+                    "typia.tag": {
+                      "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                      "type": "object",
+                      "properties": {
+                        "target": {
+                          "type": "string",
+                          "const": "number"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "type"
+                        },
+                        "value": {
+                          "description": "Numeric type identifier",
+                          "type": "string",
+                          "const": "uint32"
+                        },
+                        "validate": {
+                          "type": "string",
+                          "const": "$importInternal(\"isTypeUint32\")($input)"
+                        },
+                        "exclusive": {
+                          "type": "boolean",
+                          "const": true
+                        },
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "integer"
+                            },
+                            "minimum": {
+                              "type": "number",
+                              "const": 0
+                            }
+                          },
+                          "required": ["minimum", "type"]
+                        }
+                      },
+                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                    }
+                  }
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "topP": {
+              "description": "Top-p sampling parameter",
+              "allOf": [
+                {
+                  "description": "Inclusive minimum value constraint (value >= min).\n\n`Minimum<N>` is a type tag that validates numeric values are greater than or\nequal to the specified bound. Apply it to `number` or `bigint` properties\nusing TypeScript intersection types.\n\nThis constraint is **mutually exclusive** with {@link ExclusiveMinimum} - you\ncannot use both on the same property. Use `Minimum` for inclusive bounds (>=)\nand `ExclusiveMinimum` for exclusive bounds (>).\n\nThe constraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It also generates `minimum` in JSON Schema output.",
+                  "type": "object",
+                  "properties": {
+                    "typia.tag": {
+                      "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                      "type": "object",
+                      "properties": {
+                        "target": {
+                          "type": "string",
+                          "const": "number"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "minimum"
+                        },
+                        "value": {
+                          "description": "The minimum allowed value (inclusive)",
+                          "type": "number",
+                          "const": 0
+                        },
+                        "validate": {
+                          "type": "string",
+                          "const": "0 <= $input"
+                        },
+                        "exclusive": {
+                          "type": "array",
+                          "items": [
+                            {
+                              "type": "string",
+                              "const": "minimum"
+                            },
+                            {
+                              "type": "string",
+                              "const": "exclusiveMinimum"
+                            }
+                          ],
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "minimum": {
+                              "description": "The minimum allowed value (inclusive)",
+                              "type": "number",
+                              "const": 0
+                            }
+                          },
+                          "required": ["minimum"]
+                        }
+                      },
+                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                    }
+                  }
+                },
+                {
+                  "description": "Inclusive maximum value constraint (value <= max).\n\n`Maximum<N>` is a type tag that validates numeric values are less than or\nequal to the specified bound. Apply it to `number` or `bigint` properties\nusing TypeScript intersection types.\n\nThis constraint is **mutually exclusive** with {@link ExclusiveMaximum} - you\ncannot use both on the same property. Use `Maximum` for inclusive bounds (<=)\nand `ExclusiveMaximum` for exclusive bounds (<).\n\nThe constraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It also generates `maximum` in JSON Schema output.",
+                  "type": "object",
+                  "properties": {
+                    "typia.tag": {
+                      "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                      "type": "object",
+                      "properties": {
+                        "target": {
+                          "type": "string",
+                          "const": "number"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "maximum"
+                        },
+                        "value": {
+                          "description": "The maximum allowed value (inclusive)",
+                          "type": "number",
+                          "const": 1
+                        },
+                        "validate": {
+                          "type": "string",
+                          "const": "$input <= 1"
+                        },
+                        "exclusive": {
+                          "type": "array",
+                          "items": [
+                            {
+                              "type": "string",
+                              "const": "maximum"
+                            },
+                            {
+                              "type": "string",
+                              "const": "exclusiveMaximum"
+                            }
+                          ],
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "maximum": {
+                              "description": "The maximum allowed value (inclusive)",
+                              "type": "number",
+                              "const": 1
+                            }
+                          },
+                          "required": ["maximum"]
+                        }
+                      },
+                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                    }
+                  }
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "thinkingLevel": {
+              "description": "Thinking depth level",
+              "enum": ["adaptive", "high", "low", "medium", "minimal", "off", "xhigh"],
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": ["preferred"]
+    },
+    "AgentCompliance": {
+      "description": "Agent compliance/risk policy.\nMirrors gitagent compliance fields in camelCase for internal usage.",
+      "type": "object",
+      "properties": {
+        "riskTier": {
+          "description": "Risk tier for this agent's tasks",
+          "enum": ["critical", "high", "low", "standard"],
+          "type": "string"
+        },
+        "frameworks": {
+          "description": "Regulatory / governance frameworks to align with",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "humanInTheLoop": {
+          "description": "Human supervision level",
+          "enum": ["advisory", "always", "conditional", "none"],
+          "type": "string"
+        },
+        "auditLogging": {
+          "description": "Enable audit logging",
+          "type": "boolean"
+        },
+        "retentionPeriod": {
+          "description": "Retention period for audit records (e.g. 90d)",
+          "type": "string"
+        }
+      }
     },
     "UseEntry": {
       "description": "A single plugin declaration in the `use` array.",
@@ -92,6 +460,9 @@
       "required": ["plugin"]
     },
     "Record<string,unknown>": {
+      "type": "object"
+    },
+    "Record<string,CloudPluginInstanceConfig>": {
       "type": "object"
     },
     "RegistryConfig": {
@@ -145,6 +516,15 @@
         "headers": {
           "description": "Extra static headers",
           "$ref": "#/definitions/Record%3Cstring%2Cstring%3E"
+        },
+        "request": {
+          "description": "Transport overrides (e.g. allowPrivateNetwork for proxy environments)",
+          "type": "object",
+          "properties": {
+            "allowPrivateNetwork": {
+              "type": "boolean"
+            }
+          }
         },
         "models": {
           "description": "Provider model catalog",
@@ -207,6 +587,14 @@
         "id": {
           "description": "Unique configuration ID",
           "type": "string"
+        },
+        "extends": {
+          "description": "Base configuration to inherit from.\nResolved recursively — child fields override parent.",
+          "type": "string"
+        },
+        "model": {
+          "description": "Model preset for agents using this configuration.\nAfter extends resolution, merged into AgentConfiguration.model.\nPriority: agent.model > configuration.model > team.defaultModel.",
+          "$ref": "#/definitions/AgentModel"
         },
         "openclaw": {
           "description": "OpenClaw config values",
@@ -1076,7 +1464,16 @@
           "type": "object",
           "properties": {
             "profile": {
-              "enum": ["coding", "full", "messaging", "minimal"],
+              "enum": [
+                "approve-all",
+                "approve-reads",
+                "coding",
+                "dangerously-skip-permissions",
+                "deny-all",
+                "full",
+                "messaging",
+                "minimal"
+              ],
               "type": "string"
             },
             "allow": {
@@ -1797,7 +2194,16 @@
       "properties": {
         "profile": {
           "description": "Tool profile",
-          "enum": ["coding", "full", "messaging", "minimal"],
+          "enum": [
+            "approve-all",
+            "approve-reads",
+            "coding",
+            "dangerously-skip-permissions",
+            "deny-all",
+            "full",
+            "messaging",
+            "minimal"
+          ],
           "type": "string"
         },
         "allow": {
@@ -2321,6 +2727,10 @@
           "description": "Model preferences — overrides registry and team defaults.\nMirrors gitagent's `model` section: preferred primary + ordered fallbacks.",
           "$ref": "#/definitions/AgentModel"
         },
+        "compliance": {
+          "description": "Compliance/risk policy for this agent.\nFalls back to team.defaultCompliance when omitted.",
+          "$ref": "#/definitions/AgentCompliance"
+        },
         "workflows": {
           "description": "Deterministic multi-step workflows this agent can run.\nMirrors gitagent's SkillsFlow workflows/*.yaml.",
           "type": "array",
@@ -2380,6 +2790,10 @@
           "description": "Base configuration ID to extend from registry.configurations",
           "type": "string"
         },
+        "model": {
+          "description": "Model preferences resolved from registry.configurations preset.\nPopulated after extends resolution; lower priority than agent.model.",
+          "$ref": "#/definitions/AgentModel"
+        },
         "openclaw": {
           "description": "OpenClaw config overrides (official format)",
           "$ref": "#/definitions/Partial%3COpenClawConfig%3E"
@@ -2419,331 +2833,6 @@
           "type": "string"
         }
       }
-    },
-    "AgentModel": {
-      "description": "Agent model configuration — mirrors gitagent's model section.\nSpecifies primary model with ordered fallbacks and inference constraints.",
-      "type": "object",
-      "properties": {
-        "preferred": {
-          "description": "Primary model in \"provider/model\" format (e.g. \"anthropic/claude-sonnet-4-5\")",
-          "type": "string"
-        },
-        "fallbacks": {
-          "description": "Ordered fallback models tried if primary is unavailable",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "constraints": {
-          "description": "Inference constraints",
-          "type": "object",
-          "properties": {
-            "temperature": {
-              "description": "Sampling temperature 0.0–2.0",
-              "allOf": [
-                {
-                  "description": "Inclusive minimum value constraint (value >= min).\n\n`Minimum<N>` is a type tag that validates numeric values are greater than or\nequal to the specified bound. Apply it to `number` or `bigint` properties\nusing TypeScript intersection types.\n\nThis constraint is **mutually exclusive** with {@link ExclusiveMinimum} - you\ncannot use both on the same property. Use `Minimum` for inclusive bounds (>=)\nand `ExclusiveMinimum` for exclusive bounds (>).\n\nThe constraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It also generates `minimum` in JSON Schema output.",
-                  "type": "object",
-                  "properties": {
-                    "typia.tag": {
-                      "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
-                      "type": "object",
-                      "properties": {
-                        "target": {
-                          "type": "string",
-                          "const": "number"
-                        },
-                        "kind": {
-                          "type": "string",
-                          "const": "minimum"
-                        },
-                        "value": {
-                          "description": "The minimum allowed value (inclusive)",
-                          "type": "number",
-                          "const": 0
-                        },
-                        "validate": {
-                          "type": "string",
-                          "const": "0 <= $input"
-                        },
-                        "exclusive": {
-                          "type": "array",
-                          "items": [
-                            {
-                              "type": "string",
-                              "const": "minimum"
-                            },
-                            {
-                              "type": "string",
-                              "const": "exclusiveMinimum"
-                            }
-                          ],
-                          "minItems": 2,
-                          "maxItems": 2
-                        },
-                        "schema": {
-                          "type": "object",
-                          "properties": {
-                            "minimum": {
-                              "description": "The minimum allowed value (inclusive)",
-                              "type": "number",
-                              "const": 0
-                            }
-                          },
-                          "required": ["minimum"]
-                        }
-                      },
-                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
-                    }
-                  }
-                },
-                {
-                  "description": "Inclusive maximum value constraint (value <= max).\n\n`Maximum<N>` is a type tag that validates numeric values are less than or\nequal to the specified bound. Apply it to `number` or `bigint` properties\nusing TypeScript intersection types.\n\nThis constraint is **mutually exclusive** with {@link ExclusiveMaximum} - you\ncannot use both on the same property. Use `Maximum` for inclusive bounds (<=)\nand `ExclusiveMaximum` for exclusive bounds (<).\n\nThe constraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It also generates `maximum` in JSON Schema output.",
-                  "type": "object",
-                  "properties": {
-                    "typia.tag": {
-                      "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
-                      "type": "object",
-                      "properties": {
-                        "target": {
-                          "type": "string",
-                          "const": "number"
-                        },
-                        "kind": {
-                          "type": "string",
-                          "const": "maximum"
-                        },
-                        "value": {
-                          "description": "The maximum allowed value (inclusive)",
-                          "type": "number",
-                          "const": 2
-                        },
-                        "validate": {
-                          "type": "string",
-                          "const": "$input <= 2"
-                        },
-                        "exclusive": {
-                          "type": "array",
-                          "items": [
-                            {
-                              "type": "string",
-                              "const": "maximum"
-                            },
-                            {
-                              "type": "string",
-                              "const": "exclusiveMaximum"
-                            }
-                          ],
-                          "minItems": 2,
-                          "maxItems": 2
-                        },
-                        "schema": {
-                          "type": "object",
-                          "properties": {
-                            "maximum": {
-                              "description": "The maximum allowed value (inclusive)",
-                              "type": "number",
-                              "const": 2
-                            }
-                          },
-                          "required": ["maximum"]
-                        }
-                      },
-                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
-                    }
-                  }
-                },
-                {
-                  "type": "number"
-                }
-              ]
-            },
-            "maxTokens": {
-              "description": "Max output tokens",
-              "allOf": [
-                {
-                  "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
-                  "type": "object",
-                  "properties": {
-                    "typia.tag": {
-                      "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
-                      "type": "object",
-                      "properties": {
-                        "target": {
-                          "type": "string",
-                          "const": "number"
-                        },
-                        "kind": {
-                          "type": "string",
-                          "const": "type"
-                        },
-                        "value": {
-                          "description": "Numeric type identifier",
-                          "type": "string",
-                          "const": "uint32"
-                        },
-                        "validate": {
-                          "type": "string",
-                          "const": "$importInternal(\"isTypeUint32\")($input)"
-                        },
-                        "exclusive": {
-                          "type": "boolean",
-                          "const": true
-                        },
-                        "schema": {
-                          "type": "object",
-                          "properties": {
-                            "type": {
-                              "type": "string",
-                              "const": "integer"
-                            },
-                            "minimum": {
-                              "type": "number",
-                              "const": 0
-                            }
-                          },
-                          "required": ["minimum", "type"]
-                        }
-                      },
-                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
-                    }
-                  }
-                },
-                {
-                  "type": "number"
-                }
-              ]
-            },
-            "topP": {
-              "description": "Top-p sampling parameter",
-              "allOf": [
-                {
-                  "description": "Inclusive minimum value constraint (value >= min).\n\n`Minimum<N>` is a type tag that validates numeric values are greater than or\nequal to the specified bound. Apply it to `number` or `bigint` properties\nusing TypeScript intersection types.\n\nThis constraint is **mutually exclusive** with {@link ExclusiveMinimum} - you\ncannot use both on the same property. Use `Minimum` for inclusive bounds (>=)\nand `ExclusiveMinimum` for exclusive bounds (>).\n\nThe constraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It also generates `minimum` in JSON Schema output.",
-                  "type": "object",
-                  "properties": {
-                    "typia.tag": {
-                      "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
-                      "type": "object",
-                      "properties": {
-                        "target": {
-                          "type": "string",
-                          "const": "number"
-                        },
-                        "kind": {
-                          "type": "string",
-                          "const": "minimum"
-                        },
-                        "value": {
-                          "description": "The minimum allowed value (inclusive)",
-                          "type": "number",
-                          "const": 0
-                        },
-                        "validate": {
-                          "type": "string",
-                          "const": "0 <= $input"
-                        },
-                        "exclusive": {
-                          "type": "array",
-                          "items": [
-                            {
-                              "type": "string",
-                              "const": "minimum"
-                            },
-                            {
-                              "type": "string",
-                              "const": "exclusiveMinimum"
-                            }
-                          ],
-                          "minItems": 2,
-                          "maxItems": 2
-                        },
-                        "schema": {
-                          "type": "object",
-                          "properties": {
-                            "minimum": {
-                              "description": "The minimum allowed value (inclusive)",
-                              "type": "number",
-                              "const": 0
-                            }
-                          },
-                          "required": ["minimum"]
-                        }
-                      },
-                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
-                    }
-                  }
-                },
-                {
-                  "description": "Inclusive maximum value constraint (value <= max).\n\n`Maximum<N>` is a type tag that validates numeric values are less than or\nequal to the specified bound. Apply it to `number` or `bigint` properties\nusing TypeScript intersection types.\n\nThis constraint is **mutually exclusive** with {@link ExclusiveMaximum} - you\ncannot use both on the same property. Use `Maximum` for inclusive bounds (<=)\nand `ExclusiveMaximum` for exclusive bounds (<).\n\nThe constraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It also generates `maximum` in JSON Schema output.",
-                  "type": "object",
-                  "properties": {
-                    "typia.tag": {
-                      "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
-                      "type": "object",
-                      "properties": {
-                        "target": {
-                          "type": "string",
-                          "const": "number"
-                        },
-                        "kind": {
-                          "type": "string",
-                          "const": "maximum"
-                        },
-                        "value": {
-                          "description": "The maximum allowed value (inclusive)",
-                          "type": "number",
-                          "const": 1
-                        },
-                        "validate": {
-                          "type": "string",
-                          "const": "$input <= 1"
-                        },
-                        "exclusive": {
-                          "type": "array",
-                          "items": [
-                            {
-                              "type": "string",
-                              "const": "maximum"
-                            },
-                            {
-                              "type": "string",
-                              "const": "exclusiveMaximum"
-                            }
-                          ],
-                          "minItems": 2,
-                          "maxItems": 2
-                        },
-                        "schema": {
-                          "type": "object",
-                          "properties": {
-                            "maximum": {
-                              "description": "The maximum allowed value (inclusive)",
-                              "type": "number",
-                              "const": 1
-                            }
-                          },
-                          "required": ["maximum"]
-                        }
-                      },
-                      "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
-                    }
-                  }
-                },
-                {
-                  "type": "number"
-                }
-              ]
-            },
-            "thinkingLevel": {
-              "description": "Thinking depth level",
-              "enum": ["adaptive", "high", "low", "medium", "minimal", "off", "xhigh"],
-              "type": "string"
-            }
-          }
-        }
-      },
-      "required": ["preferred"]
     },
     "AgentWorkflowDef": {
       "description": "Deterministic multi-step workflow — mirrors gitagent's SkillsFlow / workflows/*.yaml.\nChains skills, agents, and tools with explicit dependencies and data flow.",
