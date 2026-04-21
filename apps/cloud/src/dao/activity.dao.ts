@@ -4,7 +4,7 @@
 
 import { desc } from 'drizzle-orm'
 import type { CloudDatabase } from '../db/index.js'
-import { type Activity, type NewActivity, activities } from '../db/schema.js'
+import { type Activity, activities, type NewActivity } from '../db/schema.js'
 
 export class ActivityDao {
   constructor(private db: CloudDatabase) {}

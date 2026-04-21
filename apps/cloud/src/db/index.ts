@@ -5,11 +5,11 @@
  * Data lives at ~/.shadowob/cloud.db by default.
  */
 
-import Database from 'better-sqlite3'
-import { drizzle } from 'drizzle-orm/better-sqlite3'
+import { mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { mkdirSync } from 'node:fs'
+import Database from 'better-sqlite3'
+import { drizzle } from 'drizzle-orm/better-sqlite3'
 import * as schema from './schema.js'
 
 export type CloudDatabase = ReturnType<typeof createDatabase>

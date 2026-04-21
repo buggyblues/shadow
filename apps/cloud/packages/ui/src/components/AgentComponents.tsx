@@ -1,6 +1,6 @@
+import { Badge, Button, EmptyState } from '@shadowob/ui'
 import { Code, Cpu, Layers, Server, Settings, Users, Zap } from 'lucide-react'
 import { useState } from 'react'
-import { Badge, Button, EmptyState } from '@shadowob/ui'
 import { cn, pluralize } from '@/lib/utils'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
