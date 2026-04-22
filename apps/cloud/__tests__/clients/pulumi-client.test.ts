@@ -1,12 +1,14 @@
 import { delimiter } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { ensurePulumiCliOnPath } from '../../src/clients/pulumi-client'
+import { ensurePulumiCliOnPath, resolvePulumiBackendUrl } from '../../src/clients/pulumi-client'
 
 const originalPath = process.env.PATH
+const originalPulumiBackendUrl = process.env.PULUMI_BACKEND_URL
 
 describe('ensurePulumiCliOnPath', () => {
   afterEach(() => {
     process.env.PATH = originalPath
+    process.env.PULUMI_BACKEND_URL = originalPulumiBackendUrl
   })
 
   it('prepends the Pulumi bin directory to PATH', () => {
@@ -25,5 +27,19 @@ describe('ensurePulumiCliOnPath', () => {
     ensurePulumiCliOnPath('/root/.shadowob/pulumi/cli')
 
     expect(process.env.PATH).toBe([binDir, '/usr/bin', '/bin'].join(delimiter))
+  })
+
+  it('falls back to the local file backend when PULUMI_BACKEND_URL is blank', () => {
+    process.env.PULUMI_BACKEND_URL = '   '
+
+    expect(resolvePulumiBackendUrl('/tmp/shadow-pulumi-state')).toBe(
+      'file:///tmp/shadow-pulumi-state',
+    )
+  })
+
+  it('keeps an explicit non-empty Pulumi backend URL', () => {
+    process.env.PULUMI_BACKEND_URL = 'https://api.pulumi.example'
+
+    expect(resolvePulumiBackendUrl('/tmp/shadow-pulumi-state')).toBe('https://api.pulumi.example')
   })
 })

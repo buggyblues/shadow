@@ -405,13 +405,17 @@ function StepConfigure({
     placeholder?: string
     isPassword?: boolean
   }) => {
+    const inputId = `deploy-env-${envKey.toLowerCase()}`
     const isUsingSaved = config.envVars[envKey] === '__SAVED__'
     const hasSaved = !!combinedLookup[envKey]
     const isFilled = isUsingSaved || Boolean(config.envVars[envKey]?.trim())
 
     return (
       <div className="space-y-1.5">
-        <label className="flex items-center gap-1.5 text-xs font-mono text-text-secondary">
+        <label
+          htmlFor={isUsingSaved ? undefined : inputId}
+          className="flex items-center gap-1.5 text-xs font-mono text-text-secondary"
+        >
           {isFilled ? (
             <CheckCircle size={11} className="text-success" />
           ) : (
@@ -438,6 +442,9 @@ function StepConfigure({
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Input
+                id={inputId}
+                name={envKey}
+                data-testid={inputId}
                 type={isPassword && !showPasswords[envKey] ? 'password' : 'text'}
                 value={config.envVars[envKey] ?? ''}
                 onChange={(e) => updateVar(envKey, e.target.value)}

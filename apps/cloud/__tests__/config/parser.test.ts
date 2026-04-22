@@ -396,5 +396,63 @@ describe('parser', () => {
       expect(result.tools?.allow).toContain('web-fetch')
       expect(result.tools?.deny).toContain('mcp-*')
     })
+
+    it('should drop legacy tool fragments while preserving explicit valid config', () => {
+      const config: CloudConfig = {
+        version: '1',
+        deployments: {
+          agents: [
+            {
+              id: 'legacy-agent',
+              runtime: 'openclaw',
+              configuration: {
+                openclaw: {
+                  tools: {
+                    profile: 'full',
+                    memory: { enabled: true },
+                    code: { enabled: true },
+                    web: { fetch: { enabled: true } },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      }
+
+      const result = buildOpenClawConfig(config.deployments!.agents[0], config)
+      const tools = result.tools as Record<string, unknown>
+
+      expect(result.tools?.profile).toBe('full')
+      expect(result.tools?.web).toEqual({ fetch: { enabled: true } })
+      expect('memory' in tools).toBe(false)
+      expect('code' in tools).toBe(false)
+    })
+
+    it('should map legacy code enablement to the coding profile when no profile is set', () => {
+      const config: CloudConfig = {
+        version: '1',
+        deployments: {
+          agents: [
+            {
+              id: 'legacy-code-agent',
+              runtime: 'openclaw',
+              configuration: {
+                openclaw: {
+                  tools: {
+                    code: { enabled: true },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      }
+
+      const result = buildOpenClawConfig(config.deployments!.agents[0], config)
+
+      expect(result.tools?.profile).toBe('coding')
+      expect((result.tools as Record<string, unknown>)?.code).toBeUndefined()
+    })
   })
 })

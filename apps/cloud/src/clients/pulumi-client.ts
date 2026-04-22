@@ -18,6 +18,15 @@ import { createInfraProgram, type InfraOptions } from '../infra/index.js'
 let cachedPulumiCommand: automation.PulumiCommand | null = null
 let cachedPulumiBackendUrl: string | null = null
 
+function getNonEmptyEnv(name: string): string | undefined {
+  const value = process.env[name]
+
+  if (typeof value !== 'string') return undefined
+
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
 export interface StackOptions {
   projectName?: string
   stackName: string
@@ -35,9 +44,13 @@ export interface StackOptions {
 }
 
 function getDefaultStateDir(): string {
-  return process.env.PULUMI_BACKEND_URL
+  return getNonEmptyEnv('PULUMI_BACKEND_URL')
     ? '' // if already set, don't override
     : join(homedir(), '.shadowob', 'pulumi')
+}
+
+export function resolvePulumiBackendUrl(stateDir?: string): string | undefined {
+  return getNonEmptyEnv('PULUMI_BACKEND_URL') ?? (stateDir ? `file://${stateDir}` : undefined)
 }
 
 export function ensurePulumiCliOnPath(cliRoot: string): string {
@@ -94,7 +107,7 @@ export async function getOrCreateStack(options: StackOptions) {
   }
 
   const stateDir = options.stateDir ?? getDefaultStateDir()
-  const backendUrl = process.env.PULUMI_BACKEND_URL ?? (stateDir ? `file://${stateDir}` : undefined)
+  const backendUrl = resolvePulumiBackendUrl(stateDir)
 
   // Ensure local file backend directory exists before Pulumi tries to open it
   if (backendUrl?.startsWith('file://')) {
@@ -112,6 +125,8 @@ export async function getOrCreateStack(options: StackOptions) {
   }
   if (backendUrl) {
     process.env.PULUMI_BACKEND_URL = backendUrl
+  } else {
+    delete process.env.PULUMI_BACKEND_URL
   }
 
   // Ensure the Pulumi CLI binary is available (install if needed)

@@ -345,6 +345,40 @@ function buildGatewayConfig(
 }
 
 /**
+ * Normalize legacy tool config fragments that are no longer accepted by the
+ * current OpenClaw schema.
+ *
+ * Older templates used nested `tools.code` / `tools.memory` flags. Current
+ * OpenClaw expects capability selection to flow through `tools.profile` and no
+ * longer accepts those keys. We strip the stale keys and preserve the closest
+ * valid behavior.
+ */
+function normalizeLegacyToolsConfig(tools: OpenClawConfig['tools']): void {
+  if (!tools) return
+
+  const mutableTools = tools as OpenClawConfig['tools'] & Record<string, unknown>
+  const legacyCode = mutableTools.code
+
+  const legacyCodeEnabled =
+    legacyCode === true ||
+    (legacyCode &&
+      typeof legacyCode === 'object' &&
+      (!('enabled' in legacyCode) ||
+        (legacyCode as { enabled?: unknown }).enabled === undefined ||
+        Boolean((legacyCode as { enabled?: unknown }).enabled)))
+
+  if (
+    (mutableTools.profile === undefined || mutableTools.profile === 'minimal') &&
+    legacyCodeEnabled
+  ) {
+    mutableTools.profile = 'coding'
+  }
+
+  delete mutableTools.code
+  delete mutableTools.memory
+}
+
+/**
  * Strip agent-entry fields not in OpenClaw's strict schema.
  * Returns workspace files to write (e.g., SOUL.md from instructions).
  */
@@ -522,7 +556,11 @@ export function buildOpenClawConfig(
     openclawConfig._pluginEnvVars = pluginEnvVars
   }
 
-  // 17. Ensure shadowob channel has a disabled fallback config so the
+  // 17. Normalize legacy tool config fragments so historical templates and
+  //     stored snapshots still produce a valid OpenClaw config.
+  normalizeLegacyToolsConfig(openclawConfig.tools)
+
+  // 18. Ensure shadowob channel has a disabled fallback config so the
   //     always-installed openclaw-shadowob extension passes validation.
   const existingChannels = (openclawConfig as Record<string, unknown>).channels as
     | Record<string, unknown>

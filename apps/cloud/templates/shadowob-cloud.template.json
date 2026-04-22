@@ -66,9 +66,6 @@
             "systemPrompt": "You are a helpful AI assistant named {{buddyName}}. Be concise, friendly, and accurate. When you don't know something, say so rather than guessing. You operate inside a Shadow chat server — users can @mention you or message you directly.",
             "tools": {
               "profile": "full",
-              "memory": {
-                "enabled": true
-              },
               "web": {
                 "search": {
                   "enabled": true

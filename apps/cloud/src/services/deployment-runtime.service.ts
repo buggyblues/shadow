@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { DeployOptions, DeployResult } from './deploy.service.js'
@@ -27,6 +27,34 @@ export interface DestroyRuntimeOptions {
 function extractKubeContext(kubeconfigYaml: string): string | undefined {
   const match = kubeconfigYaml.match(/current-context:\s*(\S+)/)
   return match?.[1]
+}
+
+export function rewriteLoopbackKubeconfig(
+  kubeconfigYaml: string,
+  loopbackHost = process.env.KUBECONFIG_LOOPBACK_HOST,
+): string {
+  const normalizedHost = loopbackHost?.trim()
+  if (!normalizedHost) return kubeconfigYaml
+
+  const lines = kubeconfigYaml.split(/\r?\n/)
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
+    const match = line?.match(/^([ \t]*server:\s*https?:\/\/)(127\.0\.0\.1|localhost)([:/].*)$/)
+    if (!match) continue
+
+    const indent = match[1].match(/^[ \t]*/)?.[0] ?? ''
+    lines[index] = `${match[1]}${normalizedHost}${match[3]}`
+
+    const tlsServerNameLine = `${indent}tls-server-name: localhost`
+    const nextLine = lines[index + 1]
+    if (!nextLine?.trim().startsWith('tls-server-name:')) {
+      lines.splice(index + 1, 0, tlsServerNameLine)
+      index += 1
+    }
+  }
+
+  return lines.join('\n')
 }
 
 function normalizeRuntimeEnvVars(envVars?: Record<string, string>): Record<string, string> {
@@ -88,13 +116,21 @@ export class DeploymentRuntimeService {
     let k8sContext: string | undefined
 
     try {
-      if (cluster?.kubeconfig) {
+      const activeKubeconfigPath = process.env.KUBECONFIG
+      const activeKubeconfig = cluster?.kubeconfig
+        ? cluster.kubeconfig
+        : activeKubeconfigPath && existsSync(activeKubeconfigPath)
+          ? readFileSync(activeKubeconfigPath, 'utf8')
+          : undefined
+
+      if (activeKubeconfig) {
         const kubeDir = mkdtempSync(join(tmpdir(), 'sc-kube-'))
         const kubeconfigPath = join(kubeDir, 'kubeconfig')
-        writeFileSync(kubeconfigPath, cluster.kubeconfig, { mode: 0o600 })
+        const rewrittenKubeconfig = rewriteLoopbackKubeconfig(activeKubeconfig)
+        writeFileSync(kubeconfigPath, rewrittenKubeconfig, { mode: 0o600 })
         tempDirs.push(kubeDir)
         process.env.KUBECONFIG = kubeconfigPath
-        k8sContext = extractKubeContext(cluster.kubeconfig)
+        k8sContext = extractKubeContext(rewrittenKubeconfig) ?? process.env.KUBECONFIG_CONTEXT
         if (k8sContext) {
           process.env.KUBECONFIG_CONTEXT = k8sContext
         }
