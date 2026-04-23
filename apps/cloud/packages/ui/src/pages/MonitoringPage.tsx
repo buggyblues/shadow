@@ -12,8 +12,6 @@ import {
   TableHeader,
   TableRow,
   Tabs,
-  TabsList,
-  TabsTrigger,
 } from '@shadowob/ui'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
@@ -41,6 +39,7 @@ import {
 import { type ReactNode, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DashboardLoadingState } from '@/components/DashboardState'
+import { DashboardTabsList } from '@/components/DashboardTabsList'
 import { PageShell } from '@/components/PageShell'
 import { StatCard } from '@/components/StatCard'
 import { StatsGrid } from '@/components/StatsGrid'
@@ -452,7 +451,7 @@ function OverviewPanel({
                       key={item.namespace}
                       to="/deployments/$namespace"
                       params={{ namespace: item.namespace }}
-                      className="flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border hover:bg-white/5 transition-colors glass-surface border-border-subtle"
+                      className="flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border transition-colors hover:bg-bg-modifier-hover glass-surface border-border-subtle"
                     >
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate text-text-primary">
@@ -559,7 +558,7 @@ function OverviewPanel({
                   key={group.namespace}
                   to="/deployments/$namespace"
                   params={{ namespace: group.namespace }}
-                  className="block rounded-2xl border px-4 py-3 hover:bg-white/5 transition-colors glass-surface border-border-subtle"
+                  className="block rounded-2xl border px-4 py-3 transition-colors hover:bg-bg-modifier-hover glass-surface border-border-subtle"
                 >
                   <div className="flex items-center justify-between gap-3 mb-2">
                     <p className="text-sm font-medium text-text-primary">{group.namespace}</p>
@@ -1041,17 +1040,7 @@ export function MonitoringPage() {
           </StatsGrid>
 
           <Tabs value={activeTab} onChange={setActiveTab}>
-            <TabsList className="dashboard-tabs-list">
-              {tabs.map((tab) => (
-                <TabsTrigger key={tab.id} value={tab.id} className="dashboard-tabs-trigger">
-                  <span className="dashboard-tab-icon">{tab.icon}</span>
-                  <span>{tab.label}</span>
-                  {typeof tab.count === 'number' && (
-                    <span className="dashboard-tabs-count">{tab.count}</span>
-                  )}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            <DashboardTabsList tabs={tabs} />
           </Tabs>
         </div>
       }

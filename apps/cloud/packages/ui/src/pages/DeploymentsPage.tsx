@@ -1,4 +1,4 @@
-import { Badge, Button, Search, Tabs, TabsList, TabsTrigger } from '@shadowob/ui'
+import { Badge, Button, Search, Tabs } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
@@ -25,6 +25,7 @@ import { DashboardEmptyState } from '@/components/DashboardEmptyState'
 import { DashboardListRow } from '@/components/DashboardListRow'
 import { DashboardNamespaceCard } from '@/components/DashboardNamespaceCard'
 import { DashboardLoadingState } from '@/components/DashboardState'
+import { DashboardTabsList } from '@/components/DashboardTabsList'
 import { DashboardTaskCard } from '@/components/DashboardTaskCard'
 import { PageShell } from '@/components/PageShell'
 import { StatCard } from '@/components/StatCard'
@@ -607,17 +608,7 @@ export function DeploymentsPage() {
           </StatsGrid>
           <div className="flex items-center justify-between gap-3">
             <Tabs value={activeTab} onChange={setActiveTab}>
-              <TabsList className="dashboard-tabs-list">
-                {tabs.map((tab) => (
-                  <TabsTrigger key={tab.id} value={tab.id} className="dashboard-tabs-trigger">
-                    <span className="dashboard-tab-icon">{tab.icon}</span>
-                    <span>{tab.label}</span>
-                    {typeof tab.count === 'number' && (
-                      <span className="dashboard-tabs-count">{tab.count}</span>
-                    )}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
+              <DashboardTabsList tabs={tabs} />
             </Tabs>
             {activeTab === 'infrastructure' && (
               <Search

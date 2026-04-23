@@ -402,6 +402,10 @@ function CommunityTab() {
             onChange={(e) => setToken(e.target.value)}
             placeholder={data?.hasToken ? '••••••••' : t('settings.communityTokenPlaceholder')}
             className="font-mono text-sm"
+            autoComplete="off"
+            data-1p-ignore
+            data-lpignore="true"
+            data-form-type="other"
           />
           <p className="text-xs text-text-muted">{t('settings.communityTokenHint')}</p>
         </div>

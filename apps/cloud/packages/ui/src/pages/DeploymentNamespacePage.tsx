@@ -10,8 +10,6 @@ import {
   TableHeader,
   TableRow,
   Tabs,
-  TabsList,
-  TabsTrigger,
 } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
@@ -42,6 +40,7 @@ import { CliCommandSnippet } from '@/components/CliCommandSnippet'
 import { DangerConfirmDialog } from '@/components/DangerConfirmDialog'
 import { DashboardEmptyState } from '@/components/DashboardEmptyState'
 import { DashboardNamespaceCard } from '@/components/DashboardNamespaceCard'
+import { DashboardTabsList } from '@/components/DashboardTabsList'
 import { DashboardTaskCard } from '@/components/DashboardTaskCard'
 import { EnvVarEditorDialog } from '@/components/EnvVarEditorDialog'
 import { LogsPanel } from '@/components/LogsPanel'
@@ -145,7 +144,7 @@ function AgentCard({
           onClick={onOpenLogs}
           variant="ghost"
           size="sm"
-          className="dashboard-action-button"
+          className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
         >
           {t('deployments.tabLogs')}
         </Button>
@@ -164,7 +163,7 @@ function AgentCard({
             type="button"
             variant="ghost"
             size="xs"
-            className="dashboard-action-button"
+            className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
             onClick={() => handleScale(-1)}
             disabled={scaleMutation.isPending || currentReplicas <= 0}
           >
@@ -175,7 +174,7 @@ function AgentCard({
             type="button"
             variant="ghost"
             size="xs"
-            className="dashboard-action-button"
+            className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
             onClick={() => handleScale(1)}
             disabled={scaleMutation.isPending}
           >
@@ -232,11 +231,21 @@ function PodsPanel({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="dashboard-table-head">{t('clusters.status')}</TableHead>
-              <TableHead className="dashboard-table-head">{t('monitoring.name')}</TableHead>
-              <TableHead className="dashboard-table-head">{t('monitoring.ready')}</TableHead>
-              <TableHead className="dashboard-table-head">{t('deployments.restarts')}</TableHead>
-              <TableHead className="dashboard-table-head">{t('deployments.age')}</TableHead>
+              <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                {t('clusters.status')}
+              </TableHead>
+              <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                {t('monitoring.name')}
+              </TableHead>
+              <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                {t('monitoring.ready')}
+              </TableHead>
+              <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                {t('deployments.restarts')}
+              </TableHead>
+              <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                {t('deployments.age')}
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -532,7 +541,7 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
             }}
             variant="primary"
             size="sm"
-            className="dashboard-action-button"
+            className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
           >
             <Plus size={11} />
             {t('common.add')}
@@ -546,10 +555,18 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="dashboard-table-head">{t('secrets.keyName')}</TableHead>
-                  <TableHead className="dashboard-table-head">{t('secrets.secretValue')}</TableHead>
-                  <TableHead className="dashboard-table-head">{t('secrets.secret')}</TableHead>
-                  <TableHead className="dashboard-table-head">{t('common.actions')}</TableHead>
+                  <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('secrets.keyName')}
+                  </TableHead>
+                  <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('secrets.secretValue')}
+                  </TableHead>
+                  <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('secrets.secret')}
+                  </TableHead>
+                  <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('common.actions')}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -575,7 +592,7 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
                           onClick={() => void handleEditStart(entry)}
                           variant="ghost"
                           size="icon"
-                          className="dashboard-action-button"
+                          className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
                         >
                           <Pencil size={12} />
                         </Button>
@@ -584,7 +601,7 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
                           onClick={() => setDeleteKey(entry.key)}
                           variant="ghost"
                           size="icon"
-                          className="dashboard-action-button"
+                          className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
                         >
                           <Trash2 size={12} />
                         </Button>
@@ -611,9 +628,15 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="dashboard-table-head">{t('secrets.keyName')}</TableHead>
-                  <TableHead className="dashboard-table-head">{t('secrets.secretValue')}</TableHead>
-                  <TableHead className="dashboard-table-head">{t('secrets.scope')}</TableHead>
+                  <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('secrets.keyName')}
+                  </TableHead>
+                  <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('secrets.secretValue')}
+                  </TableHead>
+                  <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('secrets.scope')}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1051,7 +1074,7 @@ export function DeploymentNamespacePage() {
 
   if (!isLoading && namespaceDeployments.length === 0) {
     return (
-      <div className="dashboard-page-shell dashboard-page-shell--narrow space-y-6">
+      <div className="mx-auto max-w-[1280px] space-y-6 p-6 md:px-8">
         <Breadcrumb
           items={[{ label: t('deployments.title'), to: '/deployments' }, { label: namespace }]}
           className="mb-4"
@@ -1074,7 +1097,7 @@ export function DeploymentNamespacePage() {
   }
 
   return (
-    <div className="dashboard-page-shell dashboard-page-shell--narrow space-y-6">
+    <div className="mx-auto max-w-[1280px] space-y-6 p-6 md:px-8">
       <Breadcrumb
         items={[{ label: t('deployments.title'), to: '/deployments' }, { label: namespace }]}
         className="mb-4"
@@ -1082,8 +1105,12 @@ export function DeploymentNamespacePage() {
 
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="dashboard-page-title font-mono text-3xl">{namespace}</h1>
-          <p className="dashboard-page-description mt-1">{t('deployments.namespaceDescription')}</p>
+          <h1 className="font-extrabold tracking-[-0.03em] text-text-primary font-mono text-3xl">
+            {namespace}
+          </h1>
+          <p className="mt-1 text-sm leading-7 text-text-muted">
+            {t('deployments.namespaceDescription')}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -1095,7 +1122,7 @@ export function DeploymentNamespacePage() {
             }}
             variant="ghost"
             size="sm"
-            className="dashboard-action-button"
+            className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
           >
             <RefreshCw size={12} />
             {t('common.refresh')}
@@ -1106,7 +1133,7 @@ export function DeploymentNamespacePage() {
               onClick={() => void handleRedeploy()}
               variant="ghost"
               size="sm"
-              className="dashboard-action-button"
+              className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
             >
               <Rocket size={12} />
               {t('deployTask.redeploy')}
@@ -1117,7 +1144,7 @@ export function DeploymentNamespacePage() {
             onClick={() => setDestroyOpen(true)}
             variant="ghost"
             size="sm"
-            className="dashboard-action-button"
+            className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
           >
             <Trash2 size={12} />
             {t('clusters.destroy')}
@@ -1189,17 +1216,7 @@ export function DeploymentNamespacePage() {
       />
 
       <Tabs value={activeTab} onChange={setActiveTab}>
-        <TabsList className="dashboard-tabs-list">
-          {tabs.map((tab) => (
-            <TabsTrigger key={tab.id} value={tab.id} className="dashboard-tabs-trigger">
-              <span className="dashboard-tab-icon">{tab.icon}</span>
-              <span>{tab.label}</span>
-              {typeof tab.count === 'number' && (
-                <span className="dashboard-tabs-count">{tab.count}</span>
-              )}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <DashboardTabsList tabs={tabs} />
       </Tabs>
 
       <div className="min-h-[38vh]">

@@ -428,9 +428,15 @@ export function SecretsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="dashboard-table-head">{t('secrets.keyName')}</TableHead>
-                <TableHead className="dashboard-table-head">{t('secrets.secretValue')}</TableHead>
-                <TableHead className="dashboard-table-head">{t('common.actions')}</TableHead>
+                <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                  {t('secrets.keyName')}
+                </TableHead>
+                <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                  {t('secrets.secretValue')}
+                </TableHead>
+                <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                  {t('common.actions')}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -451,7 +457,7 @@ export function SecretsPage() {
                         type="button"
                         variant="ghost"
                         size="xs"
-                        className="dashboard-action-button"
+                        className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_color-mix(in_srgb,var(--color-primary)_36%,transparent)]"
                         onClick={() => void handleStartEdit(entry)}
                         title={t('common.edit')}
                       >
@@ -462,7 +468,7 @@ export function SecretsPage() {
                         type="button"
                         variant="ghost"
                         size="xs"
-                        className="dashboard-action-button text-danger/70 hover:text-danger hover:bg-danger/10"
+                        className="text-danger/70 transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease hover:bg-danger/10 hover:text-danger active:translate-y-[0.5px] focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_color-mix(in_srgb,var(--color-primary)_36%,transparent)]"
                         onClick={() => setDeleteTarget({ key: entry.key })}
                         title={t('common.delete')}
                       >

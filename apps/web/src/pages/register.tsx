@@ -162,7 +162,10 @@ export function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={8}
-              autoComplete="new-password"
+              autoComplete="off"
+              data-1p-ignore
+              data-lpignore="true"
+              data-form-type="other"
               placeholder={t('auth.passwordPlaceholder')}
             />
 

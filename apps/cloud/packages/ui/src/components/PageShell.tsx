@@ -3,36 +3,17 @@ import { Breadcrumb, type BreadcrumbItem } from '@/components/Breadcrumb'
 import { cn } from '@/lib/utils'
 
 interface PageShellProps {
-  /** Breadcrumb trail — last item is the current page */
   breadcrumb: BreadcrumbItem[]
   title: ReactNode
   description?: ReactNode
-  /** Buttons / actions placed in the top-right of the header */
   actions?: ReactNode
-  /** Content inside the header glass-panel (filters, tabs, banners, etc.) */
   headerContent?: ReactNode
-  /** Main body content below the header panel */
   children: ReactNode
-  /** Extra classes on the outer shell */
   className?: string
-  /** Narrow variant (max-width 1280px instead of 1440px) */
   narrow?: boolean
-  /** gap between header and body sections, default space-y-6 */
   bodyClassName?: string
 }
 
-/**
- * PageShell — the canonical one-size-fits-all page layout.
- *
- * Structure:
- *   dashboard-page-shell
- *     Breadcrumb
- *     glass-panel p-6            ← header panel
- *       title row (title + actions)
- *       description
- *       [headerContent]           ← optional: tabs, filters, banners
- *     [children]                  ← optional body sections
- */
 export function PageShell({
   breadcrumb,
   title,
@@ -46,7 +27,7 @@ export function PageShell({
 }: PageShellProps) {
   return (
     <div
-      className={cn('dashboard-page-shell', narrow && 'dashboard-page-shell--narrow', className)}
+      className={cn('mx-auto max-w-[1440px] p-6 md:px-8', narrow && 'max-w-[1280px]', className)}
     >
       <section className="glass-panel p-6">
         {/* Title row */}
@@ -56,12 +37,16 @@ export function PageShell({
             (description || headerContent) && 'mb-4',
           )}
         >
-          <h1 className="dashboard-page-title">{title}</h1>
+          <h1 className="text-[1.875rem] font-extrabold tracking-[-0.03em] text-text-primary md:text-[2.125rem]">
+            {title}
+          </h1>
           {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
         </div>
 
         {description && (
-          <p className={cn('dashboard-page-description', headerContent && 'mb-5')}>{description}</p>
+          <p className={cn('text-sm leading-7 text-text-muted', headerContent && 'mb-5')}>
+            {description}
+          </p>
         )}
 
         {headerContent}
