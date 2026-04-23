@@ -88,29 +88,34 @@ docker compose down -v
 
 For a faster development experience with hot-reloading, run infrastructure via Docker and applications natively:
 
-**1. Start infrastructure services:**
-
-```bash
-docker compose up postgres redis minio -d
-```
-
-**2. Install dependencies:**
+**1. Install dependencies:**
 
 ```bash
 pnpm install
 ```
 
-**3. Run database migrations:**
+**2. Run database migrations:**
 
 ```bash
 pnpm db:migrate
 ```
 
-**4. Start all applications in dev mode:**
+**3. Start development environment (one command):**
 
 ```bash
 pnpm dev
 ```
+
+Alternative focused workflows:
+
+```bash
+pnpm dev:backend
+pnpm dev:frontend
+```
+
+These scripts automatically start infrastructure (`postgres`, `redis`, `minio`) via Docker Compose.
+`pnpm dev:frontend` also keeps the Docker `server` service running on `:3002` so the web/admin dev proxies have a live API target.
+Set `SHADOW_DEV_API_BASE` if you need the frontend dev proxies to target a different API origin.
 
 This starts:
 - **Server** on `http://localhost:3002` (tsx watch mode)

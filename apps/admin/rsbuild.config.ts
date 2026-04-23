@@ -1,6 +1,8 @@
 import { defineConfig } from '@rsbuild/core'
 import { pluginReact } from '@rsbuild/plugin-react'
 
+const devApiTarget = process.env.SHADOW_DEV_API_BASE ?? 'http://localhost:3002'
+
 export default defineConfig({
   plugins: [pluginReact()],
   source: {
@@ -21,7 +23,7 @@ export default defineConfig({
   server: {
     port: 3001,
     proxy: {
-      '/api': 'http://localhost:3002',
+      '/api': devApiTarget,
     },
   },
   output: {

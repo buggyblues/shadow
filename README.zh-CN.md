@@ -146,9 +146,12 @@ docker compose up --build
 
 ```bash
 pnpm install
-docker compose up -d postgres redis minio  # 仅基础设施
 pnpm db:migrate
-pnpm dev
+pnpm dev          # 全栈（server + web + admin）
+
+# 或按角色启动
+pnpm dev:backend  # 服务端开发（含 cloud 后端 watcher）+ 基础设施
+pnpm dev:frontend # 前端开发（web/admin/cloud dashboard/website，支持热更新，API 由 docker 中的 :3002 提供）
 ```
 
 完整开发流程请参阅 [CONTRIBUTING.md](CONTRIBUTING.md)。

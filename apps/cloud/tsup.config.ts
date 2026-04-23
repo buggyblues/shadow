@@ -1,6 +1,8 @@
 import UnpluginTypia from '@typia/unplugin'
 import { defineConfig } from 'tsup'
 
+const emitDts = process.env.SHADOW_BUILD_DTS !== '0'
+
 export default defineConfig([
   // CLI entry
   {
@@ -9,7 +11,7 @@ export default defineConfig([
     target: 'es2022',
     noExternal: [/^@shadowob\/shared$/],
     clean: true,
-    dts: true,
+    dts: emitDts,
     banner: {
       js: '#!/usr/bin/env node',
     },

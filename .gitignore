@@ -43,6 +43,7 @@ pnpm-debug.log*
 
 # Docker
 docker/data/
+.docker-cache/
 
 # MinIO
 .minio/

@@ -48,8 +48,6 @@ export function PageShell({
     <div
       className={cn('dashboard-page-shell', narrow && 'dashboard-page-shell--narrow', className)}
     >
-      <Breadcrumb items={breadcrumb} className="mb-4" />
-
       <section className="glass-panel p-6">
         {/* Title row */}
         <div

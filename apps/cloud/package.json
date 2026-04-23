@@ -20,6 +20,8 @@
   "scripts": {
     "build": "tsup && rsbuild build",
     "dev": "tsup --watch",
+    "dev:backend": "tsup --watch",
+    "dev:frontend": "rsbuild dev",
     "console:dev": "rsbuild dev",
     "console:build": "rsbuild build",
     "console:preview": "rsbuild preview",

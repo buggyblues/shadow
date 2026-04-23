@@ -50,9 +50,14 @@ services:
 
   # ── Application ───────────────────────────────────
   server:
+    image: shadow/runtime:dev
     build:
       context: .
       dockerfile: apps/server/Dockerfile
+      cache_from:
+        - type=local,src=.docker-cache/server
+      cache_to:
+        - type=local,dest=.docker-cache/server,mode=max
     restart: unless-stopped
     ports:
       - "3002:3002"
@@ -94,6 +99,10 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      cache_from:
+        - type=local,src=.docker-cache/web
+      cache_to:
+        - type=local,dest=.docker-cache/web,mode=max
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -104,6 +113,10 @@ services:
     build:
       context: .
       dockerfile: apps/admin/Dockerfile
+      cache_from:
+        - type=local,src=.docker-cache/admin
+      cache_to:
+        - type=local,dest=.docker-cache/admin,mode=max
     restart: unless-stopped
     ports:
       - "3001:3001"
@@ -111,9 +124,8 @@ services:
       - server
 
   cloud-worker:
-    build:
-      context: .
-      dockerfile: apps/cloud/Dockerfile.worker
+    image: shadow/runtime:dev
+    command: [ "node", "apps/cloud/dist/worker.cjs" ]
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://shadow:shadow@postgres:5432/shadow
