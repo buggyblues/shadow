@@ -267,7 +267,7 @@ export function OverviewPage() {
       title={t('overview.subtitle')}
       description={t('overview.description')}
       headerContent={
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <StatCard
             label={t('overview.deployments')}
             value={total}
@@ -309,9 +309,9 @@ export function OverviewPage() {
       </GlassPanel>
 
       {/* Two column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-4">
         {/* Left: Recent Deployments */}
-        <div className="lg:col-span-2">
+        <div className="xl:col-span-3">
           <Card variant="surface">
             <div className="px-5 py-4 flex items-center justify-between border-b border-border-subtle">
               <h2 className="text-sm font-bold flex items-center gap-2 text-text-primary">

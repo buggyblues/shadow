@@ -11,7 +11,6 @@ import {
   FileText,
   FolderOpen,
   GitFork,
-  Heart,
   Key,
   Layers,
   Rocket,
@@ -31,7 +30,6 @@ import {
 } from '@/components/TemplateDetailShared'
 import { api } from '@/lib/api'
 import { useApiClient } from '@/lib/api-context'
-import { useAppStore } from '@/stores/app'
 import { useToast } from '@/stores/toast'
 
 function getCategoryLabel(
@@ -134,8 +132,6 @@ export function StoreDetailPage() {
   const { t, i18n } = useTranslation()
   const { name } = useParams({ strict: false }) as { name: string }
   const [activeTab, setActiveTab] = useState('overview')
-  const isFavorite = useAppStore((state) => state.favorites.includes(name))
-  const toggleFavorite = useAppStore((state) => state.toggleFavorite)
   const toast = useToast()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -199,16 +195,6 @@ export function StoreDetailPage() {
       breadcrumbItems={[{ label: t('store.title'), to: '/store' }, { label: name }]}
       heroIcon={<span className="text-5xl">{detail?.emoji ?? '📦'}</span>}
       title={name}
-      titleActions={
-        <Button
-          type="button"
-          variant={isFavorite ? 'danger' : 'secondary'}
-          size="icon"
-          onClick={() => toggleFavorite(name)}
-        >
-          <Heart size={18} fill={isFavorite ? 'currentColor' : 'none'} />
-        </Button>
-      }
       description={detail?.description ?? t('common.loading')}
       badges={
         detail ? (

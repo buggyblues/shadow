@@ -1,11 +1,9 @@
 @import url("https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Noto+Sans+SC:wght@500;700;900&display=swap");
 @import "tailwindcss";
-@import "../../../../../web/src/styles/shared.css";
+@import "@shadowob/ui/styles/shared.css";
 
 /* ── Dark mode: class-based strategy ───────────────────────────────── */
 @custom-variant dark (&:where(.dark, .dark *));
-
-@source "../../../../../../packages/ui/src";
 
 /* ── Neon Frost Design System ─────────────────────────────────────── */
 

@@ -4,7 +4,15 @@ import { cn } from '../../lib/utils'
 const Card = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement> & {
-    variant?: 'default' | 'glass' | 'surface' | 'gradient' | 'danger' | 'glassPanel' | 'glassCard' | 'stat'
+    variant?:
+      | 'default'
+      | 'glass'
+      | 'surface'
+      | 'gradient'
+      | 'danger'
+      | 'glassPanel'
+      | 'glassCard'
+      | 'stat'
     hoverable?: boolean
     active?: boolean
   }
@@ -21,8 +29,7 @@ const Card = React.forwardRef<
       'rounded-3xl bg-[var(--glass-bg)] border-[var(--glass-border)] backdrop-blur-[48px] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_12px_48px_-12px_rgba(0,0,0,0.5)]',
     glassCard:
       'rounded-[32px] bg-[var(--glass-bg)] border-[var(--glass-border)] border-t-white/10 backdrop-blur-[48px] shadow-[var(--shadow-soft)]',
-    stat:
-      'rounded-2xl bg-bg-primary border-border-subtle shadow-sm hover:border-primary/20',
+    stat: 'rounded-2xl bg-[var(--glass-bg)] border-[var(--glass-border)] backdrop-blur-[24px] shadow-[var(--shadow-soft)] hover:border-primary/20',
   }
 
   return (
@@ -33,7 +40,7 @@ const Card = React.forwardRef<
         variants[variant],
         active && 'border-primary/60 bg-bg-tertiary shadow-2xl scale-[1.02]',
         hoverable &&
-        'hover:border-primary/40 hover:bg-bg-tertiary hover:scale-[1.02] hover:shadow-2xl active:scale-[0.98]',
+          'hover:border-primary/40 hover:bg-bg-tertiary hover:scale-[1.02] hover:shadow-2xl active:scale-[0.98]',
         className,
       )}
       {...props}

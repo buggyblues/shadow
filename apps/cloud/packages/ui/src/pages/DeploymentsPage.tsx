@@ -574,7 +574,7 @@ export function DeploymentsPage() {
       }
       headerContent={
         <div className="space-y-3">
-          <StatsGrid className="grid-cols-2 lg:grid-cols-5">
+          <StatsGrid className="grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
             <StatCard
               label={t('clusters.totalDeployments')}
               value={total}
@@ -649,7 +649,7 @@ export function DeploymentsPage() {
           )}
 
           {!isLoading && groups.length > 0 && (
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-3">
               {groups.map((group) => (
                 <NamespaceCard
                   key={group.namespace}

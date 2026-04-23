@@ -1,4 +1,4 @@
-import { Button, cn } from '@shadowob/ui'
+import { Button, cn, InputValley } from '@shadowob/ui'
 import { type InfiniteData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileText, FolderOpen, Image as ImageIcon, Plus, Send, Smile, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -662,9 +662,9 @@ export function MessageInput({
         </div>
       )}
 
-      <div
+      <InputValley
         className={cn(
-          'flex items-center gap-2 px-4 py-2 input-valley',
+          'flex items-center gap-2 px-4 py-2',
           replyToId || pendingFiles.length > 0 ? 'rounded-b-[20px]' : 'rounded-[20px]',
         )}
       >
@@ -743,7 +743,7 @@ export function MessageInput({
         >
           <Send size={16} className="text-white" />
         </Button>
-      </div>
+      </InputValley>
 
       <input
         ref={fileInputRef}

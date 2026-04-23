@@ -66,3 +66,50 @@ export const GlassCard = React.forwardRef<HTMLElement, GlassVariantProps>((props
   <Glass ref={ref} variant="card" {...props} />
 ))
 GlassCard.displayName = 'GlassCard'
+
+interface GlassHeaderProps extends React.HTMLAttributes<HTMLElement> {
+  as?: React.ElementType
+}
+
+export const GlassHeader = React.forwardRef<HTMLElement, GlassHeaderProps>(
+  ({ as: Comp = 'div', className, style, ...props }, ref) => (
+    <Comp
+      ref={ref}
+      className={cn('flex h-14 items-center px-6', className)}
+      style={{
+        background: 'color-mix(in srgb, var(--glass-bg) 78%, transparent)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        borderBottom: '1px solid var(--color-border-subtle)',
+        flexShrink: 0,
+        ...style,
+      }}
+      {...props}
+    />
+  ),
+)
+GlassHeader.displayName = 'GlassHeader'
+
+interface InputValleyProps extends React.HTMLAttributes<HTMLElement> {
+  as?: React.ElementType
+}
+
+export const InputValley = React.forwardRef<HTMLElement, InputValleyProps>(
+  ({ as: Comp = 'div', className, style, ...props }, ref) => (
+    <Comp
+      ref={ref}
+      className={cn(className)}
+      style={{
+        background: 'color-mix(in srgb, var(--glass-bg) 82%, transparent)',
+        border: '2px solid var(--color-border-subtle)',
+        boxShadow: 'inset 0 2px 4px color-mix(in srgb, var(--color-bg-deep) 45%, transparent)',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+        transition: 'all 0.3s ease',
+        ...style,
+      }}
+      {...props}
+    />
+  ),
+)
+InputValley.displayName = 'InputValley'

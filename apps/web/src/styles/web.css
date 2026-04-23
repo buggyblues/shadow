@@ -1,0 +1,311 @@
+/*
+ * Web-app-specific styles.
+ * These are only used in apps/web and should NOT be in @shadowob/ui/shared.css.
+ */
+
+/* ─── App Header ─── */
+.app-header {
+  height: 3.5rem;
+  background: rgba(10, 15, 30, 0.3);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  flex-shrink: 0;
+}
+:root.light .app-header {
+  background: rgba(255, 255, 255, 0.74);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* ─── Active channel pill — jelly pill with cyan inner glow ─── */
+.channel-pill-active {
+  background: rgba(0, 243, 255, 0.12);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.15),
+    0 0 12px rgba(0, 243, 255, 0.1);
+}
+:root.light .channel-pill-active {
+  background: rgba(0, 198, 209, 0.1);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.6),
+    0 0 12px rgba(0, 198, 209, 0.08);
+}
+
+/* ─── Chat panel & scroll surface ─── */
+.chat-panel {
+  background: rgba(10, 12, 18, 0.46);
+}
+:root.light .chat-panel {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(148, 163, 184, 0.18);
+  box-shadow:
+    0 18px 48px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.94);
+}
+
+.chat-scroll-surface {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.01), rgba(255, 255, 255, 0.04));
+}
+:root.light .chat-scroll-surface {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.58));
+}
+:root.light .chat-panel .message-row:hover {
+  background-color: rgba(255, 255, 255, 0.55);
+}
+
+/* ─── Server / workspace page content ─── */
+.server-page-content {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0.04));
+}
+:root.light .server-page-content {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.44), rgba(255, 255, 255, 0.62));
+}
+
+/* ─── Dynamic background overlays ─── */
+.dynamic-background-overlay {
+  background: rgba(248, 250, 252, 0.26);
+  transition: background-color 200ms ease;
+}
+:root:not(.light) .dynamic-background-overlay {
+  background: rgba(2, 6, 23, 0.58);
+}
+.dynamic-background-vignette {
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.16), transparent 32%),
+    radial-gradient(circle at bottom left, rgba(8, 145, 178, 0.1), transparent 42%);
+}
+:root:not(.light) .dynamic-background-vignette {
+  background:
+    radial-gradient(circle at top right, rgba(15, 23, 42, 0.24), transparent 34%),
+    radial-gradient(circle at bottom left, rgba(2, 6, 23, 0.38), transparent 48%);
+}
+
+/* ─── Message row hover ─── */
+.message-row {
+  transition: background-color 0.3s ease;
+  border-radius: 12px;
+}
+.message-row:hover {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+/* ─── Avatar online indicator pulse ─── */
+@keyframes online-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(0, 230, 118, 0);
+  }
+}
+.online-indicator {
+  animation: online-pulse 2s infinite;
+}
+
+/* ─── Mobile safe areas ─── */
+@media (max-width: 767px) {
+  .mobile-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .mobile-safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .message-row:hover {
+    background-color: transparent;
+  }
+}
+
+/* ─── Shop / form inputs ─── */
+.form-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-dim);
+  border-radius: 0.5rem;
+}
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+.form-input::placeholder {
+  color: var(--color-text-muted);
+}
+select.form-input {
+  appearance: auto;
+}
+textarea.form-input {
+  resize: vertical;
+}
+
+/* ─── Markdown message styling ─── */
+.msg-markdown p {
+  margin: 0.25rem 0;
+}
+.msg-markdown h1,
+.msg-markdown h2,
+.msg-markdown h3 {
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  font-weight: 900;
+  color: var(--color-text-primary);
+  letter-spacing: -0.02em;
+}
+.msg-markdown h1 {
+  font-size: 1.5rem;
+}
+.msg-markdown h2 {
+  font-size: 1.25rem;
+}
+.msg-markdown h3 {
+  font-size: 1.1rem;
+}
+
+.msg-markdown code {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-primary);
+  padding: 0.15rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.85em;
+  font-family: var(--font-mono);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+:root.light .msg-markdown code {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.05);
+}
+
+.msg-markdown pre {
+  background: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 1rem;
+  margin: 0.75rem 0;
+  overflow-x: auto;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+:root.light .msg-markdown pre {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.msg-markdown pre code {
+  background: transparent;
+  padding: 0;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  white-space: pre;
+  word-wrap: normal;
+}
+
+.msg-markdown a {
+  color: var(--color-primary);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(0, 243, 255, 0.3);
+  transition: all 0.2s ease;
+}
+.msg-markdown a:hover {
+  border-bottom-color: var(--color-primary);
+  opacity: 1;
+}
+
+.msg-markdown blockquote {
+  border-left: 4px solid var(--color-primary);
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  color: var(--color-text-muted);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px 16px 16px 4px;
+}
+:root.light .msg-markdown blockquote {
+  color: var(--color-text-muted);
+}
+
+.msg-markdown ul,
+.msg-markdown ol {
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+.msg-markdown li {
+  margin: 0.25rem 0;
+}
+
+.msg-markdown table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  margin: 1rem 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+}
+:root.light .msg-markdown table {
+  border-color: rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.01);
+}
+
+.msg-markdown th {
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 800;
+  text-align: left;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  color: var(--color-text-muted);
+}
+:root.light .msg-markdown th {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.msg-markdown th,
+.msg-markdown td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+:root.light .msg-markdown th,
+:root.light .msg-markdown td {
+  border-color: rgba(0, 0, 0, 0.06);
+}
+.msg-markdown th:last-child,
+.msg-markdown td:last-child {
+  border-right: none;
+}
+.msg-markdown tr:last-child td {
+  border-bottom: none;
+}
+.msg-markdown tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.msg-markdown img {
+  max-width: 100%;
+  max-height: 400px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition:
+    transform 0.4s var(--bezier-bouncy, ease),
+    box-shadow 0.3s ease;
+  object-fit: contain;
+}
+.msg-markdown img:hover {
+  transform: scale(1.02);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.msg-markdown hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 1.5rem 0;
+}
+:root.light .msg-markdown hr {
+  border-color: rgba(0, 0, 0, 0.1);
+}

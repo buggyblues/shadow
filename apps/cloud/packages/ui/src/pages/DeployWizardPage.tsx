@@ -1,4 +1,4 @@
-import { Badge, Button, Checkbox, Input } from '@shadowob/ui'
+import { Badge, Button, Checkbox, GlassPanel, GlassSurface, Input, SecretInput } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import {
@@ -13,8 +13,6 @@ import {
   Copy,
   Database,
   Download,
-  Eye,
-  EyeOff,
   FolderOpen,
   Key,
   Loader2,
@@ -28,6 +26,8 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { FieldErrors } from 'react-hook-form'
+import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { AlertBanner, AlertBannerList } from '@/components/AlertBanner'
 import { Breadcrumb } from '@/components/Breadcrumb'
@@ -133,7 +133,7 @@ function StepOverview({ name }: { name: string }) {
         <p className="text-sm text-text-muted">{t('deploy.confirmDeployKubernetes')}</p>
       </div>
 
-      <div className="bg-bg-secondary border border-border-subtle rounded-xl p-6">
+      <GlassPanel className="rounded-[28px] p-6">
         <div className="flex items-start gap-4">
           <span className="text-4xl">{template?.emoji ?? '📦'}</span>
           <div className="flex-1">
@@ -160,31 +160,31 @@ function StepOverview({ name }: { name: string }) {
 
             {/* Quick stats */}
             <div className="grid grid-cols-3 gap-4">
-              <div className="bg-bg-deep border border-border-subtle rounded-lg p-3">
+              <GlassSurface className="rounded-xl border border-border-subtle p-3">
                 <div className="text-xs text-text-muted flex items-center gap-1 mb-1">
                   <Users size={11} />
                   {t('deploy.agentsLabel')}
                 </div>
                 <p className="text-lg font-semibold">{template?.agentCount ?? '—'}</p>
-              </div>
-              <div className="bg-bg-deep border border-border-subtle rounded-lg p-3">
+              </GlassSurface>
+              <GlassSurface className="rounded-xl border border-border-subtle p-3">
                 <div className="text-xs text-text-muted flex items-center gap-1 mb-1">
                   <FolderOpen size={11} />
                   {t('deploy.namespaceLabel')}
                 </div>
                 <p className="text-sm font-mono mt-1">{template?.namespace ?? '—'}</p>
-              </div>
-              <div className="bg-bg-deep border border-border-subtle rounded-lg p-3">
+              </GlassSurface>
+              <GlassSurface className="rounded-xl border border-border-subtle p-3">
                 <div className="text-xs text-text-muted flex items-center gap-1 mb-1">
                   <Clock size={11} />
                   {t('deploy.deployTimeLabel')}
                 </div>
                 <p className="text-sm mt-1">{template?.estimatedDeployTime ?? '—'}</p>
-              </div>
+              </GlassSurface>
             </div>
           </div>
         </div>
-      </div>
+      </GlassPanel>
 
       {/* Highlights */}
       <AlertBanner variant="info" icon={Sparkles} title={t('deploy.whatYouWillGet')}>
@@ -216,6 +216,162 @@ interface DeployConfig {
   envVars: Record<string, string>
 }
 
+function isSensitiveEnvVarKey(key: string): boolean {
+  return /(TOKEN|SECRET|PASSWORD|PRIVATE|CREDENTIAL|API_KEY|_KEY$|_B64$)/i.test(key)
+}
+
+function EnvVarRow({
+  envKey,
+  placeholder,
+  isSecret = false,
+  value,
+  hasSaved,
+  error,
+  errorMessage,
+  inputRef,
+  onValueChange,
+  onInputBlur,
+  onUseSaved,
+  onOverrideSaved,
+  t,
+}: {
+  envKey: string
+  placeholder?: string
+  isSecret?: boolean
+  value: string
+  hasSaved: boolean
+  error?: boolean
+  errorMessage?: string
+  inputRef?: (el: HTMLInputElement | null) => void
+  onValueChange: (value: string) => void
+  onInputBlur?: () => void
+  onUseSaved: () => void
+  onOverrideSaved: () => void
+  t: (key: string, options?: Record<string, unknown>) => string
+}) {
+  const inputId = `deploy-env-${envKey.toLowerCase()}`
+  const errorId = `${inputId}-error`
+  const isUsingSaved = value === '__SAVED__'
+  const isFilled = isUsingSaved || Boolean(value.trim())
+
+  return (
+    <div className="space-y-1.5">
+      <label
+        htmlFor={isUsingSaved ? undefined : inputId}
+        className={cn(
+          'flex items-center gap-1.5 text-xs font-mono',
+          error ? 'text-danger' : 'text-text-secondary',
+        )}
+      >
+        {error ? (
+          <XCircle size={11} className="text-danger" />
+        ) : isFilled ? (
+          <CheckCircle size={11} className="text-success" />
+        ) : (
+          <AlertTriangle size={11} className="text-warning" />
+        )}
+        {envKey}
+        <span className="text-danger text-[10px]">*</span>
+      </label>
+      {isUsingSaved ? (
+        <div
+          className={cn(
+            'flex items-center gap-2 rounded-lg px-3 py-2 transition-colors',
+            error
+              ? 'border border-danger/45 bg-danger/10 ring-1 ring-danger/20'
+              : 'border border-success/30 bg-success/8',
+          )}
+        >
+          <CheckCircle size={12} className="text-success shrink-0" />
+          <span className="flex-1 text-xs text-success font-mono">
+            {t('deploy.usingSavedValue')}
+          </span>
+          <button
+            type="button"
+            onClick={onOverrideSaved}
+            className="text-[11px] text-text-muted hover:text-text-primary transition-colors shrink-0"
+          >
+            {t('deploy.override')}
+          </button>
+        </div>
+      ) : (
+        <div
+          className={cn(
+            'flex items-center gap-2 rounded-xl p-1 transition-colors',
+            error && 'bg-danger/8 ring-1 ring-danger/30',
+          )}
+        >
+          {isSecret ? (
+            <SecretInput
+              id={inputId}
+              name={envKey}
+              data-testid={inputId}
+              value={value}
+              onChange={(e) => onValueChange(e.target.value)}
+              onBlur={onInputBlur}
+              onPaste={(e) => e.stopPropagation()}
+              placeholder={placeholder}
+              autoComplete="off"
+              className="flex-1"
+              error={error}
+              ref={inputRef}
+              aria-invalid={error}
+              aria-describedby={errorMessage ? errorId : undefined}
+            />
+          ) : (
+            <Input
+              id={inputId}
+              name={envKey}
+              data-testid={inputId}
+              type="text"
+              value={value}
+              onChange={(e) => onValueChange(e.target.value)}
+              onBlur={onInputBlur}
+              onPaste={(e) => e.stopPropagation()}
+              placeholder={placeholder}
+              autoComplete="off"
+              className="flex-1"
+              error={error}
+              ref={inputRef}
+              aria-invalid={error}
+              aria-describedby={errorMessage ? errorId : undefined}
+              data-1p-ignore
+              data-lpignore="true"
+              data-form-type="other"
+            />
+          )}
+          {hasSaved && (
+            <button
+              type="button"
+              onClick={onUseSaved}
+              className="text-[11px] text-primary hover:text-primary/80 transition-colors whitespace-nowrap shrink-0"
+            >
+              {t('deploy.useSaved')}
+            </button>
+          )}
+        </div>
+      )}
+      {errorMessage && (
+        <p id={errorId} className="text-xs font-medium text-danger ml-0.5">
+          {errorMessage}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function getEnvFieldError(
+  errors: FieldErrors<DeployConfig>,
+  key: string,
+): { hasError: boolean; message?: string } {
+  const bucket = errors.envVars as Record<string, { message?: string } | undefined> | undefined
+  const item = bucket?.[key]
+  return {
+    hasError: Boolean(item),
+    message: typeof item?.message === 'string' ? item.message : undefined,
+  }
+}
+
 function StepConfigure({
   name,
   config,
@@ -229,12 +385,32 @@ function StepConfigure({
 }) {
   const api = useApiClient()
   const { t, i18n } = useTranslation()
+  const toast = useToast()
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const {
+    watch,
+    getValues,
+    setValue,
+    setError,
+    clearErrors,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<DeployConfig>({
+    defaultValues: config,
+    mode: 'onSubmit',
+  })
+  const namespace = watch('namespace')
+  const envVars = watch('envVars') ?? {}
   const { data: detailData } = useQuery({
     queryKey: ['template-detail', name, i18n.language],
     queryFn: () => api.templates.detail(name, i18n.language),
   })
   const template = detailData?.template
-  const resolvedNamespace = config.namespace || template?.namespace || name
+  const resolvedNamespace = namespace || template?.namespace || name
+
+  useEffect(() => {
+    onChange({ namespace: namespace ?? '', envVars })
+  }, [namespace, envVars, onChange])
 
   // Fetch required env var refs from template
   const { data: envRefsData, isError: isEnvRefsError } = useQuery({
@@ -269,11 +445,11 @@ function StepConfigure({
   const nsInitRef = useRef(false)
   useEffect(() => {
     if (nsInitRef.current || !template) return
-    if (!config.namespace) {
+    if (!namespace) {
       nsInitRef.current = true
-      onChange({ ...config, namespace: template.namespace ?? name })
+      setValue('namespace', template.namespace ?? name, { shouldDirty: true })
     }
-  }, [template, config, onChange, name])
+  }, [template, namespace, setValue, name])
 
   // Fetch already-saved env vars + secrets from backend
   const { data: savedEnvData } = useQuery({
@@ -322,7 +498,7 @@ function StepConfigure({
     if (initializedRef.current || Object.keys(combinedLookup).length === 0) return
     if (envRefsData === undefined) return
     initializedRef.current = true
-    const merged = { ...config.envVars }
+    const merged = { ...getValues('envVars') }
     let changed = false
     for (const shadowKey of ['SHADOW_SERVER_URL', 'SHADOW_USER_TOKEN']) {
       if (!merged[shadowKey] && combinedLookup[shadowKey]) {
@@ -336,8 +512,10 @@ function StepConfigure({
         changed = true
       }
     }
-    if (changed) onChange({ ...config, envVars: merged })
-  }, [requiredVars, combinedLookup, config, onChange, envRefsData])
+    if (changed) {
+      setValue('envVars', merged, { shouldDirty: true })
+    }
+  }, [requiredVars, combinedLookup, envRefsData, getValues, setValue])
 
   // When group changes, re-fill any already-saved marked vars that now have values
   const applyGroup = (group: string) => {
@@ -346,7 +524,7 @@ function StepConfigure({
     for (const ev of globalEnvData?.envVars ?? []) {
       if ((ev.groupName ?? 'default') === group) groupVars[ev.key] = ev.maskedValue
     }
-    const merged = { ...config.envVars }
+    const merged = { ...getValues('envVars') }
     let changed = false
     const allKeys = ['SHADOW_SERVER_URL', 'SHADOW_USER_TOKEN', ...requiredVars]
     for (const key of allKeys) {
@@ -355,21 +533,25 @@ function StepConfigure({
         changed = true
       }
     }
-    if (changed) onChange({ ...config, envVars: merged })
+    if (changed) {
+      setValue('envVars', merged, { shouldDirty: true })
+    }
   }
 
   const [extraVars, setExtraVars] = useState<Array<{ key: string; value: string }>>([])
-  const [validationError, setValidationError] = useState<string | null>(null)
-  const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({})
 
   const updateVar = (key: string, value: string) => {
-    onChange({ ...config, envVars: { ...config.envVars, [key]: value } })
+    setValue(`envVars.${key}` as const, value, {
+      shouldDirty: true,
+      shouldTouch: true,
+    })
+    clearErrors(`envVars.${key}` as const)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    const shadowUrl = config.envVars.SHADOW_SERVER_URL
-    const shadowToken = config.envVars.SHADOW_USER_TOKEN
+  const onSubmit = () => {
+    const currentEnvVars = getValues('envVars') ?? {}
+    const shadowUrl = currentEnvVars.SHADOW_SERVER_URL
+    const shadowToken = currentEnvVars.SHADOW_USER_TOKEN
     const missingShadow: string[] = []
     if (!shadowUrl || (shadowUrl !== '__SAVED__' && !shadowUrl.trim())) {
       if (!combinedLookup.SHADOW_SERVER_URL) missingShadow.push('SHADOW_SERVER_URL')
@@ -378,274 +560,252 @@ function StepConfigure({
       if (!combinedLookup.SHADOW_USER_TOKEN) missingShadow.push('SHADOW_USER_TOKEN')
     }
     const missing = requiredVars.filter((k) => {
-      const val = config.envVars[k]
+      const val = currentEnvVars[k]
       return !val || val.trim() === ''
     })
     const trulyMissing = missing.filter((k) => !combinedLookup[k])
     const allMissing = [...missingShadow, ...trulyMissing]
     if (allMissing.length > 0) {
-      setValidationError(`${t('deploy.missingRequiredVars')} ${allMissing.join(', ')}`)
+      for (const key of allMissing) {
+        setError(`envVars.${key}` as const, {
+          type: 'required',
+          message: t('deploy.missingRequiredVars'),
+        })
+      }
+
+      const firstMissingKey = allMissing[0]
+      if (firstMissingKey) {
+        requestAnimationFrame(() => {
+          const el = inputRefs.current[firstMissingKey]
+          if (el) {
+            el.removeAttribute('disabled')
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            el.focus({ preventScroll: true })
+            el.select?.()
+          }
+        })
+      }
+
+      const preview = allMissing.slice(0, 3).join(', ')
+      const suffix = allMissing.length > 3 ? ` ... +${allMissing.length - 3}` : ''
+      toast.warning(`${t('deploy.missingRequiredVars')} ${preview}${suffix}`)
       return
     }
-    setValidationError(null)
     onNext()
   }
 
-  const toggleShowPassword = (key: string) => {
-    setShowPasswords((p) => ({ ...p, [key]: !p[key] }))
-  }
+  return (
+    <form id="wizard-configure-form" onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      <GlassPanel className="rounded-[28px] p-5 md:p-6 space-y-5">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold">{t('deploy.stepConfigureLabel')}</h2>
+          <p className="text-sm text-text-muted">{t('deploy.stepConfigureDescription')}</p>
+        </div>
 
-  // Reusable env var row: shows saved chip or input
-  const EnvVarRow = ({
-    envKey,
-    placeholder,
-    isPassword = true,
-  }: {
-    envKey: string
-    placeholder?: string
-    isPassword?: boolean
-  }) => {
-    const inputId = `deploy-env-${envKey.toLowerCase()}`
-    const isUsingSaved = config.envVars[envKey] === '__SAVED__'
-    const hasSaved = !!combinedLookup[envKey]
-    const isFilled = isUsingSaved || Boolean(config.envVars[envKey]?.trim())
-
-    return (
-      <div className="space-y-1.5">
-        <label
-          htmlFor={isUsingSaved ? undefined : inputId}
-          className="flex items-center gap-1.5 text-xs font-mono text-text-secondary"
-        >
-          {isFilled ? (
-            <CheckCircle size={11} className="text-success" />
-          ) : (
-            <AlertTriangle size={11} className="text-warning" />
-          )}
-          {envKey}
-          <span className="text-danger text-[10px]">*</span>
-        </label>
-        {isUsingSaved ? (
-          <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success/8 px-3 py-2">
-            <CheckCircle size={12} className="text-success shrink-0" />
-            <span className="flex-1 text-xs text-success font-mono">
-              {t('deploy.usingSavedValue')}
+        {/* Group auto-fill selector */}
+        {groups.length > 0 && (
+          <div className="flex items-center gap-3 rounded-xl border border-border-subtle bg-bg-secondary/50 px-4 py-3">
+            <Database size={14} className="text-text-muted shrink-0" />
+            <span className="text-xs text-text-secondary shrink-0">
+              {t('deploy.fillFromGroup')}
             </span>
-            <button
-              type="button"
-              onClick={() => updateVar(envKey, '')}
-              className="text-[11px] text-text-muted hover:text-text-primary transition-colors shrink-0"
+            <select
+              value={selectedGroup}
+              onChange={(e) => applyGroup(e.target.value)}
+              className="flex-1 min-w-0 bg-transparent text-xs text-text-primary border border-border-subtle rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-primary/50"
             >
-              {t('deploy.override')}
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Input
-                id={inputId}
-                name={envKey}
-                data-testid={inputId}
-                type={isPassword && !showPasswords[envKey] ? 'password' : 'text'}
-                value={config.envVars[envKey] ?? ''}
-                onChange={(e) => updateVar(envKey, e.target.value)}
-                placeholder={placeholder}
-                autoComplete="off"
-                data-1p-ignore
-                data-lpignore="true"
-                data-form-type="other"
-              />
-              {isPassword && (
-                <button
-                  type="button"
-                  onClick={() => toggleShowPassword(envKey)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
-                >
-                  {showPasswords[envKey] ? <Eye size={13} /> : <EyeOff size={13} />}
-                </button>
-              )}
-            </div>
-            {hasSaved && (
-              <button
-                type="button"
-                onClick={() => updateVar(envKey, '__SAVED__')}
-                className="text-[11px] text-primary hover:text-primary/80 transition-colors whitespace-nowrap shrink-0"
-              >
-                {t('deploy.useSaved')}
-              </button>
-            )}
+              <option value="">{t('deploy.selectGroup')}</option>
+              {groups.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
           </div>
         )}
-      </div>
-    )
-  }
 
-  return (
-    <form id="wizard-configure-form" onSubmit={handleSubmit} className="space-y-5">
-      {/* Group auto-fill selector */}
-      {groups.length > 0 && (
-        <div className="flex items-center gap-3 rounded-xl border border-border-subtle bg-bg-secondary/50 px-4 py-3">
-          <Database size={14} className="text-text-muted shrink-0" />
-          <span className="text-xs text-text-secondary shrink-0">{t('deploy.fillFromGroup')}</span>
-          <select
-            value={selectedGroup}
-            onChange={(e) => applyGroup(e.target.value)}
-            className="flex-1 min-w-0 bg-transparent text-xs text-text-primary border border-border-subtle rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-primary/50"
-          >
-            <option value="">{t('deploy.selectGroup')}</option>
-            {groups.map((g) => (
-              <option key={g} value={g}>
-                {g}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {/* Namespace */}
-      <div className="rounded-xl border border-border-subtle bg-bg-secondary/50 p-4 space-y-3">
-        <div>
-          <label htmlFor="namespace" className="block text-sm font-semibold mb-0.5">
-            {t('deploy.namespace')}
-          </label>
-          <p className="text-xs text-text-muted">{t('deploy.kubernetesNamespaceDesc')}</p>
-        </div>
-        <Input
-          id="namespace"
-          type="text"
-          value={config.namespace}
-          onChange={(e) => onChange({ ...config, namespace: e.target.value })}
-          placeholder={template?.namespace ?? name}
-        />
-      </div>
-
-      {/* Shadow Connection */}
-      <div className="rounded-xl border border-border-subtle bg-bg-secondary/50 p-4 space-y-4">
-        <div className="flex items-center gap-2">
-          <Unplug size={14} className="text-purple-400" />
+        {/* Namespace */}
+        <div className="rounded-xl border border-border-subtle bg-bg-secondary/50 p-4 space-y-3">
           <div>
-            <h3 className="text-sm font-semibold">{t('deploy.shadowConnectionTitle')}</h3>
-            <p className="text-xs text-text-muted">{t('deploy.shadowConnectionDescription')}</p>
+            <label htmlFor="namespace" className="block text-sm font-semibold mb-0.5">
+              {t('deploy.namespace')}
+            </label>
+            <p className="text-xs text-text-muted">{t('deploy.kubernetesNamespaceDesc')}</p>
           </div>
+          <Input
+            id="namespace"
+            type="text"
+            value={namespace ?? ''}
+            onChange={(e) => setValue('namespace', e.target.value, { shouldDirty: true })}
+            placeholder={template?.namespace ?? name}
+          />
         </div>
-        <EnvVarRow
-          envKey="SHADOW_SERVER_URL"
-          placeholder="https://your-shadow-server.example.com"
-          isPassword={false}
-        />
-        <EnvVarRow envKey="SHADOW_USER_TOKEN" placeholder="pat_..." />
-      </div>
 
-      {/* Required Environment Variables */}
-      {requiredVars.length > 0 && (
+        {/* Shadow Connection */}
         <div className="rounded-xl border border-border-subtle bg-bg-secondary/50 p-4 space-y-4">
           <div className="flex items-center gap-2">
-            <Key size={14} className="text-warning" />
+            <Unplug size={14} className="text-purple-400" />
             <div>
-              <h3 className="text-sm font-semibold">{t('deploy.requiredEnvVars')}</h3>
-              <p className="text-xs text-text-muted">
-                {t('deploy.templateRequiresVars', { count: requiredVars.length })}{' '}
-                {t('deploy.envVarsAllRequired')}
-              </p>
+              <h3 className="text-sm font-semibold">{t('deploy.shadowConnectionTitle')}</h3>
+              <p className="text-xs text-text-muted">{t('deploy.shadowConnectionDescription')}</p>
             </div>
           </div>
-          {requiredVars.map((key) => (
-            <EnvVarRow
-              key={key}
-              envKey={key}
-              placeholder={
-                key.includes('KEY') || key.includes('TOKEN') || key.includes('SECRET')
-                  ? 'sk-...'
-                  : t('deploy.enterValue')
-              }
-            />
-          ))}
+          <EnvVarRow
+            envKey="SHADOW_SERVER_URL"
+            placeholder="https://your-shadow-server.example.com"
+            isSecret={false}
+            value={envVars.SHADOW_SERVER_URL ?? ''}
+            hasSaved={Boolean(combinedLookup.SHADOW_SERVER_URL)}
+            error={getEnvFieldError(errors, 'SHADOW_SERVER_URL').hasError}
+            errorMessage={getEnvFieldError(errors, 'SHADOW_SERVER_URL').message}
+            inputRef={(el) => {
+              inputRefs.current.SHADOW_SERVER_URL = el
+            }}
+            onValueChange={(value) => updateVar('SHADOW_SERVER_URL', value)}
+            onInputBlur={() => clearErrors('envVars.SHADOW_SERVER_URL')}
+            onUseSaved={() => updateVar('SHADOW_SERVER_URL', '__SAVED__')}
+            onOverrideSaved={() => updateVar('SHADOW_SERVER_URL', '')}
+            t={t}
+          />
+          <EnvVarRow
+            envKey="SHADOW_USER_TOKEN"
+            placeholder="pat_..."
+            isSecret
+            value={envVars.SHADOW_USER_TOKEN ?? ''}
+            hasSaved={Boolean(combinedLookup.SHADOW_USER_TOKEN)}
+            error={getEnvFieldError(errors, 'SHADOW_USER_TOKEN').hasError}
+            errorMessage={getEnvFieldError(errors, 'SHADOW_USER_TOKEN').message}
+            inputRef={(el) => {
+              inputRefs.current.SHADOW_USER_TOKEN = el
+            }}
+            onValueChange={(value) => updateVar('SHADOW_USER_TOKEN', value)}
+            onInputBlur={() => clearErrors('envVars.SHADOW_USER_TOKEN')}
+            onUseSaved={() => updateVar('SHADOW_USER_TOKEN', '__SAVED__')}
+            onOverrideSaved={() => updateVar('SHADOW_USER_TOKEN', '')}
+            t={t}
+          />
         </div>
-      )}
 
-      {/* Extra env vars (optional) */}
-      <div className="rounded-xl border border-border-subtle bg-bg-secondary/50 p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold">{t('deploy.additionalVariables')}</h3>
-            <p className="text-xs text-text-muted">{t('deploy.optionalKeyValue')}</p>
-          </div>
-          <Button
-            type="button"
-            onClick={() => setExtraVars([...extraVars, { key: '', value: '' }])}
-            variant="ghost"
-            size="sm"
-          >
-            <Plus size={12} />
-            {t('deploy.addVariable')}
-          </Button>
-        </div>
-        {extraVars.length === 0 ? (
-          <div className="text-center py-3 text-xs text-text-muted border border-dashed border-border-subtle rounded-lg">
-            {t('deploy.noAdditionalVars')}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {extraVars.map((env, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <Input
-                  type="text"
-                  value={env.key}
-                  onChange={(e) => {
-                    const updated = [...extraVars]
-                    const current = updated[i]
-                    if (!current) return
-                    updated[i] = { ...current, key: e.target.value }
-                    setExtraVars(updated)
-                    if (e.target.value) updateVar(e.target.value, env.value)
-                  }}
-                  placeholder="KEY"
-                  className="flex-1"
-                />
-                <span className="text-text-muted text-xs">=</span>
-                <Input
-                  type="text"
-                  value={env.value}
-                  onChange={(e) => {
-                    const updated = [...extraVars]
-                    const current = updated[i]
-                    if (!current) return
-                    updated[i] = { ...current, value: e.target.value }
-                    setExtraVars(updated)
-                    if (env.key) updateVar(env.key, e.target.value)
-                  }}
-                  placeholder="value"
-                  className="flex-1"
-                />
-                <Button
-                  type="button"
-                  onClick={() => {
-                    const removed = extraVars[i]
-                    setExtraVars(extraVars.filter((_, j) => j !== i))
-                    if (removed?.key) {
-                      const updated = { ...config.envVars }
-                      delete updated[removed.key]
-                      onChange({ ...config, envVars: updated })
-                    }
-                  }}
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 p-1 text-text-muted hover:text-danger"
-                >
-                  <Trash2 size={13} />
-                </Button>
+        {/* Required Environment Variables */}
+        {requiredVars.length > 0 && (
+          <div className="rounded-xl border border-border-subtle bg-bg-secondary/50 p-4 space-y-4">
+            <div className="flex items-center gap-2">
+              <Key size={14} className="text-warning" />
+              <div>
+                <h3 className="text-sm font-semibold">{t('deploy.requiredEnvVars')}</h3>
+                <p className="text-xs text-text-muted">
+                  {t('deploy.templateRequiresVars', { count: requiredVars.length })}{' '}
+                  {t('deploy.envVarsAllRequired')}
+                </p>
               </div>
-            ))}
+            </div>
+            {requiredVars.map((key) => {
+              const fieldError = getEnvFieldError(errors, key)
+              return (
+                <EnvVarRow
+                  key={key}
+                  envKey={key}
+                  isSecret={isSensitiveEnvVarKey(key)}
+                  placeholder={
+                    key.includes('KEY') || key.includes('TOKEN') || key.includes('SECRET')
+                      ? 'sk-...'
+                      : t('deploy.enterValue')
+                  }
+                  value={envVars[key] ?? ''}
+                  hasSaved={Boolean(combinedLookup[key])}
+                  error={fieldError.hasError}
+                  errorMessage={fieldError.message}
+                  inputRef={(el) => {
+                    inputRefs.current[key] = el
+                  }}
+                  onValueChange={(value) => updateVar(key, value)}
+                  onInputBlur={() => clearErrors(`envVars.${key}` as const)}
+                  onUseSaved={() => updateVar(key, '__SAVED__')}
+                  onOverrideSaved={() => updateVar(key, '')}
+                  t={t}
+                />
+              )
+            })}
           </div>
         )}
-      </div>
 
-      {/* Validation error */}
-      {validationError && (
-        <div className="flex items-center gap-2 rounded-lg border border-danger/25 bg-danger/8 p-3">
-          <XCircle size={14} className="text-danger shrink-0" />
-          <p className="text-xs text-danger">{validationError}</p>
+        {/* Extra env vars (optional) */}
+        <div className="rounded-xl border border-border-subtle bg-bg-secondary/50 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold">{t('deploy.additionalVariables')}</h3>
+              <p className="text-xs text-text-muted">{t('deploy.optionalKeyValue')}</p>
+            </div>
+            <Button
+              type="button"
+              onClick={() => setExtraVars([...extraVars, { key: '', value: '' }])}
+              variant="ghost"
+              size="sm"
+            >
+              <Plus size={12} />
+              {t('deploy.addVariable')}
+            </Button>
+          </div>
+          {extraVars.length === 0 ? (
+            <div className="text-center py-3 text-xs text-text-muted border border-dashed border-border-subtle rounded-lg">
+              {t('deploy.noAdditionalVars')}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {extraVars.map((env, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input
+                    type="text"
+                    value={env.key}
+                    onChange={(e) => {
+                      const updated = [...extraVars]
+                      const current = updated[i]
+                      if (!current) return
+                      updated[i] = { ...current, key: e.target.value }
+                      setExtraVars(updated)
+                      if (e.target.value) updateVar(e.target.value, env.value)
+                    }}
+                    placeholder="KEY"
+                    className="flex-1"
+                  />
+                  <span className="text-text-muted text-xs">=</span>
+                  <Input
+                    type="text"
+                    value={env.value}
+                    onChange={(e) => {
+                      const updated = [...extraVars]
+                      const current = updated[i]
+                      if (!current) return
+                      updated[i] = { ...current, value: e.target.value }
+                      setExtraVars(updated)
+                      if (env.key) updateVar(env.key, e.target.value)
+                    }}
+                    placeholder="value"
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const removed = extraVars[i]
+                      setExtraVars(extraVars.filter((_, j) => j !== i))
+                      if (removed?.key) {
+                        const updated = { ...envVars }
+                        delete updated[removed.key]
+                        setValue('envVars', updated, { shouldDirty: true })
+                      }
+                    }}
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 p-1 text-text-muted hover:text-danger"
+                  >
+                    <Trash2 size={13} />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      </GlassPanel>
     </form>
   )
 }
@@ -1029,7 +1189,7 @@ function StepDeploy({
       {/* Review summary (before deploy) */}
       {!deployStarted && (
         <>
-          <div className="bg-bg-secondary border border-border-subtle rounded-lg divide-y divide-border-subtle">
+          <GlassPanel className="rounded-[24px] divide-y divide-border-subtle p-0">
             <div className="px-5 py-3 flex items-center justify-between">
               <span className="text-xs text-text-muted">{t('deploy.template')}</span>
               <span className="text-sm font-medium flex items-center gap-2">
@@ -1056,10 +1216,10 @@ function StepDeploy({
                   : t('deploy.asConfigured')}
               </span>
             </div>
-          </div>
+          </GlassPanel>
 
           {/* Cost & balance info */}
-          <div className="bg-bg-secondary border border-border-subtle rounded-lg divide-y divide-border-subtle">
+          <GlassPanel className="rounded-[24px] divide-y divide-border-subtle p-0">
             <div className="px-5 py-3 flex items-center justify-between">
               <span className="text-xs text-text-muted">{t('deploy.estimatedCost')}</span>
               <span className="text-sm font-medium">
@@ -1074,7 +1234,7 @@ function StepDeploy({
                 {walletBalance === null ? '...' : walletBalance} {t('deploy.shrimpCoins')}
               </span>
             </div>
-          </div>
+          </GlassPanel>
 
           {!hasEnoughBalance && (
             <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-center justify-between gap-4">
@@ -1346,113 +1506,124 @@ export function DeployWizardPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      {/* Sticky top header */}
-      <div className="sticky top-0 z-20 bg-bg-base/95 backdrop-blur border-b border-border-subtle">
-        <div className="px-6 py-4">
-          <Breadcrumb
-            items={[
-              { label: t('store.title'), to: '/store' },
-              { label: name, to: `/store/${name}` },
-              { label: t('common.deploy') },
-            ]}
-            className="mb-3"
-          />
-          <div className="flex items-center gap-4">
-            {/* Classic step indicators with connectors */}
-            <div className="flex items-center flex-1 min-w-0">
-              {steps.map((step, index) => {
-                const status =
-                  index < currentStep ? 'completed' : index === currentStep ? 'active' : 'upcoming'
-                const isClickable = status === 'completed'
-                return (
-                  <div key={step.id} className="flex items-center flex-1 last:flex-none">
-                    <button
-                      type="button"
-                      disabled={!isClickable}
-                      onClick={() => isClickable && setCurrentStep(index)}
-                      className={cn(
-                        'flex items-center gap-2 group',
-                        isClickable ? 'cursor-pointer' : 'cursor-default',
+    <div className="mx-auto max-w-4xl">
+      <GlassPanel className="overflow-hidden p-0">
+        {/* Sticky top header */}
+        <div className="sticky top-0 z-20 border-b border-border-subtle/70 bg-bg-base/72 backdrop-blur-[16px]">
+          <div className="px-4 py-4 md:px-6">
+            <Breadcrumb
+              items={[
+                { label: t('store.title'), to: '/store' },
+                { label: name, to: `/store/${name}` },
+                { label: t('common.deploy') },
+              ]}
+              className="mb-3"
+            />
+            <div className="flex items-center gap-4">
+              {/* Classic step indicators with connectors */}
+              <div className="flex items-center flex-1 min-w-0">
+                {steps.map((step, index) => {
+                  const status =
+                    index < currentStep
+                      ? 'completed'
+                      : index === currentStep
+                        ? 'active'
+                        : 'upcoming'
+                  const isClickable = status === 'completed'
+                  return (
+                    <div key={step.id} className="flex items-center flex-1 last:flex-none">
+                      <button
+                        type="button"
+                        disabled={!isClickable}
+                        onClick={() => isClickable && setCurrentStep(index)}
+                        className={cn(
+                          'flex items-center gap-2 group',
+                          isClickable ? 'cursor-pointer' : 'cursor-default',
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-all',
+                            status === 'active' &&
+                              'bg-primary text-white shadow-sm shadow-primary/40',
+                            status === 'completed' &&
+                              'bg-success/15 text-success ring-1 ring-success/40 group-hover:bg-success group-hover:text-white',
+                            status === 'upcoming' &&
+                              'bg-bg-secondary text-text-muted ring-1 ring-border-subtle',
+                          )}
+                        >
+                          {status === 'completed' ? <CheckCircle2 size={14} /> : index + 1}
+                        </div>
+                        <span
+                          className={cn(
+                            'text-sm font-medium hidden sm:inline whitespace-nowrap transition-colors',
+                            status === 'active' && 'text-text-primary',
+                            status === 'completed' &&
+                              'text-text-secondary group-hover:text-text-primary',
+                            status === 'upcoming' && 'text-text-muted',
+                          )}
+                        >
+                          {step.label}
+                        </span>
+                      </button>
+                      {index < steps.length - 1 && (
+                        <div
+                          className={cn(
+                            'mx-3 h-px flex-1 transition-colors',
+                            index < currentStep ? 'bg-success/50' : 'bg-border-subtle',
+                          )}
+                        />
                       )}
-                    >
-                      <div
-                        className={cn(
-                          'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-all',
-                          status === 'active' &&
-                            'bg-primary text-white shadow-sm shadow-primary/40',
-                          status === 'completed' &&
-                            'bg-success/15 text-success ring-1 ring-success/40 group-hover:bg-success group-hover:text-white',
-                          status === 'upcoming' &&
-                            'bg-bg-secondary text-text-muted ring-1 ring-border-subtle',
-                        )}
-                      >
-                        {status === 'completed' ? <CheckCircle2 size={14} /> : index + 1}
-                      </div>
-                      <span
-                        className={cn(
-                          'text-sm font-medium hidden sm:inline whitespace-nowrap transition-colors',
-                          status === 'active' && 'text-text-primary',
-                          status === 'completed' &&
-                            'text-text-secondary group-hover:text-text-primary',
-                          status === 'upcoming' && 'text-text-muted',
-                        )}
-                      >
-                        {step.label}
-                      </span>
-                    </button>
-                    {index < steps.length - 1 && (
-                      <div
-                        className={cn(
-                          'mx-3 h-px flex-1 transition-colors',
-                          index < currentStep ? 'bg-success/50' : 'bg-border-subtle',
-                        )}
-                      />
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-            {/* Nav buttons */}
-            <div className="flex items-center gap-2 shrink-0">
-              {currentStep > 0 && currentStep < 2 && (
-                <Button type="button" onClick={handleBack} variant="ghost" size="sm">
-                  <ArrowLeft size={14} />
-                  {t('common.back')}
-                </Button>
-              )}
-              {nextLabel && currentStep === 0 && (
-                <Button type="button" onClick={() => setCurrentStep(1)} variant="primary" size="sm">
-                  {nextLabel}
-                  <ArrowRight size={14} />
-                </Button>
-              )}
-              {nextLabel && currentStep === 1 && (
-                <Button type="submit" form="wizard-configure-form" variant="primary" size="sm">
-                  {nextLabel}
-                  <ArrowRight size={14} />
-                </Button>
-              )}
+                    </div>
+                  )
+                })}
+              </div>
+              {/* Nav buttons */}
+              <div className="flex items-center gap-2 shrink-0">
+                {currentStep > 0 && currentStep < 2 && (
+                  <Button type="button" onClick={handleBack} variant="ghost" size="sm">
+                    <ArrowLeft size={14} />
+                    {t('common.back')}
+                  </Button>
+                )}
+                {nextLabel && currentStep === 0 && (
+                  <Button
+                    type="button"
+                    onClick={() => setCurrentStep(1)}
+                    variant="primary"
+                    size="sm"
+                  >
+                    {nextLabel}
+                    <ArrowRight size={14} />
+                  </Button>
+                )}
+                {nextLabel && currentStep === 1 && (
+                  <Button type="submit" form="wizard-configure-form" variant="primary" size="sm">
+                    {nextLabel}
+                    <ArrowRight size={14} />
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Step content */}
-      <div className="p-6 pb-12">
-        {currentStep === 0 && <StepOverview name={name} />}
-        {currentStep === 1 && (
-          <StepConfigure
-            name={name}
-            config={deployConfig}
-            onChange={setDeployConfig}
-            onNext={() => setCurrentStep(2)}
-          />
-        )}
-        {currentStep === 2 && (
-          <StepDeploy name={name} config={deployConfig} onBack={() => setCurrentStep(1)} />
-        )}
-      </div>
+        {/* Step content */}
+        <div className="p-6 pb-12">
+          {currentStep === 0 && <StepOverview name={name} />}
+          {currentStep === 1 && (
+            <StepConfigure
+              name={name}
+              config={deployConfig}
+              onChange={setDeployConfig}
+              onNext={() => setCurrentStep(2)}
+            />
+          )}
+          {currentStep === 2 && (
+            <StepDeploy name={name} config={deployConfig} onBack={() => setCurrentStep(1)} />
+          )}
+        </div>
+      </GlassPanel>
     </div>
   )
 }

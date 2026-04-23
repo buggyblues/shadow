@@ -1004,7 +1004,7 @@ export function MonitoringPage() {
       }
       headerContent={
         <div className="space-y-4">
-          <StatsGrid className="grid-cols-1 sm:grid-cols-2 xl:grid-cols-6">
+          <StatsGrid className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-6">
             <StatCard
               label={t('monitoring.healthScore')}
               value={doctor ? `${healthScore}%` : '—'}

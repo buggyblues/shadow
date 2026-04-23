@@ -1,6 +1,6 @@
 /* Desktop globals: own Tailwind instance with desktop + web source scanning */
 @import "tailwindcss";
-@import "../../../../web/src/styles/shared.css";
+@import "@shadowob/ui/styles/shared.css";
 @source "../../../../web/src";
 
 /* ===== Desktop Window Chrome ===== */

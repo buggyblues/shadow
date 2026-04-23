@@ -1,4 +1,4 @@
-import { cn, GlassPanel } from '@shadowob/ui'
+import { cn, GlassHeader, GlassPanel } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { Bot, Gift, MessageCircle, Monitor, Settings, Target, Wallet } from 'lucide-react'
@@ -227,7 +227,7 @@ export function SettingsPage() {
         {activeTab !== 'dm' && (
           <GlassPanel className="flex-1 h-full overflow-hidden flex flex-col">
             {/* Unified Header */}
-            <div className="glass-header gap-3">
+            <GlassHeader className="gap-3">
               <div className="w-8 h-8 rounded-full bg-bg-tertiary/50 flex items-center justify-center text-primary shrink-0 shadow-inner">
                 {activeNavItem ? (
                   <activeNavItem.icon size={16} strokeWidth={2.5} />
@@ -238,7 +238,7 @@ export function SettingsPage() {
               <h3 className="font-black text-text-primary text-[15px] truncate uppercase tracking-tight">
                 {activeNavItem ? t(activeNavItem.labelKey, activeNavItem.labelFallback) : '...'}
               </h3>
-            </div>
+            </GlassHeader>
 
             <div className="flex-1 overflow-y-auto">
               <div className="max-w-4xl mx-auto p-4 md:p-8">

@@ -1,10 +1,9 @@
-import { Badge, Button, Card, EmptyState, GlassCard, GlassPanel, Search } from '@shadowob/ui'
+import { Badge, Button, EmptyState, GlassCard, GlassPanel, Search } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
   AlertCircle,
   ChevronRight,
-  Heart,
   Package,
   Rocket,
   Settings,
@@ -129,17 +128,12 @@ function StoreAppCard({
   categoryLabel: string
 }) {
   const { t } = useTranslation()
-  const isFavorite = useAppStore((state) => state.favorites.includes(template.name))
-  const toggleFavorite = useAppStore((state) => state.toggleFavorite)
   const summary = template.overview[0] ?? template.description
   const bannerStyle = CATEGORY_BANNER[template.category] ?? CATEGORY_BANNER_DEFAULT
   const bannerWords = template.name.split('-').slice(0, 3)
 
   return (
-    <Card
-      variant="surface"
-      className="relative transition-shadow duration-200 hover:shadow-lg hover:shadow-primary/[0.06] hover:border-border-primary/25"
-    >
+    <GlassCard className="relative transition-shadow duration-200 hover:shadow-lg hover:shadow-primary/[0.08] hover:border-border-primary/25">
       {/* Clickable banner */}
       <Link to="/store/$name" params={{ name: template.name }} className="block">
         <div
@@ -179,21 +173,6 @@ function StoreAppCard({
           )}
         </div>
       </Link>
-
-      {/* Favorite — outside the link, overlays banner corner */}
-      <button
-        type="button"
-        onClick={() => toggleFavorite(template.name)}
-        className={cn(
-          'absolute right-2.5 top-2.5 z-10 flex h-8 w-8 items-center justify-center rounded-xl border transition-all duration-200',
-          isFavorite
-            ? 'border-pink-500/20 bg-pink-500/10 text-pink-400'
-            : 'border-border-subtle bg-bg-secondary/80 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover',
-        )}
-        title={t('common.favorite')}
-      >
-        <Heart size={13} fill={isFavorite ? 'currentColor' : 'none'} />
-      </button>
 
       {/* Body */}
       <div className="flex flex-col gap-3 p-4">
@@ -243,7 +222,7 @@ function StoreAppCard({
           </Button>
         </div>
       </div>
-    </Card>
+    </GlassCard>
   )
 }
 
@@ -393,69 +372,71 @@ export function StorePage() {
           </Button>
         </GlassCard>
       )}
-      {/* Filter strip — colocated with cards */}
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap gap-1.5">
-          {(['all', 'beginner', 'intermediate', 'advanced'] as const).map((diff) => (
-            <FilterPill
-              key={diff}
-              label={diff === 'all' ? t('store.categories.all') : getDifficultyLabel(diff, t)}
-              count={difficultyCounts[diff] ?? 0}
-              active={selectedDifficulty === diff}
-              onClick={() => setSelectedDifficulty(diff)}
-            />
-          ))}
+      <GlassPanel className="space-y-5 p-4 md:p-5">
+        {/* Filter strip — colocated with cards */}
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap gap-1.5">
+            {(['all', 'beginner', 'intermediate', 'advanced'] as const).map((diff) => (
+              <FilterPill
+                key={diff}
+                label={diff === 'all' ? t('store.categories.all') : getDifficultyLabel(diff, t)}
+                count={difficultyCounts[diff] ?? 0}
+                active={selectedDifficulty === diff}
+                onClick={() => setSelectedDifficulty(diff)}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {categories.map((category) => (
+              <FilterPill
+                key={category.id}
+                label={category.label}
+                count={categoryCounts[category.id] ?? 0}
+                active={selectedCategory === category.id}
+                onClick={() => setSelectedCategory(category.id as TemplateCategoryId | 'all')}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-text-muted">
+              {t('store.matchingTemplates', { count: filtered.length })}
+              {selectedDifficulty !== 'all'
+                ? ` · ${getDifficultyLabel(selectedDifficulty, t)}`
+                : ''}
+              {selectedCategory !== 'all'
+                ? ` · ${categoryLabels[selectedCategory] ?? selectedCategory}`
+                : ''}
+              {debouncedSearch ? ` · ${t('store.matchingQuery', { query: debouncedSearch })}` : ''}
+            </p>
+            {hasFilters && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setSearch('')
+                  setSelectedCategory('all')
+                  setSelectedDifficulty('all')
+                }}
+              >
+                {t('store.clearFilters')}
+              </Button>
+            )}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          {categories.map((category) => (
-            <FilterPill
-              key={category.id}
-              label={category.label}
-              count={categoryCounts[category.id] ?? 0}
-              active={selectedCategory === category.id}
-              onClick={() => setSelectedCategory(category.id as TemplateCategoryId | 'all')}
-            />
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-text-muted">
-            {t('store.matchingTemplates', { count: filtered.length })}
-            {selectedDifficulty !== 'all' ? ` · ${getDifficultyLabel(selectedDifficulty, t)}` : ''}
-            {selectedCategory !== 'all'
-              ? ` · ${categoryLabels[selectedCategory] ?? selectedCategory}`
-              : ''}
-            {debouncedSearch ? ` · ${t('store.matchingQuery', { query: debouncedSearch })}` : ''}
-          </p>
-          {hasFilters && (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                setSearch('')
-                setSelectedCategory('all')
-                setSelectedDifficulty('all')
-              }}
-            >
-              {t('store.clearFilters')}
-            </Button>
-          )}
-        </div>
-      </div>
 
-      {isLoading && (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <div
-              key={`store-skeleton-${index}`}
-              className="h-[248px] rounded-3xl border border-border-subtle bg-bg-secondary/60 animate-pulse"
-            />
-          ))}
-        </div>
-      )}
+        {isLoading && (
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div
+                key={`store-skeleton-${index}`}
+                className="h-[248px] rounded-3xl border border-border-subtle bg-bg-secondary/60 animate-pulse"
+              />
+            ))}
+          </div>
+        )}
 
-      {!isLoading && filtered.length === 0 && (
-        <GlassPanel className="p-6">
+        {!isLoading && filtered.length === 0 && (
           <EmptyState
             icon={Package}
             title={t('store.noTemplatesFound')}
@@ -479,20 +460,20 @@ export function StorePage() {
               </Button>
             }
           />
-        </GlassPanel>
-      )}
+        )}
 
-      {!isLoading && filtered.length > 0 && (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-          {filtered.map((template) => (
-            <StoreAppCard
-              key={template.name}
-              template={template}
-              categoryLabel={categoryLabels[template.category] ?? template.category}
-            />
-          ))}
-        </div>
-      )}
+        {!isLoading && filtered.length > 0 && (
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {filtered.map((template) => (
+              <StoreAppCard
+                key={template.name}
+                template={template}
+                categoryLabel={categoryLabels[template.category] ?? template.category}
+              />
+            ))}
+          </div>
+        )}
+      </GlassPanel>
     </PageShell>
   )
 }

@@ -28,14 +28,18 @@ export function PageShell({
 }: PageShellProps) {
   return (
     <div
-      className={cn('mx-auto max-w-[1440px] p-6 md:px-8', narrow && 'max-w-[1280px]', className)}
+      className={cn(
+        'mx-auto max-w-[1440px] px-4 pt-0 pb-4 md:px-6 md:pb-5',
+        narrow && 'max-w-[1280px]',
+        className,
+      )}
     >
-      <GlassPanel as="section" className="p-6">
+      <GlassPanel as="section" className="p-5 md:p-6">
         {/* Title row */}
         <div
           className={cn(
             'flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between',
-            (description || headerContent) && 'mb-4',
+            (description || headerContent) && 'mb-3 md:mb-4',
           )}
         >
           <h1 className="text-[1.875rem] font-extrabold tracking-[-0.03em] text-text-primary md:text-[2.125rem]">
@@ -45,7 +49,7 @@ export function PageShell({
         </div>
 
         {description && (
-          <p className={cn('text-sm leading-7 text-text-muted', headerContent && 'mb-5')}>
+          <p className={cn('text-sm leading-6 text-text-muted', headerContent && 'mb-4')}>
             {description}
           </p>
         )}
@@ -53,7 +57,7 @@ export function PageShell({
         {headerContent}
       </GlassPanel>
 
-      {children && <div className={cn('mt-6', bodyClassName)}>{children}</div>}
+      {children && <div className={cn('mt-4 md:mt-5', bodyClassName)}>{children}</div>}
     </div>
   )
 }

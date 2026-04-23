@@ -1,4 +1,4 @@
-import { Badge, Button, Card, EmptyState } from '@shadowob/ui'
+import { Badge, Button, EmptyState, GlassPanel } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { Coins, Loader2, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 import { useState } from 'react'
@@ -89,7 +89,7 @@ export function WalletPage() {
       description={t('wallet.description')}
     >
       {/* Balance card */}
-      <Card className="p-6 flex items-center justify-between mb-6">
+      <GlassPanel className="mb-4 flex items-center justify-between p-5 md:p-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
             <Wallet size={20} className="text-primary" />
@@ -114,10 +114,10 @@ export function WalletPage() {
             {t('wallet.topUp')}
           </Button>
         </div>
-      </Card>
+      </GlassPanel>
 
       {/* Transaction history */}
-      <div>
+      <GlassPanel className="p-5 md:p-6">
         <h3 className="text-sm font-semibold mb-3">{t('wallet.transactionHistory')}</h3>
         {txLoading ? (
           <div className="flex justify-center py-10">
@@ -131,9 +131,9 @@ export function WalletPage() {
           />
         ) : (
           <>
-            <div className="overflow-x-auto rounded-lg border border-border">
+            <div className="overflow-x-auto rounded-2xl border border-border-subtle bg-bg-secondary/20">
               <table className="w-full text-sm">
-                <thead className="bg-bg-secondary text-text-muted">
+                <thead className="bg-bg-tertiary/50 text-text-muted">
                   <tr>
                     <th className="px-4 py-2.5 text-left font-medium">{t('wallet.txType')}</th>
                     <th className="px-4 py-2.5 text-left font-medium">{t('wallet.txNote')}</th>
@@ -205,7 +205,7 @@ export function WalletPage() {
             )}
           </>
         )}
-      </div>
+      </GlassPanel>
     </PageShell>
   )
 }
