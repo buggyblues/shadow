@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import type { CloudConfig } from '../config/schema.js'
 import type { DeployOptions, DeployResult } from './deploy.service.js'
 import { DeployService } from './deploy.service.js'
@@ -28,6 +28,11 @@ export interface DestroyRuntimeOptions {
   stack?: string
   cluster?: DeploymentRuntimeCluster | null
   configSnapshot?: unknown
+}
+
+interface ResolvedRuntimeContext {
+  k8sContext?: string
+  kubeConfigPath?: string
 }
 
 function extractKubeContext(kubeconfigYaml: string): string | undefined {
@@ -92,6 +97,29 @@ function getStableRuntimeKubeconfigPath(kubeconfigYaml: string): string {
   return kubeconfigPath
 }
 
+function getHostLocalRuntimeKubeconfigPaths(): string[] {
+  return [process.env.KUBECONFIG_HOST_PATH?.trim(), join(homedir(), '.kube', 'config')].filter(
+    (candidate): candidate is string => Boolean(candidate),
+  )
+}
+
+function isHostLocalRuntimeKubeconfigPath(candidate: string | undefined): boolean {
+  if (!candidate) return false
+  return getHostLocalRuntimeKubeconfigPaths().includes(candidate)
+}
+
+function resolveAmbientRuntimeKubeconfigPath(): string | undefined {
+  const candidates = [
+    ...(process.env.KUBECONFIG?.split(delimiter)
+      .map((candidate) => candidate.trim())
+      .filter((candidate) => candidate.length > 0) ?? []),
+    process.env.KUBECONFIG_HOST_PATH?.trim(),
+    join(homedir(), '.kube', 'config'),
+  ].filter((candidate): candidate is string => Boolean(candidate))
+
+  return candidates.find((candidate) => existsSync(candidate))
+}
+
 export class DeploymentRuntimeService {
   constructor(private readonly deployService: DeployService) {}
 
@@ -109,11 +137,12 @@ export class DeploymentRuntimeService {
     } = options
 
     try {
-      return await this.withResolvedContext(options.cluster, options.runtimeEnvVars, (k8sContext) =>
+      return await this.withResolvedContext(options.cluster, options.runtimeEnvVars, (context) =>
         this.deployService.up({
           ...deployOptions,
           filePath: configPath,
-          k8sContext,
+          k8sContext: context.k8sContext,
+          kubeConfigPath: context.kubeConfigPath,
           shadowUrl,
           shadowToken,
         }),
@@ -131,11 +160,12 @@ export class DeploymentRuntimeService {
         ? (options.configSnapshot as CloudConfig)
         : undefined
 
-    await this.withResolvedContext(options.cluster, undefined, (k8sContext) =>
+    await this.withResolvedContext(options.cluster, undefined, (context) =>
       this.deployService.destroy({
         namespace: options.namespace,
         stack: options.stack,
-        k8sContext,
+        k8sContext: context.k8sContext,
+        kubeConfigPath: context.kubeConfigPath,
         config: configSnapshot,
       }),
     )
@@ -144,34 +174,38 @@ export class DeploymentRuntimeService {
   private async withResolvedContext<T>(
     cluster: DeploymentRuntimeCluster | null | undefined,
     runtimeEnvVars: Record<string, string> | undefined,
-    run: (k8sContext: string | undefined) => Promise<T>,
+    run: (context: ResolvedRuntimeContext) => Promise<T>,
   ): Promise<T> {
     const originalKubeconfig = process.env.KUBECONFIG
     const originalKubeContext = process.env.KUBECONFIG_CONTEXT
     const originalRuntimeEnv: Record<string, string | undefined> = {}
 
     let k8sContext: string | undefined
+    let kubeConfigPath: string | undefined
 
     try {
-      const activeKubeconfigPath = process.env.KUBECONFIG
-      const hasMountedKubeconfig = Boolean(activeKubeconfigPath && existsSync(activeKubeconfigPath))
+      const activeKubeconfigPath = resolveAmbientRuntimeKubeconfigPath()
       const activeKubeconfig = cluster?.kubeconfig
         ? cluster.kubeconfig
-        : hasMountedKubeconfig && activeKubeconfigPath
+        : activeKubeconfigPath
           ? readFileSync(activeKubeconfigPath, 'utf8')
           : undefined
 
       if (activeKubeconfig) {
-        const rewrittenKubeconfig = rewriteLoopbackKubeconfig(activeKubeconfig)
+        const shouldRewriteLoopback = Boolean(
+          cluster?.kubeconfig ||
+            (activeKubeconfigPath && !isHostLocalRuntimeKubeconfigPath(activeKubeconfigPath)),
+        )
+        const rewrittenKubeconfig = shouldRewriteLoopback
+          ? rewriteLoopbackKubeconfig(activeKubeconfig)
+          : activeKubeconfig
         const shouldReuseMountedPath =
-          !cluster?.kubeconfig &&
-          hasMountedKubeconfig &&
-          activeKubeconfigPath &&
-          rewrittenKubeconfig === activeKubeconfig
+          !cluster?.kubeconfig && activeKubeconfigPath && rewrittenKubeconfig === activeKubeconfig
 
-        process.env.KUBECONFIG = shouldReuseMountedPath
+        kubeConfigPath = shouldReuseMountedPath
           ? activeKubeconfigPath
           : getStableRuntimeKubeconfigPath(rewrittenKubeconfig)
+        process.env.KUBECONFIG = kubeConfigPath
         k8sContext = extractKubeContext(rewrittenKubeconfig) ?? process.env.KUBECONFIG_CONTEXT
         if (k8sContext) {
           process.env.KUBECONFIG_CONTEXT = k8sContext
@@ -184,7 +218,7 @@ export class DeploymentRuntimeService {
         process.env[key] = value
       }
 
-      return await run(k8sContext)
+      return await run({ k8sContext, kubeConfigPath })
     } finally {
       if (originalKubeconfig !== undefined) {
         process.env.KUBECONFIG = originalKubeconfig

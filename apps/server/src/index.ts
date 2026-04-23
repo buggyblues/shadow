@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { execSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { serve } from '@hono/node-server'
 import { hash } from 'bcryptjs'
 import { eq } from 'drizzle-orm'
@@ -18,6 +19,7 @@ import { logger } from './lib/logger'
 import { setupWebSocket } from './ws'
 
 const PORT = Number(process.env.PORT ?? 3002)
+const CURRENT_DIR = path.dirname(fileURLToPath(import.meta.url))
 
 async function main() {
   // Database schema sync / migration
@@ -110,7 +112,7 @@ async function main() {
       (() => {
         const candidates = [
           path.resolve(process.cwd(), 'apps/cloud/templates'), // server runtime image
-          path.resolve(__dirname, '../../../../apps/cloud/templates'), // monorepo dev
+          path.resolve(CURRENT_DIR, '../../../../apps/cloud/templates'), // monorepo dev
           path.resolve(process.cwd(), '../../apps/cloud/templates'), // docker build context
           path.resolve(process.cwd(), '../cloud/templates'), // alternative layout
           path.resolve(process.cwd(), 'node_modules/@shadowob/cloud/templates'), // installed pkg

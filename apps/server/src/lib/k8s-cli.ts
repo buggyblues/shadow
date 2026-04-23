@@ -48,31 +48,60 @@ function rewriteLoopbackKubeconfig(kubeconfigYaml: string, loopbackHost?: string
   return lines.join('\n')
 }
 
-function resolveAmbientKubeconfig(): string | undefined {
-  const envPath = process.env.KUBECONFIG?.split(delimiter).find(
-    (candidate) => candidate.trim().length > 0,
+function getHostLocalKubeconfigPaths(): string[] {
+  return [process.env.KUBECONFIG_HOST_PATH?.trim(), join(homedir(), '.kube', 'config')].filter(
+    (candidate): candidate is string => Boolean(candidate),
   )
-  const defaultPath = join(homedir(), '.kube', 'config')
-  const kubeconfigPath = envPath ?? defaultPath
+}
 
-  if (!existsSync(kubeconfigPath)) {
+function isHostLocalKubeconfigPath(candidate: string | undefined): boolean {
+  if (!candidate) return false
+  return getHostLocalKubeconfigPaths().includes(candidate)
+}
+
+function resolveAmbientKubeconfig():
+  | {
+      kubeconfig: string
+      shouldRewriteLoopback: boolean
+    }
+  | undefined {
+  const envCandidates =
+    process.env.KUBECONFIG?.split(delimiter)
+      .map((candidate) => candidate.trim())
+      .filter((candidate) => candidate.length > 0) ?? []
+
+  const kubeconfigPath = [
+    ...envCandidates,
+    process.env.KUBECONFIG_HOST_PATH?.trim(),
+    join(homedir(), '.kube', 'config'),
+  ]
+    .filter((candidate): candidate is string => Boolean(candidate))
+    .find((candidate) => existsSync(candidate))
+
+  if (!kubeconfigPath) {
     return undefined
   }
 
-  return readFileSync(kubeconfigPath, 'utf-8')
+  return {
+    kubeconfig: readFileSync(kubeconfigPath, 'utf-8'),
+    shouldRewriteLoopback: !isHostLocalKubeconfigPath(kubeconfigPath),
+  }
 }
 
 function createTempKubeconfig(
   kubeconfig: string,
   includeAmbientContext = false,
+  rewriteLoopback = true,
 ): {
   args: string[]
   cleanup: () => void
 } {
   const dir = mkdtempSync(join(tmpdir(), 'sc-saas-kube-'))
   const path = join(dir, 'kubeconfig')
-  const loopbackHost = process.env.KUBECONFIG_LOOPBACK_HOST ?? 'host.lima.internal'
-  const rewritten = rewriteLoopbackKubeconfig(kubeconfig, loopbackHost)
+  const loopbackHost = process.env.KUBECONFIG_LOOPBACK_HOST?.trim()
+  const rewritten = rewriteLoopback
+    ? rewriteLoopbackKubeconfig(kubeconfig, loopbackHost)
+    : kubeconfig
   writeFileSync(path, rewritten, { mode: 0o600 })
 
   const args = ['--kubeconfig', path]
@@ -94,12 +123,17 @@ function createTempKubeconfig(
 
 function withKubeconfig<T>(kubeconfig: string | undefined, fn: (kubeArgs: string[]) => T): T {
   const explicitKubeconfig = kubeconfig?.trim() ? kubeconfig : undefined
-  const effectiveKubeconfig = explicitKubeconfig ?? resolveAmbientKubeconfig()
+  const ambientKubeconfig = explicitKubeconfig ? undefined : resolveAmbientKubeconfig()
+  const effectiveKubeconfig = explicitKubeconfig ?? ambientKubeconfig?.kubeconfig
   if (!effectiveKubeconfig) {
     return fn([])
   }
 
-  const { args, cleanup } = createTempKubeconfig(effectiveKubeconfig, !explicitKubeconfig)
+  const { args, cleanup } = createTempKubeconfig(
+    effectiveKubeconfig,
+    !explicitKubeconfig,
+    explicitKubeconfig ? true : (ambientKubeconfig?.shouldRewriteLoopback ?? true),
+  )
   try {
     return fn(args)
   } finally {
@@ -165,9 +199,14 @@ export function spawnPodLogStream(opts: {
   let cleanup = () => {}
 
   const explicitKubeconfig = opts.kubeconfig?.trim() ? opts.kubeconfig : undefined
-  const effectiveKubeconfig = explicitKubeconfig ?? resolveAmbientKubeconfig()
+  const ambientKubeconfig = explicitKubeconfig ? undefined : resolveAmbientKubeconfig()
+  const effectiveKubeconfig = explicitKubeconfig ?? ambientKubeconfig?.kubeconfig
   if (effectiveKubeconfig) {
-    const tempKubeconfig = createTempKubeconfig(effectiveKubeconfig, !explicitKubeconfig)
+    const tempKubeconfig = createTempKubeconfig(
+      effectiveKubeconfig,
+      !explicitKubeconfig,
+      explicitKubeconfig ? true : (ambientKubeconfig?.shouldRewriteLoopback ?? true),
+    )
     args.push(...tempKubeconfig.args)
     cleanup = tempKubeconfig.cleanup
   }
@@ -184,24 +223,33 @@ export function spawnPodLogStream(opts: {
 
 /**
  * List all namespaces tagged as managed by Shadow Cloud on the *default*
- * cluster (KUBECONFIG). Used for orphan reconcile in the SaaS API. Returns
- * `null` if kubectl is not installed (so callers can degrade gracefully).
+ * cluster (KUBECONFIG). Supports both the legacy `managed-by=shadowob-cloud-cli`
+ * label and the newer `shadowob-cloud/managed=true` label so reconcile and
+ * cleanup remain backward-compatible across deployments. Returns `null` if
+ * kubectl is not installed (so callers can degrade gracefully).
  */
 export function listManagedNamespaces(kubeconfig?: string): string[] | null {
   try {
-    const out = execKubectl(
-      [
-        'get',
-        'ns',
-        '-l',
-        'shadowob-cloud/managed=true',
-        '-o',
-        'jsonpath={.items[*].metadata.name}',
-      ],
-      kubeconfig,
-      10_000,
-    ).trim()
-    return out.length === 0 ? [] : out.split(/\s+/)
+    const out = execKubectl(['get', 'ns', '-o', 'json'], kubeconfig, 10_000)
+    const data = JSON.parse(out) as {
+      items?: Array<{
+        metadata?: {
+          name?: string
+          labels?: Record<string, string | undefined>
+        }
+      }>
+    }
+
+    return (data.items ?? [])
+      .filter((item) => {
+        const labels = item.metadata?.labels ?? {}
+        return (
+          labels['shadowob-cloud/managed'] === 'true' ||
+          labels['managed-by'] === 'shadowob-cloud-cli'
+        )
+      })
+      .map((item) => item.metadata?.name)
+      .filter((name): name is string => Boolean(name))
   } catch {
     return null
   }

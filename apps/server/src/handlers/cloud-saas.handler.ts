@@ -7,6 +7,7 @@ import { cloudDeployments, cloudTemplates } from '../db/schema'
 import {
   prepareCloudSaasConfigSnapshot,
   sanitizeCloudSaasDeployment,
+  validateCloudSaasConfigSnapshot,
 } from '../lib/cloud-saas-config'
 import {
   extractRequiredEnvVars,
@@ -27,6 +28,15 @@ const TIER_COST: Record<string, number> = {
 
 function getPrimarySchema(): Record<string, unknown> {
   return loadCloudConfigSchema()
+}
+
+function isDeployableTemplateContent(content: unknown): boolean {
+  try {
+    validateCloudSaasConfigSnapshot(content)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function createCloudSaasHandler(container: AppContainer) {
@@ -76,7 +86,9 @@ export function createCloudSaasHandler(container: AppContainer) {
     const category = c.req.query('category')
     const q = c.req.query('q')?.toLowerCase()
     const dao = container.resolve('cloudTemplateDao')
-    let templates = await dao.listApproved()
+    let templates = (await dao.listApproved()).filter((template) =>
+      isDeployableTemplateContent(template.content),
+    )
     if (category) {
       templates = templates.filter((t) => t.category === category)
     }
@@ -142,6 +154,9 @@ export function createCloudSaasHandler(container: AppContainer) {
     if (!template || template.reviewStatus !== 'approved') {
       return c.json({ ok: false, error: 'Template not found' }, 404)
     }
+    if (!isDeployableTemplateContent(template.content)) {
+      return c.json({ ok: false, error: 'Template is not deployable' }, 422)
+    }
     return c.json(template)
   })
 
@@ -151,6 +166,9 @@ export function createCloudSaasHandler(container: AppContainer) {
     const template = await dao.findBySlug(slug)
     if (!template || template.reviewStatus !== 'approved') {
       return c.json({ ok: false, error: 'Template not found' }, 404)
+    }
+    if (!isDeployableTemplateContent(template.content)) {
+      return c.json({ ok: false, error: 'Template is not deployable' }, 422)
     }
     return c.json({ template: slug, requiredEnvVars: extractRequiredEnvVars(template.content) })
   })
@@ -401,6 +419,9 @@ export function createCloudSaasHandler(container: AppContainer) {
       const template = await templateDao.findBySlug(input.templateSlug)
       if (!template || template.reviewStatus !== 'approved') {
         return c.json({ ok: false, error: 'Template not found or not approved' }, 404)
+      }
+      if (!isDeployableTemplateContent(template.content)) {
+        return c.json({ ok: false, error: 'Template is not deployable' }, 422)
       }
 
       let storedConfigSnapshot: Record<string, unknown>
@@ -924,7 +945,7 @@ export function createCloudSaasHandler(container: AppContainer) {
   /**
    * POST /api/cloud-saas/deployments/orphans/:namespace/cleanup
    * Force-delete an orphan namespace (no DB row). Admin-only safety check
-   * is enforced via the namespace label `shadowob-cloud/managed=true`.
+   * is enforced via the namespace managed labels.
    */
   h.post('/deployments/orphans/:namespace/cleanup', async (c) => {
     const namespace = c.req.param('namespace')
@@ -933,7 +954,7 @@ export function createCloudSaasHandler(container: AppContainer) {
       return c.json(
         {
           ok: false,
-          error: 'Refusing to delete: namespace is not labeled shadowob-cloud/managed=true',
+          error: 'Refusing to delete: namespace is not labeled as Shadow Cloud managed',
         },
         422,
       )

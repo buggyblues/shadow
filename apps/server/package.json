@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "JWT_SECRET=${JWT_SECRET:-shadow-dev-jwt-secret-do-not-use-in-production} DB_PUSH=true tsx watch src/index.ts",
     "dev:backend": "JWT_SECRET=${JWT_SECRET:-shadow-dev-jwt-secret-do-not-use-in-production} DB_PUSH=true tsx watch src/index.ts",
-    "dev:cloud-worker": "tsx watch src/cloud-worker.ts",
+    "dev:cloud-worker": "SHADOW_BUILD_DTS=0 pnpm --filter @shadowob/cloud exec tsup && tsx watch src/cloud-worker.ts",
     "dev:migrate": "JWT_SECRET=${JWT_SECRET:-shadow-dev-jwt-secret-do-not-use-in-production} tsx watch src/index.ts",
     "build": "tsup",
     "start": "node dist/index.js",

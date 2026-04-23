@@ -32,6 +32,7 @@ let app: Hono
 let userId: string
 let token: string
 let officialTemplateSlug: string
+let invalidOfficialTemplateSlug: string
 
 function uniqueName(prefix: string): string {
   return `${prefix}-${randomUUID().slice(0, 8)}`
@@ -107,13 +108,29 @@ beforeAll(async () => {
       description: 'Integration test official template',
       source: 'official',
       reviewStatus: 'approved',
-      content: { agents: [{ role: 'worker', model: 'gpt-4o-mini' }], version: 1 },
+      content: makeConfigSnapshot('official-template-secret'),
       tags: ['test'],
       category: 'test',
       baseCost: 0,
     })
     .returning()
   officialTemplateSlug = tmpl!.slug
+
+  const [invalidTemplate] = await db
+    .insert(schema.cloudTemplates)
+    .values({
+      slug: `e2e-invalid-official-${Date.now()}`,
+      name: 'E2E Invalid Official Template',
+      description: 'Invalid deploy config template for integration tests',
+      source: 'official',
+      reviewStatus: 'approved',
+      content: { agents: [{ role: 'worker', model: 'gpt-4o-mini' }], version: 1 },
+      tags: ['test'],
+      category: 'test',
+      baseCost: 0,
+    })
+    .returning()
+  invalidOfficialTemplateSlug = invalidTemplate!.slug
 })
 
 afterAll(async () => {
@@ -122,6 +139,12 @@ afterAll(async () => {
     await db
       .delete(schema.cloudTemplates)
       .where(schema.cloudTemplates.slug.like(`e2e-official-%`))
+      .catch(() => {})
+  }
+  if (invalidOfficialTemplateSlug) {
+    await db
+      .delete(schema.cloudTemplates)
+      .where(schema.cloudTemplates.slug.like(`e2e-invalid-official-%`))
       .catch(() => {})
   }
   if (userId) {
@@ -157,12 +180,28 @@ describe('Cloud SaaS — template store', () => {
     expect(found).toBeDefined()
   })
 
+  it('GET /api/cloud-saas/templates excludes approved templates with invalid deploy config', async () => {
+    const res = await req('GET', '/api/cloud-saas/templates')
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as Array<{ slug: string }>
+    const found = body.find((t) => t.slug === invalidOfficialTemplateSlug)
+    expect(found).toBeUndefined()
+  })
+
   it('GET /api/cloud-saas/templates/:slug returns template detail', async () => {
     const res = await req('GET', `/api/cloud-saas/templates/${officialTemplateSlug}`)
     expect(res.status).toBe(200)
     const body = (await res.json()) as { slug: string; reviewStatus: string }
     expect(body.slug).toBe(officialTemplateSlug)
     expect(body.reviewStatus).toBe('approved')
+  })
+
+  it('GET /api/cloud-saas/templates/:slug rejects undeployable approved templates', async () => {
+    const res = await req('GET', `/api/cloud-saas/templates/${invalidOfficialTemplateSlug}`)
+    expect(res.status).toBe(422)
+    const body = (await res.json()) as { ok: boolean; error: string }
+    expect(body.ok).toBe(false)
+    expect(body.error).toContain('not deployable')
   })
 })
 
@@ -296,6 +335,30 @@ describe('Cloud SaaS — deployment + billing', () => {
     const body = (await res.json()) as { ok: boolean; error: string }
     expect(body.ok).toBe(false)
     expect(body.error).toContain('Invalid configSnapshot')
+
+    const walletAfter = (await (await req('GET', '/api/cloud-saas/wallet')).json()) as {
+      balance: number
+    }
+    expect(walletAfter.balance).toBe(walletBefore.balance)
+  })
+
+  it('POST /api/cloud-saas/deployments rejects undeployable templates before charging wallet', async () => {
+    const walletBefore = (await (await req('GET', '/api/cloud-saas/wallet')).json()) as {
+      balance: number
+    }
+
+    const res = await req('POST', '/api/cloud-saas/deployments', {
+      namespace: uniqueName('e2e-invalid-template-ns'),
+      name: uniqueName('e2e-invalid-template-deploy'),
+      templateSlug: invalidOfficialTemplateSlug,
+      resourceTier: 'lightweight',
+      configSnapshot: makeConfigSnapshot('valid-runtime-secret'),
+    })
+
+    expect(res.status).toBe(422)
+    const body = (await res.json()) as { ok: boolean; error: string }
+    expect(body.ok).toBe(false)
+    expect(body.error).toContain('not deployable')
 
     const walletAfter = (await (await req('GET', '/api/cloud-saas/wallet')).json()) as {
       balance: number

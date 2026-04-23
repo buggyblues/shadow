@@ -4,6 +4,7 @@ import type { CloudActivityDao } from '../dao/cloud-activity.dao'
 import type { CloudClusterDao } from '../dao/cloud-cluster.dao'
 import type { CloudDeploymentDao } from '../dao/cloud-deployment.dao'
 import type { CloudTemplateDao } from '../dao/cloud-template.dao'
+import { validateCloudSaasConfigSnapshot } from '../lib/cloud-saas-config'
 import { decrypt, encrypt } from '../lib/kms'
 
 export class CloudService {
@@ -34,7 +35,15 @@ export class CloudService {
     for (const file of jsonFiles) {
       const slug = file.replace('.template.json', '')
       const raw = await readFile(join(templatesDir, file), 'utf-8')
-      const content = JSON.parse(raw)
+      let content: Record<string, unknown>
+      try {
+        content = validateCloudSaasConfigSnapshot(JSON.parse(raw))
+      } catch (err) {
+        console.warn(
+          `[cloud] Skipping invalid official template "${file}": ${err instanceof Error ? err.message : String(err)}`,
+        )
+        continue
+      }
       const name = slug
         .split('-')
         .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
