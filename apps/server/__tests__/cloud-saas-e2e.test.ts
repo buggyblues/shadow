@@ -12,6 +12,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
+import { eq, like } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import { Hono } from 'hono'
 import postgres from 'postgres'
@@ -138,19 +139,19 @@ afterAll(async () => {
   if (officialTemplateSlug) {
     await db
       .delete(schema.cloudTemplates)
-      .where(schema.cloudTemplates.slug.like(`e2e-official-%`))
+      .where(like(schema.cloudTemplates.slug, 'e2e-official-%'))
       .catch(() => {})
   }
   if (invalidOfficialTemplateSlug) {
     await db
       .delete(schema.cloudTemplates)
-      .where(schema.cloudTemplates.slug.like(`e2e-invalid-official-%`))
+      .where(like(schema.cloudTemplates.slug, 'e2e-invalid-official-%'))
       .catch(() => {})
   }
   if (userId) {
     await db
       .delete(schema.users)
-      .where(schema.users.id.eq(userId))
+      .where(eq(schema.users.id, userId))
       .catch(() => {})
   }
   await sql.end()
@@ -311,6 +312,71 @@ describe('Cloud SaaS — deployment + billing', () => {
     }
     const deployTx = txBody.transactions.find((tx) => tx.referenceType === 'cloud_deploy')
     expect(deployTx).toBeDefined()
+  })
+
+  it('GET /api/cloud-saas/deployments/costs and /:id/costs return Shrimp billing summaries', async () => {
+    const namespace = uniqueName('e2e-costs-ns')
+    const createRes = await req('POST', '/api/cloud-saas/deployments', {
+      namespace,
+      name: uniqueName('e2e-costs-deploy'),
+      templateSlug: officialTemplateSlug,
+      resourceTier: 'lightweight',
+      configSnapshot: makeConfigSnapshot('cost-secret'),
+    })
+
+    expect(createRes.status).toBe(201)
+    const deployment = (await createRes.json()) as { id: string; monthlyCost: number | null }
+
+    const namespaceCostsRes = await req('GET', `/api/cloud-saas/deployments/${deployment.id}/costs`)
+    expect(namespaceCostsRes.status).toBe(200)
+    const namespaceCosts = (await namespaceCostsRes.json()) as {
+      namespace: string
+      billingAmount: number | null
+      billingUnit: string
+      agents: Array<{ billingAmount: number | null; billingUnit: string }>
+    }
+    expect(namespaceCosts.namespace).toBe(namespace)
+    expect(namespaceCosts.billingUnit).toBe('shrimp')
+    expect(namespaceCosts.billingAmount).toBe(deployment.monthlyCost)
+    expect(Array.isArray(namespaceCosts.agents)).toBe(true)
+    expect(namespaceCosts.agents.length).toBeGreaterThan(0)
+    expect(namespaceCosts.agents.every((agent) => agent.billingUnit === 'shrimp')).toBe(true)
+
+    const overviewRes = await req('GET', '/api/cloud-saas/deployments/costs')
+    expect(overviewRes.status).toBe(200)
+    const overview = (await overviewRes.json()) as {
+      billingUnit: string
+      namespaces: Array<{ namespace: string; billingUnit: string; billingAmount: number | null }>
+    }
+    expect(overview.billingUnit).toBe('shrimp')
+    const matchingNamespace = overview.namespaces.find((item) => item.namespace === namespace)
+    expect(matchingNamespace).toBeDefined()
+    expect(matchingNamespace?.billingUnit).toBe('shrimp')
+    expect(matchingNamespace?.billingAmount).toBe(deployment.monthlyCost)
+  })
+
+  it('POST /api/cloud-saas/deployments/:id/cancel marks a pending deployment as cancelling', async () => {
+    const createRes = await req('POST', '/api/cloud-saas/deployments', {
+      namespace: uniqueName('e2e-cancel-ns'),
+      name: uniqueName('e2e-cancel-deploy'),
+      templateSlug: officialTemplateSlug,
+      resourceTier: 'lightweight',
+      configSnapshot: makeConfigSnapshot('cancel-secret'),
+    })
+
+    expect(createRes.status).toBe(201)
+    const deployment = (await createRes.json()) as { id: string }
+
+    const cancelRes = await req('POST', `/api/cloud-saas/deployments/${deployment.id}/cancel`)
+    expect(cancelRes.status).toBe(200)
+    const cancelBody = (await cancelRes.json()) as { ok: boolean; status: string }
+    expect(cancelBody.ok).toBe(true)
+    expect(cancelBody.status).toBe('cancelling')
+
+    const detailRes = await req('GET', `/api/cloud-saas/deployments/${deployment.id}`)
+    expect(detailRes.status).toBe(200)
+    const detail = (await detailRes.json()) as { status: string }
+    expect(detail.status).toBe('cancelling')
   })
 
   it('POST /api/cloud-saas/deployments rejects invalid config without charging wallet', async () => {

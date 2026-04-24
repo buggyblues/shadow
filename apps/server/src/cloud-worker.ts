@@ -9,7 +9,8 @@ import { CloudClusterDao } from './dao/cloud-cluster.dao'
 import { CloudDeploymentDao } from './dao/cloud-deployment.dao'
 import type { Database } from './db'
 import { db } from './db'
-import { listManagedNamespaces, namespaceExists } from './lib/k8s-cli'
+import { resolveCloudSaasShadowRuntime } from './lib/cloud-saas-config'
+import { deleteNamespace, listManagedNamespaces, namespaceExists } from './lib/k8s-cli'
 import { decrypt } from './lib/kms'
 
 const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS ?? 5000)
@@ -143,6 +144,23 @@ async function resolveClusterRuntime(
   }
 }
 
+async function waitForNamespaceDeletion(
+  namespace: string,
+  kubeconfig?: string,
+  timeoutMs = 180_000,
+  intervalMs = 4_000,
+): Promise<boolean> {
+  const startedAt = Date.now()
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const exists = namespaceExists(namespace, kubeconfig)
+    if (exists === false) return true
+    await sleep(intervalMs)
+  }
+
+  return false
+}
+
 async function processDeployment(
   deployment: CloudDeploymentRecord,
   deploymentDao: CloudDeploymentDao,
@@ -179,12 +197,16 @@ async function processDeployment(
       throw new Error('No valid config snapshot found for this deployment. Cannot deploy.')
     }
 
-    const shadowUrl = runtimeEnvVars.SHADOW_SERVER_URL ?? process.env.SHADOW_SERVER_URL
-    const shadowToken = runtimeEnvVars.SHADOW_USER_TOKEN ?? process.env.SHADOW_USER_TOKEN
+    const { shadowUrl, podShadowUrl, shadowToken } = resolveCloudSaasShadowRuntime(runtimeEnvVars)
 
     await deploymentDao.appendLog(
       deployment.id,
       'Config snapshot written, starting Pulumi deploy...',
+      'info',
+    )
+    await deploymentDao.appendLog(
+      deployment.id,
+      `Resolved Shadow URLs: provision=${shadowUrl ?? '(unset)'} pod=${podShadowUrl ?? '(unset)'}`,
       'info',
     )
 
@@ -195,12 +217,13 @@ async function processDeployment(
       stack: deployment.id,
       cluster,
       shadowUrl,
+      k8sShadowUrl: podShadowUrl,
       shadowToken,
-      onOutput: (out) => {
+      onOutput: (out: string) => {
         process.stdout.write(`[deploy:${deployment.id}] ${out}`)
         deploymentDao.appendLog(deployment.id, out.trim(), 'info').catch(() => {})
       },
-      onStackReady: (stack) => {
+      onStackReady: (stack: { cancel: () => Promise<void> }) => {
         cancelToken.stack = stack
       },
       isCancelled: () => cancelToken.cancelled,
@@ -247,6 +270,7 @@ async function processDestroy(
   try {
     const cluster = await resolveClusterRuntime(deployment.clusterId, clusterDao)
     const { configSnapshot } = extractCloudSaasRuntime(deployment.configSnapshot)
+    const clusterKubeconfig = cluster?.kubeconfig
 
     await container.deploymentRuntime.destroy({
       namespace: deployment.namespace,
@@ -254,6 +278,25 @@ async function processDestroy(
       cluster,
       configSnapshot,
     })
+
+    let namespaceDeleted = await waitForNamespaceDeletion(
+      deployment.namespace,
+      clusterKubeconfig,
+      30_000,
+    )
+    if (!namespaceDeleted) {
+      await deploymentDao.appendLog(
+        deployment.id,
+        `Namespace "${deployment.namespace}" still exists after stack destroy; issuing direct namespace delete`,
+        'warn',
+      )
+      deleteNamespace(deployment.namespace, clusterKubeconfig)
+      namespaceDeleted = await waitForNamespaceDeletion(deployment.namespace, clusterKubeconfig)
+    }
+
+    if (!namespaceDeleted) {
+      throw new Error(`Namespace "${deployment.namespace}" still exists after destroy`)
+    }
 
     await deploymentDao.appendLog(
       deployment.id,

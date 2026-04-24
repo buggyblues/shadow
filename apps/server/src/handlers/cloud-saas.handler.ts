@@ -14,7 +14,18 @@ import {
   loadCloudConfigSchema,
   summarizeCloudConfigValidation,
 } from '../lib/cloud-saas-validation'
-import { deleteNamespace, listManagedNamespaces, listPods, spawnPodLogStream } from '../lib/k8s-cli'
+import {
+  type CostOverviewSummary,
+  collectNamespaceCost,
+  type NamespaceCostSummary,
+} from '../lib/cloud-usage-cost'
+import {
+  deleteNamespace,
+  listManagedNamespaces,
+  listPods,
+  readPodLogs,
+  spawnPodLogStream,
+} from '../lib/k8s-cli'
 import { decrypt } from '../lib/kms'
 import { authMiddleware } from '../middleware/auth.middleware'
 
@@ -37,6 +48,68 @@ function isDeployableTemplateContent(content: unknown): boolean {
   } catch {
     return false
   }
+}
+
+type DeploymentAgentConfig = {
+  id?: unknown
+  replicas?: unknown
+}
+
+function getDeploymentAgentNames(deployment: {
+  name: string
+  agentCount?: number | null
+  configSnapshot?: unknown
+}): string[] {
+  const configSnapshot =
+    deployment.configSnapshot && typeof deployment.configSnapshot === 'object'
+      ? (deployment.configSnapshot as Record<string, unknown>)
+      : null
+  const deployments = configSnapshot?.deployments as
+    | { agents?: DeploymentAgentConfig[] }
+    | undefined
+  const agentNames = (deployments?.agents ?? [])
+    .map((agent) => (typeof agent?.id === 'string' ? agent.id : null))
+    .filter((agentName): agentName is string => Boolean(agentName))
+
+  if (agentNames.length > 0) {
+    return agentNames
+  }
+
+  if ((deployment.agentCount ?? 0) > 1) {
+    return Array.from(
+      { length: deployment.agentCount ?? 0 },
+      (_, index) => `${deployment.name}-${index + 1}`,
+    )
+  }
+
+  return [deployment.name]
+}
+
+function sumNullable(values: Array<number | null>): number | null {
+  const filtered = values.filter((value): value is number => value !== null)
+  return filtered.length > 0 ? filtered.reduce((sum, value) => sum + value, 0) : null
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+function isTerminalDeploymentStatus(status: string): boolean {
+  return status === 'deployed' || status === 'failed' || status === 'destroyed'
+}
+
+function isVisibleDeploymentStatus(status: string): boolean {
+  return (
+    status === 'pending' ||
+    status === 'deploying' ||
+    status === 'cancelling' ||
+    status === 'deployed' ||
+    status === 'destroying'
+  )
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 export function createCloudSaasHandler(container: AppContainer) {
@@ -364,8 +437,10 @@ export function createCloudSaasHandler(container: AppContainer) {
       .limit(limit)
       .offset(offset)
 
+    const sanitizedRows = rows.map((row) => sanitizeCloudSaasDeployment(row))
+
     if (!includeOrphans) {
-      return c.json(rows.map((row) => sanitizeCloudSaasDeployment(row)))
+      return c.json(sanitizedRows)
     }
 
     const known = new Set(rows.map((r) => r.namespace))
@@ -375,7 +450,55 @@ export function createCloudSaasHandler(container: AppContainer) {
     // by the worker's reconcile loop instead.
     const ns = listManagedNamespaces() ?? []
     const orphans = ns.filter((n) => !known.has(n))
-    return c.json({ items: rows.map((row) => sanitizeCloudSaasDeployment(row)), _orphans: orphans })
+    return c.json({ items: sanitizedRows, _orphans: orphans })
+  })
+
+  /**
+   * GET /api/cloud-saas/deployments/costs
+   * Aggregate cost snapshots for all visible SaaS deployments.
+   */
+  h.get('/deployments/costs', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const db = container.resolve('db')
+    const rows = await db
+      .select()
+      .from(cloudDeployments)
+      .where(eq(cloudDeployments.userId, user.userId))
+      .orderBy(cloudDeployments.createdAt)
+
+    const visibleRows = rows.filter((row) => isVisibleDeploymentStatus(row.status))
+    const summaries = await Promise.all(
+      visibleRows.map(async (deployment) => {
+        const kubeconfig = (await resolveKubeconfig(deployment)) ?? undefined
+        return collectNamespaceCost({
+          namespace: deployment.namespace,
+          agentNames: getDeploymentAgentNames(deployment),
+          billingAmount: deployment.monthlyCost ?? null,
+          billingUnit: 'shrimp',
+          kubeconfig,
+        })
+      }),
+    )
+
+    const overview: CostOverviewSummary = {
+      totalUsd: sumNullable(summaries.map((summary) => summary.totalUsd)),
+      billingAmount: sumNullable(summaries.map((summary) => summary.billingAmount)),
+      billingUnit: 'shrimp',
+      totalTokens: sumNullable(summaries.map((summary) => summary.totalTokens)),
+      namespaces: summaries.map((summary) => ({
+        namespace: summary.namespace,
+        totalUsd: summary.totalUsd,
+        billingAmount: summary.billingAmount,
+        billingUnit: summary.billingUnit,
+        totalTokens: summary.totalTokens,
+        agentCount: summary.agents.length,
+        availableAgents: summary.availableAgents,
+        unavailableAgents: summary.unavailableAgents,
+      })),
+      generatedAt: new Date().toISOString(),
+    }
+
+    return c.json(overview)
   })
 
   /**
@@ -389,6 +512,25 @@ export function createCloudSaasHandler(container: AppContainer) {
     const deployment = await dao.findById(id, user.userId)
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
     return c.json(sanitizeCloudSaasDeployment(deployment))
+  })
+
+  h.get('/deployments/:id/costs', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const id = c.req.param('id')
+    const dao = container.resolve('cloudDeploymentDao')
+    const deployment = await dao.findById(id, user.userId)
+    if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+
+    const kubeconfig = (await resolveKubeconfig(deployment)) ?? undefined
+    const summary: NamespaceCostSummary = collectNamespaceCost({
+      namespace: deployment.namespace,
+      agentNames: getDeploymentAgentNames(deployment),
+      billingAmount: deployment.monthlyCost ?? null,
+      billingUnit: 'shrimp',
+      kubeconfig,
+    })
+
+    return c.json(summary)
   })
 
   /**
@@ -676,14 +818,58 @@ export function createCloudSaasHandler(container: AppContainer) {
       new ReadableStream({
         async start(controller) {
           const enc = new TextEncoder()
-          const send = (data: unknown) =>
-            controller.enqueue(enc.encode(`data: ${JSON.stringify(data)}\n\n`))
-          const logs = await dao.getLogs(id)
-          for (const log of logs) {
-            send({ level: log.level, message: log.message, createdAt: log.createdAt })
+          const send = (data: unknown, event?: string) =>
+            controller.enqueue(
+              enc.encode(`${event ? `event: ${event}\n` : ''}data: ${JSON.stringify(data)}\n\n`),
+            )
+
+          let sentCount = 0
+          let lastStatus: string | null = null
+
+          try {
+            while (!c.req.raw.signal.aborted) {
+              const logs = await dao.getLogs(id)
+              for (const log of logs.slice(sentCount)) {
+                send({ level: log.level, message: log.message, createdAt: log.createdAt }, 'log')
+              }
+              sentCount = logs.length
+
+              const current = await dao.findById(id, user.userId)
+              if (!current) {
+                send({ error: 'Deployment not found' }, 'error')
+                break
+              }
+
+              if (current.status !== lastStatus) {
+                lastStatus = current.status
+                send({ status: current.status }, 'status')
+              }
+
+              if (isTerminalDeploymentStatus(current.status)) {
+                send(
+                  {
+                    status: current.status,
+                    error: current.errorMessage,
+                  },
+                  'close',
+                )
+                break
+              }
+
+              await delay(1000)
+            }
+          } catch (err) {
+            send(
+              { error: err instanceof Error ? err.message : 'Failed to stream deployment logs' },
+              'error',
+            )
+          } finally {
+            try {
+              controller.close()
+            } catch {
+              /* already closed */
+            }
           }
-          send({ type: 'status', status: deployment.status })
-          controller.close()
         },
       }),
       200,
@@ -691,6 +877,7 @@ export function createCloudSaasHandler(container: AppContainer) {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
       },
     )
   })
@@ -774,14 +961,66 @@ export function createCloudSaasHandler(container: AppContainer) {
     const dao = container.resolve('cloudDeploymentDao')
     const deployment = await dao.findById(id, user.userId)
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+
+    const agentParam = c.req.query('agent')
+    const podParam = c.req.query('pod')
+    const page = clamp(Number.parseInt(c.req.query('page') ?? '1', 10) || 1, 1, 100)
+    const limit = clamp(Number.parseInt(c.req.query('limit') ?? '200', 10) || 200, 20, 500)
+
+    if (agentParam || podParam) {
+      const kubeconfig = (await resolveKubeconfig(deployment)) ?? undefined
+      const pods = listPods(deployment.namespace, kubeconfig)
+      let podName = podParam
+      if (!podName && agentParam) {
+        podName = pods.find((pod) => pod.name.includes(agentParam))?.name
+      }
+      if (!podName) {
+        podName = pods.find((pod) => pod.status === 'Running')?.name ?? pods[0]?.name
+      }
+
+      if (!podName) {
+        return c.json({ ok: false, error: 'No pods found for this deployment' }, 404)
+      }
+
+      try {
+        const requestedTail = page * limit
+        const allLines = readPodLogs({
+          namespace: deployment.namespace,
+          pod: podName,
+          tail: requestedTail,
+          timestamps: true,
+          kubeconfig,
+        })
+          .split('\n')
+          .map((line) => line.trimEnd())
+          .filter(Boolean)
+
+        const start = Math.max(allLines.length - requestedTail, 0)
+        const end = Math.max(allLines.length - (page - 1) * limit, 0)
+
+        return c.json({
+          namespace: deployment.namespace,
+          agent: agentParam ?? podName,
+          podName,
+          page,
+          limit,
+          lines: allLines.slice(start, end),
+          hasMore: allLines.length >= requestedTail,
+        })
+      } catch (err) {
+        return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 500)
+      }
+    }
+
     const logs = await dao.getLogs(id)
     return c.json({
-      lines: logs.map((l) => ({
-        level: l.level,
-        message: l.message,
-        createdAt: l.createdAt,
-      })),
-      total: logs.length,
+      namespace: deployment.namespace,
+      agent: deployment.name,
+      podName: deployment.name,
+      page,
+      limit,
+      lines: logs.map((l) => (l.level ? `[${l.level.toUpperCase()}] ${l.message}` : l.message)),
+      hasMore: false,
     })
   })
 

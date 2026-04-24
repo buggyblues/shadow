@@ -66,15 +66,15 @@ export class CloudDeploymentDao {
   }
 
   /**
-   * Reconcile-only: deployments the platform considers "live" right now.
-   * Used by the orphan-cluster reconciler to compare against k8s state.
+   * Reconcile-only: deployments that should already have a namespace present
+   * on the cluster.
+   *
+   * IMPORTANT: do not include `deploying` here. A rollout may still be
+   * creating the namespace when the periodic orphan reconciler runs, which
+   * would cause a false `orphaned-by-cluster` failure mid-deploy.
    */
   async listLive() {
-    const { inArray } = await import('drizzle-orm')
-    return this.db
-      .select()
-      .from(cloudDeployments)
-      .where(inArray(cloudDeployments.status, ['deployed', 'deploying', 'cancelling']))
+    return this.db.select().from(cloudDeployments).where(eq(cloudDeployments.status, 'deployed'))
   }
 
   async create(data: {

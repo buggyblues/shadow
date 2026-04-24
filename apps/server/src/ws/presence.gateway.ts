@@ -1,7 +1,7 @@
+import type { RedisClientType } from 'redis'
 import type { Socket, Server as SocketIOServer } from 'socket.io'
 import type { AppContainer } from '../container'
 import { logger } from '../lib/logger'
-import type { RedisClientType } from 'redis'
 import { presenceKeys } from '../lib/redis'
 
 const ACTIVITY_TTL = 60 // seconds — auto-expire safety net

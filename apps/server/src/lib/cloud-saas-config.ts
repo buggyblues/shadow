@@ -131,6 +131,23 @@ export function extractCloudSaasRuntime(configSnapshot: unknown): {
   }
 }
 
+export function resolveCloudSaasShadowRuntime(
+  envVars?: Record<string, string>,
+  processEnv: Record<string, string | undefined> = process.env,
+): {
+  shadowUrl?: string
+  podShadowUrl?: string
+  shadowToken?: string
+} {
+  const runtimeEnvVars = normalizeRuntimeEnvVars(envVars)
+  const shadowUrl = runtimeEnvVars.SHADOW_SERVER_URL ?? processEnv.SHADOW_SERVER_URL
+  const podShadowUrl =
+    runtimeEnvVars.SHADOW_AGENT_SERVER_URL ?? processEnv.SHADOW_AGENT_SERVER_URL ?? shadowUrl
+  const shadowToken = runtimeEnvVars.SHADOW_USER_TOKEN ?? processEnv.SHADOW_USER_TOKEN
+
+  return { shadowUrl, podShadowUrl, shadowToken }
+}
+
 export function redactCloudSaasConfigSnapshot(configSnapshot: unknown): unknown {
   const { configSnapshot: snapshot } = extractCloudSaasRuntime(configSnapshot)
   if (!snapshot) return null

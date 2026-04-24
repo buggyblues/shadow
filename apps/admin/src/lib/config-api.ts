@@ -87,7 +87,12 @@ export const configApi = {
     }),
   updateSchema: (
     id: string,
-    data: Partial<{ displayName: string; description: string; jsonSchema: Record<string, unknown>; uiSchema: Record<string, unknown> }>,
+    data: Partial<{
+      displayName: string
+      description: string
+      jsonSchema: Record<string, unknown>
+      uiSchema: Record<string, unknown>
+    }>,
   ) =>
     apiFetch<ConfigSchema>(`/config/schemas/${id}`, {
       method: 'PUT',
@@ -117,10 +122,15 @@ export const configApi = {
 
   // Feature flags
   listFlags: () => apiFetch<FeatureFlag[]>('/config/flags'),
-  createFlag: (data: { key: string; description?: string; envs?: { dev: boolean; staging: boolean; prod: boolean } }) =>
-    apiFetch<FeatureFlag>('/config/flags', { method: 'POST', body: JSON.stringify(data) }),
-  updateFlag: (id: string, data: { description?: string; envs: { dev: boolean; staging: boolean; prod: boolean } }) =>
-    apiFetch<FeatureFlag>(`/config/flags/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  createFlag: (data: {
+    key: string
+    description?: string
+    envs?: { dev: boolean; staging: boolean; prod: boolean }
+  }) => apiFetch<FeatureFlag>('/config/flags', { method: 'POST', body: JSON.stringify(data) }),
+  updateFlag: (
+    id: string,
+    data: { description?: string; envs: { dev: boolean; staging: boolean; prod: boolean } },
+  ) => apiFetch<FeatureFlag>(`/config/flags/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteFlag: (id: string) =>
     apiFetch<{ ok: boolean }>(`/config/flags/${id}`, { method: 'DELETE' }),
 

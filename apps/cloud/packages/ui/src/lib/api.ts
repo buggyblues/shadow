@@ -197,17 +197,25 @@ export interface DeploymentLogsPage {
   hasMore: boolean
 }
 
+export type BillingUnit = 'usd' | 'shrimp'
+
 export interface ProviderUsageSummary {
   provider: string
   amountUsd: number | null
   usageLabel: string | null
   raw: string | null
+  inputTokens: number | null
+  outputTokens: number | null
+  totalTokens: number | null
 }
 
 export interface AgentCostSummary {
   agentName: string
   podName: string | null
   totalUsd: number | null
+  billingAmount: number | null
+  billingUnit: BillingUnit
+  totalTokens: number | null
   providers: ProviderUsageSummary[]
   source: 'json' | 'text' | 'unavailable'
   message: string | null
@@ -216,6 +224,9 @@ export interface AgentCostSummary {
 export interface NamespaceCostSummary {
   namespace: string
   totalUsd: number | null
+  billingAmount: number | null
+  billingUnit: BillingUnit
+  totalTokens: number | null
   agents: AgentCostSummary[]
   availableAgents: number
   unavailableAgents: number
@@ -224,9 +235,15 @@ export interface NamespaceCostSummary {
 
 export interface CostOverviewSummary {
   totalUsd: number | null
+  billingAmount: number | null
+  billingUnit: BillingUnit
+  totalTokens: number | null
   namespaces: Array<{
     namespace: string
     totalUsd: number | null
+    billingAmount: number | null
+    billingUnit: BillingUnit
+    totalTokens: number | null
     agentCount: number
     availableAgents: number
     unavailableAgents: number
@@ -596,6 +613,37 @@ export type CloudApiClient = typeof api & {
     success: boolean
     error?: string
     deploymentId?: string
-    status?: 'pending' | 'deploying' | 'deployed' | 'failed' | 'destroying' | 'destroyed'
+    status?:
+      | 'pending'
+      | 'deploying'
+      | 'cancelling'
+      | 'deployed'
+      | 'failed'
+      | 'destroying'
+      | 'destroyed'
+  }>
+  deploymentStatusFn?: (deploymentId: string) => Promise<{
+    id: string
+    status:
+      | 'pending'
+      | 'deploying'
+      | 'cancelling'
+      | 'deployed'
+      | 'failed'
+      | 'destroying'
+      | 'destroyed'
+    errorMessage?: string | null
+  }>
+  deploymentLogsUrlFn?: (deploymentId: string) => string
+  cancelDeploymentFn?: (deploymentId: string) => Promise<{
+    ok: boolean
+    status?:
+      | 'pending'
+      | 'deploying'
+      | 'cancelling'
+      | 'deployed'
+      | 'failed'
+      | 'destroying'
+      | 'destroyed'
   }>
 }

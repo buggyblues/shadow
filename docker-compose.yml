@@ -64,6 +64,7 @@ services:
     environment:
       DATABASE_URL: postgresql://shadow:shadow@postgres:5432/shadow
       REDIS_URL: redis://redis:6379
+      ENABLE_DEV_TOPUP: ${ENABLE_DEV_TOPUP:-0}
       JWT_SECRET: ${JWT_SECRET:-shadow-dev-jwt-secret-do-not-use-in-production}
       JWT_EXPIRES_IN: 7d
       PORT: 3002
@@ -138,6 +139,7 @@ services:
       KMS_MASTER_KEY: ${KMS_MASTER_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
       POLL_INTERVAL_MS: ${CLOUD_WORKER_POLL_INTERVAL_MS:-5000}
       SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://server:3002}
+      SHADOW_AGENT_SERVER_URL: ${SHADOW_AGENT_SERVER_URL:-http://host.lima.internal:3002}
       KUBECONFIG: ${KUBECONFIG:-/root/.kube/config}
       KUBECONFIG_CONTEXT: ${KUBECONFIG_CONTEXT:-}
       KUBECONFIG_LOOPBACK_HOST: ${KUBECONFIG_LOOPBACK_HOST:-host.lima.internal}

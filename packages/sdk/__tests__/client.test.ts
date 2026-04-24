@@ -1,6 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ShadowClient } from '../src/client'
 
+const originalFetch = globalThis.fetch
+
+function restoreStubbedGlobals() {
+  vi.restoreAllMocks()
+
+  if (originalFetch === undefined) {
+    delete (globalThis as typeof globalThis & { fetch?: typeof fetch }).fetch
+    return
+  }
+
+  globalThis.fetch = originalFetch
+}
+
 describe('ShadowClient', () => {
   let client: ShadowClient
 
@@ -28,11 +41,11 @@ describe('ShadowClient', () => {
 
   describe('request error handling', () => {
     beforeEach(() => {
-      vi.stubGlobal('fetch', vi.fn())
+      globalThis.fetch = vi.fn() as typeof fetch
     })
 
     afterEach(() => {
-      vi.unstubAllGlobals()
+      restoreStubbedGlobals()
     })
 
     it('should throw on non-ok response with status and body', async () => {
@@ -41,7 +54,7 @@ describe('ShadowClient', () => {
         status: 401,
         text: () => Promise.resolve('Unauthorized'),
       })
-      vi.stubGlobal('fetch', mockFetch)
+      globalThis.fetch = mockFetch as typeof fetch
 
       await expect(client.getMe()).rejects.toThrow(
         'Shadow API GET /api/auth/me failed (401): Unauthorized',
@@ -53,7 +66,7 @@ describe('ShadowClient', () => {
         ok: true,
         json: () => Promise.resolve({ id: '1', username: 'test' }),
       })
-      vi.stubGlobal('fetch', mockFetch)
+      globalThis.fetch = mockFetch as typeof fetch
 
       await client.getMe()
 
@@ -72,7 +85,7 @@ describe('ShadowClient', () => {
         ok: true,
         json: () => Promise.resolve({ token: 'new', user: {} }),
       })
-      vi.stubGlobal('fetch', mockFetch)
+      globalThis.fetch = mockFetch as typeof fetch
 
       await client.login({ email: 'a@b.com', password: '12345678' })
 
@@ -92,7 +105,7 @@ describe('ShadowClient', () => {
         status: 500,
         text: () => Promise.reject(new Error('parse error')),
       })
-      vi.stubGlobal('fetch', mockFetch)
+      globalThis.fetch = mockFetch as typeof fetch
 
       await expect(client.getMe()).rejects.toThrow('failed (500)')
     })
@@ -100,11 +113,11 @@ describe('ShadowClient', () => {
 
   describe('auth methods', () => {
     beforeEach(() => {
-      vi.stubGlobal('fetch', vi.fn())
+      globalThis.fetch = vi.fn() as typeof fetch
     })
 
     afterEach(() => {
-      vi.unstubAllGlobals()
+      restoreStubbedGlobals()
     })
 
     it('should call register with correct path and body', async () => {
@@ -112,7 +125,7 @@ describe('ShadowClient', () => {
         ok: true,
         json: () => Promise.resolve({ token: 'jwt', user: { id: '1' } }),
       })
-      vi.stubGlobal('fetch', mockFetch)
+      globalThis.fetch = mockFetch as typeof fetch
 
       const data = {
         email: 'test@example.com',
@@ -136,7 +149,7 @@ describe('ShadowClient', () => {
         ok: true,
         json: () => Promise.resolve({ token: 'jwt', user: { id: '1' } }),
       })
-      vi.stubGlobal('fetch', mockFetch)
+      globalThis.fetch = mockFetch as typeof fetch
 
       await client.login({ email: 'test@example.com', password: 'password123' })
 
@@ -153,7 +166,7 @@ describe('ShadowClient', () => {
         ok: true,
         json: () => Promise.resolve({ id: '1', username: 'test' }),
       })
-      vi.stubGlobal('fetch', mockFetch)
+      globalThis.fetch = mockFetch as typeof fetch
 
       await client.getMe()
 
@@ -170,11 +183,11 @@ describe('ShadowClient', () => {
 
   describe('server methods', () => {
     beforeEach(() => {
-      vi.stubGlobal('fetch', vi.fn())
+      globalThis.fetch = vi.fn() as typeof fetch
     })
 
     afterEach(() => {
-      vi.unstubAllGlobals()
+      restoreStubbedGlobals()
     })
 
     it('should call listServers with GET', async () => {
@@ -182,7 +195,7 @@ describe('ShadowClient', () => {
         ok: true,
         json: () => Promise.resolve([]),
       })
-      vi.stubGlobal('fetch', mockFetch)
+      globalThis.fetch = mockFetch as typeof fetch
 
       await client.listServers()
 
@@ -197,7 +210,7 @@ describe('ShadowClient', () => {
         ok: true,
         json: () => Promise.resolve({ id: 's1', name: 'Test' }),
       })
-      vi.stubGlobal('fetch', mockFetch)
+      globalThis.fetch = mockFetch as typeof fetch
 
       await client.createServer({ name: 'Test' })
 
@@ -213,11 +226,11 @@ describe('ShadowClient', () => {
 
   describe('message methods', () => {
     beforeEach(() => {
-      vi.stubGlobal('fetch', vi.fn())
+      globalThis.fetch = vi.fn() as typeof fetch
     })
 
     afterEach(() => {
-      vi.unstubAllGlobals()
+      restoreStubbedGlobals()
     })
 
     it('should call sendMessage with correct path', async () => {
@@ -225,7 +238,7 @@ describe('ShadowClient', () => {
         ok: true,
         json: () => Promise.resolve({ id: 'm1' }),
       })
-      vi.stubGlobal('fetch', mockFetch)
+      globalThis.fetch = mockFetch as typeof fetch
 
       await client.sendMessage('ch1', 'Hello')
 
@@ -243,13 +256,146 @@ describe('ShadowClient', () => {
         ok: true,
         json: () => Promise.resolve([]),
       })
-      vi.stubGlobal('fetch', mockFetch)
+      globalThis.fetch = mockFetch as typeof fetch
 
       await client.getMessages('ch1')
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/channels/ch1/messages'),
         expect.any(Object),
+      )
+    })
+  })
+
+  describe('agent policy methods', () => {
+    beforeEach(() => {
+      globalThis.fetch = vi.fn() as typeof fetch
+    })
+
+    afterEach(() => {
+      restoreStubbedGlobals()
+    })
+
+    it('should call listPolicies via the agent policies endpoint and filter by server', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'p1',
+              serverId: 'srv-1',
+              channelId: 'ch-1',
+              mentionOnly: false,
+              reply: true,
+              config: {},
+            },
+            {
+              id: 'p2',
+              serverId: 'srv-2',
+              channelId: 'ch-2',
+              mentionOnly: true,
+              reply: true,
+              config: {},
+            },
+          ]),
+      })
+      globalThis.fetch = mockFetch as typeof fetch
+
+      const policies = await client.listPolicies('agent-1', 'srv-1')
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/agents/agent-1/policies',
+        expect.any(Object),
+      )
+      expect(policies).toEqual([
+        {
+          id: 'p1',
+          serverId: 'srv-1',
+          channelId: 'ch-1',
+          mentionOnly: false,
+          reply: true,
+          config: {},
+        },
+      ])
+    })
+
+    it('should call upsertPolicy via the batch agent policies endpoint', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'p1',
+              serverId: 'srv-1',
+              channelId: 'ch-1',
+              mentionOnly: false,
+              reply: true,
+              config: { mode: 'test' },
+            },
+          ]),
+      })
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.upsertPolicy('agent-1', 'srv-1', {
+        channelId: 'ch-1',
+        mentionOnly: false,
+        reply: true,
+        config: { mode: 'test' },
+      })
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/agents/agent-1/policies',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({
+            policies: [
+              {
+                serverId: 'srv-1',
+                channelId: 'ch-1',
+                mentionOnly: false,
+                reply: true,
+                config: { mode: 'test' },
+              },
+            ],
+          }),
+        }),
+      )
+    })
+
+    it('should resolve a policy id before deletePolicy', async () => {
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve([
+              {
+                id: 'p1',
+                serverId: 'srv-1',
+                channelId: 'ch-1',
+                mentionOnly: false,
+                reply: true,
+                config: {},
+              },
+            ]),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ success: true }),
+        })
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.deletePolicy('agent-1', 'srv-1', 'ch-1')
+
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'https://api.example.com/api/agents/agent-1/policies',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'https://api.example.com/api/agents/agent-1/policies/p1',
+        expect.objectContaining({ method: 'DELETE' }),
       )
     })
   })

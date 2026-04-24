@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { AppContainer } from '../container'
-import { STRIPE_WEBHOOK_SECRET, stripe } from '../lib/stripe'
 import { logger } from '../lib/logger'
+import { STRIPE_WEBHOOK_SECRET, stripe } from '../lib/stripe'
 
 /**
  * Stripe Webhook Handler.

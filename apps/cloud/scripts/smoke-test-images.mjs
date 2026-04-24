@@ -27,7 +27,14 @@ const IMAGES = ['openclaw-runner', 'claude-runner']
 
 const REQUIRED_TEMPLATES = ['AGENTS.md', 'SOUL.md', 'IDENTITY.md', 'TOOLS.md', 'USER.md']
 
-const REQUIRED_WORKSPACE_FILES = ['AGENTS.md', 'SOUL.md', 'IDENTITY.md', 'TOOLS.md', 'USER.md', 'HEARTBEAT.md']
+const REQUIRED_WORKSPACE_FILES = [
+  'AGENTS.md',
+  'SOUL.md',
+  'IDENTITY.md',
+  'TOOLS.md',
+  'USER.md',
+  'HEARTBEAT.md',
+]
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -39,7 +46,12 @@ function docker(image, cmd, { timeout = 30000 } = {}) {
       stdio: ['ignore', 'pipe', 'pipe'],
     }).trim()
   } catch (err) {
-    return { error: true, stderr: err.stderr?.trim() ?? '', stdout: err.stdout?.trim() ?? '', status: err.status }
+    return {
+      error: true,
+      stderr: err.stderr?.trim() ?? '',
+      stdout: err.stdout?.trim() ?? '',
+      status: err.status,
+    }
   }
 }
 
@@ -59,7 +71,10 @@ function testTemplatesExist(image) {
   const templatesDir = '/app/node_modules/openclaw/docs/reference/templates'
   const result = docker(image, `ls ${templatesDir}`)
   if (result.error) {
-    return fail('OpenClaw internal templates missing', `${templatesDir} not found — Dockerfile cleanup too aggressive`)
+    return fail(
+      'OpenClaw internal templates missing',
+      `${templatesDir} not found — Dockerfile cleanup too aggressive`,
+    )
   }
   const files = result.split('\n')
   let ok = true
@@ -86,7 +101,7 @@ function testWorkspaceSetup(image) {
   // Simulate what the entrypoint does: write config, run openclaw setup, check workspace
   const script = [
     'mkdir -p /home/openclaw/.openclaw',
-    'node -e "require(\'fs\').writeFileSync(\'/home/openclaw/.openclaw/openclaw.json\', JSON.stringify({agents:{defaults:{workspace:\'/home/openclaw/.openclaw/workspace\'}}}))"',
+    "node -e \"require('fs').writeFileSync('/home/openclaw/.openclaw/openclaw.json', JSON.stringify({agents:{defaults:{workspace:'/home/openclaw/.openclaw/workspace'}}}))\"",
     'OPENCLAW_CONFIG_PATH=/home/openclaw/.openclaw/openclaw.json openclaw setup --workspace /home/openclaw/.openclaw/workspace 2>&1',
     'echo "---FILES---"',
     'ls /home/openclaw/.openclaw/workspace/',
@@ -98,7 +113,10 @@ function testWorkspaceSetup(image) {
   }
 
   const filesPart = result.split('---FILES---')[1]?.trim() ?? ''
-  const files = filesPart.split('\n').map((f) => f.trim()).filter(Boolean)
+  const files = filesPart
+    .split('\n')
+    .map((f) => f.trim())
+    .filter(Boolean)
 
   let ok = true
   for (const f of REQUIRED_WORKSPACE_FILES) {
@@ -131,7 +149,7 @@ function testEntrypointDryRun(image) {
       'console.log(\\"workspaceDir=\\" + workspaceDir);' +
       'if (workspaceDir === \\"\\") { console.error(\\"EMPTY STRING BUG\\"); process.exit(1); }' +
       'console.log(\\"OK\\");' +
-    '"',
+      '"',
   ].join(' && ')
 
   const result = docker(image, script, { timeout: 10000 })

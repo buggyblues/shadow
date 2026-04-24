@@ -62,6 +62,7 @@ export interface DestroyOptions {
   namespace?: string
   stack?: string
   k8sContext?: string
+  kubeConfigPath?: string
   config?: CloudConfig
 }
 
@@ -141,8 +142,11 @@ export class DeployService {
     }
 
     // 2. Build extra secrets from CLI-provided credentials (passed directly to plugin lifecycle)
+    // The SHADOW_SERVER_URL injected into pod env must be reachable from inside the cluster, so
+    // prefer the pod-facing URL (k8sShadowUrl) over the worker-side provisioning URL (shadowUrl).
     const extraSecrets: Record<string, string> = {}
-    if (options.shadowUrl) extraSecrets.SHADOW_SERVER_URL = options.shadowUrl
+    const podFacingShadowUrl = options.k8sShadowUrl ?? options.shadowUrl
+    if (podFacingShadowUrl) extraSecrets.SHADOW_SERVER_URL = podFacingShadowUrl
     if (options.shadowToken) extraSecrets.SHADOW_USER_TOKEN = options.shadowToken
 
     // 3. Resolve config (expand extends + templates)
@@ -212,13 +216,20 @@ export class DeployService {
       }
     }
 
+    const k8sShadowUrl =
+      options.k8sShadowUrl ??
+      process.env.SHADOW_AGENT_SERVER_URL ??
+      options.shadowUrl ??
+      process.env.K8S_SHADOW_URL ??
+      process.env.SHADOW_SERVER_URL
+
     // 4. Output manifests to directory if requested
     if (options.outputDir) {
       this.logger.step('Generating manifests...')
       const manifests = this.manifestService.build({
         config: resolved,
         namespace,
-        shadowServerUrl: options.shadowUrl ?? process.env.SHADOW_SERVER_URL,
+        shadowServerUrl: k8sShadowUrl,
       })
 
       const outDir = resolve(options.outputDir)
@@ -240,12 +251,6 @@ export class DeployService {
     }
 
     // 5. Deploy via Pulumi automation API
-    const k8sShadowUrl =
-      options.k8sShadowUrl ??
-      options.shadowUrl ??
-      process.env.K8S_SHADOW_URL ??
-      process.env.SHADOW_SERVER_URL
-
     this.logger.step('Initializing Pulumi stack...')
     emit('Initializing Pulumi stack...\n')
 

@@ -186,7 +186,8 @@ export function ShopOrders({ serverId }: ShopOrdersProps) {
       queryClient.invalidateQueries({ queryKey: ['shop-orders', serverId] })
       showToast(t('shop.reviewSubmitted', '评价已提交，感谢您的反馈！'), 'success')
     },
-    onError: (err: Error) => showToast(err.message || t('shop.reviewSubmitFailed', '评价提交失败'), 'error'),
+    onError: (err: Error) =>
+      showToast(err.message || t('shop.reviewSubmitFailed', '评价提交失败'), 'error'),
   })
 
   useEffect(() => {

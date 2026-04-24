@@ -130,7 +130,9 @@ const loginResult = await api('/api/auth/login', {
 })
 
 if (!loginResult.response.ok || !loginResult.body?.accessToken) {
-  throw new Error(`Login failed: ${loginResult.response.status} ${JSON.stringify(loginResult.body)}`)
+  throw new Error(
+    `Login failed: ${loginResult.response.status} ${JSON.stringify(loginResult.body)}`,
+  )
 }
 
 const accessToken = loginResult.body.accessToken
@@ -159,7 +161,9 @@ const patResult = await api('/api/tokens', {
 })
 
 if (!patResult.response.ok || !patResult.body?.token || !patResult.body?.id) {
-  throw new Error(`PAT creation failed: ${patResult.response.status} ${JSON.stringify(patResult.body)}`)
+  throw new Error(
+    `PAT creation failed: ${patResult.response.status} ${JSON.stringify(patResult.body)}`,
+  )
 }
 
 const patId = patResult.body.id
@@ -193,7 +197,10 @@ try {
     ],
     { label: 'cloud console entry point' },
   )
-  await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'p0-verify-01-cloud-root.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(SCREENSHOT_DIR, 'p0-verify-01-cloud-root.png'),
+    fullPage: true,
+  })
 
   const deployClicked = await clickFirst(page, [
     () => page.getByRole('button', { name: /deploy template|部署模板/i }),
@@ -231,16 +238,15 @@ try {
     }
   }
 
-  await waitForVisibleLocator(
-    page,
-    [() => page.getByRole('button', { name: /continue|继续/i })],
-    { label: 'wizard step 1 continue button' },
-  )
-  await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'p0-verify-03-deploy-step-1.png'), fullPage: true })
+  await waitForVisibleLocator(page, [() => page.getByRole('button', { name: /continue|继续/i })], {
+    label: 'wizard step 1 continue button',
+  })
+  await page.screenshot({
+    path: path.join(SCREENSHOT_DIR, 'p0-verify-03-deploy-step-1.png'),
+    fullPage: true,
+  })
 
-  await clickFirst(page, [
-    () => page.getByRole('button', { name: /continue|继续/i }),
-  ])
+  await clickFirst(page, [() => page.getByRole('button', { name: /continue|继续/i })])
 
   await waitForVisibleLocator(page, [() => page.locator('#namespace')], {
     label: 'namespace input',
@@ -258,18 +264,24 @@ try {
     throw new Error(`Namespace was unexpectedly changed to ${await namespaceInput.inputValue()}`)
   }
 
-  await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'p0-verify-04-deploy-step-2-filled.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(SCREENSHOT_DIR, 'p0-verify-04-deploy-step-2-filled.png'),
+    fullPage: true,
+  })
 
-  await clickFirst(page, [
-    () => page.getByRole('button', { name: /continue|继续/i }),
-  ])
+  await clickFirst(page, [() => page.getByRole('button', { name: /continue|继续/i })])
 
-  const startDeploymentButton = page.getByRole('button', { name: /start deployment|开始部署/i }).last()
+  const startDeploymentButton = page
+    .getByRole('button', { name: /start deployment|开始部署/i })
+    .last()
   await startDeploymentButton.waitFor({
     state: 'visible',
     timeout: 10_000,
   })
-  await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'p0-verify-05-deploy-step-3-review.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(SCREENSHOT_DIR, 'p0-verify-05-deploy-step-3-review.png'),
+    fullPage: true,
+  })
 
   let createResponse = null
   try {
@@ -298,7 +310,10 @@ try {
   }
 
   await page.waitForTimeout(1500)
-  await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'p0-verify-06-deploy-started.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(SCREENSHOT_DIR, 'p0-verify-06-deploy-started.png'),
+    fullPage: true,
+  })
 
   finalDeployment = await poll(
     async () => {
@@ -363,7 +378,10 @@ try {
     ],
     { timeoutMs: 20_000, label: 'deployments page after create' },
   )
-  await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'p0-verify-07-deployments-after-create.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(SCREENSHOT_DIR, 'p0-verify-07-deployments-after-create.png'),
+    fullPage: true,
+  })
 
   const destroyResult = await api(`/api/cloud-saas/deployments/${deploymentId}`, {
     method: 'DELETE',
@@ -371,7 +389,9 @@ try {
   })
 
   if (!destroyResult.response.ok) {
-    throw new Error(`Destroy request failed: ${destroyResult.response.status} ${JSON.stringify(destroyResult.body)}`)
+    throw new Error(
+      `Destroy request failed: ${destroyResult.response.status} ${JSON.stringify(destroyResult.body)}`,
+    )
   }
 
   destroyStatus = await poll(
@@ -403,15 +423,14 @@ try {
     ],
     { timeoutMs: 20_000, label: 'deployments page after destroy' },
   )
-  await waitForLocatorToDisappear(
-    page,
-    [() => page.getByText(namespace, { exact: false })],
-    {
-      timeoutMs: 20_000,
-      label: `namespace ${namespace} removal from deployments page`,
-    },
-  )
-  await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'p0-verify-08-deployments-after-destroy.png'), fullPage: true })
+  await waitForLocatorToDisappear(page, [() => page.getByText(namespace, { exact: false })], {
+    timeoutMs: 20_000,
+    label: `namespace ${namespace} removal from deployments page`,
+  })
+  await page.screenshot({
+    path: path.join(SCREENSHOT_DIR, 'p0-verify-08-deployments-after-destroy.png'),
+    fullPage: true,
+  })
 
   console.log(
     JSON.stringify(

@@ -1,3 +1,4 @@
+import type { Logger } from 'pino'
 import type { AgentDao } from '../dao/agent.dao'
 import type { AgentDashboardDao } from '../dao/agent-dashboard.dao'
 import type { ChannelDao } from '../dao/channel.dao'
@@ -10,8 +11,6 @@ import type {
   UpdateMessageInput,
   UpdateThreadInput,
 } from '../validators/message.schema'
-
-import type { Logger } from 'pino'
 
 export class MessageService {
   constructor(

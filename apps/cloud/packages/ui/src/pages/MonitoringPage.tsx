@@ -53,11 +53,44 @@ import {
   type DoctorCheck,
   type DoctorResult,
   type NamespaceCostSummary,
+  type ProviderUsageSummary,
 } from '@/lib/api'
 import { useApiClient } from '@/lib/api-context'
-import { formatUsdCost } from '@/lib/store-data'
+import { formatDisplayCost, formatTokenCount, formatUsdCost } from '@/lib/store-data'
 import { formatTimestamp, getRelativeTime, isDeploymentReady } from '@/lib/utils'
 import { type ActivityEntry, type ActivityType } from '@/stores/app'
+
+function formatTokenLabel(value: number | null, locale: string, tokenLabel: string): string {
+  if (value === null) return '—'
+  return `${formatTokenCount(value, locale)} ${tokenLabel}`
+}
+
+function getProviderMetricDisplay(
+  provider: ProviderUsageSummary,
+  options: {
+    billingUnit: 'usd' | 'shrimp'
+    locale: string
+    tokenLabel: string
+  },
+): { primary: string; secondary: string | null } {
+  const tokenText =
+    provider.totalTokens !== null
+      ? formatTokenLabel(provider.totalTokens, options.locale, options.tokenLabel)
+      : null
+  const usageText = provider.usageLabel ?? provider.raw ?? null
+
+  if (options.billingUnit === 'shrimp') {
+    return {
+      primary: tokenText ?? usageText ?? '—',
+      secondary: usageText && usageText !== tokenText ? usageText : null,
+    }
+  }
+
+  return {
+    primary: formatUsdCost(provider.amountUsd, options.locale),
+    secondary: tokenText ?? usageText,
+  }
+}
 
 function doctorStatusToStatusType(status: DoctorCheck['status']): StatusType {
   if (status === 'pass') return 'success'
@@ -365,10 +398,12 @@ function OverviewPanel({
   const topCostNamespaces = useMemo(() => {
     return [...(costOverview?.namespaces ?? [])]
       .sort((left, right) => {
-        if (left.totalUsd === null && right.totalUsd === null) return 0
-        if (left.totalUsd === null) return 1
-        if (right.totalUsd === null) return -1
-        return right.totalUsd - left.totalUsd
+        const leftCost = left.billingAmount ?? left.totalUsd
+        const rightCost = right.billingAmount ?? right.totalUsd
+        if (leftCost === null && rightCost === null) return 0
+        if (leftCost === null) return 1
+        if (rightCost === null) return -1
+        return rightCost - leftCost
       })
       .slice(0, 4)
   }, [costOverview?.namespaces])
@@ -436,8 +471,15 @@ function OverviewPanel({
             <>
               <div>
                 <div className="text-2xl font-black text-green-400">
-                  {formatUsdCost(costOverview.totalUsd, i18n.language)}
+                  {formatDisplayCost(costOverview, {
+                    locale: i18n.language,
+                    shrimpUnitLabel: t('deploy.shrimpCoins'),
+                  })}
                 </div>
+                <p className="mt-1 text-xs text-text-muted">
+                  {t('deployments.totalTokens')}:{' '}
+                  {formatTokenCount(costOverview.totalTokens, i18n.language)}
+                </p>
                 <p className="text-xs mt-1 text-text-muted">
                   {t('deployments.generatedAt')}
                   {': '}
@@ -460,12 +502,21 @@ function OverviewPanel({
                             {item.namespace}
                           </p>
                           <p className="text-xs text-text-muted">
+                            {item.totalTokens !== null && (
+                              <>
+                                {t('deployments.totalTokens')}:{' '}
+                                {formatTokenCount(item.totalTokens, i18n.language)} ·{' '}
+                              </>
+                            )}
                             {t('deployments.availableAgents')}: {item.availableAgents} ·{' '}
                             {t('deployments.unavailableAgents')}: {item.unavailableAgents}
                           </p>
                         </div>
                         <span className="text-sm font-semibold text-green-400 shrink-0">
-                          {formatUsdCost(item.totalUsd, i18n.language)}
+                          {formatDisplayCost(item, {
+                            locale: i18n.language,
+                            shrimpUnitLabel: t('deploy.shrimpCoins'),
+                          })}
                         </span>
                       </GlassSurface>
                     </Link>
@@ -631,12 +682,21 @@ function CostsPanel({
 
   return (
     <div className="space-y-6">
-      <StatsGrid className="mb-0 grid-cols-1 md:grid-cols-4">
+      <StatsGrid className="mb-0 grid-cols-1 md:grid-cols-2 xl:grid-cols-5">
         <StatCard
           label={t('deployments.totalCost')}
-          value={formatUsdCost(overview.totalUsd, i18n.language)}
+          value={formatDisplayCost(overview, {
+            locale: i18n.language,
+            shrimpUnitLabel: t('deploy.shrimpCoins'),
+          })}
           icon={<DollarSign size={13} />}
           color="green"
+        />
+        <StatCard
+          label={t('deployments.totalTokens')}
+          value={formatTokenCount(overview.totalTokens, i18n.language)}
+          icon={<Activity size={13} />}
+          color="purple"
         />
         <StatCard
           label={t('monitoring.namespaces')}
@@ -673,7 +733,7 @@ function CostsPanel({
 
           return (
             <GlassCard key={item.namespace} className="p-4 space-y-4">
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Link
@@ -691,14 +751,23 @@ function CostsPanel({
                   </div>
 
                   <p className="text-xs mt-1 text-text-muted">
+                    {item.totalTokens !== null && (
+                      <>
+                        {t('deployments.totalTokens')}:{' '}
+                        {formatTokenCount(item.totalTokens, i18n.language)} ·{' '}
+                      </>
+                    )}
                     {t('deployments.availableAgents')}: {item.availableAgents} ·{' '}
                     {t('deployments.unavailableAgents')}: {item.unavailableAgents}
                   </p>
                 </div>
 
-                <div className="text-right shrink-0">
-                  <p className="text-lg font-semibold text-green-400">
-                    {formatUsdCost(item.totalUsd, i18n.language)}
+                <div className="min-w-0 shrink-0 text-left md:max-w-[14rem] md:text-right">
+                  <p className="break-words text-lg font-semibold leading-tight text-green-400">
+                    {formatDisplayCost(item, {
+                      locale: i18n.language,
+                      shrimpUnitLabel: t('deploy.shrimpCoins'),
+                    })}
                   </p>
                   <p className="text-xs text-text-muted">{t('deployments.totalCost')}</p>
                 </div>
@@ -712,7 +781,7 @@ function CostsPanel({
                         key={`${detail.namespace}-${agent.agentName}`}
                         className="rounded-2xl border border-border-subtle px-4 py-3"
                       >
-                        <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="mb-2 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="text-sm font-mono truncate text-text-primary">
@@ -731,32 +800,52 @@ function CostsPanel({
                             </p>
                           </div>
 
-                          <div className="text-right shrink-0">
-                            <p className="text-sm font-semibold text-green-400">
-                              {formatUsdCost(agent.totalUsd, i18n.language)}
+                          <div className="min-w-0 shrink-0 text-left md:max-w-[14rem] md:text-right">
+                            <p className="break-words text-sm font-semibold text-green-400">
+                              {formatDisplayCost(agent, {
+                                locale: i18n.language,
+                                shrimpUnitLabel: t('deploy.shrimpCoins'),
+                              })}
                             </p>
                             <p className="text-xs text-text-muted">{t('deployments.totalCost')}</p>
+                            <p className="mt-1 text-xs text-text-muted">
+                              {formatTokenLabel(
+                                agent.totalTokens,
+                                i18n.language,
+                                t('deployments.tokens'),
+                              )}
+                            </p>
                           </div>
                         </div>
 
                         {agent.providers.length > 0 ? (
                           <div className="space-y-2">
-                            {agent.providers.map((provider) => (
-                              <div
-                                key={`${agent.agentName}-${provider.provider}`}
-                                className="flex items-center justify-between gap-3 text-xs"
-                              >
-                                <span className="text-text-secondary">{provider.provider}</span>
-                                <div className="text-right">
-                                  <p className="text-text-primary">
-                                    {formatUsdCost(provider.amountUsd, i18n.language)}
-                                  </p>
-                                  <p className="text-text-muted">
-                                    {provider.usageLabel ?? provider.raw ?? '—'}
-                                  </p>
+                            {agent.providers.map((provider) => {
+                              const providerDisplay = getProviderMetricDisplay(provider, {
+                                billingUnit: detail.billingUnit,
+                                locale: i18n.language,
+                                tokenLabel: t('deployments.tokens'),
+                              })
+
+                              return (
+                                <div
+                                  key={`${agent.agentName}-${provider.provider}`}
+                                  className="flex flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                                >
+                                  <span className="text-text-secondary">{provider.provider}</span>
+                                  <div className="min-w-0 text-left sm:text-right">
+                                    <p className="break-words text-text-primary">
+                                      {providerDisplay.primary}
+                                    </p>
+                                    {providerDisplay.secondary ? (
+                                      <p className="break-words text-text-muted">
+                                        {providerDisplay.secondary}
+                                      </p>
+                                    ) : null}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              )
+                            })}
                           </div>
                         ) : (
                           <p className="text-xs text-text-muted">
@@ -1008,7 +1097,7 @@ export function MonitoringPage() {
       }
       headerContent={
         <div className="space-y-4">
-          <StatsGrid className="grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+          <StatsGrid className="grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
             <StatCard
               label={t('monitoring.healthScore')}
               value={doctor ? `${healthScore}%` : '—'}
@@ -1035,9 +1124,18 @@ export function MonitoringPage() {
             />
             <StatCard
               label={t('deployments.totalCost')}
-              value={formatUsdCost(costOverview?.totalUsd ?? null, i18n.language)}
+              value={formatDisplayCost(costOverview ?? {}, {
+                locale: i18n.language,
+                shrimpUnitLabel: t('deploy.shrimpCoins'),
+              })}
               icon={<DollarSign size={13} />}
               color="green"
+            />
+            <StatCard
+              label={t('deployments.totalTokens')}
+              value={formatTokenCount(costOverview?.totalTokens ?? null, i18n.language)}
+              icon={<Activity size={13} />}
+              color="purple"
             />
             <StatCard
               label={t('deployments.unavailableAgents')}

@@ -35,7 +35,7 @@ import { StatusDot } from '@/components/StatusDot'
 import { useDebounce } from '@/hooks/useDebounce'
 import { type Deployment, type DeployTaskListItem } from '@/lib/api'
 import { useApiClient } from '@/lib/api-context'
-import { formatUsdCost } from '@/lib/store-data'
+import { formatDisplayCost, formatTokenCount } from '@/lib/store-data'
 import {
   formatTimestamp,
   getAge,
@@ -55,7 +55,10 @@ interface NamespaceGroup {
   readyCount: number
   totalCount: number
   latestTask?: DeployTaskListItem
-  costUsd?: number | null
+  totalUsd?: number | null
+  billingAmount?: number | null
+  billingUnit?: 'usd' | 'shrimp'
+  totalTokens?: number | null
   availableCostAgents?: number
   unavailableCostAgents?: number
 }
@@ -215,9 +218,30 @@ function NamespaceCard({
             <p className="text-xs text-text-muted">
               {group.totalCount} {pluralize(group.totalCount, 'deployment')}
             </p>
-            <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-muted">
               <DollarSign size={11} />
-              <span>{formatUsdCost(group.costUsd ?? null, i18n.language)}</span>
+              <span>
+                {formatDisplayCost(
+                  {
+                    totalUsd: group.totalUsd ?? null,
+                    billingAmount: group.billingAmount ?? null,
+                    billingUnit: group.billingUnit,
+                  },
+                  {
+                    locale: i18n.language,
+                    shrimpUnitLabel: t('deploy.shrimpCoins'),
+                  },
+                )}
+              </span>
+              {group.totalTokens !== null && (
+                <>
+                  <span>·</span>
+                  <span>
+                    {t('deployments.totalTokens')}{' '}
+                    {formatTokenCount(group.totalTokens ?? null, i18n.language)}
+                  </span>
+                </>
+              )}
               <span>·</span>
               <span>
                 {t('deployments.availableAgents')} {group.availableCostAgents ?? 0}
@@ -235,7 +259,7 @@ function NamespaceCard({
         </div>
       }
       headerRight={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 md:justify-end">
           <StatusDot
             status={group.readyCount === group.totalCount ? 'success' : 'warning'}
             label={readyLabel}
@@ -483,12 +507,22 @@ export function DeploymentsPage() {
   const costByNamespace = useMemo(() => {
     const map = new Map<
       string,
-      { totalUsd: number | null; availableAgents: number; unavailableAgents: number }
+      {
+        totalUsd: number | null
+        billingAmount: number | null
+        billingUnit: 'usd' | 'shrimp'
+        totalTokens: number | null
+        availableAgents: number
+        unavailableAgents: number
+      }
     >()
 
     for (const item of costOverview?.namespaces ?? []) {
       map.set(item.namespace, {
         totalUsd: item.totalUsd,
+        billingAmount: item.billingAmount,
+        billingUnit: item.billingUnit,
+        totalTokens: item.totalTokens,
         availableAgents: item.availableAgents,
         unavailableAgents: item.unavailableAgents,
       })
@@ -507,7 +541,10 @@ export function DeploymentsPage() {
       readyCount: deps.filter((deployment) => isDeploymentReady(deployment.ready)).length,
       totalCount: deps.length,
       latestTask: tasksByNamespace.get(namespace),
-      costUsd: costByNamespace.get(namespace)?.totalUsd ?? null,
+      totalUsd: costByNamespace.get(namespace)?.totalUsd ?? null,
+      billingAmount: costByNamespace.get(namespace)?.billingAmount ?? null,
+      billingUnit: costByNamespace.get(namespace)?.billingUnit ?? 'usd',
+      totalTokens: costByNamespace.get(namespace)?.totalTokens ?? null,
       availableCostAgents: costByNamespace.get(namespace)?.availableAgents ?? 0,
       unavailableCostAgents: costByNamespace.get(namespace)?.unavailableAgents ?? 0,
     }))
@@ -599,7 +636,10 @@ export function DeploymentsPage() {
             />
             <StatCard
               label={t('deployments.totalCost')}
-              value={formatUsdCost(costOverview?.totalUsd ?? null, i18n.language)}
+              value={formatDisplayCost(costOverview ?? {}, {
+                locale: i18n.language,
+                shrimpUnitLabel: t('deploy.shrimpCoins'),
+              })}
               icon={<DollarSign size={13} />}
               color="purple"
             />

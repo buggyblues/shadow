@@ -227,16 +227,32 @@ export class ShadowClient {
 
   async listPolicies(
     agentId: string,
-    serverId: string,
+    serverId?: string,
   ): Promise<
     {
+      id: string
+      serverId: string
       channelId: string | null
+      listen?: boolean
       mentionOnly: boolean
       reply: boolean
       config: Record<string, unknown>
     }[]
   > {
-    return this.request(`/api/agents/${agentId}/servers/${serverId}/policies`)
+    const policies = await this.request<
+      {
+        id: string
+        serverId: string
+        channelId: string | null
+        listen?: boolean
+        mentionOnly: boolean
+        reply: boolean
+        config: Record<string, unknown>
+      }[]
+    >(`/api/agents/${agentId}/policies`)
+
+    if (!serverId) return policies
+    return policies.filter((policy) => policy.serverId === serverId)
   }
 
   async upsertPolicy(
@@ -248,11 +264,44 @@ export class ShadowClient {
       reply?: boolean
       config?: Record<string, unknown>
     },
-  ): Promise<{ channelId: string | null; mentionOnly: boolean; reply: boolean }> {
-    return this.request(`/api/agents/${agentId}/servers/${serverId}/policies`, {
+  ): Promise<{
+    id: string
+    serverId: string
+    channelId: string | null
+    listen?: boolean
+    mentionOnly: boolean
+    reply: boolean
+    config?: Record<string, unknown>
+  }> {
+    const policy = {
+      serverId,
+      ...(data.channelId !== undefined ? { channelId: data.channelId } : {}),
+      ...(data.mentionOnly !== undefined ? { mentionOnly: data.mentionOnly } : {}),
+      ...(data.reply !== undefined ? { reply: data.reply } : {}),
+      ...(data.config !== undefined ? { config: data.config } : {}),
+    }
+
+    const results = await this.request<
+      Array<{
+        id: string
+        serverId: string
+        channelId: string | null
+        listen?: boolean
+        mentionOnly: boolean
+        reply: boolean
+        config?: Record<string, unknown>
+      }>
+    >(`/api/agents/${agentId}/policies`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: JSON.stringify({ policies: [policy] }),
     })
+
+    const [result] = results
+    if (!result) {
+      throw new Error(`Shadow API PUT /api/agents/${agentId}/policies returned no policy result`)
+    }
+
+    return result
   }
 
   async deletePolicy(
@@ -260,7 +309,16 @@ export class ShadowClient {
     serverId: string,
     channelId: string,
   ): Promise<{ success: boolean }> {
-    return this.request(`/api/agents/${agentId}/servers/${serverId}/policies/${channelId}`, {
+    const policies = await this.listPolicies(agentId, serverId)
+    const policy = policies.find((entry) => entry.channelId === channelId)
+
+    if (!policy?.id) {
+      throw new Error(
+        `Shadow policy not found for agent ${agentId} in server ${serverId} channel ${channelId}`,
+      )
+    }
+
+    return this.request(`/api/agents/${agentId}/policies/${policy.id}`, {
       method: 'DELETE',
     })
   }

@@ -1,6 +1,6 @@
+import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { spawnSync } from 'node:child_process'
 
 const rootDir = process.cwd()
 
@@ -23,7 +23,14 @@ const packageChecks = [
   {
     name: '@shadowob/openclaw-shadowob',
     dir: 'packages/openclaw-shadowob',
-    srcEntries: ['src', 'package.json', 'index.ts', 'setup-entry.ts', 'tsup.config.ts', 'tsconfig.json'],
+    srcEntries: [
+      'src',
+      'package.json',
+      'index.ts',
+      'setup-entry.ts',
+      'tsup.config.ts',
+      'tsconfig.json',
+    ],
   },
   {
     name: '@shadowob/cli',

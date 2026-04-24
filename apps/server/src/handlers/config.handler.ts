@@ -41,10 +41,7 @@ export function createConfigHandler(container: AppContainer) {
   // GET /admin/api/config/schemas
   adminApp.get('/schemas', async (c) => {
     const db = container.resolve('db')
-    const rows = await db
-      .select()
-      .from(configSchemas)
-      .orderBy(desc(configSchemas.updatedAt))
+    const rows = await db.select().from(configSchemas).orderBy(desc(configSchemas.updatedAt))
     return c.json(rows)
   })
 
@@ -54,7 +51,10 @@ export function createConfigHandler(container: AppContainer) {
     zValidator(
       'json',
       z.object({
-        name: z.string().min(1).regex(/^[a-z0-9-]+$/, 'Lowercase kebab-case only'),
+        name: z
+          .string()
+          .min(1)
+          .regex(/^[a-z0-9-]+$/, 'Lowercase kebab-case only'),
         displayName: z.string().min(1),
         description: z.string().optional(),
         jsonSchema: z.record(z.unknown()),
@@ -168,7 +168,13 @@ export function createConfigHandler(container: AppContainer) {
   // POST /admin/api/config/values/:schemaName?env=prod  — save new draft
   adminApp.post(
     '/values/:schemaName',
-    zValidator('json', z.object({ data: z.union([z.record(z.unknown()), z.array(z.unknown())]), env: z.enum(['dev', 'staging', 'prod']).optional() })),
+    zValidator(
+      'json',
+      z.object({
+        data: z.union([z.record(z.unknown()), z.array(z.unknown())]),
+        env: z.enum(['dev', 'staging', 'prod']).optional(),
+      }),
+    ),
     async (c) => {
       const db = container.resolve('db')
       const user = c.get('user') as { userId: string }
@@ -353,7 +359,11 @@ export function createConfigHandler(container: AppContainer) {
 
     if (!publishedRow) return c.json({ ok: false, error: 'No published config' }, 404)
 
-    const result = { data: publishedRow.data, version: publishedRow.version, publishedAt: publishedRow.publishedAt }
+    const result = {
+      data: publishedRow.data,
+      version: publishedRow.version,
+      publishedAt: publishedRow.publishedAt,
+    }
 
     if (redis) {
       await redis.set(key, JSON.stringify(result), { EX: CONFIG_CACHE_TTL })

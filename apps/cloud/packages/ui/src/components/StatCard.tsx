@@ -37,21 +37,21 @@ export function StatCard({
       variant="stat"
       hoverable={Boolean(onClick)}
       className={cn(
-        'p-4 transition-all',
+        'min-w-0 p-4 transition-all',
         onClick && 'cursor-pointer hover:-translate-y-0.5',
         className,
       )}
       onClick={onClick}
     >
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2 text-xs">
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
           <span className={cn('inline-flex items-center justify-center', colors.icon)}>{icon}</span>
-          <span className="text-text-muted">{label}</span>
+          <span className="min-w-0 break-words text-text-muted">{label}</span>
         </div>
         {trend && (
           <span
             className={cn(
-              'text-xs px-1.5 py-0.5 rounded-full border border-border-subtle',
+              'shrink-0 rounded-full border border-border-subtle px-1.5 py-0.5 text-xs',
               trend.positive
                 ? 'text-success bg-success/10 border-success/20'
                 : 'text-danger bg-danger/10 border-danger/20',
@@ -61,7 +61,14 @@ export function StatCard({
           </span>
         )}
       </div>
-      <p className={cn('text-2xl font-black tracking-tight', colors.value)}>{value}</p>
+      <p
+        className={cn(
+          'break-words text-[clamp(1.25rem,2vw,1.75rem)] font-black leading-tight tracking-tight',
+          colors.value,
+        )}
+      >
+        {value}
+      </p>
     </Card>
   )
 }

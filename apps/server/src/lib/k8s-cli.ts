@@ -8,7 +8,7 @@
  * for the duration of each call and removed in the finally block. We never
  * log the content.
  */
-import { execFileSync, spawn } from 'node:child_process'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
@@ -19,6 +19,12 @@ export interface K8sPodSummary {
   status: string
   restarts: number
   age: string
+}
+
+export interface K8sExecResult {
+  stdout: string
+  stderr: string
+  exitCode: number
 }
 
 function rewriteLoopbackKubeconfig(kubeconfigYaml: string, loopbackHost?: string): string {
@@ -48,10 +54,23 @@ function rewriteLoopbackKubeconfig(kubeconfigYaml: string, loopbackHost?: string
   return lines.join('\n')
 }
 
+function isContainerizedRuntime(): boolean {
+  return process.env.SHADOW_CONTAINERIZED === '1' || existsSync('/.dockerenv')
+}
+
 function getHostLocalKubeconfigPaths(): string[] {
-  return [process.env.KUBECONFIG_HOST_PATH?.trim(), join(homedir(), '.kube', 'config')].filter(
-    (candidate): candidate is string => Boolean(candidate),
-  )
+  const candidates = [process.env.KUBECONFIG_HOST_PATH?.trim()]
+
+  if (!isContainerizedRuntime()) {
+    candidates.push(
+      ...(process.env.KUBECONFIG?.split(delimiter)
+        .map((candidate) => candidate.trim())
+        .filter((candidate) => candidate.length > 0) ?? []),
+      join(homedir(), '.kube', 'config'),
+    )
+  }
+
+  return [...new Set(candidates.filter((candidate): candidate is string => Boolean(candidate)))]
 }
 
 function isHostLocalKubeconfigPath(candidate: string | undefined): boolean {
@@ -219,6 +238,54 @@ export function spawnPodLogStream(opts: {
 
   const proc = spawn('kubectl', args, { stdio: ['ignore', 'pipe', 'pipe'] })
   return { proc, cleanup }
+}
+
+/**
+ * Read a snapshot of pod logs.
+ */
+export function readPodLogs(opts: {
+  namespace: string
+  pod: string
+  container?: string
+  tail?: number
+  timestamps?: boolean
+  kubeconfig?: string
+}): string {
+  const args = ['logs', '-n', opts.namespace, opts.pod]
+  if (opts.container) args.push('-c', opts.container)
+  if (opts.tail !== undefined) args.push(`--tail=${opts.tail}`)
+  if (opts.timestamps) args.push('--timestamps')
+  return execKubectl(args, opts.kubeconfig)
+}
+
+/**
+ * Execute a command inside a pod and capture stdout/stderr.
+ */
+export function execInPod(opts: {
+  namespace: string
+  pod: string
+  command: string[]
+  container?: string
+  kubeconfig?: string
+  timeout?: number
+}): K8sExecResult {
+  return withKubeconfig(opts.kubeconfig, (kubeArgs) => {
+    const args = [...kubeArgs, '-n', opts.namespace, 'exec', opts.pod]
+    if (opts.container) args.push('-c', opts.container)
+    args.push('--', ...opts.command)
+
+    const result = spawnSync('kubectl', args, {
+      encoding: 'utf-8',
+      timeout: opts.timeout ?? 15_000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+
+    return {
+      stdout: result.stdout ?? '',
+      stderr: result.stderr ?? '',
+      exitCode: result.status ?? 1,
+    }
+  })
 }
 
 /**

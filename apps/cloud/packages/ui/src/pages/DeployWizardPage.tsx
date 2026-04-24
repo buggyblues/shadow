@@ -25,7 +25,7 @@ import {
   Users,
   XCircle,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FieldErrors } from 'react-hook-form'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -1001,10 +1001,23 @@ function StepDeploy({
   const queryClient = useQueryClient()
   const addActivity = useAppStore((s) => s.addActivity)
   const addRecentDeploy = useAppStore((s) => s.addRecentDeploy)
-  const { lines, status, error: _sseError, startFetch } = useSSEStream()
+  const { lines, status, error: sseError, connect, startFetch, disconnect, clear } = useSSEStream()
   const [deployStarted, setDeployStarted] = useState(false)
   const [deploySuccess, setDeploySuccess] = useState<boolean | null>(null)
   const [taskInfo, setTaskInfo] = useState<{ id: number; url: string } | null>(null)
+  const [activeDeploymentId, setActiveDeploymentId] = useState<string | null>(null)
+  const [deploymentStatus, setDeploymentStatus] = useState<
+    | 'pending'
+    | 'deploying'
+    | 'cancelling'
+    | 'deployed'
+    | 'failed'
+    | 'destroying'
+    | 'destroyed'
+    | null
+  >(null)
+  const [cancelRequested, setCancelRequested] = useState(false)
+  const terminalHandledRef = useRef(false)
   const { data: detailData } = useQuery({
     queryKey: ['template-detail', name, i18n.language],
     queryFn: () => api.templates.detail(name, i18n.language),
@@ -1029,6 +1042,46 @@ function StepDeploy({
 
   const taskUrl = taskInfo ? new URL(taskInfo.url, window.location.origin).toString() : ''
 
+  type DeployInvocationResult = {
+    success: boolean
+    error?: string
+    exitCode?: number | null
+    deploymentId?: string
+    status?:
+      | 'pending'
+      | 'deploying'
+      | 'cancelling'
+      | 'deployed'
+      | 'failed'
+      | 'destroying'
+      | 'destroyed'
+  }
+
+  const deployApi = api as typeof api & {
+    deployFn?: (config: {
+      templateSlug: string
+      namespace: string
+      name: string
+      resourceTier: string
+      configSnapshot: Record<string, unknown>
+      envVars?: Record<string, string>
+    }) => Promise<DeployInvocationResult>
+    deploymentStatusFn?: (deploymentId: string) => Promise<{
+      id: string
+      status:
+        | 'pending'
+        | 'deploying'
+        | 'cancelling'
+        | 'deployed'
+        | 'failed'
+        | 'destroying'
+        | 'destroyed'
+      errorMessage?: string | null
+    }>
+    deploymentLogsUrlFn?: (deploymentId: string) => string
+    cancelDeploymentFn?: (deploymentId: string) => Promise<{ ok: boolean; status?: string }>
+  }
+
   // Auto-scroll log
   useEffect(() => {
     if (logRef.current) {
@@ -1036,14 +1089,162 @@ function StepDeploy({
     }
   }, [lines.length])
 
+  const finalizeSuccessfulDeployment = useCallback(async () => {
+    if (terminalHandledRef.current) return
+    terminalHandledRef.current = true
+    setDeploySuccess(true)
+    setDeploymentStatus('deployed')
+
+    const envEntries = Object.entries(config.envVars).filter(
+      ([, v]) => v && v !== '__SAVED__' && v.trim() !== '',
+    )
+    for (const [key, value] of envEntries) {
+      try {
+        await api.deployments.env.upsert(targetNamespace, key, value, true)
+      } catch {
+        /* non-critical */
+      }
+    }
+
+    addActivity({
+      type: 'deploy',
+      title: `Deployed ${name}`,
+      detail: `Template: ${name}, Namespace: ${targetNamespace}`,
+      namespace: targetNamespace,
+      template: name,
+    })
+    addRecentDeploy(name, targetNamespace)
+
+    queryClient.invalidateQueries({ queryKey: ['deployments'] })
+    queryClient.invalidateQueries({ queryKey: ['deployment-env', targetNamespace] })
+    queryClient.invalidateQueries({ queryKey: ['namespace-costs', targetNamespace] })
+    queryClient.invalidateQueries({ queryKey: ['cost-overview'] })
+    queryClient.invalidateQueries({ queryKey: ['deployment-cost-overview'] })
+    toast.success(t('deploy.successfullyDeployed', { name }))
+  }, [
+    addActivity,
+    addRecentDeploy,
+    api.deployments.env,
+    config.envVars,
+    name,
+    queryClient,
+    t,
+    targetNamespace,
+    toast,
+  ])
+
+  const finalizeFailedDeployment = useCallback(
+    (message: string, options?: { cancelled?: boolean }) => {
+      if (terminalHandledRef.current) return
+      terminalHandledRef.current = true
+      setDeploySuccess(false)
+
+      if (options?.cancelled) {
+        toast.warning(message)
+        addActivity({
+          type: 'deploy',
+          title: `Cancelled deployment ${name}`,
+          detail: message,
+          template: name,
+        })
+        return
+      }
+
+      toast.error(t('deploy.deployFailedWithMessage', { message }))
+      addActivity({
+        type: 'deploy',
+        title: `Failed to deploy ${name}`,
+        detail: message,
+        template: name,
+      })
+    },
+    [addActivity, name, t, toast],
+  )
+
+  useEffect(() => {
+    if (!activeDeploymentId || typeof deployApi.deploymentLogsUrlFn !== 'function') return
+    connect(deployApi.deploymentLogsUrlFn(activeDeploymentId))
+  }, [activeDeploymentId, connect, deployApi])
+
+  useEffect(() => {
+    if (
+      !deployStarted ||
+      !activeDeploymentId ||
+      deploySuccess !== null ||
+      typeof deployApi.deploymentStatusFn !== 'function'
+    ) {
+      return
+    }
+
+    let cancelled = false
+
+    const pollStatus = async () => {
+      while (!cancelled && !terminalHandledRef.current) {
+        try {
+          const current = await deployApi.deploymentStatusFn?.(activeDeploymentId)
+          if (!current || cancelled) return
+
+          setDeploymentStatus(current.status)
+
+          if (current.status === 'deployed') {
+            await finalizeSuccessfulDeployment()
+            return
+          }
+
+          if (current.status === 'failed') {
+            finalizeFailedDeployment(current.errorMessage ?? t('deploy.unknownError'))
+            return
+          }
+
+          if (current.status === 'destroyed') {
+            finalizeFailedDeployment(
+              cancelRequested
+                ? t('deploy.deploymentCancelled')
+                : (current.errorMessage ?? t('deploy.unknownError')),
+              { cancelled: cancelRequested },
+            )
+            return
+          }
+        } catch (err) {
+          finalizeFailedDeployment(err instanceof Error ? err.message : t('deploy.unknownError'))
+          return
+        }
+
+        await new Promise((resolve) => window.setTimeout(resolve, 2000))
+      }
+    }
+
+    void pollStatus()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    activeDeploymentId,
+    cancelRequested,
+    deployApi,
+    deployStarted,
+    deploySuccess,
+    finalizeFailedDeployment,
+    finalizeSuccessfulDeployment,
+    t,
+  ])
+
   // Initialize and deploy
   const initMutation = useMutation({
     mutationFn: () => api.init(name),
   })
 
   const handleDeploy = async () => {
+    terminalHandledRef.current = false
     setDeployStarted(true)
+    setDeploySuccess(null)
     setTaskInfo(null)
+    setActiveDeploymentId(null)
+    setDeploymentStatus(null)
+    setCancelRequested(false)
+    disconnect()
+    clear()
 
     try {
       // Step 1: Initialize from template (returns template JSON and persists to DB)
@@ -1075,22 +1276,6 @@ function StepDeploy({
         namespace: targetNamespace,
       }
 
-      type DeployInvocationResult = {
-        success: boolean
-        error?: string
-        exitCode?: number | null
-      }
-      const deployApi = api as typeof api & {
-        deployFn?: (config: {
-          templateSlug: string
-          namespace: string
-          name: string
-          resourceTier: string
-          configSnapshot: Record<string, unknown>
-          envVars?: Record<string, string>
-        }) => Promise<DeployInvocationResult>
-      }
-
       let result: DeployInvocationResult
 
       if (typeof deployApi.deployFn === 'function') {
@@ -1103,6 +1288,15 @@ function StepDeploy({
           configSnapshot: saasConfigSnapshot,
           envVars: config.envVars,
         })
+
+        if (!result.success || !result.deploymentId) {
+          setDeploySuccess(false)
+          throw new Error(result.error || t('deploy.unknownError'))
+        }
+
+        setActiveDeploymentId(result.deploymentId)
+        setDeploymentStatus(result.status ?? 'pending')
+        return
       } else {
         result = await startFetch('/api/deploy', deployConfig, {
           onEvent: (event, data) => {
@@ -1122,7 +1316,6 @@ function StepDeploy({
       }
 
       if (!result.success) {
-        setDeploySuccess(false)
         throw new Error(
           result.error ||
             t('deploy.deployFailedWithCode', {
@@ -1131,45 +1324,29 @@ function StepDeploy({
         )
       }
 
-      setDeploySuccess(true)
-
-      // Save user-entered env vars to Secrets for future deploys
-      const envEntries = Object.entries(config.envVars).filter(
-        ([, v]) => v && v !== '__SAVED__' && v.trim() !== '',
-      )
-      for (const [key, value] of envEntries) {
-        try {
-          await api.deployments.env.upsert(targetNamespace, key, value, true)
-        } catch {
-          /* non-critical */
-        }
-      }
-
-      // Record activity
-      addActivity({
-        type: 'deploy',
-        title: `Deployed ${name}`,
-        detail: `Template: ${name}, Namespace: ${targetNamespace}`,
-        namespace: targetNamespace,
-        template: name,
-      })
-      addRecentDeploy(name, targetNamespace)
-
-      queryClient.invalidateQueries({ queryKey: ['deployments'] })
-      queryClient.invalidateQueries({ queryKey: ['deployment-env', targetNamespace] })
-      queryClient.invalidateQueries({ queryKey: ['namespace-costs', targetNamespace] })
-      queryClient.invalidateQueries({ queryKey: ['cost-overview'] })
-      toast.success(t('deploy.successfullyDeployed', { name }))
+      await finalizeSuccessfulDeployment()
     } catch (err) {
-      setDeploySuccess(false)
       const errorMsg = err instanceof Error ? err.message : t('deploy.unknownError')
-      toast.error(t('deploy.deployFailedWithMessage', { message: errorMsg }))
-      addActivity({
-        type: 'deploy',
-        title: `Failed to deploy ${name}`,
-        detail: errorMsg,
-        template: name,
-      })
+      finalizeFailedDeployment(errorMsg)
+    }
+  }
+
+  const handleCancelDeployment = async () => {
+    if (!activeDeploymentId || typeof deployApi.cancelDeploymentFn !== 'function') return
+
+    try {
+      setCancelRequested(true)
+      setDeploymentStatus('cancelling')
+      await deployApi.cancelDeploymentFn(activeDeploymentId)
+      toast.warning(t('deploy.cancelRequested'))
+    } catch (err) {
+      setCancelRequested(false)
+      setDeploymentStatus('deploying')
+      toast.error(
+        t('deploy.deployFailedWithMessage', {
+          message: err instanceof Error ? err.message : t('deploy.unknownError'),
+        }),
+      )
     }
   }
 
@@ -1194,8 +1371,23 @@ function StepDeploy({
     }
   }
 
+  const resetDeploymentState = () => {
+    terminalHandledRef.current = false
+    disconnect()
+    clear()
+    setDeployStarted(false)
+    setDeploySuccess(null)
+    setTaskInfo(null)
+    setActiveDeploymentId(null)
+    setDeploymentStatus(null)
+    setCancelRequested(false)
+  }
+
   const isDeploying =
-    deployStarted && deploySuccess === null && status !== 'done' && status !== 'error'
+    deployStarted &&
+    deploySuccess === null &&
+    (activeDeploymentId !== null || (status !== 'done' && status !== 'error'))
+  const isCancelling = deploymentStatus === 'cancelling'
   const isDone = deploySuccess === true
   const isError = deploySuccess === false
 
@@ -1209,7 +1401,9 @@ function StepDeploy({
               ? t('deploy.deploymentComplete')
               : isError
                 ? t('deploy.deploymentFailed')
-                : t('deploy.deploying')}
+                : isCancelling
+                  ? t('deploy.cancelling')
+                  : t('deploy.deploying')}
         </h2>
         <p className="text-sm text-text-muted">
           {!deployStarted
@@ -1218,7 +1412,9 @@ function StepDeploy({
               ? t('deploy.deploySuccessDesc')
               : isError
                 ? t('deploy.deployFailDesc')
-                : t('deploy.deployingToCluster')}
+                : isCancelling
+                  ? t('deploy.cancelRequested')
+                  : t('deploy.deployingToCluster')}
         </p>
       </div>
 
@@ -1353,32 +1549,61 @@ function StepDeploy({
           {/* Status bar */}
           <div
             className={cn(
-              'flex items-center gap-3 p-4 rounded-lg border',
+              'flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between',
               isDone && 'bg-success/8 border-success/25',
               isError && 'bg-danger/8 border-danger/25',
+              isCancelling && 'bg-warning/8 border-warning/25',
               isDeploying && 'bg-primary/8 border-primary/25',
             )}
           >
-            {isDeploying && <Loader2 size={18} className="text-primary animate-spin" />}
-            {isDone && <CheckCircle size={18} className="text-success" />}
-            {isError && <XCircle size={18} className="text-danger" />}
-            <div>
-              <p
-                className={cn(
-                  'text-sm font-medium',
-                  isDone && 'text-success',
-                  isError && 'text-danger',
-                  isDeploying && 'text-primary',
-                )}
-              >
-                {isDeploying && t('deploy.deploying')}
-                {isDone && t('deploy.deploymentSuccessful')}
-                {isError && t('deploy.deploymentFailed')}
-              </p>
-              <p className="text-xs text-text-muted mt-1">
-                {t('deploy.logLinesReceived', { count: lines.length })}
-              </p>
+            <div className="flex items-center gap-3">
+              {isCancelling && <Loader2 size={18} className="animate-spin text-warning" />}
+              {!isCancelling && isDeploying && (
+                <Loader2 size={18} className="text-primary animate-spin" />
+              )}
+              {isDone && <CheckCircle size={18} className="text-success" />}
+              {isError && <XCircle size={18} className="text-danger" />}
+              <div>
+                <p
+                  className={cn(
+                    'text-sm font-medium',
+                    isDone && 'text-success',
+                    isError && 'text-danger',
+                    isCancelling && 'text-warning',
+                    isDeploying && !isCancelling && 'text-primary',
+                  )}
+                >
+                  {isCancelling && t('deploy.cancelling')}
+                  {!isCancelling && isDeploying && t('deploy.deploying')}
+                  {isDone && t('deploy.deploymentSuccessful')}
+                  {isError && t('deploy.deploymentFailed')}
+                </p>
+                <p className="mt-1 text-xs text-text-muted">
+                  {isCancelling
+                    ? t('deploy.cancelRequested')
+                    : t('deploy.logLinesReceived', { count: lines.length })}
+                </p>
+              </div>
             </div>
+            {activeDeploymentId &&
+            typeof deployApi.cancelDeploymentFn === 'function' &&
+            !isDone &&
+            !isError ? (
+              <Button
+                type="button"
+                onClick={handleCancelDeployment}
+                variant="ghost"
+                size="sm"
+                disabled={cancelRequested}
+              >
+                {cancelRequested ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <XCircle size={14} />
+                )}
+                {cancelRequested ? t('deploy.cancelling') : t('deploy.cancelDeployment')}
+              </Button>
+            ) : null}
           </div>
 
           {taskInfo && (
@@ -1440,6 +1665,12 @@ function StepDeploy({
               ))}
             </div>
           </div>
+
+          {sseError && (
+            <div className="rounded-lg border border-danger/25 bg-danger/8 px-4 py-3 text-xs text-danger">
+              {sseError}
+            </div>
+          )}
 
           {/* Post-deploy actions */}
           {isDone && (
@@ -1503,14 +1734,7 @@ function StepDeploy({
               >
                 {t('store.backToStore')}
               </Link>
-              <Button
-                type="button"
-                onClick={() => {
-                  setDeployStarted(false)
-                  setDeploySuccess(null)
-                }}
-                variant="ghost"
-              >
+              <Button type="button" onClick={resetDeploymentState} variant="ghost">
                 {t('common.retry')}
               </Button>
             </div>

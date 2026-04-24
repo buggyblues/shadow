@@ -4,6 +4,7 @@ import {
   extractCloudSaasRuntime,
   prepareCloudSaasConfigSnapshot,
   redactCloudSaasConfigSnapshot,
+  resolveCloudSaasShadowRuntime,
   validateCloudSaasConfigSnapshot,
 } from './cloud-saas-config'
 
@@ -99,6 +100,26 @@ describe('cloud-saas-config', () => {
           },
         },
       },
+    })
+  })
+
+  it('prefers SHADOW_AGENT_SERVER_URL for pod-facing runtime while keeping provisioning URL separate', () => {
+    const resolved = resolveCloudSaasShadowRuntime(
+      {
+        SHADOW_SERVER_URL: 'http://server:3002',
+        SHADOW_USER_TOKEN: 'pat_test',
+      },
+      {
+        SHADOW_SERVER_URL: 'http://server:3002',
+        SHADOW_AGENT_SERVER_URL: 'http://host.lima.internal:3002',
+        SHADOW_USER_TOKEN: 'pat_test',
+      },
+    )
+
+    expect(resolved).toEqual({
+      shadowUrl: 'http://server:3002',
+      podShadowUrl: 'http://host.lima.internal:3002',
+      shadowToken: 'pat_test',
     })
   })
 })

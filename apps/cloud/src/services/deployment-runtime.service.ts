@@ -97,10 +97,23 @@ function getStableRuntimeKubeconfigPath(kubeconfigYaml: string): string {
   return kubeconfigPath
 }
 
+function isContainerizedRuntime(): boolean {
+  return process.env.SHADOW_CONTAINERIZED === '1' || existsSync('/.dockerenv')
+}
+
 function getHostLocalRuntimeKubeconfigPaths(): string[] {
-  return [process.env.KUBECONFIG_HOST_PATH?.trim(), join(homedir(), '.kube', 'config')].filter(
-    (candidate): candidate is string => Boolean(candidate),
-  )
+  const candidates = [process.env.KUBECONFIG_HOST_PATH?.trim()]
+
+  if (!isContainerizedRuntime()) {
+    candidates.push(
+      ...(process.env.KUBECONFIG?.split(delimiter)
+        .map((candidate) => candidate.trim())
+        .filter((candidate) => candidate.length > 0) ?? []),
+      join(homedir(), '.kube', 'config'),
+    )
+  }
+
+  return [...new Set(candidates.filter((candidate): candidate is string => Boolean(candidate)))]
 }
 
 function isHostLocalRuntimeKubeconfigPath(candidate: string | undefined): boolean {

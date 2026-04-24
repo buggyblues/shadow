@@ -55,10 +55,6 @@ type TemplateDeployments = {
 const deploymentCacheByNamespace = new Map<string, SaasDeployment>()
 const deploymentCacheById = new Map<string, SaasDeployment>()
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
 function syncDeploymentCache(rows: SaasDeployment[]) {
   for (const row of rows) {
     deploymentCacheByNamespace.set(row.namespace, row)
@@ -69,7 +65,14 @@ function syncDeploymentCache(rows: SaasDeployment[]) {
 async function listSaasDeployments(): Promise<SaasDeployment[]> {
   const rows = await saasApi.deployments.list()
   syncDeploymentCache(rows)
-  return rows.filter((row) => row.status !== 'destroyed')
+  return rows.filter(
+    (row) =>
+      row.status === 'pending' ||
+      row.status === 'deploying' ||
+      row.status === 'cancelling' ||
+      row.status === 'deployed' ||
+      row.status === 'destroying',
+  )
 }
 
 async function resolveDeploymentByNamespace(namespace: string): Promise<SaasDeployment | null> {
@@ -406,24 +409,16 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
       syncDeploymentCache([updated])
       return { ok: true }
     },
-    costs: () =>
-      listSaasDeployments().then((rows) => ({
-        totalUsd: rows.reduce((sum, d) => sum + (d.monthlyCost ?? 0), 0) || null,
-        namespaces: rows.map((d) => ({
-          namespace: d.namespace,
-          totalUsd: d.monthlyCost ?? null,
-          agentCount: getDeploymentAgentEntries(d).length,
-          availableAgents: d.status === 'deployed' ? getDeploymentAgentEntries(d).length : 0,
-          unavailableAgents: d.status === 'deployed' ? 0 : getDeploymentAgentEntries(d).length,
-        })),
-        generatedAt: now(),
-      })),
+    costs: () => saasApi.deployments.costs(),
     namespaceCosts: async (namespace: string) => {
       const deployment = await resolveDeploymentByNamespace(namespace)
       if (!deployment) {
         return {
           namespace,
           totalUsd: null,
+          billingAmount: null,
+          billingUnit: 'shrimp' as const,
+          totalTokens: null,
           agents: [],
           availableAgents: 0,
           unavailableAgents: 0,
@@ -431,27 +426,7 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
         }
       }
 
-      const agents = getDeploymentAgentEntries(deployment)
-      const perAgentCost =
-        deployment.monthlyCost !== null && agents.length > 0
-          ? deployment.monthlyCost / agents.length
-          : null
-
-      return {
-        namespace,
-        totalUsd: deployment.monthlyCost ?? null,
-        agents: agents.map((agent) => ({
-          agentName: agent.name,
-          podName: null,
-          totalUsd: perAgentCost,
-          providers: [],
-          source: 'unavailable' as const,
-          message: null,
-        })),
-        availableAgents: deployment.status === 'deployed' ? agents.length : 0,
-        unavailableAgents: deployment.status === 'deployed' ? 0 : agents.length,
-        generatedAt: now(),
-      }
+      return saasApi.deployments.namespaceCosts(deployment.id)
     },
     pods: async (namespace: string, agent: string) => {
       const deployment = await resolveDeploymentByNamespace(namespace)
@@ -480,21 +455,7 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
         }
       }
 
-      const response = await saasApi.deployments.logsHistory(deployment.id)
-      const totalLines = response.lines.length
-      const end = Math.max(totalLines - (page - 1) * limit, 0)
-      const start = Math.max(end - limit, 0)
-      const slice = response.lines.slice(start, end)
-
-      return {
-        namespace,
-        agent,
-        podName: agent,
-        page,
-        limit,
-        lines: slice.map((line) => line.message),
-        hasMore: start > 0,
-      }
+      return saasApi.deployments.logsHistory(deployment.id, { agent, page, limit })
     },
     env: {
       list: async (namespace: string, mode: 'effective' | 'scoped' = 'effective') => {
@@ -714,35 +675,10 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
       })
       syncDeploymentCache([created])
 
-      let current = created
-      const timeoutMs = 3 * 60 * 1000
-      const intervalMs = 2_000
-      const deadline = Date.now() + timeoutMs
-
-      while (Date.now() < deadline) {
-        if (current.status === 'deployed') {
-          return { success: true, deploymentId: current.id, status: current.status }
-        }
-
-        if (current.status === 'failed' || current.status === 'destroyed') {
-          return {
-            success: false,
-            error: `Deployment ${current.status}`,
-            deploymentId: current.id,
-            status: current.status,
-          }
-        }
-
-        await sleep(intervalMs)
-        current = await saasApi.deployments.get(created.id)
-        syncDeploymentCache([current])
-      }
-
       return {
-        success: false,
-        error: 'Deployment is still in progress. Please check the deployment list.',
-        deploymentId: current.id,
-        status: current.status,
+        success: true,
+        deploymentId: created.id,
+        status: created.status,
       }
     } catch (err) {
       return {
@@ -751,6 +687,20 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
       }
     }
   },
+
+  deploymentStatusFn: async (deploymentId: string) => {
+    const deployment = await saasApi.deployments.get(deploymentId)
+    syncDeploymentCache([deployment])
+    return {
+      id: deployment.id,
+      status: deployment.status,
+      errorMessage: deployment.errorMessage,
+    }
+  },
+
+  deploymentLogsUrlFn: (deploymentId: string) => saasApi.deployments.logsUrl(deploymentId),
+
+  cancelDeploymentFn: (deploymentId: string) => saasApi.deployments.cancel(deploymentId),
 
   // ── Wallet ────────────────────────────────────────────────────────────────
   // top-up is performed via the apps/web Stripe recharge modal (host app),

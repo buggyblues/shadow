@@ -163,20 +163,40 @@ class ShadowClient:
 
     # ── Agent Policies ───────────────────────────────────────────────────
 
-    def list_policies(self, agent_id: str, server_id: str) -> list[dict[str, Any]]:
-        return self._get(f"/api/agents/{agent_id}/servers/{server_id}/policies")
+    def list_policies(
+        self, agent_id: str, server_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        policies = self._get(f"/api/agents/{agent_id}/policies")
+        if server_id is None:
+            return policies
+        return [policy for policy in policies if policy.get("serverId") == server_id]
 
     def upsert_policy(
         self, agent_id: str, server_id: str, **kwargs: Any
     ) -> dict[str, Any]:
-        return self._put(f"/api/agents/{agent_id}/servers/{server_id}/policies", json=kwargs)
+        policy: dict[str, Any] = {"serverId": server_id, **kwargs}
+        results = self._put(
+            f"/api/agents/{agent_id}/policies", json={"policies": [policy]}
+        )
+        if isinstance(results, list):
+            if not results:
+                raise ValueError(f"No policy result returned for agent {agent_id}")
+            return results[0]
+        return results
 
     def delete_policy(
         self, agent_id: str, server_id: str, channel_id: str
     ) -> dict[str, Any]:
-        return self._delete(
-            f"/api/agents/{agent_id}/servers/{server_id}/policies/{channel_id}"
+        policies = self.list_policies(agent_id, server_id)
+        policy = next(
+            (entry for entry in policies if entry.get("channelId") == channel_id),
+            None,
         )
+        if not policy or not policy.get("id"):
+            raise ValueError(
+                f"Policy not found for agent {agent_id} in server {server_id} channel {channel_id}"
+            )
+        return self._delete(f"/api/agents/{agent_id}/policies/{policy['id']}")
 
     # ── Servers ──────────────────────────────────────────────────────────
 

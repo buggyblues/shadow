@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -10,6 +10,8 @@ import {
 const originalLoopbackHost = process.env.KUBECONFIG_LOOPBACK_HOST
 const originalKubeconfig = process.env.KUBECONFIG
 const originalKubeconfigHostPath = process.env.KUBECONFIG_HOST_PATH
+const originalHome = process.env.HOME
+const originalContainerized = process.env.SHADOW_CONTAINERIZED
 const tempDirs: string[] = []
 
 afterEach(() => {
@@ -29,6 +31,18 @@ afterEach(() => {
     delete process.env.KUBECONFIG_HOST_PATH
   } else {
     process.env.KUBECONFIG_HOST_PATH = originalKubeconfigHostPath
+  }
+
+  if (originalHome === undefined) {
+    delete process.env.HOME
+  } else {
+    process.env.HOME = originalHome
+  }
+
+  if (originalContainerized === undefined) {
+    delete process.env.SHADOW_CONTAINERIZED
+  } else {
+    process.env.SHADOW_CONTAINERIZED = originalContainerized
   }
 
   while (tempDirs.length > 0) {
@@ -271,6 +285,78 @@ users:
     await runtime.deployFromSnapshot({
       namespace: 'qa-deploy-test',
       stack: 'deployment-ambient-host-path',
+      configSnapshot: {
+        version: '1',
+        deployments: {
+          agents: [{ id: 'agent-1', runtime: 'openclaw' }],
+        },
+      },
+    })
+
+    expect(up).toHaveBeenCalledOnce()
+  })
+
+  it('rewrites mounted home kubeconfig paths when running in a containerized runtime', async () => {
+    const tempHome = mkdtempSync(join(tmpdir(), 'shadow-container-home-'))
+    tempDirs.push(tempHome)
+
+    const kubeDir = join(tempHome, '.kube')
+    mkdirSync(kubeDir, { recursive: true })
+    const mountedKubeconfigPath = join(kubeDir, 'config')
+    writeFileSync(
+      mountedKubeconfigPath,
+      `apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    server: https://127.0.0.1:6443
+  name: mounted-cluster
+contexts:
+- context:
+    cluster: mounted-cluster
+    user: mounted-user
+  name: mounted-cluster
+current-context: mounted-cluster
+users:
+- name: mounted-user
+  user:
+    token: mounted-token`,
+      'utf8',
+    )
+
+    process.env.HOME = tempHome
+    process.env.KUBECONFIG = mountedKubeconfigPath
+    delete process.env.KUBECONFIG_HOST_PATH
+    process.env.KUBECONFIG_LOOPBACK_HOST = 'host.lima.internal'
+    process.env.SHADOW_CONTAINERIZED = '1'
+
+    const up = vi.fn().mockImplementation(async (options) => {
+      expect(options.k8sContext).toBe('mounted-cluster')
+      expect(options.kubeConfigPath).toBe(process.env.KUBECONFIG)
+      expect(typeof options.kubeConfigPath).toBe('string')
+      expect(options.kubeConfigPath).toContain('.shadowob/kubeconfigs/')
+      expect(options.kubeConfigPath).not.toBe(mountedKubeconfigPath)
+      expect(readFileSync(options.kubeConfigPath!, 'utf8')).toContain(
+        'server: https://host.lima.internal:6443',
+      )
+
+      return {
+        namespace: 'qa-containerized-runtime',
+        agentCount: 1,
+        config: {
+          version: '1',
+          deployments: {
+            agents: [{ id: 'agent-1', runtime: 'openclaw' }],
+          },
+        },
+      }
+    })
+
+    const runtime = new DeploymentRuntimeService({ up } as unknown as never)
+
+    await runtime.deployFromSnapshot({
+      namespace: 'qa-containerized-runtime',
+      stack: 'deployment-containerized-runtime',
       configSnapshot: {
         version: '1',
         deployments: {

@@ -330,8 +330,13 @@ function setupSignalHandlers(proc) {
 // ─── Workspace Initialization ───────────────────────────────────────────────
 
 const WORKSPACE_BOOTSTRAP_FILES = [
-  'SOUL.md', 'IDENTITY.md', 'TOOLS.md', 'AGENTS.md',
-  'USER.md', 'HEARTBEAT.md', 'BOOTSTRAP.md',
+  'SOUL.md',
+  'IDENTITY.md',
+  'TOOLS.md',
+  'AGENTS.md',
+  'USER.md',
+  'HEARTBEAT.md',
+  'BOOTSTRAP.md',
 ]
 
 function initializeWorkspace(workspaceDir, configPath) {
@@ -349,7 +354,9 @@ function initializeWorkspace(workspaceDir, configPath) {
     console.log('[entrypoint] \u2713 openclaw setup completed')
   } else {
     const stderr = setupResult.stderr?.toString().trim()
-    console.warn(`[entrypoint] \u26a0 openclaw setup exited ${setupResult.status}: ${stderr || '(no output)'}`)
+    console.warn(
+      `[entrypoint] \u26a0 openclaw setup exited ${setupResult.status}: ${stderr || '(no output)'}`,
+    )
   }
 
   // Overlay agent-specific files from ConfigMap over bootstrap defaults

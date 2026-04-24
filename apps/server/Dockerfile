@@ -36,10 +36,7 @@ COPY apps/web/src/styles/ apps/web/src/styles/
 ENV SHADOW_BUILD_DTS=0
 RUN pnpm --filter @shadowob/shared build && \
     pnpm --filter @shadowob/sdk build && \
-        pnpm --parallel \
-            --filter @shadowob/server \
-            --filter @shadowob/cloud \
-            build
+    pnpm --filter @shadowob/server build
 
 # ── Run stage ───────────────────────────────────────
 FROM node:22-alpine AS runner

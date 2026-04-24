@@ -1,3 +1,9 @@
+import type {
+  CostOverviewSummary,
+  DeploymentLogsPage,
+  NamespaceCostSummary,
+} from '@shadowob/cloud-ui/lib/api'
+
 /**
  * SaaS API Client — wraps /api/cloud-saas/* endpoints on apps/server.
  * Used by web-saas pages (embedded in apps/web at /cloud/*).
@@ -71,7 +77,14 @@ export interface SaasDeployment {
   clusterId: string | null
   namespace: string
   name: string
-  status: 'pending' | 'deploying' | 'deployed' | 'failed' | 'destroying' | 'destroyed'
+  status:
+    | 'pending'
+    | 'deploying'
+    | 'cancelling'
+    | 'deployed'
+    | 'failed'
+    | 'destroying'
+    | 'destroyed'
   agentCount: number
   configSnapshot: Record<string, unknown> | null
   errorMessage: string | null
@@ -187,15 +200,31 @@ export const saasApi = {
       envVars?: Record<string, string>
     }) => post<SaasDeployment>('/deployments', data),
     delete: (id: string) => del<{ ok: boolean }>(`/deployments/${encodeURIComponent(id)}`),
+    costs: () => get<CostOverviewSummary>('/deployments/costs'),
+    namespaceCosts: (id: string) =>
+      get<NamespaceCostSummary>(`/deployments/${encodeURIComponent(id)}/costs`),
     scale: (id: string, agentCount: number) =>
       post<SaasDeployment>(`/deployments/${encodeURIComponent(id)}/scale`, { agentCount }),
     logsUrl: (id: string) => `${BASE}/deployments/${encodeURIComponent(id)}/logs`,
-    logsHistory: (id: string) =>
-      get<{ lines: Array<{ level: string; message: string; createdAt: string }>; total: number }>(
-        `/deployments/${encodeURIComponent(id)}/logs/history`,
-      ),
+    logsHistory: (
+      id: string,
+      params?: { agent?: string; pod?: string; page?: number; limit?: number },
+    ) => {
+      const qs = new URLSearchParams()
+      if (params?.agent) qs.set('agent', params.agent)
+      if (params?.pod) qs.set('pod', params.pod)
+      if (params?.page) qs.set('page', String(params.page))
+      if (params?.limit) qs.set('limit', String(params.limit))
+      const query = qs.toString()
+      return get<DeploymentLogsPage>(
+        `/deployments/${encodeURIComponent(id)}/logs/history${query ? `?${query}` : ''}`,
+      )
+    },
     cancel: (id: string) =>
-      post<{ ok: boolean }>(`/deployments/${encodeURIComponent(id)}/cancel`, {}),
+      post<{ ok: boolean; status?: 'cancelling' }>(
+        `/deployments/${encodeURIComponent(id)}/cancel`,
+        {},
+      ),
     pods: (id: string) =>
       get<{
         pods: Array<{

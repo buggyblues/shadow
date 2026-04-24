@@ -1,9 +1,9 @@
 import { zValidator } from '@hono/zod-validator'
 import { Hono } from 'hono'
 import { z } from 'zod'
+import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
 import { EnhanceRequestSchema } from '../services/voice-enhance.service'
-import type { AppContainer } from '../container'
 
 /**
  * Voice Enhancement API Routes

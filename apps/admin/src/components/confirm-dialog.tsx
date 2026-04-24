@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react'
 import { AlertTriangle } from 'lucide-react'
+import { useCallback, useState } from 'react'
 
 interface ConfirmOptions {
   title?: string
@@ -44,8 +44,12 @@ export function ConfirmDialogProvider() {
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-start gap-3">
-          <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full ${state.danger ? 'bg-red-100' : 'bg-amber-100'}`}>
-            <AlertTriangle className={`h-5 w-5 ${state.danger ? 'text-red-600' : 'text-amber-600'}`} />
+          <div
+            className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full ${state.danger ? 'bg-red-100' : 'bg-amber-100'}`}
+          >
+            <AlertTriangle
+              className={`h-5 w-5 ${state.danger ? 'text-red-600' : 'text-amber-600'}`}
+            />
           </div>
           <div className="flex-1">
             {state.title && <h3 className="font-semibold text-gray-900">{state.title}</h3>}
