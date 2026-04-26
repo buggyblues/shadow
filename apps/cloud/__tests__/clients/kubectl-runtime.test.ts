@@ -13,7 +13,7 @@ vi.mock('node:child_process', async () => {
   }
 })
 
-import { listManagedNamespaces } from '../src/lib/k8s-cli'
+import { listManagedNamespaces } from '../../src/clients/kubectl-runtime'
 
 const originalKubeconfig = process.env.KUBECONFIG
 const originalKubeconfigHostPath = process.env.KUBECONFIG_HOST_PATH
