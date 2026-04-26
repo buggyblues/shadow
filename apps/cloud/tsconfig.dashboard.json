@@ -16,7 +16,16 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./packages/ui/src/*"]
+      "@/*": ["./packages/ui/src/*"],
+      "@shadowob/cloud-ui": ["./packages/ui/src/index.ts"],
+      "@shadowob/cloud-ui/components/*": ["./packages/ui/src/components/*"],
+      "@shadowob/cloud-ui/hooks/*": ["./packages/ui/src/hooks/*"],
+      "@shadowob/cloud-ui/i18n": ["./packages/ui/src/i18n/index.ts"],
+      "@shadowob/cloud-ui/lib/*": ["./packages/ui/src/lib/*"],
+      "@shadowob/cloud-ui/pages/*": ["./packages/ui/src/pages/*"],
+      "@shadowob/cloud-ui/stores/*": ["./packages/ui/src/stores/*"],
+      "@shadowob/cloud-ui/styles/*": ["./packages/ui/src/styles/*"],
+      "@shadowob/cloud-ui/web-saas": ["./src/interfaces/web-saas/index.tsx"]
     }
   },
   "include": ["src/interfaces/dashboard", "src/interfaces/web-saas", "packages/ui/src"]

@@ -20,8 +20,11 @@ import type {
   PluginHooks,
   PluginManifest,
   PluginMCPServer,
+  PluginSecretField,
   PluginSkillsConfig,
   PluginValidationResult,
+  ProviderCatalog,
+  ProviderModelEntry,
 } from './types.js'
 
 export function loadManifest(raw: Record<string, unknown>): PluginManifest {
@@ -36,6 +39,7 @@ function makeHooks(): PluginHooks {
   return {
     resolveAgent: [],
     buildConfig: [],
+    buildPrompt: [],
     buildEnv: [],
     buildResources: [],
     validate: [],
@@ -46,7 +50,13 @@ function makeHooks(): PluginHooks {
 
 function makeAPI(
   hooks: PluginHooks,
-  collected: { skills?: PluginSkillsConfig; cli?: PluginCLITool[]; mcp?: PluginMCPServer[] },
+  collected: {
+    skills?: PluginSkillsConfig
+    cli?: PluginCLITool[]
+    mcp?: PluginMCPServer[]
+    providerCatalogs?: ProviderCatalog[]
+    secretFields?: PluginSecretField[]
+  },
 ): PluginAPI {
   return {
     addSkills: (s) => {
@@ -58,8 +68,15 @@ function makeAPI(
     addMCP: (server) => {
       collected.mcp = [...(collected.mcp ?? []), server]
     },
+    addProviderCatalog: (catalog) => {
+      collected.providerCatalogs = [...(collected.providerCatalogs ?? []), catalog]
+    },
+    addSecretFields: (fields) => {
+      collected.secretFields = [...(collected.secretFields ?? []), ...fields]
+    },
     onResolveAgent: (fn) => hooks.resolveAgent.push(fn),
     onBuildConfig: (fn) => hooks.buildConfig.push(fn),
+    onBuildPrompt: (fn) => hooks.buildPrompt.push(fn),
     onBuildEnv: (fn) => hooks.buildEnv.push(fn),
     onBuildResources: (fn) => hooks.buildResources.push(fn),
     onValidate: (fn) => hooks.validate.push(fn),
@@ -80,8 +97,13 @@ export function definePlugin(
   setup: (api: PluginAPI) => void,
 ): PluginDefinition {
   const hooks = makeHooks()
-  const collected: { skills?: PluginSkillsConfig; cli?: PluginCLITool[]; mcp?: PluginMCPServer[] } =
-    {}
+  const collected: {
+    skills?: PluginSkillsConfig
+    cli?: PluginCLITool[]
+    mcp?: PluginMCPServer[]
+    providerCatalogs?: ProviderCatalog[]
+    secretFields?: PluginSecretField[]
+  } = {}
   const api = makeAPI(hooks, collected)
   setup(api)
   return {
@@ -89,6 +111,8 @@ export function definePlugin(
     skills: collected.skills,
     cli: collected.cli,
     mcp: collected.mcp,
+    providerCatalogs: collected.providerCatalogs,
+    secretFields: collected.secretFields,
     _hooks: hooks,
     _buildConfig: hooks.buildConfig,
     _buildEnv: hooks.buildEnv,
@@ -224,16 +248,64 @@ export function defineChannelPlugin(
  */
 export function defineProviderPlugin(
   manifest: PluginManifest,
-  options: { provider: { id: string; api: string; baseUrl?: string } },
+  options: {
+    provider: {
+      id: string
+      api: string
+      baseUrl?: string
+      envKey?: string
+      envKeyAliases?: string[]
+      baseUrlEnvKey?: string
+      modelEnvKey?: string
+      priority?: number
+      models?: ProviderModelEntry[]
+    }
+  },
   extraSetup?: (api: PluginAPI) => void,
 ): PluginDefinition {
   return definePlugin(manifest, (api) => {
+    const apiKeyField =
+      manifest.auth.fields.find((f) => f.required && f.sensitive) ??
+      manifest.auth.fields.find((f) => f.sensitive)
+    const envKey = options.provider.envKey ?? apiKeyField?.key
+    if (envKey) {
+      api.addProviderCatalog({
+        id: options.provider.id,
+        api: mapProviderApi(options.provider.api),
+        baseUrl: options.provider.baseUrl,
+        envKey,
+        envKeyAliases: options.provider.envKeyAliases,
+        baseUrlEnvKey: options.provider.baseUrlEnvKey,
+        modelEnvKey: options.provider.modelEnvKey,
+        priority: options.provider.priority,
+        models: options.provider.models ?? [],
+      })
+    }
+    api.addSecretFields(
+      manifest.auth.fields.map((field) => ({
+        key: field.key,
+        label: field.label,
+        description: field.description,
+        required: field.required,
+        sensitive: field.sensitive,
+      })),
+    )
+
     api.onBuildConfig((ctx): PluginConfigFragment => {
       const { agentConfig } = ctx
-      const apiKeyField = manifest.auth.fields.find((f) => f.required && f.sensitive)
+      const resolvedEnvKey = resolveProviderEnvKey(options.provider.envKey ?? apiKeyField?.key, {
+        aliases: options.provider.envKeyAliases,
+        secrets: ctx.secrets as Record<string, string | undefined>,
+      })
       const providerEntry: Record<string, unknown> = {
-        ...(apiKeyField ? { apiKey: `\${env:${apiKeyField.key}}` } : {}),
-        models: [],
+        ...(resolvedEnvKey ? { apiKey: `\${env:${resolvedEnvKey}}` } : {}),
+        models:
+          options.provider.models?.map((m) => ({
+            id: m.id,
+            name: m.name ?? m.id,
+            ...(m.contextWindow != null ? { contextWindow: m.contextWindow } : {}),
+            ...(m.maxTokens != null ? { maxTokens: m.maxTokens } : {}),
+          })) ?? [],
         request: { allowPrivateNetwork: true },
       }
       if (agentConfig.baseUrl || options.provider.baseUrl) {
@@ -241,19 +313,82 @@ export function defineProviderPlugin(
       }
       if (agentConfig.models) providerEntry.models = agentConfig.models
       if (options.provider.api) {
-        const MAP: Record<string, string> = {
-          anthropic: 'anthropic-messages',
-          openai: 'openai-completions',
-          google: 'google-generative-ai',
-          gemini: 'google-generative-ai',
-        }
-        providerEntry.api = MAP[options.provider.api] ?? options.provider.api
+        providerEntry.api = mapProviderApi(options.provider.api)
       }
       return { models: { mode: 'merge', providers: { [options.provider.id]: providerEntry } } }
     })
 
-    api.onBuildEnv((ctx) => defaultEnvVars(manifest, ctx))
-    api.onValidate((ctx) => defaultValidation(manifest, ctx))
+    api.onBuildEnv((ctx) => {
+      const out = defaultEnvVars(manifest, ctx)
+      for (const key of providerEnvKeys(options.provider)) {
+        const value = (ctx.secrets as Record<string, string | undefined>)[key] ?? process.env[key]
+        if (value) out[key] = value
+      }
+      return out
+    })
+    api.onValidate((ctx) => {
+      const result = defaultValidation(manifest, ctx)
+      if (
+        apiKeyField &&
+        hasProviderEnvValue(options.provider.envKey ?? apiKeyField.key, {
+          aliases: options.provider.envKeyAliases,
+          secrets: ctx.secrets as Record<string, string | undefined>,
+        })
+      ) {
+        result.errors = result.errors.filter((error) => error.path !== `secrets.${apiKeyField.key}`)
+        result.valid = result.errors.filter((error) => error.severity === 'error').length === 0
+      }
+      return result
+    })
     extraSetup?.(api)
   })
+}
+
+function mapProviderApi(api: string): string {
+  const MAP: Record<string, string> = {
+    anthropic: 'anthropic-messages',
+    openai: 'openai-completions',
+    'openai-chat': 'openai-completions',
+    google: 'google-generative-ai',
+    gemini: 'google-generative-ai',
+    bedrock: 'bedrock-converse-stream',
+    azure: 'azure-openai-responses',
+    'azure-openai': 'azure-openai-responses',
+  }
+  return MAP[api] ?? api
+}
+
+function resolveProviderEnvKey(
+  envKey: string | undefined,
+  options: { aliases?: string[]; secrets: Record<string, string | undefined> },
+): string | undefined {
+  if (!envKey) return undefined
+  for (const key of [envKey, ...(options.aliases ?? [])]) {
+    if (options.secrets[key] ?? process.env[key]) return key
+  }
+  return envKey
+}
+
+function hasProviderEnvValue(
+  envKey: string | undefined,
+  options: { aliases?: string[]; secrets: Record<string, string | undefined> },
+): boolean {
+  if (!envKey) return false
+  return [envKey, ...(options.aliases ?? [])].some((key) =>
+    Boolean(options.secrets[key] ?? process.env[key]),
+  )
+}
+
+function providerEnvKeys(provider: {
+  envKey?: string
+  envKeyAliases?: string[]
+  baseUrlEnvKey?: string
+  modelEnvKey?: string
+}): string[] {
+  return [
+    provider.envKey,
+    ...(provider.envKeyAliases ?? []),
+    provider.baseUrlEnvKey,
+    provider.modelEnvKey,
+  ].filter((key): key is string => Boolean(key))
 }

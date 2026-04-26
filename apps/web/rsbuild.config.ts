@@ -4,6 +4,7 @@ import { pluginReact } from '@rsbuild/plugin-react'
 
 // Absolute path to @shadowob/cloud-ui source
 const cloudUiSrc = path.resolve(__dirname, '../cloud/packages/ui/src')
+const devApiTarget = process.env.SHADOW_DEV_API_BASE ?? 'http://localhost:3002'
 
 export default defineConfig({
   plugins: [pluginReact()],
@@ -37,11 +38,11 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://[::1]:3002',
+        target: devApiTarget,
         changeOrigin: true,
       },
       '/socket.io': {
-        target: 'http://[::1]:3002',
+        target: devApiTarget,
         ws: true,
       },
       '/shadow': {

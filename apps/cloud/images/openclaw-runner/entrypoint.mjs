@@ -10,17 +10,62 @@
  */
 
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { createServer } from 'node:http'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 
 const OPENCLAW_STATE_DIR = '/home/openclaw/.openclaw'
+const SLASH_COMMANDS_INDEX_PATH = join(OPENCLAW_STATE_DIR, 'shadow', 'slash-commands.json')
 const CONFIG_MOUNT = '/etc/openclaw'
 const EXTENSIONS_DIR = '/app/extensions'
 const GATEWAY_PORT = parseInt(process.env.OPENCLAW_GATEWAY_PORT ?? '3100', 10)
+const OPENCLAW_HTTP_PORT = GATEWAY_PORT + 1
 const LOG_DIR = '/var/log/openclaw'
 const SHARED_WORKSPACE_PATH = process.env.SHARED_WORKSPACE_PATH ?? ''
 const SKILLS_DIR = process.env.SKILLS_DIR ?? ''
+const CLOUD_DISABLED_BUNDLED_PLUGINS = ['bonjour']
+const RUNTIME_DEPS_WARM_SCRIPT = '/app/warm-runtime-deps.mjs'
+const DEFAULT_PLUGIN_STAGE_DIR = '/opt/openclaw-runtime-deps'
+let runtimeDepsStageDir = process.env.OPENCLAW_PLUGIN_STAGE_DIR || DEFAULT_PLUGIN_STAGE_DIR
+
+function installFileLogging() {
+  try {
+    mkdirSync(LOG_DIR, { recursive: true })
+    const stream = createWriteStream(join(LOG_DIR, 'entrypoint.log'), { flags: 'a' })
+    const mirror = (original) => {
+      return (chunk, encoding, callback) => {
+        try {
+          stream.write(chunk)
+        } catch {
+          // Keep stdout/stderr healthy even if file logging fails.
+        }
+        return original(chunk, encoding, callback)
+      }
+    }
+    process.stdout.write = mirror(process.stdout.write.bind(process.stdout))
+    process.stderr.write = mirror(process.stderr.write.bind(process.stderr))
+    process.on('uncaughtException', (err) => {
+      console.error('[entrypoint] Uncaught exception:', err)
+    })
+    process.on('unhandledRejection', (reason) => {
+      console.error('[entrypoint] Unhandled rejection:', reason)
+    })
+  } catch (err) {
+    console.error('[entrypoint] Failed to install file logging:', err)
+  }
+}
+
+installFileLogging()
 
 // ─── Config Loading ─────────────────────────────────────────────────────────
 
@@ -85,6 +130,11 @@ function generateOpenClawConfig(mountedConfig) {
   if (!config.plugins.entries['openclaw-shadowob']) {
     config.plugins.entries['openclaw-shadowob'] = { enabled: true }
   }
+  for (const pluginId of CLOUD_DISABLED_BUNDLED_PLUGINS) {
+    if (!config.plugins.entries[pluginId]) {
+      config.plugins.entries[pluginId] = { enabled: false }
+    }
+  }
 
   // Ensure channels.shadowob exists — OpenClaw's configMayNeedPluginManifestRegistry()
   // only triggers plugin discovery when a non-built-in channel is present in config.
@@ -95,11 +145,12 @@ function generateOpenClawConfig(mountedConfig) {
     config.channels.shadowob = { enabled: true }
   }
 
-  // Set gateway port
+  // Set gateway port. The runner health server uses GATEWAY_PORT, so OpenClaw
+  // itself must bind to the adjacent port in both CLI args and persisted config.
   if (!config.gateway) {
     config.gateway = {}
   }
-  config.gateway.port = GATEWAY_PORT
+  config.gateway.port = OPENCLAW_HTTP_PORT
   // Use "lan" bind (0.0.0.0) so the gateway is reachable from outside the container.
   config.gateway.bind = 'lan'
   // Ensure gateway.mode is set — required by OpenClaw to start without cloud setup
@@ -137,7 +188,583 @@ function generateOpenClawConfig(mountedConfig) {
   return config
 }
 
-// ─── Extension Verification ─────────────────────────────────────────────────
+// ─── Pack Wiring (agent-pack env vars) ──────────────────────────────────────
+
+/**
+ * Read SHADOW_PACK_*_DIRS env vars produced by the cloud agent-pack plugin
+ * (apps/cloud/src/plugins/agent-pack/index.ts) and merge their contents into
+ * the OpenClaw config so the runtime actually consumes:
+ *
+ *   - agents/        → subagents (registered as additional agents.list[] entries
+ *                       and added to every primary agent's subagents.allowAgents)
+ *   - mcp/           → mcp.servers map (each *.json merged in)
+ *   - hooks/         → hooks.scripts list (paths only — runtime invocation
+ *                       semantics intentionally minimal until we standardize)
+ *   - instructions/  → appended to the primary agent's `instructions` field
+ *   - commands/      → local slash command index consumed by openclaw-shadowob
+ *
+ * Other kinds (scripts/, files/) stay as env vars for direct use.
+ */
+function splitDirs(value) {
+  if (!value) return []
+  return value
+    .split(':')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .filter((p) => existsSync(p))
+}
+
+function listChildDirs(dir) {
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => join(dir, d.name))
+  } catch {
+    return []
+  }
+}
+
+function listFiles(dir, suffix) {
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((d) => d.isFile() && d.name.endsWith(suffix))
+      .map((d) => join(dir, d.name))
+  } catch {
+    return []
+  }
+}
+
+function readMaybe(path) {
+  try {
+    return readFileSync(path, 'utf-8')
+  } catch {
+    return ''
+  }
+}
+
+function safeJson(path) {
+  try {
+    return JSON.parse(readFileSync(path, 'utf-8'))
+  } catch (err) {
+    console.warn(`[entrypoint] Failed to parse pack JSON ${path}:`, err.message)
+    return null
+  }
+}
+
+function deriveSubagentId(dir) {
+  // Use the immediate parent's name (= pack id) + child folder name
+  // → "<pack>-<child>" so collisions across packs are unlikely.
+  const parts = dir.split('/').filter(Boolean)
+  const child = parts[parts.length - 1] ?? 'subagent'
+  const pack = parts[parts.length - 3] ?? 'pack' // .../<pack>/agents/<child>
+  return `${pack}-${child}`.replace(/[^a-zA-Z0-9_-]/g, '-')
+}
+
+function loadSubagentDef(dir) {
+  // Look for AGENT.md, SKILL.md, or SOUL.md (all valid Claude-style descriptors).
+  const candidates = ['AGENT.md', 'SKILL.md', 'SOUL.md']
+  for (const f of candidates) {
+    const p = join(dir, f)
+    if (existsSync(p)) return readMaybe(p)
+  }
+  return ''
+}
+
+function normalizeSlashCommandName(value) {
+  if (typeof value !== 'string') return null
+  const name = value.trim().replace(/^\/+/, '')
+  return /^[a-zA-Z][a-zA-Z0-9._-]{0,63}$/.test(name) ? name : null
+}
+
+function parseFrontmatterList(value) {
+  if (typeof value !== 'string') return []
+  const trimmed = value.trim()
+  const unwrapped =
+    trimmed.startsWith('[') && trimmed.endsWith(']') ? trimmed.slice(1, -1) : trimmed
+  return unwrapped
+    .split(',')
+    .map((item) => item.trim().replace(/^['"]|['"]$/g, ''))
+    .filter(Boolean)
+}
+
+function parseFrontmatter(text) {
+  if (!text.startsWith('---')) return { data: {}, body: text }
+  const end = text.indexOf('\n---', 3)
+  if (end === -1) return { data: {}, body: text }
+  const raw = text.slice(3, end).trim()
+  const data = {}
+  const lines = raw.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const match = line.match(/^([a-zA-Z0-9_.-]+):\s*(.*)$/)
+    if (!match) continue
+    const key = match[1]
+    const value = match[2].trim().replace(/^['"]|['"]$/g, '')
+    if (value === '|') {
+      const block = []
+      while (i + 1 < lines.length) {
+        const next = lines[i + 1]
+        if (next && !/^\s/.test(next)) break
+        block.push(next.replace(/^\s{2}/, ''))
+        i++
+      }
+      data[key] = block.join('\n').trim()
+      continue
+    }
+    if (value) {
+      data[key] = value
+      continue
+    }
+
+    const items = []
+    while (i + 1 < lines.length) {
+      const itemMatch = lines[i + 1].match(/^\s*-\s*(.+)$/)
+      if (!itemMatch) break
+      items.push(itemMatch[1].trim().replace(/^['"]|['"]$/g, ''))
+      i++
+    }
+    data[key] = items.length > 0 ? items.join(',') : value
+  }
+  return { data, body: text.slice(end + 4).trimStart() }
+}
+
+function parseFrontmatterJson(value) {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return undefined
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    return undefined
+  }
+}
+
+function normalizeSlashInteraction(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const kind = typeof value.kind === 'string' ? value.kind.trim().toLowerCase() : ''
+  if (!['buttons', 'select', 'form', 'approval'].includes(kind)) return undefined
+  const out = { kind }
+  for (const key of [
+    'id',
+    'prompt',
+    'submitLabel',
+    'responsePrompt',
+    'approvalCommentLabel',
+  ]) {
+    if (typeof value[key] === 'string' && value[key].trim()) out[key] = value[key].trim()
+  }
+  if (typeof value.oneShot === 'boolean') out.oneShot = value.oneShot
+  if (Array.isArray(value.fields)) {
+    out.fields = value.fields
+      .filter((field) => field && typeof field === 'object' && !Array.isArray(field))
+      .map((field, index) => ({
+        id:
+          typeof field.id === 'string' && field.id.trim()
+            ? field.id.trim()
+            : `field_${index + 1}`,
+        kind:
+          typeof field.kind === 'string' &&
+          ['text', 'textarea', 'number', 'checkbox', 'select'].includes(field.kind)
+            ? field.kind
+            : 'text',
+        label:
+          typeof field.label === 'string' && field.label.trim()
+            ? field.label.trim()
+            : `Field ${index + 1}`,
+        ...(typeof field.placeholder === 'string' && field.placeholder.trim()
+          ? { placeholder: field.placeholder.trim() }
+          : {}),
+        ...(typeof field.defaultValue === 'string' ? { defaultValue: field.defaultValue } : {}),
+        ...(typeof field.required === 'boolean' ? { required: field.required } : {}),
+        ...(typeof field.maxLength === 'number' ? { maxLength: field.maxLength } : {}),
+      }))
+      .slice(0, 12)
+  }
+  return out
+}
+
+function frontmatterInteraction(data) {
+  const direct = normalizeSlashInteraction(
+    parseFrontmatterJson(data.interaction) ?? parseFrontmatterJson(data.interactive),
+  )
+  if (direct) return direct
+
+  const kind = data['interaction.kind'] ?? data['interactive.kind']
+  if (!kind) return undefined
+  const oneShotRaw = data['interaction.oneShot'] ?? data['interactive.oneShot']
+  return normalizeSlashInteraction({
+    kind,
+    id: data['interaction.id'] ?? data['interactive.id'],
+    prompt: data['interaction.prompt'] ?? data['interactive.prompt'],
+    submitLabel: data['interaction.submitLabel'] ?? data['interactive.submitLabel'],
+    responsePrompt: data['interaction.responsePrompt'] ?? data['interactive.responsePrompt'],
+    ...(oneShotRaw !== undefined ? { oneShot: oneShotRaw === 'true' } : {}),
+    fields: parseFrontmatterJson(data['interaction.fields'] ?? data['interactive.fields']),
+  })
+}
+
+function gstackShortName(name) {
+  return name.replace(/^gstack(?:-openclaw)?-/, '')
+}
+
+function inferSlashInteraction({ name, packId }) {
+  const shortName = packId === 'gstack' ? gstackShortName(name) : name
+  if (packId === 'gstack' && shortName === 'office-hours') {
+    return {
+      id: 'slash:gstack:office-hours',
+      kind: 'form',
+      prompt:
+        '先填写这 6 个 office-hours 问题。Strategy Buddy 会基于这些答案产出问题重构、MVP 范围和 90 天路线图。',
+      submitLabel: '提交',
+      responsePrompt:
+        'Office-hours answers submitted. Run the gstack CEO review now. Produce a concrete response before asking for approval: 1) reframed problem, 2) MVP scope, 3) 90-day roadmap, 4) risks and assumptions. Only after those sections are visible, send one approval interactive block for that exact proposal.',
+      oneShot: true,
+      fields: [
+        {
+          id: 'pain',
+          kind: 'textarea',
+          label: '痛点是什么？给具体例子，不要假设场景。',
+          required: true,
+          maxLength: 2000,
+        },
+        {
+          id: 'status_quo',
+          kind: 'textarea',
+          label: '现在怎么解决？你或用户目前用什么办法应对？',
+          required: true,
+          maxLength: 2000,
+        },
+        {
+          id: 'user',
+          kind: 'textarea',
+          label: '谁会用它？第一个愿意付费或每天使用的人长什么样？',
+          required: true,
+          maxLength: 2000,
+        },
+        {
+          id: 'founder_edge',
+          kind: 'textarea',
+          label: '为什么是你来做？你的独特洞察、资源、渠道或经历是什么？',
+          required: true,
+          maxLength: 2000,
+        },
+        {
+          id: 'desired_outcome',
+          kind: 'textarea',
+          label: '你想要的是方案，还是结果？用户真正得到什么？',
+          required: true,
+          maxLength: 2000,
+        },
+        {
+          id: 'tomorrow_use',
+          kind: 'textarea',
+          label: '如果明天这个产品就存在，你最想用它做什么？从开始到结束描述一个场景。',
+          required: true,
+          maxLength: 2000,
+        },
+      ],
+    }
+  }
+  return undefined
+}
+
+function inferSlashAliases({ name, packId }) {
+  const aliases = []
+  if (packId === 'gstack') {
+    const shortName = gstackShortName(name)
+    if (shortName && shortName !== name) aliases.push(shortName)
+    if (shortName === 'office-hours') aliases.push('office-hour')
+  }
+  return aliases
+}
+
+function derivePackId(path) {
+  const parts = path.split('/').filter(Boolean)
+  const idx = parts.lastIndexOf('agent-packs')
+  if (idx >= 0 && parts[idx + 1]) return parts[idx + 1]
+  return undefined
+}
+
+function deriveSlashDescription(body, frontmatter) {
+  const fmDescription =
+    typeof frontmatter.description === 'string' ? frontmatter.description.trim() : ''
+  if (fmDescription) return fmDescription.slice(0, 240)
+
+  for (const line of body.split('\n')) {
+    const text = line.replace(/^#+\s*/, '').trim()
+    if (text) return text.slice(0, 240)
+  }
+  return undefined
+}
+
+function readSlashCommand(path, fallbackName) {
+  const text = readMaybe(path).trim()
+  if (!text) return null
+  const { data, body } = parseFrontmatter(text)
+  const name = normalizeSlashCommandName(data.name ?? fallbackName)
+  if (!name) return null
+  const packId = derivePackId(path)
+  const aliases = parseFrontmatterList(data.aliases)
+    .map(normalizeSlashCommandName)
+    .filter(Boolean)
+    .filter((alias) => alias.toLowerCase() !== name.toLowerCase())
+  aliases.push(...inferSlashAliases({ name, packId, body, path }))
+  const description = deriveSlashDescription(body, data)
+  const interaction =
+    frontmatterInteraction(data) ?? inferSlashInteraction({ name, packId, body, path })
+
+  return {
+    name,
+    ...(description ? { description } : {}),
+    ...(aliases.length > 0 ? { aliases: [...new Set(aliases)] } : {}),
+    ...(packId ? { packId } : {}),
+    ...(interaction ? { interaction } : {}),
+    sourcePath: path,
+    body: text.slice(0, 20_000),
+  }
+}
+
+function discoverSlashCommands(commandsDirs) {
+  const commands = []
+  const seen = new Set()
+  for (const dir of commandsDirs) {
+    for (const file of listFiles(dir, '.md')) {
+      const fallbackName = file.split('/').pop().replace(/\.md$/, '')
+      const command = readSlashCommand(file, fallbackName)
+      if (!command) continue
+      const key = command.name.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      commands.push(command)
+    }
+
+    for (const childDir of listChildDirs(dir)) {
+      const fallbackName = childDir.split('/').pop()
+      const candidates = ['SKILL.md', 'COMMAND.md', 'README.md']
+      for (const candidate of candidates) {
+        const path = join(childDir, candidate)
+        if (!existsSync(path)) continue
+        const command = readSlashCommand(path, fallbackName)
+        if (!command) break
+        const key = command.name.toLowerCase()
+        if (!seen.has(key)) {
+          seen.add(key)
+          commands.push(command)
+        }
+        break
+      }
+    }
+  }
+  return commands.slice(0, 200)
+}
+
+function writeSlashCommandIndex(commands) {
+  mkdirSync(join(OPENCLAW_STATE_DIR, 'shadow'), { recursive: true })
+  writeFileSync(SLASH_COMMANDS_INDEX_PATH, JSON.stringify(commands, null, 2), 'utf-8')
+  process.env.SHADOW_SLASH_COMMANDS_PATH = SLASH_COMMANDS_INDEX_PATH
+}
+
+function shadowobChannelConfigMetadata() {
+  return {
+    label: 'ShadowOwnBuddy',
+    description: 'Shadow server channel integration — chat with AI agents in Shadow channels',
+    schema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      additionalProperties: true,
+      properties: {
+        name: { type: 'string' },
+        enabled: { type: 'boolean' },
+        token: { type: 'string' },
+        serverUrl: { type: 'string' },
+        buddyId: { type: 'string' },
+        buddyName: { type: 'string' },
+        buddyDescription: { type: 'string' },
+        replyToMode: { type: 'string', enum: ['first', 'all', 'off'] },
+        accountAgentMap: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+        },
+        accounts: {
+          type: 'object',
+          additionalProperties: {
+            type: 'object',
+            additionalProperties: true,
+            properties: {
+              enabled: { type: 'boolean' },
+              token: { type: 'string' },
+              serverUrl: { type: 'string' },
+              buddyId: { type: 'string' },
+              buddyName: { type: 'string' },
+              buddyDescription: { type: 'string' },
+              agentId: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+    uiHints: {
+      token: {
+        label: 'Agent Token',
+        sensitive: true,
+        placeholder: 'Paste the JWT token generated in Shadow -> Agents',
+      },
+      serverUrl: {
+        label: 'Server URL',
+        placeholder: 'https://shadowob.com',
+      },
+      enabled: {
+        label: 'Enabled',
+      },
+    },
+  }
+}
+
+function mergeShadowPacks(config) {
+  const agentsDirs = splitDirs(process.env.SHADOW_PACK_AGENTS_DIRS)
+  const mcpDirs = splitDirs(process.env.SHADOW_PACK_MCP_DIRS)
+  const hooksDirs = splitDirs(process.env.SHADOW_PACK_HOOKS_DIRS)
+  const instructionsDirs = splitDirs(process.env.SHADOW_PACK_INSTRUCTIONS_DIRS)
+  const skillsDirs = splitDirs(process.env.SHADOW_PACK_SKILLS_DIRS)
+  const commandsDirs = splitDirs(process.env.SHADOW_PACK_COMMANDS_DIRS)
+
+  if (
+    agentsDirs.length === 0 &&
+    mcpDirs.length === 0 &&
+    hooksDirs.length === 0 &&
+    instructionsDirs.length === 0 &&
+    skillsDirs.length === 0 &&
+    commandsDirs.length === 0
+  ) {
+    return config
+  }
+
+  // ── Subagents ──────────────────────────────────────────────────────────────
+  const newSubagents = []
+  const subagentIds = []
+  for (const dir of agentsDirs) {
+    for (const childDir of listChildDirs(dir)) {
+      const def = loadSubagentDef(childDir)
+      if (!def) continue
+      const id = deriveSubagentId(childDir)
+      newSubagents.push({
+        id,
+        runtime: { type: 'subagent' },
+        identity: { name: id },
+        instructions: def,
+      })
+      subagentIds.push(id)
+    }
+  }
+  if (newSubagents.length > 0) {
+    if (!config.agents) config.agents = {}
+    if (!Array.isArray(config.agents.list)) config.agents.list = []
+    // Avoid double-registration if entrypoint is invoked twice.
+    const existingIds = new Set(config.agents.list.map((a) => a.id))
+    for (const sa of newSubagents) {
+      if (!existingIds.has(sa.id)) config.agents.list.push(sa)
+    }
+    // Every primary (non-subagent) agent gets these subagents allowed.
+    for (const a of config.agents.list) {
+      if (a.runtime?.type === 'subagent') continue
+      if (!a.subagents) a.subagents = {}
+      const allow = new Set(a.subagents.allowAgents ?? [])
+      for (const id of subagentIds) allow.add(id)
+      a.subagents.allowAgents = [...allow]
+    }
+    console.log(`[entrypoint] Registered ${subagentIds.length} pack subagent(s)`)
+  }
+
+  // ── MCP servers ────────────────────────────────────────────────────────────
+  const mcpServers = {}
+  for (const dir of mcpDirs) {
+    for (const file of listFiles(dir, '.json')) {
+      const parsed = safeJson(file)
+      if (!parsed || typeof parsed !== 'object') continue
+      // Two accepted shapes:
+      //   1. Claude Desktop / mcp.json:  { mcpServers: { name: { command, args, env } } }
+      //   2. Single-server file:         { command, args, env, transport? } (name = filename)
+      if (parsed.mcpServers && typeof parsed.mcpServers === 'object') {
+        for (const [name, def] of Object.entries(parsed.mcpServers)) {
+          if (def && typeof def === 'object') mcpServers[name] = def
+        }
+      } else if (parsed.command) {
+        const name = file
+          .split('/')
+          .pop()
+          .replace(/\.json$/, '')
+        mcpServers[name] = parsed
+      }
+    }
+  }
+  if (Object.keys(mcpServers).length > 0) {
+    if (!config.mcp) config.mcp = {}
+    config.mcp.servers = { ...(config.mcp.servers ?? {}), ...mcpServers }
+    console.log(`[entrypoint] Merged ${Object.keys(mcpServers).length} MCP server(s) from packs`)
+  }
+
+  // ── Hooks ──────────────────────────────────────────────────────────────────
+  const hookScripts = []
+  for (const dir of hooksDirs) {
+    try {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (!entry.isFile()) continue
+        const p = join(dir, entry.name)
+        try {
+          // Only treat executable files as hooks
+          const mode = statSync(p).mode
+          if (mode & 0o111) hookScripts.push(p)
+        } catch {
+          // ignore
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+  if (hookScripts.length > 0) {
+    if (!config.hooks) config.hooks = {}
+    config.hooks.scripts = [...(config.hooks.scripts ?? []), ...hookScripts]
+    console.log(`[entrypoint] Registered ${hookScripts.length} pack hook script(s)`)
+  }
+
+  // ── Instructions append ────────────────────────────────────────────────────
+  const instructionChunks = []
+  for (const dir of instructionsDirs) {
+    for (const file of listFiles(dir, '.md')) {
+      const text = readMaybe(file).trim()
+      if (text) instructionChunks.push(`<!-- ${file} -->\n${text}`)
+    }
+    // Also look for direct files at the dir root (instructions plugin already
+    // copied the curated set into the parent; this catches the dir-level case).
+    for (const sub of listChildDirs(dir)) {
+      for (const file of listFiles(sub, '.md')) {
+        const text = readMaybe(file).trim()
+        if (text) instructionChunks.push(`<!-- ${file} -->\n${text}`)
+      }
+    }
+  }
+  if (instructionChunks.length > 0) {
+    // Store chunks under a temp key; main() will write them to the workspace
+    // file PACK_INSTRUCTIONS.md instead of embedding them in openclaw.json.
+    // Embedding large instruction files (can be 100KB+) directly into the JSON
+    // config causes the openclaw gateway to crash on startup.
+    config.__packInstructionChunks = instructionChunks
+    console.log(
+      `[entrypoint] Collected ${instructionChunks.length} pack instruction file(s) for workspace`,
+    )
+  }
+
+  // ── Slash commands ────────────────────────────────────────────────────────
+  const slashCommandDirs = [...new Set([...commandsDirs, ...skillsDirs])]
+  if (slashCommandDirs.length > 0) {
+    const slashCommands = discoverSlashCommands(slashCommandDirs)
+    writeSlashCommandIndex(slashCommands)
+    console.log(`[entrypoint] Indexed ${slashCommands.length} pack slash command(s)`)
+  }
+
+  return config
+}
 
 function verifyExtensions() {
   if (!existsSync(EXTENSIONS_DIR)) {
@@ -165,9 +792,47 @@ function verifyExtensions() {
   }
 }
 
+function ensureShadowobManifestMetadata() {
+  const manifestPath = join(EXTENSIONS_DIR, 'shadowob', 'openclaw.plugin.json')
+  if (!existsSync(manifestPath)) return
+
+  try {
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
+    if (!manifest || typeof manifest !== 'object') return
+
+    let changed = false
+    if (!manifest.channelConfigs || typeof manifest.channelConfigs !== 'object') {
+      manifest.channelConfigs = {}
+      changed = true
+    }
+    if (!manifest.channelConfigs.shadowob) {
+      manifest.channelConfigs.shadowob = shadowobChannelConfigMetadata()
+      changed = true
+    }
+    if (!manifest.channelEnvVars || typeof manifest.channelEnvVars !== 'object') {
+      manifest.channelEnvVars = {}
+      changed = true
+    }
+    if (!manifest.channelEnvVars.shadowob) {
+      manifest.channelEnvVars.shadowob = ['SHADOW_SERVER_URL', 'SHADOW_AGENT_TOKEN']
+      changed = true
+    }
+
+    if (changed) {
+      writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8')
+      console.log('[entrypoint] Patched shadowob plugin manifest channel metadata')
+    }
+  } catch (err) {
+    console.warn(`[entrypoint] Failed to patch shadowob plugin manifest: ${err.message}`)
+  }
+}
+
 // ─── Health Check Server ────────────────────────────────────────────────────
 
 let gatewayHealthy = false
+let gatewayReady = false
+let shadowChannelReady = false
+let healthRequiresShadowChannel = true
 let gatewayProcess = null
 let gatewayGraceTimer = null
 let gatewayRestarts = 0
@@ -198,14 +863,30 @@ function redact(line) {
 
 function startHealthServer() {
   const server = createServer((req, res) => {
-    if (req.url === '/health') {
-      if (gatewayHealthy) {
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ status: 'healthy', pid: gatewayProcess?.pid }))
-      } else {
-        res.writeHead(503, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ status: 'starting' }))
-      }
+    if (req.url === '/live') {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(
+        JSON.stringify({
+          status: 'live',
+          pid: gatewayProcess?.pid,
+          gatewayReady,
+          shadowChannelReady,
+        }),
+      )
+      return
+    }
+
+    if (req.url === '/ready' || req.url === '/health') {
+      const ready = healthRequiresShadowChannel ? shadowChannelReady : gatewayReady
+      res.writeHead(ready ? 200 : 503, { 'Content-Type': 'application/json' })
+      res.end(
+        JSON.stringify({
+          status: ready ? 'ready' : 'starting',
+          pid: gatewayProcess?.pid,
+          gatewayReady,
+          shadowChannelReady,
+        }),
+      )
     } else {
       res.writeHead(404)
       res.end()
@@ -221,6 +902,132 @@ function startHealthServer() {
 
 // ─── Gateway Process ────────────────────────────────────────────────────────
 
+function clearStaleRuntimeDependencyLocks() {
+  const depsRoots = [
+    runtimeDepsStageDir,
+    join(OPENCLAW_STATE_DIR, 'plugin-runtime-deps'),
+  ].filter((entry, index, values) => entry && values.indexOf(entry) === index)
+
+  for (const depsRoot of depsRoots) {
+    if (!existsSync(depsRoot)) continue
+
+    for (const runtimeDir of listChildDirs(depsRoot)) {
+      const lockDir = join(runtimeDir, '.openclaw-runtime-deps.lock')
+      if (!existsSync(lockDir)) continue
+
+      let ownerPid = null
+      try {
+        const owner = JSON.parse(readFileSync(join(lockDir, 'owner.json'), 'utf-8'))
+        if (typeof owner.pid === 'number') ownerPid = owner.pid
+      } catch {
+        // Treat unreadable lock metadata as stale; the gateway will recreate it.
+      }
+
+      const ownerAlive = ownerPid !== null && existsSync(`/proc/${ownerPid}`)
+      if (!ownerAlive) {
+        rmSync(lockDir, { recursive: true, force: true })
+        console.log(`[entrypoint] Removed stale OpenClaw runtime dependency lock: ${lockDir}`)
+      }
+    }
+  }
+}
+
+function prepareWritableRuntimeDepsStage() {
+  const imageStageDir = DEFAULT_PLUGIN_STAGE_DIR
+  const writableStageDir = join(OPENCLAW_STATE_DIR, 'plugin-runtime-deps')
+  const explicitStageDir = process.env.OPENCLAW_PLUGIN_STAGE_DIR
+
+  if (explicitStageDir && explicitStageDir !== imageStageDir) {
+    runtimeDepsStageDir = explicitStageDir
+    return
+  }
+
+  mkdirSync(writableStageDir, { recursive: true })
+  if (existsSync(imageStageDir)) {
+    for (const runtimeDir of listChildDirs(imageStageDir)) {
+      const dest = join(writableStageDir, basename(runtimeDir))
+      if (existsSync(dest)) continue
+      try {
+        cpSync(runtimeDir, dest, { recursive: true, dereference: false })
+        console.log(`[entrypoint] Seeded OpenClaw runtime deps from image: ${dest}`)
+      } catch (err) {
+        console.warn(`[entrypoint] Failed to seed runtime deps ${dest}: ${err.message}`)
+      }
+    }
+  }
+  runtimeDepsStageDir = writableStageDir
+}
+
+function runRuntimeDepsWarmup(configPath, stageDir) {
+  if (!existsSync(RUNTIME_DEPS_WARM_SCRIPT)) {
+    return { ok: false, reason: 'Bundled runtime dependency warmup script is missing' }
+  }
+
+  const timeout = Number.parseInt(process.env.OPENCLAW_RUNTIME_DEPS_WARM_TIMEOUT_MS ?? '240000', 10)
+  const env = {
+    ...process.env,
+    OPENCLAW_CONFIG_PATH: configPath,
+    OPENCLAW_STATE_DIR,
+    OPENCLAW_PLUGIN_STAGE_DIR: stageDir,
+    HOME: '/home/openclaw',
+    NODE_ENV: 'production',
+    npm_config_cache: '/tmp/npm-cache',
+  }
+
+  console.log(`[entrypoint] Warming OpenClaw bundled runtime dependencies in ${stageDir}...`)
+  const result = spawnSync('node', [RUNTIME_DEPS_WARM_SCRIPT, configPath], {
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout,
+  })
+
+  const stdout = result.stdout?.toString().trim()
+  if (stdout) {
+    for (const line of stdout.split('\n')) process.stdout.write(`${redact(line)}\n`)
+  }
+  const stderr = result.stderr?.toString().trim()
+  if (stderr) {
+    for (const line of stderr.split('\n')) process.stderr.write(`${redact(line)}\n`)
+  }
+
+  if (result.error) {
+    return { ok: false, reason: result.error.message }
+  }
+  if (result.status !== 0) {
+    return { ok: false, reason: `exited ${result.status}` }
+  }
+  return { ok: true }
+}
+
+function warmBundledPluginRuntimeDeps(configPath) {
+  if (process.env.OPENCLAW_SKIP_RUNTIME_DEPS_WARMUP === '1') {
+    console.log('[entrypoint] Skipping bundled runtime dependency warmup')
+    return
+  }
+
+  const preferredStageDir = runtimeDepsStageDir
+  const first = runRuntimeDepsWarmup(configPath, preferredStageDir)
+  if (first.ok) {
+    runtimeDepsStageDir = preferredStageDir
+    console.log('[entrypoint] ✓ bundled runtime dependencies warmed')
+    return
+  }
+
+  const fallbackStageDir = join(OPENCLAW_STATE_DIR, 'plugin-runtime-deps')
+  console.warn(
+    `[entrypoint] Runtime dependency warmup in ${preferredStageDir} failed: ${first.reason}`,
+  )
+  if (preferredStageDir === fallbackStageDir) return
+
+  const fallback = runRuntimeDepsWarmup(configPath, fallbackStageDir)
+  if (fallback.ok) {
+    runtimeDepsStageDir = fallbackStageDir
+    console.log('[entrypoint] ✓ bundled runtime dependencies warmed in writable state dir')
+    return
+  }
+  console.warn(`[entrypoint] Runtime dependency fallback warmup failed: ${fallback.reason}`)
+}
+
 function findGatewayEntry() {
   const candidates = [
     '/app/node_modules/openclaw/dist/cli/index.js',
@@ -235,9 +1042,11 @@ function findGatewayEntry() {
 }
 
 function startGateway(_healthServer) {
+  clearStaleRuntimeDependencyLocks()
+
   const entry = findGatewayEntry()
   const configPath = join(OPENCLAW_STATE_DIR, 'openclaw.json')
-  const gatewayPort = GATEWAY_PORT + 1 // Health server uses GATEWAY_PORT
+  const gatewayPort = OPENCLAW_HTTP_PORT
 
   console.log(`[entrypoint] Starting OpenClaw gateway: ${entry}`)
   console.log(`[entrypoint] Config: ${configPath}`)
@@ -250,6 +1059,7 @@ function startGateway(_healthServer) {
     OPENCLAW_CONFIG_PATH: configPath,
     OPENCLAW_STATE_DIR: OPENCLAW_STATE_DIR,
     OPENCLAW_GATEWAY_PORT: String(gatewayPort),
+    OPENCLAW_PLUGIN_STAGE_DIR: runtimeDepsStageDir,
     OPENCLAW_LOG_DIR: LOG_DIR,
     NODE_ENV: 'production',
     // Disable OpenClaw's self-respawn mechanism — the original process would exit
@@ -274,24 +1084,39 @@ function startGateway(_healthServer) {
 
   gatewayProcess = proc
 
-  // After 10s of the gateway running without crashing, consider it healthy
+  // Keep the container unready until the gateway has actually started the
+  // Shadow channel. A fixed grace period marks pods ready while OpenClaw is
+  // still installing plugin runtime deps, which causes rolling updates to drop
+  // channel messages during handoff.
   gatewayGraceTimer = setTimeout(() => {
     if (!proc.killed && proc.exitCode === null) {
-      gatewayHealthy = true
-      console.log('[entrypoint] Gateway grace period elapsed — reporting healthy')
+      console.log('[entrypoint] Gateway still starting — waiting for channel readiness')
     }
-  }, 10000)
+  }, 120000)
 
   proc.stdout.on('data', (data) => {
     const line = data.toString().trim()
     process.stdout.write(`[openclaw] ${redact(line)}\n`)
 
-    // Detect gateway ready immediately
-    if (line.includes('Gateway ready') || line.includes('listening on')) {
+    if (line.includes('[gateway] ready') || line.includes('Gateway ready')) {
+      gatewayReady = true
+      console.log('[entrypoint] Gateway HTTP server is ready')
+      if (!healthRequiresShadowChannel && !gatewayHealthy) {
+        gatewayHealthy = true
+        console.log('[entrypoint] Gateway is ready')
+      }
+    }
+
+    if (
+      healthRequiresShadowChannel &&
+      line.includes('[ws] ✓ Joined channel room')
+    ) {
+      shadowChannelReady = true
+      clearTimeout(gatewayGraceTimer)
       if (!gatewayHealthy) {
         gatewayHealthy = true
         // Keep health server running — it now returns 200 since gatewayHealthy=true
-        console.log('[entrypoint] Gateway is ready')
+        console.log('[entrypoint] Shadow channel is ready')
       }
     }
   })
@@ -304,6 +1129,8 @@ function startGateway(_healthServer) {
     console.log(`[entrypoint] Gateway exited: code=${code} signal=${signal}`)
     clearTimeout(gatewayGraceTimer)
     gatewayHealthy = false
+    gatewayReady = false
+    shadowChannelReady = false
 
     if (signal === 'SIGTERM' || signal === 'SIGINT') {
       return // Normal shutdown, signal handlers will handle process.exit
@@ -363,7 +1190,13 @@ async function main() {
 
   // 1. Load config
   const mountedConfig = loadMountedConfig()
-  const openclawConfig = generateOpenClawConfig(mountedConfig)
+  const baseConfig = generateOpenClawConfig(mountedConfig)
+  const openclawConfig = mergeShadowPacks(baseConfig)
+  healthRequiresShadowChannel = openclawConfig.channels?.shadowob?.enabled !== false
+  const packInstructionChunks = Array.isArray(openclawConfig.__packInstructionChunks)
+    ? openclawConfig.__packInstructionChunks
+    : []
+  delete openclawConfig.__packInstructionChunks
 
   // 2. Write config
   mkdirSync(OPENCLAW_STATE_DIR, { recursive: true })
@@ -371,15 +1204,22 @@ async function main() {
   writeFileSync(configPath, JSON.stringify(openclawConfig, null, 2), 'utf-8')
   console.log(`[entrypoint] Config written to ${configPath}`)
 
-  // 2b. Ensure shared workspace directory exists
+  // 2b. Start live health server early. Readiness remains false until the
+  // gateway has joined Shadow channel rooms.
+  const healthServer = startHealthServer()
+
+  // 2c. Ensure shared workspace directory exists
   if (SHARED_WORKSPACE_PATH) {
     mkdirSync(SHARED_WORKSPACE_PATH, { recursive: true })
     console.log(`[entrypoint] Shared workspace ready: ${SHARED_WORKSPACE_PATH}`)
   }
 
-  // 2c. Run `openclaw setup` to initialize workspace with bootstrap files.
+  // 2d. Run `openclaw setup` to initialize workspace with bootstrap files.
   // This seeds AGENTS.md, SOUL.md, IDENTITY.md, etc. from OpenClaw's internal templates.
-  const workspaceDir = openclawConfig.agents?.defaults?.workspace || SHARED_WORKSPACE_PATH || join(OPENCLAW_STATE_DIR, 'workspace')
+  const workspaceDir =
+    openclawConfig.agents?.defaults?.workspace ||
+    SHARED_WORKSPACE_PATH ||
+    join(OPENCLAW_STATE_DIR, 'workspace')
   mkdirSync(workspaceDir, { recursive: true })
   console.log(`[entrypoint] Initializing workspace: ${workspaceDir}`)
   const setupResult = spawnSync('openclaw', ['setup', '--workspace', workspaceDir], {
@@ -391,13 +1231,23 @@ async function main() {
     console.log('[entrypoint] ✓ openclaw setup completed')
   } else {
     const stderr = setupResult.stderr?.toString().trim()
-    console.warn(`[entrypoint] ⚠ openclaw setup exited ${setupResult.status}: ${stderr || '(no output)'}`)
+    console.warn(
+      `[entrypoint] ⚠ openclaw setup exited ${setupResult.status}: ${stderr || '(no output)'}`,
+    )
   }
 
-  // 2d. Overlay workspace files from ConfigMap (SOUL.md, AGENTS.md, etc.)
+  // 2e. Overlay workspace files from ConfigMap (SOUL.md, AGENTS.md, etc.)
   // These are agent-specific files generated by the cloud config builder that
   // override the default bootstrap files created by `openclaw setup`.
-  const WORKSPACE_BOOTSTRAP_FILES = ['SOUL.md', 'IDENTITY.md', 'TOOLS.md', 'AGENTS.md', 'USER.md', 'HEARTBEAT.md', 'BOOTSTRAP.md']
+  const WORKSPACE_BOOTSTRAP_FILES = [
+    'SOUL.md',
+    'IDENTITY.md',
+    'TOOLS.md',
+    'AGENTS.md',
+    'USER.md',
+    'HEARTBEAT.md',
+    'BOOTSTRAP.md',
+  ]
   for (const filename of WORKSPACE_BOOTSTRAP_FILES) {
     const srcPath = join(CONFIG_MOUNT, filename)
     if (existsSync(srcPath)) {
@@ -411,22 +1261,36 @@ async function main() {
     }
   }
 
-  // 2e. Ensure skills directory exists
+  // 2f. Write collected pack instructions to workspace file instead of embedding
+  // them in openclaw.json (large files cause the gateway to crash on startup).
+  if (packInstructionChunks.length > 0) {
+    const packInstructionsPath = join(workspaceDir, 'PACK_INSTRUCTIONS.md')
+    try {
+      writeFileSync(packInstructionsPath, packInstructionChunks.join('\n\n'), 'utf-8')
+      console.log(
+        `[entrypoint] Wrote ${packInstructionChunks.length} pack instruction file(s) to PACK_INSTRUCTIONS.md`,
+      )
+    } catch (err) {
+      console.warn(`[entrypoint] Failed to write PACK_INSTRUCTIONS.md: ${err.message}`)
+    }
+  }
+
+  // 2g. Ensure skills directory exists
   if (SKILLS_DIR) {
     mkdirSync(SKILLS_DIR, { recursive: true })
     console.log(`[entrypoint] Skills directory ready: ${SKILLS_DIR}`)
   }
 
-  // 3. Verify extensions
+  // 3. Verify extensions and pre-stage plugin runtime deps before chat traffic.
+  ensureShadowobManifestMetadata()
   verifyExtensions()
+  prepareWritableRuntimeDepsStage()
+  warmBundledPluginRuntimeDeps(configPath)
 
-  // 4. Start health server (temporary, until gateway is ready)
-  const healthServer = startHealthServer()
-
-  // 5. Start gateway
+  // 4. Start gateway
   const proc = startGateway(healthServer)
 
-  // 6. Setup signal handlers
+  // 5. Setup signal handlers
   setupSignalHandlers(proc)
 }
 

@@ -9,8 +9,6 @@ import {
   TableHeader,
   TableRow,
   Tabs,
-  TabsList,
-  TabsTrigger,
 } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
@@ -43,6 +41,7 @@ import { Breadcrumb } from '@/components/Breadcrumb'
 import { CliCommandSnippet } from '@/components/CliCommandSnippet'
 import { DangerConfirmDialog } from '@/components/DangerConfirmDialog'
 import { DashboardEmptyState } from '@/components/DashboardEmptyState'
+import { DashboardTabsList } from '@/components/DashboardTabsList'
 import { DashboardTaskCard } from '@/components/DashboardTaskCard'
 import { EnvVarEditorDialog } from '@/components/EnvVarEditorDialog'
 import { IconActionButton } from '@/components/IconActionButton'
@@ -102,11 +101,21 @@ function PodsTab({ pods, isLoading }: { pods: Pod[] | undefined; isLoading: bool
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="dashboard-table-head">{t('clusters.status')}</TableHead>
-              <TableHead className="dashboard-table-head">{t('monitoring.name')}</TableHead>
-              <TableHead className="dashboard-table-head">{t('monitoring.ready')}</TableHead>
-              <TableHead className="dashboard-table-head">{t('deployments.restarts')}</TableHead>
-              <TableHead className="dashboard-table-head">{t('deployments.age')}</TableHead>
+              <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                {t('clusters.status')}
+              </TableHead>
+              <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                {t('monitoring.name')}
+              </TableHead>
+              <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                {t('monitoring.ready')}
+              </TableHead>
+              <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                {t('deployments.restarts')}
+              </TableHead>
+              <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                {t('deployments.age')}
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -190,7 +199,7 @@ function LogsTab({ namespace, id }: { namespace: string; id: string }) {
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="dashboard-action-button"
+                className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
                 onClick={() => {
                   disconnect()
                   clear()
@@ -376,7 +385,7 @@ function ConfigTab() {
             type="button"
             variant="glass"
             size="sm"
-            className="dashboard-action-button"
+            className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
             onClick={handleFormat}
           >
             <FileJson size={11} />
@@ -386,7 +395,7 @@ function ConfigTab() {
             type="button"
             variant="glass"
             size="sm"
-            className="dashboard-action-button"
+            className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
             onClick={handleValidate}
           >
             <CheckCircle size={11} />
@@ -396,7 +405,7 @@ function ConfigTab() {
             type="button"
             variant="primary"
             size="sm"
-            className="dashboard-action-button"
+            className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
             onClick={() => saveMutation.mutate()}
             disabled={!dirty || saveMutation.isPending}
           >
@@ -533,7 +542,7 @@ function EnvironmentTab() {
           type="button"
           variant="primary"
           size="sm"
-          className="dashboard-action-button"
+          className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
           onClick={() => {
             setEditEntry(null)
             setDialogMode('create')
@@ -551,9 +560,15 @@ function EnvironmentTab() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="dashboard-table-head">{t('secrets.keyName')}</TableHead>
-                <TableHead className="dashboard-table-head">{t('secrets.secretValue')}</TableHead>
-                <TableHead className="dashboard-table-head">{t('common.actions')}</TableHead>
+                <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                  {t('secrets.keyName')}
+                </TableHead>
+                <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                  {t('secrets.secretValue')}
+                </TableHead>
+                <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                  {t('common.actions')}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -789,7 +804,7 @@ export function DeploymentDetailPage() {
   ]
 
   return (
-    <div className="dashboard-page-shell dashboard-page-shell--narrow space-y-6">
+    <div className="mx-auto max-w-[1280px] space-y-6 p-6 md:px-8">
       <Breadcrumb
         items={[
           { label: t('deployments.title'), to: '/deployments' },
@@ -802,7 +817,9 @@ export function DeploymentDetailPage() {
       {/* Header */}
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="dashboard-page-title font-mono text-3xl">{id}</h1>
+          <h1 className="font-extrabold tracking-[-0.03em] text-text-primary font-mono text-3xl">
+            {id}
+          </h1>
           <p className="mt-1 text-sm text-text-muted">
             {t('deploymentDetail.namespace')}:{' '}
             <span className="font-mono text-text-secondary">{namespace}</span>
@@ -816,7 +833,7 @@ export function DeploymentDetailPage() {
               type="button"
               variant="ghost"
               size="xs"
-              className="dashboard-action-button"
+              className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
               onClick={() => handleScale(-1)}
               disabled={scaleMutation.isPending || (replicas ?? 0) <= 0}
             >
@@ -829,7 +846,7 @@ export function DeploymentDetailPage() {
               type="button"
               variant="ghost"
               size="xs"
-              className="dashboard-action-button"
+              className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
               onClick={() => handleScale(1)}
               disabled={scaleMutation.isPending}
             >
@@ -841,7 +858,7 @@ export function DeploymentDetailPage() {
             type="button"
             variant="primary"
             size="sm"
-            className="dashboard-action-button"
+            className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
             onClick={() => void handleRedeploy()}
           >
             <Rocket size={12} />
@@ -852,7 +869,7 @@ export function DeploymentDetailPage() {
             type="button"
             variant="danger"
             size="sm"
-            className="dashboard-action-button"
+            className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
             onClick={() => setShowDestroy(true)}
             disabled={destroyMutation.isPending}
           >
@@ -891,17 +908,7 @@ export function DeploymentDetailPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onChange={setActiveTab}>
-        <TabsList className="dashboard-tabs-list">
-          {tabs.map((tab) => (
-            <TabsTrigger key={tab.id} value={tab.id} className="dashboard-tabs-trigger">
-              <span className="dashboard-tab-icon">{tab.icon}</span>
-              <span>{tab.label}</span>
-              {typeof tab.count === 'number' && (
-                <span className="dashboard-tabs-count">{tab.count}</span>
-              )}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <DashboardTabsList tabs={tabs} />
       </Tabs>
 
       <div className="min-h-[38vh]">

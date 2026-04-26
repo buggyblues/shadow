@@ -123,7 +123,7 @@ app.route('/api/cloud', createCloudHandler(container))
 
 ### 步骤 8：cloud-worker 容器
 
-新增 `apps/cloud/src/worker.ts`（或独立 `apps/cloud-worker/`），轮询/订阅 DB 任务队列，调用 `DeployService`，写回日志和状态。
+新增 `apps/server/src/cloud-worker.ts`，由 `server` 依赖 `@shadowob/cloud` SDK，轮询/订阅 DB 任务队列，调用云部署运行时，写回日志和状态。
 `docker-compose.yml` 新增 `cloud-worker` 服务。
 
 ---

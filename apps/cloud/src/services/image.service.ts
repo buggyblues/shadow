@@ -8,8 +8,8 @@
 import { execFileSync, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import type { Logger } from '../utils/logger.js'
+import { resolveCloudPackageAssetDir } from '../utils/package-asset-path.js'
 
 export const IMAGES = [
   'openclaw-runner',
@@ -36,9 +36,7 @@ export class ImageService {
 
   constructor(logger: Logger, imagesDir?: string) {
     this.logger = logger
-    // After tsup bundling, import.meta.url points to dist/index.js
-    // so we only need to go up 1 level to reach the package root.
-    this.imagesDir = imagesDir ?? resolve(fileURLToPath(import.meta.url), '..', '..', 'images')
+    this.imagesDir = imagesDir ?? resolveCloudPackageAssetDir('images')
   }
 
   /** Get the images directory path. */
@@ -48,7 +46,7 @@ export class ImageService {
 
   /** Get the container registry URL. */
   getRegistry(): string {
-    return process.env.SHADOWOB_REGISTRY ?? process.env.SHADOWOB_REGISTRY ?? 'ghcr.io/shadowob'
+    return process.env.SHADOWOB_REGISTRY ?? 'ghcr.io/shadowob'
   }
 
   /** Get all available image names. */
@@ -65,6 +63,7 @@ export class ImageService {
   async build(options: ImageBuildOptions): Promise<void> {
     const { name, tag = 'latest', noCache, intoK8s, push, platform } = options
     const dockerfilePath = resolve(this.imagesDir, name, 'Dockerfile')
+    const buildContext = this.getBuildContext(name)
 
     if (!existsSync(dockerfilePath)) {
       throw new Error(`Dockerfile not found: ${dockerfilePath}`)
@@ -79,12 +78,13 @@ export class ImageService {
     const localTag = this.getLocalTag(name, tag)
 
     this.logger.step(`Building ${name} (tag: ${intoK8s ? localTag : remoteTag})...`)
+    await this.prepareBuildContext(name)
 
     const buildArgs: string[] = ['-t', intoK8s ? localTag : remoteTag]
     if (intoK8s) buildArgs.push('-t', remoteTag)
     if (noCache) buildArgs.push('--no-cache')
     if (platform) buildArgs.push('--platform', platform)
-    buildArgs.push('-f', dockerfilePath, resolve(this.imagesDir, name))
+    buildArgs.push('-f', dockerfilePath, buildContext)
 
     await this.dockerBuild(buildArgs)
 
@@ -120,12 +120,35 @@ export class ImageService {
     }))
   }
 
+  private getBuildContext(name: string): string {
+    if (name !== 'openclaw-runner') return resolve(this.imagesDir, name)
+
+    const repoRoot = resolve(this.imagesDir, '../../..')
+    const localShadowobPlugin = resolve(repoRoot, 'packages', 'openclaw-shadowob', 'package.json')
+    return existsSync(localShadowobPlugin) ? repoRoot : resolve(this.imagesDir, name)
+  }
+
+  private async prepareBuildContext(name: string): Promise<void> {
+    if (name !== 'openclaw-runner') return
+
+    const repoRoot = resolve(this.imagesDir, '../../..')
+    const localShadowobPlugin = resolve(repoRoot, 'packages', 'openclaw-shadowob', 'package.json')
+    if (!existsSync(localShadowobPlugin)) return
+
+    this.logger.step('Building local @shadowob/openclaw-shadowob package for runner image...')
+    await this.spawnProcess('pnpm', ['--filter', '@shadowob/openclaw-shadowob', 'build'], repoRoot)
+  }
+
   private dockerBuild(args: string[]): Promise<void> {
+    return this.spawnProcess('docker', ['build', ...args])
+  }
+
+  private spawnProcess(command: string, args: string[], cwd?: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      const proc = spawn('docker', ['build', ...args], { stdio: 'inherit' })
+      const proc = spawn(command, args, { cwd, stdio: 'inherit' })
       proc.on('close', (code) => {
         if (code === 0) resolve()
-        else reject(new Error(`docker build exited with code ${code}`))
+        else reject(new Error(`${command} ${args.join(' ')} exited with code ${code}`))
       })
       proc.on('error', reject)
     })

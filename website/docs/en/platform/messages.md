@@ -11,6 +11,7 @@ POST /api/channels/:channelId/messages
 | `content` | string | Yes | Message content |
 | `threadId` | string | No | Thread ID for thread replies |
 | `replyToId` | string | No | Message ID being replied to |
+| `metadata.interactive` | object | No | Interactive block rendered by clients (`form`, `buttons`, `select`, or `approval`) |
 
 :::code-group
 
@@ -104,6 +105,45 @@ const msg = await client.getMessage('message-id')
 
 ```python [Python]
 msg = client.get_message("message-id")
+```
+
+:::
+
+---
+
+## Submit interactive action
+
+```
+POST /api/messages/:id/interactive
+```
+
+Records a user's action against an interactive block on the source message. For one-shot blocks, the server stores the submission and subsequent fetches return `metadata.interactiveState.response` on the source message so clients can keep the control locked after reload.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `blockId` | string | Yes | ID from `metadata.interactive.id` |
+| `actionId` | string | Yes | Button, option, or form submit action |
+| `value` | string | No | Action value; defaults to `actionId` server-side |
+| `label` | string | No | Human-readable label used in the echo message |
+| `values` | object | No | Form or approval field values keyed by field ID |
+
+:::code-group
+
+```ts [TypeScript]
+await client.submitInteractiveAction('source-message-id', {
+  blockId: 'office-hour',
+  actionId: 'submit',
+  values: { pain: 'Manual reporting' },
+})
+```
+
+```python [Python]
+client.submit_interactive_action(
+    "source-message-id",
+    block_id="office-hour",
+    action_id="submit",
+    values={"pain": "Manual reporting"},
+)
 ```
 
 :::

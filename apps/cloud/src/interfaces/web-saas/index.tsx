@@ -6,10 +6,8 @@
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from '@tanstack/react-router'
-import { useEffect } from 'react'
 import '@shadowob/cloud-ui/i18n'
 import { setActivityRecordFn } from '@shadowob/cloud-ui/stores/app'
-import { applyTheme, useThemeStore } from '@shadowob/cloud-ui/stores/theme'
 import { router } from './router'
 import '@shadowob/cloud-ui/styles/globals.css'
 
@@ -29,21 +27,13 @@ const queryClient = new QueryClient({
   },
 })
 
-function ThemeSync() {
-  const theme = useThemeStore((s) => s.theme)
-  useEffect(() => {
-    applyTheme(theme)
-    if (theme !== 'system') return
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const handler = () => applyTheme('system')
-    mq.addEventListener('change', handler)
-    return () => mq.removeEventListener('change', handler)
-  }, [theme])
-  return null
-}
-
 /**
  * CloudSaasApp — exported for use by apps/web as a lazy-loaded route component.
+ *
+ * Theme + i18n are intentionally NOT re-initialized here: the host apps/web
+ * already owns the document root's theme class and the global i18next
+ * instance. Cloud-UI's i18n bundle attaches to the existing i18next on load
+ * (see packages/ui/src/i18n/index.ts).
  *
  * Usage in apps/web:
  *   const CloudSaasApp = lazy(() => import('@shadowob/cloud-ui/web-saas'))
@@ -52,7 +42,6 @@ function ThemeSync() {
 export function CloudSaasApp() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeSync />
       <RouterProvider router={router} />
     </QueryClientProvider>
   )

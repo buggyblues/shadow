@@ -72,3 +72,36 @@ export function createPatMiddleware(container: AppContainer) {
     await next()
   }
 }
+
+/**
+ * Compatibility fallback for previously deployed agents.
+ *
+ * Agent tokens are signed JWTs, but older deployments can keep running with a token signed by a
+ * rotated JWT secret. Since AgentService persists the issued token in agent.config.lastToken, treat
+ * that exact value as an opaque bearer credential when normal JWT verification would fail.
+ */
+export function createStoredAgentTokenMiddleware(container: AppContainer) {
+  return async (c: Context, next: Next): Promise<Response | undefined> => {
+    const authHeader = c.req.header('Authorization')
+    if (!authHeader?.startsWith('Bearer ') || authHeader.startsWith('Bearer pat_')) {
+      await next()
+      return
+    }
+
+    const tokenValue = authHeader.slice(7)
+    try {
+      verifyToken(tokenValue)
+      await next()
+      return
+    } catch {
+      // Fall through to the stored opaque token lookup.
+    }
+
+    const agent = await container.resolve('agentDao').findByLastToken(tokenValue)
+    if (agent) {
+      c.set('user', { userId: agent.userId } as JwtPayload)
+    }
+
+    await next()
+  }
+}

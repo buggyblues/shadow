@@ -1,4 +1,4 @@
-import { Badge, Button, cn } from '@shadowob/ui'
+import { Badge, Button, cn, GlassPanel } from '@shadowob/ui'
 import {
   type InfiniteData,
   useInfiniteQuery,
@@ -65,6 +65,7 @@ interface Message {
   author?: Author
   reactions?: ReactionGroup[]
   attachments?: { id: string; filename: string; url: string; contentType: string; size: number }[]
+  metadata?: BubbleMessage['metadata']
   /** Optimistic send status — only set on client-side pending messages */
   sendStatus?: 'sending' | 'failed'
 }
@@ -106,6 +107,12 @@ interface SystemEvent {
 type TimelineItem =
   | { kind: 'message'; data: Message; isGrouped: boolean }
   | { kind: 'system'; data: SystemEvent }
+
+type InteractiveResponse = NonNullable<
+  NonNullable<BubbleMessage['metadata']>['interactiveResponse']
+>
+
+const VIRTUALIZE_MESSAGE_THRESHOLD = 40
 
 /** Estimated height by content type — used for virtualizer initial estimates */
 function estimateItemSize(item: TimelineItem): number {
@@ -160,7 +167,6 @@ export function ChatArea() {
   } | null>(null)
 
   // Handle ?msg= query param for message anchor links
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional trigger on channel change
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const msgId = params.get('msg')
@@ -221,6 +227,17 @@ export function ChatArea() {
   const messageMap = useMemo(() => {
     const map = new Map<string, Message>()
     for (const m of messages) map.set(m.id, m)
+    return map
+  }, [messages])
+
+  const interactiveResponsesBySourceId = useMemo(() => {
+    const map = new Map<string, InteractiveResponse>()
+    for (const m of messages) {
+      const response = m.metadata?.interactiveResponse
+      if (response?.sourceMessageId) {
+        map.set(response.sourceMessageId, response)
+      }
+    }
     return map
   }, [messages])
 
@@ -468,7 +485,6 @@ export function ChatArea() {
   )
 
   // Clear system events and activity on channel change
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset
   useEffect(() => {
     setSystemEvents([])
     setActivityUsers([])
@@ -497,6 +513,9 @@ export function ChatArea() {
       }),
   })
 
+  // Dynamic blocks (forms, markdown, attachments) behave best in normal flow for active chats.
+  const shouldVirtualize = timeline.length > VIRTUALIZE_MESSAGE_THRESHOLD
+
   // Virtual list setup with dynamic size estimation
   const virtualizer = useVirtualizer({
     count: timeline.length,
@@ -524,13 +543,41 @@ export function ChatArea() {
   const scrollToBottom = useCallback(
     (behavior: 'auto' | 'smooth' = 'smooth') => {
       if (timeline.length === 0) return
+      const lastIndex = timeline.length - 1
+
+      const settleRawBottom = () => {
+        if (!shouldStickToBottomRef.current) return
+        const scrollEl = parentRef.current
+        if (scrollEl) {
+          scrollEl.scrollTop = scrollEl.scrollHeight
+        }
+      }
+
+      const settleAtBottom = (nextBehavior: 'auto' | 'smooth') => {
+        if (!shouldStickToBottomRef.current) return
+        if (!shouldVirtualize) {
+          settleRawBottom()
+          return
+        }
+        virtualizer.measure()
+        virtualizer.scrollToIndex(lastIndex, { align: 'end', behavior: nextBehavior })
+        requestAnimationFrame(() => {
+          const scrollEl = parentRef.current
+          if (scrollEl && shouldStickToBottomRef.current) {
+            scrollEl.scrollTop = scrollEl.scrollHeight
+          }
+        })
+      }
+
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          virtualizer.scrollToIndex(timeline.length - 1, { align: 'end', behavior })
+          settleAtBottom(behavior)
+          window.setTimeout(() => settleAtBottom('auto'), 80)
+          window.setTimeout(() => settleAtBottom('auto'), 240)
         })
       })
     },
-    [timeline.length, virtualizer],
+    [timeline.length, shouldVirtualize, virtualizer],
   )
 
   // Single consolidated scroll-position effect — avoids conflicts from multiple useLayoutEffects
@@ -544,7 +591,7 @@ export function ChatArea() {
       // First load: scroll to bottom immediately
       initialScrollDoneRef.current = true
       prevMessageCountRef.current = currentCount
-      virtualizer.scrollToIndex(currentCount - 1, { align: 'end' })
+      scrollToBottom('auto')
       return
     }
 
@@ -570,7 +617,6 @@ export function ChatArea() {
   }, [timeline.length, virtualizer, scrollToBottom])
 
   // Reset scroll state on channel change
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset on channel switch
   useEffect(() => {
     initialScrollDoneRef.current = false
     prevMessageCountRef.current = 0
@@ -728,6 +774,69 @@ export function ChatArea() {
     [saveToWorkspaceFile, activeServerId],
   )
 
+  const renderTimelineItem = (item: TimelineItem, index: number) => (
+    <>
+      {lastReadCount > 0 && index === lastReadCount && (
+        <div className="flex items-center gap-2 px-4 my-2">
+          <div className="flex-1 h-px bg-danger/60" />
+          <span className="text-xs text-danger font-black px-2">{t('chat.newMessages')}</span>
+          <div className="flex-1 h-px bg-danger/60" />
+        </div>
+      )}
+      {item.kind === 'system' ? (
+        <div className="flex items-center justify-center gap-2 px-4 py-1.5">
+          <Badge
+            variant="neutral"
+            size="md"
+            className="bg-bg-tertiary/50 backdrop-blur-sm rounded-full border-border-subtle gap-1.5 font-normal"
+          >
+            {item.data.type === 'joined' ? (
+              <LogIn size={14} className="text-success" />
+            ) : (
+              <LogOut size={14} className="text-danger" />
+            )}
+            <span>
+              {item.data.isBot ? 'Buddy · ' : ''}
+              <span className="font-medium text-text-secondary">{item.data.displayName}</span>{' '}
+              {item.data.type === 'joined'
+                ? item.data.scope === 'channel'
+                  ? t('member.joinedChannel')
+                  : t('member.joinedServer')
+                : item.data.scope === 'channel'
+                  ? t('member.leftChannel')
+                  : t('member.leftServer')}
+            </span>
+          </Badge>
+        </div>
+      ) : (
+        <MessageBubble
+          message={item.data}
+          currentUserId={user?.id ?? ''}
+          isGrouped={item.isGrouped}
+          onReply={(id) => setReplyToId(id)}
+          onReact={handleReact}
+          onMessageUpdate={handleMessageUpdate}
+          onMessageDelete={handleMessageDelete}
+          onPreviewFile={(att) => setPreviewFile(att)}
+          onSaveToWorkspace={activeServerId ? (att) => setSaveToWorkspaceFile(att) : undefined}
+          highlight={highlightMsgId === item.data.id}
+          replyToMessage={
+            item.data.replyToId ? (messageMap.get(item.data.replyToId) ?? null) : null
+          }
+          selectionMode={selectionMode}
+          isSelected={selectedMessageIds.has(item.data.id)}
+          submittedInteractiveResponse={
+            item.data.metadata?.interactiveState?.response ??
+            interactiveResponsesBySourceId.get(item.data.id) ??
+            null
+          }
+          onToggleSelect={handleToggleSelect}
+          onEnterSelectionMode={handleEnterSelectionMode}
+        />
+      )}
+    </>
+  )
+
   if (!activeChannelId) {
     return (
       <div className="flex-1 flex items-center justify-center text-text-muted bg-bg-primary/70 backdrop-blur-xl">
@@ -736,12 +845,17 @@ export function ChatArea() {
     )
   }
 
-  const virtualItems = virtualizer.getVirtualItems()
+  const virtualItems = shouldVirtualize ? virtualizer.getVirtualItems() : []
 
   return (
     <div className="flex-1 flex min-w-0 h-full">
-      <div
-        className="flex-1 flex flex-col glass-panel chat-panel overflow-hidden min-w-0 h-full relative"
+      <GlassPanel
+        className="flex-1 flex flex-col chat-panel overflow-hidden min-w-0 h-full relative"
+        style={{
+          background: 'var(--chat-panel-bg)',
+          backdropFilter: 'none',
+          WebkitBackdropFilter: 'none',
+        }}
         onDrop={handleAreaDrop}
         onDragOver={handleAreaDragOver}
         onDragLeave={handleAreaDragLeave}
@@ -794,7 +908,7 @@ export function ChatArea() {
           </div>
         </div>
 
-        {/* Messages — virtual list */}
+        {/* Messages */}
         <div
           ref={parentRef}
           className="chat-scroll-surface flex-1 overflow-y-auto overflow-x-hidden"
@@ -821,7 +935,7 @@ export function ChatArea() {
                 }
               }}
             />
-          ) : (
+          ) : shouldVirtualize ? (
             <div
               style={{
                 height: `${virtualizer.getTotalSize()}px`,
@@ -854,68 +968,25 @@ export function ChatArea() {
                       transform: `translateY(${virtualItem.start}px)`,
                     }}
                   >
-                    {lastReadCount > 0 && virtualItem.index === lastReadCount && (
-                      <div className="flex items-center gap-2 px-4 my-2">
-                        <div className="flex-1 h-px bg-danger/60" />
-                        <span className="text-xs text-danger font-black px-2">
-                          {t('chat.newMessages')}
-                        </span>
-                        <div className="flex-1 h-px bg-danger/60" />
-                      </div>
-                    )}
-                    {item.kind === 'system' ? (
-                      <div className="flex items-center justify-center gap-2 px-4 py-1.5">
-                        <Badge
-                          variant="neutral"
-                          size="md"
-                          className="bg-bg-tertiary/50 backdrop-blur-sm rounded-full border-border-subtle gap-1.5 font-normal"
-                        >
-                          {item.data.type === 'joined' ? (
-                            <LogIn size={14} className="text-success" />
-                          ) : (
-                            <LogOut size={14} className="text-danger" />
-                          )}
-                          <span>
-                            {item.data.isBot ? 'Buddy · ' : ''}
-                            <span className="font-medium text-text-secondary">
-                              {item.data.displayName}
-                            </span>{' '}
-                            {item.data.type === 'joined'
-                              ? item.data.scope === 'channel'
-                                ? t('member.joinedChannel')
-                                : t('member.joinedServer')
-                              : item.data.scope === 'channel'
-                                ? t('member.leftChannel')
-                                : t('member.leftServer')}
-                          </span>
-                        </Badge>
-                      </div>
-                    ) : (
-                      <MessageBubble
-                        message={item.data}
-                        currentUserId={user?.id ?? ''}
-                        isGrouped={item.isGrouped}
-                        onReply={(id) => setReplyToId(id)}
-                        onReact={handleReact}
-                        onMessageUpdate={handleMessageUpdate}
-                        onMessageDelete={handleMessageDelete}
-                        onPreviewFile={(att) => setPreviewFile(att)}
-                        onSaveToWorkspace={
-                          activeServerId ? (att) => setSaveToWorkspaceFile(att) : undefined
-                        }
-                        highlight={highlightMsgId === item.data.id}
-                        replyToMessage={
-                          item.data.replyToId ? (messageMap.get(item.data.replyToId) ?? null) : null
-                        }
-                        selectionMode={selectionMode}
-                        isSelected={selectedMessageIds.has(item.data.id)}
-                        onToggleSelect={handleToggleSelect}
-                        onEnterSelectionMode={handleEnterSelectionMode}
-                      />
-                    )}
+                    {renderTimelineItem(item, virtualItem.index)}
                   </div>
                 )
               })}
+            </div>
+          ) : (
+            <div className="flex flex-col py-2">
+              {/* Loading older messages indicator */}
+              {isFetchingNextPage && (
+                <div className="flex justify-center py-2">
+                  <span className="text-xs text-text-muted animate-pulse">
+                    {t('chat.loadingOlder', 'Loading older messages...')}
+                  </span>
+                </div>
+              )}
+
+              {timeline.map((item, index) => (
+                <div key={item.data.id}>{renderTimelineItem(item, index)}</div>
+              ))}
             </div>
           )}
         </div>
@@ -1023,7 +1094,7 @@ export function ChatArea() {
             onExternalFilesConsumed={() => setDroppedFiles([])}
           />
         )}
-      </div>
+      </GlassPanel>
 
       {/* File preview panel */}
       {previewFile && (

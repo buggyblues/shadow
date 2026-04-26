@@ -375,7 +375,14 @@
     "areTyping": "正在輸入...",
     "copy": "複製",
     "edit": "編輯",
-    "copied": "已複製"
+    "copied": "已複製",
+    "interactiveSubmit": "提交",
+    "interactiveApprove": "批准",
+    "interactiveReject": "拒絕",
+    "interactiveRequired": "必填",
+    "interactiveSubmitFailed": "提交回應失敗",
+    "interactiveOn": "開啟",
+    "interactiveOff": "關閉"
   },
   "member": {
     "title": "成員",

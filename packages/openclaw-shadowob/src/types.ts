@@ -34,6 +34,47 @@ export type ShadowPolicyConfig = {
   smartReply?: boolean
 }
 
+// ─── Slash Commands (discovered from agent packs) ───────────────────────────
+
+export type ShadowSlashCommand = {
+  name: string
+  description?: string
+  aliases?: string[]
+  packId?: string
+  sourcePath?: string
+  body?: string
+  interaction?: ShadowSlashCommandInteraction
+}
+
+export type ShadowSlashCommandInteraction = {
+  id?: string
+  kind: 'buttons' | 'select' | 'form' | 'approval'
+  prompt?: string
+  buttons?: Array<{
+    id: string
+    label: string
+    value?: string
+    style?: 'primary' | 'secondary' | 'destructive'
+  }>
+  options?: Array<{ id: string; label: string; value: string }>
+  fields?: Array<{
+    id: string
+    kind: 'text' | 'textarea' | 'number' | 'checkbox' | 'select'
+    label: string
+    placeholder?: string
+    defaultValue?: string
+    required?: boolean
+    options?: Array<{ id: string; label: string; value: string }>
+    maxLength?: number
+    min?: number
+    max?: number
+  }>
+  submitLabel?: string
+  responsePrompt?: string
+  approvalCommentLabel?: string
+  oneShot?: boolean
+}
+
 // ─── Agent Chain Metadata (anti-loop tracking) ──────────────────────────────
 
 export type AgentChainMetadata = {

@@ -1,3 +1,4 @@
+import { GlassPanel } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, Check, Copy, ExternalLink, Home, Settings } from 'lucide-react'
@@ -326,6 +327,9 @@ interface HomepageApp {
   sourceUrl: string
   version: string | null
   iconUrl: string | null
+  settings?: {
+    proxyEnabled?: boolean
+  } | null
 }
 
 export function ServerHome({ serverId: propServerId, standalone }: ServerHomeProps = {}) {
@@ -334,6 +338,9 @@ export function ServerHome({ serverId: propServerId, standalone }: ServerHomePro
   const { activeServerId } = useChatStore()
   const effectiveServerId = propServerId || activeServerId
   const [copied, setCopied] = useState(false)
+  const [homepageLoadError, setHomepageLoadError] = useState(false)
+  const [forceBuiltinHomepage, setForceBuiltinHomepage] = useState(false)
+  const [homepageLoaded, setHomepageLoaded] = useState(false)
 
   const { data: server } = useQuery({
     queryKey: ['server', effectiveServerId],
@@ -365,10 +372,16 @@ export function ServerHome({ serverId: propServerId, standalone }: ServerHomePro
       const { type, channelName, url } = event.data
 
       if (type === 'server-home:explore-channels' || type === 'navigate-channel') {
+        const candidateChannels = (channels ?? []).filter(
+          (ch) => !ch.name.toLowerCase().startsWith('app:'),
+        )
+        const normalizedName =
+          typeof channelName === 'string' ? channelName.trim().toLowerCase() : undefined
         // Navigate to the first channel, or by name if specified
-        const targetChannel = channelName
-          ? channels?.find((ch) => ch.name === channelName)
-          : channels?.[0]
+        const targetChannel = normalizedName
+          ? candidateChannels.find((ch) => ch.name.trim().toLowerCase() === normalizedName) ||
+            channels?.find((ch) => ch.name.trim().toLowerCase() === normalizedName)
+          : candidateChannels[0] || channels?.[0]
         if (targetChannel && server) {
           void navigate({
             to: '/servers/$serverSlug/channels/$channelId',
@@ -399,6 +412,34 @@ export function ServerHome({ serverId: propServerId, standalone }: ServerHomePro
     return () => window.removeEventListener('message', handleMessage)
   }, [handleMessage])
 
+  // Use custom HTML if set, otherwise generate default with i18n
+  // If a homepage app exists, resolve its URL for the iframe
+  const homepageAppUrl = homepageApp
+    ? homepageApp.sourceType === 'url'
+      ? homepageApp.settings?.proxyEnabled
+        ? `/api/app-proxy/${homepageApp.id}`
+        : homepageApp.sourceUrl
+      : `/api/servers/${effectiveServerId}/apps/${homepageApp.id}/serve`
+    : null
+
+  // Reset homepage fallback when server/homepage source changes
+  useEffect(() => {
+    setHomepageLoadError(false)
+    setForceBuiltinHomepage(false)
+    setHomepageLoaded(false)
+  }, [homepageAppUrl, effectiveServerId])
+
+  // Fallback if iframe hangs without explicit error (common with blocked/embed-restricted pages)
+  useEffect(() => {
+    if (!homepageAppUrl || forceBuiltinHomepage || homepageLoaded || homepageLoadError) return
+
+    const timer = window.setTimeout(() => {
+      setHomepageLoadError(true)
+    }, 12_000)
+
+    return () => window.clearTimeout(timer)
+  }, [homepageAppUrl, forceBuiltinHomepage, homepageLoaded, homepageLoadError])
+
   if (!server) {
     return (
       <div className="flex-1 flex items-center justify-center bg-bg-primary">
@@ -412,13 +453,6 @@ export function ServerHome({ serverId: propServerId, standalone }: ServerHomePro
 
   // Use custom HTML if set, otherwise generate default with i18n
   const rawHtml = server.homepageHtml || generateDefaultHtml(server, t)
-
-  // If a homepage app exists, resolve its URL for the iframe
-  const homepageAppUrl = homepageApp
-    ? homepageApp.sourceType === 'url'
-      ? homepageApp.sourceUrl
-      : `/api/media/files/${homepageApp.sourceUrl}`
-    : null
 
   // Inject link interceptor script to prevent app-in-app navigation
   const linkInterceptorScript = `<script>
@@ -451,7 +485,7 @@ document.addEventListener('click', function(e) {
   }
 
   return (
-    <div className="flex-1 flex flex-col glass-panel overflow-hidden min-h-0">
+    <GlassPanel className="flex-1 flex flex-col overflow-hidden min-h-0">
       {/* Header bar */}
       <div className="desktop-drag-titlebar app-header px-4 flex items-center border-b border-border-subtle shrink-0">
         {/* Mobile back button — return to channel list */}
@@ -499,14 +533,16 @@ document.addEventListener('click', function(e) {
         </div>
       </div>
       {/* HTML content in sandboxed iframe */}
-      <div className="server-page-content flex-1 overflow-auto">
-        {homepageAppUrl ? (
+      <div className="server-page-content relative flex-1 overflow-auto">
+        {homepageAppUrl && !forceBuiltinHomepage ? (
           <iframe
             src={homepageAppUrl}
             title={`${homepageApp?.name ?? server.name} homepage`}
             className="w-full h-full border-0"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
             allow="fullscreen; clipboard-write"
+            onLoad={() => setHomepageLoaded(true)}
+            onError={() => setHomepageLoadError(true)}
           />
         ) : (
           <iframe
@@ -516,7 +552,32 @@ document.addEventListener('click', function(e) {
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
           />
         )}
+
+        {homepageLoadError && homepageAppUrl && !forceBuiltinHomepage && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-bg-primary/90 backdrop-blur-sm px-4">
+            <div className="max-w-md w-full rounded-2xl border border-border-subtle bg-bg-secondary/95 p-5 shadow-xl">
+              <h3 className="text-text-primary font-black text-base mb-2">
+                {t('serverHome.homepageLoadFailedTitle', 'Homepage app failed to load')}
+              </h3>
+              <p className="text-text-muted text-sm leading-relaxed mb-4">
+                {t(
+                  'serverHome.homepageLoadFailedDesc',
+                  'The homepage app cannot be displayed in the embedded view right now. You can switch to the built-in homepage and continue navigating channels.',
+                )}
+              </p>
+              <div className="flex items-center gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setForceBuiltinHomepage(true)}
+                  className="px-3 py-2 rounded-lg bg-primary text-black font-bold text-sm hover:opacity-90"
+                >
+                  {t('serverHome.switchToBuiltinHomepage', 'Switch to built-in homepage')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    </div>
+    </GlassPanel>
   )
 }

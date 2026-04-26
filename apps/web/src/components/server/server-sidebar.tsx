@@ -3,6 +3,7 @@ import {
   AvatarFallback,
   Button,
   cn,
+  GlassPanel,
   Input,
   Modal,
   ModalBody,
@@ -294,7 +295,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="w-[88px] glass-panel !overflow-visible flex flex-col items-center py-4 shrink-0 h-full z-50">
+      <GlassPanel className="w-[88px] !overflow-visible flex flex-col items-center py-4 shrink-0 h-full z-50">
         {/* User avatar → settings/profile */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -719,7 +720,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
             ]}
           />
         )}
-      </div>
+      </GlassPanel>
     </TooltipProvider>
   )
 }

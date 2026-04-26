@@ -246,6 +246,35 @@ export function createAgentHandler(container: AppContainer) {
     }
   })
 
+  // GET /api/agents/:id/slash-commands — runtime/owner command registry
+  agentHandler.get('/:id/slash-commands', async (c) => {
+    const agentService = container.resolve('agentService')
+    const user = c.get('user')
+    const id = c.req.param('id')
+    try {
+      const commands = await agentService.getSlashCommands(id, user.userId)
+      return c.json({ commands })
+    } catch (err) {
+      const status = (err as { status?: number }).status ?? 500
+      return c.json({ ok: false, error: (err as Error).message }, status as 404 | 403)
+    }
+  })
+
+  // PUT /api/agents/:id/slash-commands — called by running Buddy after pack discovery
+  agentHandler.put('/:id/slash-commands', async (c) => {
+    const agentService = container.resolve('agentService')
+    const user = c.get('user')
+    const id = c.req.param('id')
+    try {
+      const body = await c.req.json<{ commands?: unknown }>()
+      const commands = await agentService.updateSlashCommands(id, user.userId, body.commands)
+      return c.json({ ok: true, commands })
+    } catch (err) {
+      const status = (err as { status?: number }).status ?? 500
+      return c.json({ ok: false, error: (err as Error).message }, status as 400 | 403 | 404)
+    }
+  })
+
   // GET /api/agents/:id/policies — list all policies for an agent (owner only)
   agentHandler.get('/:id/policies', async (c) => {
     const user = c.get('user')

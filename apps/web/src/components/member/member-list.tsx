@@ -1,3 +1,4 @@
+import { GlassPanel } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Check,
@@ -341,9 +342,9 @@ export function MemberList() {
     <>
       {/* Desktop member list — hidden when file preview panel is open */}
       {!filePreviewOpen && (
-        <div className="w-[240px] glass-panel overflow-hidden overflow-y-auto shrink-0 pt-4 hidden lg:block h-full scrollbar-hidden">
+        <GlassPanel className="w-[240px] overflow-hidden overflow-y-auto shrink-0 pt-4 hidden lg:block h-full scrollbar-hidden">
           {memberContent}
-        </div>
+        </GlassPanel>
       )}
 
       {/* Mobile member list overlay */}
@@ -353,7 +354,7 @@ export function MemberList() {
             className="absolute inset-0 bg-bg-deep/60 backdrop-blur-sm"
             onClick={closeMobileMemberList}
           />
-          <div className="ml-auto relative z-10 w-64 glass-panel h-full overflow-y-auto animate-slide-in-right scrollbar-hidden">
+          <GlassPanel className="ml-auto relative z-10 w-64 h-full overflow-y-auto animate-slide-in-right scrollbar-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle backdrop-blur-xl">
               <h3 className="font-bold text-text-primary text-sm">{t('member.groupOnline')}</h3>
               <button
@@ -364,7 +365,7 @@ export function MemberList() {
               </button>
             </div>
             <div className="pt-2">{memberContent}</div>
-          </div>
+          </GlassPanel>
         </div>
       )}
 

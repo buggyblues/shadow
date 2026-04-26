@@ -33,6 +33,66 @@ export interface ReactionGroup {
   userIds: string[]
 }
 
+/** Phase 2 interactive block — mirrors web/server schema. */
+export interface InteractiveButtonItem {
+  id: string
+  label: string
+  style?: 'primary' | 'secondary' | 'destructive'
+  value?: string
+}
+export interface InteractiveSelectItem {
+  id: string
+  label: string
+  value: string
+}
+export interface InteractiveFormField {
+  id: string
+  kind: 'text' | 'textarea' | 'number' | 'checkbox' | 'select'
+  label: string
+  placeholder?: string
+  defaultValue?: string
+  required?: boolean
+  options?: InteractiveSelectItem[]
+  maxLength?: number
+  min?: number
+  max?: number
+}
+export interface InteractiveBlock {
+  id: string
+  kind: 'buttons' | 'select' | 'form' | 'approval'
+  prompt?: string
+  buttons?: InteractiveButtonItem[]
+  options?: InteractiveSelectItem[]
+  fields?: InteractiveFormField[]
+  submitLabel?: string
+  responsePrompt?: string
+  approvalCommentLabel?: string
+  oneShot?: boolean
+}
+export interface InteractiveResponseMetadata {
+  blockId: string
+  sourceMessageId: string
+  actionId: string
+  value: string
+  values?: Record<string, string>
+  submissionId?: string
+  responseMessageId?: string | null
+  submittedAt?: string
+}
+export interface InteractiveStateMetadata {
+  sourceMessageId: string
+  blockId: string
+  submitted: boolean
+  response?: InteractiveResponseMetadata
+}
+
+export interface MessageMetadata {
+  interactive?: InteractiveBlock
+  interactiveResponse?: InteractiveResponseMetadata
+  interactiveState?: InteractiveStateMetadata
+  [key: string]: unknown
+}
+
 export interface Message {
   id: string
   content: string
@@ -47,6 +107,8 @@ export interface Message {
   author?: Author
   attachments?: Attachment[]
   reactions?: ReactionGroup[]
+  /** Optional metadata blob — includes interactive blocks (Phase 2). */
+  metadata?: MessageMetadata
   /** Optimistic send status — only set on client-side pending messages */
   sendStatus?: 'sending' | 'failed'
 }
@@ -137,5 +199,6 @@ export function normalizeMessage(raw: Record<string, unknown>): Message {
     author: raw.author as Author | undefined,
     attachments,
     reactions,
+    metadata: (raw.metadata as MessageMetadata | undefined) ?? undefined,
   }
 }

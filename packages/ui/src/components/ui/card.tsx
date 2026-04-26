@@ -4,7 +4,15 @@ import { cn } from '../../lib/utils'
 const Card = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement> & {
-    variant?: 'default' | 'glass' | 'surface' | 'gradient' | 'danger' | 'glassPanel' | 'glassCard' | 'stat'
+    variant?:
+      | 'default'
+      | 'glass'
+      | 'surface'
+      | 'gradient'
+      | 'danger'
+      | 'glassPanel'
+      | 'glassCard'
+      | 'stat'
     hoverable?: boolean
     active?: boolean
   }
@@ -13,16 +21,15 @@ const Card = React.forwardRef<
     default: 'rounded-[40px] bg-bg-secondary border-border-subtle shadow-sm',
     surface: 'rounded-3xl bg-bg-primary border-border-subtle shadow-md',
     glass:
-      'rounded-[32px] bg-[rgba(255,255,255,0.75)] dark:bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] border-white dark:border-[rgba(255,255,255,0.08)] dark:border-t-[rgba(255,255,255,0.15)] shadow-[0_15px_45px_rgba(0,0,0,0.04),inset_0_2px_12px_rgba(255,255,255,0.9)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.5)]',
+      'rounded-[32px] bg-[rgba(255,255,255,0.75)] dark:bg-[rgba(255,255,255,0.03)] backdrop-blur-[32px] border-[var(--glass-line)] dark:border-[var(--glass-line)] dark:border-t-[var(--glass-line-strong)] shadow-[0_15px_45px_rgba(0,0,0,0.04),inset_0_2px_12px_rgba(255,255,255,0.8)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.5)]',
     gradient:
       'rounded-3xl bg-gradient-to-br from-primary/10 via-bg-secondary to-bg-secondary border-primary/20 shadow-lg',
     danger: 'rounded-3xl bg-danger/5 border-danger/20 shadow-sm',
     glassPanel:
-      'rounded-3xl bg-[var(--glass-bg)] border-[var(--glass-border)] backdrop-blur-[48px] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_12px_48px_-12px_rgba(0,0,0,0.5)]',
+      'rounded-3xl bg-[var(--glass-bg)] border-[var(--glass-line)] backdrop-blur-[48px] shadow-[inset_0_1px_0_0_var(--glass-line-soft),0_12px_48px_-12px_rgba(0,0,0,0.5)]',
     glassCard:
-      'rounded-[32px] bg-[var(--glass-bg)] border-[var(--glass-border)] border-t-white/10 backdrop-blur-[48px] shadow-[var(--shadow-soft)]',
-    stat:
-      'rounded-2xl bg-bg-primary border-border-subtle shadow-sm hover:border-primary/20',
+      'rounded-[32px] bg-[var(--glass-bg)] border-[var(--glass-line)] border-t-[var(--glass-line-strong)] backdrop-blur-[48px] shadow-[var(--shadow-soft)]',
+    stat: 'rounded-2xl bg-[var(--glass-bg)] border-[var(--glass-line)] backdrop-blur-[24px] shadow-[var(--shadow-soft)] hover:border-primary/20',
   }
 
   return (
@@ -33,7 +40,7 @@ const Card = React.forwardRef<
         variants[variant],
         active && 'border-primary/60 bg-bg-tertiary shadow-2xl scale-[1.02]',
         hoverable &&
-        'hover:border-primary/40 hover:bg-bg-tertiary hover:scale-[1.02] hover:shadow-2xl active:scale-[0.98]',
+          'hover:border-primary/40 hover:bg-bg-tertiary hover:scale-[1.02] hover:shadow-2xl active:scale-[0.98]',
         className,
       )}
       {...props}

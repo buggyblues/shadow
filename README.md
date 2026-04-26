@@ -146,9 +146,12 @@ Open [localhost:3000](http://localhost:3000) and create your first community.
 
 ```bash
 pnpm install
-docker compose up -d postgres redis minio  # infrastructure only
 pnpm db:migrate
-pnpm dev
+pnpm dev          # full-stack (server + web + admin)
+
+# or run by area
+pnpm dev:backend  # server + cloud backend watchers + infra
+pnpm dev:frontend # web + admin + cloud dashboard + website (HMR, with dockerized API on :3002)
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development workflow.

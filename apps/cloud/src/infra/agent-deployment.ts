@@ -24,6 +24,7 @@ export interface AgentDeploymentOptions {
   agentName: string
   agent: AgentDeployment
   namespace: string | pulumi.Input<string>
+  namespaceName?: string
   config: import('../config/schema.js').CloudConfig
   configMapName: string
   secretName: string
@@ -43,11 +44,22 @@ export interface AgentDeploymentOptions {
   sharedWorkspaceMountPath?: string
   /** Skills install directory inside the container */
   skillsInstallDir?: string
+  resourceOptions?: pulumi.CustomResourceOptions
 }
 
 export function createAgentDeployment(options: AgentDeploymentOptions) {
-  const { agentName, agent, namespace, config, configMapName, secretName, extraEnv, provider } =
-    options
+  const {
+    agentName,
+    agent,
+    namespace,
+    namespaceName,
+    config,
+    configMapName,
+    secretName,
+    extraEnv,
+    provider,
+    resourceOptions,
+  } = options
 
   const image = agent.image ?? getRuntime(agent.runtime).defaultImage
   const replicas = agent.replicas ?? 1
@@ -70,7 +82,7 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
   const initContainers: k8s.types.input.core.v1.Container[] = []
 
   // Collect K8s artifacts from all plugins (init containers, volumes, env vars, labels)
-  const ns = typeof namespace === 'string' ? namespace : 'default'
+  const ns = namespaceName ?? (typeof namespace === 'string' ? namespace : 'default')
   const pluginArtifacts = collectPluginK8sArtifacts(agent, config, ns)
 
   for (const ic of pluginArtifacts.initContainers) {
@@ -152,6 +164,21 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
                 readinessProbe: READINESS_PROBE,
                 startupProbe: STARTUP_PROBE,
               },
+              // Plugin-contributed helper containers (e.g. gitagent git-pull loop)
+              ...pluginArtifacts.sidecars.map(
+                (sc) =>
+                  ({
+                    name: sc.name,
+                    image: sc.image,
+                    imagePullPolicy: sc.imagePullPolicy,
+                    command: sc.command,
+                    args: sc.args,
+                    env: sc.env,
+                    volumeMounts: sc.volumeMounts,
+                    resources: sc.resources,
+                    securityContext: sc.securityContext,
+                  }) as unknown as k8s.types.input.core.v1.Container,
+              ),
             ],
             volumes,
             restartPolicy: 'Always',
@@ -159,7 +186,7 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
         },
       },
     },
-    { provider },
+    { provider, ...resourceOptions },
   )
 
   return { deployment }

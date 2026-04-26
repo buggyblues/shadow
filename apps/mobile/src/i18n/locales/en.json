@@ -378,7 +378,14 @@
     "areTyping": "are typing...",
     "copy": "Copy",
     "edit": "Edit",
-    "copied": "Copied"
+    "copied": "Copied",
+    "interactiveSubmit": "Submit",
+    "interactiveApprove": "Approve",
+    "interactiveReject": "Reject",
+    "interactiveRequired": "Required",
+    "interactiveSubmitFailed": "Failed to submit response",
+    "interactiveOn": "On",
+    "interactiveOff": "Off"
   },
   "member": {
     "title": "Members",

@@ -1,3 +1,4 @@
+import type { Logger } from 'pino'
 import type { AgentDao } from '../dao/agent.dao'
 import type { AgentDashboardDao } from '../dao/agent-dashboard.dao'
 import type { ChannelDao } from '../dao/channel.dao'
@@ -5,13 +6,24 @@ import type { MessageDao } from '../dao/message.dao'
 import type { UserDao } from '../dao/user.dao'
 import type {
   CreateThreadInput,
+  InteractiveActionInput,
   ReactionInput,
   SendMessageInput,
   UpdateMessageInput,
   UpdateThreadInput,
 } from '../validators/message.schema'
 
-import type { Logger } from 'pino'
+type MessageWithMetadata = {
+  id: string
+  metadata?: Record<string, unknown> | null
+}
+
+function getInteractiveBlockId(message: MessageWithMetadata): string | null {
+  const interactive = message.metadata?.interactive
+  if (!interactive || typeof interactive !== 'object' || Array.isArray(interactive)) return null
+  const id = (interactive as Record<string, unknown>).id
+  return typeof id === 'string' && id.trim() ? id : null
+}
 
 export class MessageService {
   constructor(
@@ -25,12 +37,94 @@ export class MessageService {
     },
   ) {}
 
-  async getByChannelId(channelId: string, limit?: number, cursor?: string) {
-    return this.deps.messageDao.findByChannelId(channelId, limit, cursor)
+  async getByChannelId(channelId: string, limit?: number, cursor?: string, viewerUserId?: string) {
+    const result = await this.deps.messageDao.findByChannelId(channelId, limit, cursor)
+    if (!viewerUserId) return result
+    return {
+      ...result,
+      messages: await this.attachInteractiveStates(result.messages, viewerUserId),
+    }
   }
 
-  async getById(id: string) {
-    return this.deps.messageDao.findById(id)
+  async getById(id: string, viewerUserId?: string) {
+    const message = await this.deps.messageDao.findById(id)
+    if (!message || !viewerUserId) return message
+    return (await this.attachInteractiveStates([message], viewerUserId))[0] ?? message
+  }
+
+  async getInteractiveSubmission(sourceMessageId: string, blockId: string, userId: string) {
+    return this.deps.messageDao.findInteractiveSubmission(sourceMessageId, blockId, userId)
+  }
+
+  async createInteractiveSubmission(
+    sourceMessageId: string,
+    blockId: string,
+    userId: string,
+    input: Pick<InteractiveActionInput, 'actionId' | 'values'> & { value: string },
+  ) {
+    return this.deps.messageDao.createInteractiveSubmission({
+      sourceMessageId,
+      blockId,
+      userId,
+      actionId: input.actionId,
+      value: input.value,
+      values: input.values,
+    })
+  }
+
+  async updateInteractiveSubmissionResponse(submissionId: string, responseMessageId: string) {
+    return this.deps.messageDao.updateInteractiveSubmissionResponse(submissionId, responseMessageId)
+  }
+
+  private async attachInteractiveStates<T extends MessageWithMetadata>(
+    messages: T[],
+    viewerUserId: string,
+  ): Promise<T[]> {
+    const interactiveMessages = messages
+      .map((message) => ({ message, blockId: getInteractiveBlockId(message) }))
+      .filter((entry): entry is { message: T; blockId: string } => Boolean(entry.blockId))
+    if (interactiveMessages.length === 0) return messages
+
+    const submissions = await this.deps.messageDao.findInteractiveSubmissionsForSources(
+      interactiveMessages.map((entry) => entry.message.id),
+      viewerUserId,
+    )
+    if (submissions.length === 0) return messages
+
+    const byKey = new Map(
+      submissions.map((submission) => {
+        return [`${submission.sourceMessageId}:${submission.blockId}`, submission] as const
+      }),
+    )
+
+    return messages.map((message) => {
+      const blockId = getInteractiveBlockId(message)
+      if (!blockId) return message
+      const submission = byKey.get(`${message.id}:${blockId}`)
+      if (!submission) return message
+
+      return {
+        ...message,
+        metadata: {
+          ...(message.metadata ?? {}),
+          interactiveState: {
+            sourceMessageId: submission.sourceMessageId,
+            blockId: submission.blockId,
+            submitted: true,
+            response: {
+              blockId: submission.blockId,
+              sourceMessageId: submission.sourceMessageId,
+              actionId: submission.actionId,
+              value: submission.value,
+              ...(submission.values ? { values: submission.values } : {}),
+              submissionId: submission.id,
+              responseMessageId: submission.responseMessageId,
+              submittedAt: submission.createdAt.toISOString(),
+            },
+          },
+        },
+      }
+    })
   }
 
   async send(channelId: string, authorId: string, input: SendMessageInput) {

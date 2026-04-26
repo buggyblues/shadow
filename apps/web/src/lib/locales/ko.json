@@ -156,12 +156,12 @@
   },
   "pat": {
     "title": "API 토큰",
-    "desc": "API 및 CLI 접근을 위한 개인 액세스 토큰을 만듭니다",
-    "create": "토큰 만들기",
-    "createNew": "새 토큰 만들기",
+    "desc": "API 및 CLI 접근을 위한 개인 액세스 토큰을 생성합니다",
+    "create": "토큰 생성",
+    "createNew": "새 토큰 생성",
     "tokenName": "토큰 이름",
     "tokenNamePlaceholder": "예: CLI 배포, CI/CD",
-    "expiration": "만료",
+    "expiration": "만료 기간",
     "expires30": "30일",
     "expires60": "60일",
     "expires90": "90일",
@@ -169,17 +169,17 @@
     "expires365": "1년",
     "expiresNever": "만료 없음",
     "creating": "생성 중...",
-    "tokenWarning": "새 API 토큰(한 번만 표시됩니다)",
-    "tokenDismiss": "저장했습니다, 닫기",
-    "noTokens": "API 토큰 없음",
-    "noTokensHint": "CLI 또는 API 접근용 토큰을 만드세요",
+    "tokenWarning": "새 API 토큰(한 번만 표시됨)",
+    "tokenDismiss": "저장했습니다. 닫기",
+    "noTokens": "API 토큰이 없습니다",
+    "noTokensHint": "CLI 또는 API 접근을 위해 토큰을 생성하세요",
     "created": "생성일",
     "lastUsed": "마지막 사용",
     "expired": "만료됨",
     "expiresOn": "만료일",
     "noExpiry": "만료 없음",
     "delete": "토큰 삭제",
-    "deleteConfirm": "삭제하시겠습니까? 이 토큰은 즉시 작동을 멈춥니다.",
+    "deleteConfirm": "삭제하시겠습니까? 이 토큰은 즉시 비활성화됩니다.",
     "confirmDelete": "삭제 확인"
   },
   "guide": {
@@ -406,7 +406,16 @@
     "dropFilesHere": "파일을 여기에 끌어다 놓아 업로드",
     "linkCopied": "링크가 복사되었습니다",
     "savedToWorkspace": "워크스페이스에 저장됨",
-    "saveToWorkspaceFailed": "워크스페이스 저장 실패"
+    "saveToWorkspaceFailed": "워크스페이스 저장 실패",
+    "slashCommands": "슬래시 명령",
+    "slashCommandFrom": "{{name}} 제공",
+    "slashCommandNoDescription": "이 Buddy 명령 실행",
+    "interactiveChoose": "선택하세요...",
+    "interactiveSubmit": "제출",
+    "interactiveApprove": "승인",
+    "interactiveReject": "거절",
+    "interactiveRequired": "필수",
+    "interactiveSubmitFailed": "응답 제출 실패"
   },
   "member": {
     "online": "온라인",
@@ -959,7 +968,10 @@
     "exploreChannels": "채널 탐색",
     "startChatting": "채팅 시작",
     "openNewWindow": "새 창에서 열기",
-    "backToServer": "서버로 돌아가기"
+    "backToServer": "서버로 돌아가기",
+    "homepageLoadFailedTitle": "홈페이지 앱을 불러오지 못했습니다",
+    "homepageLoadFailedDesc": "현재 이 서버의 홈페이지 앱을 임베드 보기에서 표시할 수 없습니다. 내장 홈페이지로 전환해 채널 탐색을 계속할 수 있습니다.",
+    "switchToBuiltinHomepage": "내장 홈페이지로 전환"
   },
   "contract": {
     "contractTitle": "Buddy 고용 계약",
@@ -1592,5 +1604,31 @@
     "updateCategoryError": "카테고리 업데이트에 실패했습니다",
     "categoryDeleted": "카테고리가 삭제되었습니다",
     "deleteCategoryError": "카테고리 삭제에 실패했습니다"
+  },
+  "developers": {
+    "cloud": {
+      "heroBadge": "개발자를 위한 Shadow Cloud",
+      "heroTitle": "YAML 말고 Agent를 배포하세요.",
+      "heroSubtitle": "Git 저장소에서 관리형 Kubernetes 클러스터까지, 몇 분 만에 agent 팀을 배포합니다. 핫 업데이트, 실시간 로그, Stripe 결제를 Shadow 플랫폼에 깊게 통합했습니다.",
+      "ctaOpenConsole": "클라우드 콘솔 열기",
+      "ctaBrowseApps": "앱 스토어 둘러보기",
+      "featureGitTitle": "Git 기반 배포",
+      "featureGitDesc": "agent는 저장소에 존재합니다. sidecar의 주기적 git pull로 SOUL.md / skills / tools / hooks를 Pod 재시작 없이 갱신합니다.",
+      "featureK8sTitle": "관리형 Kubernetes",
+      "featureK8sDesc": "BYOK 클러스터 또는 플랫폼 클러스터를 사용할 수 있으며, 모든 배포는 원클릭으로 취소/삭제할 수 있습니다.",
+      "featureBillingTitle": "투명한 과금",
+      "featureBillingDesc": "새우코인 기준 과금, Stripe 충전 지원. 보유한 컴퓨트 리소스에 숨은 마크업이 없습니다.",
+      "featureObsTitle": "실시간 관측 가능성",
+      "featureObsDesc": "Pod 로그 스트리밍, agent 헬스 확인, orphan 네임스페이스 정합성 점검까지 대시보드에서 처리합니다.",
+      "howTitle": "3단계 배포",
+      "step1Title": "Git 저장소 지정",
+      "step1Desc": "템플릿 또는 gitagent 규약(SOUL.md, agent.yaml, skills/ 등)을 따르는 저장소를 사용하세요.",
+      "step2Title": "리소스와 시크릿 설정",
+      "step2Desc": "리소스 티어를 고르고 Secret만 입력하면 나머지는 자동으로 처리됩니다.",
+      "step3Title": "배포 후 반복 개선",
+      "step3Desc": "main에 push하면 다음 sidecar pull 주기에 최신 버전이 반영됩니다. 재배포가 필요 없습니다.",
+      "pricingTitle": "컴퓨트는 당신의 것.",
+      "pricingDesc": "Shop 수익으로 컴퓨트 비용을 충당하고, 크리에이터는 인프라를 부담하면서 리소스 소유권을 유지합니다."
+    }
   }
 }

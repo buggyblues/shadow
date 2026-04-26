@@ -13,12 +13,14 @@ import type {
   PluginK8sEnvVar,
   PluginK8sInitContainer,
   PluginK8sResult,
+  PluginK8sSidecar,
   PluginK8sVolume,
   PluginK8sVolumeMount,
 } from '../plugins/types.js'
 
 export interface CollectedK8sArtifacts {
   initContainers: PluginK8sInitContainer[]
+  sidecars: PluginK8sSidecar[]
   volumes: PluginK8sVolume[]
   volumeMounts: PluginK8sVolumeMount[]
   envVars: PluginK8sEnvVar[]
@@ -38,6 +40,7 @@ export function collectPluginK8sArtifacts(
 ): CollectedK8sArtifacts {
   const result: CollectedK8sArtifacts = {
     initContainers: [],
+    sidecars: [],
     volumes: [],
     volumeMounts: [],
     envVars: [],
@@ -62,6 +65,9 @@ export function collectPluginK8sArtifacts(
 
     if (artifacts.initContainers?.length) {
       result.initContainers.push(...artifacts.initContainers)
+    }
+    if (artifacts.sidecars?.length) {
+      result.sidecars.push(...artifacts.sidecars)
     }
     if (artifacts.volumes?.length) {
       result.volumes.push(...artifacts.volumes)

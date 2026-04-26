@@ -3,8 +3,8 @@ import { RouterProvider } from '@tanstack/react-router'
 import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import '@/i18n'
-import { router } from './router'
 import { applyTheme, useThemeStore } from '@/stores/theme'
+import { router } from './router'
 import '@/styles/globals.css'
 
 const queryClient = new QueryClient({

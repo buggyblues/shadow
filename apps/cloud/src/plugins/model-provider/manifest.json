@@ -13,6 +13,6 @@
     "type": "object",
     "properties": {}
   },
-  "capabilities": ["config-builder"],
-  "tags": ["ai", "models", "provider"]
+  "capabilities": ["auth-provider", "config-builder"],
+  "tags": ["ai", "llm", "models", "provider", "model-selection"]
 }

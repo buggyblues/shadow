@@ -5,7 +5,8 @@
 
 const API_BASE =
   typeof window !== 'undefined'
-    ? (window as unknown as Record<string, string>).__SHADOW_API_URL__ ?? 'https://api.shadow.chat'
+    ? ((window as unknown as Record<string, string>).__SHADOW_API_URL__ ??
+      'https://api.shadow.chat')
     : 'https://api.shadow.chat'
 
 export async function fetchConfig<T>(schemaName: string, fallback: T): Promise<T> {

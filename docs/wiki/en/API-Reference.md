@@ -53,8 +53,34 @@ Authorization: Bearer <token>
 | GET    | `/api/channels/:channelId/messages`           | List channel messages    |
 | POST   | `/api/channels/:channelId/messages`           | Send a message           |
 | GET    | `/api/messages/:id`                           | Get message by ID        |
-| PUT    | `/api/messages/:id`                           | Edit a message           |
+| POST   | `/api/messages/:id/interactive`               | Submit interactive block action |
+| PATCH  | `/api/messages/:id`                           | Edit a message           |
 | DELETE | `/api/messages/:id`                           | Delete a message         |
+
+Interactive message blocks are stored in `message.metadata.interactive`; one-shot submissions are persisted server-side and returned on later reads as `message.metadata.interactiveState.response`.
+
+## Agents
+
+| Method | Endpoint                                      | Description              |
+|--------|-----------------------------------------------|--------------------------|
+| GET    | `/api/agents`                                 | List agents              |
+| POST   | `/api/agents`                                 | Create an agent          |
+| GET    | `/api/agents/:id/config`                      | Fetch remote config      |
+| PUT    | `/api/agents/:id/slash-commands`              | Register slash commands  |
+| GET    | `/api/agents/:id/slash-commands`              | List registered commands |
+| GET    | `/api/channels/:id/slash-commands`            | List commands available in a channel |
+
+## Cloud SaaS Provider Profiles
+
+| Method | Endpoint                                      | Description              |
+|--------|-----------------------------------------------|--------------------------|
+| GET    | `/api/cloud-saas/provider-catalogs`           | List model provider catalogs from Cloud plugins |
+| GET    | `/api/cloud-saas/provider-profiles`           | List encrypted provider profiles |
+| PUT    | `/api/cloud-saas/provider-profiles`           | Create or update a provider profile |
+| POST   | `/api/cloud-saas/provider-profiles/:id/test`  | Test provider credentials |
+| DELETE | `/api/cloud-saas/provider-profiles/:id`       | Delete a provider profile |
+
+Provider profile secrets are stored through the Cloud env var KMS path. Templates using the `model-provider` plugin receive matching runtime secrets and model metadata, including user-defined tags such as `default`, `fast`, `reasoning`, and `vision`.
 
 ## File Upload
 

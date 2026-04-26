@@ -156,30 +156,30 @@
   },
   "pat": {
     "title": "API トークン",
-    "desc": "API と CLI アクセス用の個人アクセストークンを作成します",
+    "desc": "API と CLI アクセス用の個人アクセストークンを作成",
     "create": "トークンを作成",
     "createNew": "新しいトークンを作成",
     "tokenName": "トークン名",
     "tokenNamePlaceholder": "例: CLI デプロイ、CI/CD",
     "expiration": "有効期限",
-    "expires30": "30 日",
-    "expires60": "60 日",
-    "expires90": "90 日",
-    "expires180": "180 日",
-    "expires365": "1 年",
+    "expires30": "30日",
+    "expires60": "60日",
+    "expires90": "90日",
+    "expires180": "180日",
+    "expires365": "1年",
     "expiresNever": "無期限",
     "creating": "作成中...",
-    "tokenWarning": "新しい API トークン（一度だけ表示されます）",
-    "tokenDismiss": "保存しました、閉じる",
-    "noTokens": "API トークンはありません",
-    "noTokensHint": "CLI または API アクセス用のトークンを作成します",
+    "tokenWarning": "新しい API トークン（1回のみ表示）",
+    "tokenDismiss": "保存しました。閉じる",
+    "noTokens": "API トークンがありません",
+    "noTokensHint": "CLI または API アクセス用のトークンを作成してください",
     "created": "作成日",
     "lastUsed": "最終使用",
     "expired": "期限切れ",
     "expiresOn": "有効期限",
     "noExpiry": "無期限",
     "delete": "トークンを削除",
-    "deleteConfirm": "削除しますか？このトークンはすぐに使えなくなります。",
+    "deleteConfirm": "削除してもよろしいですか？このトークンは直ちに無効になります。",
     "confirmDelete": "削除を確認"
   },
   "guide": {
@@ -406,7 +406,16 @@
     "dropFilesHere": "ここにファイルをドロップしてアップロード",
     "linkCopied": "リンクをコピーしました",
     "savedToWorkspace": "ワークスペースに保存しました",
-    "saveToWorkspaceFailed": "ワークスペースへの保存に失敗しました"
+    "saveToWorkspaceFailed": "ワークスペースへの保存に失敗しました",
+    "slashCommands": "スラッシュコマンド",
+    "slashCommandFrom": "{{name}} から",
+    "slashCommandNoDescription": "この Buddy コマンドを実行",
+    "interactiveChoose": "選択してください...",
+    "interactiveSubmit": "送信",
+    "interactiveApprove": "承認",
+    "interactiveReject": "却下",
+    "interactiveRequired": "必須",
+    "interactiveSubmitFailed": "回答の送信に失敗しました"
   },
   "member": {
     "online": "オンライン",
@@ -959,7 +968,10 @@
     "exploreChannels": "チャンネルを見る",
     "startChatting": "チャットを始める",
     "openNewWindow": "新しいウィンドウで開く",
-    "backToServer": "サーバーに戻る"
+    "backToServer": "サーバーに戻る",
+    "homepageLoadFailedTitle": "ホームページアプリを読み込めませんでした",
+    "homepageLoadFailedDesc": "現在、このサーバーのホームページアプリを埋め込み表示できません。内蔵ホームページに切り替えて、チャンネルの操作を続けてください。",
+    "switchToBuiltinHomepage": "内蔵ホームページに切り替える"
   },
   "contract": {
     "contractTitle": "Buddy 雇用契約",
@@ -1592,5 +1604,31 @@
     "updateCategoryError": "カテゴリーの更新に失敗しました",
     "categoryDeleted": "カテゴリーを削除しました",
     "deleteCategoryError": "カテゴリーの削除に失敗しました"
+  },
+  "developers": {
+    "cloud": {
+      "heroBadge": "開発者向け Shadow Cloud",
+      "heroTitle": "YAML ではなく Agent を届けよう。",
+      "heroSubtitle": "Git リポジトリから管理された Kubernetes クラスタへ、数分で agent チームをデプロイ。ホット更新、リアルタイムログ、Stripe 課金を Shadow とシームレスに統合。",
+      "ctaOpenConsole": "クラウドコンソールを開く",
+      "ctaBrowseApps": "アプリストアを見る",
+      "featureGitTitle": "Git からデプロイ",
+      "featureGitDesc": "agent はリポジトリで管理。sidecar の定期 git pull により、SOUL.md / skills / tools / hooks は Pod 再起動なしで更新されます。",
+      "featureK8sTitle": "マネージド Kubernetes",
+      "featureK8sDesc": "BYOK クラスタまたはプラットフォームクラスタを利用可能。各デプロイはワンクリックでキャンセルや破棄ができます。",
+      "featureBillingTitle": "透明な課金",
+      "featureBillingDesc": "エビコインで課金。Stripe でチャージ。自前の計算資源に隠れた上乗せはありません。",
+      "featureObsTitle": "リアルタイム可観測性",
+      "featureObsDesc": "Pod ログをストリーミング表示し、agent のヘルスを確認。孤立したネームスペースの整合まで、すべてダッシュボードで完結。",
+      "howTitle": "3ステップで公開",
+      "step1Title": "Git リポジトリを指定",
+      "step1Desc": "テンプレート、または gitagent 規約（SOUL.md、agent.yaml、skills/ など）に従った独自リポジトリを使います。",
+      "step2Title": "リソースと環境変数を設定",
+      "step2Desc": "リソース階層を選び、Secret を入力したら残りはお任せ。",
+      "step3Title": "デプロイして継続改善",
+      "step3Desc": "main に push すれば、次回 sidecar pull で最新が反映。再デプロイは不要です。",
+      "pricingTitle": "計算資源はあなたのもの。",
+      "pricingDesc": "Shop の収益で計算コストを賄い、クリエイターはインフラを担いながら資源の所有権を維持します。"
+    }
   }
 }

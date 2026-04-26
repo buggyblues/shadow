@@ -5,7 +5,7 @@
  * This module only contains client-side visual mappings.
  */
 
-import type { TemplateCategoryId, TemplateDifficulty } from './api'
+import type { BillingUnit, TemplateCategoryId, TemplateDifficulty } from './api'
 
 export function getCategoryColor(category: TemplateCategoryId): string {
   const colors: Record<TemplateCategoryId, string> = {
@@ -38,4 +38,38 @@ export function formatUsdCost(value: number | null, locale?: string): string {
     currency: 'USD',
     maximumFractionDigits: value >= 100 ? 0 : 2,
   }).format(value)
+}
+
+export function formatShrimpCost(value: number | null, unitLabel: string, locale?: string): string {
+  if (value === null) return '—'
+  const formatted = new Intl.NumberFormat(locale ?? 'en', {
+    maximumFractionDigits: value >= 100 ? 0 : 2,
+  }).format(value)
+  return `${formatted} ${unitLabel}`
+}
+
+export function formatDisplayCost(
+  value: { totalUsd?: number | null; billingAmount?: number | null; billingUnit?: BillingUnit },
+  options?: {
+    locale?: string
+    shrimpUnitLabel?: string
+  },
+): string {
+  const billingAmount = value.billingAmount ?? value.totalUsd ?? null
+  const billingUnit = value.billingUnit ?? 'usd'
+
+  if (billingUnit === 'shrimp') {
+    return formatShrimpCost(
+      billingAmount,
+      options?.shrimpUnitLabel ?? 'Shrimp Coins',
+      options?.locale,
+    )
+  }
+
+  return formatUsdCost(billingAmount, options?.locale)
+}
+
+export function formatTokenCount(value: number | null, locale?: string): string {
+  if (value === null) return '—'
+  return new Intl.NumberFormat(locale ?? 'en').format(value)
 }

@@ -123,7 +123,9 @@ function checkNoHardcodedZhinengti() {
       const matches = content.match(/智能体/g)
       if (matches) {
         count += matches.length
-        errors.push(`[i18n] Hardcoded '智能体' found in ${file} (${matches.length} occurrence(s)) — use 'Agent'`)
+        errors.push(
+          `[i18n] Hardcoded '智能体' found in ${file} (${matches.length} occurrence(s)) — use 'Agent'`,
+        )
       }
     }
   }
@@ -166,7 +168,9 @@ function checkNoChineeseHardcodedText() {
     if (chineseInJsx.test(line) || chineseInString.test(line)) {
       count++
       if (count <= 5) {
-        warnings.push(`[i18n] Possible hardcoded Chinese text in JSX: ${line.trim().substring(0, 120)}`)
+        warnings.push(
+          `[i18n] Possible hardcoded Chinese text in JSX: ${line.trim().substring(0, 120)}`,
+        )
       }
     }
   }
@@ -192,7 +196,9 @@ for (const e of errors) {
 }
 
 if (errors.length > 0) {
-  console.error(`\n✖ Dashboard i18n check failed: ${errors.length} error(s), ${warnings.length} warning(s)`)
+  console.error(
+    `\n✖ Dashboard i18n check failed: ${errors.length} error(s), ${warnings.length} warning(s)`,
+  )
   process.exit(1)
 }
 

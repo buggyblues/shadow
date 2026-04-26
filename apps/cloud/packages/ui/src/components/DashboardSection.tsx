@@ -1,3 +1,4 @@
+import { GlassPanel } from '@shadowob/ui'
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
@@ -19,7 +20,7 @@ export function DashboardSection({
   contentClassName,
 }: DashboardSectionProps) {
   return (
-    <section className={cn('glass-panel p-6', className)}>
+    <GlassPanel as="section" className={cn('p-6', className)}>
       {(title || description || actions) && (
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -30,6 +31,6 @@ export function DashboardSection({
         </div>
       )}
       <div className={cn('space-y-4', contentClassName)}>{children}</div>
-    </section>
+    </GlassPanel>
   )
 }

@@ -3,11 +3,14 @@
  *
  * Contains:
  * - buildGitCloneCommand — init container command for git repo cloning
+ * - buildGitSyncSidecar — sidecar container spec for periodic `git pull`
  * - generateGitAgentDockerfile — multi-stage Dockerfile for baking gitagent files
  *
  * Used by the infra layer (infra/index.ts, infra/agent-deployment.ts) and
  * build commands (interfaces/cli/build.command.ts).
  */
+
+import type { PluginK8sSidecar } from '../types.js'
 
 /**
  * Standard gitagent files to copy from a cloned repo.
@@ -69,6 +72,92 @@ export function buildGitCloneCommand(opts: {
   }
 
   return ['/bin/sh', '-c', cmds.join(' && ')]
+}
+
+/**
+ * Parse a duration string like "30s", "5m", "1h" into seconds.
+ * Used by the git-pull sidecar loop interval.
+ */
+export function parsePollInterval(input: string | number | undefined): number {
+  if (input == null) return 0
+  if (typeof input === 'number') return Math.max(0, Math.floor(input))
+  const m = /^(\d+)\s*(s|m|h)?$/.exec(input.trim())
+  if (!m) return 0
+  const n = Number(m[1])
+  const unit = m[2] ?? 's'
+  switch (unit) {
+    case 'h':
+      return n * 3600
+    case 'm':
+      return n * 60
+    default:
+      return n
+  }
+}
+
+/**
+ * Build a sidecar container that periodically pulls the gitagent repo and
+ * overlays the latest files into the shared mountPath volume. Enables live
+ * updates to SOUL.md/AGENTS.md/skills/... without restarting the agent pod.
+ *
+ * Pairs with `buildGitCloneCommand` (which does the initial clone into the
+ * same emptyDir volume). The agent container mounts the same volume read-only
+ * and a chokidar watcher (see reader.ts) picks up changes.
+ */
+export function buildGitSyncSidecar(opts: {
+  name: string
+  url: string
+  ref: string
+  depth: number
+  agentDir?: string
+  mountPath: string
+  include?: string[]
+  /** Poll interval in seconds. `0` disables the sidecar (returns undefined). */
+  intervalSec: number
+}): PluginK8sSidecar | undefined {
+  const { name, url, ref, depth, agentDir, mountPath, include, intervalSec } = opts
+  if (!intervalSec || intervalSec <= 0) return undefined
+
+  const cloneTarget = '/tmp/agent-source'
+  const filesToCopy = include && include.length > 0 ? include : STANDARD_GITAGENT_FILES
+
+  // Initial clone into a scratch dir, then loop: fetch + reset + rsync (cp -a).
+  // Inside the sidecar we treat the repo as the authoritative state; files not
+  // present upstream are removed (cp -a overwrites; we rm -rf before copy).
+  const copySnippet = filesToCopy
+    .map(
+      (f) => `cp -r "${cloneTarget}/${agentDir ?? '.'}/${f}" "${mountPath}/" 2>/dev/null || true`,
+    )
+    .join('; ')
+
+  const script = `
+set -e
+if [ ! -d "${cloneTarget}/.git" ]; then
+  git clone --depth ${depth} --branch "${ref}" "${url}" "${cloneTarget}"
+fi
+while true; do
+  cd "${cloneTarget}"
+  git fetch --depth ${depth} origin "${ref}" 2>&1 || echo "[gitagent-sync] fetch failed, will retry"
+  git reset --hard "origin/${ref}" 2>&1 || git reset --hard "${ref}" 2>&1 || true
+  mkdir -p "${mountPath}"
+  ${copySnippet}
+  # touch a marker file so readers using chokidar(fs) can debounce on it
+  date -u +%FT%TZ > "${mountPath}/.gitagent-synced-at" || true
+  sleep ${intervalSec}
+done
+`.trim()
+
+  return {
+    name,
+    image: 'alpine/git:latest',
+    imagePullPolicy: 'IfNotPresent',
+    command: ['/bin/sh', '-c', script],
+    volumeMounts: [{ name: 'gitagent-src', mountPath }],
+    resources: {
+      requests: { cpu: '10m', memory: '32Mi' },
+      limits: { cpu: '100m', memory: '128Mi' },
+    },
+  }
 }
 
 /**

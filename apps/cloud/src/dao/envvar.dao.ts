@@ -24,7 +24,18 @@ export class EnvVarDao {
     private db: CloudDatabase,
     passphrase?: string,
   ) {
-    this.passphrase = passphrase ?? process.env.SHADOWOB_PASSPHRASE ?? 'shadowob-cloud-default'
+    const configuredPassphrase = passphrase ?? process.env.SHADOWOB_PASSPHRASE
+    if (configuredPassphrase) {
+      this.passphrase = configuredPassphrase
+      return
+    }
+
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('SHADOWOB_PASSPHRASE is required in production')
+    }
+
+    console.warn('[cloud] SHADOWOB_PASSPHRASE is not set; using insecure development fallback')
+    this.passphrase = 'shadowob-cloud-default'
   }
 
   private encrypt(plaintext: string): { encrypted: string; iv: string } {

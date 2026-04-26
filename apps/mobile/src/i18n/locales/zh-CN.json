@@ -377,7 +377,14 @@
     "areTyping": "正在输入...",
     "copy": "复制",
     "edit": "编辑",
-    "copied": "已复制"
+    "copied": "已复制",
+    "interactiveSubmit": "提交",
+    "interactiveApprove": "批准",
+    "interactiveReject": "拒绝",
+    "interactiveRequired": "必填",
+    "interactiveSubmitFailed": "提交回应失败",
+    "interactiveOn": "开启",
+    "interactiveOff": "关闭"
   },
   "member": {
     "title": "成员",

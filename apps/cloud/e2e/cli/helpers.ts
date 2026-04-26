@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const FIXTURES_DIR = join(__dirname, '..', 'fixtures')
 const CLOUD_ROOT = join(__dirname, '..', '..')
+const WORKSPACE_ROOT = join(CLOUD_ROOT, '..', '..')
 const CLI_BIN = join(CLOUD_ROOT, 'dist', 'index.js')
 const SEED_SCRIPT = join(CLOUD_ROOT, '..', '..', '..', 'scripts', 'e2e', 'seed-screenshot-env.mjs')
 
@@ -539,12 +540,27 @@ export async function buildDockerImage(
     throw new Error(`Dockerfile not found: ${dockerfilePath}`)
   }
 
-  return new Promise((resolve, reject) => {
-    const proc = spawn(
-      'docker',
-      ['build', '-t', fullTag, '-f', dockerfilePath, join(imagesDir, imageName)],
-      { stdio: 'inherit' },
+  if (imageName === 'openclaw-runner') {
+    const localShadowobPlugin = join(
+      WORKSPACE_ROOT,
+      'packages',
+      'openclaw-shadowob',
+      'package.json',
     )
+    if (existsSync(localShadowobPlugin)) {
+      execSync('pnpm --filter @shadowob/openclaw-shadowob build', {
+        cwd: WORKSPACE_ROOT,
+        stdio: 'inherit',
+      })
+    }
+  }
+
+  return new Promise((resolve, reject) => {
+    const buildContext =
+      imageName === 'openclaw-runner' ? WORKSPACE_ROOT : join(imagesDir, imageName)
+    const proc = spawn('docker', ['build', '-t', fullTag, '-f', dockerfilePath, buildContext], {
+      stdio: 'inherit',
+    })
 
     proc.on('close', (code) => {
       if (code === 0) resolve(fullTag)

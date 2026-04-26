@@ -11,8 +11,10 @@ import { createAuthHandler } from './handlers/auth.handler'
 import { createChannelHandler } from './handlers/channel.handler'
 import { createCloudHandler } from './handlers/cloud.handler'
 import { createCloudSaasHandler } from './handlers/cloud-saas.handler'
+import { createConfigHandler } from './handlers/config.handler'
 import { createDiscoverHandler } from './handlers/discover.handler'
 import { createDmHandler } from './handlers/dm.handler'
+import { createFeatureFlagsHandler } from './handlers/feature-flags.handler'
 import { createFriendshipHandler } from './handlers/friendship.handler'
 import { createInviteHandler } from './handlers/invite.handler'
 import { createMediaHandler } from './handlers/media.handler'
@@ -27,12 +29,10 @@ import { createServerHandler } from './handlers/server.handler'
 import { createShopHandler } from './handlers/shop.handler'
 import { createStripeWebhookHandler } from './handlers/stripe-webhook.handler'
 import { createTaskCenterHandler } from './handlers/task-center.handler'
-import { createConfigHandler } from './handlers/config.handler'
-import { createFeatureFlagsHandler } from './handlers/feature-flags.handler'
 import { createVoiceEnhanceHandler } from './handlers/voice-enhance.handler'
 import { createWorkspaceHandler } from './handlers/workspace.handler'
 import { logger } from './lib/logger'
-import { createPatMiddleware } from './middleware/auth.middleware'
+import { createPatMiddleware, createStoredAgentTokenMiddleware } from './middleware/auth.middleware'
 import { loggerMiddleware } from './middleware/logger.middleware'
 import { securityHeadersMiddleware } from './middleware/security-headers.middleware'
 
@@ -82,6 +82,7 @@ export function createApp(container: AppContainer) {
 
   // PAT token resolution (must run before route-level authMiddleware)
   app.use('*', createPatMiddleware(container))
+  app.use('*', createStoredAgentTokenMiddleware(container))
 
   // Health check
   app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))

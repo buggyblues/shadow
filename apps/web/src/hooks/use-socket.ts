@@ -13,6 +13,9 @@ export function useSocketEvent<T = unknown>(event: string, handler: (data: T) =>
     const socket = getSocket()
     const listener = (data: T) => handlerRef.current(data)
     socket.on(event, listener as (...args: unknown[]) => void)
+    if (event === 'connect' && socket.connected) {
+      queueMicrotask(() => handlerRef.current(undefined as T))
+    }
     return () => {
       socket.off(event, listener as (...args: unknown[]) => void)
     }

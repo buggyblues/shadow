@@ -20,6 +20,18 @@ import type {
 import { log as defaultLog, type Logger } from '../../utils/logger.js'
 import type { ProvisionState } from '../../utils/state.js'
 
+type AccessibleShadowServer = {
+  id: string
+  name?: string | null
+  slug?: string | null
+}
+
+type AccessibleShadowChannel = {
+  id: string
+  serverId?: string | null
+  name?: string | null
+}
+
 // The shadowob plugin's per-plugin state blob (stored under plugins.shadowob in ProvisionState)
 type ShadowobState = {
   servers?: Record<string, string>
@@ -210,14 +222,22 @@ async function provisionServer(
   serverDef: ShadowServer,
   state: ShadowobState | null,
 ): Promise<string> {
+  const accessibleServers = await listAccessibleServers(client)
+  const accessibleServerIds = new Set(accessibleServers.map((server) => server.id))
+
   // Check state first — if server exists in state, verify via API
   const existingId = state?.servers?.[serverDef.id]
   if (existingId) {
     try {
       const existing = await client.getServer(existingId)
-      if (existing) {
+      if (existing && accessibleServerIds.has(existing.id)) {
         log.dim(`  Server "${serverDef.name}" found in state (${existingId})`)
         return existingId
+      }
+      if (existing) {
+        log.dim(
+          `  Server "${serverDef.name}" in state (${existingId}) is not visible to this token, creating a user-owned server...`,
+        )
       }
     } catch {
       log.dim(`  Server "${serverDef.name}" in state but not found on server, recreating...`)
@@ -228,15 +248,14 @@ async function provisionServer(
 
   // Try to find existing server by slug
   if (serverDef.slug) {
-    try {
-      const existing = await client.getServer(serverDef.slug)
-      if (existing) {
-        log.dim(`  Server "${serverDef.name}" already exists (${existing.id})`)
-        return existing.id
-      }
-    } catch {
-      // Not found, create new
+    const existing = accessibleServers.find((server) => server.slug === serverDef.slug)
+    if (existing) {
+      log.dim(`  Server "${serverDef.name}" already exists (${existing.id})`)
+      return existing.id
     }
+    log.dim(
+      `  No accessible server found for slug "${serverDef.slug}"; creating a user-owned server`,
+    )
   }
 
   const server = await client.createServer({
@@ -258,9 +277,16 @@ async function provisionChannel(
   // Check state first
   const existingId = state?.channels?.[channelDef.id]
   if (existingId) {
-    // Trust state — channels don't move between servers
-    log.dim(`    Channel "${channelDef.title}" found in state (${existingId})`)
-    return existingId
+    try {
+      const existing = (await client.getChannel(existingId)) as AccessibleShadowChannel
+      if (existing.serverId === serverId) {
+        log.dim(`    Channel "${channelDef.title}" found in state (${existingId})`)
+        return existingId
+      }
+      log.dim(`    Channel "${channelDef.title}" in state belongs to another server, recreating...`)
+    } catch {
+      log.dim(`    Channel "${channelDef.title}" in state but not found, recreating...`)
+    }
   }
 
   log.step(`  Provisioning channel: ${channelDef.title}`)
@@ -268,7 +294,12 @@ async function provisionChannel(
   // Check existing channels
   try {
     const channels = await client.getServerChannels(serverId)
-    const existing = channels.find((c) => c.name === channelDef.title)
+    const expectedName = normalizeChannelName(channelDef.title)
+    const expectedId = normalizeChannelName(channelDef.id)
+    const existing = channels.find((c) => {
+      const channelName = normalizeChannelName(c.name)
+      return channelName === expectedName || channelName === expectedId
+    })
     if (existing) {
       log.dim(`    Channel "${channelDef.title}" already exists (${existing.id})`)
       return existing.id
@@ -291,14 +322,29 @@ async function provisionBuddy(
   buddyDef: ShadowBuddy,
   state: ShadowobState | null,
 ): Promise<{ agentId: string; token: string; userId: string }> {
-  // Check state first — reuse existing token to avoid invalidating old ones
+  // Check state first, but mint a fresh token so restarted/community servers
+  // do not keep handing old runtimes an expired JWT.
   const existingBuddy = state?.buddies?.[buddyDef.id]
-  if (existingBuddy?.agentId && existingBuddy?.token) {
+  if (existingBuddy?.agentId) {
     log.dim(`  Buddy "${buddyDef.name}" found in state (agent: ${existingBuddy.agentId})`)
-    return {
-      agentId: existingBuddy.agentId,
-      token: existingBuddy.token,
-      userId: existingBuddy.userId,
+    try {
+      const tokenResult = await client.generateAgentToken(existingBuddy.agentId)
+      return {
+        agentId: existingBuddy.agentId,
+        token: tokenResult.token,
+        userId: existingBuddy.userId,
+      }
+    } catch (err) {
+      if (existingBuddy.token) {
+        log.dim(
+          `  Could not refresh token for "${buddyDef.name}", reusing state token: ${formatErrorMessage(err)}`,
+        )
+        return {
+          agentId: existingBuddy.agentId,
+          token: existingBuddy.token,
+          userId: existingBuddy.userId,
+        }
+      }
     }
   }
 
@@ -374,8 +420,10 @@ async function processBinding(
     try {
       await client.addAgentsToServer(serverId, [buddyInfo.agentId])
       log.success(`  Added buddy "${binding.targetId}" to server "${serverConfigId}"`)
-    } catch {
-      log.dim(`  Buddy already in server "${serverConfigId}" (or error)`)
+    } catch (err) {
+      log.dim(
+        `  Buddy already in server "${serverConfigId}" (or error: ${formatErrorMessage(err)})`,
+      )
     }
   }
 
@@ -393,8 +441,10 @@ async function processBinding(
     try {
       await client.addChannelMember(channelId, buddyInfo.userId)
       log.success(`  Added buddy "${binding.targetId}" to channel "${channelConfigId}"`)
-    } catch {
-      log.dim(`  Buddy already in channel "${channelConfigId}" (or error)`)
+    } catch (err) {
+      log.dim(
+        `  Buddy already in channel "${channelConfigId}" (or error: ${formatErrorMessage(err)})`,
+      )
     }
   }
 
@@ -448,6 +498,41 @@ async function processBinding(
       }
     }
   }
+}
+
+async function listAccessibleServers(client: ShadowClient): Promise<AccessibleShadowServer[]> {
+  try {
+    const response = (await client.listServers()) as unknown
+    if (!Array.isArray(response)) return []
+
+    return response
+      .map((entry) => {
+        const server =
+          entry && typeof entry === 'object' && 'server' in entry
+            ? (entry as { server?: unknown }).server
+            : entry
+        if (!server || typeof server !== 'object') return null
+        const candidate = server as AccessibleShadowServer
+        return typeof candidate.id === 'string' ? candidate : null
+      })
+      .filter((server): server is AccessibleShadowServer => server !== null)
+  } catch (err) {
+    log.dim(`  Could not list accessible servers before provisioning: ${formatErrorMessage(err)}`)
+    return []
+  }
+}
+
+function normalizeChannelName(value: string | null | undefined): string {
+  return (value ?? '')
+    .toLowerCase()
+    .trim()
+    .replace(/^#/, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
+function formatErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
 }
 
 /**

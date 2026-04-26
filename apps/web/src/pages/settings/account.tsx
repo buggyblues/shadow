@@ -86,6 +86,9 @@ export function AccountSettings() {
               id="old-password"
               type="password"
               autoComplete="off"
+              data-1p-ignore
+              data-lpignore="true"
+              data-form-type="other"
               value={oldPassword}
               onChange={(e) => setOldPassword(e.target.value)}
               placeholder="••••••••"
@@ -100,7 +103,10 @@ export function AccountSettings() {
               <Input
                 id="new-password"
                 type="password"
-                autoComplete="new-password"
+                autoComplete="off"
+                data-1p-ignore
+                data-lpignore="true"
+                data-form-type="other"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 onBlur={() => setTouched((prev) => ({ ...prev, newPassword: true }))}
@@ -115,7 +121,10 @@ export function AccountSettings() {
               <Input
                 id="confirm-password"
                 type="password"
-                autoComplete="new-password"
+                autoComplete="off"
+                data-1p-ignore
+                data-lpignore="true"
+                data-form-type="other"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 onBlur={() => setTouched((prev) => ({ ...prev, confirmPassword: true }))}

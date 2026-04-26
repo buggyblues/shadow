@@ -12,7 +12,12 @@
     "./i18n": "./src/i18n/index.ts",
     "./lib/*": "./src/lib/*",
     "./styles/*": "./src/styles/*",
-    "./web-saas": "./web-saas/index.tsx"
+    "./web-saas": {
+      "types": "./src/types/web-saas.d.ts",
+      "development": "./web-saas/index.tsx",
+      "import": "./web-saas/index.tsx",
+      "default": "./web-saas/index.tsx"
+    }
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

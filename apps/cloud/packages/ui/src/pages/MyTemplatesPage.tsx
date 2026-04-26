@@ -9,8 +9,9 @@ import {
   AlertDialogTitle,
   Badge,
   Button,
-  Card,
   EmptyState,
+  GlassCard,
+  GlassPanel,
   Input,
   Modal,
   ModalBody,
@@ -39,7 +40,7 @@ import { PageShell } from '@/components/PageShell'
 import { parseTemplateAgents } from '@/components/TemplateDetailShared'
 import { useDebounce } from '@/hooks/useDebounce'
 import { useTypewriterPlaceholder } from '@/hooks/useTypewriterPlaceholder'
-import { api, type TemplateCatalogSummary } from '@/lib/api'
+import { type TemplateCatalogSummary } from '@/lib/api'
 import { useApiClient } from '@/lib/api-context'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/stores/toast'
@@ -97,7 +98,6 @@ function FilterPill({
   active: boolean
   onClick: () => void
 }) {
-  const api = useApiClient()
   return (
     <Button type="button" onClick={onClick} variant="ghost" size="sm">
       <span className="truncate">{label}</span>
@@ -122,7 +122,6 @@ function CardMetric({
   value: string | number
   label: string
 }) {
-  const api = useApiClient()
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-xl border border-border-subtle bg-bg-primary/60 px-2.5 py-1.5 text-[11px] font-semibold text-text-secondary"
@@ -157,7 +156,6 @@ function TemplateCard({
   onDelete: () => void
   onShare: () => void
 }) {
-  const api = useApiClient()
   const { t, i18n } = useTranslation()
   const overview = useMemo(() => getMyTemplateOverview(content), [content])
   const sourceType = getTemplateSourceType(templateSlug)
@@ -171,7 +169,7 @@ function TemplateCard({
   })
 
   return (
-    <Card variant="surface">
+    <GlassCard>
       <div className="flex h-full flex-col gap-4 p-5">
         <div className="flex items-start gap-4">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-border-subtle bg-bg-primary/50 text-[28px] shadow-sm">
@@ -212,7 +210,7 @@ function TemplateCard({
                         reviewStatus === 'approved'
                           ? 'success'
                           : reviewStatus === 'rejected'
-                            ? 'destructive'
+                            ? 'danger'
                             : reviewStatus === 'pending'
                               ? 'warning'
                               : 'neutral'
@@ -317,7 +315,7 @@ function TemplateCard({
           </Button>
         </div>
       </div>
-    </Card>
+    </GlassCard>
   )
 }
 
@@ -483,7 +481,6 @@ function ImportGitDialog({
   onClose: () => void
   isPending: boolean
 }) {
-  const api = useApiClient()
   const { t } = useTranslation()
   const [url, setUrl] = useState('')
   const [name, setName] = useState('')
@@ -741,91 +738,93 @@ export function MyTemplatesPage() {
         </div>
       }
     >
-      {isLoading && (
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div
-              key={`template-skeleton-${index}`}
-              className="h-[248px] rounded-3xl border border-border-subtle bg-bg-secondary/60 p-5 animate-pulse"
-            />
-          ))}
-        </div>
-      )}
+      <GlassPanel className="space-y-5 p-4 md:p-5">
+        {isLoading && (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-5">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div
+                key={`template-skeleton-${index}`}
+                className="h-[248px] rounded-3xl border border-border-subtle bg-bg-secondary/60 p-5 animate-pulse"
+              />
+            ))}
+          </div>
+        )}
 
-      {!isLoading && templates.length === 0 && (
-        <EmptyState
-          icon={Copy}
-          title={t('templates.noCustomTemplates')}
-          description={t('templates.forkTemplateStart')}
-          action={
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              onClick={() => setShowForkDialog(true)}
-            >
-              <GitFork size={14} />
-              {t('templates.forkTemplate')}
-            </Button>
-          }
-        />
-      )}
+        {!isLoading && templates.length === 0 && (
+          <EmptyState
+            icon={Copy}
+            title={t('templates.noCustomTemplates')}
+            description={t('templates.forkTemplateStart')}
+            action={
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={() => setShowForkDialog(true)}
+              >
+                <GitFork size={14} />
+                {t('templates.forkTemplate')}
+              </Button>
+            }
+          />
+        )}
 
-      {!isLoading && templates.length > 0 && filteredTemplates.length === 0 && (
-        <EmptyState
-          icon={Search}
-          title={t('templates.noTemplatesMatch', {
-            query: debouncedSearch || t('templates.title'),
-          })}
-          description={t('templates.emptyFiltered')}
-          action={
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              onClick={() => {
-                setSearch('')
-                setActiveFilter('all')
-              }}
-            >
-              {t('templates.clearFilters')}
-            </Button>
-          }
-        />
-      )}
+        {!isLoading && templates.length > 0 && filteredTemplates.length === 0 && (
+          <EmptyState
+            icon={Search}
+            title={t('templates.noTemplatesMatch', {
+              query: debouncedSearch || t('templates.title'),
+            })}
+            description={t('templates.emptyFiltered')}
+            action={
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setSearch('')
+                  setActiveFilter('all')
+                }}
+              >
+                {t('templates.clearFilters')}
+              </Button>
+            }
+          />
+        )}
 
-      {!isLoading && filteredTemplates.length > 0 && (
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          {filteredTemplates.map((template) => (
-            <TemplateCard
-              key={template.slug}
-              name={template.name}
-              slug={template.slug}
-              templateSlug={template.templateSlug}
-              content={template.content}
-              baseTemplate={
-                template.templateSlug ? catalogByName.get(template.templateSlug) : undefined
-              }
-              version={template.version ?? 1}
-              updatedAt={template.updatedAt}
-              reviewStatus={template.reviewStatus}
-              onShare={async () => {
-                try {
-                  const shareData = await api.myTemplates.share(template.name)
-                  const json = JSON.stringify(shareData, null, 2)
-                  await navigator.clipboard.writeText(json)
-                  toast.success(t('templates.shareCopied'))
-                } catch {
-                  toast.error(t('templates.shareFailed'))
+        {!isLoading && filteredTemplates.length > 0 && (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-5">
+            {filteredTemplates.map((template) => (
+              <TemplateCard
+                key={template.slug}
+                name={template.name}
+                slug={template.slug}
+                templateSlug={template.templateSlug}
+                content={template.content}
+                baseTemplate={
+                  template.templateSlug ? catalogByName.get(template.templateSlug) : undefined
                 }
-              }}
-              onDelete={() => {
-                setTemplateToDelete({ name: template.name, reviewStatus: template.reviewStatus })
-              }}
-            />
-          ))}
-        </div>
-      )}
+                version={template.version ?? 1}
+                updatedAt={template.updatedAt}
+                reviewStatus={template.reviewStatus}
+                onShare={async () => {
+                  try {
+                    const shareData = await api.myTemplates.share(template.name)
+                    const json = JSON.stringify(shareData, null, 2)
+                    await navigator.clipboard.writeText(json)
+                    toast.success(t('templates.shareCopied'))
+                  } catch {
+                    toast.error(t('templates.shareFailed'))
+                  }
+                }}
+                onDelete={() => {
+                  setTemplateToDelete({ name: template.name, reviewStatus: template.reviewStatus })
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </GlassPanel>
 
       <AlertDialog
         open={Boolean(templateToDelete)}

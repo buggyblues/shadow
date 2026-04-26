@@ -29,7 +29,7 @@ interface UseSSEStreamReturn {
   status: SSEStatus
   error: string | null
   /** Connect to an EventSource (GET) endpoint */
-  connect: (url: string) => void
+  connect: (url: string, options?: FetchSSEOptions) => void
   /** Start a fetch-based SSE stream (POST) */
   startFetch: (url: string, body: unknown, options?: FetchSSEOptions) => Promise<SSEResult>
   /** Disconnect active stream */
@@ -44,14 +44,125 @@ export function useSSEStream(options: UseSSEStreamOptions = {}): UseSSEStreamRet
   const [status, setStatus] = useState<SSEStatus>('idle')
   const [error, setError] = useState<string | null>(null)
 
-  const esRef = useRef<EventSource | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
-  const cleanup = useCallback(() => {
-    if (esRef.current) {
-      esRef.current.close()
-      esRef.current = null
+  const appendLine = useCallback(
+    (line: string) => {
+      setLines((prev) => [...prev.slice(-(maxLines - 1)), line])
+    },
+    [maxLines],
+  )
+
+  const getAuthHeaders = useCallback((): Record<string, string> => {
+    if (typeof window === 'undefined') return {}
+    try {
+      const token = window.localStorage.getItem('accessToken')
+      return token ? { Authorization: `Bearer ${token}` } : {}
+    } catch {
+      return {}
     }
+  }, [])
+
+  const formatLine = useCallback((data: unknown): string | null => {
+    if (typeof data === 'string') return data
+    if (!data || typeof data !== 'object') return null
+
+    const payload = data as {
+      line?: unknown
+      message?: unknown
+      level?: unknown
+      error?: unknown
+    }
+
+    if (typeof payload.line === 'string') {
+      return payload.line
+    }
+
+    if (typeof payload.message === 'string') {
+      const level = typeof payload.level === 'string' ? payload.level.toUpperCase() : null
+      return level ? `[${level}] ${payload.message}` : payload.message
+    }
+
+    if (typeof payload.error === 'string') {
+      return `Error: ${payload.error}`
+    }
+
+    return null
+  }, [])
+
+  const parseEventBlock = useCallback((block: string) => {
+    const lines = block.split('\n')
+    let event: string | undefined
+    const dataLines: string[] = []
+
+    for (const line of lines) {
+      if (line.startsWith('event:')) {
+        event = line.slice(6).trim()
+        continue
+      }
+      if (line.startsWith('data:')) {
+        dataLines.push(line.slice(5).trimStart())
+      }
+    }
+
+    if (dataLines.length === 0) return null
+
+    const raw = dataLines.join('\n')
+    try {
+      return { event, data: JSON.parse(raw) as unknown }
+    } catch {
+      return { event, data: raw as unknown }
+    }
+  }, [])
+
+  const readEventStream = useCallback(
+    async (response: Response, handlers?: FetchSSEOptions) => {
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error('No response body')
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      const flushBlock = (block: string) => {
+        const parsed = parseEventBlock(block)
+        if (!parsed) return
+
+        handlers?.onEvent?.(parsed.event, parsed.data)
+
+        const line = formatLine(parsed.data)
+        if (
+          line !== null &&
+          parsed.event !== 'done' &&
+          parsed.event !== 'end' &&
+          parsed.event !== 'close' &&
+          parsed.event !== 'status'
+        ) {
+          appendLine(line)
+        }
+      }
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const chunks = buffer.split('\n\n')
+        buffer = chunks.pop() ?? ''
+
+        for (const chunk of chunks) {
+          flushBlock(chunk)
+        }
+      }
+
+      const trailing = buffer.trim()
+      if (trailing.length > 0) {
+        flushBlock(trailing)
+      }
+    },
+    [appendLine, formatLine, parseEventBlock],
+  )
+
+  const cleanup = useCallback(() => {
     if (abortRef.current) {
       abortRef.current.abort()
       abortRef.current = null
@@ -71,40 +182,47 @@ export function useSSEStream(options: UseSSEStreamOptions = {}): UseSSEStreamRet
 
   // EventSource-based connect (for log streaming)
   const connect = useCallback(
-    (url: string) => {
+    (url: string, options?: FetchSSEOptions) => {
       cleanup()
       setLines([])
       setError(null)
       setStatus('connecting')
 
-      const es = new EventSource(url)
-      esRef.current = es
+      const controller = new AbortController()
+      abortRef.current = controller
 
-      es.onopen = () => setStatus('connected')
-
-      es.onmessage = (e) => {
+      void (async () => {
         try {
-          const line = JSON.parse(e.data) as string
-          setLines((prev) => [...prev.slice(-(maxLines - 1)), line])
-        } catch {
-          /* ignore non-JSON messages */
+          const res = await fetch(url, {
+            method: 'GET',
+            headers: {
+              Accept: 'text/event-stream',
+              ...getAuthHeaders(),
+            },
+            signal: controller.signal,
+          })
+
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`)
+          }
+
+          setStatus('connected')
+          await readEventStream(res, options)
+          setStatus((current) => (current === 'error' ? current : 'done'))
+        } catch (err) {
+          if ((err as Error).name === 'AbortError') {
+            return
+          }
+          setError('Connection lost. Click Connect to retry.')
+          setStatus('error')
+        } finally {
+          if (abortRef.current === controller) {
+            abortRef.current = null
+          }
         }
-      }
-
-      es.addEventListener('close', () => {
-        setStatus('done')
-        es.close()
-        esRef.current = null
-      })
-
-      es.onerror = () => {
-        setError('Connection lost. Click Connect to retry.')
-        setStatus('error')
-        es.close()
-        esRef.current = null
-      }
+      })()
     },
-    [cleanup, maxLines],
+    [cleanup, getAuthHeaders, readEventStream],
   )
 
   // Fetch-based SSE (for deploy with POST body)
@@ -123,7 +241,7 @@ export function useSSEStream(options: UseSSEStreamOptions = {}): UseSSEStreamRet
       try {
         const res = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
           body: JSON.stringify(body),
           signal: controller.signal,
         })
@@ -133,31 +251,16 @@ export function useSSEStream(options: UseSSEStreamOptions = {}): UseSSEStreamRet
         }
 
         setStatus('connected')
-        const reader = res.body?.getReader()
-        const decoder = new TextDecoder()
-        if (!reader) throw new Error('No response body')
-
-        let buf = ''
-        while (true) {
-          const { done: readerDone, value } = await reader.read()
-          if (readerDone) break
-          buf += decoder.decode(value, { stream: true })
-          const parts = buf.split('\n\n')
-          buf = parts.pop() ?? ''
-          for (const part of parts) {
-            if (!part.startsWith('data:') && !part.startsWith('event:')) continue
-            const partLines = part.split('\n')
-            const eventLine = partLines.find((l) => l.startsWith('event:'))
-            const dataLine = partLines.find((l) => l.startsWith('data:'))
-            if (!dataLine) continue
-            const data = JSON.parse(dataLine.slice(5).trim())
-            const event = eventLine?.slice(7).trim()
+        await readEventStream(res, {
+          onEvent: (event, data) => {
             options?.onEvent?.(event, data)
-            if (event === 'log') {
-              setLines((prev) => [...prev.slice(-(maxLines - 1)), data as string])
-            } else if (event === 'done') {
-              const exitCode = typeof data === 'object' ? data?.exitCode : undefined
-              const errorMsg = typeof data === 'object' ? data?.error : undefined
+            if (event === 'done') {
+              const payload =
+                typeof data === 'object' && data !== null
+                  ? (data as { exitCode?: unknown; error?: unknown })
+                  : null
+              const exitCode = typeof payload?.exitCode === 'number' ? payload.exitCode : undefined
+              const errorMsg = typeof payload?.error === 'string' ? payload.error : undefined
               result = {
                 success: exitCode === 0 || exitCode === undefined,
                 exitCode,
@@ -165,12 +268,12 @@ export function useSSEStream(options: UseSSEStreamOptions = {}): UseSSEStreamRet
               }
               if (errorMsg) {
                 setError(errorMsg)
-                setLines((prev) => [...prev, `Error: ${errorMsg}`])
+                appendLine(`Error: ${errorMsg}`)
               }
               setStatus('done')
             }
-          }
-        }
+          },
+        })
 
         if (result.success === false && !result.error) {
           result = { success: true }
@@ -189,7 +292,7 @@ export function useSSEStream(options: UseSSEStreamOptions = {}): UseSSEStreamRet
         abortRef.current = null
       }
     },
-    [cleanup, maxLines],
+    [appendLine, cleanup, formatLine, getAuthHeaders, readEventStream],
   )
 
   // Cleanup on unmount

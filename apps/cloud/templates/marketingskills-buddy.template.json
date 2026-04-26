@@ -1,0 +1,105 @@
+{
+  "version": "1.0.0",
+  "name": "${i18n:name}",
+  "description": "${i18n:description}",
+  "environment": "production",
+  "team": {
+    "name": "marketingskills-buddy",
+    "description": "Single Marketing Buddy powered live by community-curated marketing skills (coreyhaines31/marketingskills) — CRO, copy, SEO, paid, email, and growth — pulled at deploy time."
+  },
+  "use": [
+    {
+      "plugin": "model-provider"
+    },
+    {
+      "plugin": "shadowob",
+      "options": {
+        "servers": [
+          {
+            "id": "marketingskills-hq",
+            "name": "Marketing Skills",
+            "slug": "marketingskills",
+            "channels": [
+              {
+                "id": "general",
+                "title": "General",
+                "type": "text"
+              },
+              {
+                "id": "briefs",
+                "title": "Briefs",
+                "type": "text"
+              }
+            ]
+          }
+        ],
+        "buddies": [
+          {
+            "id": "marketing-bot",
+            "name": "Marketing Buddy"
+          }
+        ],
+        "bindings": [
+          {
+            "targetId": "marketing-bot",
+            "targetType": "buddy",
+            "servers": ["marketingskills-hq"],
+            "channels": ["general", "briefs"],
+            "agentId": "marketing-buddy"
+          }
+        ]
+      }
+    }
+  ],
+  "deployments": {
+    "namespace": "marketingskills-buddy",
+    "agents": [
+      {
+        "id": "marketing-buddy",
+        "runtime": "openclaw",
+        "description": "Generalist marketing buddy that uses community-curated marketingskills for any CRO/copy/SEO/paid/email/growth question. Deploys with one Buddy on a focused Server.",
+        "identity": {
+          "name": "Marketing Buddy",
+          "personality": "You are a hands-on marketing operator. You apply the marketingskills repo's heuristics: customer research first, ICP and JTBD before tactics, simple CRO before traffic spend. You quote which skill you used.",
+          "systemPrompt": "On every brief:\n1. Read .agents/product-marketing-context.md if it exists; otherwise run the product-marketing-context skill to create it.\n2. Pick the most-relevant marketingskills skill (e.g. customer-research, copywriting-frameworks, seo-strategy, lifecycle-emails, paid-media, growth-loops). Cite the folder name.\n3. Produce the deliverable inline. End with one sharpening question for the user.\n4. If the user wants options, post a buttons interactive block using the message tool with action `send`; include `target`, `message`, `kind: \"buttons\"`, `prompt`, and `buttons` so Shadow renders a real dialog."
+        },
+        "use": [
+          {
+            "plugin": "agent-pack",
+            "options": {
+              "packs": [
+                {
+                  "id": "marketingskills",
+                  "url": "https://github.com/coreyhaines31/marketingskills",
+                  "ref": "main"
+                }
+              ],
+              "poll": "1h"
+            }
+          }
+        ],
+        "resources": {
+          "requests": {
+            "cpu": "100m",
+            "memory": "256Mi"
+          },
+          "limits": {
+            "cpu": "1000m",
+            "memory": "1Gi"
+          }
+        },
+        "configuration": {}
+      }
+    ]
+  },
+  "i18n": {
+    "en": {
+      "name": "Marketing Skills Buddy",
+      "description": "Single Marketing Buddy powered live by coreyhaines31/marketingskills — CRO, copy, SEO, paid, email, and growth — pulled at deploy time so the agent always tracks the upstream community."
+    },
+    "zh-CN": {
+      "name": "营销技能 Buddy",
+      "description": "单 Buddy 模板，部署时动态拉取社区仓库 coreyhaines31/marketingskills（CRO、文案、SEO、付费、邮件、增长），始终保持与上游一致。"
+    }
+  }
+}

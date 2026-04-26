@@ -59,7 +59,9 @@ function checkNoNewGrayClasses(diff) {
     if (grayPattern.test(line)) {
       count++
       if (count <= 5) {
-        warnings.push(`[style] New gray-* class found (use semantic token instead): ${line.trim().substring(0, 120)}`)
+        warnings.push(
+          `[style] New gray-* class found (use semantic token instead): ${line.trim().substring(0, 120)}`,
+        )
       }
     }
   }
@@ -103,7 +105,9 @@ function checkNoNewNfVariables(diff) {
 
     for (const line of addedLines) {
       if (nfDefPattern.test(line)) {
-        errors.push(`[style] --nf-* token used in ${fileMatch[1]} (use --color-* tokens): ${line.trim().substring(0, 120)}`)
+        errors.push(
+          `[style] --nf-* token used in ${fileMatch[1]} (use --color-* tokens): ${line.trim().substring(0, 120)}`,
+        )
       }
     }
   }
@@ -116,16 +120,22 @@ function checkPageShellUsage(diff) {
   const fileBlocks = diff.split(/^diff --git /m).slice(1)
 
   for (const block of fileBlocks) {
-    const fileMatch = block.match(/^a\/(apps\/cloud\/src\/interfaces\/dashboard\/pages\/\w+Page\.tsx)/)
+    const fileMatch = block.match(
+      /^a\/(apps\/cloud\/src\/interfaces\/dashboard\/pages\/\w+Page\.tsx)/,
+    )
     if (!fileMatch) continue
 
     // Check if PageShell is used somewhere in the added lines of this file
     const addedLines = block.split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++'))
     const hasPageShell = addedLines.some((l) => l.includes('PageShell'))
-    const hasRawP6Div = addedLines.some((l) => /className=["'][^"']*\bp-6\b/.test(l) && l.includes('<div'))
+    const hasRawP6Div = addedLines.some(
+      (l) => /className=["'][^"']*\bp-6\b/.test(l) && l.includes('<div'),
+    )
 
     if (hasRawP6Div && !hasPageShell) {
-      warnings.push(`[style] ${fileMatch[1]}: page uses raw <div p-6> — consider migrating to PageShell`)
+      warnings.push(
+        `[style] ${fileMatch[1]}: page uses raw <div p-6> — consider migrating to PageShell`,
+      )
     }
   }
 }
@@ -151,7 +161,9 @@ for (const e of errors) {
 }
 
 if (errors.length > 0) {
-  console.error(`\n✖ Dashboard style check failed: ${errors.length} error(s), ${warnings.length} warning(s)`)
+  console.error(
+    `\n✖ Dashboard style check failed: ${errors.length} error(s), ${warnings.length} warning(s)`,
+  )
   process.exit(1)
 }
 

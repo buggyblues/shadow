@@ -3,7 +3,6 @@
  */
 
 import type * as pulumi from '@pulumi/pulumi'
-import { buildOpenClawConfig } from '../config/parser.js'
 import type { CloudConfig } from '../config/schema.js'
 import { createAgentDeployment } from './agent-deployment.js'
 import { createConfigResources } from './config-resources.js'
@@ -20,6 +19,7 @@ import {
 } from './constants.js'
 import { createNetworking } from './networking.js'
 import { collectPluginK8sArtifacts } from './plugin-k8s.js'
+import { buildAgentRuntimePackage } from './runtime-package.js'
 import {
   buildContainerSecurityContext,
   buildNetworkPolicy,
@@ -69,6 +69,7 @@ export function createInfraProgram(options: InfraOptions) {
     const skillsInstallDir = config.skills?.entries?.length
       ? (config.skills.installDir ?? '/app/skills')
       : undefined
+    const namespaceResourceOptions = { dependsOn: [shared.namespace] }
 
     for (const agent of agents) {
       const agentName = agent.id
@@ -82,14 +83,19 @@ export function createInfraProgram(options: InfraOptions) {
         env.SHADOW_SERVER_URL = shadowServerUrl
       }
 
+      const runtimePackage = buildAgentRuntimePackage({
+        agent,
+        config,
+        extraEnv: env,
+      })
+
       // ConfigMap + Secret
       const configRes = createConfigResources({
         agentName,
-        agent,
-        config,
         namespace,
-        extraEnv: env,
+        runtimePackage,
         provider,
+        resourceOptions: namespaceResourceOptions,
       })
 
       // Deployment — must wait for namespace to exist
@@ -97,15 +103,24 @@ export function createInfraProgram(options: InfraOptions) {
         agentName,
         agent,
         namespace,
+        namespaceName: namespace,
         config,
         configMapName: configRes.configMapName,
         secretName: configRes.secretName,
-        extraEnv: env,
+        extraEnv: runtimePackage.plainEnv,
         provider,
         imagePullPolicy: imagePullPolicy ?? 'IfNotPresent',
         sharedWorkspacePvcName,
         sharedWorkspaceMountPath,
         skillsInstallDir,
+        resourceOptions: {
+          dependsOn: [
+            shared.namespace,
+            ...(shared.workspacePvc ? [shared.workspacePvc] : []),
+            configRes.configMap,
+            configRes.secret,
+          ],
+        },
       })
 
       // Service (for health check endpoint)
@@ -114,6 +129,7 @@ export function createInfraProgram(options: InfraOptions) {
         namespace,
         port: HEALTH_PORT,
         provider,
+        resourceOptions: namespaceResourceOptions,
       })
 
       // Export service cluster IP for resource retrieval
@@ -201,90 +217,11 @@ export function buildManifests(options: InfraOptions) {
       env.SHADOW_SERVER_URL = shadowServerUrl
     }
 
-    const openclawConfig = buildOpenClawConfig(agent, config)
-
-    // Extract workspace files (e.g. SOUL.md) before serializing config
-    const workspaceFiles = (openclawConfig._workspaceFiles ?? {}) as Record<string, string>
-    delete openclawConfig._workspaceFiles
-
-    // Extract plugin environment variables and merge into Pod env
-    const pluginEnvVars = (openclawConfig._pluginEnvVars ?? {}) as Record<string, string>
-    delete openclawConfig._pluginEnvVars
-
-    // Extract plugin-generated K8s resources (Ingress, CronJob, etc.)
-    const pluginResources = (openclawConfig._pluginResources ?? []) as Record<string, unknown>[]
-    delete openclawConfig._pluginResources
-
-    // Extract deferred plugin provisions (async lifecycle hooks — executed by DeployService)
-    const pluginProvisions = (openclawConfig._pluginProvisions ?? []) as Array<{
-      pluginId: string
-      secrets?: Record<string, string>
-    }>
-    delete openclawConfig._pluginProvisions
-
-    // Merge any secrets produced by plugin provisioning into the env
-    for (const prov of pluginProvisions) {
-      if (prov.secrets) {
-        Object.assign(env, prov.secrets)
-      }
-    }
-
-    // ConfigMap
-    const configData: Record<string, string> = {
-      'config.json': JSON.stringify(openclawConfig, null, 2),
-      ...workspaceFiles,
-    }
-    const secretData: Record<string, string> = {}
-
-    // P0: Vault-based per-agent secret isolation
-    const vaultName = agent.vault ?? 'default'
-    const vault = config.registry?.vaults?.[vaultName]
-    if (vault) {
-      // Vault provider API keys
-      if (vault.providers) {
-        for (const [providerId, source] of Object.entries(vault.providers)) {
-          if (source.apiKey) {
-            const envKey = `${providerId.toUpperCase().replace(/-/g, '_')}_API_KEY`
-            secretData[envKey] = source.apiKey
-          }
-        }
-      }
-      // Vault named secrets
-      if (vault.secrets) {
-        for (const [key, value] of Object.entries(vault.secrets)) {
-          secretData[key] = value
-        }
-      }
-    }
-
-    // Fallback: legacy registry.providers (when no vaults configured)
-    if (!config.registry?.vaults && config.registry?.providers) {
-      for (const p of config.registry.providers) {
-        if (p.apiKey) {
-          const envKey = `${(p.id ?? 'custom').toUpperCase().replace(/-/g, '_')}_API_KEY`
-          secretData[envKey] = p.apiKey
-        }
-      }
-    }
-
-    // Merge plugin-contributed env vars (from PluginEnvProvider)
-    for (const [key, value] of Object.entries(pluginEnvVars)) {
-      // Resolve ${env:VAR} references to actual values from process.env
-      const resolved = value.replace(/\$\{env:([^}]+)\}/g, (_, varName) => {
-        return process.env[varName] ?? ''
-      })
-      if (resolved) {
-        env[key] = resolved
-      }
-    }
-
-    for (const [key, value] of Object.entries(env)) {
-      if (key.includes('TOKEN') || key.includes('KEY') || key.includes('SECRET')) {
-        secretData[key] = value
-      } else {
-        configData[key] = value
-      }
-    }
+    const runtimePackage = buildAgentRuntimePackage({
+      agent,
+      config,
+      extraEnv: env,
+    })
 
     manifests.push({
       apiVersion: 'v1',
@@ -294,7 +231,7 @@ export function buildManifests(options: InfraOptions) {
         namespace,
         labels: { app: 'shadowob-cloud', agent: agentName },
       },
-      data: configData,
+      data: runtimePackage.configData,
     })
 
     manifests.push({
@@ -306,7 +243,7 @@ export function buildManifests(options: InfraOptions) {
         labels: { app: 'shadowob-cloud', agent: agentName },
       },
       type: 'Opaque',
-      stringData: secretData,
+      stringData: runtimePackage.secretData,
     })
 
     // Deployment
@@ -344,7 +281,7 @@ export function buildManifests(options: InfraOptions) {
 
     const envList = [
       ...baseEnvVars(agentName),
-      ...Object.entries(env).map(([name, value]) => ({ name, value })),
+      ...Object.entries(runtimePackage.plainEnv).map(([name, value]) => ({ name, value })),
       ...pluginK8s.envVars,
     ]
     if (hasSharedWorkspace) {
@@ -394,6 +331,18 @@ export function buildManifests(options: InfraOptions) {
                 readinessProbe: READINESS_PROBE,
                 startupProbe: STARTUP_PROBE,
               },
+              // Plugin-contributed helper containers (e.g. gitagent git-pull loop)
+              ...pluginK8s.sidecars.map((sc) => ({
+                name: sc.name,
+                image: sc.image,
+                imagePullPolicy: sc.imagePullPolicy,
+                command: sc.command,
+                args: sc.args,
+                env: sc.env,
+                volumeMounts: sc.volumeMounts,
+                resources: sc.resources,
+                securityContext: sc.securityContext,
+              })),
             ],
             volumes,
             ...(initContainers.length > 0 ? { initContainers } : {}),
@@ -425,7 +374,7 @@ export function buildManifests(options: InfraOptions) {
     )
 
     // Add plugin-generated K8s resources (Ingress, CronJob, etc.)
-    for (const resource of pluginResources) {
+    for (const resource of runtimePackage.pluginResources) {
       manifests.push(resource)
     }
   }

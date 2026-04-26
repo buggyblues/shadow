@@ -378,7 +378,14 @@
     "areTyping": "입력 중...",
     "copy": "복사",
     "edit": "편집",
-    "copied": "복사됨"
+    "copied": "복사됨",
+    "interactiveSubmit": "제출",
+    "interactiveApprove": "승인",
+    "interactiveReject": "거절",
+    "interactiveRequired": "필수",
+    "interactiveSubmitFailed": "응답 제출 실패",
+    "interactiveOn": "켜짐",
+    "interactiveOff": "꺼짐"
   },
   "member": {
     "title": "멤버",

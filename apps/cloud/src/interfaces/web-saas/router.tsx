@@ -15,12 +15,13 @@ import { DeployWizardPage } from '@shadowob/cloud-ui/pages/DeployWizardPage'
 import { MonitoringPage } from '@shadowob/cloud-ui/pages/MonitoringPage'
 import { MyTemplateDetailPage } from '@shadowob/cloud-ui/pages/MyTemplateDetailPage'
 import { MyTemplatesPage } from '@shadowob/cloud-ui/pages/MyTemplatesPage'
+import { ProviderProfilesPage } from '@shadowob/cloud-ui/pages/ProviderProfilesPage'
 import { SecretsPage } from '@shadowob/cloud-ui/pages/SecretsPage'
 import { StoreDetailPage } from '@shadowob/cloud-ui/pages/StoreDetailPage'
 import { StorePage } from '@shadowob/cloud-ui/pages/StorePage'
 import { WalletPage } from '@shadowob/cloud-ui/pages/WalletPage'
 import {
-  createMemoryHistory,
+  createBrowserHistory,
   createRootRoute,
   createRoute,
   createRouter,
@@ -125,6 +126,12 @@ const secretsRoute = createRoute({
   component: withErrorBoundary(SecretsPage),
 })
 
+const providersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/providers',
+  component: withErrorBoundary(ProviderProfilesPage),
+})
+
 // ── Wallet / Billing ───────────────────────────────────────────────────────
 
 const walletRoute = createRoute({
@@ -145,10 +152,17 @@ const routeTree = rootRoute.addChildren([
   monitoringRoute,
   myTemplatesRoute,
   myTemplateDetailRoute,
+  providersRoute,
   secretsRoute,
   walletRoute,
 ])
 
-const memoryHistory = createMemoryHistory({ initialEntries: ['/'] })
+// Use browser history with explicit basepath so every SaaS page has a real URL:
+// /app/cloud/store, /app/cloud/deployments/$namespace, etc.
+const browserHistory = createBrowserHistory()
 
-export const router = createRouter({ routeTree, history: memoryHistory })
+export const router = createRouter({
+  routeTree,
+  history: browserHistory,
+  basepath: '/app/cloud',
+})

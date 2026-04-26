@@ -5,7 +5,7 @@
  * In production, can be extended to use AWS KMS, GCP KMS, or HashiCorp Vault by implementing
  * the KmsProvider interface and selecting it via the KMS_PROVIDER env variable.
  */
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 
 const ALGORITHM = 'aes-256-gcm'
 const KEY_LENGTH = 32 // bytes
@@ -15,6 +15,9 @@ const AUTH_TAG_LENGTH = 16 // bytes
 function getMasterKey(): Buffer {
   const keyEnv = process.env.KMS_MASTER_KEY
   if (!keyEnv) {
+    if (process.env.NODE_ENV !== 'production') {
+      return createHash('sha256').update('shadow-local-dev-kms-master-key').digest()
+    }
     throw new Error('KMS_MASTER_KEY environment variable is required for encryption')
   }
   const keyBuf = Buffer.from(keyEnv, 'hex')

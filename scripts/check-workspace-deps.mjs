@@ -18,6 +18,7 @@ const WORKSPACE_DIRS = [
   'apps/desktop',
   'apps/flash',
   'apps/flash/packages/cards',
+  'apps/flash/packages/server',
   'apps/flash/packages/types',
   'apps/mobile',
   'apps/playground',

@@ -1,4 +1,4 @@
-import { Badge, Button, EmptyState } from '@shadowob/ui'
+import { Badge, Button, EmptyState, GlassCard } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import {
@@ -11,7 +11,6 @@ import {
   FileText,
   FolderOpen,
   GitFork,
-  Heart,
   Key,
   Layers,
   Rocket,
@@ -29,9 +28,7 @@ import {
   TemplateConfigTab,
   TemplateDetailShell,
 } from '@/components/TemplateDetailShared'
-import { api } from '@/lib/api'
 import { useApiClient } from '@/lib/api-context'
-import { useAppStore } from '@/stores/app'
 import { useToast } from '@/stores/toast'
 
 function getCategoryLabel(
@@ -59,21 +56,20 @@ function OverviewTab({
   useCases: string[]
   requirements: string[]
 }) {
-  const api = useApiClient()
   const { t } = useTranslation()
 
   return (
     <div className="space-y-6">
-      <div className="glass-card rounded-3xl p-5 space-y-4">
+      <GlassCard className="rounded-3xl p-5 space-y-4">
         {overview.map((paragraph) => (
           <p key={paragraph} className="text-sm leading-7 text-text-secondary">
             {paragraph}
           </p>
         ))}
-      </div>
+      </GlassCard>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <div className="glass-card rounded-3xl p-5 space-y-4">
+        <GlassCard className="rounded-3xl p-5 space-y-4">
           <h3 className="text-sm font-black flex items-center gap-2 text-text-primary">
             <Zap size={14} className="text-accent" />
             {t('storeDetail.features')}
@@ -89,9 +85,9 @@ function OverviewTab({
               </div>
             ))}
           </div>
-        </div>
+        </GlassCard>
 
-        <div className="glass-card rounded-3xl p-5 space-y-4">
+        <GlassCard className="rounded-3xl p-5 space-y-4">
           <h3 className="text-sm font-black flex items-center gap-2 text-text-primary">
             <Layers size={14} className="text-[var(--color-nf-indigo)]" />
             {t('storeDetail.useCases')}
@@ -106,10 +102,10 @@ function OverviewTab({
               </span>
             ))}
           </div>
-        </div>
+        </GlassCard>
       </div>
 
-      <div className="glass-card rounded-3xl p-5 space-y-4">
+      <GlassCard className="rounded-3xl p-5 space-y-4">
         <h3 className="text-sm font-black flex items-center gap-2 text-text-primary">
           <Shield size={14} className="text-danger" />
           {t('storeDetail.requirements')}
@@ -124,7 +120,7 @@ function OverviewTab({
             </div>
           ))}
         </div>
-      </div>
+      </GlassCard>
     </div>
   )
 }
@@ -134,8 +130,6 @@ export function StoreDetailPage() {
   const { t, i18n } = useTranslation()
   const { name } = useParams({ strict: false }) as { name: string }
   const [activeTab, setActiveTab] = useState('overview')
-  const isFavorite = useAppStore((state) => state.favorites.includes(name))
-  const toggleFavorite = useAppStore((state) => state.toggleFavorite)
   const toast = useToast()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -199,16 +193,6 @@ export function StoreDetailPage() {
       breadcrumbItems={[{ label: t('store.title'), to: '/store' }, { label: name }]}
       heroIcon={<span className="text-5xl">{detail?.emoji ?? '📦'}</span>}
       title={name}
-      titleActions={
-        <Button
-          type="button"
-          variant={isFavorite ? 'danger' : 'secondary'}
-          size="icon"
-          onClick={() => toggleFavorite(name)}
-        >
-          <Heart size={18} fill={isFavorite ? 'currentColor' : 'none'} />
-        </Button>
-      }
       description={detail?.description ?? t('common.loading')}
       badges={
         detail ? (
@@ -266,7 +250,7 @@ export function StoreDetailPage() {
       }
       sidebar={
         detail ? (
-          <div className="glass-card rounded-3xl p-5 space-y-5">
+          <GlassCard className="rounded-3xl p-5 space-y-5">
             <h3 className="text-xs font-black uppercase tracking-[0.2em] text-text-muted">
               {t('templateDetail.quickInfo')}
             </h3>
@@ -365,7 +349,7 @@ export function StoreDetailPage() {
                 shadowob-cloud deploy --template {name}
               </code>
             </div>
-          </div>
+          </GlassCard>
         ) : null
       }
       tabs={tabs}

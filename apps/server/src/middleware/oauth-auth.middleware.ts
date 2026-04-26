@@ -63,7 +63,10 @@ export function oauthScopeMiddleware(requiredScopes: string[]) {
     const grantedScopes = token.scope.split(' ')
     const hasAllScopes = requiredScopes.every((s) => grantedScopes.includes(s))
     if (!hasAllScopes) {
-      return c.json({ ok: false, error: 'insufficient_scope', code: 'FORBIDDEN', required: requiredScopes }, 403)
+      return c.json(
+        { ok: false, error: 'insufficient_scope', code: 'FORBIDDEN', required: requiredScopes },
+        403,
+      )
     }
 
     await next()

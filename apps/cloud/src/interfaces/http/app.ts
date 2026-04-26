@@ -14,6 +14,7 @@ import { createConfigHandler } from './handlers/config.handler.js'
 import { createDeployHandler } from './handlers/deploy.handler.js'
 import { createHealthHandler } from './handlers/health.handler.js'
 import { createMyTemplatesHandler } from './handlers/my-templates.handler.js'
+import { createProviderProfileHandler } from './handlers/provider-profile.handler.js'
 import { createSecretHandler } from './handlers/secret.handler.js'
 import { createSettingsHandler } from './handlers/settings.handler.js'
 import { createTemplateHandler } from './handlers/template.handler.js'
@@ -70,6 +71,7 @@ export function createCloudApp(ctx: HandlerContext, authToken?: string): Hono {
   app.route('/api', createSettingsHandler(ctx))
   app.route('/api', createActivityHandler(ctx))
   app.route('/api', createSecretHandler(ctx))
+  app.route('/api', createProviderProfileHandler(ctx))
   app.route('/api', createMyTemplatesHandler(ctx))
   app.route('/api', createCommunityHandler(ctx))
 

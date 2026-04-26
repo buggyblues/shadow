@@ -83,12 +83,16 @@ export function EnvVarEditorDialog({
                 value={value}
                 onChange={(event) => setValue(event.target.value)}
                 placeholder={mode === 'edit' ? t('secrets.leaveEmptyKeep') : ''}
+                autoComplete="off"
+                data-1p-ignore
+                data-lpignore="true"
+                data-form-type="other"
               />
               <Button
                 type="button"
                 variant="ghost"
                 size="xs"
-                className="dashboard-action-button"
+                className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
                 onClick={() => setShowValue((current) => !current)}
               >
                 {showValue ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -111,7 +115,7 @@ export function EnvVarEditorDialog({
             <Button
               type="button"
               variant="ghost"
-              className="dashboard-action-button"
+              className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
               onClick={onClose}
             >
               {t('common.cancel')}
@@ -119,7 +123,7 @@ export function EnvVarEditorDialog({
             <Button
               type="button"
               variant="primary"
-              className="dashboard-action-button"
+              className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
               onClick={() => key.trim() && onSubmit({ key: key.trim(), value, isSecret })}
               disabled={!key.trim() || isSubmitting}
             >

@@ -28,7 +28,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "prepack": "pnpm build",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "rm -rf ../types/dist && pnpm --filter @shadowob/flash-types exec tsc -p tsconfig.json && tsc --noEmit",
     "clean": "rm -rf dist"
   },
   "dependencies": {

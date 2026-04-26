@@ -1,4 +1,4 @@
-import { cn } from '@shadowob/ui'
+import { cn, GlassPanel } from '@shadowob/ui'
 import { Eye } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
@@ -371,12 +371,15 @@ export function WorkspacePage({
 
   /* Render */
   return (
-    <div
+    <GlassPanel
       {...getRootProps()}
       className={cn(
         'relative flex flex-1 flex-col overflow-hidden min-h-0',
-        embedded ? 'bg-transparent' : 'glass-panel h-full',
+        embedded ? 'bg-transparent' : 'h-full',
       )}
+      style={
+        embedded ? { background: 'transparent', border: 'none', boxShadow: 'none' } : undefined
+      }
     >
       <input {...inputProps} />
 
@@ -527,6 +530,6 @@ export function WorkspacePage({
           mutations.renameNode.isPending
         }
       />
-    </div>
+    </GlassPanel>
   )
 }

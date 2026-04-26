@@ -14,6 +14,7 @@ import { DeployWizardPage } from '@/pages/DeployWizardPage'
 import { MonitoringPage } from '@/pages/MonitoringPage'
 import { MyTemplateDetailPage } from '@/pages/MyTemplateDetailPage'
 import { MyTemplatesPage } from '@/pages/MyTemplatesPage'
+import { ProviderProfilesPage } from '@/pages/ProviderProfilesPage'
 import { SecretsPage } from '@/pages/SecretsPage'
 import { StoreDetailPage } from '@/pages/StoreDetailPage'
 import { StorePage } from '@/pages/StorePage'
@@ -183,6 +184,12 @@ const secretsRoute = createRoute({
   component: withErrorBoundary(SecretsPage),
 })
 
+const providersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/providers',
+  component: withErrorBoundary(ProviderProfilesPage),
+})
+
 const myTemplatesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/my-templates',
@@ -215,6 +222,7 @@ const routeTree = rootRoute.addChildren([
   templatesRedirectRoute,
   activityRoute,
   settingsRoute,
+  providersRoute,
   secretsRoute,
   myTemplatesRoute,
   myTemplateDetailRoute,

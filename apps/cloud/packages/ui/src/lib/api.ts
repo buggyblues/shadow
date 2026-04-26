@@ -90,6 +90,54 @@ export interface ProviderSettings {
   baseUrl?: string
 }
 
+export interface ProviderCatalogEntry {
+  pluginId: string
+  pluginName: string
+  provider: {
+    id: string
+    api: string
+    baseUrl?: string
+    envKey: string
+    envKeyAliases?: string[]
+    baseUrlEnvKey?: string
+    modelEnvKey?: string
+    priority?: number
+    models: Array<{
+      id: string
+      name?: string
+      tags?: string[]
+      contextWindow?: number
+      maxTokens?: number
+    }>
+  }
+  secretFields: Array<{
+    key: string
+    label?: string
+    description?: string
+    required?: boolean
+    sensitive?: boolean
+  }>
+}
+
+export interface ProviderProfile {
+  id: string
+  providerId: string
+  name: string
+  scope: string
+  enabled: boolean
+  config: Record<string, unknown>
+  envVars: Array<{ key: string; maskedValue: string; isSecret: boolean }>
+  updatedAt?: string
+}
+
+export interface ProviderTestResult {
+  ok: boolean
+  status?: number | null
+  message?: string
+  error?: string
+  checkedAt?: string
+}
+
 export interface DoctorCheck {
   name: string
   status: 'pass' | 'warn' | 'fail'
@@ -197,17 +245,25 @@ export interface DeploymentLogsPage {
   hasMore: boolean
 }
 
+export type BillingUnit = 'usd' | 'shrimp'
+
 export interface ProviderUsageSummary {
   provider: string
   amountUsd: number | null
   usageLabel: string | null
   raw: string | null
+  inputTokens: number | null
+  outputTokens: number | null
+  totalTokens: number | null
 }
 
 export interface AgentCostSummary {
   agentName: string
   podName: string | null
   totalUsd: number | null
+  billingAmount: number | null
+  billingUnit: BillingUnit
+  totalTokens: number | null
   providers: ProviderUsageSummary[]
   source: 'json' | 'text' | 'unavailable'
   message: string | null
@@ -216,6 +272,9 @@ export interface AgentCostSummary {
 export interface NamespaceCostSummary {
   namespace: string
   totalUsd: number | null
+  billingAmount: number | null
+  billingUnit: BillingUnit
+  totalTokens: number | null
   agents: AgentCostSummary[]
   availableAgents: number
   unavailableAgents: number
@@ -224,9 +283,15 @@ export interface NamespaceCostSummary {
 
 export interface CostOverviewSummary {
   totalUsd: number | null
+  billingAmount: number | null
+  billingUnit: BillingUnit
+  totalTokens: number | null
   namespaces: Array<{
     namespace: string
     totalUsd: number | null
+    billingAmount: number | null
+    billingUnit: BillingUnit
+    totalTokens: number | null
     agentCount: number
     availableAgents: number
     unavailableAgents: number
@@ -504,6 +569,28 @@ export const api = {
     put: (data: Settings) => put<{ ok: boolean }>('/settings', data),
   },
 
+  providerCatalogs: {
+    list: () => get<{ providers: ProviderCatalogEntry[] }>('/provider-catalogs'),
+  },
+
+  providerProfiles: {
+    list: () => get<{ profiles: ProviderProfile[] }>('/provider-profiles'),
+    upsert: (data: {
+      id?: string
+      providerId: string
+      name: string
+      enabled?: boolean
+      config?: Record<string, unknown>
+      envVars?: Record<string, string>
+    }) => put<{ ok: boolean; profile?: ProviderProfile }>('/provider-profiles', data),
+    test: (id: string) =>
+      post<ProviderTestResult>(`/provider-profiles/${encodeURIComponent(id)}/test`, {}),
+    delete: (id: string) =>
+      fetch(`${BASE}/provider-profiles/${encodeURIComponent(id)}`, { method: 'DELETE' }).then((r) =>
+        r.json(),
+      ) as Promise<{ ok: boolean }>,
+  },
+
   activity: {
     list: () => get<{ activities: Array<Record<string, unknown>> }>('/activity'),
     record: (entry: object) => post<{ success: boolean }>('/activity', entry),
@@ -590,6 +677,43 @@ export type CloudApiClient = typeof api & {
     namespace: string
     name: string
     resourceTier?: string
+    configSnapshot?: Record<string, unknown>
     envVars?: Record<string, string>
-  }) => Promise<{ success: boolean; error?: string }>
+  }) => Promise<{
+    success: boolean
+    error?: string
+    deploymentId?: string
+    status?:
+      | 'pending'
+      | 'deploying'
+      | 'cancelling'
+      | 'deployed'
+      | 'failed'
+      | 'destroying'
+      | 'destroyed'
+  }>
+  deploymentStatusFn?: (deploymentId: string) => Promise<{
+    id: string
+    status:
+      | 'pending'
+      | 'deploying'
+      | 'cancelling'
+      | 'deployed'
+      | 'failed'
+      | 'destroying'
+      | 'destroyed'
+    errorMessage?: string | null
+  }>
+  deploymentLogsUrlFn?: (deploymentId: string) => string
+  cancelDeploymentFn?: (deploymentId: string) => Promise<{
+    ok: boolean
+    status?:
+      | 'pending'
+      | 'deploying'
+      | 'cancelling'
+      | 'deployed'
+      | 'failed'
+      | 'destroying'
+      | 'destroyed'
+  }>
 }

@@ -1,4 +1,4 @@
-import { Badge, Button, Card, EmptyState, Search } from '@shadowob/ui'
+import { Badge, Button, Card, EmptyState, GlassCard, Search } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
@@ -186,7 +186,7 @@ export function CommunityPage() {
 
       {/* Content */}
       {isError && (
-        <div className="glass-card flex flex-col items-center gap-4 py-16 text-center">
+        <GlassCard className="flex flex-col items-center gap-4 py-16 text-center">
           <AlertCircle size={40} className="text-text-muted" />
           <div>
             <p className="text-sm font-semibold text-text-primary">{t('community.errorTitle')}</p>
@@ -195,7 +195,7 @@ export function CommunityPage() {
           <Button variant="secondary" size="sm" onClick={() => void refetch()}>
             {t('common.retry')}
           </Button>
-        </div>
+        </GlassCard>
       )}
 
       {!isError && isLoading && (

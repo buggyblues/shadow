@@ -752,6 +752,194 @@ const TEMPLATE_REGISTRY: Record<string, TemplateRegistryEntry> = {
       },
     },
   },
+  'marketingskills-buddy': {
+    category: 'business',
+    emoji: '📣',
+    featured: true,
+    popularity: 88,
+    difficulty: 'beginner',
+    translations: {
+      en: {
+        overview: [
+          'Single Marketing Buddy that pulls coreyhaines31/marketingskills at deploy time and stays in sync via hourly poll.',
+          'Deploys one Buddy on a focused "Marketing Skills" Server with #general and #briefs channels.',
+        ],
+        features: [
+          'Live skills sync from coreyhaines31/marketingskills',
+          'CRO, copy, SEO, paid, email, growth out of the box',
+          'Composable — deploy alongside gstack, seomachine, slavingia/skills',
+          'Buttons / select / form interactive blocks',
+        ],
+        highlights: [
+          'One-Buddy starter for any marketing problem',
+          'Tracks the upstream community automatically',
+          'Composable with the other 3 single-repo templates',
+        ],
+        requirements: ['At least one configured LLM provider', 'Outbound HTTPS to GitHub'],
+        useCases: ['Marketing brief reviews', 'CRO audits', 'SEO strategy', 'Lifecycle campaigns'],
+        estimatedDeployTime: '~3 min',
+      },
+      'zh-CN': {
+        overview: [
+          '单 Buddy 模板：部署时拉取 coreyhaines31/marketingskills,每小时同步上游。',
+          '在「Marketing Skills」服务器内提供 #general 与 #briefs 两个频道。',
+        ],
+        features: [
+          '实时从 coreyhaines31/marketingskills 同步技能',
+          '开箱即用：CRO、文案、SEO、付费、邮件、增长',
+          '可组合：与 gstack / seomachine / slavingia/skills 同时部署',
+          '按钮 / 下拉 / 表单交互组件',
+        ],
+        highlights: [
+          '任意营销问题的单 Buddy 起点',
+          '自动跟随上游社区',
+          '与其他 3 个单仓库模板可任意组合',
+        ],
+        requirements: ['至少一个已配置的 LLM Provider', '可访问 GitHub 的出站 HTTPS'],
+        useCases: ['营销简报评审', 'CRO 审计', 'SEO 策略', '生命周期活动'],
+        estimatedDeployTime: '~3 分钟',
+      },
+    },
+  },
+  'gstack-buddy': {
+    category: 'business',
+    emoji: '🎯',
+    featured: true,
+    popularity: 86,
+    difficulty: 'beginner',
+    translations: {
+      en: {
+        overview: [
+          "Single Strategy Buddy that runs Garry Tan's gstack methodology — office-hours interrogations, plan-ceo-review, weekly retros, autoplan.",
+          'Pulled live from garrytan/gstack at deploy time so you always run the latest version of the playbook.',
+        ],
+        features: [
+          'YC-style six-question office-hours flow',
+          'Friday weekly retro on a heartbeat schedule',
+          'CEO-review reframing for any new brief',
+          'Approval interactive blocks for locking decisions',
+        ],
+        highlights: [
+          'Reframes before it executes',
+          'Forces clarity before commitment',
+          'Composable with the marketing / SEO buddies',
+        ],
+        requirements: ['At least one configured LLM provider', 'Outbound HTTPS to GitHub'],
+        useCases: ['Strategy reviews', 'Brief interrogation', 'Weekly retros'],
+        estimatedDeployTime: '~3 min',
+      },
+      'zh-CN': {
+        overview: [
+          '单 Buddy 模板，运行 Garry Tan 的 gstack 方法 —— office-hours 六问、CEO 评审、周复盘、自动规划。',
+          '部署时从 garrytan/gstack 动态拉取,始终运行最新版本。',
+        ],
+        features: [
+          'YC 风格 six-question office-hours 流程',
+          '周五自动周复盘 (heartbeat)',
+          '为新任务自动跑 CEO 评审',
+          'Approval 交互组件锁定决策',
+        ],
+        highlights: ['先重构,再执行', '强制澄清后承诺', '可与营销 / SEO Buddy 组合'],
+        requirements: ['至少一个已配置的 LLM Provider', '可访问 GitHub 的出站 HTTPS'],
+        useCases: ['战略评审', '需求拷问', '周复盘'],
+        estimatedDeployTime: '~3 分钟',
+      },
+    },
+  },
+  'seomachine-buddy': {
+    category: 'business',
+    emoji: '🔎',
+    featured: true,
+    popularity: 84,
+    difficulty: 'beginner',
+    translations: {
+      en: {
+        overview: [
+          'Single SEO Buddy powered by TheCraigHewitt/seomachine — keyword research, content briefs, on-page audits, topical-authority planning.',
+          'Three channels: #research / #briefs / #audits.',
+        ],
+        features: [
+          'Keyword research with intent + cluster output',
+          'Structured content briefs (intent, outline, schema, internal links)',
+          'On-page audits (title, meta, schema, AEO citations)',
+          'Select interactive blocks for picking next topic to brief',
+        ],
+        highlights: [
+          'Topical-authority over keyword volume',
+          'AEO/GEO-aware — optimizes for LLM citations',
+          'Composable with the marketing buddy for full content stack',
+        ],
+        requirements: ['At least one configured LLM provider', 'Outbound HTTPS to GitHub'],
+        useCases: ['SEO strategy', 'Content brief automation', 'On-page audits'],
+        estimatedDeployTime: '~3 min',
+      },
+      'zh-CN': {
+        overview: [
+          '单 Buddy 模板,由 TheCraigHewitt/seomachine 驱动 —— 关键词研究、内容简报、On-page 审计、主题权威规划。',
+          '提供 3 个频道:#research / #briefs / #audits。',
+        ],
+        features: [
+          '关键词研究 + 意图聚类输出',
+          '结构化内容简报 (意图、大纲、Schema、内链)',
+          'On-page 审计 (标题、Meta、Schema、AEO 引用)',
+          'Select 交互组件挑选下一个简报主题',
+        ],
+        highlights: [
+          '主题权威优先于关键词量',
+          '面向 AEO/GEO,优化 LLM 引用',
+          '可与营销 Buddy 组合形成完整内容栈',
+        ],
+        requirements: ['至少一个已配置的 LLM Provider', '可访问 GitHub 的出站 HTTPS'],
+        useCases: ['SEO 策略', '内容简报自动化', 'On-page 审计'],
+        estimatedDeployTime: '~3 分钟',
+      },
+    },
+  },
+  'slavingia-skills-buddy': {
+    category: 'business',
+    emoji: '🧘',
+    featured: true,
+    popularity: 80,
+    difficulty: 'beginner',
+    translations: {
+      en: {
+        overview: [
+          "Single Solo Buddy powered by Sahil Lavingia's curated slavingia/skills — writing, decision-making, design taste, leverage.",
+          'Two channels: #general / #decisions. Decision requests trigger a structured form (cost-of-wrong, reversibility, deadline).',
+        ],
+        features: [
+          'Live sync from slavingia/skills',
+          'Decision form interactive block',
+          'Optimizes for taste and momentum',
+          'Composable with the other 3 single-repo templates',
+        ],
+        highlights: [
+          'Calm, opinionated solo-operator coach',
+          'Decision form forces clarity',
+          'Plain-English outputs only',
+        ],
+        requirements: ['At least one configured LLM provider', 'Outbound HTTPS to GitHub'],
+        useCases: ['Solo founder coaching', 'Decision frameworks', 'Writing & design taste'],
+        estimatedDeployTime: '~3 min',
+      },
+      'zh-CN': {
+        overview: [
+          '单 Buddy 模板,由 Sahil Lavingia 精选的 slavingia/skills 驱动 —— 写作、决策、设计审美、杠杆。',
+          '提供 #general / #decisions 两个频道。决策请求会自动弹出结构化表单（错误成本、可逆性、截止日）。',
+        ],
+        features: [
+          '从 slavingia/skills 实时同步',
+          '决策表单交互组件',
+          '针对审美与势能优化',
+          '可与其他 3 个单仓库模板组合',
+        ],
+        highlights: ['冷静、立场鲜明的单兵教练', '决策表单强制澄清', '只输出朴素英文'],
+        requirements: ['至少一个已配置的 LLM Provider', '可访问 GitHub 的出站 HTTPS'],
+        useCases: ['独立创业者陪练', '决策框架', '写作与设计审美'],
+        estimatedDeployTime: '~3 分钟',
+      },
+    },
+  },
 }
 
 function normalizeLocale(locale?: string): 'en' | 'zh-CN' {

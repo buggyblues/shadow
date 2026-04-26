@@ -406,7 +406,16 @@
     "dropFilesHere": "拖放檔案到此處上傳",
     "linkCopied": "連結已複製",
     "savedToWorkspace": "已儲存到工作區",
-    "saveToWorkspaceFailed": "儲存到工作區失敗"
+    "saveToWorkspaceFailed": "儲存到工作區失敗",
+    "slashCommands": "斜線命令",
+    "slashCommandFrom": "來自 {{name}}",
+    "slashCommandNoDescription": "執行這個 Buddy 命令",
+    "interactiveChoose": "請選擇...",
+    "interactiveSubmit": "提交",
+    "interactiveApprove": "批准",
+    "interactiveReject": "拒絕",
+    "interactiveRequired": "必填",
+    "interactiveSubmitFailed": "提交回應失敗"
   },
   "member": {
     "online": "線上",
@@ -959,7 +968,10 @@
     "exploreChannels": "瀏覽頻道",
     "startChatting": "開始聊天",
     "openNewWindow": "在新視窗開啟",
-    "backToServer": "返回伺服器"
+    "backToServer": "返回伺服器",
+    "homepageLoadFailedTitle": "首頁應用載入失敗",
+    "homepageLoadFailedDesc": "目前此伺服器的首頁應用暫時無法在內嵌視圖中開啟，你可以切換到內建首頁並繼續瀏覽頻道。",
+    "switchToBuiltinHomepage": "切換到內建首頁"
   },
   "contract": {
     "contractTitle": "Buddy 聘用合約",
@@ -1592,5 +1604,31 @@
     "updateCategoryError": "更新分類失敗",
     "categoryDeleted": "分類已刪除",
     "deleteCategoryError": "刪除分類失敗"
+  },
+  "developers": {
+    "cloud": {
+      "heroBadge": "開發者的 Shadow Cloud",
+      "heroTitle": "交付 Agent，不是 YAML。",
+      "heroSubtitle": "從 Git 倉庫到託管 Kubernetes 叢集，分鐘級上線你的 agent 團隊。支援熱更新、即時日誌、Stripe 結算，深度融入 Shadow 平台。",
+      "ctaOpenConsole": "打開雲端主控台",
+      "ctaBrowseApps": "瀏覽應用市場",
+      "featureGitTitle": "從 Git 部署",
+      "featureGitDesc": "你的 agent 住在倉庫中。sidecar 定時 git pull，SOUL.md / skills / tools / hooks 更新無需重啟 Pod。",
+      "featureK8sTitle": "託管 Kubernetes",
+      "featureK8sDesc": "可使用自帶叢集（BYOK）或平台叢集，每次部署都可一鍵取消或銷毀。",
+      "featureBillingTitle": "透明計費",
+      "featureBillingDesc": "以蝦幣計費，Stripe 完成充值。自有算力不被加價。",
+      "featureObsTitle": "即時可觀測",
+      "featureObsDesc": "流式查看 Pod 日誌、agent 健康狀態，對帳孤兒叢集——全部在主控台完成。",
+      "howTitle": "三步上線",
+      "step1Title": "指向一個 Git 倉庫",
+      "step1Desc": "使用範本或你自己遵循 gitagent 約定的倉庫（SOUL.md、agent.yaml、skills/ 等）。",
+      "step2Title": "選配額、填憑證",
+      "step2Desc": "選擇資源檔位，填好 Secret 後其餘交給我們。",
+      "step3Title": "部署並迭代",
+      "step3Desc": "推送 main，sidecar 下一輪 pull 就會拉到最新版本。無需重新部署。",
+      "pricingTitle": "算力你全有。",
+      "pricingDesc": "Shop 的收入覆蓋算力成本——創作者承擔基礎設施，同時保留資源歸屬。"
+    }
   }
 }

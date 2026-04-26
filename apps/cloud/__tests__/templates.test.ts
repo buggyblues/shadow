@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { resolvePacks } from '../src/plugins/agent-pack/index.js'
 import { parseJsonc } from '../src/utils/jsonc.js'
 
 const templatesDir = resolve(fileURLToPath(import.meta.url), '..', '..', 'templates')
@@ -109,5 +110,56 @@ describe('folder-based template consistency (TPL-03)', () => {
     expect(raw).not.toMatch(/sk-proj-[a-zA-Z0-9]+/)
     expect(raw).not.toMatch(/gsk_[a-zA-Z0-9]+/)
     expect(raw).not.toMatch(/xai-[a-zA-Z0-9]+/)
+  })
+})
+
+function readFlatTemplate(file: string): Record<string, unknown> {
+  return parseJsonc<Record<string, unknown>>(
+    readFileSync(resolve(templatesDir, file), 'utf-8'),
+    file,
+  )
+}
+
+function readAgentPackMounts(file: string): Array<{ kind: string; from: string }> {
+  const content = readFlatTemplate(file)
+  const deployments = content.deployments as Record<string, unknown>
+  const agents = deployments.agents as Array<Record<string, unknown>>
+  const firstAgent = agents[0]!
+  const agentUse = (firstAgent.use ?? []) as Array<Record<string, unknown>>
+  const agentPack = agentUse.find((entry) => entry.plugin === 'agent-pack')!
+  const options = agentPack.options as Record<string, unknown>
+  const packs = resolvePacks(options)
+  return packs[0]!.mounts.map((mount) => ({
+    kind: String(mount.kind),
+    from: String(mount.from),
+  }))
+}
+
+describe('community pack template mounts', () => {
+  it('gstack-buddy mounts the OpenClaw-native gstack artifacts', () => {
+    expect(readAgentPackMounts('gstack-buddy.template.json')).toEqual(
+      expect.arrayContaining([
+        { kind: 'skills', from: 'openclaw/skills' },
+        { kind: 'instructions', from: 'openclaw' },
+      ]),
+    )
+  })
+
+  it('seomachine-buddy mounts Claude commands, agents, and context docs', () => {
+    expect(readAgentPackMounts('seomachine-buddy.template.json')).toEqual(
+      expect.arrayContaining([
+        { kind: 'commands', from: '.claude/commands' },
+        { kind: 'agents', from: '.claude/agents' },
+        { kind: 'instructions', from: '.claude/commands' },
+        { kind: 'instructions', from: '.claude/agents' },
+        { kind: 'instructions', from: 'context' },
+      ]),
+    )
+  })
+
+  it('slavingia-skills-buddy mounts the actual skills directory', () => {
+    expect(readAgentPackMounts('slavingia-skills-buddy.template.json')).toEqual(
+      expect.arrayContaining([{ kind: 'skills', from: 'skills' }]),
+    )
   })
 })

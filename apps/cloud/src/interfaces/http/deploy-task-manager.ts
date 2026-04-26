@@ -5,9 +5,7 @@
  * log lines, and allows later SSE subscribers to replay and follow progress.
  */
 
-import { writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { resolveCloudSaasShadowRuntime } from '../../application/cloud-saas-config.js'
 import type { DeploymentDao } from '../../dao/deployment.dao.js'
 import type { DeploymentLogDao } from '../../dao/deployment-log.dao.js'
 import type { EnvVarDao } from '../../dao/envvar.dao.js'
@@ -15,15 +13,6 @@ import type { Deployment } from '../../db/schema.js'
 import type { ServiceContainer } from '../../services/container.js'
 import { GLOBAL_ENV_SCOPE, toDeploymentEnvScope } from '../../utils/deployment-scope.js'
 import { redactSecrets } from '../../utils/redact.js'
-
-function cleanupTmpFile(path: string): void {
-  try {
-    const { unlinkSync } = require('node:fs')
-    unlinkSync(path)
-  } catch {
-    /* ignore */
-  }
-}
 
 function shouldSkipProgressLine(line: string): boolean {
   const trimmed = line.trim()
@@ -153,16 +142,8 @@ export class DeployTaskManager {
   }
 
   private async run(taskId: number, config: Record<string, unknown>): Promise<void> {
-    const originalEnv: Record<string, string | undefined> = {}
     const { envOverrides, templateConfig } = this.buildEnvOverrides(config)
-    const tmpFile = join(tmpdir(), `shadowob-deploy-${taskId}-${Date.now()}.json`)
-
-    writeFileSync(tmpFile, JSON.stringify(templateConfig, null, 2), 'utf-8')
-
-    for (const [key, value] of Object.entries(envOverrides)) {
-      originalEnv[key] = process.env[key]
-      process.env[key] = value
-    }
+    const { shadowUrl, podShadowUrl, shadowToken } = resolveCloudSaasShadowRuntime(envOverrides)
 
     try {
       this.deploymentDao.update(taskId, {
@@ -175,12 +156,14 @@ export class DeployTaskManager {
 
       this.appendLog(taskId, 'Starting deployment...')
 
-      const result = await this.container.deploy.up({
-        filePath: tmpFile,
+      const result = await this.container.deploymentRuntime.deployFromSnapshot({
+        configSnapshot: templateConfig,
+        runtimeEnvVars: envOverrides,
         namespace: templateConfig.namespace as string | undefined,
         dryRun: templateConfig.dryRun as boolean | undefined,
-        shadowUrl: envOverrides.SHADOW_SERVER_URL,
-        shadowToken: envOverrides.SHADOW_USER_TOKEN,
+        shadowUrl,
+        shadowToken,
+        k8sShadowUrl: podShadowUrl,
         onOutput: (output: string) => {
           this.appendOutput(taskId, output)
         },
@@ -210,15 +193,6 @@ export class DeployTaskManager {
       this.emit(taskId, { type: 'done', data: { exitCode: 1, error: message } })
     } finally {
       this.activeTaskIds.delete(taskId)
-      cleanupTmpFile(tmpFile)
-
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          delete process.env[key]
-        } else {
-          process.env[key] = value
-        }
-      }
     }
   }
 }

@@ -56,6 +56,88 @@ export interface ShadowMessage {
     isBot?: boolean
   }
   attachments?: ShadowAttachment[]
+  metadata?: ShadowMessageMetadata | null
+}
+
+export interface ShadowInteractiveButtonItem {
+  id: string
+  label: string
+  style?: 'primary' | 'secondary' | 'destructive'
+  value?: string
+}
+
+export interface ShadowInteractiveSelectItem {
+  id: string
+  label: string
+  value: string
+}
+
+export interface ShadowInteractiveFormField {
+  id: string
+  kind: 'text' | 'textarea' | 'number' | 'checkbox' | 'select'
+  label: string
+  placeholder?: string
+  defaultValue?: string
+  required?: boolean
+  options?: ShadowInteractiveSelectItem[]
+  maxLength?: number
+  min?: number
+  max?: number
+}
+
+export interface ShadowInteractiveBlock {
+  id: string
+  kind: 'buttons' | 'select' | 'form' | 'approval'
+  prompt?: string
+  buttons?: ShadowInteractiveButtonItem[]
+  options?: ShadowInteractiveSelectItem[]
+  fields?: ShadowInteractiveFormField[]
+  submitLabel?: string
+  responsePrompt?: string
+  approvalCommentLabel?: string
+  oneShot?: boolean
+}
+
+export interface ShadowInteractiveResponse {
+  blockId: string
+  sourceMessageId: string
+  actionId: string
+  value: string
+  values?: Record<string, string>
+  submissionId?: string
+  responseMessageId?: string | null
+  submittedAt?: string
+}
+
+export interface ShadowInteractiveState {
+  sourceMessageId: string
+  blockId: string
+  submitted: boolean
+  response?: ShadowInteractiveResponse
+}
+
+export interface ShadowInteractiveActionInput {
+  blockId: string
+  actionId: string
+  value?: string
+  label?: string
+  values?: Record<string, string>
+}
+
+export interface ShadowInteractiveSubmissionPending {
+  ok: true
+  pending: true
+  interactiveState?: ShadowInteractiveState
+}
+
+export type ShadowInteractiveActionResult = ShadowMessage | ShadowInteractiveSubmissionPending
+
+export interface ShadowMessageMetadata {
+  agentChain?: Record<string, unknown>
+  interactive?: ShadowInteractiveBlock
+  interactiveResponse?: ShadowInteractiveResponse
+  interactiveState?: ShadowInteractiveState
+  [key: string]: unknown
 }
 
 export interface ShadowAttachment {
@@ -151,6 +233,22 @@ export interface ShadowChannelPolicy {
   config: Record<string, unknown>
 }
 
+export interface ShadowSlashCommand {
+  name: string
+  description?: string
+  aliases?: string[]
+  packId?: string
+  sourcePath?: string
+  interaction?: ShadowInteractiveBlock
+}
+
+export interface ShadowChannelSlashCommand extends ShadowSlashCommand {
+  agentId: string
+  botUserId: string
+  botUsername: string
+  botDisplayName?: string | null
+}
+
 export interface ShadowRemoteChannel {
   id: string
   name: string
@@ -170,6 +268,7 @@ export interface ShadowRemoteServer {
 export interface ShadowRemoteConfig {
   agentId: string
   botUserId: string
+  slashCommands?: ShadowSlashCommand[]
   servers: ShadowRemoteServer[]
 }
 

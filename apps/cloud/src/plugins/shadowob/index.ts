@@ -54,7 +54,6 @@ function buildShadowConfig(context: PluginBuildContext): PluginConfigFragment {
 
     const account: Record<string, unknown> = {
       token: `\${env:SHADOW_TOKEN_${binding.targetId.toUpperCase().replace(/-/g, '_')}}`,
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
       serverUrl: '${env:SHADOW_SERVER_URL}',
       enabled: true,
       buddyName: buddy.name,
@@ -117,8 +116,16 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
   })
 
   api.onProvision(async (context: PluginProvisionContext) => {
+    // Pod-facing URL — used as runtime env var inside the agent container
     const serverUrl = context.secrets.SHADOW_SERVER_URL
+    // Host-facing URL — used by cloud backend for the provisioning API calls.
+    // Falls back to pod-facing URL when not provided (e.g. CLI mode where they're equal).
+    const provisionUrl =
+      context.secrets.SHADOW_PROVISION_URL ?? process.env.SHADOW_PROVISION_URL ?? serverUrl
     const userToken = context.secrets.SHADOW_USER_TOKEN
+    context.logger.dim(
+      `  shadowob: provisionUrl=${provisionUrl} tokenLen=${userToken?.length ?? 0} tokenStart=${userToken?.slice(0, 10) ?? '(none)'}`,
+    )
     if (!serverUrl || !userToken) {
       context.logger.dim(
         '  shadowob provision skipped: SHADOW_SERVER_URL / SHADOW_USER_TOKEN not set',
@@ -127,7 +134,7 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
     }
 
     const result = await provisionShadowResources(context.config, {
-      serverUrl,
+      serverUrl: provisionUrl ?? serverUrl,
       userToken,
       dryRun: context.dryRun,
       existingState: context.previousState as {

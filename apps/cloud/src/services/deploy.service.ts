@@ -32,10 +32,23 @@ export interface DeployOptions {
   k8sShadowUrl?: string
   local?: boolean
   onOutput?: (out: string) => void
+  /** Per-request env overrides used for template/plugin resolution. Never mutates process.env. */
+  runtimeEnvVars?: Record<string, string>
   /** Named cluster — resolves to kubeconfig in ~/.shadow-cloud/clusters/<name>.yaml */
   cluster?: string
   /** Explicit path to a kubeconfig file (overrides cluster and k8sContext) */
   kubeConfigPath?: string
+  /**
+   * Optional callback invoked once the Pulumi Stack object exists.
+   * Callers can store the reference and later invoke `stack.cancel()` to
+   * abort an in-progress `up` operation cooperatively.
+   */
+  onStackReady?: (stack: { cancel: () => Promise<void> }) => void
+  /**
+   * Optional cooperative-cancel checker. Polled at safe boundaries; if it
+   * returns `true`, the deploy aborts before performing further side-effects.
+   */
+  isCancelled?: () => boolean
 }
 
 export interface DeployResult {
@@ -51,7 +64,32 @@ export interface DestroyOptions {
   namespace?: string
   stack?: string
   k8sContext?: string
+  kubeConfigPath?: string
   config?: CloudConfig
+}
+
+function resolveStackName(namespace: string, stack?: string): string {
+  return stack ?? `dev-${namespace}`
+}
+
+function normalizeRuntimeEnvVars(envVars?: Record<string, string>): Record<string, string> {
+  const normalized: Record<string, string> = {}
+  if (!envVars) return normalized
+
+  for (const [key, value] of Object.entries(envVars)) {
+    if (typeof value !== 'string') continue
+    if (value === '__SAVED__' || value.trim() === '') continue
+    normalized[key] = value
+  }
+
+  return normalized
+}
+
+function buildEffectiveEnv(envVars?: Record<string, string>): Record<string, string | undefined> {
+  return {
+    ...process.env,
+    ...normalizeRuntimeEnvVars(envVars),
+  }
 }
 
 // ─── Service ────────────────────────────────────────────────────────────────
@@ -73,6 +111,7 @@ export class DeployService {
   async up(options: DeployOptions): Promise<DeployResult> {
     const filePath = resolve(options.filePath)
     const emit = options.onOutput ?? (() => {})
+    const effectiveEnv = buildEffectiveEnv(options.runtimeEnvVars)
 
     if (!existsSync(filePath)) {
       throw new Error(`Config file not found: ${filePath}`)
@@ -98,6 +137,7 @@ export class DeployService {
     const config = await this.configService.parseFile(filePath)
 
     const namespace = options.namespace ?? config.deployments?.namespace ?? 'shadowob-cloud'
+    const stackName = resolveStackName(namespace, options.stack)
     const agents = config.deployments?.agents ?? []
 
     if (agents.length === 0) {
@@ -130,14 +170,21 @@ export class DeployService {
     }
 
     // 2. Build extra secrets from CLI-provided credentials (passed directly to plugin lifecycle)
+    // The SHADOW_SERVER_URL injected into pod env must be reachable from inside the cluster, so
+    // prefer the pod-facing URL (k8sShadowUrl) over the worker-side provisioning URL (shadowUrl).
     const extraSecrets: Record<string, string> = {}
-    if (options.shadowUrl) extraSecrets.SHADOW_SERVER_URL = options.shadowUrl
+    const podFacingShadowUrl = options.k8sShadowUrl ?? options.shadowUrl
+    if (podFacingShadowUrl) extraSecrets.SHADOW_SERVER_URL = podFacingShadowUrl
+    // Host-reachable URL for the cloud backend's provisioning API calls.
+    // When pod-facing URL differs (e.g. host.lima.internal vs localhost), the host
+    // can't resolve the pod-facing one, so we pass the host-side URL separately.
+    if (options.shadowUrl) extraSecrets.SHADOW_PROVISION_URL = options.shadowUrl
     if (options.shadowToken) extraSecrets.SHADOW_USER_TOKEN = options.shadowToken
 
     // 3. Resolve config (expand extends + templates)
     this.logger.step('Resolving config...')
     emit('Resolving config...\n')
-    const resolved = await this.configService.resolve(config, configCwd)
+    const resolved = await this.configService.resolve(config, configCwd, { env: effectiveEnv })
 
     // Always load plugins so the build pipeline (applyPluginPipeline) works regardless
     // of whether provisioning is skipped.
@@ -186,7 +233,7 @@ export class DeployService {
               const { mergeProvisionState, saveProvisionState } = await import('../utils/state.js')
               const newState: import('../utils/state.js').ProvisionState = {
                 provisionedAt: new Date().toISOString(),
-                stackName: options.stack ?? 'dev',
+                stackName,
                 namespace,
                 plugins: provisionResults.states,
               }
@@ -201,13 +248,20 @@ export class DeployService {
       }
     }
 
+    const k8sShadowUrl =
+      options.k8sShadowUrl ??
+      effectiveEnv.SHADOW_AGENT_SERVER_URL ??
+      options.shadowUrl ??
+      effectiveEnv.K8S_SHADOW_URL ??
+      effectiveEnv.SHADOW_SERVER_URL
+
     // 4. Output manifests to directory if requested
     if (options.outputDir) {
       this.logger.step('Generating manifests...')
       const manifests = this.manifestService.build({
         config: resolved,
         namespace,
-        shadowServerUrl: options.shadowUrl ?? process.env.SHADOW_SERVER_URL,
+        shadowServerUrl: k8sShadowUrl,
       })
 
       const outDir = resolve(options.outputDir)
@@ -229,19 +283,13 @@ export class DeployService {
     }
 
     // 5. Deploy via Pulumi automation API
-    const k8sShadowUrl =
-      options.k8sShadowUrl ??
-      options.shadowUrl ??
-      process.env.K8S_SHADOW_URL ??
-      process.env.SHADOW_SERVER_URL
-
     this.logger.step('Initializing Pulumi stack...')
     emit('Initializing Pulumi stack...\n')
 
     let stack: Awaited<ReturnType<typeof this.k8s.getOrCreateStack>>
     try {
       stack = await this.k8s.getOrCreateStack({
-        stackName: options.stack ?? 'dev',
+        stackName,
         config: resolved,
         namespace,
         shadowServerUrl: k8sShadowUrl,
@@ -258,7 +306,7 @@ export class DeployService {
         try {
           const tmpStack = await this.k8s
             .getOrCreateStack({
-              stackName: options.stack ?? 'dev',
+              stackName,
               config: resolved,
               namespace,
               shadowServerUrl: k8sShadowUrl,
@@ -290,7 +338,7 @@ export class DeployService {
         }
         // Retry
         stack = await this.k8s.getOrCreateStack({
-          stackName: options.stack ?? 'dev',
+          stackName,
           config: resolved,
           namespace,
           shadowServerUrl: k8sShadowUrl,
@@ -301,6 +349,20 @@ export class DeployService {
       } else {
         throw err
       }
+    }
+
+    // Expose the stack so the worker can call stack.cancel() if the user
+    // requests cancellation while the up() operation is running.
+    if (options.onStackReady) {
+      try {
+        options.onStackReady(stack as unknown as { cancel: () => Promise<void> })
+      } catch {
+        /* never let a callback throw kill the deploy */
+      }
+    }
+
+    if (options.isCancelled?.()) {
+      throw new Error('Deployment cancelled before stack apply')
     }
 
     await this.k8s.deployStack(stack, {
@@ -340,12 +402,13 @@ export class DeployService {
    */
   async destroy(options: DestroyOptions): Promise<void> {
     const namespace = options.namespace ?? 'shadowob-cloud'
+    const stackName = resolveStackName(namespace, options.stack)
 
     this.logger.step(`Destroying resources in namespace "${namespace}"...`)
 
     if (options.config) {
       const stack = await this.k8s.getOrCreateStack({
-        stackName: options.stack ?? 'dev',
+        stackName,
         config: options.config,
         namespace,
         kubeContext: options.k8sContext,

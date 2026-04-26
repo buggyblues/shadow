@@ -2,7 +2,9 @@ import type { Logger } from 'pino'
 import type { AgentDao } from '../dao/agent.dao'
 import type { AgentPolicyDao } from '../dao/agent-policy.dao'
 import type { ChannelDao } from '../dao/channel.dao'
+import type { ChannelMemberDao } from '../dao/channel-member.dao'
 import type { ServerDao } from '../dao/server.dao'
+import { normalizeSlashCommands } from './agent.service'
 
 export class AgentPolicyService {
   constructor(
@@ -11,6 +13,7 @@ export class AgentPolicyService {
       agentDao: AgentDao
       serverDao: ServerDao
       channelDao: ChannelDao
+      channelMemberDao: ChannelMemberDao
       logger: Logger
     },
   ) {}
@@ -70,6 +73,21 @@ export class AgentPolicyService {
     const servers = await Promise.all(
       memberships.map(async ({ server }) => {
         const channels = await this.deps.channelDao.findByServerId(server.id)
+        const channelIds = channels.map((ch) => ch.id)
+        let visibleChannelIds: Set<string> | null = null
+        try {
+          visibleChannelIds = new Set(
+            await this.deps.channelMemberDao.getUserChannelIds(agent.userId, channelIds),
+          )
+        } catch (err) {
+          this.deps.logger.warn(
+            { err, agentId, serverId: server.id },
+            'Failed to filter remote agent config by channel membership; falling back to all channels',
+          )
+        }
+        const joinableChannels = visibleChannelIds
+          ? channels.filter((ch) => visibleChannelIds.has(ch.id))
+          : channels
         const serverPolicies = allPolicies.filter((p) => p.serverId === server.id)
 
         // Find server-wide default policy (channelId is null)
@@ -87,7 +105,7 @@ export class AgentPolicyService {
           slug: server.slug,
           iconUrl: server.iconUrl,
           defaultPolicy,
-          channels: channels.map((ch) => {
+          channels: joinableChannels.map((ch) => {
             const channelPolicy = serverPolicies.find((p) => p.channelId === ch.id)
             return {
               id: ch.id,
@@ -110,6 +128,9 @@ export class AgentPolicyService {
     return {
       agentId,
       botUserId: agent.userId,
+      slashCommands: normalizeSlashCommands(
+        (agent.config as Record<string, unknown>)?.slashCommands,
+      ),
       servers,
     }
   }

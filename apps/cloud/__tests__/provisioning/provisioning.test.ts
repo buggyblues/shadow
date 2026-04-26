@@ -1,7 +1,21 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { CloudConfig } from '../../src/config/schema.js'
 import type { ProvisionResult } from '../../src/plugins/shadowob/provisioning.js'
 import { buildProvisionedEnvVars } from '../../src/plugins/shadowob/provisioning.js'
+
+const originalShadowAgentServerUrl = process.env.SHADOW_AGENT_SERVER_URL
+
+beforeEach(() => {
+  delete process.env.SHADOW_AGENT_SERVER_URL
+})
+
+afterEach(() => {
+  if (originalShadowAgentServerUrl === undefined) {
+    delete process.env.SHADOW_AGENT_SERVER_URL
+  } else {
+    process.env.SHADOW_AGENT_SERVER_URL = originalShadowAgentServerUrl
+  }
+})
 
 describe('provisioning', () => {
   describe('buildProvisionedEnvVars', () => {
@@ -120,6 +134,44 @@ describe('provisioning', () => {
 
       const env = buildProvisionedEnvVars('agent-1', config, provision, 'http://localhost')
       expect(Object.keys(env)).toHaveLength(0)
+    })
+
+    it('prefers SHADOW_AGENT_SERVER_URL for in-cluster agent runtime env', () => {
+      process.env.SHADOW_AGENT_SERVER_URL = 'http://host.lima.internal:3002'
+
+      const config: CloudConfig = {
+        version: '1',
+        use: [
+          {
+            plugin: 'shadowob',
+            options: {
+              buddies: [{ id: 'bot-1', name: 'Bot' }],
+              bindings: [
+                {
+                  targetId: 'bot-1',
+                  targetType: 'buddy',
+                  servers: ['srv-1'],
+                  channels: ['ch-1'],
+                  agentId: 'agent-1',
+                },
+              ],
+            },
+          },
+        ],
+      }
+
+      const provision: ProvisionResult = {
+        servers: new Map([['srv-1', 'real-server-id']]),
+        channels: new Map([['ch-1', 'real-channel-id']]),
+        buddies: new Map([
+          ['bot-1', { agentId: 'real-agent-id', token: 'token-abc123', userId: 'user-1' }],
+        ]),
+      }
+
+      const env = buildProvisionedEnvVars('agent-1', config, provision, 'http://server:3002')
+
+      expect(env.SHADOW_SERVER_URL).toBe('http://host.lima.internal:3002')
+      expect(env.SHADOW_TOKEN_BOT_1).toBe('token-abc123')
     })
   })
 })

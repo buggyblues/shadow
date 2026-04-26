@@ -1,7 +1,7 @@
 import { generateInviteCode } from '@shadowob/shared'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import type { Database } from '../db'
-import { members, servers, users } from '../db/schema'
+import { agents, members, servers, users } from '../db/schema'
 import { channels } from '../db/schema/channels'
 
 export class ServerDao {
@@ -155,12 +155,25 @@ export class ServerDao {
           username: users.username,
           displayName: users.displayName,
           avatarUrl: users.avatarUrl,
-          status: users.status,
+          status: sql<'online' | 'idle' | 'dnd' | 'offline'>`
+            CASE
+              WHEN ${users.isBot} THEN
+                CASE
+                  WHEN ${agents.status} = 'running'
+                    AND ${agents.lastHeartbeat} IS NOT NULL
+                    AND EXTRACT(EPOCH FROM (NOW() - ${agents.lastHeartbeat})) <= 90
+                  THEN 'online'::user_status
+                  ELSE 'offline'::user_status
+                END
+              ELSE ${users.status}
+            END
+          `.as('status'),
           isBot: users.isBot,
         },
       })
       .from(members)
       .leftJoin(users, eq(members.userId, users.id))
+      .leftJoin(agents, eq(agents.userId, users.id))
       .where(eq(members.serverId, serverId))
 
     return rows.map((r) => ({ ...r.member, user: r.user }))

@@ -10,7 +10,7 @@ import { setupPresenceGateway } from './presence.gateway'
 
 export function setupWebSocket(io: SocketIOServer, container: AppContainer): void {
   // Auth middleware for Socket.IO
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const token = socket.handshake.auth.token as string | undefined
 
     if (!token) {
@@ -23,6 +23,13 @@ export function setupWebSocket(io: SocketIOServer, container: AppContainer): voi
       socket.data.username = payload.username
       next()
     } catch (err) {
+      const agent = await container.resolve('agentDao').findByLastToken(token)
+      if (agent) {
+        socket.data.userId = agent.userId
+        socket.data.username = 'agent'
+        next()
+        return
+      }
       logger.warn({ err, socketId: socket.id }, 'Socket authentication failed — invalid token')
       next(new Error('Invalid token'))
     }

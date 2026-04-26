@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm'
+import { eq, inArray, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import { agents, users } from '../db/schema'
 
@@ -76,6 +76,20 @@ export class AgentDao {
 
   async findByUserId(userId: string) {
     const result = await this.db.select().from(agents).where(eq(agents.userId, userId)).limit(1)
+    return result[0] ?? null
+  }
+
+  async findByUserIds(userIds: string[]) {
+    if (userIds.length === 0) return []
+    return this.db.select().from(agents).where(inArray(agents.userId, userIds))
+  }
+
+  async findByLastToken(token: string) {
+    const result = await this.db
+      .select()
+      .from(agents)
+      .where(sql`${agents.config}->>'lastToken' = ${token}`)
+      .limit(1)
     return result[0] ?? null
   }
 

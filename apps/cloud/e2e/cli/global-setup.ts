@@ -69,6 +69,14 @@ function run(cmd: string, cwd = WORKSPACE_ROOT): void {
   execSync(cmd, { cwd, stdio: 'inherit' })
 }
 
+function prepareOpenClawRunnerContext(): void {
+  const localShadowobPlugin = join(WORKSPACE_ROOT, 'packages', 'openclaw-shadowob', 'package.json')
+  if (!existsSync(localShadowobPlugin)) return
+
+  console.log('[setup] Building local @shadowob/openclaw-shadowob package for runner image...')
+  run('pnpm --filter @shadowob/openclaw-shadowob build', WORKSPACE_ROOT)
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default async function globalSetup() {
@@ -109,10 +117,11 @@ export default async function globalSetup() {
   if (!imageExists || process.env.E2E_BUILD_IMAGE === '1') {
     console.log(`[setup] Building openclaw-runner image (${openclawRunnerTag})...`)
     console.log(
-      '[setup] This installs openclaw + @shadowob/openclaw-shadowob from npm — may take a few minutes',
+      '[setup] This installs openclaw and bakes the local @shadowob/openclaw-shadowob package — may take a few minutes',
     )
+    prepareOpenClawRunnerContext()
     run(
-      `docker build -t ${openclawRunnerTag} -f ${join(openclawRunnerDir, 'Dockerfile')} ${openclawRunnerDir}`,
+      `docker build -t ${openclawRunnerTag} -f ${join(openclawRunnerDir, 'Dockerfile')} ${WORKSPACE_ROOT}`,
       WORKSPACE_ROOT,
     )
     console.log('[setup] openclaw-runner image built ✓')

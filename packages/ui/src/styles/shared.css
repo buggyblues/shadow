@@ -1,0 +1,267 @@
+/*
+ * Shared theme tokens & base styles.
+ * Centralized in @shadowob/ui for all apps in the monorepo.
+ * Must NOT contain @import "tailwindcss" — each app handles that itself.
+ */
+
+/* Scan packages/ui/src so Tailwind picks up component class names */
+@source "../";
+
+@theme {
+  --font-sans: "Nunito", "Noto Sans SC", sans-serif;
+  --font-mono: "Inter", monospace;
+
+  --color-primary: #00f3ff;
+  --color-primary-strong: #00c6d1;
+  --color-primary-hover: #00a3b0;
+  --color-accent: #f8e71c;
+  --color-accent-strong: #ffb300;
+  --color-accent-hover: #e0d018;
+  --color-success: #00e676;
+  --color-warning: #ff9100;
+  --color-danger: #ff2a55;
+
+  /* Neon Frost Dark Theme (Default) */
+  --color-bg-deep: #050508;
+  --color-bg-primary: #0a0a0f;
+  --color-bg-secondary: #12121a;
+  --color-bg-tertiary: #1a1a24;
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #a1a1aa;
+  --color-text-muted: #94a3b8;
+  --color-bg-modifier-hover: rgba(255, 255, 255, 0.04);
+  --color-bg-modifier-active: rgba(255, 255, 255, 0.08);
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-border-dim: rgba(255, 255, 255, 0.1);
+  --color-divider: #272733;
+
+  /* Glassmorphism */
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-line-soft: rgba(255, 255, 255, 0.04);
+  --glass-line: rgba(255, 255, 255, 0.07);
+  --glass-line-strong: rgba(255, 255, 255, 0.1);
+  --shadow-soft: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
+  --shadow-cyan: 0 10px 25px rgba(0, 243, 255, 0.4);
+
+  /* Physics */
+  --bezier-bouncy: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ─── Light Theme ─── */
+:root.light {
+  --color-bg-deep: #f1f5f9;
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f8fafc;
+  --color-bg-tertiary: #f1f5f9;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #334155;
+  --color-text-muted: #64748b;
+  --color-primary: #0891b2;
+  --color-primary-strong: #0e7490;
+  --color-primary-hover: #155e75;
+  --color-danger: #dc2626;
+  --color-bg-modifier-hover: rgba(0, 0, 0, 0.05);
+  --color-bg-modifier-active: rgba(0, 0, 0, 0.08);
+  --color-border-subtle: rgba(0, 0, 0, 0.08);
+  --color-border-dim: rgba(0, 0, 0, 0.12);
+  --color-divider: #e2e8f0;
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(0, 0, 0, 0.05);
+  --glass-line-soft: rgba(0, 0, 0, 0.04);
+  --glass-line: rgba(0, 0, 0, 0.06);
+  --glass-line-strong: rgba(0, 0, 0, 0.1);
+  --shadow-soft: 0 10px 40px -10px rgba(0, 0, 0, 0.08);
+}
+
+/* ─── Light Theme Utility Overrides ─── */
+:root.light {
+  color-scheme: light;
+}
+:root.light body {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+:root.light ::-webkit-scrollbar-thumb {
+  background: #c4c9ce;
+}
+:root.light ::-webkit-scrollbar-thumb:hover {
+  background: #a8adb3;
+}
+
+/* ─── Global CJK typography optimization ─── */
+:lang(zh),
+:lang(ja),
+:lang(ko) {
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+body {
+  font-family: "Nunito", "Noto Sans SC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  background-color: var(--color-bg-deep, var(--color-bg-primary));
+  color: var(--color-text-primary);
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+/* ─── Scrollbar styling ─── */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-bg-tertiary);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #1a1b1e;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+/* Hidden scrollbar — scrollable but no visible scrollbar */
+.scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─── Animation Utilities ─── */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes panelSlideIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+@keyframes float {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  33% {
+    transform: translate(40px, 60px) scale(1.05) rotate(5deg);
+  }
+  66% {
+    transform: translate(-30px, 20px) scale(0.95) rotate(-5deg);
+  }
+}
+@keyframes spring-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out both;
+}
+.animate-slide-in-left {
+  animation: slide-in-left 0.2s ease-out both;
+}
+.animate-slide-in-right {
+  animation: slide-in-right 0.2s ease-out both;
+}
+.animate-scale-in {
+  animation: scale-in 0.15s ease-out both;
+}
+.animate-pulse-soft {
+  animation: pulse-soft 1.5s infinite;
+}
+.animate-float {
+  animation: float 25s infinite ease-in-out;
+}
+.animate-spring-in {
+  animation: spring-in 0.5s var(--bezier-bouncy) both;
+}
+
+/* ─── Blob button (press animation) ─── */
+.blob-button {
+  transition: all 0.5s var(--bezier-bouncy);
+}
+.blob-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 10px 25px rgba(0, 243, 255, 0.3);
+}
+.blob-button:active {
+  transform: scale(0.95) translateY(2px);
+}

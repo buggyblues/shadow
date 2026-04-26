@@ -161,22 +161,55 @@ class ShadowClient:
     def get_agent_config(self, agent_id: str) -> dict[str, Any]:
         return self._get(f"/api/agents/{agent_id}/config")
 
+    def update_agent_slash_commands(
+        self, agent_id: str, commands: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        return self._put(
+            f"/api/agents/{agent_id}/slash-commands", json={"commands": commands}
+        )
+
+    def get_agent_slash_commands(self, agent_id: str) -> dict[str, Any]:
+        return self._get(f"/api/agents/{agent_id}/slash-commands")
+
+    def list_channel_slash_commands(self, channel_id: str) -> dict[str, Any]:
+        return self._get(f"/api/channels/{channel_id}/slash-commands")
+
     # ── Agent Policies ───────────────────────────────────────────────────
 
-    def list_policies(self, agent_id: str, server_id: str) -> list[dict[str, Any]]:
-        return self._get(f"/api/agents/{agent_id}/servers/{server_id}/policies")
+    def list_policies(
+        self, agent_id: str, server_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        policies = self._get(f"/api/agents/{agent_id}/policies")
+        if server_id is None:
+            return policies
+        return [policy for policy in policies if policy.get("serverId") == server_id]
 
     def upsert_policy(
         self, agent_id: str, server_id: str, **kwargs: Any
     ) -> dict[str, Any]:
-        return self._put(f"/api/agents/{agent_id}/servers/{server_id}/policies", json=kwargs)
+        policy: dict[str, Any] = {"serverId": server_id, **kwargs}
+        results = self._put(
+            f"/api/agents/{agent_id}/policies", json={"policies": [policy]}
+        )
+        if isinstance(results, list):
+            if not results:
+                raise ValueError(f"No policy result returned for agent {agent_id}")
+            return results[0]
+        return results
 
     def delete_policy(
         self, agent_id: str, server_id: str, channel_id: str
     ) -> dict[str, Any]:
-        return self._delete(
-            f"/api/agents/{agent_id}/servers/{server_id}/policies/{channel_id}"
+        policies = self.list_policies(agent_id, server_id)
+        policy = next(
+            (entry for entry in policies if entry.get("channelId") == channel_id),
+            None,
         )
+        if not policy or not policy.get("id"):
+            raise ValueError(
+                f"Policy not found for agent {agent_id} in server {server_id} channel {channel_id}"
+            )
+        return self._delete(f"/api/agents/{agent_id}/policies/{policy['id']}")
 
     # ── Servers ──────────────────────────────────────────────────────────
 
@@ -336,6 +369,25 @@ class ShadowClient:
 
     def get_message(self, message_id: str) -> dict[str, Any]:
         return self._get(f"/api/messages/{message_id}")
+
+    def submit_interactive_action(
+        self,
+        message_id: str,
+        *,
+        block_id: str,
+        action_id: str,
+        value: str | None = None,
+        label: str | None = None,
+        values: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = {"blockId": block_id, "actionId": action_id}
+        if value is not None:
+            data["value"] = value
+        if label is not None:
+            data["label"] = label
+        if values is not None:
+            data["values"] = values
+        return self._post(f"/api/messages/{message_id}/interactive", json=data)
 
     def edit_message(self, message_id: str, content: str) -> dict[str, Any]:
         return self._patch(f"/api/messages/{message_id}", json={"content": content})

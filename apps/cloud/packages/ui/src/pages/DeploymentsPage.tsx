@@ -1,4 +1,4 @@
-import { Badge, Button, Search, Tabs, TabsList, TabsTrigger } from '@shadowob/ui'
+import { Badge, Button, GlassPanel, Search, Tabs } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
@@ -25,6 +25,7 @@ import { DashboardEmptyState } from '@/components/DashboardEmptyState'
 import { DashboardListRow } from '@/components/DashboardListRow'
 import { DashboardNamespaceCard } from '@/components/DashboardNamespaceCard'
 import { DashboardLoadingState } from '@/components/DashboardState'
+import { DashboardTabsList } from '@/components/DashboardTabsList'
 import { DashboardTaskCard } from '@/components/DashboardTaskCard'
 import { PageShell } from '@/components/PageShell'
 import { StatCard } from '@/components/StatCard'
@@ -32,9 +33,9 @@ import { StatsGrid } from '@/components/StatsGrid'
 import { StatusBadge } from '@/components/StatusBadge'
 import { StatusDot } from '@/components/StatusDot'
 import { useDebounce } from '@/hooks/useDebounce'
-import { api, type Deployment, type DeployTaskListItem } from '@/lib/api'
+import { type Deployment, type DeployTaskListItem } from '@/lib/api'
 import { useApiClient } from '@/lib/api-context'
-import { formatUsdCost } from '@/lib/store-data'
+import { formatDisplayCost, formatTokenCount } from '@/lib/store-data'
 import {
   formatTimestamp,
   getAge,
@@ -54,7 +55,10 @@ interface NamespaceGroup {
   readyCount: number
   totalCount: number
   latestTask?: DeployTaskListItem
-  costUsd?: number | null
+  totalUsd?: number | null
+  billingAmount?: number | null
+  billingUnit?: 'usd' | 'shrimp'
+  totalTokens?: number | null
   availableCostAgents?: number
   unavailableCostAgents?: number
 }
@@ -185,7 +189,6 @@ function NamespaceCard({
   onRedeploy: (taskId: number) => void
   onRollback: (ns: string) => void
 }) {
-  const api = useApiClient()
   const { t, i18n } = useTranslation()
   const task = group.latestTask
   const readyLabel = `${group.readyCount}/${group.totalCount} ${t('clusters.ready').toLowerCase()}`
@@ -215,9 +218,30 @@ function NamespaceCard({
             <p className="text-xs text-text-muted">
               {group.totalCount} {pluralize(group.totalCount, 'deployment')}
             </p>
-            <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-muted">
               <DollarSign size={11} />
-              <span>{formatUsdCost(group.costUsd ?? null, i18n.language)}</span>
+              <span>
+                {formatDisplayCost(
+                  {
+                    totalUsd: group.totalUsd ?? null,
+                    billingAmount: group.billingAmount ?? null,
+                    billingUnit: group.billingUnit,
+                  },
+                  {
+                    locale: i18n.language,
+                    shrimpUnitLabel: t('deploy.shrimpCoins'),
+                  },
+                )}
+              </span>
+              {group.totalTokens !== null && (
+                <>
+                  <span>·</span>
+                  <span>
+                    {t('deployments.totalTokens')}{' '}
+                    {formatTokenCount(group.totalTokens ?? null, i18n.language)}
+                  </span>
+                </>
+              )}
               <span>·</span>
               <span>
                 {t('deployments.availableAgents')} {group.availableCostAgents ?? 0}
@@ -235,7 +259,7 @@ function NamespaceCard({
         </div>
       }
       headerRight={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 md:justify-end">
           <StatusDot
             status={group.readyCount === group.totalCount ? 'success' : 'warning'}
             label={readyLabel}
@@ -307,7 +331,6 @@ function NamespaceCard({
 // ── Tasks Panel ───────────────────────────────────────────────────────────────
 
 function TasksPanel({ tasks }: { tasks: DeployTaskListItem[] }) {
-  const api = useApiClient()
   const { t } = useTranslation()
 
   if (tasks.length === 0) {
@@ -375,8 +398,15 @@ export function DeploymentsPage() {
   } = useQuery({
     queryKey: ['deployments'],
     queryFn: api.deployments.list,
-    refetchInterval: 10_000,
-    staleTime: 5_000,
+    // Fast-poll while any deployment row is mid-transition; slow otherwise.
+    refetchInterval: (q) => {
+      const rows = (q.state.data as Array<{ ready?: string; available?: string }>) ?? []
+      const transitioning = rows.some(
+        (r) => (r.ready && !r.ready.startsWith('1/')) || r.available === '0',
+      )
+      return transitioning ? 3_000 : 30_000
+    },
+    staleTime: 2_000,
   })
 
   const { data: nsInfo } = useQuery({
@@ -477,12 +507,22 @@ export function DeploymentsPage() {
   const costByNamespace = useMemo(() => {
     const map = new Map<
       string,
-      { totalUsd: number | null; availableAgents: number; unavailableAgents: number }
+      {
+        totalUsd: number | null
+        billingAmount: number | null
+        billingUnit: 'usd' | 'shrimp'
+        totalTokens: number | null
+        availableAgents: number
+        unavailableAgents: number
+      }
     >()
 
     for (const item of costOverview?.namespaces ?? []) {
       map.set(item.namespace, {
         totalUsd: item.totalUsd,
+        billingAmount: item.billingAmount,
+        billingUnit: item.billingUnit,
+        totalTokens: item.totalTokens,
         availableAgents: item.availableAgents,
         unavailableAgents: item.unavailableAgents,
       })
@@ -501,7 +541,10 @@ export function DeploymentsPage() {
       readyCount: deps.filter((deployment) => isDeploymentReady(deployment.ready)).length,
       totalCount: deps.length,
       latestTask: tasksByNamespace.get(namespace),
-      costUsd: costByNamespace.get(namespace)?.totalUsd ?? null,
+      totalUsd: costByNamespace.get(namespace)?.totalUsd ?? null,
+      billingAmount: costByNamespace.get(namespace)?.billingAmount ?? null,
+      billingUnit: costByNamespace.get(namespace)?.billingUnit ?? 'usd',
+      totalTokens: costByNamespace.get(namespace)?.totalTokens ?? null,
       availableCostAgents: costByNamespace.get(namespace)?.availableAgents ?? 0,
       unavailableCostAgents: costByNamespace.get(namespace)?.unavailableAgents ?? 0,
     }))
@@ -566,7 +609,7 @@ export function DeploymentsPage() {
       }
       headerContent={
         <div className="space-y-3">
-          <StatsGrid className="grid-cols-2 lg:grid-cols-5">
+          <StatsGrid className="grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
             <StatCard
               label={t('clusters.totalDeployments')}
               value={total}
@@ -593,24 +636,17 @@ export function DeploymentsPage() {
             />
             <StatCard
               label={t('deployments.totalCost')}
-              value={formatUsdCost(costOverview?.totalUsd ?? null, i18n.language)}
+              value={formatDisplayCost(costOverview ?? {}, {
+                locale: i18n.language,
+                shrimpUnitLabel: t('deploy.shrimpCoins'),
+              })}
               icon={<DollarSign size={13} />}
               color="purple"
             />
           </StatsGrid>
           <div className="flex items-center justify-between gap-3">
             <Tabs value={activeTab} onChange={setActiveTab}>
-              <TabsList className="dashboard-tabs-list">
-                {tabs.map((tab) => (
-                  <TabsTrigger key={tab.id} value={tab.id} className="dashboard-tabs-trigger">
-                    <span className="dashboard-tab-icon">{tab.icon}</span>
-                    <span>{tab.label}</span>
-                    {typeof tab.count === 'number' && (
-                      <span className="dashboard-tabs-count">{tab.count}</span>
-                    )}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
+              <DashboardTabsList tabs={tabs} />
             </Tabs>
             {activeTab === 'infrastructure' && (
               <Search
@@ -627,9 +663,9 @@ export function DeploymentsPage() {
       {activeTab === 'infrastructure' && (
         <>
           {isLoading && (
-            <div className="glass-panel p-4">
+            <GlassPanel className="p-4">
               <DashboardLoadingState rows={2} />
-            </div>
+            </GlassPanel>
           )}
 
           {!isLoading && groups.length === 0 && (
@@ -651,7 +687,7 @@ export function DeploymentsPage() {
           )}
 
           {!isLoading && groups.length > 0 && (
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-3">
               {groups.map((group) => (
                 <NamespaceCard
                   key={group.namespace}

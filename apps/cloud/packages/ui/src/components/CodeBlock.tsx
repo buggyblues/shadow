@@ -40,7 +40,7 @@ export function CodeBlock({
     >
       {/* Header */}
       {(title || language) && (
-        <div className="flex items-center justify-between border-b border-white/8 bg-[#252526] px-4 py-2">
+        <div className="flex items-center justify-between border-b border-[var(--glass-line)] bg-[#252526] px-4 py-2">
           <div className="flex items-center gap-2">
             {title && <span className="text-xs text-[#cccccc]/70">{title}</span>}
             {language && (

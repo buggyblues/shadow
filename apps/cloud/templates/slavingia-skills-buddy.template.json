@@ -1,0 +1,105 @@
+{
+  "version": "1.0.0",
+  "name": "${i18n:name}",
+  "description": "${i18n:description}",
+  "environment": "production",
+  "team": {
+    "name": "slavingia-skills-buddy",
+    "description": "Single Solo Buddy powered by slavingia/skills — Sahil Lavingia's curated skills library. Multi-purpose: writing, decision-making, design, leverage."
+  },
+  "use": [
+    {
+      "plugin": "model-provider"
+    },
+    {
+      "plugin": "shadowob",
+      "options": {
+        "servers": [
+          {
+            "id": "slavingia-hq",
+            "name": "Solo Skills",
+            "slug": "solo-skills",
+            "channels": [
+              {
+                "id": "general",
+                "title": "General",
+                "type": "text"
+              },
+              {
+                "id": "decisions",
+                "title": "Decisions",
+                "type": "text"
+              }
+            ]
+          }
+        ],
+        "buddies": [
+          {
+            "id": "solo-bot",
+            "name": "Solo Buddy"
+          }
+        ],
+        "bindings": [
+          {
+            "targetId": "solo-bot",
+            "targetType": "buddy",
+            "servers": ["slavingia-hq"],
+            "channels": ["general", "decisions"],
+            "agentId": "solo-buddy"
+          }
+        ]
+      }
+    }
+  ],
+  "deployments": {
+    "namespace": "slavingia-skills-buddy",
+    "agents": [
+      {
+        "id": "solo-buddy",
+        "runtime": "openclaw",
+        "description": "Single Solo Buddy that uses Sahil Lavingia's curated skills (slavingia/skills) for writing, decision-making, design taste, and high-leverage solo work.",
+        "identity": {
+          "name": "Solo Buddy",
+          "personality": "You are a calm, opinionated solo-operator coach. You optimize for leverage, taste, and momentum. You are biased toward shipping, allergic to busywork, and you write in plain English.",
+          "systemPrompt": "Routing:\n• #general → consult the most-relevant slavingia/skills folder; cite the folder name and apply it.\n• #decisions → for any decision request, post a `form` interactive block using the message tool with action `send`; include `target`, `message`, `kind: \"form\"`, `prompt`, and `fields` asking for: the decision, the cost of being wrong, the reversibility, and the deadline. Then return a recommendation with a one-line rationale.\n\nAlways prefer fewer, sharper outputs to long ones."
+        },
+        "use": [
+          {
+            "plugin": "agent-pack",
+            "options": {
+              "packs": [
+                {
+                  "id": "slavingia-skills",
+                  "url": "https://github.com/slavingia/skills",
+                  "ref": "main"
+                }
+              ],
+              "poll": "1h"
+            }
+          }
+        ],
+        "resources": {
+          "requests": {
+            "cpu": "100m",
+            "memory": "256Mi"
+          },
+          "limits": {
+            "cpu": "1000m",
+            "memory": "1Gi"
+          }
+        },
+        "configuration": {}
+      }
+    ]
+  },
+  "i18n": {
+    "en": {
+      "name": "Solo Skills Buddy",
+      "description": "Single Solo Buddy powered live by slavingia/skills — Sahil Lavingia's curated skills for writing, decision-making, design taste, and high-leverage solo work."
+    },
+    "zh-CN": {
+      "name": "Solo 技能 Buddy",
+      "description": "单 Buddy 模板，部署时动态拉取 slavingia/skills（Sahil Lavingia 精选技能集）—— 写作、决策、设计审美、高杠杆独立工作。"
+    }
+  }
+}

@@ -1140,7 +1140,8 @@ function OrderManager({ serverId }: { serverId: string }) {
       queryClient.invalidateQueries({ queryKey: ['admin-orders', serverId] })
       showToast(t('shop.orderStatusUpdated', '订单状态已更新'), 'success')
     },
-    onError: (err: Error) => showToast(err.message || t('shop.updateOrderStatusFailed', '更新订单状态失败'), 'error'),
+    onError: (err: Error) =>
+      showToast(err.message || t('shop.updateOrderStatusFailed', '更新订单状态失败'), 'error'),
   })
 
   const { data: orders = [] } = useQuery({
@@ -1347,7 +1348,8 @@ function ShopSettings({ serverId }: { serverId: string }) {
       queryClient.invalidateQueries({ queryKey: ['shop', serverId] })
       showToast(t('shop.shopSettingsSaved', '店铺设置已保存'), 'success')
     },
-    onError: (err: Error) => showToast(err.message || t('shop.saveShopSettingsFailed', '保存店铺设置失败'), 'error'),
+    onError: (err: Error) =>
+      showToast(err.message || t('shop.saveShopSettingsFailed', '保存店铺设置失败'), 'error'),
   })
 
   return (

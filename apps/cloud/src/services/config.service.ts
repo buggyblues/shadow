@@ -14,7 +14,7 @@ import {
 } from '../config/parser.js'
 import type { AgentDeployment, CloudConfig, Configuration } from '../config/schema.js'
 import { type SecurityViolation, validateNoInlineKeys } from '../config/security.js'
-import { collectTemplateRefs } from '../config/template.js'
+import { collectTemplateRefs, type TemplateContext } from '../config/template.js'
 import { deepMerge } from '../utils/deep-merge.js'
 
 export class ConfigService {
@@ -24,13 +24,22 @@ export class ConfigService {
   }
 
   /** Expand 'extends' references and resolve template variables. */
-  async resolve(config: CloudConfig, cwd?: string): Promise<CloudConfig> {
-    return resolveConfig(config, undefined, cwd)
+  async resolve(
+    config: CloudConfig,
+    cwd?: string,
+    templateCtx?: TemplateContext,
+  ): Promise<CloudConfig> {
+    return resolveConfig(config, templateCtx, cwd)
   }
 
   /** Build OpenClaw config for a specific agent. */
-  buildOpenClawConfig(agent: AgentDeployment, config: CloudConfig, cwd?: string) {
-    return buildOpenClawConfig(agent, config, cwd)
+  buildOpenClawConfig(
+    agent: AgentDeployment,
+    config: CloudConfig,
+    cwd?: string,
+    env?: Record<string, string | undefined>,
+  ) {
+    return buildOpenClawConfig(agent, config, cwd, env)
   }
 
   /**
@@ -49,9 +58,9 @@ export class ConfigService {
    * Parse, validate, and resolve in one call.
    * Convenience for callers that need the final resolved config.
    */
-  async resolveFromFile(filePath: string): Promise<CloudConfig> {
+  async resolveFromFile(filePath: string, templateCtx?: TemplateContext): Promise<CloudConfig> {
     const config = await parseConfigFile(filePath)
-    return resolveConfig(config, undefined, dirname(filePath))
+    return resolveConfig(config, templateCtx, dirname(filePath))
   }
 
   /** Detect inline API keys in config (SEC-01). */

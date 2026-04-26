@@ -1,6 +1,16 @@
-import { Button, cn } from '@shadowob/ui'
+import { Button, cn, InputValley } from '@shadowob/ui'
 import { type InfiniteData, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileText, FolderOpen, Image as ImageIcon, Plus, Send, Smile, X } from 'lucide-react'
+import {
+  Bot,
+  Command as CommandIcon,
+  FileText,
+  FolderOpen,
+  Image as ImageIcon,
+  Plus,
+  Send,
+  Smile,
+  X,
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useDraftStorage } from '../../hooks/use-draft-storage'
@@ -62,6 +72,17 @@ interface Member {
   user?: MemberUser
 }
 
+interface SlashCommand {
+  name: string
+  description?: string
+  aliases?: string[]
+  packId?: string
+  agentId: string
+  botUserId: string
+  botUsername: string
+  botDisplayName?: string | null
+}
+
 export function MessageInput({
   channelId,
   channelName,
@@ -101,12 +122,27 @@ export function MessageInput({
   const [mentionIndex, setMentionIndex] = useState(0)
   const mentionListRef = useRef<HTMLDivElement>(null)
 
+  // Slash command autocomplete state
+  const [slashQuery, setSlashQuery] = useState<string | null>(null)
+  const [slashIndex, setSlashIndex] = useState(0)
+  const slashListRef = useRef<HTMLDivElement>(null)
+
   // Fetch members for @mention autocomplete
   const { data: members = [] } = useQuery({
     queryKey: ['members', activeServerId],
     queryFn: () => fetchApi<Member[]>(`/api/servers/${activeServerId}/members`),
     enabled: !!activeServerId,
   })
+
+  const { data: slashCommandData } = useQuery({
+    queryKey: ['channel-slash-commands', channelId],
+    queryFn: () =>
+      fetchApi<{ commands: SlashCommand[] }>(`/api/channels/${channelId}/slash-commands`),
+    enabled: Boolean(channelId),
+    staleTime: 30_000,
+  })
+
+  const slashCommands = slashCommandData?.commands ?? []
 
   // Filter members by mention query — buddies first, pinyin support, show all results
   const filteredMembers = useMemo(() => {
@@ -155,6 +191,33 @@ export function MessageInput({
     return scored.map((x) => x.member)
   }, [members, mentionQuery])
 
+  const filteredSlashCommands = useMemo(() => {
+    if (slashQuery === null) return []
+    const q = slashQuery.trim().toLocaleLowerCase()
+    return slashCommands
+      .filter((command) => {
+        if (!q) return true
+        const haystack = [
+          command.name,
+          ...(command.aliases ?? []),
+          command.description ?? '',
+          command.packId ?? '',
+          command.botUsername,
+          command.botDisplayName ?? '',
+        ]
+          .join(' ')
+          .toLocaleLowerCase()
+        return haystack.includes(q)
+      })
+      .sort((a, b) => {
+        const aExact = a.name.toLocaleLowerCase() === q ? 1 : 0
+        const bExact = b.name.toLocaleLowerCase() === q ? 1 : 0
+        if (aExact !== bExact) return bExact - aExact
+        return a.name.localeCompare(b.name)
+      })
+      .slice(0, 12)
+  }, [slashCommands, slashQuery])
+
   // Scroll active mention item into view
   useEffect(() => {
     if (mentionListRef.current && mentionQuery !== null) {
@@ -162,6 +225,13 @@ export function MessageInput({
       item?.scrollIntoView({ block: 'nearest' })
     }
   }, [mentionIndex, mentionQuery])
+
+  useEffect(() => {
+    if (slashListRef.current && slashQuery !== null) {
+      const item = slashListRef.current.children[slashIndex] as HTMLElement
+      item?.scrollIntoView({ block: 'nearest' })
+    }
+  }, [slashIndex, slashQuery])
 
   // Consume external files dropped into the chat area
   useEffect(() => {
@@ -207,6 +277,31 @@ export function MessageInput({
       requestAnimationFrame(() => {
         textarea.focus()
         textarea.setSelectionRange(newCursorPos, newCursorPos)
+      })
+    },
+    [content],
+  )
+
+  const insertSlashCommand = useCallback(
+    (command: SlashCommand) => {
+      const textarea = textareaRef.current
+      if (!textarea) return
+
+      const cursorPos = textarea.selectionStart
+      const beforeCursor = content.slice(0, cursorPos)
+      const after = content.slice(cursorPos)
+      const match = beforeCursor.match(/^\/([^\s/]{0,64})$/u)
+      if (!match) return
+
+      const token = `/${command.name} `
+      const newContent = `${token}${after}`
+      setContent(newContent)
+      setSlashQuery(null)
+      setSlashIndex(0)
+
+      requestAnimationFrame(() => {
+        textarea.focus()
+        textarea.setSelectionRange(token.length, token.length)
       })
     },
     [content],
@@ -412,6 +507,34 @@ export function MessageInput({
   }, [])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Handle slash command autocomplete navigation
+    if (slashQuery !== null && filteredSlashCommands.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSlashIndex((prev) => (prev + 1) % filteredSlashCommands.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSlashIndex(
+          (prev) => (prev - 1 + filteredSlashCommands.length) % filteredSlashCommands.length,
+        )
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        const selected = filteredSlashCommands[slashIndex]
+        if (selected) insertSlashCommand(selected)
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setSlashQuery(null)
+        setSlashIndex(0)
+        return
+      }
+    }
+
     // Handle mention autocomplete navigation
     if (mentionQuery !== null && filteredMembers.length > 0) {
       if (e.key === 'ArrowDown') {
@@ -458,8 +581,19 @@ export function MessageInput({
     // Detect @mention trigger
     const cursorPos = el.selectionStart
     const beforeCursor = value.slice(0, cursorPos)
+    const slashMatch = beforeCursor.match(/^\/([^\s/]{0,64})$/u)
+    if (slashMatch) {
+      setSlashQuery(slashMatch[1] ?? '')
+      setSlashIndex(0)
+      setMentionQuery(null)
+      setMentionIndex(0)
+    } else {
+      setSlashQuery(null)
+      setSlashIndex(0)
+    }
+
     const mentionMatch = beforeCursor.match(/(?:^|\s)@([^\s@]{0,32})$/u)
-    if (mentionMatch) {
+    if (!slashMatch && mentionMatch) {
       setMentionQuery(mentionMatch[1] ?? '')
       setMentionIndex(0)
     } else {
@@ -560,6 +694,53 @@ export function MessageInput({
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
+      {/* Slash command autocomplete popup */}
+      {slashQuery !== null && filteredSlashCommands.length > 0 && (
+        <div
+          ref={slashListRef}
+          className="absolute bottom-[calc(100%+8px)] left-4 right-4 bg-white/95 dark:bg-[#1A1D24]/95 backdrop-blur-2xl border border-black/5 dark:border-white/10 rounded-[16px] shadow-[0_12px_48px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_48px_rgba(0,0,0,0.5)] py-2 px-1.5 max-h-[280px] overflow-y-auto z-50 flex flex-col gap-0.5 animate-in fade-in slide-in-from-bottom-2 duration-100"
+        >
+          <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted flex items-center gap-1.5">
+            <CommandIcon size={13} />
+            {t('chat.slashCommands')}
+          </div>
+          {filteredSlashCommands.map((command, i) => (
+            <button
+              key={`${command.agentId}:${command.name}`}
+              type="button"
+              className={cn(
+                'flex items-center gap-3 w-full px-3 py-2.5 text-left transition-colors rounded-[10px]',
+                i === slashIndex
+                  ? 'bg-black/5 dark:bg-white/10 text-text-primary'
+                  : 'text-text-primary hover:bg-black/5 dark:hover:bg-white/10',
+              )}
+              onMouseEnter={() => setSlashIndex(i)}
+              onMouseDown={(e) => {
+                e.preventDefault()
+                insertSlashCommand(command)
+              }}
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                <CommandIcon size={16} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold text-[14px]">/{command.name}</span>
+                <span className="block truncate text-xs text-text-muted">
+                  {command.description ?? t('chat.slashCommandNoDescription')}
+                </span>
+              </span>
+              <span className="hidden sm:flex items-center gap-1.5 max-w-[180px] text-xs text-text-muted">
+                <Bot size={13} className="shrink-0" />
+                <span className="truncate">
+                  {t('chat.slashCommandFrom', {
+                    name: command.botDisplayName ?? command.botUsername,
+                  })}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
       {/* @mention autocomplete popup */}
       {mentionQuery !== null && filteredMembers.length > 0 && (
         <div
@@ -662,9 +843,9 @@ export function MessageInput({
         </div>
       )}
 
-      <div
+      <InputValley
         className={cn(
-          'flex items-center gap-2 px-4 py-2 input-valley',
+          'flex items-center gap-2 px-4 py-2',
           replyToId || pendingFiles.length > 0 ? 'rounded-b-[20px]' : 'rounded-[20px]',
         )}
       >
@@ -743,7 +924,7 @@ export function MessageInput({
         >
           <Send size={16} className="text-white" />
         </Button>
-      </div>
+      </InputValley>
 
       <input
         ref={fileInputRef}

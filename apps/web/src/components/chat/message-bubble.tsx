@@ -68,8 +68,68 @@ export interface Message {
   author?: Author
   reactions?: ReactionGroup[]
   attachments?: Attachment[]
+  /** Optional metadata blob — includes interactive blocks (Phase 2). */
+  metadata?: {
+    interactive?: InteractiveBlock
+    interactiveResponse?: InteractiveResponseMetadata
+    interactiveState?: InteractiveStateMetadata
+    [key: string]: unknown
+  }
   /** Optimistic send status — only set on client-side pending messages */
   sendStatus?: 'sending' | 'failed'
+}
+
+/** Phase 2 interactive block shape — mirrors server schema. */
+export interface InteractiveButtonItem {
+  id: string
+  label: string
+  style?: 'primary' | 'secondary' | 'destructive'
+  value?: string
+}
+export interface InteractiveSelectItem {
+  id: string
+  label: string
+  value: string
+}
+export interface InteractiveFormField {
+  id: string
+  kind: 'text' | 'textarea' | 'number' | 'checkbox' | 'select'
+  label: string
+  placeholder?: string
+  defaultValue?: string
+  required?: boolean
+  options?: InteractiveSelectItem[]
+  maxLength?: number
+  min?: number
+  max?: number
+}
+export interface InteractiveBlock {
+  id: string
+  kind: 'buttons' | 'select' | 'form' | 'approval'
+  prompt?: string
+  buttons?: InteractiveButtonItem[]
+  options?: InteractiveSelectItem[]
+  fields?: InteractiveFormField[]
+  submitLabel?: string
+  responsePrompt?: string
+  approvalCommentLabel?: string
+  oneShot?: boolean
+}
+export interface InteractiveResponseMetadata {
+  blockId: string
+  sourceMessageId: string
+  actionId: string
+  value: string
+  values?: Record<string, string>
+  submissionId?: string
+  responseMessageId?: string | null
+  submittedAt?: string
+}
+export interface InteractiveStateMetadata {
+  sourceMessageId: string
+  blockId: string
+  submitted: boolean
+  response?: InteractiveResponseMetadata
 }
 
 export type { Attachment, Author, ReactionGroup }
@@ -99,6 +159,7 @@ export interface MessageBubbleProps {
   /** Multi-select mode */
   selectionMode?: boolean
   isSelected?: boolean
+  submittedInteractiveResponse?: InteractiveResponseMetadata | null
   onToggleSelect?: (messageId: string) => void
   onEnterSelectionMode?: (messageId: string) => void
   /** When true, this message is grouped with the previous message (same author, within 1 min) — hide avatar & name */
@@ -171,6 +232,7 @@ function MessageBubbleInner({
   replyToMessage,
   selectionMode,
   isSelected,
+  submittedInteractiveResponse,
   onToggleSelect,
   onEnterSelectionMode,
   isGrouped = false,
@@ -669,6 +731,16 @@ function MessageBubbleInner({
           </div>
         )}
 
+        {/* Interactive block (Phase 2 POC — buttons / select) */}
+        {message.metadata?.interactive && (
+          <InteractiveBlockRenderer
+            block={message.metadata.interactive}
+            messageId={message.id}
+            disabled={message.sendStatus === 'sending'}
+            submittedResponse={submittedInteractiveResponse}
+          />
+        )}
+
         {/* Reactions */}
         {message.reactions && message.reactions.length > 0 && (
           <div className={`flex flex-wrap gap-1 mt-1.5 ${isDmOwn ? 'justify-end' : ''}`}>
@@ -1061,6 +1133,328 @@ function MessageBubbleInner({
   )
 }
 
+/**
+ * Phase 2 POC — renders interactive controls (buttons / select) attached to
+ * a message and POSTs the user's choice to the server, which echoes a
+ * follow-up reply that the buddy agent receives via normal chat flow.
+ */
+function InteractiveBlockRenderer({
+  block,
+  messageId,
+  disabled,
+  submittedResponse,
+}: {
+  block: InteractiveBlock
+  messageId: string
+  disabled?: boolean
+  submittedResponse?: InteractiveResponseMetadata | null
+}) {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const activeChannelId = useChatStore((s) => s.activeChannelId)
+  const [submitting, setSubmitting] = React.useState(false)
+  const [done, setDone] = React.useState<string | null>(submittedResponse?.actionId ?? null)
+  const [error, setError] = React.useState<string | null>(null)
+  const submittingRef = React.useRef(false)
+
+  React.useEffect(() => {
+    if (submittedResponse?.actionId) {
+      setDone(submittedResponse.actionId)
+    }
+  }, [submittedResponse?.actionId])
+
+  const send = React.useCallback(
+    async (actionId: string, value: string, label: string, values?: Record<string, string>) => {
+      if (submittingRef.current || (block.oneShot !== false && done)) return
+      submittingRef.current = true
+      const previousDone = done
+      setSubmitting(true)
+      if (block.oneShot !== false) setDone(actionId)
+      setError(null)
+      try {
+        await fetchApi(`/api/messages/${messageId}/interactive`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            blockId: block.id,
+            actionId,
+            value,
+            label,
+            ...(values ? { values } : {}),
+          }),
+        })
+        setDone(actionId)
+        if (activeChannelId) {
+          queryClient.invalidateQueries({ queryKey: ['messages', activeChannelId] })
+        }
+      } catch (e) {
+        if (block.oneShot !== false) setDone(previousDone)
+        setError(e instanceof Error ? e.message : t('chat.interactiveSubmitFailed'))
+      } finally {
+        submittingRef.current = false
+        setSubmitting(false)
+      }
+    },
+    [activeChannelId, block.id, block.oneShot, done, messageId, queryClient, submitting, t],
+  )
+
+  const isLocked =
+    disabled || submitting || (block.oneShot !== false && (done !== null || !!submittedResponse))
+
+  return (
+    <div className="mt-2 flex flex-col gap-2 rounded-lg border border-border-subtle bg-black/5 dark:bg-white/5 p-3">
+      {block.prompt && (
+        <div className="text-sm text-text-secondary whitespace-pre-wrap">{block.prompt}</div>
+      )}
+
+      {block.kind === 'buttons' && block.buttons && (
+        <div className="flex flex-wrap gap-2">
+          {block.buttons.map((b) => {
+            const value = b.value ?? b.id
+            const isPicked = done === b.id
+            return (
+              <Button
+                key={b.id}
+                size="sm"
+                variant={
+                  b.style === 'destructive'
+                    ? 'danger'
+                    : b.style === 'primary' || isPicked
+                      ? 'primary'
+                      : 'outline'
+                }
+                disabled={isLocked}
+                onClick={() => send(b.id, value, b.label)}
+              >
+                {isPicked ? (
+                  <>
+                    <Check size={14} />
+                    <span>{b.label}</span>
+                  </>
+                ) : (
+                  b.label
+                )}
+              </Button>
+            )
+          })}
+        </div>
+      )}
+
+      {block.kind === 'select' && block.options && (
+        <select
+          className="rounded-md border border-border-subtle bg-background px-2 py-1 text-sm"
+          disabled={isLocked}
+          value={done ?? ''}
+          onChange={(e) => {
+            const id = e.target.value
+            if (!id) return
+            const opt = block.options?.find((o) => o.id === id)
+            if (opt) send(opt.id, opt.value, opt.label)
+          }}
+        >
+          <option value="" disabled>
+            {t('chat.interactiveChoose')}
+          </option>
+          {block.options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {(block.kind === 'form' || block.kind === 'approval') && (
+        <InteractiveFormBody
+          block={block}
+          isLocked={isLocked}
+          submittedValues={submittedResponse?.values}
+          onSubmit={(actionId, label, values) => send(actionId, actionId, label, values)}
+        />
+      )}
+
+      {error && <div className="text-xs text-danger">{error}</div>}
+    </div>
+  )
+}
+
+/**
+ * Renders a `kind: 'form' | 'approval'` block as a controlled mini-form.
+ * - 'form': renders fields + Submit button (single action 'submit').
+ * - 'approval': renders fields (typically a single comment textarea) + Approve / Reject pair.
+ */
+function InteractiveFormBody({
+  block,
+  isLocked,
+  submittedValues,
+  onSubmit,
+}: {
+  block: InteractiveBlock
+  isLocked: boolean
+  submittedValues?: Record<string, string>
+  onSubmit: (actionId: string, label: string, values: Record<string, string>) => void
+}) {
+  const { t } = useTranslation()
+  const initial = React.useMemo<Record<string, string>>(() => {
+    const out: Record<string, string> = {}
+    for (const f of block.fields ?? []) {
+      out[f.id] =
+        submittedValues?.[f.id] ?? f.defaultValue ?? (f.kind === 'checkbox' ? 'false' : '')
+    }
+    return out
+  }, [block.fields, submittedValues])
+  const [values, setValues] = React.useState<Record<string, string>>(initial)
+  const [touched, setTouched] = React.useState(false)
+
+  React.useEffect(() => {
+    if (submittedValues) {
+      setValues(initial)
+    }
+  }, [initial, submittedValues])
+
+  const setField = (id: string, v: string) => setValues((prev) => ({ ...prev, [id]: v }))
+
+  const missingRequired = (block.fields ?? []).some((f) => f.required && !values[f.id]?.trim())
+
+  const submit = (actionId: string, label: string) => {
+    if (isLocked) return
+    setTouched(true)
+    if (missingRequired) return
+    onSubmit(actionId, label, values)
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex max-h-80 flex-col gap-2 overflow-y-auto pr-1">
+        {(block.fields ?? []).map((f) => {
+          const v = values[f.id] ?? ''
+          const showError = touched && f.required && !v.trim()
+          return (
+            <label key={f.id} className="flex flex-col gap-1 text-sm">
+              <span className="text-text-secondary">
+                {f.label}
+                {f.required ? <span className="text-danger ml-0.5">*</span> : null}
+              </span>
+              {f.kind === 'textarea' ? (
+                <textarea
+                  className="rounded-md border border-border-subtle bg-background px-2 py-1 text-sm min-h-[60px]"
+                  placeholder={f.placeholder}
+                  maxLength={f.maxLength}
+                  value={v}
+                  disabled={isLocked}
+                  onChange={(e) => setField(f.id, e.target.value)}
+                />
+              ) : f.kind === 'select' ? (
+                <select
+                  className="rounded-md border border-border-subtle bg-background px-2 py-1 text-sm"
+                  value={v}
+                  disabled={isLocked}
+                  onChange={(e) => setField(f.id, e.target.value)}
+                >
+                  <option value="" disabled>
+                    {t('chat.interactiveChoose')}
+                  </option>
+                  {(f.options ?? []).map((o) => (
+                    <option key={o.id} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              ) : f.kind === 'checkbox' ? (
+                <input
+                  type="checkbox"
+                  className="self-start"
+                  checked={v === 'true'}
+                  disabled={isLocked}
+                  onChange={(e) => setField(f.id, e.target.checked ? 'true' : 'false')}
+                />
+              ) : (
+                <input
+                  type={f.kind === 'number' ? 'number' : 'text'}
+                  className="rounded-md border border-border-subtle bg-background px-2 py-1 text-sm"
+                  placeholder={f.placeholder}
+                  maxLength={f.maxLength}
+                  min={f.min}
+                  max={f.max}
+                  value={v}
+                  disabled={isLocked}
+                  onChange={(e) => setField(f.id, e.target.value)}
+                />
+              )}
+              {showError && (
+                <span className="text-xs text-danger">{t('chat.interactiveRequired')}</span>
+              )}
+            </label>
+          )
+        })}
+      </div>
+
+      <div className="flex flex-wrap gap-2 pt-1">
+        {block.kind === 'form' ? (
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={isLocked}
+            onClick={() => submit('submit', block.submitLabel ?? t('chat.interactiveSubmit'))}
+          >
+            {block.submitLabel ?? t('chat.interactiveSubmit')}
+          </Button>
+        ) : (
+          <>
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={isLocked}
+              onClick={() => submit('approve', t('chat.interactiveApprove'))}
+            >
+              <Check size={14} />
+              <span>{t('chat.interactiveApprove')}</span>
+            </Button>
+            <Button
+              size="sm"
+              variant="danger"
+              disabled={isLocked}
+              onClick={() => submit('reject', t('chat.interactiveReject'))}
+            >
+              <X size={14} />
+              <span>{t('chat.interactiveReject')}</span>
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function interactiveValuesEqual(
+  prev?: Record<string, string>,
+  next?: Record<string, string>,
+): boolean {
+  const prevKeys = Object.keys(prev ?? {})
+  const nextKeys = Object.keys(next ?? {})
+  if (prevKeys.length !== nextKeys.length) return false
+  for (const key of prevKeys) {
+    if (prev?.[key] !== next?.[key]) return false
+  }
+  return true
+}
+
+function interactiveResponseEqual(
+  prev?: InteractiveResponseMetadata | null,
+  next?: InteractiveResponseMetadata | null,
+): boolean {
+  if (!prev && !next) return true
+  if (!prev || !next) return false
+  return (
+    prev.blockId === next.blockId &&
+    prev.sourceMessageId === next.sourceMessageId &&
+    prev.actionId === next.actionId &&
+    prev.value === next.value &&
+    prev.submissionId === next.submissionId &&
+    prev.responseMessageId === next.responseMessageId &&
+    interactiveValuesEqual(prev.values, next.values)
+  )
+}
+
 /** Memoized MessageBubble — prevents unnecessary re-renders when props haven't changed. */
 export const MessageBubble = React.memo(MessageBubbleInner, (prev, next) => {
   // Shallow compare all props. For stable references from parent (useCallback),
@@ -1076,6 +1470,11 @@ export const MessageBubble = React.memo(MessageBubbleInner, (prev, next) => {
   if (prev.isGrouped !== next.isGrouped) return false
   if (prev.selectionMode !== next.selectionMode) return false
   if (prev.isSelected !== next.isSelected) return false
+  if (
+    !interactiveResponseEqual(prev.submittedInteractiveResponse, next.submittedInteractiveResponse)
+  ) {
+    return false
+  }
 
   // Deep compare reactions (frequently updated via WS)
   const prevReactions = prev.message.reactions

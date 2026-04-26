@@ -214,6 +214,63 @@ export interface PluginMCPServer {
   env?: Record<string, string>
 }
 
+// ─── Provider / Secret Capability Types ─────────────────────────────────────
+
+export type ModelTag = 'default' | 'fast' | 'flash' | 'reasoning' | 'vision'
+
+export interface ProviderModelEntry {
+  /** Model ID within the provider. */
+  id: string
+  /** Display name. Defaults to id. */
+  name?: string
+  /** Capability tags used by selector plugins such as model-provider. */
+  tags?: ModelTag[]
+  contextWindow?: number
+  maxTokens?: number
+  cost?: {
+    inputPerMillion?: number
+    outputPerMillion?: number
+    currency?: string
+  }
+  capabilities?: {
+    vision?: boolean
+    tools?: boolean
+    reasoning?: boolean
+  }
+}
+
+export interface ProviderCatalog {
+  /** OpenClaw provider ID used in model refs, e.g. anthropic/claude-sonnet-4-5. */
+  id: string
+  /** OpenClaw API adapter. */
+  api: string
+  baseUrl?: string
+  /** Primary env var used to authenticate this provider. */
+  envKey: string
+  /** Compatible aliases to sniff before falling back to envKey. */
+  envKeyAliases?: string[]
+  /** Optional base URL override env var. */
+  baseUrlEnvKey?: string
+  /** Optional default model override env var. */
+  modelEnvKey?: string
+  /** Lower number means higher selector priority. */
+  priority?: number
+  /** Enables local env sniffing when no community profile is connected. Defaults to true. */
+  allowEnvDetection?: boolean
+  models: ProviderModelEntry[]
+}
+
+export interface PluginSecretField {
+  key: string
+  label?: string
+  description?: string
+  required?: boolean
+  sensitive?: boolean
+  aliases?: string[]
+  /** Whether this value must be present in the runtime container env. Defaults to true. */
+  runtime?: boolean
+}
+
 // ─── K8s Artifact Types ──────────────────────────────────────────────────────
 
 export interface PluginK8sInitContainer {
@@ -223,6 +280,25 @@ export interface PluginK8sInitContainer {
   command: string[]
   env?: Array<{ name: string; value?: string; valueFrom?: Record<string, unknown> }>
   volumeMounts: Array<{ name: string; mountPath: string; readOnly?: boolean }>
+  resources?: Record<string, unknown>
+  securityContext?: Record<string, unknown>
+}
+
+/**
+ * Long-running helper container that runs alongside the main agent container.
+ * Used e.g. by gitagent for periodic `git pull` loops (live refresh without
+ * restarting the pod). Shape is a subset of k8s.types.input.core.v1.Container
+ * to keep the plugin API independent of Pulumi types.
+ */
+export interface PluginK8sSidecar {
+  name: string
+  image: string
+  imagePullPolicy?: string
+  command?: string[]
+  args?: string[]
+  env?: Array<{ name: string; value?: string; valueFrom?: Record<string, unknown> }>
+  volumeMounts: Array<{ name: string; mountPath: string; readOnly?: boolean }>
+  resources?: Record<string, unknown>
   securityContext?: Record<string, unknown>
 }
 
@@ -245,6 +321,8 @@ export interface PluginK8sEnvVar {
 
 export interface PluginK8sResult {
   initContainers?: PluginK8sInitContainer[]
+  /** Helper containers that run for the lifetime of the pod. */
+  sidecars?: PluginK8sSidecar[]
   volumes?: PluginK8sVolume[]
   volumeMounts?: PluginK8sVolumeMount[]
   envVars?: PluginK8sEnvVar[]
@@ -284,6 +362,12 @@ export interface PluginAPI {
   /** Declare an MCP server (use sparingly — prefer skills+cli) */
   addMCP(server: PluginMCPServer): void
 
+  /** Declare model/provider presets that selector plugins can discover. */
+  addProviderCatalog(catalog: ProviderCatalog): void
+
+  /** Declare env/secret fields that Cloud can store and inject at runtime. */
+  addSecretFields(fields: PluginSecretField[]): void
+
   // ── Build hooks (synchronous) ──
 
   /**
@@ -294,6 +378,9 @@ export interface PluginAPI {
 
   /** Emit an OpenClaw config fragment (merged with other plugin fragments) */
   onBuildConfig(fn: (ctx: PluginBuildContext) => PluginConfigFragment | void): void
+
+  /** Emit additional standing instructions to append to the agent prompt */
+  onBuildPrompt(fn: (ctx: PluginBuildContext) => string | void): void
 
   /** Emit environment variables to inject into the agent container */
   onBuildEnv(fn: (ctx: PluginBuildContext) => Record<string, string> | void): void
@@ -321,6 +408,7 @@ export interface PluginAPI {
 export interface PluginHooks {
   resolveAgent: Array<(agent: AgentDeployment, config: CloudConfig) => AgentDeployment>
   buildConfig: Array<(ctx: PluginBuildContext) => PluginConfigFragment | void>
+  buildPrompt: Array<(ctx: PluginBuildContext) => string | void>
   buildEnv: Array<(ctx: PluginBuildContext) => Record<string, string> | void>
   buildResources: Array<(ctx: PluginBuildContext) => Record<string, unknown>[]>
   validate: Array<(ctx: PluginBuildContext) => PluginValidationResult | void>
@@ -345,6 +433,10 @@ export interface PluginDefinition {
   cli?: PluginCLITool[]
   /** Declared MCP servers (from api.addMCP) */
   mcp?: PluginMCPServer[]
+  /** Declared model provider catalogs (from api.addProviderCatalog) */
+  providerCatalogs?: ProviderCatalog[]
+  /** Declared env/secret fields (from api.addSecretFields) */
+  secretFields?: PluginSecretField[]
   /** K8s provider — generates pod-level K8s artifacts (init containers, volumes) */
   k8s?: PluginK8sProvider
 

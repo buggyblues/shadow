@@ -1,0 +1,108 @@
+{
+  "id": "agent-pack",
+  "name": "Agent Pack",
+  "description": "Pure mechanism for pulling AI-agent customisation packs (skills, slash commands, persona/instructions, hooks, MCP server configs, helper scripts, sub-agents, arbitrary files) from any git repo at deploy time and mounting them into the agent container. Templates can rely on common-layout auto-detection or provide exact mounts for unusual repositories.",
+  "version": "1.0.0",
+  "category": "code",
+  "icon": "package",
+  "auth": {
+    "type": "token",
+    "fields": [
+      {
+        "key": "GITHUB_TOKEN",
+        "label": "Git Token (HTTPS)",
+        "description": "Optional personal access token for private agent-pack repositories",
+        "required": false,
+        "sensitive": true,
+        "placeholder": "ghp_..."
+      }
+    ]
+  },
+  "config": {
+    "type": "object",
+    "properties": {
+      "packs": {
+        "type": "array",
+        "description": "Agent packs to mount into the container",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Unique pack id within the agent (used for mount subdir). Auto-derived from url when omitted."
+            },
+            "url": { "type": "string", "description": "Repository URL (HTTPS or SSH). Required." },
+            "ref": {
+              "type": "string",
+              "description": "Branch, tag, or commit SHA. Defaults to 'main'."
+            },
+            "depth": { "type": "number", "description": "Shallow clone depth. Defaults to 1." },
+            "autoDetect": {
+              "type": "boolean",
+              "description": "Auto-detect common pack layouts (skills/, .claude/commands, .claude/agents, openclaw/skills, hooks, MCP, scripts, context docs). Defaults to true when mounts are omitted."
+            },
+            "mounts": {
+              "type": "array",
+              "description": "Per-kind mount declarations. Optional when autoDetect is enabled; use this for custom repo layouts.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "skills",
+                      "commands",
+                      "instructions",
+                      "hooks",
+                      "mcp",
+                      "scripts",
+                      "agents",
+                      "files"
+                    ],
+                    "description": "Kind of artifact this mount contributes."
+                  },
+                  "from": {
+                    "type": "string",
+                    "description": "Source path inside the cloned repo. Use '.' for repo root."
+                  },
+                  "include": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Optional whitelist of immediate child names to copy."
+                  }
+                },
+                "required": ["kind", "from"]
+              }
+            },
+            "instructionFiles": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Override the curated root-level instruction filenames (default: CLAUDE.md, AGENTS.md, SOUL.md, RULES.md, ETHOS.md, INSTRUCTIONS.md, PERSONALITY.md, README.md)."
+            },
+            "tokenSecret": {
+              "type": "string",
+              "description": "K8s secret name (or ${env:VAR}) for HTTPS token"
+            },
+            "sshKeySecret": {
+              "type": "string",
+              "description": "K8s secret name for SSH private key"
+            }
+          },
+          "required": ["url"]
+        }
+      },
+      "mountPath": {
+        "type": "string",
+        "default": "/agent-packs",
+        "description": "Container path where pack subdirs are mounted"
+      },
+      "poll": {
+        "type": "string",
+        "description": "Optional poll interval (e.g. '5m', '30s', '1h') for live refresh sidecar. Omit to disable."
+      }
+    }
+  },
+  "capabilities": ["config-builder"],
+  "tags": ["agent-pack", "skills", "claude", "git", "mechanism", "built-in"],
+  "popularity": 90
+}

@@ -279,6 +279,107 @@ describe('ShadowClient REST API', () => {
     const result = await botClient.sendHeartbeat(agent.id)
     expect(result.ok).toBe(true)
   })
+
+  it('interactive block: send → click button → echo arrives with values', async () => {
+    // Buddy posts an interactive block
+    const block = {
+      id: `ia_${Date.now().toString(36)}`,
+      kind: 'buttons' as const,
+      prompt: 'Pick one',
+      buttons: [
+        { id: 'yes', label: 'Yes', value: 'yes' },
+        { id: 'no', label: 'No', value: 'no', variant: 'danger' as const },
+      ],
+    }
+    const sent = await client.sendMessage(channelId, 'Need your input', {
+      metadata: { interactive: block },
+    })
+    expect(sent.id).toBeDefined()
+    expect((sent.metadata as { interactive?: { id: string } } | null)?.interactive?.id).toBe(
+      block.id,
+    )
+
+    // User clicks "yes" → POST /messages/:id/interactive
+    const res = await fetch(`${baseUrl}/api/messages/${sent.id}/interactive`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${user2Token}`,
+      },
+      body: JSON.stringify({ blockId: block.id, actionId: 'yes', value: 'yes', label: 'Yes' }),
+    })
+    expect(res.status).toBeLessThan(300)
+    const echo = (await res.json()) as { id: string; content: string; metadata?: unknown }
+    expect(echo.id).toBeDefined()
+    expect(echo.content).toBe('Yes (yes)')
+    const meta = echo.metadata as {
+      interactiveResponse?: { blockId: string; actionId: string }
+    }
+    expect(meta.interactiveResponse?.blockId).toBe(block.id)
+    expect(meta.interactiveResponse?.actionId).toBe('yes')
+
+    // Form submission with values
+    const formBlock = {
+      id: `ia_form_${Date.now().toString(36)}`,
+      kind: 'form' as const,
+      prompt: 'Tell us',
+      fields: [
+        { id: 'name', kind: 'text' as const, label: 'Name', required: true },
+        { id: 'note', kind: 'textarea' as const, label: 'Note' },
+      ],
+      submitLabel: 'Submit',
+    }
+    const formSent = await client.sendMessage(channelId, 'Form please', {
+      metadata: { interactive: formBlock },
+    })
+    const formRes = await fetch(`${baseUrl}/api/messages/${formSent.id}/interactive`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${user2Token}`,
+      },
+      body: JSON.stringify({
+        blockId: formBlock.id,
+        actionId: 'submit',
+        value: 'submit',
+        values: { name: 'Alice', note: 'Hello' },
+      }),
+    })
+    expect(formRes.status).toBeLessThan(300)
+    const formEcho = (await formRes.json()) as { id: string; content: string; metadata?: unknown }
+    expect(formEcho.content).toContain('- Name: Alice')
+    expect(formEcho.content).toContain('- Note: Hello')
+    const formMeta = formEcho.metadata as {
+      interactiveResponse?: { values?: Record<string, string> }
+    }
+    expect(formMeta.interactiveResponse?.values?.name).toBe('Alice')
+    expect(formMeta.interactiveResponse?.values?.note).toBe('Hello')
+
+    const duplicateFormRes = await fetch(`${baseUrl}/api/messages/${formSent.id}/interactive`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${user2Token}`,
+      },
+      body: JSON.stringify({
+        blockId: formBlock.id,
+        actionId: 'submit',
+        value: 'submit',
+        values: { name: 'Alice', note: 'Hello again' },
+      }),
+    })
+    expect(duplicateFormRes.status).toBeLessThan(300)
+    const duplicateFormEcho = (await duplicateFormRes.json()) as { id?: string }
+    expect(duplicateFormEcho.id).toBe(formEcho.id)
+
+    const page = await client2.getMessages(channelId, 50)
+    const enrichedSource = page.messages.find((message) => message.id === formSent.id)
+    const interactiveState = enrichedSource?.metadata?.interactiveState as
+      | { response?: { values?: Record<string, string>; responseMessageId?: string | null } }
+      | undefined
+    expect(interactiveState?.response?.values?.name).toBe('Alice')
+    expect(interactiveState?.response?.responseMessageId).toBe(formEcho.id)
+  })
 })
 
 describe('ShadowSocket real-time events', () => {

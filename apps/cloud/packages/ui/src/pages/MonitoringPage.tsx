@@ -1,8 +1,10 @@
 import {
   Badge,
   Button,
-  Card,
   EmptyState,
+  GlassCard,
+  GlassPanel,
+  GlassSurface,
   NativeSelect,
   Search,
   Table,
@@ -12,8 +14,6 @@ import {
   TableHeader,
   TableRow,
   Tabs,
-  TabsList,
-  TabsTrigger,
 } from '@shadowob/ui'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
@@ -41,23 +41,56 @@ import {
 import { type ReactNode, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DashboardLoadingState } from '@/components/DashboardState'
+import { DashboardTabsList } from '@/components/DashboardTabsList'
 import { PageShell } from '@/components/PageShell'
 import { StatCard } from '@/components/StatCard'
 import { StatsGrid } from '@/components/StatsGrid'
 import { StatusDot, type StatusType } from '@/components/StatusDot'
 import { useDebounce } from '@/hooks/useDebounce'
 import {
-  api,
   type CostOverviewSummary,
   type Deployment,
   type DoctorCheck,
   type DoctorResult,
   type NamespaceCostSummary,
+  type ProviderUsageSummary,
 } from '@/lib/api'
 import { useApiClient } from '@/lib/api-context'
-import { formatUsdCost } from '@/lib/store-data'
+import { formatDisplayCost, formatTokenCount, formatUsdCost } from '@/lib/store-data'
 import { formatTimestamp, getRelativeTime, isDeploymentReady } from '@/lib/utils'
 import { type ActivityEntry, type ActivityType } from '@/stores/app'
+
+function formatTokenLabel(value: number | null, locale: string, tokenLabel: string): string {
+  if (value === null) return '—'
+  return `${formatTokenCount(value, locale)} ${tokenLabel}`
+}
+
+function getProviderMetricDisplay(
+  provider: ProviderUsageSummary,
+  options: {
+    billingUnit: 'usd' | 'shrimp'
+    locale: string
+    tokenLabel: string
+  },
+): { primary: string; secondary: string | null } {
+  const tokenText =
+    provider.totalTokens !== null
+      ? formatTokenLabel(provider.totalTokens, options.locale, options.tokenLabel)
+      : null
+  const usageText = provider.usageLabel ?? provider.raw ?? null
+
+  if (options.billingUnit === 'shrimp') {
+    return {
+      primary: tokenText ?? usageText ?? '—',
+      secondary: usageText && usageText !== tokenText ? usageText : null,
+    }
+  }
+
+  return {
+    primary: formatUsdCost(provider.amountUsd, options.locale),
+    secondary: tokenText ?? usageText,
+  }
+}
 
 function doctorStatusToStatusType(status: DoctorCheck['status']): StatusType {
   if (status === 'pass') return 'success'
@@ -227,7 +260,7 @@ function HealthPanel({ doctor }: { doctor: DoctorResult }) {
         </div>
       </div>
 
-      <Card variant="surface">
+      <div className="overflow-hidden rounded-2xl border border-[var(--glass-line)] divide-y divide-[var(--glass-line-soft)]">
         {doctor.checks.map((check) => (
           <div key={check.name} className="px-4 py-3 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
@@ -248,7 +281,7 @@ function HealthPanel({ doctor }: { doctor: DoctorResult }) {
             </Badge>
           </div>
         ))}
-      </Card>
+      </div>
     </div>
   )
 }
@@ -269,7 +302,7 @@ function DeploymentsPanel({ deployments }: { deployments: Deployment[] }) {
         })}
       </p>
 
-      <Card variant="surface">
+      <div className="overflow-hidden rounded-2xl border border-[var(--glass-line)]">
         <Table>
           <TableHeader>
             <TableRow>
@@ -319,7 +352,7 @@ function DeploymentsPanel({ deployments }: { deployments: Deployment[] }) {
             })}
           </TableBody>
         </Table>
-      </Card>
+      </div>
     </div>
   )
 }
@@ -365,10 +398,12 @@ function OverviewPanel({
   const topCostNamespaces = useMemo(() => {
     return [...(costOverview?.namespaces ?? [])]
       .sort((left, right) => {
-        if (left.totalUsd === null && right.totalUsd === null) return 0
-        if (left.totalUsd === null) return 1
-        if (right.totalUsd === null) return -1
-        return right.totalUsd - left.totalUsd
+        const leftCost = left.billingAmount ?? left.totalUsd
+        const rightCost = right.billingAmount ?? right.totalUsd
+        if (leftCost === null && rightCost === null) return 0
+        if (leftCost === null) return 1
+        if (rightCost === null) return -1
+        return rightCost - leftCost
       })
       .slice(0, 4)
   }, [costOverview?.namespaces])
@@ -376,7 +411,7 @@ function OverviewPanel({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className="glass-card p-4 space-y-4">
+        <GlassCard className="p-4 space-y-4">
           <div className="flex items-center gap-2">
             <Stethoscope size={16} style={{ color: 'var(--color-nf-cyan)' }} />
             <h2 className="text-sm font-black text-text-primary">
@@ -388,9 +423,9 @@ function OverviewPanel({
             issues.length > 0 ? (
               <div className="space-y-3">
                 {issues.slice(0, 4).map((check) => (
-                  <div
+                  <GlassSurface
                     key={check.name}
-                    className="glass-surface rounded-2xl border border-border-subtle px-4 py-3"
+                    className="rounded-2xl border border-border-subtle px-4 py-3"
                   >
                     <div className="flex items-center justify-between gap-3 mb-1">
                       <div className="flex items-center gap-2 min-w-0">
@@ -413,20 +448,20 @@ function OverviewPanel({
                       </Badge>
                     </div>
                     <p className="text-xs text-text-secondary">{check.message}</p>
-                  </div>
+                  </GlassSurface>
                 ))}
               </div>
             ) : (
-              <div className="glass-surface rounded-2xl border border-border-subtle px-4 py-4 text-sm text-text-secondary">
+              <GlassSurface className="rounded-2xl border border-border-subtle px-4 py-4 text-sm text-text-secondary">
                 {t('monitoring.allSystemsHealthy')}
-              </div>
+              </GlassSurface>
             )
           ) : (
             <div className="text-sm text-text-muted">{t('monitoring.runningHealthChecks')}</div>
           )}
-        </div>
+        </GlassCard>
 
-        <div className="glass-card p-4 space-y-4">
+        <GlassCard className="p-4 space-y-4">
           <div className="flex items-center gap-2">
             <DollarSign size={16} style={{ color: 'var(--color-nf-yellow)' }} />
             <h2 className="text-sm font-black text-text-primary">{t('monitoring.costSnapshot')}</h2>
@@ -436,8 +471,15 @@ function OverviewPanel({
             <>
               <div>
                 <div className="text-2xl font-black text-green-400">
-                  {formatUsdCost(costOverview.totalUsd, i18n.language)}
+                  {formatDisplayCost(costOverview, {
+                    locale: i18n.language,
+                    shrimpUnitLabel: t('deploy.shrimpCoins'),
+                  })}
                 </div>
+                <p className="mt-1 text-xs text-text-muted">
+                  {t('deployments.totalTokens')}:{' '}
+                  {formatTokenCount(costOverview.totalTokens, i18n.language)}
+                </p>
                 <p className="text-xs mt-1 text-text-muted">
                   {t('deployments.generatedAt')}
                   {': '}
@@ -452,20 +494,31 @@ function OverviewPanel({
                       key={item.namespace}
                       to="/deployments/$namespace"
                       params={{ namespace: item.namespace }}
-                      className="flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border hover:bg-white/5 transition-colors glass-surface border-border-subtle"
+                      className="block"
                     >
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate text-text-primary">
-                          {item.namespace}
-                        </p>
-                        <p className="text-xs text-text-muted">
-                          {t('deployments.availableAgents')}: {item.availableAgents} ·{' '}
-                          {t('deployments.unavailableAgents')}: {item.unavailableAgents}
-                        </p>
-                      </div>
-                      <span className="text-sm font-semibold text-green-400 shrink-0">
-                        {formatUsdCost(item.totalUsd, i18n.language)}
-                      </span>
+                      <GlassSurface className="flex items-center justify-between gap-3 rounded-2xl border border-border-subtle px-4 py-3 transition-colors hover:bg-bg-modifier-hover">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate text-text-primary">
+                            {item.namespace}
+                          </p>
+                          <p className="text-xs text-text-muted">
+                            {item.totalTokens !== null && (
+                              <>
+                                {t('deployments.totalTokens')}:{' '}
+                                {formatTokenCount(item.totalTokens, i18n.language)} ·{' '}
+                              </>
+                            )}
+                            {t('deployments.availableAgents')}: {item.availableAgents} ·{' '}
+                            {t('deployments.unavailableAgents')}: {item.unavailableAgents}
+                          </p>
+                        </div>
+                        <span className="text-sm font-semibold text-green-400 shrink-0">
+                          {formatDisplayCost(item, {
+                            locale: i18n.language,
+                            shrimpUnitLabel: t('deploy.shrimpCoins'),
+                          })}
+                        </span>
+                      </GlassSurface>
                     </Link>
                   ))
                 ) : (
@@ -478,9 +531,9 @@ function OverviewPanel({
           ) : (
             <p className="text-sm text-text-muted">{t('common.loading')}</p>
           )}
-        </div>
+        </GlassCard>
 
-        <div className="glass-card p-4 space-y-4">
+        <GlassCard className="p-4 space-y-4">
           <div className="flex items-center gap-2">
             <FolderOpen size={16} style={{ color: 'var(--color-nf-cyan)' }} />
             <h2 className="text-sm font-black text-text-primary">
@@ -489,30 +542,30 @@ function OverviewPanel({
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            <div className="glass-surface rounded-2xl p-4">
+            <GlassSurface className="rounded-2xl p-4">
               <div className="text-xs mb-1 text-text-muted">
                 {t('monitoring.configuredNamespaces')}
               </div>
               <div className="text-lg font-black text-text-primary">
                 {namespaces?.configured.length ?? 0}
               </div>
-            </div>
-            <div className="glass-surface rounded-2xl p-4">
+            </GlassSurface>
+            <GlassSurface className="rounded-2xl p-4">
               <div className="text-xs mb-1 text-text-muted">
                 {t('monitoring.discoveredNamespaces')}
               </div>
               <div className="text-lg font-black text-text-primary">
                 {namespaces?.discovered.length ?? 0}
               </div>
-            </div>
-            <div className="glass-surface rounded-2xl p-4">
+            </GlassSurface>
+            <GlassSurface className="rounded-2xl p-4">
               <div className="text-xs mb-1 text-text-muted">
                 {t('monitoring.trackedNamespaces')}
               </div>
               <div className="text-lg font-black text-text-primary">
                 {namespaces?.all.length ?? 0}
               </div>
-            </div>
+            </GlassSurface>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -524,11 +577,11 @@ function OverviewPanel({
               </Button>
             ))}
           </div>
-        </div>
+        </GlassCard>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-4">
-        <div className="glass-card p-4 space-y-4">
+        <GlassCard className="p-4 space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Activity size={16} style={{ color: 'var(--color-nf-cyan)' }} />
@@ -542,9 +595,9 @@ function OverviewPanel({
           </div>
 
           <ActivityList activities={activities} limit={6} />
-        </div>
+        </GlassCard>
 
-        <div className="glass-card p-4 space-y-4">
+        <GlassCard className="p-4 space-y-4">
           <div className="flex items-center gap-2">
             <Box size={16} style={{ color: 'var(--color-nf-cyan)' }} />
             <h2 className="text-sm font-black text-text-primary">
@@ -559,17 +612,22 @@ function OverviewPanel({
                   key={group.namespace}
                   to="/deployments/$namespace"
                   params={{ namespace: group.namespace }}
-                  className="block rounded-2xl border px-4 py-3 hover:bg-white/5 transition-colors glass-surface border-border-subtle"
+                  className="block"
                 >
-                  <div className="flex items-center justify-between gap-3 mb-2">
-                    <p className="text-sm font-medium text-text-primary">{group.namespace}</p>
-                    <Badge variant={group.ready === group.total ? 'success' : 'warning'} size="sm">
-                      {group.ready}/{group.total}
-                    </Badge>
-                  </div>
-                  <p className="text-xs line-clamp-2 text-text-muted">
-                    {group.deployments.map((deployment) => deployment.name).join(', ')}
-                  </p>
+                  <GlassSurface className="block rounded-2xl border border-border-subtle px-4 py-3 transition-colors hover:bg-bg-modifier-hover">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-text-primary">{group.namespace}</p>
+                      <Badge
+                        variant={group.ready === group.total ? 'success' : 'warning'}
+                        size="sm"
+                      >
+                        {group.ready}/{group.total}
+                      </Badge>
+                    </div>
+                    <p className="line-clamp-2 text-xs text-text-muted">
+                      {group.deployments.map((deployment) => deployment.name).join(', ')}
+                    </p>
+                  </GlassSurface>
                 </Link>
               ))}
             </div>
@@ -580,7 +638,7 @@ function OverviewPanel({
               description={t('deployments.noDeploymentsYet')}
             />
           )}
-        </div>
+        </GlassCard>
       </div>
     </div>
   )
@@ -595,7 +653,6 @@ function CostsPanel({
   namespaceCosts: NamespaceCostSummary[]
   loadingNamespaceCosts: boolean
 }) {
-  const api = useApiClient()
   const { t, i18n } = useTranslation()
 
   const costByNamespace = useMemo(
@@ -625,12 +682,21 @@ function CostsPanel({
 
   return (
     <div className="space-y-6">
-      <StatsGrid className="mb-0 grid-cols-1 md:grid-cols-4">
+      <StatsGrid className="mb-0 grid-cols-1 md:grid-cols-2 xl:grid-cols-5">
         <StatCard
           label={t('deployments.totalCost')}
-          value={formatUsdCost(overview.totalUsd, i18n.language)}
+          value={formatDisplayCost(overview, {
+            locale: i18n.language,
+            shrimpUnitLabel: t('deploy.shrimpCoins'),
+          })}
           icon={<DollarSign size={13} />}
           color="green"
+        />
+        <StatCard
+          label={t('deployments.totalTokens')}
+          value={formatTokenCount(overview.totalTokens, i18n.language)}
+          icon={<Activity size={13} />}
+          color="purple"
         />
         <StatCard
           label={t('monitoring.namespaces')}
@@ -666,8 +732,8 @@ function CostsPanel({
             : null
 
           return (
-            <div key={item.namespace} className="glass-card p-4 space-y-4">
-              <div className="flex items-start justify-between gap-3">
+            <GlassCard key={item.namespace} className="p-4 space-y-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Link
@@ -685,14 +751,23 @@ function CostsPanel({
                   </div>
 
                   <p className="text-xs mt-1 text-text-muted">
+                    {item.totalTokens !== null && (
+                      <>
+                        {t('deployments.totalTokens')}:{' '}
+                        {formatTokenCount(item.totalTokens, i18n.language)} ·{' '}
+                      </>
+                    )}
                     {t('deployments.availableAgents')}: {item.availableAgents} ·{' '}
                     {t('deployments.unavailableAgents')}: {item.unavailableAgents}
                   </p>
                 </div>
 
-                <div className="text-right shrink-0">
-                  <p className="text-lg font-semibold text-green-400">
-                    {formatUsdCost(item.totalUsd, i18n.language)}
+                <div className="min-w-0 shrink-0 text-left md:max-w-[14rem] md:text-right">
+                  <p className="break-words text-lg font-semibold leading-tight text-green-400">
+                    {formatDisplayCost(item, {
+                      locale: i18n.language,
+                      shrimpUnitLabel: t('deploy.shrimpCoins'),
+                    })}
                   </p>
                   <p className="text-xs text-text-muted">{t('deployments.totalCost')}</p>
                 </div>
@@ -702,11 +777,11 @@ function CostsPanel({
                 detail.agents.length > 0 ? (
                   <div className="space-y-3">
                     {detail.agents.map((agent) => (
-                      <div
+                      <GlassSurface
                         key={`${detail.namespace}-${agent.agentName}`}
-                        className="glass-surface rounded-2xl border border-border-subtle px-4 py-3"
+                        className="rounded-2xl border border-border-subtle px-4 py-3"
                       >
-                        <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="mb-2 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="text-sm font-mono truncate text-text-primary">
@@ -725,32 +800,52 @@ function CostsPanel({
                             </p>
                           </div>
 
-                          <div className="text-right shrink-0">
-                            <p className="text-sm font-semibold text-green-400">
-                              {formatUsdCost(agent.totalUsd, i18n.language)}
+                          <div className="min-w-0 shrink-0 text-left md:max-w-[14rem] md:text-right">
+                            <p className="break-words text-sm font-semibold text-green-400">
+                              {formatDisplayCost(agent, {
+                                locale: i18n.language,
+                                shrimpUnitLabel: t('deploy.shrimpCoins'),
+                              })}
                             </p>
                             <p className="text-xs text-text-muted">{t('deployments.totalCost')}</p>
+                            <p className="mt-1 text-xs text-text-muted">
+                              {formatTokenLabel(
+                                agent.totalTokens,
+                                i18n.language,
+                                t('deployments.tokens'),
+                              )}
+                            </p>
                           </div>
                         </div>
 
                         {agent.providers.length > 0 ? (
                           <div className="space-y-2">
-                            {agent.providers.map((provider) => (
-                              <div
-                                key={`${agent.agentName}-${provider.provider}`}
-                                className="flex items-center justify-between gap-3 text-xs"
-                              >
-                                <span className="text-text-secondary">{provider.provider}</span>
-                                <div className="text-right">
-                                  <p className="text-text-primary">
-                                    {formatUsdCost(provider.amountUsd, i18n.language)}
-                                  </p>
-                                  <p className="text-text-muted">
-                                    {provider.usageLabel ?? provider.raw ?? '—'}
-                                  </p>
+                            {agent.providers.map((provider) => {
+                              const providerDisplay = getProviderMetricDisplay(provider, {
+                                billingUnit: detail.billingUnit,
+                                locale: i18n.language,
+                                tokenLabel: t('deployments.tokens'),
+                              })
+
+                              return (
+                                <div
+                                  key={`${agent.agentName}-${provider.provider}`}
+                                  className="flex flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                                >
+                                  <span className="text-text-secondary">{provider.provider}</span>
+                                  <div className="min-w-0 text-left sm:text-right">
+                                    <p className="break-words text-text-primary">
+                                      {providerDisplay.primary}
+                                    </p>
+                                    {providerDisplay.secondary ? (
+                                      <p className="break-words text-text-muted">
+                                        {providerDisplay.secondary}
+                                      </p>
+                                    ) : null}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              )
+                            })}
                           </div>
                         ) : (
                           <p className="text-xs text-text-muted">
@@ -761,7 +856,7 @@ function CostsPanel({
                         {agent.message && (
                           <p className="text-xs text-yellow-500 mt-3">{agent.message}</p>
                         )}
-                      </div>
+                      </GlassSurface>
                     ))}
                   </div>
                 ) : (
@@ -774,7 +869,7 @@ function CostsPanel({
                   {loadingNamespaceCosts ? t('monitoring.loadingCostDetails') : t('common.loading')}
                 </p>
               )}
-            </div>
+            </GlassCard>
           )
         })}
       </div>
@@ -783,7 +878,6 @@ function CostsPanel({
 }
 
 function ActivityPanel({ activities }: { activities: ActivityEntry[] }) {
-  const api = useApiClient()
   const { t } = useTranslation()
   const activityTypeConfig = useMemo(() => getActivityTypeConfig(t), [t])
   const [search, setSearch] = useState('')
@@ -988,6 +1082,8 @@ export function MonitoringPage() {
     { id: 'activity', label: t('activity.title'), icon: <Activity size={13} /> },
   ]
 
+  const tabPanelClassName = 'rounded-[28px] p-4 md:p-5 lg:p-6'
+
   return (
     <PageShell
       breadcrumb={[{ label: t('nav.monitoring') }]}
@@ -1001,7 +1097,7 @@ export function MonitoringPage() {
       }
       headerContent={
         <div className="space-y-4">
-          <StatsGrid className="grid-cols-1 sm:grid-cols-2 xl:grid-cols-6">
+          <StatsGrid className="grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
             <StatCard
               label={t('monitoring.healthScore')}
               value={doctor ? `${healthScore}%` : '—'}
@@ -1028,9 +1124,18 @@ export function MonitoringPage() {
             />
             <StatCard
               label={t('deployments.totalCost')}
-              value={formatUsdCost(costOverview?.totalUsd ?? null, i18n.language)}
+              value={formatDisplayCost(costOverview ?? {}, {
+                locale: i18n.language,
+                shrimpUnitLabel: t('deploy.shrimpCoins'),
+              })}
               icon={<DollarSign size={13} />}
               color="green"
+            />
+            <StatCard
+              label={t('deployments.totalTokens')}
+              value={formatTokenCount(costOverview?.totalTokens ?? null, i18n.language)}
+              icon={<Activity size={13} />}
+              color="purple"
             />
             <StatCard
               label={t('deployments.unavailableAgents')}
@@ -1041,74 +1146,86 @@ export function MonitoringPage() {
           </StatsGrid>
 
           <Tabs value={activeTab} onChange={setActiveTab}>
-            <TabsList className="dashboard-tabs-list">
-              {tabs.map((tab) => (
-                <TabsTrigger key={tab.id} value={tab.id} className="dashboard-tabs-trigger">
-                  <span className="dashboard-tab-icon">{tab.icon}</span>
-                  <span>{tab.label}</span>
-                  {typeof tab.count === 'number' && (
-                    <span className="dashboard-tabs-count">{tab.count}</span>
-                  )}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            <DashboardTabsList tabs={tabs} />
           </Tabs>
         </div>
       }
     >
-      <div className="min-h-[36vh]">
+      <div className="min-h-[40vh]">
         {activeTab === 'overview' && (
-          <OverviewPanel
-            doctor={doctor}
-            deployments={deploymentList}
-            namespaces={namespaces}
-            costOverview={costOverview}
-            activities={activities}
-          />
+          <GlassPanel className={tabPanelClassName}>
+            <OverviewPanel
+              doctor={doctor}
+              deployments={deploymentList}
+              namespaces={namespaces}
+              costOverview={costOverview}
+              activities={activities}
+            />
+          </GlassPanel>
         )}
 
         {activeTab === 'health' &&
           (loadingDoctor ? (
-            <div className="py-10 text-center text-text-muted text-sm">
-              {t('monitoring.runningHealthChecks')}
-            </div>
+            <GlassPanel className={tabPanelClassName}>
+              <div className="min-h-[22vh] py-10 text-center text-sm text-text-muted">
+                {t('monitoring.runningHealthChecks')}
+              </div>
+            </GlassPanel>
           ) : doctor ? (
-            <HealthPanel doctor={doctor} />
+            <GlassPanel className={tabPanelClassName}>
+              <HealthPanel doctor={doctor} />
+            </GlassPanel>
           ) : (
-            <div className="py-10 text-center text-text-muted text-sm">
-              {t('monitoring.failedHealthChecks')}
-            </div>
+            <GlassPanel className={tabPanelClassName}>
+              <div className="min-h-[22vh] py-10 text-center text-sm text-text-muted">
+                {t('monitoring.failedHealthChecks')}
+              </div>
+            </GlassPanel>
           ))}
 
         {activeTab === 'deployments' &&
           (loadingDeployments ? (
-            <DashboardLoadingState inline className="py-10" />
+            <GlassPanel className={tabPanelClassName}>
+              <DashboardLoadingState inline className="py-10" />
+            </GlassPanel>
           ) : deploymentList.length > 0 ? (
-            <DeploymentsPanel deployments={deploymentList} />
+            <GlassPanel className={tabPanelClassName}>
+              <DeploymentsPanel deployments={deploymentList} />
+            </GlassPanel>
           ) : (
-            <EmptyState
-              icon={Box}
-              title={t('monitoring.noDeploymentsFound')}
-              description={t('deployments.noDeploymentsYet')}
-            />
+            <GlassPanel className={tabPanelClassName}>
+              <EmptyState
+                icon={Box}
+                title={t('monitoring.noDeploymentsFound')}
+                description={t('deployments.noDeploymentsYet')}
+              />
+            </GlassPanel>
           ))}
 
         {activeTab === 'costs' &&
           (loadingCosts || loadingNamespaces ? (
-            <DashboardLoadingState inline className="py-10" />
+            <GlassPanel className={tabPanelClassName}>
+              <DashboardLoadingState inline className="py-10" />
+            </GlassPanel>
           ) : (
-            <CostsPanel
-              overview={costOverview}
-              namespaceCosts={namespaceCosts}
-              loadingNamespaceCosts={loadingNamespaceCosts}
-            />
+            <GlassPanel className={tabPanelClassName}>
+              <CostsPanel
+                overview={costOverview}
+                namespaceCosts={namespaceCosts}
+                loadingNamespaceCosts={loadingNamespaceCosts}
+              />
+            </GlassPanel>
           ))}
 
         {activeTab === 'activity' &&
           (loadingActivity ? (
-            <DashboardLoadingState inline className="py-10" />
+            <GlassPanel className={tabPanelClassName}>
+              <DashboardLoadingState inline className="py-10" />
+            </GlassPanel>
           ) : (
-            <ActivityPanel activities={activities} />
+            <GlassPanel className={tabPanelClassName}>
+              <ActivityPanel activities={activities} />
+            </GlassPanel>
           ))}
       </div>
     </PageShell>

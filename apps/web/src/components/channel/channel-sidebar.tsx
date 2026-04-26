@@ -2,6 +2,7 @@ import {
   Badge,
   Button,
   cn,
+  GlassPanel,
   Input,
   Modal,
   ModalBody,
@@ -489,7 +490,7 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
   }
 
   return (
-    <div className="w-full h-full glass-panel overflow-hidden flex flex-col shrink-0 relative z-20">
+    <GlassPanel className="w-full h-full overflow-hidden flex flex-col shrink-0 relative z-20">
       {/* Server name header — glassmorphic bar */}
       <div
         onClick={openServerEdit}
@@ -888,6 +889,6 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
           }}
         />
       )}
-    </div>
+    </GlassPanel>
   )
 }

@@ -20,6 +20,8 @@ function createMockAgentDao(overrides = {}) {
     findById: vi.fn(),
     findByOwnerId: vi.fn(),
     findByUserId: vi.fn(),
+    findByUserIds: vi.fn(),
+    findByLastToken: vi.fn(),
     findAll: vi.fn(),
     create: vi.fn(),
     updateStatus: vi.fn(),
@@ -323,6 +325,101 @@ describe('AgentService', () => {
     })
   })
 
+  describe('slash commands', () => {
+    it('should normalize and persist slash command registry updates', async () => {
+      const agent = {
+        id: 'agent-1',
+        userId: 'bot-user-1',
+        kernelType: 'openclaw',
+        config: { existing: true },
+        ownerId: 'owner-1',
+        status: 'running',
+      }
+      const agentDao = createMockAgentDao({
+        findById: vi.fn().mockResolvedValue(agent),
+        updateConfig: vi.fn().mockResolvedValue(agent),
+      })
+      const service = new AgentService({
+        agentDao: agentDao as any,
+        userDao: createMockUserDao() as any,
+        logger: createMockLogger() as any,
+      })
+
+      const commands = await service.updateSlashCommands('agent-1', 'bot-user-1', [
+        {
+          name: '/audit',
+          description: ' Run a complete audit ',
+          aliases: ['/a', 'audit', 'bad alias!'],
+          packId: 'seomachine-buddy',
+          sourcePath: '/agent-packs/seomachine/commands/audit/SKILL.md',
+          interaction: {
+            kind: 'form',
+            prompt: 'Fill details',
+            fields: [{ id: 'url', label: 'URL', kind: 'text', required: true }],
+            responsePrompt: 'Run audit after submit.',
+          },
+        },
+        { name: 'audit', description: 'duplicate' },
+        { name: '1bad' },
+      ])
+
+      expect(commands).toEqual([
+        {
+          name: 'audit',
+          description: 'Run a complete audit',
+          aliases: ['a'],
+          packId: 'seomachine-buddy',
+          sourcePath: '/agent-packs/seomachine/commands/audit/SKILL.md',
+          interaction: {
+            kind: 'form',
+            prompt: 'Fill details',
+            fields: [{ id: 'url', label: 'URL', kind: 'text', required: true }],
+            responsePrompt: 'Run audit after submit.',
+          },
+        },
+      ])
+      expect(agentDao.updateConfig).toHaveBeenCalledWith(
+        'agent-1',
+        expect.objectContaining({
+          existing: true,
+          slashCommands: commands,
+          slashCommandsUpdatedAt: expect.any(String),
+        }),
+      )
+    })
+
+    it('should allow owner or bot user to read slash commands', async () => {
+      const agent = {
+        id: 'agent-1',
+        userId: 'bot-user-1',
+        kernelType: 'openclaw',
+        config: {
+          slashCommands: [{ name: '/research', description: 'Research a topic' }],
+        },
+        ownerId: 'owner-1',
+        status: 'running',
+      }
+      const agentDao = createMockAgentDao({
+        findById: vi.fn().mockResolvedValue(agent),
+      })
+      const service = new AgentService({
+        agentDao: agentDao as any,
+        userDao: createMockUserDao() as any,
+        logger: createMockLogger() as any,
+      })
+
+      await expect(service.getSlashCommands('agent-1', 'owner-1')).resolves.toEqual([
+        { name: 'research', description: 'Research a topic' },
+      ])
+      await expect(service.getSlashCommands('agent-1', 'bot-user-1')).resolves.toEqual([
+        { name: 'research', description: 'Research a topic' },
+      ])
+      await expect(service.getSlashCommands('agent-1', 'other-user')).rejects.toMatchObject({
+        status: 403,
+      })
+    })
+  })
+
   describe('generateToken', () => {
     it('should generate a valid JWT for the bot user', async () => {
       const agent = {
@@ -540,6 +637,43 @@ describe('Agent Handler (HTTP)', () => {
     const data = await res.json()
     expect(data.id).toBe('bot-123')
     expect(data.username).toBe('agent-test')
+  })
+
+  it('stored legacy agent token should be accepted as an opaque fallback', async () => {
+    const { Hono } = await import('hono')
+    const { authMiddleware, createStoredAgentTokenMiddleware } = await import(
+      '../src/middleware/auth.middleware'
+    )
+    const app = new Hono()
+    const agentDao = createMockAgentDao({
+      findByLastToken: vi.fn().mockResolvedValue({ userId: 'bot-legacy' }),
+    })
+    const container = {
+      resolve: vi.fn((name: string) => {
+        if (name === 'agentDao') return agentDao
+        throw new Error(`Unexpected dependency: ${name}`)
+      }),
+    }
+
+    app.use(
+      '*',
+      createStoredAgentTokenMiddleware(
+        container as Parameters<typeof createStoredAgentTokenMiddleware>[0],
+      ),
+    )
+    app.use('*', authMiddleware)
+    app.get('/api/auth/me', (c) => {
+      const user = c.get('user') as { userId: string }
+      return c.json({ id: user.userId })
+    })
+
+    const res = await app.request('/api/auth/me', {
+      headers: { Authorization: 'Bearer legacy-agent-token' },
+    })
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ id: 'bot-legacy' })
+    expect(agentDao.findByLastToken).toHaveBeenCalledWith('legacy-agent-token')
   })
 
   it('should return 409 when creating agent with duplicate username', async () => {

@@ -20,11 +20,13 @@ COPY apps/cloud/packages/ui/package.json ./apps/cloud/packages/ui/
 COPY apps/desktop/package.json ./apps/desktop/
 COPY apps/flash/package.json ./apps/flash/
 COPY apps/flash/packages/cards/package.json ./apps/flash/packages/cards/
+COPY apps/flash/packages/server/package.json ./apps/flash/packages/server/
 COPY apps/flash/packages/types/package.json ./apps/flash/packages/types/
 COPY apps/mobile/package.json ./apps/mobile/
 COPY apps/playground/package.json ./apps/playground/
 COPY apps/server/package.json ./apps/server/
 COPY apps/web/package.json ./apps/web/
+COPY website/package.json ./website/
 COPY packages/cli/package.json ./packages/cli/
 COPY packages/oauth/package.json ./packages/oauth/
 COPY packages/openclaw-shadowob/package.json ./packages/openclaw-shadowob/

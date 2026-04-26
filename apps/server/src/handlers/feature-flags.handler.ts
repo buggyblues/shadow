@@ -44,7 +44,10 @@ export function createFeatureFlagsHandler(container: AppContainer) {
     zValidator(
       'json',
       z.object({
-        key: z.string().min(1).regex(/^[a-z0-9-]+$/, 'Lowercase kebab-case only'),
+        key: z
+          .string()
+          .min(1)
+          .regex(/^[a-z0-9-]+$/, 'Lowercase kebab-case only'),
         description: z.string().optional(),
         envs: z
           .object({

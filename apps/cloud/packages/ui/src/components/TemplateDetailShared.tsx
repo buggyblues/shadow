@@ -1,10 +1,11 @@
-import { Badge, Button, EmptyState, Tabs, TabsList, TabsTrigger } from '@shadowob/ui'
+import { Badge, Button, EmptyState, GlassPanel, GlassSurface, Tabs } from '@shadowob/ui'
 import { ChevronRight, Cpu, Layers, Settings, Users, Zap } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Breadcrumb } from '@/components/Breadcrumb'
 import { CodeBlock } from '@/components/CodeBlock'
+import { DashboardTabsList, type TabItem } from '@/components/DashboardTabsList'
 import { cn } from '@/lib/utils'
 
 export interface TemplateAgentInfo {
@@ -20,13 +21,6 @@ export interface TemplateAgentInfo {
   configuration?: Record<string, unknown>
   resources?: { requests?: Record<string, string>; limits?: Record<string, string> }
   env?: Record<string, string>
-}
-
-export interface TabItem {
-  id: string
-  label: string
-  icon?: ReactNode
-  count?: number
 }
 
 function getAgentName(agent: Record<string, unknown>): string {
@@ -198,9 +192,12 @@ function TemplateAgentCard({ agent, index }: { agent: TemplateAgentInfo; index: 
               <h5 className="mb-1.5 text-micro font-black uppercase tracking-[0.16em] text-text-muted">
                 {t('templateDetail.identity')}
               </h5>
-              <p className="glass-surface line-clamp-4 rounded-[18px] px-3 py-3 text-xs leading-6 text-text-secondary">
+              <GlassSurface
+                as="p"
+                className="line-clamp-4 rounded-[18px] px-3 py-3 text-xs leading-6 text-text-secondary"
+              >
                 {agent.identity.personality}
-              </p>
+              </GlassSurface>
             </div>
           )}
 
@@ -232,7 +229,7 @@ function TemplateAgentCard({ agent, index }: { agent: TemplateAgentInfo; index: 
               </h5>
               <div className="grid grid-cols-2 gap-2">
                 {agent.resources.requests && (
-                  <div className="glass-surface rounded-[18px] px-3 py-3">
+                  <GlassSurface className="rounded-[18px] px-3 py-3">
                     <span className="mb-1 block text-micro font-semibold text-text-muted">
                       {t('templateDetail.requests')}
                     </span>
@@ -245,10 +242,10 @@ function TemplateAgentCard({ agent, index }: { agent: TemplateAgentInfo; index: 
                         <span className="font-mono">{value}</span>
                       </div>
                     ))}
-                  </div>
+                  </GlassSurface>
                 )}
                 {agent.resources.limits && (
-                  <div className="glass-surface rounded-[18px] px-3 py-3">
+                  <GlassSurface className="rounded-[18px] px-3 py-3">
                     <span className="mb-1 block text-micro font-semibold text-text-muted">
                       {t('templateDetail.limits')}
                     </span>
@@ -261,7 +258,7 @@ function TemplateAgentCard({ agent, index }: { agent: TemplateAgentInfo; index: 
                         <span className="font-mono">{value}</span>
                       </div>
                     ))}
-                  </div>
+                  </GlassSurface>
                 )}
               </div>
             </div>
@@ -304,12 +301,13 @@ function TemplateAgentCard({ agent, index }: { agent: TemplateAgentInfo; index: 
               </h5>
               <div className="flex flex-wrap gap-1.5">
                 {agent.tools.map((tool) => (
-                  <span
+                  <GlassSurface
+                    as="span"
                     key={tool}
-                    className="glass-surface rounded-full px-2 py-1 text-micro font-mono text-text-secondary"
+                    className="rounded-full px-2 py-1 text-micro font-mono text-text-secondary"
                   >
                     {tool}
-                  </span>
+                  </GlassSurface>
                 ))}
               </div>
             </div>
@@ -411,12 +409,12 @@ export function TemplateDetailShell({
   children: ReactNode
 }) {
   return (
-    <div className="dashboard-page-shell space-y-5">
+    <div className="mx-auto max-w-[1440px] space-y-5 p-6 md:px-8">
       <Breadcrumb items={breadcrumbItems} className="mb-1" />
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
         <div className="min-w-0 space-y-5">
-          <div className="glass-panel p-6">
+          <GlassPanel className="p-6">
             <div className="flex flex-col gap-5 md:flex-row md:items-start">
               <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[28px] border border-border-subtle bg-bg-secondary/50">
                 {heroIcon}
@@ -426,11 +424,13 @@ export function TemplateDetailShell({
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div className="min-w-0 space-y-3">
                     <div className="flex flex-wrap items-center gap-3">
-                      <h1 className="dashboard-page-title text-text-primary">{title}</h1>
+                      <h1 className="text-[1.875rem] font-extrabold tracking-[-0.03em] text-text-primary md:text-[2.125rem]">
+                        {title}
+                      </h1>
                       {titleMeta}
                     </div>
 
-                    <div className="dashboard-page-description max-w-3xl text-text-secondary">
+                    <div className="max-w-3xl text-sm leading-7 text-text-secondary">
                       {description}
                     </div>
 
@@ -447,20 +447,10 @@ export function TemplateDetailShell({
                 )}
               </div>
             </div>
-          </div>
+          </GlassPanel>
 
           <Tabs value={activeTab} onChange={onTabChange}>
-            <TabsList className="dashboard-tabs-list">
-              {tabs.map((tab) => (
-                <TabsTrigger key={tab.id} value={tab.id} className="dashboard-tabs-trigger">
-                  {tab.icon && <span className="dashboard-tab-icon">{tab.icon}</span>}
-                  <span>{tab.label}</span>
-                  {typeof tab.count === 'number' && (
-                    <span className="dashboard-tabs-count text-micro">{tab.count}</span>
-                  )}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            <DashboardTabsList tabs={tabs} />
           </Tabs>
 
           <div>{children}</div>

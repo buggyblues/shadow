@@ -8,13 +8,13 @@
  * For testing: pass overrides to createContainer({ logger: mockLogger })
  */
 
-import { resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { TemplateDao } from '../dao/template.dao.js'
 import { type Logger, log } from '../utils/logger.js'
+import { resolveCloudPackageAssetDir } from '../utils/package-asset-path.js'
 import { ClusterService } from './cluster.service.js'
 import { ConfigService } from './config.service.js'
 import { DeployService } from './deploy.service.js'
+import { DeploymentRuntimeService } from './deployment-runtime.service.js'
 import { ImageService } from './image.service.js'
 import { K8sService } from './k8s.service.js'
 import { ManifestService } from './manifest.service.js'
@@ -31,6 +31,7 @@ export interface ServiceContainer {
   config: ConfigService
   manifest: ManifestService
   deploy: DeployService
+  deploymentRuntime: DeploymentRuntimeService
   template: TemplateService
   templateI18n: TemplateI18nService
   runtime: RuntimeService
@@ -50,7 +51,7 @@ export function createContainer(overrides?: Partial<ServiceContainer>): ServiceC
   const logger = overrides?.logger ?? log
   const config = overrides?.config ?? new ConfigService()
   const manifest = overrides?.manifest ?? new ManifestService()
-  const defaultTemplatesDir = resolve(fileURLToPath(import.meta.url), '..', '..', 'templates')
+  const defaultTemplatesDir = resolveCloudPackageAssetDir('templates')
   const templateDao = new TemplateDao(defaultTemplatesDir)
   const template = overrides?.template ?? new TemplateService(templateDao)
   const runtime = overrides?.runtime ?? new RuntimeService()
@@ -59,6 +60,7 @@ export function createContainer(overrides?: Partial<ServiceContainer>): ServiceC
   const templateI18n = overrides?.templateI18n ?? new TemplateI18nService(template)
   const usageCost = overrides?.usageCost ?? new UsageCostService(k8s)
   const deploy = overrides?.deploy ?? new DeployService(config, manifest, k8s, logger)
+  const deploymentRuntime = overrides?.deploymentRuntime ?? new DeploymentRuntimeService(deploy)
   const cluster = overrides?.cluster ?? new ClusterService()
 
   return {
@@ -66,6 +68,7 @@ export function createContainer(overrides?: Partial<ServiceContainer>): ServiceC
     config,
     manifest,
     deploy,
+    deploymentRuntime,
     template,
     templateI18n,
     runtime,
@@ -80,6 +83,13 @@ export { ClusterService } from './cluster.service.js'
 // Re-export service classes for SDK use
 export { ConfigService } from './config.service.js'
 export { type DeployOptions, type DeployResult, DeployService } from './deploy.service.js'
+export {
+  type DeployFromSnapshotOptions,
+  type DeploymentRuntimeCluster,
+  DeploymentRuntimeService,
+  type DestroyRuntimeOptions,
+  rewriteLoopbackKubeconfig,
+} from './deployment-runtime.service.js'
 export { IMAGES, type ImageBuildOptions, ImageService } from './image.service.js'
 export { K8sService } from './k8s.service.js'
 export { ManifestService } from './manifest.service.js'

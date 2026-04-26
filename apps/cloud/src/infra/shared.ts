@@ -44,6 +44,7 @@ export function createSharedResources(options: SharedResourcesOptions) {
         name: options.namespace,
         labels: {
           app: 'shadowob-cloud',
+          'shadowob-cloud/managed': 'true',
           'managed-by': 'shadowob-cloud-cli',
         },
       },
@@ -63,6 +64,7 @@ export function createSharedResources(options: SharedResourcesOptions) {
           namespace: options.namespace,
           labels: {
             app: 'shadowob-cloud',
+            'shadowob-cloud/managed': 'true',
             'managed-by': 'shadowob-cloud-cli',
           },
         },

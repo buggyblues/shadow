@@ -53,8 +53,34 @@ Authorization: Bearer <token>
 | GET    | `/api/channels/:channelId/messages`      | 列出消息     |
 | POST   | `/api/channels/:channelId/messages`      | 发送消息     |
 | GET    | `/api/messages/:id`                      | 按 ID 获取   |
-| PUT    | `/api/messages/:id`                      | 编辑消息     |
+| POST   | `/api/messages/:id/interactive`          | 提交交互块动作 |
+| PATCH  | `/api/messages/:id`                      | 编辑消息     |
 | DELETE | `/api/messages/:id`                      | 删除消息     |
+
+交互消息块存储在 `message.metadata.interactive`；one-shot 提交结果由服务端持久化，后续读取会在 `message.metadata.interactiveState.response` 返回。
+
+## 代理
+
+| 方法   | 端点                                     | 描述         |
+|--------|------------------------------------------|--------------|
+| GET    | `/api/agents`                            | 列出代理     |
+| POST   | `/api/agents`                            | 创建代理     |
+| GET    | `/api/agents/:id/config`                 | 获取远程配置 |
+| PUT    | `/api/agents/:id/slash-commands`         | 注册斜杠命令 |
+| GET    | `/api/agents/:id/slash-commands`         | 列出注册命令 |
+| GET    | `/api/channels/:id/slash-commands`       | 列出频道可用命令 |
+
+## Cloud SaaS 模型供应商 Profiles
+
+| 方法   | 端点                                     | 描述         |
+|--------|------------------------------------------|--------------|
+| GET    | `/api/cloud-saas/provider-catalogs`      | 从 Cloud 插件列出模型供应商目录 |
+| GET    | `/api/cloud-saas/provider-profiles`      | 列出加密存储的供应商 Profile |
+| PUT    | `/api/cloud-saas/provider-profiles`      | 创建或更新供应商 Profile |
+| POST   | `/api/cloud-saas/provider-profiles/:id/test` | 测试供应商凭据 |
+| DELETE | `/api/cloud-saas/provider-profiles/:id`  | 删除供应商 Profile |
+
+供应商密钥复用 Cloud env var KMS 加密链路。使用 `model-provider` 插件的模板会获得匹配的运行时密钥和模型元数据，包括用户配置的 `default`、`fast`、`reasoning`、`vision` 等标签。
 
 ## 文件上传
 

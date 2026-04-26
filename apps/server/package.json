@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "DB_PUSH=true tsx watch src/index.ts",
-    "dev:migrate": "tsx watch src/index.ts",
-    "build": "tsup",
+    "dev": "JWT_SECRET=${JWT_SECRET:-shadow-dev-jwt-secret-do-not-use-in-production} DB_PUSH=true tsx watch src/index.ts",
+    "dev:backend": "JWT_SECRET=${JWT_SECRET:-shadow-dev-jwt-secret-do-not-use-in-production} DB_PUSH=true tsx watch src/index.ts",
+    "dev:migrate": "JWT_SECRET=${JWT_SECRET:-shadow-dev-jwt-secret-do-not-use-in-production} tsx watch src/index.ts",
+    "build": "pnpm --filter @shadowob/cloud build && tsup",
     "start": "node dist/index.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -19,6 +20,7 @@
   "dependencies": {
     "@hono/node-server": "^1.14.1",
     "@hono/zod-validator": "^0.7.6",
+    "@shadowob/cloud": "workspace:*",
     "@shadowob/sdk": "workspace:*",
     "@shadowob/shared": "workspace:*",
     "@types/archiver": "^7.0.0",
@@ -43,6 +45,7 @@
     "zod": "^3.25.67"
   },
   "devDependencies": {
+    "@typia/unplugin": "^12.0.1",
     "@types/bcryptjs": "^3.0.0",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/mime-types": "^2.1.4",

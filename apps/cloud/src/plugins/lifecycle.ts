@@ -64,9 +64,16 @@ export async function executePluginProvisions(
         if (result.secrets) Object.assign(results.secrets, result.secrets)
       }
     } catch (err) {
+      const cause =
+        err instanceof Error
+          ? (err as Error & { cause?: { code?: string; message?: string } }).cause
+          : undefined
       const message = err instanceof Error ? err.message : String(err)
-      results.errors.push({ pluginId, error: message })
-      logger.info(`  ⚠ Plugin ${pluginId} provision failed: ${message}`)
+      const detail = cause ? ` (cause: ${cause.code ?? ''} ${cause.message ?? ''})` : ''
+      const stack =
+        err instanceof Error && err.stack ? `\n${err.stack.split('\n').slice(0, 4).join('\n')}` : ''
+      results.errors.push({ pluginId, error: message + detail })
+      logger.info(`  ⚠ Plugin ${pluginId} provision failed: ${message}${detail}${stack}`)
     }
   }
 

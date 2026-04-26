@@ -34,13 +34,13 @@ export const DEFAULT_IMAGES: Record<string, string> = {
 
 /** Default resource requests/limits for agent containers */
 export const DEFAULT_RESOURCES = {
-  requests: { cpu: '100m', memory: '256Mi' },
-  limits: { cpu: '1000m', memory: '1Gi' },
+  requests: { cpu: '250m', memory: '512Mi' },
+  limits: { cpu: '2000m', memory: '2Gi' },
 } as const
 
 /** Liveness probe configuration */
 export const LIVENESS_PROBE = {
-  httpGet: { path: '/health', port: HEALTH_PORT },
+  httpGet: { path: '/live', port: HEALTH_PORT },
   initialDelaySeconds: 30,
   periodSeconds: 15,
   failureThreshold: 5,
@@ -48,14 +48,14 @@ export const LIVENESS_PROBE = {
 
 /** Readiness probe configuration */
 export const READINESS_PROBE = {
-  httpGet: { path: '/health', port: HEALTH_PORT },
+  httpGet: { path: '/ready', port: HEALTH_PORT },
   initialDelaySeconds: 10,
   periodSeconds: 5,
 } as const
 
 /** Startup probe configuration */
 export const STARTUP_PROBE = {
-  httpGet: { path: '/health', port: HEALTH_PORT },
+  httpGet: { path: '/live', port: HEALTH_PORT },
   initialDelaySeconds: 5,
   periodSeconds: 5,
   failureThreshold: 60,

@@ -11,6 +11,7 @@ POST /api/channels/:channelId/messages
 | `content` | string | 是 | 消息内容 |
 | `threadId` | string | 否 | 线程回复的线程 ID |
 | `replyToId` | string | 否 | 被回复的消息 ID |
+| `metadata.interactive` | object | 否 | 客户端渲染的交互块（`form`、`buttons`、`select` 或 `approval`） |
 
 :::code-group
 
@@ -104,6 +105,45 @@ const msg = await client.getMessage('message-id')
 
 ```python [Python]
 msg = client.get_message("message-id")
+```
+
+:::
+
+---
+
+## 提交交互动作
+
+```
+POST /api/messages/:id/interactive
+```
+
+记录用户对源消息交互块的操作。对于 one-shot 交互块，服务端会持久化提交结果；之后重新拉取源消息时，会在 `metadata.interactiveState.response` 返回已提交状态，让客户端刷新后仍然锁定控件。
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `blockId` | string | 是 | 来自 `metadata.interactive.id` 的交互块 ID |
+| `actionId` | string | 是 | 按钮、选项或表单提交动作 |
+| `value` | string | 否 | 动作值；服务端默认使用 `actionId` |
+| `label` | string | 否 | 用于回显消息的人类可读标签 |
+| `values` | object | 否 | 表单或审批字段值，按字段 ID 组织 |
+
+:::code-group
+
+```ts [TypeScript]
+await client.submitInteractiveAction('source-message-id', {
+  blockId: 'office-hour',
+  actionId: 'submit',
+  values: { pain: 'Manual reporting' },
+})
+```
+
+```python [Python]
+client.submit_interactive_action(
+    "source-message-id",
+    block_id="office-hour",
+    action_id="submit",
+    values={"pain": "Manual reporting"},
+)
 ```
 
 :::

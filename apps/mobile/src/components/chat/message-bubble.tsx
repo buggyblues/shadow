@@ -23,7 +23,7 @@ import {
   Square as SquareIcon,
   X,
 } from 'lucide-react-native'
-import { memo, useCallback, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Alert,
@@ -44,7 +44,12 @@ import { fetchApi, getImageUrl } from '../../lib/api'
 import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
 import { fontSize, radius, spacing, useColors } from '../../theme'
-import type { Attachment, Message } from '../../types/message'
+import type {
+  Attachment,
+  InteractiveBlock,
+  InteractiveResponseMetadata,
+  Message,
+} from '../../types/message'
 import { Avatar } from '../common/avatar'
 import { MarkdownRenderer } from './markdown-renderer'
 import type { PopupAction } from './selection-popup'
@@ -608,6 +613,16 @@ function MessageBubbleInner({
             )
           })}
 
+          {/* Phase 2 — interactive block (buttons / select) */}
+          {message.metadata?.interactive && (
+            <InteractiveBlockRenderer
+              block={message.metadata.interactive}
+              messageId={message.id}
+              disabled={selectionMode}
+              submittedResponse={message.metadata.interactiveState?.response}
+            />
+          )}
+
           {/* Reactions */}
           {message.reactions && message.reactions.length > 0 && (
             <View style={styles.reactions}>
@@ -1026,4 +1041,365 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     fontWeight: '600',
   },
+  // Interactive block (Phase 2)
+  interactive: {
+    marginTop: 6,
+    padding: 10,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: 8,
+  },
+  interactivePrompt: {
+    fontSize: fontSize.sm,
+  },
+  interactiveRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  interactiveButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+  },
+  interactiveButtonText: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+  },
+  interactiveError: {
+    fontSize: fontSize.xs,
+  },
 })
+
+/**
+ * Phase 2 POC — renders interactive controls (buttons / select) attached to
+ * a message and POSTs the user's choice to the server, which echoes a
+ * follow-up reply that the buddy agent receives via normal chat flow.
+ */
+function InteractiveBlockRenderer({
+  block,
+  messageId,
+  disabled,
+  submittedResponse,
+}: {
+  block: InteractiveBlock
+  messageId: string
+  disabled?: boolean
+  submittedResponse?: InteractiveResponseMetadata | null
+}) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  const [submitting, setSubmitting] = useState(false)
+  const [done, setDone] = useState<string | null>(submittedResponse?.actionId ?? null)
+  const [error, setError] = useState<string | null>(null)
+  const submittingRef = useRef(false)
+
+  useEffect(() => {
+    if (submittedResponse?.actionId) setDone(submittedResponse.actionId)
+  }, [submittedResponse?.actionId])
+
+  const send = useCallback(
+    async (actionId: string, value: string, label: string, values?: Record<string, string>) => {
+      if (submittingRef.current || (block.oneShot !== false && done)) return
+      submittingRef.current = true
+      const previousDone = done
+      setSubmitting(true)
+      if (block.oneShot !== false) setDone(actionId)
+      setError(null)
+      try {
+        await fetchApi(`/api/messages/${messageId}/interactive`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            blockId: block.id,
+            actionId,
+            value,
+            label,
+            ...(values ? { values } : {}),
+          }),
+        })
+        setDone(actionId)
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+      } catch (e) {
+        if (block.oneShot !== false) setDone(previousDone)
+        setError(e instanceof Error ? e.message : t('chat.interactiveSubmitFailed'))
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
+      } finally {
+        submittingRef.current = false
+        setSubmitting(false)
+      }
+    },
+    [block.id, block.oneShot, done, messageId, t],
+  )
+
+  const isLocked = !!disabled || submitting || (block.oneShot !== false && done !== null)
+
+  const isFormLike = block.kind === 'form' || block.kind === 'approval'
+
+  const items = isFormLike
+    ? []
+    : block.kind === 'select'
+      ? (block.options ?? []).map((o) => ({
+          id: o.id,
+          label: o.label,
+          value: o.value,
+          style: undefined as undefined | 'primary' | 'secondary' | 'destructive',
+        }))
+      : (block.buttons ?? []).map((b) => ({
+          id: b.id,
+          label: b.label,
+          value: b.value ?? b.id,
+          style: b.style,
+        }))
+
+  return (
+    <View
+      style={[styles.interactive, { backgroundColor: colors.surface, borderColor: colors.border }]}
+    >
+      {block.prompt ? (
+        <Text style={[styles.interactivePrompt, { color: colors.textSecondary }]}>
+          {block.prompt}
+        </Text>
+      ) : null}
+
+      {isFormLike ? (
+        <InteractiveFormBody
+          block={block}
+          isLocked={isLocked}
+          colors={colors}
+          submittedValues={submittedResponse?.values}
+          onSubmit={(actionId, label, values) => send(actionId, actionId, label, values)}
+        />
+      ) : (
+        <View style={styles.interactiveRow}>
+          {items.map((it) => {
+            const isPicked = done === it.id
+            const isDanger = it.style === 'destructive'
+            const isPrimary = it.style === 'primary' || isPicked
+            const bg = isDanger ? `${colors.error}20` : isPrimary ? colors.primary : 'transparent'
+            const fg = isDanger ? colors.error : isPrimary ? '#ffffff' : colors.text
+            const borderColor = isDanger ? colors.error : isPrimary ? colors.primary : colors.border
+            return (
+              <Pressable
+                key={it.id}
+                disabled={isLocked && !isPicked}
+                style={[
+                  styles.interactiveButton,
+                  { backgroundColor: bg, borderColor, opacity: isLocked && !isPicked ? 0.5 : 1 },
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {})
+                  send(it.id, it.value, it.label)
+                }}
+              >
+                <Text style={[styles.interactiveButtonText, { color: fg }]}>
+                  {isPicked ? `✓ ${it.label}` : it.label}
+                </Text>
+              </Pressable>
+            )
+          })}
+        </View>
+      )}
+
+      {error ? (
+        <Text style={[styles.interactiveError, { color: colors.error }]}>{error}</Text>
+      ) : null}
+    </View>
+  )
+}
+
+/**
+ * Mobile renderer for `kind: 'form' | 'approval'` interactive blocks.
+ * Uses controlled TextInput / option-pill rows; checkbox is a toggle pill.
+ */
+function InteractiveFormBody({
+  block,
+  isLocked,
+  colors,
+  submittedValues,
+  onSubmit,
+}: {
+  block: InteractiveBlock
+  isLocked: boolean
+  colors: ReturnType<typeof useColors>
+  submittedValues?: Record<string, string>
+  onSubmit: (actionId: string, label: string, values: Record<string, string>) => void
+}) {
+  const { t } = useTranslation()
+  const initial = useMemo<Record<string, string>>(() => {
+    const out: Record<string, string> = {}
+    for (const f of block.fields ?? []) {
+      out[f.id] =
+        submittedValues?.[f.id] ?? f.defaultValue ?? (f.kind === 'checkbox' ? 'false' : '')
+    }
+    return out
+  }, [block.fields, submittedValues])
+  const [values, setValues] = useState<Record<string, string>>(initial)
+  const [touched, setTouched] = useState(false)
+
+  useEffect(() => {
+    if (submittedValues) setValues(initial)
+  }, [initial, submittedValues])
+
+  const setField = (id: string, v: string) => setValues((prev) => ({ ...prev, [id]: v }))
+  const missingRequired = (block.fields ?? []).some((f) => f.required && !values[f.id]?.trim())
+
+  const submit = (actionId: string, label: string) => {
+    if (isLocked) return
+    setTouched(true)
+    if (missingRequired) return
+    onSubmit(actionId, label, values)
+  }
+
+  return (
+    <View style={{ gap: 8 }}>
+      {(block.fields ?? []).map((f) => {
+        const v = values[f.id] ?? ''
+        const showError = touched && f.required && !v.trim()
+        return (
+          <View key={f.id} style={{ gap: 4 }}>
+            <Text style={[styles.interactivePrompt, { color: colors.textSecondary }]}>
+              {f.label}
+              {f.required ? <Text style={{ color: colors.error }}> *</Text> : null}
+            </Text>
+            {f.kind === 'checkbox' ? (
+              <Pressable
+                disabled={isLocked}
+                onPress={() => setField(f.id, v === 'true' ? 'false' : 'true')}
+                style={[
+                  styles.interactiveButton,
+                  {
+                    alignSelf: 'flex-start',
+                    backgroundColor: v === 'true' ? colors.primary : 'transparent',
+                    borderColor: v === 'true' ? colors.primary : colors.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.interactiveButtonText,
+                    { color: v === 'true' ? '#ffffff' : colors.text },
+                  ]}
+                >
+                  {v === 'true' ? `✓ ${t('chat.interactiveOn')}` : t('chat.interactiveOff')}
+                </Text>
+              </Pressable>
+            ) : f.kind === 'select' ? (
+              <View style={styles.interactiveRow}>
+                {(f.options ?? []).map((o) => {
+                  const picked = v === o.value
+                  return (
+                    <Pressable
+                      key={o.id}
+                      disabled={isLocked}
+                      onPress={() => setField(f.id, o.value)}
+                      style={[
+                        styles.interactiveButton,
+                        {
+                          backgroundColor: picked ? colors.primary : 'transparent',
+                          borderColor: picked ? colors.primary : colors.border,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.interactiveButtonText,
+                          { color: picked ? '#ffffff' : colors.text },
+                        ]}
+                      >
+                        {o.label}
+                      </Text>
+                    </Pressable>
+                  )
+                })}
+              </View>
+            ) : (
+              <TextInput
+                value={v}
+                onChangeText={(t) => setField(f.id, t)}
+                editable={!isLocked}
+                placeholder={f.placeholder}
+                placeholderTextColor={colors.textMuted}
+                keyboardType={f.kind === 'number' ? 'numeric' : 'default'}
+                multiline={f.kind === 'textarea'}
+                maxLength={f.maxLength}
+                style={{
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: radius.sm,
+                  paddingHorizontal: 8,
+                  paddingVertical: 6,
+                  color: colors.text,
+                  minHeight: f.kind === 'textarea' ? 60 : undefined,
+                  textAlignVertical: f.kind === 'textarea' ? 'top' : 'center',
+                }}
+              />
+            )}
+            {showError ? (
+              <Text style={[styles.interactiveError, { color: colors.error }]}>
+                {t('chat.interactiveRequired')}
+              </Text>
+            ) : null}
+          </View>
+        )
+      })}
+
+      <View style={styles.interactiveRow}>
+        {block.kind === 'form' ? (
+          <Pressable
+            disabled={isLocked}
+            onPress={() => submit('submit', block.submitLabel ?? t('chat.interactiveSubmit'))}
+            style={[
+              styles.interactiveButton,
+              {
+                backgroundColor: colors.primary,
+                borderColor: colors.primary,
+                opacity: isLocked ? 0.5 : 1,
+              },
+            ]}
+          >
+            <Text style={[styles.interactiveButtonText, { color: '#ffffff' }]}>
+              {block.submitLabel ?? t('chat.interactiveSubmit')}
+            </Text>
+          </Pressable>
+        ) : (
+          <>
+            <Pressable
+              disabled={isLocked}
+              onPress={() => submit('approve', t('chat.interactiveApprove'))}
+              style={[
+                styles.interactiveButton,
+                {
+                  backgroundColor: colors.primary,
+                  borderColor: colors.primary,
+                  opacity: isLocked ? 0.5 : 1,
+                },
+              ]}
+            >
+              <Text style={[styles.interactiveButtonText, { color: '#ffffff' }]}>
+                ✓ {t('chat.interactiveApprove')}
+              </Text>
+            </Pressable>
+            <Pressable
+              disabled={isLocked}
+              onPress={() => submit('reject', t('chat.interactiveReject'))}
+              style={[
+                styles.interactiveButton,
+                {
+                  backgroundColor: `${colors.error}20`,
+                  borderColor: colors.error,
+                  opacity: isLocked ? 0.5 : 1,
+                },
+              ]}
+            >
+              <Text style={[styles.interactiveButtonText, { color: colors.error }]}>
+                ✗ {t('chat.interactiveReject')}
+              </Text>
+            </Pressable>
+          </>
+        )}
+      </View>
+    </View>
+  )
+}

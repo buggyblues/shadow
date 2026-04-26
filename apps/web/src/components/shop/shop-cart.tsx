@@ -59,7 +59,8 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
         body: JSON.stringify(data),
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['shop-cart', serverId] }),
-    onError: (err: Error) => showToast(err.message || t('shop.updateQuantityFailed', '更新数量失败'), 'error'),
+    onError: (err: Error) =>
+      showToast(err.message || t('shop.updateQuantityFailed', '更新数量失败'), 'error'),
   })
 
   const placeOrder = useMutation({
@@ -76,7 +77,8 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
       showToast(t('shop.orderSuccess', '下单成功！'), 'success')
       if (onCheckout) onCheckout(data.id)
     },
-    onError: (err: Error) => showToast(err.message || t('shop.orderFailed', '下单失败，请检查余额或库存'), 'error'),
+    onError: (err: Error) =>
+      showToast(err.message || t('shop.orderFailed', '下单失败，请检查余额或库存'), 'error'),
   })
 
   const selectedItems = useMemo(

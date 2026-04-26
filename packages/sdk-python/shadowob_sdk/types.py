@@ -51,6 +51,16 @@ class ShadowMessage:
     is_pinned: bool = False
     author: dict[str, Any] | None = None
     attachments: list[dict[str, Any]] = field(default_factory=list)
+    metadata: dict[str, Any] | None = None
+
+
+@dataclass
+class ShadowInteractiveActionInput:
+    block_id: str
+    action_id: str
+    value: str | None = None
+    label: str | None = None
+    values: dict[str, str] | None = None
 
 
 @dataclass
@@ -101,6 +111,24 @@ class ShadowInviteCode:
     used_by: str | None = None
     used_at: str | None = None
     note: str | None = None
+
+
+@dataclass
+class ShadowSlashCommand:
+    name: str
+    description: str | None = None
+    aliases: list[str] = field(default_factory=list)
+    pack_id: str | None = None
+    source_path: str | None = None
+    interaction: dict[str, Any] | None = None
+
+
+@dataclass
+class ShadowChannelSlashCommand(ShadowSlashCommand):
+    agent_id: str = ""
+    bot_user_id: str = ""
+    bot_username: str = ""
+    bot_display_name: str | None = None
 
 
 @dataclass

@@ -1,0 +1,110 @@
+{
+  "version": "1.0.0",
+  "name": "${i18n:name}",
+  "description": "${i18n:description}",
+  "environment": "production",
+  "team": {
+    "name": "seomachine-buddy",
+    "description": "Single SEO Buddy powered by TheCraigHewitt/seomachine — using its Claude commands, agents, and context templates for keyword research, content briefs, on-page audits, and topical-authority planning."
+  },
+  "use": [
+    {
+      "plugin": "model-provider"
+    },
+    {
+      "plugin": "shadowob",
+      "options": {
+        "servers": [
+          {
+            "id": "seomachine-hq",
+            "name": "SEO Machine",
+            "slug": "seomachine",
+            "channels": [
+              {
+                "id": "research",
+                "title": "Keyword Research",
+                "type": "text"
+              },
+              {
+                "id": "briefs",
+                "title": "Content Briefs",
+                "type": "text"
+              },
+              {
+                "id": "audits",
+                "title": "On-page Audits",
+                "type": "text"
+              }
+            ]
+          }
+        ],
+        "buddies": [
+          {
+            "id": "seo-bot",
+            "name": "SEO Buddy"
+          }
+        ],
+        "bindings": [
+          {
+            "targetId": "seo-bot",
+            "targetType": "buddy",
+            "servers": ["seomachine-hq"],
+            "channels": ["research", "briefs", "audits"],
+            "agentId": "seo-buddy"
+          }
+        ]
+      }
+    }
+  ],
+  "deployments": {
+    "namespace": "seomachine-buddy",
+    "agents": [
+      {
+        "id": "seo-buddy",
+        "runtime": "openclaw",
+        "description": "Single SEO Buddy that runs the seomachine playbook — keyword research → content brief → on-page audit — grounded in the repo's Claude commands, agents, and context files.",
+        "identity": {
+          "name": "SEO Buddy",
+          "personality": "You are a senior technical-marketing SEO. You think in topic clusters, you measure SERP intent before keyword volume, and you obsess over schema and how LLMs cite the site. You hate keyword stuffing and AI-slop content.",
+          "systemPrompt": "Workflow:\n1. Before any SEO task, read the most relevant mounted seomachine context, command docs, and agent docs (brand voice, style guide, SEO guidelines, target keywords, internal links, competitor analysis, and matching workflow instructions).\n2. #research → follow the seomachine research workflow and return clustered queries with intent, competitor SERP snapshot, and the most valuable next step.\n3. #briefs → turn a target query into a structured content brief (intent, outline, internal links, schema spec, primary CTA) grounded in the mounted context.\n4. #audits → run an on-page audit (title, meta, schema, internal links, content depth, AEO citations) using the repo's SEO and CRO guidance.\n\nWhen proposing the next 5 topics to rank for, post a `select` interactive block using the message tool with action `send`; include `target`, `message`, `kind: \"select\"`, `prompt`, and `options` so the user can pick which to brief next."
+        },
+        "use": [
+          {
+            "plugin": "agent-pack",
+            "options": {
+              "packs": [
+                {
+                  "id": "seomachine",
+                  "url": "https://github.com/TheCraigHewitt/seomachine",
+                  "ref": "main"
+                }
+              ],
+              "poll": "1h"
+            }
+          }
+        ],
+        "resources": {
+          "requests": {
+            "cpu": "100m",
+            "memory": "256Mi"
+          },
+          "limits": {
+            "cpu": "1000m",
+            "memory": "1Gi"
+          }
+        },
+        "configuration": {}
+      }
+    ]
+  },
+  "i18n": {
+    "en": {
+      "name": "SEO Machine Buddy",
+      "description": "Single SEO Buddy powered live by TheCraigHewitt/seomachine — keyword research, content briefs, on-page audits, and topical-authority planning via the upstream Claude commands, agents, and context files."
+    },
+    "zh-CN": {
+      "name": "SEO 机器 Buddy",
+      "description": "单 Buddy 模板，从 TheCraigHewitt/seomachine 动态拉取 Claude 命令、代理说明与上下文文件 —— 关键词研究、内容简报、On-page 审计、主题权威规划。"
+    }
+  }
+}

@@ -1,6 +1,13 @@
 import { and, asc, desc, eq, exists, ilike, inArray, lt } from 'drizzle-orm'
 import type { Database } from '../db'
-import { attachments, messages, reactions, threads, users } from '../db/schema'
+import {
+  attachments,
+  messageInteractiveSubmissions,
+  messages,
+  reactions,
+  threads,
+  users,
+} from '../db/schema'
 
 export class MessageDao {
   constructor(private deps: { db: Database }) {}
@@ -20,6 +27,60 @@ export class MessageDao {
 
   async findById(id: string) {
     const result = await this.db.select().from(messages).where(eq(messages.id, id)).limit(1)
+    return result[0] ?? null
+  }
+
+  async findInteractiveSubmission(sourceMessageId: string, blockId: string, userId: string) {
+    const result = await this.db
+      .select()
+      .from(messageInteractiveSubmissions)
+      .where(
+        and(
+          eq(messageInteractiveSubmissions.sourceMessageId, sourceMessageId),
+          eq(messageInteractiveSubmissions.blockId, blockId),
+          eq(messageInteractiveSubmissions.userId, userId),
+        ),
+      )
+      .limit(1)
+    return result[0] ?? null
+  }
+
+  async findInteractiveSubmissionsForSources(sourceMessageIds: string[], userId: string) {
+    if (sourceMessageIds.length === 0) return []
+    return this.db
+      .select()
+      .from(messageInteractiveSubmissions)
+      .where(
+        and(
+          inArray(messageInteractiveSubmissions.sourceMessageId, sourceMessageIds),
+          eq(messageInteractiveSubmissions.userId, userId),
+        ),
+      )
+      .orderBy(asc(messageInteractiveSubmissions.createdAt))
+  }
+
+  async createInteractiveSubmission(data: {
+    sourceMessageId: string
+    blockId: string
+    userId: string
+    actionId: string
+    value: string
+    values?: Record<string, string>
+  }) {
+    const result = await this.db
+      .insert(messageInteractiveSubmissions)
+      .values(data)
+      .onConflictDoNothing()
+      .returning()
+    return result[0] ?? null
+  }
+
+  async updateInteractiveSubmissionResponse(id: string, responseMessageId: string) {
+    const result = await this.db
+      .update(messageInteractiveSubmissions)
+      .set({ responseMessageId, updatedAt: new Date() })
+      .where(eq(messageInteractiveSubmissions.id, id))
+      .returning()
     return result[0] ?? null
   }
 

@@ -10,8 +10,6 @@ import {
   TableHeader,
   TableRow,
   Tabs,
-  TabsList,
-  TabsTrigger,
 } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
@@ -42,6 +40,7 @@ import { CliCommandSnippet } from '@/components/CliCommandSnippet'
 import { DangerConfirmDialog } from '@/components/DangerConfirmDialog'
 import { DashboardEmptyState } from '@/components/DashboardEmptyState'
 import { DashboardNamespaceCard } from '@/components/DashboardNamespaceCard'
+import { DashboardTabsList } from '@/components/DashboardTabsList'
 import { DashboardTaskCard } from '@/components/DashboardTaskCard'
 import { EnvVarEditorDialog } from '@/components/EnvVarEditorDialog'
 import { LogsPanel } from '@/components/LogsPanel'
@@ -50,9 +49,14 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { StatusDot } from '@/components/StatusDot'
 import { ToolbarActionButton } from '@/components/ToolbarActionButton'
 import { useSSEStream } from '@/hooks/useSSEStream'
-import { api, type Deployment, type EnvVarListEntry, type Pod } from '@/lib/api'
+import {
+  type Deployment,
+  type EnvVarListEntry,
+  type Pod,
+  type ProviderUsageSummary,
+} from '@/lib/api'
 import { useApiClient } from '@/lib/api-context'
-import { formatUsdCost } from '@/lib/store-data'
+import { formatDisplayCost, formatTokenCount, formatUsdCost } from '@/lib/store-data'
 import { cn, formatTimestamp, getAge, getReadyReplicas, isDeploymentReady } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/stores/toast'
@@ -67,6 +71,39 @@ function getPodStatusType(status: string): 'success' | 'warning' | 'error' | 'in
   if (status === 'Failed') return 'error'
   if (status === 'Succeeded') return 'info'
   return 'warning'
+}
+
+function formatTokenLabel(value: number | null, locale: string, tokenLabel: string): string {
+  if (value === null) return '—'
+  return `${formatTokenCount(value, locale)} ${tokenLabel}`
+}
+
+function getProviderMetricDisplay(
+  provider: ProviderUsageSummary,
+  options: {
+    billingUnit: 'usd' | 'shrimp'
+    locale: string
+    tokenLabel: string
+  },
+): { primary: string; secondary: string | null } {
+  const tokenText =
+    provider.totalTokens !== null
+      ? formatTokenLabel(provider.totalTokens, options.locale, options.tokenLabel)
+      : null
+  const usageText = provider.usageLabel ?? provider.raw ?? null
+
+  if (options.billingUnit === 'shrimp') {
+    return {
+      primary: tokenText ?? usageText ?? '—',
+      secondary: usageText && usageText !== tokenText ? usageText : null,
+    }
+  }
+
+  const usdText = formatUsdCost(provider.amountUsd, options.locale)
+  return {
+    primary: usdText,
+    secondary: tokenText ?? usageText,
+  }
 }
 
 function AgentCard({
@@ -120,38 +157,51 @@ function AgentCard({
   return (
     <div
       className={cn(
-        'rounded-xl border p-4 transition-colors',
+        'min-w-0 rounded-xl border p-4 transition-colors',
         selected
           ? 'border-primary/60 bg-primary/10'
           : 'border-border-subtle bg-bg-secondary hover:border-border-dim',
       )}
     >
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <Button type="button" onClick={onSelect} variant="ghost" size="sm">
-          <div className="flex items-center gap-2 min-w-0">
-            <StatusDot status={ready ? 'success' : 'warning'} pulse={!ready} />
-            <p className="text-sm font-mono text-text-primary truncate">{deployment.name}</p>
-            {selected && (
-              <Badge variant="info" size="sm">
-                {t('deployments.currentSelection')}
-              </Badge>
-            )}
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <button
+          type="button"
+          onClick={onSelect}
+          className={cn(
+            'flex min-w-0 flex-1 items-start gap-3 rounded-xl border px-3 py-3 text-left transition-colors',
+            selected
+              ? 'border-primary/50 bg-primary/8'
+              : 'border-border-subtle/70 bg-bg-base/30 hover:border-border-dim',
+          )}
+        >
+          <StatusDot status={ready ? 'success' : 'warning'} pulse={!ready} />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="min-w-0 truncate text-sm font-mono text-text-primary">
+                {deployment.name}
+              </p>
+              {selected && (
+                <Badge variant="info" size="sm">
+                  {t('deployments.currentSelection')}
+                </Badge>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-text-muted">{getAge(deployment.age)}</p>
           </div>
-          <p className="text-xs text-text-muted mt-1">{getAge(deployment.age)}</p>
-        </Button>
+        </button>
 
         <Button
           type="button"
           onClick={onOpenLogs}
           variant="ghost"
           size="sm"
-          className="dashboard-action-button"
+          className="self-start whitespace-normal normal-case tracking-normal transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
         >
           {t('deployments.tabLogs')}
         </Button>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <StatusBadge
           dotStatus={ready ? 'success' : 'warning'}
           pulse={!ready}
@@ -164,7 +214,7 @@ function AgentCard({
             type="button"
             variant="ghost"
             size="xs"
-            className="dashboard-action-button"
+            className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
             onClick={() => handleScale(-1)}
             disabled={scaleMutation.isPending || currentReplicas <= 0}
           >
@@ -175,7 +225,7 @@ function AgentCard({
             type="button"
             variant="ghost"
             size="xs"
-            className="dashboard-action-button"
+            className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
             onClick={() => handleScale(1)}
             disabled={scaleMutation.isPending}
           >
@@ -232,11 +282,21 @@ function PodsPanel({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="dashboard-table-head">{t('clusters.status')}</TableHead>
-              <TableHead className="dashboard-table-head">{t('monitoring.name')}</TableHead>
-              <TableHead className="dashboard-table-head">{t('monitoring.ready')}</TableHead>
-              <TableHead className="dashboard-table-head">{t('deployments.restarts')}</TableHead>
-              <TableHead className="dashboard-table-head">{t('deployments.age')}</TableHead>
+              <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                {t('clusters.status')}
+              </TableHead>
+              <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                {t('monitoring.name')}
+              </TableHead>
+              <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                {t('monitoring.ready')}
+              </TableHead>
+              <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                {t('deployments.restarts')}
+              </TableHead>
+              <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                {t('deployments.age')}
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -532,7 +592,7 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
             }}
             variant="primary"
             size="sm"
-            className="dashboard-action-button"
+            className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
           >
             <Plus size={11} />
             {t('common.add')}
@@ -546,10 +606,18 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="dashboard-table-head">{t('secrets.keyName')}</TableHead>
-                  <TableHead className="dashboard-table-head">{t('secrets.secretValue')}</TableHead>
-                  <TableHead className="dashboard-table-head">{t('secrets.secret')}</TableHead>
-                  <TableHead className="dashboard-table-head">{t('common.actions')}</TableHead>
+                  <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('secrets.keyName')}
+                  </TableHead>
+                  <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('secrets.secretValue')}
+                  </TableHead>
+                  <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('secrets.secret')}
+                  </TableHead>
+                  <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('common.actions')}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -575,7 +643,7 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
                           onClick={() => void handleEditStart(entry)}
                           variant="ghost"
                           size="icon"
-                          className="dashboard-action-button"
+                          className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
                         >
                           <Pencil size={12} />
                         </Button>
@@ -584,7 +652,7 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
                           onClick={() => setDeleteKey(entry.key)}
                           variant="ghost"
                           size="icon"
-                          className="dashboard-action-button"
+                          className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
                         >
                           <Trash2 size={12} />
                         </Button>
@@ -611,9 +679,15 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="dashboard-table-head">{t('secrets.keyName')}</TableHead>
-                  <TableHead className="dashboard-table-head">{t('secrets.secretValue')}</TableHead>
-                  <TableHead className="dashboard-table-head">{t('secrets.scope')}</TableHead>
+                  <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('secrets.keyName')}
+                  </TableHead>
+                  <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('secrets.secretValue')}
+                  </TableHead>
+                  <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('secrets.scope')}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -774,12 +848,21 @@ function NamespaceCostTab({ namespace }: { namespace: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label={t('deployments.namespaceCost')}
-          value={formatUsdCost(data.totalUsd, i18n.language)}
+          value={formatDisplayCost(data, {
+            locale: i18n.language,
+            shrimpUnitLabel: t('deploy.shrimpCoins'),
+          })}
           icon={<DollarSign size={13} />}
           color="green"
+        />
+        <StatCard
+          label={t('deployments.totalTokens')}
+          value={formatTokenCount(data.totalTokens, i18n.language)}
+          icon={<Terminal size={13} />}
+          color="purple"
         />
         <StatCard
           label={t('deployments.availableAgents')}
@@ -803,10 +886,10 @@ function NamespaceCostTab({ namespace }: { namespace: string }) {
         {data.agents.map((agent) => (
           <div
             key={agent.agentName}
-            className="bg-bg-secondary border border-border-subtle rounded-xl p-5"
+            className="min-w-0 rounded-xl border border-border-subtle bg-bg-secondary p-5"
           >
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div>
+            <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-mono text-text-primary">{agent.agentName}</p>
                   <Badge variant={agent.totalUsd !== null ? 'success' : 'neutral'} size="sm">
@@ -815,32 +898,44 @@ function NamespaceCostTab({ namespace }: { namespace: string }) {
                 </div>
                 <p className="text-xs text-text-muted mt-1">{agent.podName ?? t('common.none')}</p>
               </div>
-              <div className="text-right">
-                <p className="text-lg font-semibold text-green-400">
-                  {formatUsdCost(agent.totalUsd, i18n.language)}
+              <div className="min-w-0 text-left md:max-w-[14rem] md:text-right">
+                <p className="break-words text-lg font-semibold leading-tight text-green-400">
+                  {formatDisplayCost(agent, {
+                    locale: i18n.language,
+                    shrimpUnitLabel: t('deploy.shrimpCoins'),
+                  })}
                 </p>
                 <p className="text-xs text-text-muted">{t('deployments.totalCost')}</p>
+                <p className="mt-1 text-xs text-text-muted">
+                  {formatTokenLabel(agent.totalTokens, i18n.language, t('deployments.tokens'))}
+                </p>
               </div>
             </div>
 
             {agent.providers.length > 0 ? (
               <div className="space-y-2">
-                {agent.providers.map((provider) => (
-                  <div
-                    key={`${agent.agentName}-${provider.provider}`}
-                    className="flex items-center justify-between gap-3 text-xs"
-                  >
-                    <span className="text-text-secondary">{provider.provider}</span>
-                    <div className="text-right">
-                      <p className="text-text-secondary">
-                        {formatUsdCost(provider.amountUsd, i18n.language)}
-                      </p>
-                      <p className="text-text-muted">
-                        {provider.usageLabel ?? provider.raw ?? '—'}
-                      </p>
+                {agent.providers.map((provider) => {
+                  const providerDisplay = getProviderMetricDisplay(provider, {
+                    billingUnit: data.billingUnit,
+                    locale: i18n.language,
+                    tokenLabel: t('deployments.tokens'),
+                  })
+
+                  return (
+                    <div
+                      key={`${agent.agentName}-${provider.provider}`}
+                      className="flex flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                    >
+                      <span className="text-text-secondary">{provider.provider}</span>
+                      <div className="min-w-0 text-left sm:text-right">
+                        <p className="break-words text-text-secondary">{providerDisplay.primary}</p>
+                        {providerDisplay.secondary ? (
+                          <p className="break-words text-text-muted">{providerDisplay.secondary}</p>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             ) : (
               <p className="text-xs text-text-muted">{t('deployments.noProvidersReported')}</p>
@@ -865,7 +960,6 @@ function NamespaceInfoTab({
   deployments: Deployment[]
   pods: Pod[] | undefined
 }) {
-  const api = useApiClient()
   const { t } = useTranslation()
   const readyAgents = deployments.filter((deployment) => isDeploymentReady(deployment.ready)).length
   const totalRestarts = pods?.reduce((sum, pod) => sum + Number(pod.restarts), 0) ?? 0
@@ -1051,7 +1145,7 @@ export function DeploymentNamespacePage() {
 
   if (!isLoading && namespaceDeployments.length === 0) {
     return (
-      <div className="dashboard-page-shell dashboard-page-shell--narrow space-y-6">
+      <div className="mx-auto max-w-[1280px] space-y-6 p-6 md:px-8">
         <Breadcrumb
           items={[{ label: t('deployments.title'), to: '/deployments' }, { label: namespace }]}
           className="mb-4"
@@ -1074,7 +1168,7 @@ export function DeploymentNamespacePage() {
   }
 
   return (
-    <div className="dashboard-page-shell dashboard-page-shell--narrow space-y-6">
+    <div className="mx-auto max-w-[1280px] space-y-6 p-6 md:px-8">
       <Breadcrumb
         items={[{ label: t('deployments.title'), to: '/deployments' }, { label: namespace }]}
         className="mb-4"
@@ -1082,8 +1176,12 @@ export function DeploymentNamespacePage() {
 
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="dashboard-page-title font-mono text-3xl">{namespace}</h1>
-          <p className="dashboard-page-description mt-1">{t('deployments.namespaceDescription')}</p>
+          <h1 className="font-extrabold tracking-[-0.03em] text-text-primary font-mono text-3xl">
+            {namespace}
+          </h1>
+          <p className="mt-1 text-sm leading-7 text-text-muted">
+            {t('deployments.namespaceDescription')}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -1095,7 +1193,7 @@ export function DeploymentNamespacePage() {
             }}
             variant="ghost"
             size="sm"
-            className="dashboard-action-button"
+            className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
           >
             <RefreshCw size={12} />
             {t('common.refresh')}
@@ -1106,7 +1204,7 @@ export function DeploymentNamespacePage() {
               onClick={() => void handleRedeploy()}
               variant="ghost"
               size="sm"
-              className="dashboard-action-button"
+              className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
             >
               <Rocket size={12} />
               {t('deployTask.redeploy')}
@@ -1117,7 +1215,7 @@ export function DeploymentNamespacePage() {
             onClick={() => setDestroyOpen(true)}
             variant="ghost"
             size="sm"
-            className="dashboard-action-button"
+            className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
           >
             <Trash2 size={12} />
             {t('clusters.destroy')}
@@ -1145,7 +1243,10 @@ export function DeploymentNamespacePage() {
         />
         <StatCard
           label={t('deployments.namespaceCost')}
-          value={formatUsdCost(namespaceCostQuery.data?.totalUsd ?? null, i18n.language)}
+          value={formatDisplayCost(namespaceCostQuery.data ?? {}, {
+            locale: i18n.language,
+            shrimpUnitLabel: t('deploy.shrimpCoins'),
+          })}
           icon={<DollarSign size={13} />}
           color="purple"
         />
@@ -1169,7 +1270,7 @@ export function DeploymentNamespacePage() {
         }
         rows={
           <div className="p-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
               {namespaceDeployments.map((deployment) => (
                 <AgentCard
                   key={`${deployment.namespace}/${deployment.name}`}
@@ -1189,17 +1290,7 @@ export function DeploymentNamespacePage() {
       />
 
       <Tabs value={activeTab} onChange={setActiveTab}>
-        <TabsList className="dashboard-tabs-list">
-          {tabs.map((tab) => (
-            <TabsTrigger key={tab.id} value={tab.id} className="dashboard-tabs-trigger">
-              <span className="dashboard-tab-icon">{tab.icon}</span>
-              <span>{tab.label}</span>
-              {typeof tab.count === 'number' && (
-                <span className="dashboard-tabs-count">{tab.count}</span>
-              )}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <DashboardTabsList tabs={tabs} />
       </Tabs>
 
       <div className="min-h-[38vh]">

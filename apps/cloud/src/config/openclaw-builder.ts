@@ -16,11 +16,8 @@ import {
   resolvePluginSecrets,
 } from '../plugins/config-merger.js'
 import { getPluginRegistry } from '../plugins/registry.js'
-import type { PluginBuildContext } from '../plugins/types.js'
+import type { PluginBuildContext, PluginDefinition } from '../plugins/types.js'
 import { getRuntime } from '../runtimes/index.js'
-import { registerAllRuntimes } from '../runtimes/loader.js'
-
-registerAllRuntimes()
 
 import type {
   AgentDeployment,
@@ -32,6 +29,10 @@ import type {
   OpenClawModelConfig,
   OpenClawSkillsConfig,
 } from './schema.js'
+
+type RuntimeEnv = Record<string, string | undefined>
+
+const CLOUD_DISABLED_BUNDLED_PLUGINS = ['bonjour'] as const
 
 // ─── Sub-builders ────────────────────────────────────────────────────────────
 
@@ -92,6 +93,17 @@ function copyOpenClawSections(oc: OpenClawConfig | undefined): Partial<OpenClawC
   if (oc.plugins) result.plugins = oc.plugins
   if (oc.skills) result.skills = oc.skills
   return result
+}
+
+function applyCloudRunnerPluginDefaults(openclawConfig: OpenClawConfig): void {
+  if (!openclawConfig.plugins) openclawConfig.plugins = {}
+  if (!openclawConfig.plugins.entries) openclawConfig.plugins.entries = {}
+
+  for (const pluginId of CLOUD_DISABLED_BUNDLED_PLUGINS) {
+    if (!openclawConfig.plugins.entries[pluginId]) {
+      openclawConfig.plugins.entries[pluginId] = { enabled: false }
+    }
+  }
 }
 
 /**
@@ -345,6 +357,40 @@ function buildGatewayConfig(
 }
 
 /**
+ * Normalize legacy tool config fragments that are no longer accepted by the
+ * current OpenClaw schema.
+ *
+ * Older templates used nested `tools.code` / `tools.memory` flags. Current
+ * OpenClaw expects capability selection to flow through `tools.profile` and no
+ * longer accepts those keys. We strip the stale keys and preserve the closest
+ * valid behavior.
+ */
+function normalizeLegacyToolsConfig(tools: OpenClawConfig['tools']): void {
+  if (!tools) return
+
+  const mutableTools = tools as OpenClawConfig['tools'] & Record<string, unknown>
+  const legacyCode = mutableTools.code
+
+  const legacyCodeEnabled =
+    legacyCode === true ||
+    (legacyCode &&
+      typeof legacyCode === 'object' &&
+      (!('enabled' in legacyCode) ||
+        (legacyCode as { enabled?: unknown }).enabled === undefined ||
+        Boolean((legacyCode as { enabled?: unknown }).enabled)))
+
+  if (
+    (mutableTools.profile === undefined || mutableTools.profile === 'minimal') &&
+    legacyCodeEnabled
+  ) {
+    mutableTools.profile = 'coding'
+  }
+
+  delete mutableTools.code
+  delete mutableTools.memory
+}
+
+/**
  * Strip agent-entry fields not in OpenClaw's strict schema.
  * Returns workspace files to write (e.g., SOUL.md from instructions).
  */
@@ -374,48 +420,42 @@ function stripAndCollectWorkspaceFiles(openclawConfig: OpenClawConfig): Record<s
   return workspaceFiles
 }
 
-/**
- * Run the plugin pipeline — iterate enabled plugins, call their providers, and merge results.
- *
- * All plugins use structured providers: configBuilder, env, resources, lifecycle.
- */
-function applyPluginPipeline(
+function forEachEnabledPlugin(
   agent: AgentDeployment,
   config: CloudConfig,
-  openclawConfig: OpenClawConfig,
-  cwd?: string,
-): Record<string, string> {
+  cwd: string | undefined,
+  env: RuntimeEnv | undefined,
+  visit: (args: {
+    pluginId: string
+    pluginDef: PluginDefinition
+    context: PluginBuildContext
+  }) => void,
+): void {
   const registry = getPluginRegistry()
-  if (registry.size === 0) return {}
-
-  const envVars: Record<string, string> = {}
-
-  // Collect K8s resources from resource providers
-  const pluginResources: Record<string, unknown>[] = []
+  if (registry.size === 0) return
 
   for (const pluginDef of registry.getAll()) {
     const pluginId = pluginDef.manifest.id
-
-    // Resolved config from config.plugins[id] (global + per-agent override merged)
     const resolved = resolveAgentPluginConfig(pluginId, agent.id, config)
-
-    // Also collect options from top-level and agent-level `use` entries.
-    // This allows plugins like shadowob to be configured purely via use entries
-    // without requiring a separate config.plugins[id] entry.
     const allUseEntries = [...(config.use ?? []), ...(agent.use ?? [])]
-    // Prefer per-agent use entry options; fall back to template-level.
-    const agentUseEntry = agent.use?.find((e) => e.plugin === pluginId)
-    const templateUseEntry = config.use?.find((e) => e.plugin === pluginId)
-    const useOptions = ((agentUseEntry ?? templateUseEntry)?.options ?? {}) as Record<
-      string,
-      unknown
-    >
-    const isInUse = allUseEntries.some((e) => e.plugin === pluginId)
+    const isInUse = allUseEntries.some((entry) => entry.plugin === pluginId)
 
     // Skip plugins that have no config at all (neither plugins[id] nor use entry)
     if (!resolved && !isInUse) continue
 
-    const secrets = resolvePluginSecrets(pluginId, config, process.env)
+    const effectiveEnv: RuntimeEnv = {
+      ...process.env,
+      ...(env ?? {}),
+      ...(agent.env ?? {}),
+    }
+    const secrets = {
+      ...Object.fromEntries(
+        Object.entries(effectiveEnv).filter(
+          (entry): entry is [string, string] => typeof entry[1] === 'string',
+        ),
+      ),
+      ...resolvePluginSecrets(pluginId, config, effectiveEnv),
+    }
     const context: PluginBuildContext = {
       agent,
       config,
@@ -426,29 +466,86 @@ function applyPluginPipeline(
       cwd: cwd ?? process.cwd(),
     }
 
+    visit({ pluginId, pluginDef, context })
+  }
+}
+
+export function collectPluginBuildEnvVars(
+  agent: AgentDeployment,
+  config: CloudConfig,
+  cwd?: string,
+  env?: RuntimeEnv,
+): Record<string, string> {
+  const envVars: Record<string, string> = {}
+
+  forEachEnabledPlugin(agent, config, cwd, env, ({ pluginDef, context }) => {
+    for (const fn of pluginDef._hooks.buildEnv) {
+      const vars = fn(context)
+      if (vars) Object.assign(envVars, vars)
+    }
+  })
+
+  return envVars
+}
+
+/**
+ * Run the plugin pipeline — iterate enabled plugins, call their providers, and merge results.
+ *
+ * All plugins use structured providers: configBuilder, env, resources, lifecycle.
+ */
+function applyPluginPipeline(
+  agent: AgentDeployment,
+  config: CloudConfig,
+  openclawConfig: OpenClawConfig,
+  cwd?: string,
+  env?: RuntimeEnv,
+): void {
+  // Collect K8s resources from resource providers
+  const pluginResources: Record<string, unknown>[] = []
+
+  forEachEnabledPlugin(agent, config, cwd, env, ({ pluginDef, context }) => {
     // Build OpenClaw config fragment
     for (const fn of pluginDef._hooks.buildConfig) {
       const fragment = fn(context)
       if (fragment) Object.assign(openclawConfig, mergePluginFragments(openclawConfig, fragment))
     }
 
-    // Build env vars
-    for (const fn of pluginDef._hooks.buildEnv) {
-      const vars = fn(context)
-      if (vars) Object.assign(envVars, vars)
-    }
-
     // Collect K8s resources
     for (const fn of pluginDef._hooks.buildResources) {
       pluginResources.push(...fn(context))
     }
-  }
+  })
 
   if (pluginResources.length > 0) {
     openclawConfig._pluginResources = pluginResources
   }
+}
 
-  return envVars
+function appendPromptSection(existing: string | undefined, addition: string): string {
+  const trimmedAddition = addition.trim()
+  if (!trimmedAddition) return existing ?? ''
+
+  const trimmedExisting = existing?.trim()
+  if (!trimmedExisting) return trimmedAddition
+
+  return `${trimmedExisting}\n\n---\n\n${trimmedAddition}`
+}
+
+function applyPluginPromptPipeline(
+  agent: AgentDeployment,
+  config: CloudConfig,
+  agentEntry: OpenClawAgentConfig,
+  cwd?: string,
+  env?: RuntimeEnv,
+): void {
+  forEachEnabledPlugin(agent, config, cwd, env, ({ pluginDef, context }) => {
+    for (const fn of pluginDef._hooks.buildPrompt) {
+      const addition = fn(context)
+      if (addition) {
+        agentEntry.instructions = appendPromptSection(agentEntry.instructions, addition)
+      }
+    }
+  })
 }
 
 // ─── Main builder ────────────────────────────────────────────────────────────
@@ -461,6 +558,7 @@ export function buildOpenClawConfig(
   agent: AgentDeployment,
   config: CloudConfig,
   cwd?: string,
+  env?: RuntimeEnv,
 ): OpenClawConfig {
   const oc = agent.configuration.openclaw
   const openclawConfig: OpenClawConfig = {}
@@ -474,6 +572,9 @@ export function buildOpenClawConfig(
 
   // 3. Identity → system prompt
   applyIdentity(agentEntry, agent)
+
+  // 3.5. Plugin prompt additions (mounted packs, runtime guidance, etc.)
+  applyPluginPromptPipeline(agent, config, agentEntry, cwd, env)
 
   // 4. Set up agents list
   if (!openclawConfig.agents) openclawConfig.agents = {}
@@ -510,19 +611,17 @@ export function buildOpenClawConfig(
   // 14. Gateway config
   openclawConfig.gateway = buildGatewayConfig(oc, openclawConfig.gateway)
 
-  // 15. Strip strict-schema-violating fields
-  const workspaceFiles = stripAndCollectWorkspaceFiles(openclawConfig)
-  if (Object.keys(workspaceFiles).length > 0) {
-    openclawConfig._workspaceFiles = workspaceFiles
-  }
+  // 15. Plugin pipeline — merge enabled plugin configs (channels, bindings, resources)
+  applyPluginPipeline(agent, config, openclawConfig, cwd, env)
 
-  // 16. Plugin pipeline — merge enabled plugin configs (channels, bindings, env, resources)
-  const pluginEnvVars = applyPluginPipeline(agent, config, openclawConfig, cwd)
-  if (Object.keys(pluginEnvVars).length > 0) {
-    openclawConfig._pluginEnvVars = pluginEnvVars
-  }
+  // 16. Cloud runner defaults for bundled plugins that are not useful in k8s.
+  applyCloudRunnerPluginDefaults(openclawConfig)
 
-  // 17. Ensure shadowob channel has a disabled fallback config so the
+  // 17. Normalize legacy tool config fragments so historical templates and
+  //     stored snapshots still produce a valid OpenClaw config.
+  normalizeLegacyToolsConfig(openclawConfig.tools)
+
+  // 18. Ensure shadowob channel has a disabled fallback config so the
   //     always-installed openclaw-shadowob extension passes validation.
   const existingChannels = (openclawConfig as Record<string, unknown>).channels as
     | Record<string, unknown>
@@ -534,6 +633,13 @@ export function buildOpenClawConfig(
     ;((openclawConfig as Record<string, unknown>).channels as Record<string, unknown>).shadowob = {
       enabled: false,
     }
+  }
+
+  // 19. Strip strict-schema-violating fields after plugins have contributed
+  //     their prompt/context additions.
+  const workspaceFiles = stripAndCollectWorkspaceFiles(openclawConfig)
+  if (Object.keys(workspaceFiles).length > 0) {
+    openclawConfig._workspaceFiles = workspaceFiles
   }
 
   return openclawConfig

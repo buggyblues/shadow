@@ -11,6 +11,7 @@ import {
   Badge,
   Button,
   EmptyState,
+  GlassPanel,
 } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
@@ -44,7 +45,7 @@ import {
   TemplateConfigTab,
   TemplateDetailShell,
 } from '@/components/TemplateDetailShared'
-import { api, type ValidateResult } from '@/lib/api'
+import { type ValidateResult } from '@/lib/api'
 import { useApiClient } from '@/lib/api-context'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/stores/toast'
@@ -597,7 +598,7 @@ export function MyTemplateDetailPage() {
           </>
         }
         sidebar={
-          <div className="glass-panel space-y-4 rounded-2xl p-5">
+          <GlassPanel className="space-y-4 rounded-2xl p-5">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
               {t('templateDetail.quickInfo')}
             </h3>
@@ -654,7 +655,7 @@ export function MyTemplateDetailPage() {
                       data.reviewStatus === 'approved'
                         ? 'success'
                         : data.reviewStatus === 'rejected'
-                          ? 'destructive'
+                          ? 'danger'
                           : data.reviewStatus === 'pending'
                             ? 'warning'
                             : 'neutral'
@@ -681,7 +682,7 @@ export function MyTemplateDetailPage() {
                 </div>
               )}
             </div>
-          </div>
+          </GlassPanel>
         }
         tabs={tabs}
         activeTab={activeTab}
@@ -832,7 +833,7 @@ function OverviewPanel({ content, agents }: { content: unknown; agents: Template
       </div>
 
       {/* Agent summary */}
-      <div className="glass-panel rounded-2xl p-4">
+      <GlassPanel className="rounded-2xl p-4">
         <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
           <Users size={14} className="text-primary" />
           {t('templateDetail.agentSummary')}
@@ -856,7 +857,7 @@ function OverviewPanel({ content, agents }: { content: unknown; agents: Template
             </div>
           ))}
         </div>
-      </div>
+      </GlassPanel>
 
       {/* Raw config preview */}
       <TemplateConfigTab
@@ -878,12 +879,12 @@ function StatCard({
   icon: React.ReactNode
 }) {
   return (
-    <div className="glass-panel rounded-2xl p-3">
+    <GlassPanel className="rounded-2xl p-3">
       <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase text-text-muted">
         {icon}
         {label}
       </div>
       <p className="font-mono text-lg font-semibold text-text-primary">{value}</p>
-    </div>
+    </GlassPanel>
   )
 }

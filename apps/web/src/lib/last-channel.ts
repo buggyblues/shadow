@@ -21,3 +21,15 @@ export function setLastChannelId(serverId: string, channelId: string): void {
     // ignore
   }
 }
+
+export function clearLastChannelId(serverId: string): void {
+  try {
+    const stored = localStorage.getItem(KEY)
+    if (!stored) return
+    const map = JSON.parse(stored) as Record<string, string>
+    delete map[serverId]
+    localStorage.setItem(KEY, JSON.stringify(map))
+  } catch {
+    // ignore
+  }
+}

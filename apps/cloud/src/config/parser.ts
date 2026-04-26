@@ -7,6 +7,7 @@
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { getPluginRegistry } from '../plugins/registry.js'
+import '../runtimes/loader.js'
 
 export { deepMerge } from '../utils/deep-merge.js'
 
@@ -18,6 +19,8 @@ import { resolveTemplates, type TemplateContext } from './template.js'
 
 // Re-export buildOpenClawConfig from its dedicated module
 export { buildOpenClawConfig } from './openclaw-builder.js'
+
+import { collectPluginBuildEnvVars } from './openclaw-builder.js'
 
 /**
  * Recursively resolve a Configuration from the registry, following the
@@ -192,5 +195,30 @@ export async function resolveConfig(
     effectiveCtx.vaultSecrets = { ...vaultSecrets, ...effectiveCtx.vaultSecrets }
   }
 
-  return resolveTemplates(resolved, effectiveCtx)
+  const templated = resolveTemplates(resolved, effectiveCtx)
+
+  if (!templated.deployments?.agents?.length) return templated
+
+  return {
+    ...templated,
+    deployments: {
+      ...templated.deployments,
+      agents: templated.deployments.agents.map((agent) => {
+        const pluginEnvVars = collectPluginBuildEnvVars(
+          agent,
+          templated,
+          cwd,
+          effectiveCtx.env ?? process.env,
+        )
+        if (Object.keys(pluginEnvVars).length === 0) return agent
+        return {
+          ...agent,
+          env: {
+            ...(agent.env ?? {}),
+            ...pluginEnvVars,
+          },
+        }
+      }),
+    },
+  }
 }

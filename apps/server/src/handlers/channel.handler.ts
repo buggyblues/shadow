@@ -2,6 +2,7 @@ import { zValidator } from '@hono/zod-validator'
 import { Hono } from 'hono'
 import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
+import { normalizeSlashCommands } from '../services/agent.service'
 import {
   channelPositionsSchema,
   createChannelSchema,
@@ -80,6 +81,59 @@ export function createChannelHandler(container: AppContainer) {
     return c.json(members)
   })
 
+  // GET /api/channels/:id/slash-commands — commands registered by Buddies in this channel
+  channelHandler.get('/channels/:id/slash-commands', async (c) => {
+    const channelService = container.resolve('channelService')
+    const serverDao = container.resolve('serverDao')
+    const channelMemberDao = container.resolve('channelMemberDao')
+    const agentDao = container.resolve('agentDao')
+    const id = c.req.param('id')
+    const requesterId = c.get('user').userId
+
+    try {
+      const channel = await channelService.getById(id)
+      const requesterServerMember = await serverDao.getMember(channel.serverId, requesterId)
+      if (!requesterServerMember) {
+        return c.json({ ok: false, error: 'Not a member of this server' }, 403)
+      }
+
+      if (channel.isPrivate) {
+        const requesterInChannel = await channelMemberDao.get(id, requesterId)
+        const requesterCanManageChannel =
+          requesterServerMember.role === 'owner' || requesterServerMember.role === 'admin'
+        if (!requesterInChannel && !requesterCanManageChannel) {
+          return c.json({ ok: false, error: 'Not a member of this channel' }, 403)
+        }
+      }
+
+      const members = await channelService.getChannelMembers(id, channel.serverId)
+      const botMembers = members.filter((member) => member.user?.isBot)
+      const botUserIds = botMembers.map((member) => member.userId)
+      const agents = await agentDao.findByUserIds(botUserIds)
+      const memberByUserId = new Map(botMembers.map((member) => [member.userId, member]))
+
+      const commands = agents.flatMap((agent) => {
+        const member = memberByUserId.get(agent.userId)
+        const memberUser = member?.user
+        if (!memberUser) return []
+        return normalizeSlashCommands((agent.config as Record<string, unknown>)?.slashCommands).map(
+          (command) => ({
+            ...command,
+            agentId: agent.id,
+            botUserId: agent.userId,
+            botUsername: memberUser.username,
+            botDisplayName: memberUser.displayName ?? memberUser.username ?? null,
+          }),
+        )
+      })
+
+      return c.json({ commands })
+    } catch (err) {
+      const status = (err as { status?: number }).status ?? 500
+      return c.json({ ok: false, error: (err as Error).message }, status as 403 | 404 | 500)
+    }
+  })
+
   // PATCH /api/channels/:id
   channelHandler.patch('/channels/:id', zValidator('json', updateChannelSchema), async (c) => {
     const channelService = container.resolve('channelService')
@@ -146,6 +200,8 @@ export function createChannelHandler(container: AppContainer) {
 
     const isSelfJoin = requesterId === targetUserId
     const requesterInChannel = await channelMemberDao.get(id, requesterId)
+    const requesterCanManageChannel =
+      requesterServerMember.role === 'owner' || requesterServerMember.role === 'admin'
 
     if (isSelfJoin) {
       // Self-join is allowed only for public channels
@@ -154,7 +210,7 @@ export function createChannelHandler(container: AppContainer) {
       }
     } else {
       // Inviting others requires inviter already in channel
-      if (!requesterInChannel) {
+      if (!requesterInChannel && !requesterCanManageChannel) {
         return c.json({ ok: false, error: 'Only channel members can invite others' }, 403)
       }
     }

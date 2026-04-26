@@ -1,4 +1,4 @@
-import { Badge, Button, Card, cn, EmptyState, Input } from '@shadowob/ui'
+import { Badge, Button, Card, cn, EmptyState, GlassPanel, Input } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
@@ -117,7 +117,7 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
   const showEmbeddedHeader = !embedded || !!onClose
   const shellClassName = embedded
     ? 'relative flex flex-1 flex-col overflow-hidden min-h-0 bg-transparent font-sans'
-    : 'flex-1 flex flex-col glass-panel overflow-hidden h-full relative font-sans min-h-0'
+    : 'flex-1 flex flex-col overflow-hidden h-full relative font-sans min-h-0'
 
   const { data: shop, isLoading: isShopLoading } = useQuery({
     queryKey: ['shop', serverId],
@@ -145,7 +145,8 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
       queryClient.invalidateQueries({ queryKey: ['shop-cart', serverId] })
       showToast(t('shop.addedToCart', '已加入购物车'), 'success')
     },
-    onError: (err: Error) => showToast(err.message || t('shop.addToCartFailed', '加入购物车失败'), 'error'),
+    onError: (err: Error) =>
+      showToast(err.message || t('shop.addToCartFailed', '加入购物车失败'), 'error'),
   })
 
   // Product detail view
@@ -266,7 +267,12 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
   )
 
   return (
-    <div className={shellClassName}>
+    <GlassPanel
+      className={shellClassName}
+      style={
+        embedded ? { background: 'transparent', border: 'none', boxShadow: 'none' } : undefined
+      }
+    >
       {/* ── Header ── */}
       {showEmbeddedHeader && (
         <div
@@ -356,7 +362,7 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
           />
         </OverlayContainer>
       )}
-    </div>
+    </GlassPanel>
   )
 }
 

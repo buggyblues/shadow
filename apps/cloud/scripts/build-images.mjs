@@ -17,10 +17,24 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
+const WORKSPACE_ROOT = join(ROOT, '..', '..')
 const IMAGES_DIR = join(ROOT, 'images')
 const REGISTRY = process.env.SHADOW_REGISTRY ?? 'ghcr.io/shadowob'
 
 const IMAGES = ['openclaw-runner', 'claude-runner']
+
+function prepareBuildContext(name) {
+  if (name !== 'openclaw-runner') return
+
+  const localShadowobPlugin = join(WORKSPACE_ROOT, 'packages', 'openclaw-shadowob', 'package.json')
+  if (!existsSync(localShadowobPlugin)) return
+
+  console.log('Building local @shadowob/openclaw-shadowob package for runner image...')
+  execSync('pnpm --filter @shadowob/openclaw-shadowob build', {
+    cwd: WORKSPACE_ROOT,
+    stdio: 'inherit',
+  })
+}
 
 function parseArgs() {
   const args = process.argv.slice(2)
@@ -56,6 +70,7 @@ function parseArgs() {
 
 function buildImage(name, opts) {
   const imageDir = join(IMAGES_DIR, name)
+  const dockerfilePath = join(imageDir, 'Dockerfile')
   if (!existsSync(imageDir)) {
     console.error(`Image directory not found: ${imageDir}`)
     process.exit(1)
@@ -66,7 +81,10 @@ function buildImage(name, opts) {
 
   console.log(`\n━━━ Building ${fullTag} ━━━`)
 
-  const buildArgs = ['docker', 'build', '-t', fullTag]
+  prepareBuildContext(name)
+
+  const buildContext = name === 'openclaw-runner' ? WORKSPACE_ROOT : imageDir
+  const buildArgs = ['docker', 'build', '-t', fullTag, '-f', dockerfilePath]
 
   if (opts.tag !== 'latest') {
     buildArgs.push('-t', latestTag)
@@ -80,11 +98,11 @@ function buildImage(name, opts) {
     buildArgs.push('--no-cache')
   }
 
-  buildArgs.push('.')
+  buildArgs.push(buildContext)
 
   try {
     execSync(buildArgs.join(' '), {
-      cwd: imageDir,
+      cwd: WORKSPACE_ROOT,
       stdio: 'inherit',
     })
     console.log(`✓ Built ${fullTag}`)

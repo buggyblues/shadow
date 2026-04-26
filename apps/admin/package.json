@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "rsbuild dev",
+    "dev:frontend": "rsbuild dev",
     "build": "rsbuild build",
     "preview": "rsbuild preview",
     "typecheck": "tsc --noEmit"

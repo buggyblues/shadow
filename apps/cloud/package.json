@@ -4,7 +4,7 @@
   "description": "shadowob-cloud — deploy AI agents to Kubernetes",
   "type": "module",
   "bin": {
-    "shadowob-cloud": "./dist/index.js"
+    "shadowob-cloud": "./dist/cli.js"
   },
   "files": [
     "dist",
@@ -12,14 +12,25 @@
     "templates"
   ],
   "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js"
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./cli": {
+      "development": "./src/cli.ts",
+      "import": "./dist/cli.js",
+      "default": "./dist/cli.js"
     }
   },
   "scripts": {
     "build": "tsup && rsbuild build",
     "dev": "tsup --watch",
+    "dev:backend": "tsup --watch",
+    "dev:frontend": "rsbuild dev",
     "console:dev": "rsbuild dev",
     "console:build": "rsbuild build",
     "console:preview": "rsbuild preview",
@@ -63,6 +74,7 @@
     "postgres": "^3.4.5",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-hook-form": "^7.56.4",
     "react-i18next": "^16.5.4",
     "tailwind-merge": "^3.3.0",
     "typia": "^12.0.1",

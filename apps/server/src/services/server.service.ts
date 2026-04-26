@@ -127,7 +127,10 @@ export class ServerService {
       }
     }
 
-    return this.deps.serverDao.update(id, updateData as Parameters<typeof this.deps.serverDao.update>[1])
+    return this.deps.serverDao.update(
+      id,
+      updateData as Parameters<typeof this.deps.serverDao.update>[1],
+    )
   }
 
   async delete(id: string, userId: string) {

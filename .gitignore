@@ -27,6 +27,10 @@ build/
 .DS_Store
 Thumbs.db
 
+# Python cache
+__pycache__/
+*.py[cod]
+
 # Test coverage
 coverage/
 playwright-report/
@@ -43,12 +47,16 @@ pnpm-debug.log*
 
 # Docker
 docker/data/
+.docker-cache/
 
 # MinIO
 .minio/
 
 # Misc
 *.tsbuildinfo
+.tmp/
+/solo-*.png
+dogfood-output/
 
 .research
 .review

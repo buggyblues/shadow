@@ -1,228 +1,256 @@
 /**
- * model-provider plugin — auto-discovers AI model providers from environment variables.
+ * model-provider plugin — thin selector/router over provider catalogs declared
+ * by provider plugins.
  *
- * Architecture:
- *   - Each provider preset declares its full model catalog.
- *   - Each model declares the tags it satisfies (e.g. "flash", "reasoning").
- *   - Agents select models by tag; the plugin resolves which concrete model(s) to use
- *     by scanning all discovered providers in priority order.
- *
- * Usage in template (top-level, activates provider discovery):
- *   { "plugin": "model-provider" }
- *
- * Usage per agent (optional tag override):
- *   { "plugin": "model-provider", "options": { "tag": "flash" } }
- *
- * Supported tags:
- *   default   — standard capable model
- *   flash     — fast / low-cost model
- *   reasoning — extended thinking / chain-of-thought model
- *   vision    — vision / multimodal model
- *
- * Env var → provider mapping:
- *   ANTHROPIC_API_KEY                        → anthropic
- *   OPENAI_API_KEY                           → openai
- *   DEEPSEEK_API_KEY                         → deepseek
- *   GEMINI_API_KEY / GOOGLE_API_KEY          → gemini
- *   GROK_API_KEY                             → grok
- *   OPENROUTER_API_KEY                       → openrouter
- *   OPENAI_COMPATIBLE_BASE_URL +
- *   OPENAI_COMPATIBLE_API_KEY                → custom
+ * Provider-specific knowledge lives in each provider plugin via
+ * api.addProviderCatalog(). This plugin only:
+ *   - sniffs available provider env/profile values,
+ *   - emits OpenClaw models.providers entries, and
+ *   - selects primary/fallback model refs by tag.
  */
 
 import { definePlugin } from '../helpers.js'
-import type { PluginConfigFragment, PluginManifest } from '../types.js'
+import type {
+  ModelTag,
+  PluginBuildContext,
+  PluginConfigFragment,
+  PluginManifest,
+  ProviderCatalog,
+  ProviderModelEntry,
+} from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+const PROVIDER_PROFILE_MODELS_ENV_KEY = 'SHADOW_PROVIDER_PROFILE_MODELS_JSON'
+const ALL_TAGS: readonly ModelTag[] = ['default', 'fast', 'flash', 'reasoning', 'vision']
 
-export type ModelTag = 'default' | 'flash' | 'reasoning' | 'vision'
+type RuntimeEnv = Record<string, string | undefined>
 
-const ALL_TAGS: readonly ModelTag[] = ['default', 'flash', 'reasoning', 'vision']
-
-interface ModelEntry {
-  /** Model ID within the provider (e.g. "claude-sonnet-4-5") */
-  id: string
-  /** Tags this model satisfies */
-  tags: ModelTag[]
-  /** Optional context window (tokens) */
-  contextWindow?: number
+type ProviderProfileModelSet = {
+  providerId: string
+  profileId?: string
+  models: ProviderModelEntry[]
 }
 
-interface ProviderPreset {
-  /** OpenClaw provider ID */
-  id: string
-  /** OpenClaw API adapter */
-  api: string
-  /** Base URL for the API (if non-default) */
-  baseUrl?: string
-  /** Env var name that holds the API key */
-  envKey: string
-  /**
-   * Model catalog — models listed first get higher priority within this provider.
-   * Tags on models represent capabilities; resolution picks the first model matching
-   * the requested tag across providers ordered by their position in PROVIDER_PRESETS.
-   */
-  models: ModelEntry[]
+function providerCatalogs(ctx: PluginBuildContext): ProviderCatalog[] {
+  return ctx.pluginRegistry
+    .getAll()
+    .flatMap((plugin) => plugin.providerCatalogs ?? [])
+    .filter((catalog) => catalog.allowEnvDetection !== false)
+    .sort((a, b) => (a.priority ?? 1000) - (b.priority ?? 1000))
 }
 
-// ─── Provider presets with co-located model catalog ──────────────────────────
-//
-// Provider order determines priority when multiple providers satisfy the same tag.
-// First entry = highest priority.
+function resolveEnvKey(catalog: ProviderCatalog, env: RuntimeEnv): string | undefined {
+  for (const key of [catalog.envKey, ...(catalog.envKeyAliases ?? [])]) {
+    if (env[key] ?? process.env[key]) return key
+  }
+  return undefined
+}
 
-const PROVIDER_PRESETS: ProviderPreset[] = [
-  {
-    id: 'anthropic',
-    api: 'anthropic-messages',
-    envKey: 'ANTHROPIC_API_KEY',
-    models: [
-      { id: 'claude-sonnet-4-5', tags: ['default', 'vision'] },
-      { id: 'claude-3-5-haiku-20241022', tags: ['flash'] },
-      { id: 'claude-opus-4-5', tags: ['reasoning'] },
-    ],
-  },
-  {
-    id: 'openai',
-    api: 'openai-completions',
-    envKey: 'OPENAI_API_KEY',
-    models: [
-      { id: 'gpt-4o', tags: ['default', 'vision'] },
-      { id: 'gpt-4o-mini', tags: ['flash'] },
-      { id: 'o3', tags: ['reasoning'] },
-    ],
-  },
-  {
-    id: 'gemini',
-    api: 'google-generative-ai',
-    envKey: 'GEMINI_API_KEY',
-    models: [
-      { id: 'gemini-2.0-flash', tags: ['default', 'flash', 'vision'] },
-      { id: 'gemini-2.5-pro', tags: ['reasoning'] },
-    ],
-  },
-  {
-    id: 'google',
-    api: 'google-generative-ai',
-    envKey: 'GOOGLE_API_KEY',
-    models: [
-      { id: 'gemini-2.0-flash', tags: ['default', 'flash', 'vision'] },
-      { id: 'gemini-2.5-pro', tags: ['reasoning'] },
-    ],
-  },
-  {
-    id: 'grok',
-    api: 'openai-completions',
-    baseUrl: 'https://api.x.ai/v1',
-    envKey: 'GROK_API_KEY',
-    models: [
-      { id: 'grok-3', tags: ['default', 'reasoning'] },
-      { id: 'grok-3-mini', tags: ['flash'] },
-      { id: 'grok-2-vision-1212', tags: ['vision'] },
-    ],
-  },
-  {
-    id: 'deepseek',
-    api: 'openai-completions',
-    baseUrl: 'https://api.deepseek.com/v1',
-    envKey: 'DEEPSEEK_API_KEY',
-    models: [
-      { id: 'deepseek-chat', tags: ['default', 'flash'] },
-      { id: 'deepseek-reasoner', tags: ['reasoning'] },
-    ],
-  },
-  {
-    id: 'openrouter',
-    api: 'openai-completions',
-    baseUrl: 'https://openrouter.ai/api/v1',
-    envKey: 'OPENROUTER_API_KEY',
-    models: [{ id: 'auto', tags: ['default', 'flash', 'reasoning', 'vision'] }],
-  },
-]
+function runtimeValue(key: string | undefined, env: RuntimeEnv): string | undefined {
+  if (!key) return undefined
+  return env[key] ?? process.env[key]
+}
 
-// ─── Tag resolution ──────────────────────────────────────────────────────────
+function modelTagAliases(tag: ModelTag): ModelTag[] {
+  return tag === 'fast' || tag === 'flash' ? ['fast', 'flash'] : [tag]
+}
 
-/**
- * Given a set of discovered providers and a requested tag, return an ordered list
- * of model refs ("providerId/modelId") — first entry is `primary`, rest are `fallbacks`.
- *
- * Iterates providers in PROVIDER_PRESETS order (priority), then models in the order
- * declared within each provider. First match per provider is taken.
- */
-function resolveModelsByTag(discoveredPresets: ProviderPreset[], tag: ModelTag): string[] {
+function normalizeProfileModel(raw: unknown): ProviderModelEntry | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const record = raw as Record<string, unknown>
+  const id = typeof record.id === 'string' ? record.id.trim() : ''
+  if (!id) return null
+  const tags = Array.isArray(record.tags)
+    ? record.tags
+        .filter((tag): tag is string => typeof tag === 'string')
+        .map((tag) => tag.trim().toLowerCase())
+        .filter((tag): tag is ModelTag => (ALL_TAGS as readonly string[]).includes(tag))
+    : undefined
+  const contextWindow =
+    typeof record.contextWindow === 'number' && Number.isFinite(record.contextWindow)
+      ? record.contextWindow
+      : undefined
+  const maxTokens =
+    typeof record.maxTokens === 'number' && Number.isFinite(record.maxTokens)
+      ? record.maxTokens
+      : undefined
+
+  return {
+    id,
+    ...(typeof record.name === 'string' && record.name.trim() ? { name: record.name.trim() } : {}),
+    ...(tags && tags.length > 0 ? { tags: [...new Set(tags)] } : {}),
+    ...(contextWindow ? { contextWindow } : {}),
+    ...(maxTokens ? { maxTokens } : {}),
+  }
+}
+
+function parseProviderProfileModelSets(env: RuntimeEnv): ProviderProfileModelSet[] {
+  const value = runtimeValue(PROVIDER_PROFILE_MODELS_ENV_KEY, env)
+  if (!value) return []
+
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .map((item): ProviderProfileModelSet | null => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return null
+        const record = item as Record<string, unknown>
+        const providerId = typeof record.providerId === 'string' ? record.providerId.trim() : ''
+        const profileId = typeof record.profileId === 'string' ? record.profileId.trim() : undefined
+        const models = Array.isArray(record.models)
+          ? record.models
+              .map(normalizeProfileModel)
+              .filter((model): model is ProviderModelEntry => Boolean(model))
+          : []
+        return providerId && models.length > 0 ? { providerId, profileId, models } : null
+      })
+      .filter((entry): entry is ProviderProfileModelSet => Boolean(entry))
+  } catch {
+    return []
+  }
+}
+
+function mergeModelEntries(
+  catalog: ProviderCatalog,
+  profileModelSets: ProviderProfileModelSet[],
+): ProviderCatalog {
+  const profileModels = profileModelSets
+    .filter((set) => set.providerId === catalog.id)
+    .flatMap((set) => set.models)
+  if (profileModels.length === 0) return catalog
+
+  const seen = new Set<string>()
+  const models: ProviderModelEntry[] = []
+  for (const model of [...profileModels, ...catalog.models]) {
+    if (seen.has(model.id)) continue
+    seen.add(model.id)
+    models.push(model)
+  }
+  return { ...catalog, models }
+}
+
+function modelEntries(models: ProviderModelEntry[]): Array<Record<string, unknown>> {
+  return models.map((model) => ({
+    id: model.id,
+    name: model.name ?? model.id,
+    ...(model.contextWindow != null ? { contextWindow: model.contextWindow } : {}),
+    ...(model.maxTokens != null ? { maxTokens: model.maxTokens } : {}),
+  }))
+}
+
+function withModelOverride(
+  catalog: ProviderCatalog,
+  env: RuntimeEnv,
+): { catalog: ProviderCatalog; models: ProviderModelEntry[] } {
+  const modelOverride = runtimeValue(catalog.modelEnvKey, env)
+  if (!modelOverride) return { catalog, models: catalog.models }
+
+  const models: ProviderModelEntry[] = [
+    { id: modelOverride, tags: [...ALL_TAGS] },
+    ...catalog.models,
+  ]
+  return { catalog: { ...catalog, models }, models }
+}
+
+function buildProviderEntry(
+  catalog: ProviderCatalog,
+  env: RuntimeEnv,
+): { catalog: ProviderCatalog; entry: Record<string, unknown> } | null {
+  const resolvedEnvKey = resolveEnvKey(catalog, env)
+  if (!resolvedEnvKey) return null
+
+  const baseUrl = runtimeValue(catalog.baseUrlEnvKey, env) ?? catalog.baseUrl
+  if (catalog.id === 'custom' && !baseUrl) return null
+
+  const resolved = withModelOverride(catalog, env)
+  const entry: Record<string, unknown> = {
+    api: catalog.api,
+    apiKey: `\${env:${resolvedEnvKey}}`,
+    request: { allowPrivateNetwork: true },
+    models: modelEntries(resolved.models),
+  }
+  if (baseUrl) entry.baseUrl = baseUrl
+
+  return { catalog: resolved.catalog, entry }
+}
+
+function resolveModelsByTag(catalogs: ProviderCatalog[], tag: ModelTag): string[] {
   const refs: string[] = []
-  for (const preset of discoveredPresets) {
-    const model = preset.models.find((m) => m.tags.includes(tag))
-    if (model) refs.push(`${preset.id}/${model.id}`)
+  const aliases = modelTagAliases(tag)
+  for (const catalog of catalogs) {
+    const model = catalog.models.find((m) => m.tags?.some((modelTag) => aliases.includes(modelTag)))
+    if (model) refs.push(`${catalog.id}/${model.id}`)
   }
   return refs
 }
 
-// ─── Plugin definition ────────────────────────────────────────────────────────
+function selectedTag(ctx: PluginBuildContext): ModelTag {
+  const agentUseEntry = ctx.agent.use?.find((e) => e.plugin === 'model-provider')
+  const templateUseEntry = ctx.config.use?.find((e) => e.plugin === 'model-provider')
+  const rawTag = (agentUseEntry?.options?.tag ?? templateUseEntry?.options?.tag ?? 'default') as
+    | string
+    | undefined
+  return (ALL_TAGS as readonly string[]).includes(rawTag ?? '') ? (rawTag as ModelTag) : 'default'
+}
+
+function envCandidates(catalogs: ProviderCatalog[]): string[] {
+  const keys = new Set<string>([PROVIDER_PROFILE_MODELS_ENV_KEY])
+  for (const catalog of catalogs) {
+    keys.add(catalog.envKey)
+    for (const alias of catalog.envKeyAliases ?? []) keys.add(alias)
+    if (catalog.baseUrlEnvKey) keys.add(catalog.baseUrlEnvKey)
+    if (catalog.modelEnvKey) keys.add(catalog.modelEnvKey)
+  }
+  return [...keys]
+}
 
 export default definePlugin(manifest as PluginManifest, (api) => {
+  api.addProviderCatalog({
+    id: 'custom',
+    api: 'openai-completions',
+    envKey: 'OPENAI_COMPATIBLE_API_KEY',
+    baseUrlEnvKey: 'OPENAI_COMPATIBLE_BASE_URL',
+    modelEnvKey: 'OPENAI_COMPATIBLE_MODEL_ID',
+    priority: 1000,
+    models: [{ id: 'default', tags: ['default', 'flash', 'reasoning', 'vision'] }],
+  })
+  api.addSecretFields([
+    {
+      key: 'OPENAI_COMPATIBLE_API_KEY',
+      label: 'OpenAI-compatible API Key',
+      required: false,
+      sensitive: true,
+    },
+    {
+      key: 'OPENAI_COMPATIBLE_BASE_URL',
+      label: 'OpenAI-compatible Base URL',
+      required: false,
+      sensitive: false,
+    },
+    {
+      key: 'OPENAI_COMPATIBLE_MODEL_ID',
+      label: 'OpenAI-compatible Model ID',
+      required: false,
+      sensitive: false,
+    },
+  ])
+
   api.onBuildConfig((ctx): PluginConfigFragment => {
-    const env = ctx.secrets as Record<string, string | undefined>
+    const env = ctx.secrets as RuntimeEnv
+    const profileModelSets = parseProviderProfileModelSets(env)
     const providers: Record<string, unknown> = {}
-    const discoveredPresets: ProviderPreset[] = []
+    const discovered: ProviderCatalog[] = []
 
-    for (const preset of PROVIDER_PRESETS) {
-      const keyValue = env[preset.envKey] ?? process.env[preset.envKey]
-      if (!keyValue) continue
-
-      // Skip 'google' if 'gemini' already added  (both use google-generative-ai)
-      if (preset.id === 'google' && providers.gemini) continue
-
-      const entry: Record<string, unknown> = {
-        api: preset.api,
-        // Template syntax: resolved inside the container at runtime, not baked in.
-        apiKey: `\${env:${preset.envKey}}`,
-        request: { allowPrivateNetwork: true },
-        // Declare the model catalog so OpenClaw knows what models are available.
-        models: preset.models.map((m) => ({ id: m.id, name: m.id })),
-      }
-      if (preset.baseUrl) entry.baseUrl = preset.baseUrl
-
-      providers[preset.id] = entry
-      discoveredPresets.push(preset)
-    }
-
-    // Custom OpenAI-compatible provider
-    const customBaseUrl = env.OPENAI_COMPATIBLE_BASE_URL ?? process.env.OPENAI_COMPATIBLE_BASE_URL
-    const customApiKey = env.OPENAI_COMPATIBLE_API_KEY ?? process.env.OPENAI_COMPATIBLE_API_KEY
-    if (customBaseUrl && customApiKey) {
-      const customModelId = process.env.OPENAI_COMPATIBLE_MODEL_ID ?? 'default'
-      providers.custom = {
-        api: 'openai-completions',
-        baseUrl: customBaseUrl,
-        apiKey: '${env:OPENAI_COMPATIBLE_API_KEY}',
-        request: { allowPrivateNetwork: true },
-        models: [{ id: customModelId, name: customModelId }],
-      }
-      // Custom provider satisfies all tags as a last-resort fallback.
-      discoveredPresets.push({
-        id: 'custom',
-        api: 'openai-completions',
-        baseUrl: customBaseUrl,
-        envKey: 'OPENAI_COMPATIBLE_API_KEY',
-        models: ALL_TAGS.map((t) => ({ id: customModelId, tags: [t] })),
-      })
+    for (const catalog of providerCatalogs(ctx).map((entry) =>
+      mergeModelEntries(entry, profileModelSets),
+    )) {
+      const provider = buildProviderEntry(catalog, env)
+      if (!provider) continue
+      providers[catalog.id] = provider.entry
+      discovered.push(provider.catalog)
     }
 
     if (Object.keys(providers).length === 0) return {}
-
-    // ── Tag-based model selection ──────────────────────────────────────────
-    // Agent-level use entry takes precedence over template-level.
-    const agentUseEntry = ctx.agent.use?.find((e) => e.plugin === 'model-provider')
-    const templateUseEntry = ctx.config.use?.find((e) => e.plugin === 'model-provider')
-    const rawTag = (agentUseEntry?.options?.tag ??
-      templateUseEntry?.options?.tag ??
-      'default') as string
-    const tag: ModelTag = (ALL_TAGS as readonly string[]).includes(rawTag)
-      ? (rawTag as ModelTag)
-      : 'default'
-
-    const modelRefs = resolveModelsByTag(discoveredPresets, tag)
 
     const fragment: PluginConfigFragment = {
       models: {
@@ -231,6 +259,7 @@ export default definePlugin(manifest as PluginManifest, (api) => {
       },
     }
 
+    const modelRefs = resolveModelsByTag(discovered, selectedTag(ctx))
     if (modelRefs.length > 0) {
       const [primary, ...fallbacks] = modelRefs
       fragment.agents = {
@@ -246,10 +275,20 @@ export default definePlugin(manifest as PluginManifest, (api) => {
     return fragment
   })
 
+  api.onBuildEnv((ctx): Record<string, string> => {
+    const env = ctx.secrets as RuntimeEnv
+    const out: Record<string, string> = {}
+    for (const key of envCandidates(providerCatalogs(ctx))) {
+      const value = runtimeValue(key, env)
+      if (value) out[key] = value
+    }
+    return out
+  })
+
   api.onValidate((ctx) => {
-    const env = ctx.secrets as Record<string, string | undefined>
-    const knownKeys = [...PROVIDER_PRESETS.map((p) => p.envKey), 'OPENAI_COMPATIBLE_API_KEY']
-    const found = knownKeys.some((k) => env[k] ?? process.env[k])
+    const env = ctx.secrets as RuntimeEnv
+    const keys = envCandidates(providerCatalogs(ctx))
+    const found = keys.some((key) => runtimeValue(key, env))
     if (!found) {
       return {
         valid: true,
@@ -257,9 +296,7 @@ export default definePlugin(manifest as PluginManifest, (api) => {
           {
             path: 'use[model-provider]',
             message:
-              'model-provider: no API keys detected. Set at least one of: ' +
-              'ANTHROPIC_API_KEY, OPENAI_API_KEY, DEEPSEEK_API_KEY, GEMINI_API_KEY, ' +
-              'GROK_API_KEY, OPENROUTER_API_KEY, or OPENAI_COMPATIBLE_BASE_URL + OPENAI_COMPATIBLE_API_KEY',
+              'model-provider: no provider credentials detected. Configure a saved provider profile or set one provider env var such as ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, DEEPSEEK_API_KEY, XAI_API_KEY, OPENROUTER_API_KEY, or OPENAI_COMPATIBLE_API_KEY.',
             severity: 'warning',
           },
         ],

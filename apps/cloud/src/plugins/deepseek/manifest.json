@@ -1,0 +1,40 @@
+{
+  "id": "deepseek",
+  "name": "DeepSeek",
+  "description": "Connect agents to DeepSeek chat and reasoning models through the OpenAI-compatible API",
+  "version": "1.0.0",
+  "category": "ai-provider",
+  "icon": "brain",
+  "website": "https://deepseek.com",
+  "docs": "https://api-docs.deepseek.com",
+  "auth": {
+    "type": "api-key",
+    "fields": [
+      {
+        "key": "DEEPSEEK_API_KEY",
+        "label": "API Key",
+        "description": "DeepSeek API key",
+        "required": true,
+        "sensitive": true
+      }
+    ]
+  },
+  "config": {
+    "type": "object",
+    "properties": {
+      "defaultModel": {
+        "type": "string",
+        "default": "deepseek-chat",
+        "description": "Default DeepSeek model"
+      },
+      "baseUrl": {
+        "type": "string",
+        "default": "https://api.deepseek.com/v1",
+        "description": "DeepSeek-compatible base URL"
+      }
+    }
+  },
+  "capabilities": ["auth-provider"],
+  "tags": ["ai", "llm", "deepseek", "reasoning", "openai-compatible"],
+  "popularity": 76
+}

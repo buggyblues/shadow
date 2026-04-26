@@ -9,5 +9,7 @@ export default defineProviderPlugin(manifest as PluginManifest, {
     id: 'hugging-face',
     api: 'openai',
     baseUrl: 'https://api-inference.huggingface.co/v1',
+    priority: 80,
+    models: [{ id: 'meta-llama/Llama-3.1-70B-Instruct', tags: ['default'] }],
   },
 })

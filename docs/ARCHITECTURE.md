@@ -200,7 +200,7 @@ All services, DAOs, and infrastructure are registered as **singletons** in an [A
 | `media.handler` | `/api/media` | File upload/download (MinIO) |
 | `app.handler` | `/api` | Server apps (iframe) |
 | `workspace.handler` | `/api` | Workspace file tree |
-| `agent.handler` | `/api/agents` | Agent lifecycle |
+| `agent.handler` | `/api/agents` | Agent lifecycle, remote config, slash command registry |
 | `invite.handler` | `/api/invite-codes` | Invite code management |
 | `shop.handler` | `/api` | Shop, products, cart, orders |
 | `rental.handler` | `/api/rental` | P2P rental marketplace |
@@ -400,6 +400,7 @@ users ─────┬────── servers ──────── chan
 | **channel_members** | `id`, `channelId` → channels, `userId` → users | Per-channel access control |
 | **members** | `id`, `serverId` → servers, `userId` → users, `role` (owner/admin/member), `nickname` | Server membership and roles |
 | **messages** | `id`, `channelId` → channels, `authorId` → users, `content`, `threadId`, `replyToId`, `isEdited`, `isPinned` | Chat messages |
+| **message_interactive_submissions** | `id`, `sourceMessageId` → messages, `blockId`, `userId` → users, `actionId`, `values` (jsonb), `responseMessageId` → messages | Server-side state for one-shot interactive forms/buttons |
 | **threads** | `id`, `channelId`, `parentMessageId`, `creatorId`, `name`, `isArchived` | Message threads |
 | **attachments** | `id`, `messageId` → messages, `filename`, `url`, `contentType`, `size`, `width`, `height` | File uploads |
 | **reactions** | `id`, `messageId` → messages, `userId` → users, `emoji` | Emoji reactions (unique per user+message+emoji) |

@@ -56,7 +56,8 @@ export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: O
         setOverlay('orders')
       }, 2000)
     },
-    onError: (err: Error) => showToast(err.message || t('shop.paymentFailed', '支付失败，请检查余额或库存'), 'error'),
+    onError: (err: Error) =>
+      showToast(err.message || t('shop.paymentFailed', '支付失败，请检查余额或库存'), 'error'),
   })
 
   if (!product) {

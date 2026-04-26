@@ -1,4 +1,4 @@
-import { cn } from '@shadowob/ui'
+import { cn, GlassHeader, GlassPanel } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { Bot, Gift, MessageCircle, Monitor, Settings, Target, Wallet } from 'lucide-react'
@@ -134,7 +134,7 @@ export function SettingsPage() {
       </div>
 
       {/* Desktop Sidebar — Glassmorphism */}
-      <aside className="w-[240px] shrink-0 hidden md:flex flex-col glass-panel relative z-10">
+      <GlassPanel as="aside" className="w-[240px] shrink-0 hidden md:flex flex-col relative z-10">
         {/* Account info header — click opens settings modal */}
         <button
           type="button"
@@ -220,14 +220,14 @@ export function SettingsPage() {
             </div>
           )}
         </nav>
-      </aside>
+      </GlassPanel>
 
       {/* Content Area */}
       <main className="flex-1 min-w-0 h-full overflow-hidden flex flex-col relative z-10">
         {activeTab !== 'dm' && (
-          <div className="flex-1 glass-panel h-full overflow-hidden flex flex-col">
+          <GlassPanel className="flex-1 h-full overflow-hidden flex flex-col">
             {/* Unified Header */}
-            <div className="glass-header gap-3">
+            <GlassHeader className="gap-3">
               <div className="w-8 h-8 rounded-full bg-bg-tertiary/50 flex items-center justify-center text-primary shrink-0 shadow-inner">
                 {activeNavItem ? (
                   <activeNavItem.icon size={16} strokeWidth={2.5} />
@@ -238,7 +238,7 @@ export function SettingsPage() {
               <h3 className="font-black text-text-primary text-[15px] truncate uppercase tracking-tight">
                 {activeNavItem ? t(activeNavItem.labelKey, activeNavItem.labelFallback) : '...'}
               </h3>
-            </div>
+            </GlassHeader>
 
             <div className="flex-1 overflow-y-auto">
               <div className="max-w-4xl mx-auto p-4 md:p-8">
@@ -248,16 +248,16 @@ export function SettingsPage() {
                 {activeTab === 'buddy' && <BuddyManagementContent />}
               </div>
             </div>
-          </div>
+          </GlassPanel>
         )}
 
         {/* DM - unified contact sidebar + chat */}
         {activeTab === 'dm' && (
           <div className="flex flex-1 min-h-0 gap-3">
             {/* Left sidebar: unified contacts */}
-            <div
+            <GlassPanel
               className={cn(
-                'chat-panel glass-panel w-full shrink-0 flex-col overflow-hidden md:w-72 lg:w-80',
+                'chat-panel w-full shrink-0 flex-col overflow-hidden md:w-72 lg:w-80',
                 activeDmChannelId ? 'hidden md:flex' : 'flex',
               )}
             >
@@ -280,7 +280,7 @@ export function SettingsPage() {
                   })
                 }}
               />
-            </div>
+            </GlassPanel>
 
             {/* Right panel: chat or default view */}
             <div
@@ -295,9 +295,9 @@ export function SettingsPage() {
                   onBack={() => setActiveDmChannelId(null)}
                 />
               ) : (
-                <div className="chat-panel glass-panel flex-1 overflow-hidden">
+                <GlassPanel className="chat-panel flex-1 overflow-hidden">
                   <DmDefaultView />
-                </div>
+                </GlassPanel>
               )}
             </div>
           </div>

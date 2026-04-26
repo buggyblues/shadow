@@ -1,0 +1,118 @@
+{
+  "version": "1.0.0",
+  "name": "${i18n:name}",
+  "description": "${i18n:description}",
+  "environment": "production",
+  "team": {
+    "name": "gstack-buddy",
+    "description": "Single Strategy Buddy that runs garrytan/gstack's OpenClaw methodology artifacts — office-hours, ceo-review, retro, and gstack-lite planning discipline — for product/strategy reviews."
+  },
+  "use": [
+    {
+      "plugin": "model-provider"
+    },
+    {
+      "plugin": "shadowob",
+      "options": {
+        "servers": [
+          {
+            "id": "gstack-hq",
+            "name": "gstack",
+            "slug": "gstack",
+            "channels": [
+              {
+                "id": "office-hours",
+                "title": "Office Hours",
+                "type": "text"
+              },
+              {
+                "id": "weekly-retro",
+                "title": "Weekly Retro",
+                "type": "text"
+              }
+            ]
+          }
+        ],
+        "buddies": [
+          {
+            "id": "gstack-bot",
+            "name": "Strategy Buddy"
+          }
+        ],
+        "bindings": [
+          {
+            "targetId": "gstack-bot",
+            "targetType": "buddy",
+            "servers": ["gstack-hq"],
+            "channels": ["office-hours", "weekly-retro"],
+            "agentId": "strategy-buddy"
+          }
+        ]
+      }
+    }
+  ],
+  "deployments": {
+    "namespace": "gstack-buddy",
+    "agents": [
+      {
+        "id": "strategy-buddy",
+        "runtime": "openclaw",
+        "description": "Strategy Buddy that interrogates briefs YC-style (office-hours, ceo-review), follows gstack-lite planning discipline, and runs Friday retros.",
+        "identity": {
+          "name": "Strategy Buddy",
+          "personality": "You are a high-conviction operator-coach. You reframe before you execute. You believe most teams ship the wrong thing well — your job is to make them ship the right thing.",
+          "systemPrompt": "Workflow:\n1. Before handling strategy work, read the mounted gstack OpenClaw instruction files and treat them as the methodology source of truth.\n2. For any new request in #office-hours, run the office-hours skill (six forcing questions). DO NOT solve before asking.\n3. After the user answers, run the ceo-review skill to surface the 10-star product hidden inside the request.\n4. The CEO review response must contain the actual proposal before any approval UI: problem reframing, MVP scope, 90-day roadmap, risks/assumptions, and next step. Never ask \"approve this roadmap/MVP\" unless the roadmap and MVP scope are visible in the same message.\n5. For larger initiatives, follow the mounted gstack-lite planning discipline before proposing execution.\n6. Every Friday, run the retro skill on the week and post the result to #weekly-retro.\n7. When proposing direction, post an `approval` interactive block using the message tool with action `send`; include `target`, `message`, `kind: \"approval\"`, `prompt`, and optional `approvalCommentLabel` so the user can lock decisions."
+        },
+        "use": [
+          {
+            "plugin": "agent-pack",
+            "options": {
+              "packs": [
+                {
+                  "id": "gstack",
+                  "url": "https://github.com/garrytan/gstack",
+                  "ref": "main"
+                }
+              ],
+              "poll": "1h"
+            }
+          }
+        ],
+        "configuration": {
+          "openclaw": {
+            "agents": {
+              "defaults": {
+                "heartbeat": {
+                  "every": "24h",
+                  "prompt": "If today is Friday, run the retro skill on the week and post the result to #weekly-retro. Otherwise, scan #office-hours for unanswered briefs and follow up.",
+                  "target": "shadowob",
+                  "accountId": "weekly-retro"
+                }
+              }
+            }
+          }
+        },
+        "resources": {
+          "requests": {
+            "cpu": "100m",
+            "memory": "256Mi"
+          },
+          "limits": {
+            "cpu": "1000m",
+            "memory": "1Gi"
+          }
+        }
+      }
+    ]
+  },
+  "i18n": {
+    "en": {
+      "name": "gstack Strategy Buddy",
+      "description": "Single Strategy Buddy that runs Garry Tan's gstack OpenClaw methodology — office-hours interrogations, CEO review, weekly retros, and gstack-lite planning discipline — pulled live from garrytan/gstack."
+    },
+    "zh-CN": {
+      "name": "gstack 战略 Buddy",
+      "description": "单 Buddy 模板，运行 Garry Tan 的 gstack OpenClaw 方法 —— office-hours 六问、CEO 评审、周复盘与 gstack-lite 规划纪律，部署时从 garrytan/gstack 动态拉取。"
+    }
+  }
+}

@@ -7,7 +7,10 @@
 # Config: /etc/openclaw              (ConfigMap mount, read-only)
 # Logs:   /var/log/openclaw          (emptyDir mount)
 #
-# Build: docker build -t ghcr.io/buggyblues/openclaw-runner:latest .
+# Build from the repository root so the image can include the local
+# packages/openclaw-shadowob build:
+#   docker build -t ghcr.io/buggyblues/openclaw-runner:latest \
+#     -f apps/cloud/images/openclaw-runner/Dockerfile .
 # ──────────────────────────────────────────────────────────────────────────
 
 # ── Stage 1: Builder ─────────────────────────────────────────────────────
@@ -17,13 +20,20 @@ WORKDIR /build
 
 # git is required by some npm packages during install
 RUN apk add --no-cache git
+COPY apps/cloud/images/openclaw-runner/patch-shadowob-manifest.mjs /tmp/patch-shadowob-manifest.mjs
+COPY packages/openclaw-shadowob /tmp/openclaw-shadowob
 
 # Install OpenClaw and shadowob plugin
 RUN npm init -y && \
     npm install openclaw@latest @shadowob/openclaw-shadowob@latest && \
     # Setup extensions directory
     mkdir -p extensions/shadowob && \
-    cp -r node_modules/@shadowob/openclaw-shadowob/* extensions/shadowob/ && \
+    cp -r /tmp/openclaw-shadowob/* extensions/shadowob/ && \
+    test -f extensions/shadowob/dist/index.js || \
+      (echo "Missing packages/openclaw-shadowob/dist/index.js; build the local package before building this image." && exit 1) && \
+    node /tmp/patch-shadowob-manifest.mjs extensions/shadowob/openclaw.plugin.json && \
+    find extensions/shadowob -type d \( -name "src" -o -name "__tests__" \) \
+      -exec rm -rf {} + 2>/dev/null || true && \
     # Cleanup dev artifacts to reduce image size
     # NOTE: preserve openclaw/docs/reference/templates — OpenClaw needs these at runtime
     find node_modules -type d \( -name ".github" -o -name "test" -o -name "tests" \
@@ -63,8 +73,16 @@ COPY --from=builder --chown=openclaw:openclaw /build/package.json ./package.json
 # Symlink openclaw to PATH (local install only, no global npm install)
 RUN ln -s /app/node_modules/.bin/openclaw /usr/local/bin/openclaw
 
+# Stage bundled plugin runtime deps in the image so the first real Buddy reply
+# does not spend minutes installing optional tool/provider packages.
+COPY --chown=openclaw:openclaw apps/cloud/images/openclaw-runner/warm-runtime-deps.mjs ./warm-runtime-deps.mjs
+ENV OPENCLAW_PLUGIN_STAGE_DIR=/opt/openclaw-runtime-deps
+RUN mkdir -p /opt/openclaw-runtime-deps /tmp/npm-cache && \
+    node /app/warm-runtime-deps.mjs && \
+    chown -R openclaw:openclaw /opt/openclaw-runtime-deps /tmp/npm-cache
+
 # Copy entrypoint (small, changes often → last COPY for cache)
-COPY --chown=openclaw:openclaw entrypoint.mjs ./entrypoint.mjs
+COPY --chown=openclaw:openclaw apps/cloud/images/openclaw-runner/entrypoint.mjs ./entrypoint.mjs
 
 # Health check
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
@@ -75,6 +93,7 @@ EXPOSE 3100
 ENV NODE_ENV=production
 ENV OPENCLAW_GATEWAY_PORT=3100
 ENV OPENCLAW_NO_RESPAWN=1
+ENV OPENCLAW_PLUGIN_STAGE_DIR=/opt/openclaw-runtime-deps
 
 # Run as non-root
 USER openclaw

@@ -53,6 +53,31 @@ export class CloudEnvVarDao {
       .where(and(eq(cloudEnvVars.id, id), eq(cloudEnvVars.userId, userId)))
   }
 
+  async upsertScoped(data: {
+    userId: string
+    scope: string
+    key: string
+    encryptedValue: string
+    groupId?: string | null
+  }) {
+    const existing = await this.listByUser(data.userId, data.scope)
+    const found = existing.find((v) => v.key === data.key)
+    if (found) return this.update(found.id, data.userId, data.encryptedValue)
+    return this.create({
+      userId: data.userId,
+      scope: data.scope,
+      key: data.key,
+      encryptedValue: data.encryptedValue,
+      groupId: data.groupId ?? null,
+    })
+  }
+
+  async deleteByScope(userId: string, scope: string) {
+    await this.db
+      .delete(cloudEnvVars)
+      .where(and(eq(cloudEnvVars.userId, userId), eq(cloudEnvVars.scope, scope)))
+  }
+
   // ─── Groups ──────────────────────────────────────────────────────────────
 
   async listGroupsByUser(userId: string) {
@@ -63,11 +88,26 @@ export class CloudEnvVarDao {
       .orderBy(cloudEnvGroups.name)
   }
 
+  async findGroupByName(userId: string, name: string) {
+    const result = await this.db
+      .select()
+      .from(cloudEnvGroups)
+      .where(and(eq(cloudEnvGroups.userId, userId), eq(cloudEnvGroups.name, name)))
+      .limit(1)
+    return result[0] ?? null
+  }
+
   async createGroup(data: { userId: string; name: string }) {
     const result = await this.db
       .insert(cloudEnvGroups)
       .values({ userId: data.userId, name: data.name })
       .returning()
     return result[0]
+  }
+
+  async deleteGroupByName(userId: string, name: string) {
+    await this.db
+      .delete(cloudEnvGroups)
+      .where(and(eq(cloudEnvGroups.userId, userId), eq(cloudEnvGroups.name, name)))
   }
 }

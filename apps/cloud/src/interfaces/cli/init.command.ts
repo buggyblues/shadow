@@ -5,6 +5,7 @@
 import { cp, stat, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { Command } from 'commander'
+import { collectRuntimeEnvRequirements } from '../../application/runtime-env-requirements.js'
 import type { ServiceContainer } from '../../services/container.js'
 
 async function fileExists(path: string): Promise<boolean> {
@@ -74,20 +75,13 @@ export function createInitCommand(container: ServiceContainer) {
               deployments: { namespace: 'shadowob-cloud', agents: [] },
             } as unknown)
 
-          const envKeys = [
-            { envVar: 'ANTHROPIC_API_KEY', provider: 'anthropic' },
-            { envVar: 'OPENAI_API_KEY', provider: 'openai' },
-            { envVar: 'GOOGLE_API_KEY', provider: 'google' },
-            { envVar: 'XAI_API_KEY', provider: 'xai' },
-            { envVar: 'GROQ_API_KEY', provider: 'groq' },
-          ]
-          const detected = envKeys.filter((k) => process.env[k.envVar])
+          const envKeys = await collectRuntimeEnvRequirements(content)
+          const detected = envKeys.filter((key) => process.env[key])
           if (detected.length > 0) {
-            // biome-ignore lint/suspicious/noTemplateCurlyInString: literal ${env:...} syntax shown to user
             container.logger.info(
-              `Detected ${detected.length} API key(s) from environment — config will reference them via \${env:...}`,
+              `Detected ${detected.length} provider env var(s) — config will reference them via \${env:...}`,
             )
-            for (const d of detected) container.logger.dim(`  ${d.provider} (${d.envVar})`)
+            for (const key of detected) container.logger.dim(`  ${key}`)
           } else {
             container.logger.warn('No API keys found in environment. Add them to .env and re-run.')
           }

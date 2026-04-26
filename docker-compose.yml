@@ -50,15 +50,21 @@ services:
 
   # ── Application ───────────────────────────────────
   server:
+    image: shadow/runtime:dev
     build:
       context: .
       dockerfile: apps/server/Dockerfile
+      cache_from:
+        - type=local,src=.docker-cache/server
+      cache_to:
+        - type=local,dest=.docker-cache/server,mode=max
     restart: unless-stopped
     ports:
       - "3002:3002"
     environment:
       DATABASE_URL: postgresql://shadow:shadow@postgres:5432/shadow
       REDIS_URL: redis://redis:6379
+      ENABLE_DEV_TOPUP: ${ENABLE_DEV_TOPUP:-0}
       JWT_SECRET: ${JWT_SECRET:-shadow-dev-jwt-secret-do-not-use-in-production}
       JWT_EXPIRES_IN: 7d
       PORT: 3002
@@ -82,6 +88,18 @@ services:
       STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       KMS_MASTER_KEY: ${KMS_MASTER_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      CLOUD_TEMPLATES_DIR: /app/apps/cloud/templates
+      POLL_INTERVAL_MS: ${CLOUD_WORKER_POLL_INTERVAL_MS:-5000}
+      RECONCILE_INTERVAL_MS: ${RECONCILE_INTERVAL_MS:-60000}
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://server:3002}
+      SHADOW_AGENT_SERVER_URL: ${SHADOW_AGENT_SERVER_URL:-http://host.lima.internal:3002}
+      PULUMI_CONFIG_PASSPHRASE: ${PULUMI_CONFIG_PASSPHRASE:-}
+      PULUMI_BACKEND_URL: ${PULUMI_BACKEND_URL:-file:///root/.shadowob/pulumi}
+      KUBECONFIG: ${KUBECONFIG:-/root/.kube/config}
+      KUBECONFIG_CONTEXT: ${KUBECONFIG_CONTEXT:-}
+      KUBECONFIG_LOOPBACK_HOST: ${KUBECONFIG_LOOPBACK_HOST:-host.lima.internal}
+    volumes:
+      - ${KUBECONFIG_HOST_PATH:-/dev/null}:${KUBECONFIG:-/root/.kube/config}:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -94,6 +112,10 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      cache_from:
+        - type=local,src=.docker-cache/web
+      cache_to:
+        - type=local,dest=.docker-cache/web,mode=max
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -104,31 +126,15 @@ services:
     build:
       context: .
       dockerfile: apps/admin/Dockerfile
+      cache_from:
+        - type=local,src=.docker-cache/admin
+      cache_to:
+        - type=local,dest=.docker-cache/admin,mode=max
     restart: unless-stopped
     ports:
       - "3001:3001"
     depends_on:
       - server
-
-  cloud-worker:
-    build:
-      context: .
-      dockerfile: apps/cloud/Dockerfile.worker
-    restart: unless-stopped
-    environment:
-      DATABASE_URL: postgresql://shadow:shadow@postgres:5432/shadow
-      KMS_MASTER_KEY: ${KMS_MASTER_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
-      POLL_INTERVAL_MS: ${CLOUD_WORKER_POLL_INTERVAL_MS:-5000}
-      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://server:3000}
-      KUBECONFIG: ${KUBECONFIG:-}
-      KUBECONFIG_CONTEXT: ${KUBECONFIG_CONTEXT:-}
-      PULUMI_CONFIG_PASSPHRASE: ${PULUMI_CONFIG_PASSPHRASE:-}
-      PULUMI_BACKEND_URL: ${PULUMI_BACKEND_URL:-}
-    volumes:
-      - ${KUBECONFIG_HOST_PATH:-/dev/null}:${KUBECONFIG:-/dev/null}:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
 
 volumes:
   pg_data:

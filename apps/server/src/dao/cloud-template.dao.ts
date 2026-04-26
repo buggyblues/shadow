@@ -42,7 +42,24 @@ export class CloudTemplateDao {
     tags?: string[]
   }) {
     const existing = await this.findBySlug(data.slug)
-    if (existing) return existing
+    if (existing) {
+      if (existing.source !== 'official') return existing
+
+      const result = await this.db
+        .update(cloudTemplates)
+        .set({
+          name: data.name,
+          description: data.description,
+          content: data.content as Record<string, unknown>,
+          tags: data.tags ?? existing.tags ?? [],
+          reviewStatus: 'approved',
+          updatedAt: new Date(),
+        })
+        .where(eq(cloudTemplates.id, existing.id))
+        .returning()
+      return result[0] ?? existing
+    }
+
     const result = await this.db
       .insert(cloudTemplates)
       .values({

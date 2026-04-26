@@ -1,7 +1,9 @@
+import { useQuery } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
-import { useLayoutEffect } from 'react'
+import { useEffect, useLayoutEffect } from 'react'
 import { ChatArea } from '../components/chat/chat-area'
 import { MemberList } from '../components/member/member-list'
+import { fetchApi } from '../lib/api'
 import { setLastChannelId } from '../lib/last-channel'
 import { joinChannel, leaveChannel } from '../lib/socket'
 import { useChatStore } from '../stores/chat.store'
@@ -11,6 +13,11 @@ export function ChannelView() {
   const { channelId } = useParams({ strict: false }) as { channelId: string }
   const activeServerId = useChatStore((s) => s.activeServerId)
   const setMobileView = useUIStore((s) => s.setMobileView)
+  const { data: channel } = useQuery({
+    queryKey: ['channel', channelId],
+    queryFn: () => fetchApi<{ id: string; serverId: string }>(`/api/channels/${channelId}`),
+    enabled: !!channelId,
+  })
 
   // Sync channel ID from URL → store before paint
   useLayoutEffect(() => {
@@ -22,15 +29,16 @@ export function ChannelView() {
     joinChannel(channelId)
     setMobileView('chat')
 
-    // Remember this channel as the last visited for this server
-    if (activeServerId) {
-      setLastChannelId(activeServerId, channelId)
-    }
-
     return () => {
       leaveChannel(channelId)
     }
-  }, [channelId, activeServerId, setMobileView])
+  }, [channelId, setMobileView])
+
+  useEffect(() => {
+    if (activeServerId && channel?.serverId === activeServerId) {
+      setLastChannelId(activeServerId, channelId)
+    }
+  }, [activeServerId, channel?.serverId, channelId])
 
   return (
     <>

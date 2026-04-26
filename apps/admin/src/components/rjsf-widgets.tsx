@@ -1,5 +1,13 @@
 'use client'
-import type { ArrayFieldItemTemplateProps, ArrayFieldTemplateProps, BaseInputTemplateProps, FieldTemplateProps, ObjectFieldTemplateProps, RegistryWidgetsType, WidgetProps } from '@rjsf/utils'
+import type {
+  ArrayFieldItemTemplateProps,
+  ArrayFieldTemplateProps,
+  BaseInputTemplateProps,
+  FieldTemplateProps,
+  ObjectFieldTemplateProps,
+  RegistryWidgetsType,
+  WidgetProps,
+} from '@rjsf/utils'
 import MDEditor from '@uiw/react-md-editor'
 import { Minus, Plus, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
@@ -163,8 +171,23 @@ export function MapWidget({ value, onChange, disabled }: WidgetProps) {
 }
 
 // ── Array Field Item Template ───────────────────────────────────────────────
-export function ArrayItemTemplate({ children, buttonsProps, hasToolbar, index }: ArrayFieldItemTemplateProps) {
-  const { hasMoveUp, hasMoveDown, hasRemove, hasCopy, onMoveUpItem, onMoveDownItem, onRemoveItem, onCopyItem, disabled } = buttonsProps
+export function ArrayItemTemplate({
+  children,
+  buttonsProps,
+  hasToolbar,
+  index,
+}: ArrayFieldItemTemplateProps) {
+  const {
+    hasMoveUp,
+    hasMoveDown,
+    hasRemove,
+    hasCopy,
+    onMoveUpItem,
+    onMoveDownItem,
+    onRemoveItem,
+    onCopyItem,
+    disabled,
+  } = buttonsProps
   const [collapsed, setCollapsed] = useState(false)
   return (
     <div className="w-full">
@@ -174,36 +197,72 @@ export function ArrayItemTemplate({ children, buttonsProps, hasToolbar, index }:
           onClick={() => setCollapsed((c) => !c)}
           className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700"
         >
-          <span className="text-gray-500 transition-transform" style={{ display: 'inline-block', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>▼</span>
+          <span
+            className="text-gray-500 transition-transform"
+            style={{
+              display: 'inline-block',
+              transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+            }}
+          >
+            ▼
+          </span>
           #{index + 1}
         </button>
         {hasToolbar && (
           <div className="flex gap-1">
             {hasMoveUp && (
-              <button type="button" onClick={(e) => { e.preventDefault(); onMoveUpItem(e) }} disabled={disabled}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  onMoveUpItem(e)
+                }}
+                disabled={disabled}
                 className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
-                title="Move up">
+                title="Move up"
+              >
                 ↑
               </button>
             )}
             {hasMoveDown && (
-              <button type="button" onClick={(e) => { e.preventDefault(); onMoveDownItem(e) }} disabled={disabled}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  onMoveDownItem(e)
+                }}
+                disabled={disabled}
                 className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
-                title="Move down">
+                title="Move down"
+              >
                 ↓
               </button>
             )}
             {hasCopy && (
-              <button type="button" onClick={(e) => { e.preventDefault(); onCopyItem(e) }} disabled={disabled}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  onCopyItem(e)
+                }}
+                disabled={disabled}
                 className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
-                title="Duplicate">
+                title="Duplicate"
+              >
                 Dup
               </button>
             )}
             {hasRemove && (
-              <button type="button" onClick={(e) => { e.preventDefault(); onRemoveItem(e) }} disabled={disabled}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  onRemoveItem(e)
+                }}
+                disabled={disabled}
                 className="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
-                title="Remove">
+                title="Remove"
+              >
                 Remove
               </button>
             )}
@@ -221,12 +280,13 @@ export function SortableArrayFieldTemplate(props: ArrayFieldTemplateProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      {title && (
-        <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
-      )}
+      {title && <h3 className="text-sm font-semibold text-gray-700">{title}</h3>}
       <div className="flex flex-col gap-3">
         {items.map((item, i) => (
-          <div key={item.key ?? i} className="w-full rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+          <div
+            key={item.key ?? i}
+            className="w-full rounded-lg border border-gray-200 bg-white p-3 shadow-sm"
+          >
             {item}
           </div>
         ))}
@@ -252,9 +312,21 @@ export const customWidgets: RegistryWidgetsType = {
 
 // ── RJSF Base Input Template ─────────────────────────────────────────────────
 export function BaseInputTemplate({
-  id, value, onChange, type, required, disabled, readonly, autofocus, placeholder, options,
+  id,
+  value,
+  onChange,
+  type,
+  required,
+  disabled,
+  readonly,
+  autofocus,
+  placeholder,
+  options,
 }: BaseInputTemplateProps) {
-  const inputType = type === 'integer' ? 'number' : (type || 'text')
+  const inputType = type === 'integer' ? 'number' : type || 'text'
+  const lowerId = String(id ?? '').toLowerCase()
+  const isSensitiveInput =
+    inputType === 'password' || /(token|secret|password|api[_-]?key|private[_-]?key)/.test(lowerId)
   return (
     <input
       id={id}
@@ -263,6 +335,10 @@ export function BaseInputTemplate({
       required={required}
       disabled={disabled || readonly}
       autoFocus={autofocus}
+      autoComplete={isSensitiveInput ? 'off' : undefined}
+      data-1p-ignore={isSensitiveInput ? true : undefined}
+      data-lpignore={isSensitiveInput ? 'true' : undefined}
+      data-form-type={isSensitiveInput ? 'other' : undefined}
       placeholder={placeholder}
       className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
       onChange={({ target: { value: v } }) => onChange(v === '' ? options.emptyValue : v)}
@@ -272,7 +348,14 @@ export function BaseInputTemplate({
 
 // ── RJSF Field Template ──────────────────────────────────────────────────────
 export function RjsfFieldTemplate({
-  id, label, help, required, description, errors, children, hidden,
+  id,
+  label,
+  help,
+  required,
+  description,
+  errors,
+  children,
+  hidden,
 }: FieldTemplateProps) {
   if (hidden) return <>{children}</>
   if (id === 'root') return <div className="flex flex-col gap-5">{children}</div>
@@ -294,7 +377,10 @@ export function RjsfFieldTemplate({
 
 // ── RJSF Object Field Template ───────────────────────────────────────────────
 export function RjsfObjectFieldTemplate({
-  title, description, properties, fieldPathId,
+  title,
+  description,
+  properties,
+  fieldPathId,
 }: ObjectFieldTemplateProps) {
   const isRoot = !fieldPathId?.$id || fieldPathId.$id === 'root'
   const useGrid = !isRoot && properties.length >= 4

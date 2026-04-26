@@ -1,5 +1,5 @@
-import { and, desc, eq } from 'drizzle-orm'
-import type { Database } from '../db'
+import { and, desc, eq, sql } from 'drizzle-orm'
+import { type Database, workerLockClient } from '../db'
 import { cloudDeploymentLogs, cloudDeployments } from '../db/schema'
 
 export class CloudDeploymentDao {
@@ -52,6 +52,31 @@ export class CloudDeploymentDao {
       .orderBy(cloudDeployments.createdAt)
   }
 
+  /**
+   * Deployments the user has asked to cancel mid-flight.
+   * The cloud worker picks these up and signals the in-progress deploy
+   * subprocess to terminate.
+   */
+  async listCancelling() {
+    return this.db
+      .select()
+      .from(cloudDeployments)
+      .where(eq(cloudDeployments.status, 'cancelling'))
+      .orderBy(cloudDeployments.createdAt)
+  }
+
+  /**
+   * Reconcile-only: deployments that should already have a namespace present
+   * on the cluster.
+   *
+   * IMPORTANT: do not include `deploying` here. A rollout may still be
+   * creating the namespace when the periodic orphan reconciler runs, which
+   * would cause a false `orphaned-by-cluster` failure mid-deploy.
+   */
+  async listLive() {
+    return this.db.select().from(cloudDeployments).where(eq(cloudDeployments.status, 'deployed'))
+  }
+
   async create(data: {
     userId: string
     clusterId?: string | null
@@ -77,7 +102,14 @@ export class CloudDeploymentDao {
 
   async updateStatus(
     id: string,
-    status: 'pending' | 'deploying' | 'deployed' | 'failed' | 'destroying' | 'destroyed',
+    status:
+      | 'pending'
+      | 'deploying'
+      | 'deployed'
+      | 'failed'
+      | 'destroying'
+      | 'destroyed'
+      | 'cancelling',
     errorMessage?: string | null,
   ) {
     const result = await this.db
@@ -104,5 +136,26 @@ export class CloudDeploymentDao {
       .from(cloudDeploymentLogs)
       .where(eq(cloudDeploymentLogs.deploymentId, deploymentId))
       .orderBy(cloudDeploymentLogs.createdAt)
+  }
+
+  /**
+   * Acquire a per-deployment advisory lock for cross-worker mutual exclusion.
+   * Returns true when the lock is acquired by this session.
+   */
+  async tryAcquireWorkerLock(deploymentId: string): Promise<boolean> {
+    const [row] = await workerLockClient<{ locked?: unknown }[]>`
+      select pg_try_advisory_lock(hashtext(${deploymentId})) as locked
+    `
+    const locked = row?.locked
+    return locked === true || locked === 't' || locked === 1 || locked === '1'
+  }
+
+  /**
+   * Release a per-deployment advisory lock previously acquired by this session.
+   */
+  async releaseWorkerLock(deploymentId: string): Promise<void> {
+    await workerLockClient`
+      select pg_advisory_unlock(hashtext(${deploymentId}))
+    `
   }
 }

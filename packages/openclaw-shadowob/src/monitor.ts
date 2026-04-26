@@ -27,7 +27,12 @@ import type {
 } from 'openclaw/plugin-sdk/channel-reply-pipeline'
 import type { OpenClawConfig, PluginRuntime } from 'openclaw/plugin-sdk/core'
 import { getShadowRuntime } from './runtime.js'
-import type { AgentChainMetadata, ShadowAccountConfig, ShadowPolicyConfig } from './types.js'
+import type {
+  AgentChainMetadata,
+  ShadowAccountConfig,
+  ShadowPolicyConfig,
+  ShadowSlashCommand,
+} from './types.js'
 
 /**
  * Resolve the OpenClaw data directory.
@@ -58,6 +63,427 @@ function resolveSessionStore(cfg: OpenClawConfig): string | undefined {
     if (typeof pathValue === 'string') return pathValue
   }
   return undefined
+}
+
+export function resolveShadowAgentIdFromConfig(config: unknown, accountId: string): string | null {
+  const cfg = config as {
+    agents?: { list?: Array<{ id?: unknown; default?: boolean }> }
+    bindings?: Array<{
+      agentId?: unknown
+      match?: { channel?: unknown; accountId?: unknown }
+    }>
+  }
+
+  const routeBinding = cfg.bindings?.find((binding) => {
+    return binding.match?.channel === 'shadowob' && binding.match.accountId === accountId
+  })
+  if (typeof routeBinding?.agentId === 'string' && routeBinding.agentId.trim()) {
+    return routeBinding.agentId
+  }
+
+  const defaultAgent = cfg.agents?.list?.find((agent) => agent.default) ?? cfg.agents?.list?.[0]
+  return typeof defaultAgent?.id === 'string' && defaultAgent.id.trim() ? defaultAgent.id : null
+}
+
+const SLASH_COMMAND_RE = /^\/([a-zA-Z][a-zA-Z0-9._-]{0,63})(?:\s+([\s\S]*))?$/
+const RECENT_MESSAGE_CATCHUP_WINDOW_MS = 30 * 60 * 1000
+const MAX_TRACKED_MESSAGE_IDS = 1000
+
+type ShadowSlashCommandMatch = {
+  command: ShadowSlashCommand
+  invokedName: string
+  args: string
+}
+
+export type ShadowMessageWatermarks = Record<string, { createdAt: string; messageId?: string }>
+
+function normalizeSlashCommandName(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const name = value.trim().replace(/^\/+/, '')
+  return /^[a-zA-Z][a-zA-Z0-9._-]{0,63}$/.test(name) ? name : null
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function readString(value: unknown, max = 2000): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : undefined
+}
+
+function normalizeInteractionItems(
+  value: unknown,
+  max: number,
+):
+  | Array<{
+      id: string
+      label: string
+      value?: string
+      style?: 'primary' | 'secondary' | 'destructive'
+    }>
+  | undefined {
+  if (!Array.isArray(value)) return undefined
+  const items = value
+    .filter(isRecord)
+    .map((item, index) => {
+      const label =
+        readString(item.label, 120) ?? readString(item.value, 120) ?? `Option ${index + 1}`
+      const id = readString(item.id, 80) ?? readString(item.value, 80) ?? label
+      const itemValue = readString(item.value, 2048)
+      const rawStyle = readString(item.style, 40)
+      const style: 'primary' | 'secondary' | 'destructive' | undefined =
+        rawStyle === 'primary' || rawStyle === 'secondary' || rawStyle === 'destructive'
+          ? rawStyle
+          : undefined
+      return {
+        id,
+        label,
+        ...(itemValue ? { value: itemValue } : {}),
+        ...(style ? { style } : {}),
+      }
+    })
+    .filter((item) => item.id && item.label)
+  return items.length > 0 ? items.slice(0, max) : undefined
+}
+
+function normalizeSlashInteraction(value: unknown): ShadowSlashCommand['interaction'] | undefined {
+  if (!isRecord(value)) return undefined
+  const kind = readString(value.kind, 20)
+  if (kind !== 'buttons' && kind !== 'select' && kind !== 'form' && kind !== 'approval') {
+    return undefined
+  }
+
+  const interaction: NonNullable<ShadowSlashCommand['interaction']> = { kind }
+  const id = readString(value.id, 120)
+  const prompt = readString(value.prompt)
+  const submitLabel = readString(value.submitLabel, 40)
+  const responsePrompt = readString(value.responsePrompt)
+  const approvalCommentLabel = readString(value.approvalCommentLabel, 120)
+  if (id) interaction.id = id
+  if (prompt) interaction.prompt = prompt
+  if (submitLabel) interaction.submitLabel = submitLabel
+  if (responsePrompt) interaction.responsePrompt = responsePrompt
+  if (approvalCommentLabel) interaction.approvalCommentLabel = approvalCommentLabel
+  if (typeof value.oneShot === 'boolean') interaction.oneShot = value.oneShot
+  const buttons = normalizeInteractionItems(value.buttons, 8)
+  const options = normalizeInteractionItems(value.options, 20)?.map((option) => ({
+    id: option.id,
+    label: option.label,
+    value: option.value ?? option.id,
+  }))
+  if (buttons) interaction.buttons = buttons
+  if (options) interaction.options = options
+
+  if (Array.isArray(value.fields)) {
+    const fields = value.fields.filter(isRecord).flatMap((field, index) => {
+      const fieldKind = readString(field.kind, 20) ?? readString(field.type, 20) ?? 'text'
+      if (!['text', 'textarea', 'number', 'checkbox', 'select'].includes(fieldKind)) return []
+      const normalizedField = {
+        id: readString(field.id, 80) ?? readString(field.name, 80) ?? `field_${index + 1}`,
+        kind: fieldKind as 'text' | 'textarea' | 'number' | 'checkbox' | 'select',
+        label: readString(field.label, 120) ?? readString(field.name, 120) ?? `Field ${index + 1}`,
+        ...(readString(field.placeholder, 200)
+          ? { placeholder: readString(field.placeholder, 200) }
+          : {}),
+        ...(readString(field.defaultValue, 2048)
+          ? { defaultValue: readString(field.defaultValue, 2048) }
+          : {}),
+        ...(typeof field.required === 'boolean' ? { required: field.required } : {}),
+        ...(typeof field.maxLength === 'number' ? { maxLength: field.maxLength } : {}),
+        ...(typeof field.min === 'number' ? { min: field.min } : {}),
+        ...(typeof field.max === 'number' ? { max: field.max } : {}),
+      }
+      const fieldOptions = normalizeInteractionItems(field.options, 20)?.map((option) => ({
+        id: option.id,
+        label: option.label,
+        value: option.value ?? option.id,
+      }))
+      return [{ ...normalizedField, ...(fieldOptions ? { options: fieldOptions } : {}) }]
+    })
+    if (fields.length > 0) interaction.fields = fields.slice(0, 12)
+  }
+
+  return interaction
+}
+
+export function normalizeShadowSlashCommands(input: unknown): ShadowSlashCommand[] {
+  if (!Array.isArray(input)) return []
+  const seen = new Set<string>()
+  const commands: ShadowSlashCommand[] = []
+
+  for (const item of input) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const record = item as Record<string, unknown>
+    const name = normalizeSlashCommandName(record.name)
+    if (!name) continue
+    const key = name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+
+    const aliases = Array.isArray(record.aliases)
+      ? [
+          ...new Set(
+            record.aliases
+              .map(normalizeSlashCommandName)
+              .filter((alias): alias is string => Boolean(alias)),
+          ),
+        ].filter((alias) => alias.toLowerCase() !== key)
+      : undefined
+    const interaction = normalizeSlashInteraction(record.interaction)
+
+    commands.push({
+      name,
+      ...(typeof record.description === 'string' && record.description.trim()
+        ? { description: record.description.trim().slice(0, 240) }
+        : {}),
+      ...(aliases && aliases.length > 0 ? { aliases } : {}),
+      ...(typeof record.packId === 'string' && record.packId.trim()
+        ? { packId: record.packId.trim().slice(0, 80) }
+        : {}),
+      ...(typeof record.sourcePath === 'string' && record.sourcePath.trim()
+        ? { sourcePath: record.sourcePath.trim().slice(0, 500) }
+        : {}),
+      ...(typeof record.body === 'string' && record.body.trim()
+        ? { body: record.body.trim().slice(0, 20_000) }
+        : {}),
+      ...(interaction ? { interaction } : {}),
+    })
+  }
+
+  return commands.slice(0, 200)
+}
+
+function toPublicSlashCommands(commands: ShadowSlashCommand[]): ShadowSlashCommand[] {
+  return commands.map(({ body: _body, ...command }) => command)
+}
+
+async function loadLocalSlashCommands(runtime: ShadowMonitorOptions['runtime']) {
+  const indexPath = process.env.SHADOW_SLASH_COMMANDS_PATH
+  if (!indexPath) return []
+  try {
+    const raw = await fsPromises.readFile(indexPath, 'utf-8')
+    const commands = normalizeShadowSlashCommands(JSON.parse(raw))
+    runtime.log?.(`[slash] Loaded ${commands.length} command(s) from ${indexPath}`)
+    return commands
+  } catch (err) {
+    runtime.error?.(`[slash] Failed to load command index: ${String(err)}`)
+    return []
+  }
+}
+
+async function registerAgentSlashCommands(params: {
+  account: ShadowAccountConfig
+  agentId: string
+  commands: ShadowSlashCommand[]
+}) {
+  const baseUrl = params.account.serverUrl.replace(/\/api\/?$/, '').replace(/\/$/, '')
+  const response = await fetch(`${baseUrl}/api/agents/${params.agentId}/slash-commands`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${params.account.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ commands: toPublicSlashCommands(params.commands) }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '')
+    throw new Error(`Shadow slash command registry failed (${response.status}): ${errorText}`)
+  }
+}
+
+export function matchShadowSlashCommand(
+  content: string,
+  commands: ShadowSlashCommand[],
+): ShadowSlashCommandMatch | null {
+  const match = content.trim().match(SLASH_COMMAND_RE)
+  if (!match) return null
+  const invokedName = match[1]!
+  const args = match[2]?.trim() ?? ''
+  const invokedKey = invokedName.toLowerCase()
+  const command = commands.find((candidate) => {
+    if (candidate.name.toLowerCase() === invokedKey) return true
+    return (candidate.aliases ?? []).some((alias) => alias.toLowerCase() === invokedKey)
+  })
+  return command ? { command, invokedName, args } : null
+}
+
+export function formatSlashCommandPrompt(
+  originalBody: string,
+  match: ShadowSlashCommandMatch,
+): string {
+  const chunks = [
+    `Slash command /${match.command.name} was invoked.`,
+    match.command.description ? `Description: ${match.command.description}` : '',
+    match.command.packId ? `Pack: ${match.command.packId}` : '',
+    `Arguments:\n${match.args || '(none)'}`,
+    match.command.body ? `Command definition:\n${match.command.body}` : '',
+    `Original message:\n${originalBody}`,
+  ].filter(Boolean)
+
+  return chunks.join('\n\n')
+}
+
+function buildAgentChainMetadata(params: {
+  agentId: string | null
+  botUserId: string
+  rootMessageId?: string
+  prior?: AgentChainMetadata
+}): AgentChainMetadata | undefined {
+  if (!params.agentId) return undefined
+  return {
+    agentId: params.agentId,
+    depth: (params.prior?.depth ?? 0) + 1,
+    participants: [...(params.prior?.participants ?? []), params.botUserId].filter(Boolean),
+    startedAt: params.prior?.startedAt ?? Date.now(),
+    rootMessageId: params.prior?.rootMessageId ?? params.rootMessageId,
+  }
+}
+
+function buildSlashCommandInteractiveBlock(match: ShadowSlashCommandMatch, messageId: string) {
+  const interaction = match.command.interaction
+  if (!interaction) return undefined
+  return {
+    ...interaction,
+    id:
+      interaction.id && interaction.id.trim()
+        ? `${interaction.id}:${messageId}`
+        : `slash:${match.command.packId ?? 'pack'}:${match.command.name}:${messageId}`,
+  }
+}
+
+async function sendSlashCommandInteractivePrompt(params: {
+  match: ShadowSlashCommandMatch
+  messageId: string
+  channelId: string
+  client: ShadowClient
+  runtime: ShadowMonitorOptions['runtime']
+  agentId: string | null
+  botUserId: string
+  agentChain?: AgentChainMetadata
+}) {
+  const block = buildSlashCommandInteractiveBlock(params.match, params.messageId)
+  if (!block) return false
+  const content =
+    block.prompt ?? `/${params.match.command.name} needs input before the Buddy can continue.`
+  const agentChain = buildAgentChainMetadata({
+    agentId: params.agentId,
+    botUserId: params.botUserId,
+    rootMessageId: params.messageId,
+    prior: params.agentChain,
+  })
+  await params.client.sendMessage(params.channelId, content, {
+    replyToId: params.messageId,
+    metadata: {
+      ...(agentChain ? { agentChain } : {}),
+      interactive: block,
+      slashCommand: {
+        name: params.match.command.name,
+        invokedName: params.match.invokedName,
+        args: params.match.args,
+        packId: params.match.command.packId,
+      },
+    },
+  })
+  params.runtime.log?.(
+    `[slash] Sent interactive prompt for /${params.match.command.name} (${block.kind})`,
+  )
+  return true
+}
+
+async function buildInteractiveResponseContext(params: {
+  message: ShadowMessage
+  client: ShadowClient
+  runtime: ShadowMonitorOptions['runtime']
+}) {
+  const response = (
+    params.message as {
+      metadata?: {
+        interactiveResponse?: {
+          sourceMessageId?: string
+          blockId?: string
+          actionId?: string
+          value?: string
+          values?: Record<string, string>
+        }
+      }
+    }
+  ).metadata?.interactiveResponse
+  if (!response?.sourceMessageId) return { text: '', fields: {} as Record<string, unknown> }
+
+  let source: ShadowMessage | null = null
+  try {
+    source = await params.client.getMessage(response.sourceMessageId)
+  } catch (err) {
+    params.runtime.error?.(
+      `[interactive] Failed to load source message ${response.sourceMessageId}: ${String(err)}`,
+    )
+  }
+
+  const sourceInteractive = (source as { metadata?: { interactive?: unknown } } | null)?.metadata
+    ?.interactive
+  const sourcePrompt =
+    sourceInteractive && typeof sourceInteractive === 'object' && !Array.isArray(sourceInteractive)
+      ? (sourceInteractive as Record<string, unknown>).prompt
+      : undefined
+  const responsePrompt =
+    sourceInteractive && typeof sourceInteractive === 'object' && !Array.isArray(sourceInteractive)
+      ? (sourceInteractive as Record<string, unknown>).responsePrompt
+      : undefined
+
+  const lines = [
+    'Shadow interactive response received.',
+    `Source message: ${source?.content ?? '(unavailable)'}`,
+    typeof sourcePrompt === 'string' && sourcePrompt.trim()
+      ? `Source prompt: ${sourcePrompt.trim()}`
+      : '',
+    typeof responsePrompt === 'string' && responsePrompt.trim()
+      ? `Follow-up instruction: ${responsePrompt.trim()}`
+      : '',
+    `Action: ${response.actionId ?? '(unknown)'}`,
+    response.values ? `Submitted values:\n${JSON.stringify(response.values, null, 2)}` : '',
+  ].filter(Boolean)
+
+  return {
+    text: lines.join('\n\n'),
+    fields: {
+      InteractiveResponse: response,
+      ...(source ? { InteractiveSourceMessage: source.content } : {}),
+      ...(sourceInteractive ? { InteractiveSourceBlock: sourceInteractive } : {}),
+    } as Record<string, unknown>,
+  }
+}
+
+function getMessageCreatedMs(message: Pick<ShadowMessage, 'createdAt'>): number | null {
+  const createdMs = Date.parse(message.createdAt)
+  return Number.isFinite(createdMs) ? createdMs : null
+}
+
+export function shouldCatchUpShadowMessage(
+  message: Pick<ShadowMessage, 'id' | 'authorId' | 'channelId' | 'createdAt'>,
+  options: {
+    botUserId: string
+    processedMessageIds?: ReadonlySet<string>
+    startedAtMs: number
+    watermarks?: ShadowMessageWatermarks
+    catchupWindowMs?: number
+  },
+): boolean {
+  if (message.authorId === options.botUserId) return false
+  if (options.processedMessageIds?.has(message.id)) return false
+
+  const createdMs = getMessageCreatedMs(message)
+  if (createdMs === null) return false
+
+  const watermark = options.watermarks?.[message.channelId]
+  const watermarkMs = watermark ? Date.parse(watermark.createdAt) : Number.NaN
+  if (Number.isFinite(watermarkMs)) {
+    return createdMs > watermarkMs
+  }
+
+  return (
+    createdMs >= options.startedAtMs - (options.catchupWindowMs ?? RECENT_MESSAGE_CATCHUP_WINDOW_MS)
+  )
 }
 
 // ─── Typing Keepalive ─────────────────────────────────────────────────────
@@ -134,6 +560,7 @@ async function processShadowMessage(params: {
     string,
     { serverId: string; serverSlug: string; serverName: string; channelName: string }
   >
+  slashCommands: ShadowSlashCommand[]
   socket: ShadowSocket
 }): Promise<void> {
   const {
@@ -148,6 +575,7 @@ async function processShadowMessage(params: {
     agentId,
     channelPolicies,
     channelServerMap,
+    slashCommands,
     socket,
   } = params
   const cfg = config as OpenClawConfig
@@ -320,14 +748,6 @@ async function processShadowMessage(params: {
 
   runtime.log?.(`[routing] Resolved agent: ${route.agentId} (account ${accountId})`)
 
-  const body = core.channel.reply.formatAgentEnvelope({
-    channel: 'Shadow',
-    from: senderName,
-    timestamp: new Date(message.createdAt).getTime(),
-    envelope: core.channel.reply.resolveEnvelopeFormatOptions(cfg),
-    body: rawBody,
-  })
-
   // Extract media URLs from attachments and inline markdown
   const attachmentUrls = (message.attachments ?? []).map((a) => a.url).filter(Boolean)
   const markdownMediaRegex = /!?\[[^\]]*\]\(([^)]+)\)/g
@@ -418,19 +838,66 @@ async function processShadowMessage(params: {
     if (!cleanBody) cleanBody = '[Media attached]'
   }
 
+  const interactiveResponseContext = await buildInteractiveResponseContext({
+    message,
+    client: mediaClient,
+    runtime,
+  })
+
+  const slashCommandMatch = matchShadowSlashCommand(cleanBody, slashCommands)
+  if (slashCommandMatch) {
+    runtime.log?.(
+      `[slash] Matched /${slashCommandMatch.invokedName} -> /${slashCommandMatch.command.name}`,
+    )
+  } else if (cleanBody.trim().startsWith('/')) {
+    runtime.log?.(`[slash] Unknown slash command in message ${message.id}; treating as text`)
+  }
+
+  const triggerChain = (message as { metadata?: { agentChain?: AgentChainMetadata } }).metadata
+    ?.agentChain
+
+  if (
+    slashCommandMatch?.command.interaction &&
+    !slashCommandMatch.args.trim() &&
+    !interactiveResponseContext.text
+  ) {
+    await sendSlashCommandInteractivePrompt({
+      match: slashCommandMatch,
+      messageId: message.id,
+      channelId,
+      client: mediaClient,
+      runtime,
+      agentId,
+      botUserId,
+      agentChain: triggerChain,
+    })
+    return
+  }
+
+  const baseBodyForAgent = slashCommandMatch
+    ? formatSlashCommandPrompt(cleanBody, slashCommandMatch)
+    : cleanBody
+  const bodyForAgent = interactiveResponseContext.text
+    ? `${interactiveResponseContext.text}\n\nUser message:\n${baseBodyForAgent}`
+    : baseBodyForAgent
+  const body = core.channel.reply.formatAgentEnvelope({
+    channel: 'Shadow',
+    from: senderName,
+    timestamp: new Date(message.createdAt).getTime(),
+    envelope: core.channel.reply.resolveEnvelopeFormatOptions(cfg),
+    body: bodyForAgent,
+  })
+
   const serverInfo = channelServerMap.get(channelId)
   const escapedBotUsername = botUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const mentionRegex = new RegExp(`@${escapedBotUsername}(?:\\s|$)`, 'i')
   const wasMentioned = mentionRegex.test(message.content)
 
-  const triggerChain = (message as { metadata?: { agentChain?: AgentChainMetadata } }).metadata
-    ?.agentChain
-
   const ctxPayload = core.channel.reply.finalizeInboundContext({
     Body: body,
-    BodyForAgent: cleanBody,
+    BodyForAgent: bodyForAgent,
     RawBody: rawBody,
-    CommandBody: cleanBody,
+    CommandBody: slashCommandMatch?.args ?? cleanBody,
     From: `shadowob:user:${senderId}`,
     To: `shadowob:channel:${channelId}`,
     SessionKey: route.sessionKey,
@@ -458,6 +925,26 @@ async function processShadowMessage(params: {
     BotUsername: botUsername,
     AgentId: route.agentId,
     ChannelId: channelId,
+    ...(slashCommandMatch
+      ? {
+          SlashCommand: `/${slashCommandMatch.command.name}`,
+          SlashCommandName: slashCommandMatch.command.name,
+          SlashCommandInvokedName: slashCommandMatch.invokedName,
+          SlashCommandArgs: slashCommandMatch.args,
+          ...(slashCommandMatch.command.description
+            ? { SlashCommandDescription: slashCommandMatch.command.description }
+            : {}),
+          ...(slashCommandMatch.command.packId
+            ? { SlashCommandPackId: slashCommandMatch.command.packId }
+            : {}),
+          ...(slashCommandMatch.command.sourcePath
+            ? { SlashCommandSourcePath: slashCommandMatch.command.sourcePath }
+            : {}),
+          ...(slashCommandMatch.command.body
+            ? { SlashCommandDefinition: slashCommandMatch.command.body }
+            : {}),
+        }
+      : {}),
     // Buddy identity context — injected from cloud config via account metadata.
     // Allows the AI to know "who it is" (buddy name, description) and "where it is"
     // (server, channel) for self-aware buddy behavior.
@@ -466,6 +953,7 @@ async function processShadowMessage(params: {
     ...(account.buddyDescription ? { BuddyDescription: account.buddyDescription } : {}),
     ...(message.threadId ? { ThreadId: message.threadId } : {}),
     ...(message.replyToId ? { ReplyToId: message.replyToId } : {}),
+    ...interactiveResponseContext.fields,
     ...mediaCtx,
   })
 
@@ -695,6 +1183,7 @@ async function processShadowDmMessage(params: {
   botUserId: string
   botUsername: string
   shadowAgentId: string | null
+  slashCommands: ShadowSlashCommand[]
   socket: ShadowSocket
 }): Promise<void> {
   const {
@@ -707,6 +1196,7 @@ async function processShadowDmMessage(params: {
     botUserId,
     botUsername,
     shadowAgentId,
+    slashCommands,
     socket,
   } = params
   const cfg = config as OpenClawConfig
@@ -753,19 +1243,32 @@ async function processShadowDmMessage(params: {
 
   runtime.log?.(`[routing] DM resolved agent: ${route.agentId} (account ${accountId})`)
 
+  const slashCommandMatch = matchShadowSlashCommand(bodyWithAttachments, slashCommands)
+  if (slashCommandMatch) {
+    runtime.log?.(
+      `[slash] Matched DM /${slashCommandMatch.invokedName} -> /${slashCommandMatch.command.name}`,
+    )
+  } else if (bodyWithAttachments.trim().startsWith('/')) {
+    runtime.log?.(`[slash] Unknown DM slash command in message ${dmMessage.id}; treating as text`)
+  }
+
+  const bodyForAgent = slashCommandMatch
+    ? formatSlashCommandPrompt(bodyWithAttachments, slashCommandMatch)
+    : bodyWithAttachments
+
   const body = core.channel.reply.formatAgentEnvelope({
     channel: 'Shadow DM',
     from: senderName,
     timestamp: new Date(dmMessage.createdAt).getTime(),
     envelope: core.channel.reply.resolveEnvelopeFormatOptions(cfg),
-    body: bodyWithAttachments,
+    body: bodyForAgent,
   })
 
   const ctxPayload = core.channel.reply.finalizeInboundContext({
     Body: body,
-    BodyForAgent: bodyWithAttachments,
+    BodyForAgent: bodyForAgent,
     RawBody: rawBody,
-    CommandBody: rawBody,
+    CommandBody: slashCommandMatch?.args ?? rawBody,
     From: `shadowob:user:${senderId}`,
     To: `shadowob:dm:${dmChannelId}`,
     SessionKey: route.sessionKey,
@@ -785,6 +1288,26 @@ async function processShadowDmMessage(params: {
     BotUsername: botUsername,
     AgentId: route.agentId,
     ChannelId: dmChannelId,
+    ...(slashCommandMatch
+      ? {
+          SlashCommand: `/${slashCommandMatch.command.name}`,
+          SlashCommandName: slashCommandMatch.command.name,
+          SlashCommandInvokedName: slashCommandMatch.invokedName,
+          SlashCommandArgs: slashCommandMatch.args,
+          ...(slashCommandMatch.command.description
+            ? { SlashCommandDescription: slashCommandMatch.command.description }
+            : {}),
+          ...(slashCommandMatch.command.packId
+            ? { SlashCommandPackId: slashCommandMatch.command.packId }
+            : {}),
+          ...(slashCommandMatch.command.sourcePath
+            ? { SlashCommandSourcePath: slashCommandMatch.command.sourcePath }
+            : {}),
+          ...(slashCommandMatch.command.body
+            ? { SlashCommandDefinition: slashCommandMatch.command.body }
+            : {}),
+        }
+      : {}),
   })
 
   const storePath = core.channel.session.resolveStorePath(resolveSessionStore(cfg), {
@@ -916,6 +1439,10 @@ async function getSessionCachePath(accountId: string): Promise<string> {
   return nodePath.join(dataDir, 'shadow', `session-cache-${accountId}.json`)
 }
 
+function safeCacheKey(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]/g, '_')
+}
+
 async function saveSessionCache(
   accountId: string,
   data: { remoteConfig: ShadowRemoteConfig; botUserId: string; botUsername: string },
@@ -941,15 +1468,104 @@ async function loadSessionCache(
   }
 }
 
+async function getMessageWatermarksPath(accountId: string): Promise<string> {
+  const dataDir = await getDataDir()
+  return nodePath.join(dataDir, 'shadow', `message-watermarks-${safeCacheKey(accountId)}.json`)
+}
+
+async function loadMessageWatermarks(accountId: string): Promise<ShadowMessageWatermarks> {
+  try {
+    const raw = await fsPromises.readFile(await getMessageWatermarksPath(accountId), 'utf-8')
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+
+    const watermarks: ShadowMessageWatermarks = {}
+    for (const [channelId, value] of Object.entries(parsed)) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) continue
+      const record = value as Record<string, unknown>
+      if (typeof record.createdAt !== 'string' || !Number.isFinite(Date.parse(record.createdAt))) {
+        continue
+      }
+      watermarks[channelId] = {
+        createdAt: record.createdAt,
+        ...(typeof record.messageId === 'string' ? { messageId: record.messageId } : {}),
+      }
+    }
+    return watermarks
+  } catch {
+    return {}
+  }
+}
+
+async function saveMessageWatermarks(
+  accountId: string,
+  watermarks: ShadowMessageWatermarks,
+): Promise<void> {
+  try {
+    const cachePath = await getMessageWatermarksPath(accountId)
+    await fsPromises.mkdir(nodePath.dirname(cachePath), { recursive: true })
+    await fsPromises.writeFile(cachePath, JSON.stringify(watermarks), 'utf-8')
+  } catch {
+    /* non-critical */
+  }
+}
+
+function updateMessageWatermark(
+  watermarks: ShadowMessageWatermarks,
+  message: Pick<ShadowMessage, 'id' | 'channelId' | 'createdAt'>,
+): boolean {
+  const createdMs = getMessageCreatedMs(message)
+  if (createdMs === null) return false
+
+  const current = watermarks[message.channelId]
+  const currentMs = current ? Date.parse(current.createdAt) : Number.NaN
+  if (Number.isFinite(currentMs) && createdMs < currentMs) return false
+  if (current?.messageId === message.id && current.createdAt === message.createdAt) return false
+
+  watermarks[message.channelId] = { createdAt: message.createdAt, messageId: message.id }
+  return true
+}
+
+async function appendMonitorLog(accountId: string, level: 'info' | 'error', message: string) {
+  try {
+    const dataDir = await getDataDir()
+    const logDir = nodePath.join(dataDir, 'shadow')
+    await fsPromises.mkdir(logDir, { recursive: true })
+    const line = JSON.stringify({
+      ts: new Date().toISOString(),
+      level,
+      message,
+    })
+    await fsPromises.appendFile(
+      nodePath.join(logDir, `monitor-${safeCacheKey(accountId)}.log`),
+      `${line}\n`,
+      'utf-8',
+    )
+  } catch {
+    /* non-critical */
+  }
+}
+
 // ─── Main Monitor ─────────────────────────────────────────────────────────
 
 export async function monitorShadowProvider(
   options: ShadowMonitorOptions,
 ): Promise<ShadowMonitorResult> {
-  const { account, accountId, config, runtime, abortSignal } = options
+  const { account, accountId, config, abortSignal } = options
+  const runtime = {
+    log: (msg: string) => {
+      options.runtime.log?.(msg)
+      void appendMonitorLog(accountId, 'info', msg)
+    },
+    error: (msg: string) => {
+      options.runtime.error?.(msg)
+      void appendMonitorLog(accountId, 'error', msg)
+    },
+  }
 
   const core = getShadowRuntime()
   let stopped = false
+  const monitorStartedAtMs = Date.now()
 
   const client = new ShadowClient(account.serverUrl, account.token)
   const me = await client.getMe()
@@ -957,13 +1573,23 @@ export async function monitorShadowProvider(
 
   runtime.log?.(`Shadow bot connected as ${me.username} (${botUserId})`)
 
-  const agentId = account.agentId ?? me.agentId ?? null
+  const agentId = account.agentId ?? me.agentId ?? resolveShadowAgentIdFromConfig(config, accountId)
   if (!agentId) {
     runtime.error?.(
       '[config] Cannot resolve agentId — heartbeat and remote config will be unavailable',
     )
   } else {
     runtime.log?.(`[config] Resolved agentId: ${agentId}`)
+  }
+
+  const slashCommands = await loadLocalSlashCommands(runtime)
+  if (agentId) {
+    try {
+      await registerAgentSlashCommands({ account, agentId, commands: slashCommands })
+      runtime.log?.(`[slash] Registered ${slashCommands.length} slash command(s) with Shadow`)
+    } catch (err) {
+      runtime.error?.(`[slash] Failed to register slash commands: ${String(err)}`)
+    }
   }
 
   let remoteConfig: ShadowRemoteConfig | null = null
@@ -973,6 +1599,17 @@ export async function monitorShadowProvider(
     { serverId: string; serverSlug: string; serverName: string; channelName: string }
   >()
   const allChannelIds: string[] = []
+  const messageWatermarks = await loadMessageWatermarks(accountId)
+  const processedMessageIds = new Set<string>()
+  const catchupInFlight = new Map<string, Promise<void>>()
+
+  const rememberProcessedMessage = (messageId: string) => {
+    processedMessageIds.add(messageId)
+    if (processedMessageIds.size > MAX_TRACKED_MESSAGE_IDS) {
+      const first = processedMessageIds.values().next().value
+      if (first) processedMessageIds.delete(first)
+    }
+  }
 
   if (agentId) {
     try {
@@ -1054,6 +1691,86 @@ export async function monitorShadowProvider(
     transports: ['websocket', 'polling'],
   })
 
+  const processChannelMessageWithRetry = async (
+    message: ShadowMessage,
+    source: 'ws' | 'catchup',
+    attempt = 0,
+  ): Promise<void> => {
+    try {
+      await processShadowMessage({
+        message,
+        account,
+        accountId,
+        config,
+        runtime,
+        core,
+        botUserId,
+        botUsername: me.username,
+        agentId,
+        channelPolicies,
+        channelServerMap,
+        slashCommands,
+        socket,
+      })
+      if (updateMessageWatermark(messageWatermarks, message)) {
+        void saveMessageWatermarks(accountId, messageWatermarks)
+      }
+    } catch (err) {
+      const MAX_RETRIES = 2
+      runtime.error?.(
+        `[${source}] Message processing failed (attempt ${attempt + 1}): ${String(err)}`,
+      )
+      if (attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
+        return processChannelMessageWithRetry(message, source, attempt + 1)
+      }
+      runtime.error?.(
+        `[${source}] Message permanently failed after ${MAX_RETRIES + 1} attempts: ${message.id}`,
+      )
+    }
+  }
+
+  const catchUpChannel = async (channelId: string, reason: string) => {
+    try {
+      const result = await client.getMessages(channelId, 50)
+      if (!messageWatermarks[channelId]) {
+        const latestBotMessage = [...result.messages]
+          .reverse()
+          .find((message) => message.authorId === botUserId)
+        if (latestBotMessage && updateMessageWatermark(messageWatermarks, latestBotMessage)) {
+          void saveMessageWatermarks(accountId, messageWatermarks)
+        }
+      }
+      const candidates = result.messages.filter((message) =>
+        shouldCatchUpShadowMessage(message, {
+          botUserId,
+          processedMessageIds,
+          startedAtMs: monitorStartedAtMs,
+          watermarks: messageWatermarks,
+        }),
+      )
+      if (candidates.length > 0) {
+        runtime.log?.(
+          `[catchup] Replaying ${candidates.length} missed message(s) in channel ${channelId} (${reason})`,
+        )
+      }
+      for (const message of candidates) {
+        rememberProcessedMessage(message.id)
+        await processChannelMessageWithRetry(message, 'catchup')
+      }
+    } catch (err) {
+      runtime.error?.(`[catchup] Failed for channel ${channelId}: ${String(err)}`)
+    }
+  }
+
+  const enqueueChannelCatchup = (channelId: string, reason: string) => {
+    if (catchupInFlight.has(channelId)) return
+    const task = catchUpChannel(channelId, reason).finally(() => {
+      catchupInFlight.delete(channelId)
+    })
+    catchupInFlight.set(channelId, task)
+  }
+
   socket.onConnect(() => {
     runtime.log?.(`[ws] Connected (sid=${socket.raw.id})`)
     if (allChannelIds.length === 0) {
@@ -1064,6 +1781,7 @@ export async function monitorShadowProvider(
       socket.joinChannel(chId).then((ack) => {
         if (ack?.ok) runtime.log?.(`[ws] ✓ Joined channel room ${chId} (server confirmed)`)
         else runtime.log?.(`[ws] channel:join for ${chId} — no ack received (older server?)`)
+        enqueueChannelCatchup(chId, 'connect')
       })
     }
     runtime.log?.(
@@ -1191,6 +1909,7 @@ export async function monitorShadowProvider(
     }
     socket.joinChannel(data.channelId).then((ack) => {
       if (ack?.ok) runtime.log?.(`[ws] ✓ Joined channel room ${data.channelId} after member-added`)
+      enqueueChannelCatchup(data.channelId, 'member-added')
     })
   })
 
@@ -1265,6 +1984,7 @@ export async function monitorShadowProvider(
             botUserId,
             botUsername: me.username,
             shadowAgentId: agentId,
+            slashCommands,
             socket,
           })
         } catch (err) {
@@ -1289,6 +2009,12 @@ export async function monitorShadowProvider(
       `[ws] ← message:new from ${senderLabel} in channel ${message.channelId}: "${message.content?.slice(0, 60)}" (${message.id})`,
     )
 
+    if (processedMessageIds.has(message.id)) {
+      runtime.log?.(`[ws] Skipping duplicate message:new ${message.id}`)
+      return
+    }
+    rememberProcessedMessage(message.id)
+
     if (stopped) {
       runtime.log?.('[ws] Monitor stopped, ignoring message')
       return
@@ -1299,35 +2025,7 @@ export async function monitorShadowProvider(
       return
     }
 
-    const processWithRetry = async (attempt = 0) => {
-      try {
-        await processShadowMessage({
-          message,
-          account,
-          accountId,
-          config,
-          runtime,
-          core,
-          botUserId,
-          botUsername: me.username,
-          agentId,
-          channelPolicies,
-          channelServerMap,
-          socket,
-        })
-      } catch (err) {
-        const MAX_RETRIES = 2
-        runtime.error?.(`[ws] Message processing failed (attempt ${attempt + 1}): ${String(err)}`)
-        if (attempt < MAX_RETRIES) {
-          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
-          return processWithRetry(attempt + 1)
-        }
-        runtime.error?.(
-          `[ws] Message permanently failed after ${MAX_RETRIES + 1} attempts: ${message.id}`,
-        )
-      }
-    }
-    void processWithRetry()
+    void processChannelMessageWithRetry(message, 'ws')
   })
 
   socket.connect()

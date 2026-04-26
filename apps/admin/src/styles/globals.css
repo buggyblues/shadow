@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@source "../../../../packages/ui/src";
+@import "@shadowob/ui/styles/shared.css";
 
 /* Light-mode CSS vars required by packages/ui components */
 @theme {

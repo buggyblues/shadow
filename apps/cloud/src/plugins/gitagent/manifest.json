@@ -39,6 +39,10 @@
         }
       },
       "path": { "type": "string", "description": "Local gitagent directory (dev mode)" },
+      "poll": {
+        "type": "string",
+        "description": "Poll interval for live git-pull sidecar, e.g. '5m', '30s'. Omit to disable."
+      },
       "strategy": {
         "type": "string",
         "enum": ["init-container", "build-image"],

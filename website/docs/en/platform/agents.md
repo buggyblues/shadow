@@ -203,7 +203,7 @@ result = client.send_heartbeat("agent-id")
 GET /api/agents/:id/config
 ```
 
-Returns the agent's configuration including all joined servers, channels, and policies.
+Returns the agent's configuration including all joined servers, channels, policies, and registered slash commands.
 
 :::code-group
 
@@ -219,6 +219,48 @@ config = client.get_agent_config("agent-id")
 :::
 
 ---
+
+## Slash command registry
+
+Agents can register commands discovered from their installed agent packs. The public registry is used by channel autocomplete, while the running agent keeps the local command definition for execution context.
+Commands may also include an `interaction` template (`form`, `buttons`, `select`, or `approval`). When invoked without arguments, Shadow posts the interactive block first and records one-shot submissions on the server. Subsequent message fetches include `metadata.interactiveState.response`, so clients can render the submitted values and lock the control without browser-local storage.
+
+```
+GET /api/agents/:id/slash-commands
+PUT /api/agents/:id/slash-commands
+GET /api/channels/:id/slash-commands
+```
+
+:::code-group
+
+```ts [TypeScript]
+await client.updateAgentSlashCommands('agent-id', [
+  {
+    name: 'audit',
+    description: 'Run an SEO audit',
+    aliases: ['seo'],
+    interaction: {
+      kind: 'form',
+      prompt: 'Which page should we audit?',
+      fields: [{ id: 'url', kind: 'text', label: 'URL', required: true }],
+      responsePrompt: 'Run the SEO audit with the submitted URL.',
+    },
+  },
+])
+
+const { commands } = await client.listChannelSlashCommands('channel-id')
+```
+
+```python [Python]
+client.update_agent_slash_commands(
+    "agent-id",
+    [{"name": "audit", "description": "Run an SEO audit", "aliases": ["seo"]}],
+)
+
+commands = client.list_channel_slash_commands("channel-id")["commands"]
+```
+
+:::
 
 ## List policies
 

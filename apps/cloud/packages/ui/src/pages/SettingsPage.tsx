@@ -1,4 +1,4 @@
-import { Button, Input, Modal, ModalBody, ModalContent, ModalHeader } from '@shadowob/ui'
+import { Button, GlassCard, Input, Modal, ModalBody, ModalContent, ModalHeader } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Check,
@@ -102,7 +102,7 @@ function AppearanceTab() {
 
   return (
     <div className="space-y-5">
-      <div className="glass-card p-6 space-y-4">
+      <GlassCard className="p-6 space-y-4">
         <div>
           <h2 className="text-sm font-bold text-text-primary">{t('settings.themeSection')}</h2>
           <p className="mt-1 text-sm text-text-muted">{t('settings.themeSectionDescription')}</p>
@@ -119,9 +119,9 @@ function AppearanceTab() {
             />
           ))}
         </div>
-      </div>
+      </GlassCard>
 
-      <div className="glass-card p-6 space-y-4">
+      <GlassCard className="p-6 space-y-4">
         <div>
           <h2 className="text-sm font-bold text-text-primary">{t('settings.languageSection')}</h2>
           <p className="mt-1 text-sm text-text-muted">{t('settings.languageSectionDescription')}</p>
@@ -138,7 +138,7 @@ function AppearanceTab() {
             />
           ))}
         </div>
-      </div>
+      </GlassCard>
     </div>
   )
 }
@@ -160,7 +160,7 @@ function SystemTab() {
 
   return (
     <div className="space-y-5">
-      <div className="glass-card divide-y divide-border-subtle">
+      <GlassCard className="divide-y divide-border-subtle">
         <div className="flex items-center justify-between gap-3 px-5 py-4">
           <span className="text-xs font-semibold text-text-muted">{t('settings.apiStatus')}</span>
           <span className={cn('text-sm font-semibold', health ? 'text-green-400' : 'text-red-400')}>
@@ -189,9 +189,9 @@ function SystemTab() {
           <span className="text-xs font-semibold text-text-muted">{t('settings.apiEndpoint')}</span>
           <span className="text-sm font-mono text-text-primary">{window.location.origin}/api</span>
         </div>
-      </div>
+      </GlassCard>
 
-      <div className="glass-card p-5">
+      <GlassCard className="p-5">
         <h3 className="mb-4 text-sm font-bold text-text-primary">{t('settings.environment')}</h3>
         <div className="space-y-2 text-xs">
           <div className="flex justify-between">
@@ -211,7 +211,7 @@ function SystemTab() {
             </span>
           </div>
         </div>
-      </div>
+      </GlassCard>
     </div>
   )
 }
@@ -223,7 +223,7 @@ function AboutTab() {
 
   return (
     <div className="space-y-5">
-      <div className="glass-card p-6">
+      <GlassCard className="p-6">
         <div className="mb-4 flex items-center gap-3">
           <div
             className="flex h-12 w-12 items-center justify-center rounded-full"
@@ -243,9 +243,9 @@ function AboutTab() {
           </div>
         </div>
         <p className="text-sm leading-7 text-text-secondary">{t('settings.aboutDescription')}</p>
-      </div>
+      </GlassCard>
 
-      <div className="glass-card divide-y divide-border-subtle">
+      <GlassCard className="divide-y divide-border-subtle">
         <div className="flex items-center justify-between gap-3 px-5 py-4">
           <span className="text-xs font-semibold text-text-muted">{t('settings.platform')}</span>
           <span className="text-sm text-text-primary">{t('nav.shadowCloud')}</span>
@@ -258,9 +258,9 @@ function AboutTab() {
           <span className="text-xs font-semibold text-text-muted">{t('settings.license')}</span>
           <span className="text-sm text-text-secondary">MIT</span>
         </div>
-      </div>
+      </GlassCard>
 
-      <div className="glass-card p-5">
+      <GlassCard className="p-5">
         <h3 className="mb-4 text-sm font-bold text-text-primary">{t('settings.quickLinks')}</h3>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="secondary" size="sm">
@@ -274,7 +274,7 @@ function AboutTab() {
             </a>
           </Button>
         </div>
-      </div>
+      </GlassCard>
     </div>
   )
 }
@@ -341,15 +341,15 @@ function CommunityTab() {
   return (
     <div className="space-y-5">
       {/* Connection status */}
-      <div className="glass-card p-5">
+      <GlassCard className="p-5">
         <div className="mb-4 flex items-center gap-3">
           <div
             className="flex h-10 w-10 items-center justify-center rounded-full"
             style={{
-              background: isConnected ? 'rgba(0, 243, 255, 0.12)' : 'rgba(255, 255, 255, 0.06)',
+              background: isConnected ? 'rgba(0, 243, 255, 0.12)' : 'var(--nf-bg-raised)',
               border: isConnected
                 ? '1px solid rgba(0, 243, 255, 0.24)'
-                : '1px solid rgba(255,255,255,0.1)',
+                : '1px solid var(--glass-line-strong)',
             }}
           >
             {isConnected ? (
@@ -368,10 +368,10 @@ function CommunityTab() {
         <p className="text-sm leading-6 text-text-secondary">
           {t('settings.communityDescription')}
         </p>
-      </div>
+      </GlassCard>
 
       {/* Server URL */}
-      <div className="glass-card space-y-4 p-5">
+      <GlassCard className="space-y-4 p-5">
         <h3 className="text-sm font-bold text-text-primary">{t('settings.communityServer')}</h3>
         <div className="space-y-2">
           <label className="text-xs font-semibold text-text-muted">
@@ -402,6 +402,10 @@ function CommunityTab() {
             onChange={(e) => setToken(e.target.value)}
             placeholder={data?.hasToken ? '••••••••' : t('settings.communityTokenPlaceholder')}
             className="font-mono text-sm"
+            autoComplete="off"
+            data-1p-ignore
+            data-lpignore="true"
+            data-form-type="other"
           />
           <p className="text-xs text-text-muted">{t('settings.communityTokenHint')}</p>
         </div>
@@ -417,20 +421,20 @@ function CommunityTab() {
             {saveMutation.isPending ? t('common.saving') : t('common.save')}
           </Button>
         </div>
-      </div>
+      </GlassCard>
 
       {/* OAuth */}
-      <div className="glass-card p-5">
+      <GlassCard className="p-5">
         <h3 className="mb-2 text-sm font-bold text-text-primary">{t('settings.communityOAuth')}</h3>
         <p className="mb-4 text-xs text-text-secondary">{t('settings.communityOAuthHint')}</p>
         <Button variant="secondary" size="sm" onClick={handleOAuth}>
           <ExternalLink size={14} className="mr-1.5" />
           {t('settings.connectViaOAuth')}
         </Button>
-      </div>
+      </GlassCard>
 
       {/* Quick link to community */}
-      <div className="glass-card p-5">
+      <GlassCard className="p-5">
         <h3 className="mb-2 text-sm font-bold text-text-primary">
           {t('settings.communityBrowse')}
         </h3>
@@ -441,7 +445,7 @@ function CommunityTab() {
             {t('settings.openCommunity')}
           </a>
         </Button>
-      </div>
+      </GlassCard>
     </div>
   )
 }

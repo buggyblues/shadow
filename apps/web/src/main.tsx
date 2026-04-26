@@ -18,6 +18,7 @@ import { BuddyManagementPage } from './pages/buddy-management'
 import { ChannelView } from './pages/channel-view'
 import { ContractDetailPage } from './pages/contract-detail'
 import { CreateListingPage } from './pages/create-listing'
+import { DevelopersCloudPage } from './pages/developers-cloud'
 import { DiscoverPage } from './pages/discover'
 import { DmChatPage } from './pages/dm-chat'
 import { InvitePage } from './pages/invite'
@@ -284,6 +285,22 @@ const cloudRoute = createRoute({
   ),
 })
 
+const cloudSplatRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/cloud/$',
+  component: () => (
+    <Suspense fallback={null}>
+      <CloudSaasApp />
+    </Suspense>
+  ),
+})
+
+const developersCloudRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/developers/cloud',
+  component: DevelopersCloudPage,
+})
+
 // Router
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -315,6 +332,8 @@ const routeTree = rootRoute.addChildren([
     buddyDashboardRoute,
     dmChatRoute,
     cloudRoute,
+    cloudSplatRoute,
+    developersCloudRoute,
   ]),
 ])
 

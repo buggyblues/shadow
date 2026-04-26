@@ -1,10 +1,25 @@
 import { io, type Socket } from 'socket.io-client'
 
 let socket: Socket | null = null
+const joinedChannels = new Set<string>()
+const joinedDmChannels = new Set<string>()
+const joinedApps = new Set<string>()
+
+function rejoinRooms(s: Socket): void {
+  for (const channelId of joinedChannels) {
+    s.emit('channel:join', { channelId })
+  }
+  for (const dmChannelId of joinedDmChannels) {
+    s.emit('dm:join', { dmChannelId })
+  }
+  for (const appId of joinedApps) {
+    s.emit('app:join', { appId })
+  }
+}
 
 export function getSocket(): Socket {
   if (!socket) {
-    socket = io(window.location.origin, {
+    const nextSocket = io(window.location.origin, {
       auth: (cb) => {
         cb({ token: localStorage.getItem('accessToken') })
       },
@@ -15,6 +30,8 @@ export function getSocket(): Socket {
       reconnectionDelay: 1000,
       reconnectionDelayMax: 10000,
     })
+    nextSocket.on('connect', () => rejoinRooms(nextSocket))
+    socket = nextSocket
   }
   return socket
 }
@@ -37,6 +54,9 @@ export function disconnectSocket(): void {
     socket.disconnect()
     socket = null
   }
+  joinedChannels.clear()
+  joinedDmChannels.clear()
+  joinedApps.clear()
 }
 
 function handleBeforeUnload() {
@@ -73,11 +93,19 @@ function handleVisibilityChange() {
 }
 
 export function joinChannel(channelId: string): void {
-  getSocket().emit('channel:join', { channelId })
+  joinedChannels.add(channelId)
+  const s = getSocket()
+  if (s.connected) {
+    s.emit('channel:join', { channelId })
+  }
 }
 
 export function leaveChannel(channelId: string): void {
-  getSocket().emit('channel:leave', { channelId })
+  joinedChannels.delete(channelId)
+  const s = getSocket()
+  if (s.connected) {
+    s.emit('channel:leave', { channelId })
+  }
 }
 
 export function sendWsMessage(data: {
@@ -101,11 +129,21 @@ export function joinApp(
   appId: string,
   ack?: (res: { ok: boolean; channelId?: string }) => void,
 ): void {
-  getSocket().emit('app:join', { appId }, ack)
+  joinedApps.add(appId)
+  const s = getSocket()
+  if (s.connected) {
+    s.emit('app:join', { appId }, ack)
+  } else if (ack) {
+    s.once('connect', () => s.emit('app:join', { appId }, ack))
+  }
 }
 
 export function leaveApp(appId: string): void {
-  getSocket().emit('app:leave', { appId })
+  joinedApps.delete(appId)
+  const s = getSocket()
+  if (s.connected) {
+    s.emit('app:leave', { appId })
+  }
 }
 
 export function broadcastAppState(appId: string, type: string, payload: unknown): void {
@@ -114,11 +152,19 @@ export function broadcastAppState(appId: string, type: string, payload: unknown)
 
 // DM helpers
 export function joinDm(dmChannelId: string): void {
-  getSocket().emit('dm:join', { dmChannelId })
+  joinedDmChannels.add(dmChannelId)
+  const s = getSocket()
+  if (s.connected) {
+    s.emit('dm:join', { dmChannelId })
+  }
 }
 
 export function leaveDm(dmChannelId: string): void {
-  getSocket().emit('dm:leave', { dmChannelId })
+  joinedDmChannels.delete(dmChannelId)
+  const s = getSocket()
+  if (s.connected) {
+    s.emit('dm:leave', { dmChannelId })
+  }
 }
 
 export function sendDmMessage(data: {

@@ -10,10 +10,11 @@ export interface NetworkingOptions {
   namespace: string | pulumi.Input<string>
   port: number
   provider: k8s.Provider
+  resourceOptions?: pulumi.CustomResourceOptions
 }
 
 export function createNetworking(options: NetworkingOptions) {
-  const { agentName, namespace, port, provider } = options
+  const { agentName, namespace, port, provider, resourceOptions } = options
 
   const service = new k8s.core.v1.Service(
     `${agentName}-svc`,
@@ -42,7 +43,7 @@ export function createNetworking(options: NetworkingOptions) {
         type: 'ClusterIP',
       },
     },
-    { provider },
+    { provider, ...resourceOptions },
   )
 
   return { service }

@@ -370,7 +370,7 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
     try {
       const body = await c.req.json<{ namespace?: string; stack?: string }>()
       const ns = body.namespace ?? ctx.namespaces[0] ?? 'shadowob-cloud'
-      await ctx.container.deploy.destroy({ namespace: ns, stack: body.stack })
+      await ctx.container.deploymentRuntime.destroy({ namespace: ns, stack: body.stack })
       return c.json({ ok: true, namespace: ns })
     } catch (err) {
       return c.json({ error: (err as Error).message }, 500)
@@ -452,8 +452,8 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
         dryRun?: boolean
       }>()
 
-      const shadowUrl = body.shadowUrl ?? process.env.SHADOW_SERVER_URL
-      const shadowToken = body.shadowToken ?? process.env.SHADOW_USER_TOKEN
+      const shadowUrl = body.shadowUrl
+      const shadowToken = body.shadowToken
 
       if (!shadowUrl || !shadowToken) {
         return c.json({ error: 'shadowUrl and shadowToken are required' }, 400)

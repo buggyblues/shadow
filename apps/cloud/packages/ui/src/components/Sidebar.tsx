@@ -1,4 +1,6 @@
 import {
+  GlassPanel,
+  ServerAvatar,
   SidebarContent,
   SidebarHeader,
   SidebarItem,
@@ -10,6 +12,7 @@ import {
   BarChart3,
   Coins,
   Copy,
+  KeyRound,
   Layers,
   type LucideIcon,
   Settings,
@@ -49,6 +52,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { to: '/monitoring', labelKey: 'nav.monitoring', icon: BarChart3 },
       { to: '/deployments', labelKey: 'nav.deployments', icon: Layers },
+      { to: '/providers', labelKey: 'nav.providers', icon: KeyRound },
       { to: '/secrets', labelKey: 'nav.secrets', icon: ShieldCheck },
       { to: '/wallet', labelKey: 'nav.wallet', icon: Coins },
     ],
@@ -98,14 +102,16 @@ export function Sidebar() {
 
   return (
     <aside className="relative z-20 w-[248px] shrink-0 flex flex-col">
-      <div className="flex flex-col h-full px-2.5 py-3">
-        <UISidebar className="glass-panel h-full w-full border-0 bg-transparent">
+      <div className="flex h-full flex-col px-2.5 py-0">
+        <GlassPanel as={UISidebar} className="h-full w-full border-0 bg-transparent">
           <SidebarHeader className="border-b-0 bg-transparent p-3">
             <div className="flex items-center justify-between gap-2">
               <Link to="/" className="flex min-w-0 items-center gap-3 rounded-[20px]">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] overflow-hidden border border-white/20 shadow-[0_14px_28px_rgba(0,198,209,0.18),inset_0_1px_0_rgba(255,255,255,0.4)]">
-                  <img src="/logo.png" alt="Shadow Cloud" className="h-full w-full object-cover" />
-                </div>
+                <ServerAvatar
+                  iconUrl="/logo.png"
+                  name={t('nav.shadowCloud')}
+                  className="h-12 w-12 rounded-[18px] [&>span]:rounded-[18px] [&_[data-slot='avatar']]:rounded-[18px]"
+                />
 
                 <div className="min-w-0">
                   <p className="truncate text-sm font-black text-text-primary">
@@ -133,7 +139,7 @@ export function Sidebar() {
               <SidebarSection key={section.id} section={section} />
             ))}
           </SidebarContent>
-        </UISidebar>
+        </GlassPanel>
       </div>
       <SettingsModal open={settingsOpen} onClose={closeSettings} initialTab={settingsTab} />
     </aside>

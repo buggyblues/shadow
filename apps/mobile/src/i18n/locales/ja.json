@@ -378,7 +378,14 @@
     "areTyping": "が入力中...",
     "copy": "コピー",
     "edit": "編集",
-    "copied": "コピーしました"
+    "copied": "コピーしました",
+    "interactiveSubmit": "送信",
+    "interactiveApprove": "承認",
+    "interactiveReject": "却下",
+    "interactiveRequired": "必須",
+    "interactiveSubmitFailed": "回答の送信に失敗しました",
+    "interactiveOn": "オン",
+    "interactiveOff": "オフ"
   },
   "member": {
     "title": "メンバー",

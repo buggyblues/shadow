@@ -203,7 +203,7 @@ result = client.send_heartbeat("agent-id")
 GET /api/agents/:id/config
 ```
 
-返回代理的配置，包括所有加入的服务器、频道和策略。
+返回代理的配置，包括所有加入的服务器、频道、策略和已注册的斜杠命令。
 
 :::code-group
 
@@ -218,6 +218,48 @@ config = client.get_agent_config("agent-id")
 :::
 
 ---
+
+## 斜杠命令注册表
+
+代理可以注册从已安装 agent pack 中发现的命令。公开注册表用于频道输入框自动补全，运行中的代理仍在本地保留命令定义，用于执行时上下文注入。
+命令也可以携带 `interaction` 模板（`form`、`buttons`、`select` 或 `approval`）。用户无参数触发命令时，Shadow 会先发送交互组件，并在服务端记录 one-shot 提交结果。之后拉取消息时，源消息会带上 `metadata.interactiveState.response`，客户端据此展示已填写内容并锁定控件，不依赖浏览器本地存储。
+
+```
+GET /api/agents/:id/slash-commands
+PUT /api/agents/:id/slash-commands
+GET /api/channels/:id/slash-commands
+```
+
+:::code-group
+
+```ts [TypeScript]
+await client.updateAgentSlashCommands('agent-id', [
+  {
+    name: 'audit',
+    description: '执行 SEO 审计',
+    aliases: ['seo'],
+    interaction: {
+      kind: 'form',
+      prompt: '要审计哪个页面？',
+      fields: [{ id: 'url', kind: 'text', label: 'URL', required: true }],
+      responsePrompt: '使用提交的 URL 执行 SEO 审计。',
+    },
+  },
+])
+
+const { commands } = await client.listChannelSlashCommands('channel-id')
+```
+
+```python [Python]
+client.update_agent_slash_commands(
+    "agent-id",
+    [{"name": "audit", "description": "执行 SEO 审计", "aliases": ["seo"]}],
+)
+
+commands = client.list_channel_slash_commands("channel-id")["commands"]
+```
+
+:::
 
 ## 列出策略
 

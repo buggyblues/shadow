@@ -8,7 +8,13 @@
  * 4. Target normalization
  * 5. Monitor/gateway inbound flow
  */
+
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // ── Config resolution ──────────────────────────────────────────
 
@@ -165,9 +171,183 @@ describe('Setup Entry Point', () => {
   })
 })
 
+// ── Slash commands ─────────────────────────────────────────────
+
+describe('Slash Commands', () => {
+  it('should resolve agent id from Shadow channel bindings', async () => {
+    const { resolveShadowAgentIdFromConfig } = await import('../src/monitor.js')
+
+    expect(
+      resolveShadowAgentIdFromConfig(
+        {
+          agents: { list: [{ id: 'default-agent', default: true }] },
+          bindings: [
+            {
+              agentId: 'seo-buddy',
+              match: { channel: 'shadowob', accountId: 'seo-bot' },
+            },
+          ],
+        },
+        'seo-bot',
+      ),
+    ).toBe('seo-buddy')
+    expect(
+      resolveShadowAgentIdFromConfig({ agents: { list: [{ id: 'fallback-agent' }] } }, 'missing'),
+    ).toBe('fallback-agent')
+  })
+
+  it('should normalize and match commands with aliases', async () => {
+    const { matchShadowSlashCommand, normalizeShadowSlashCommands } = await import(
+      '../src/monitor.js'
+    )
+
+    const commands = normalizeShadowSlashCommands([
+      {
+        name: '/audit',
+        description: 'Audit a page',
+        aliases: ['/a', 'bad alias!'],
+        interaction: {
+          kind: 'form',
+          prompt: 'Fill this in',
+          fields: [{ id: 'url', label: 'URL', kind: 'text', required: true }],
+          responsePrompt: 'Run the audit with the submitted fields.',
+        },
+        body: '# Audit\nRun the SEO audit.',
+      },
+      { name: 'audit' },
+      { name: '1bad' },
+    ])
+
+    expect(commands).toEqual([
+      {
+        name: 'audit',
+        description: 'Audit a page',
+        aliases: ['a'],
+        interaction: {
+          kind: 'form',
+          prompt: 'Fill this in',
+          fields: [{ id: 'url', label: 'URL', kind: 'text', required: true }],
+          responsePrompt: 'Run the audit with the submitted fields.',
+        },
+        body: '# Audit\nRun the SEO audit.',
+      },
+    ])
+    expect(matchShadowSlashCommand('/a https://example.com', commands)).toEqual({
+      command: commands[0],
+      invokedName: 'a',
+      args: 'https://example.com',
+    })
+    expect(matchShadowSlashCommand('/unknown hi', commands)).toBeNull()
+  })
+
+  it('should format slash command prompts with definition and args', async () => {
+    const { formatSlashCommandPrompt } = await import('../src/monitor.js')
+    const prompt = formatSlashCommandPrompt('/audit /pricing', {
+      command: {
+        name: 'audit',
+        description: 'Audit a page',
+        packId: 'seomachine',
+        sourcePath: '/agent-packs/seomachine/commands/audit/SKILL.md',
+        body: '# Audit\nRun the SEO audit.',
+      },
+      invokedName: 'audit',
+      args: '/pricing',
+    })
+
+    expect(prompt).toContain('Slash command /audit was invoked.')
+    expect(prompt).toContain('Arguments:\n/pricing')
+    expect(prompt).toContain('Command definition:\n# Audit')
+  })
+
+  it('should catch up missed user messages without replaying processed or old messages', async () => {
+    const { shouldCatchUpShadowMessage } = await import('../src/monitor.js')
+    const startedAtMs = Date.parse('2026-04-26T04:10:00.000Z')
+
+    expect(
+      shouldCatchUpShadowMessage(
+        {
+          id: 'missed',
+          authorId: 'user-1',
+          channelId: 'channel-1',
+          createdAt: '2026-04-26T04:08:00.000Z',
+        },
+        { botUserId: 'bot-1', startedAtMs },
+      ),
+    ).toBe(true)
+
+    expect(
+      shouldCatchUpShadowMessage(
+        {
+          id: 'own',
+          authorId: 'bot-1',
+          channelId: 'channel-1',
+          createdAt: '2026-04-26T04:08:00.000Z',
+        },
+        { botUserId: 'bot-1', startedAtMs },
+      ),
+    ).toBe(false)
+
+    expect(
+      shouldCatchUpShadowMessage(
+        {
+          id: 'processed',
+          authorId: 'user-1',
+          channelId: 'channel-1',
+          createdAt: '2026-04-26T04:08:00.000Z',
+        },
+        {
+          botUserId: 'bot-1',
+          startedAtMs,
+          processedMessageIds: new Set(['processed']),
+        },
+      ),
+    ).toBe(false)
+
+    expect(
+      shouldCatchUpShadowMessage(
+        {
+          id: 'old',
+          authorId: 'user-1',
+          channelId: 'channel-1',
+          createdAt: '2026-04-26T03:39:00.000Z',
+        },
+        { botUserId: 'bot-1', startedAtMs },
+      ),
+    ).toBe(false)
+
+    expect(
+      shouldCatchUpShadowMessage(
+        {
+          id: 'after-watermark',
+          authorId: 'user-1',
+          channelId: 'channel-1',
+          createdAt: '2026-04-26T04:12:00.000Z',
+        },
+        {
+          botUserId: 'bot-1',
+          startedAtMs,
+          watermarks: {
+            'channel-1': { createdAt: '2026-04-26T04:11:00.000Z', messageId: 'last' },
+          },
+        },
+      ),
+    ).toBe(true)
+  })
+})
+
 // ── Plugin entry point ─────────────────────────────────────────
 
 describe('Plugin Entry Point', () => {
+  it('declares shadowob channel config metadata in the manifest', () => {
+    const manifest = JSON.parse(
+      readFileSync(join(__dirname, '..', 'openclaw.plugin.json'), 'utf-8'),
+    )
+    expect(manifest.channels).toContain('shadowob')
+    expect(manifest.channelConfigs?.shadowob?.schema?.type).toBe('object')
+    expect(manifest.channelConfigs.shadowob.schema.properties.accounts).toBeDefined()
+    expect(manifest.channelEnvVars?.shadowob).toContain('SHADOW_SERVER_URL')
+  })
+
   it('should export a valid channel plugin entry via defineChannelPluginEntry', async () => {
     const mod = await import('../index.js')
     const plugin = mod.default
@@ -205,6 +385,65 @@ describe('Plugin Entry Point', () => {
     const mod = await import('../index.js')
     expect(typeof mod.getShadowRuntime).toBe('function')
     expect(typeof mod.tryGetShadowRuntime).toBe('function')
+  })
+
+  it('should describe usable Shadow message actions and interactive schema', async () => {
+    const { shadowPlugin } = await import('../src/channel.js')
+    const discovery = shadowPlugin.actions?.describeMessageTool({ cfg: {} } as never)
+    expect(discovery?.actions).toContain('send')
+    expect(discovery?.actions).toContain('sendAttachment')
+    expect(discovery?.actions).toContain('get-server')
+    expect(discovery?.actions).not.toContain('send-interactive')
+    expect(discovery?.capabilities).toContain('interactive')
+    const schema = Array.isArray(discovery?.schema) ? discovery.schema[0] : discovery?.schema
+    expect(schema?.properties.buttons).toBeDefined()
+    expect(schema?.properties.fields).toBeDefined()
+    expect(schema?.properties.approvalCommentLabel).toBeDefined()
+  })
+
+  it('should tell agents to include message when sending interactive dialogs', async () => {
+    const { shadowPlugin } = await import('../src/channel.js')
+    const hints = shadowPlugin.agentPrompt?.messageToolHints?.({ cfg: {} } as never) ?? []
+    const text = hints.join('\n')
+
+    expect(text).toContain('prefer sending a Shadow interactive dialog')
+    expect(text).toContain('`message` is required')
+  })
+
+  it('should handle send while keeping send-interactive as a legacy direct action', async () => {
+    const { shadowPlugin } = await import('../src/channel.js')
+    expect(shadowPlugin.actions?.supportsAction?.({ action: 'send' })).toBe(true)
+    expect(shadowPlugin.actions?.supportsAction?.({ action: 'send-interactive' as never })).toBe(
+      true,
+    )
+    expect(shadowPlugin.actions?.supportsAction?.({ action: 'pin' })).toBe(false)
+  })
+
+  it('should reject approval dialogs that do not include the visible proposal', async () => {
+    const { shadowPlugin } = await import('../src/channel.js')
+    const result = await shadowPlugin.actions?.handleAction?.({
+      action: 'send',
+      accountId: 'default',
+      cfg: {
+        channels: {
+          shadowob: {
+            token: 'tok',
+            serverUrl: 'http://localhost:9',
+          },
+        },
+      },
+      params: {
+        target: 'shadowob:channel:channel-id',
+        message: 'CEO Review 完成。认可这个 90 天路线图和 MVP 范围吗?',
+        kind: 'approval',
+        prompt: 'CEO Review 完成。认可这个 90 天路线图和 MVP 范围吗?',
+      },
+    } as never)
+
+    expect(result?.details).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('visible proposal'),
+    })
   })
 })
 

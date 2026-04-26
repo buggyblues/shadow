@@ -5,33 +5,17 @@
  * Each plugin is explicitly imported and registered.
  */
 
+import typia from 'typia'
 import type { PluginDefinition, PluginManifest, PluginRegistry } from './types.js'
 
-const REQUIRED_MANIFEST_FIELDS: (keyof PluginManifest)[] = [
-  'id',
-  'name',
-  'description',
-  'version',
-  'category',
-  'icon',
-  'auth',
-  'capabilities',
-  'tags',
-]
+const validatePluginManifest: (input: unknown) => typia.IValidation<PluginManifest> =
+  typia.createValidate<PluginManifest>()
 
 /**
  * Validate that a manifest object has all required fields.
  */
 export function validateManifest(manifest: unknown): manifest is PluginManifest {
-  if (!manifest || typeof manifest !== 'object') return false
-  const m = manifest as Record<string, unknown>
-  for (const field of REQUIRED_MANIFEST_FIELDS) {
-    if (m[field] === undefined || m[field] === null) return false
-  }
-  if (typeof m.id !== 'string' || typeof m.name !== 'string') return false
-  if (!Array.isArray(m.capabilities) || !Array.isArray(m.tags)) return false
-  if (!m.auth || typeof m.auth !== 'object') return false
-  return true
+  return validatePluginManifest(manifest).success
 }
 
 /**
@@ -70,6 +54,7 @@ export async function loadAllPlugins(registry: PluginRegistry): Promise<void> {
     import('./cohere/index.js'),
     import('./perplexity/index.js'),
     import('./grok/index.js'),
+    import('./deepseek/index.js'),
     import('./openrouter/index.js'),
     import('./hugging-face/index.js'),
     import('./github/index.js'),
@@ -124,6 +109,7 @@ export async function loadAllPlugins(registry: PluginRegistry): Promise<void> {
     import('./serena/index.js'),
     import('./postman-api/index.js'),
     import('./gitagent/index.js'),
+    import('./agent-pack/index.js'),
   ])
 
   for (const mod of pluginModules) {

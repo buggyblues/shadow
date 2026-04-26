@@ -79,6 +79,10 @@ function LoginPanel({ onLogin }: { onLogin: (token: string) => void }) {
           placeholder="密码"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          autoComplete="off"
+          data-1p-ignore
+          data-lpignore="true"
+          data-form-type="other"
           className="w-full bg-zinc-800 text-white rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500"
           required
         />

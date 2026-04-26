@@ -23,6 +23,12 @@ export {
   cloudTemplateSourceEnum,
   cloudTemplates,
 } from './cloud'
+export {
+  configEnvEnum,
+  configSchemas,
+  configValues,
+  featureFlags,
+} from './config-management'
 export { dmAttachments } from './dm-attachments'
 export { dmChannels } from './dm-channels'
 export { dmMessages } from './dm-messages'
@@ -30,6 +36,7 @@ export { dmReactions } from './dm-reactions'
 export { friendshipStatusEnum, friendships } from './friendships'
 export { inviteCodes } from './invite-codes'
 export { memberRoleEnum, members } from './members'
+export { messageInteractiveSubmissions } from './message-interactive-submissions'
 export { messages } from './messages'
 export {
   notificationPreferences,
@@ -91,9 +98,3 @@ export { userRewardLogs, userTaskClaims } from './task-center'
 export { threads } from './threads'
 export { userStatusEnum, users } from './users'
 export { workspaceNodeKindEnum, workspaceNodes, workspaces } from './workspaces'
-export {
-  configEnvEnum,
-  configSchemas,
-  configValues,
-  featureFlags,
-} from './config-management'

@@ -1,8 +1,8 @@
 import type { Logger } from 'pino'
 import type { AgentDao } from '../dao/agent.dao'
 import type { AgentDashboardDao } from '../dao/agent-dashboard.dao'
-import type { RentalContractDao } from '../dao/rental-contract.dao'
 import type { ClawListingDao } from '../dao/claw-listing.dao'
+import type { RentalContractDao } from '../dao/rental-contract.dao'
 import type { UserDao } from '../dao/user.dao'
 
 // Dashboard constants

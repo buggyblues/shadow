@@ -1,4 +1,69 @@
-import chalk from 'chalk'
+import * as chalkModule from 'chalk'
+
+type ChalkFormatter = {
+  blue(text: string): string
+  green(text: string): string
+  yellow(text: string): string
+  red(text: string): string
+  cyan(text: string): string
+  dim(text: string): string
+  bold(text: string): string
+}
+
+function identity(text: string): string {
+  return text
+}
+
+const passthroughChalk: ChalkFormatter = {
+  blue: identity,
+  green: identity,
+  yellow: identity,
+  red: identity,
+  cyan: identity,
+  dim: identity,
+  bold: identity,
+}
+
+function isObjectLike(value: unknown): value is Record<string, unknown> {
+  return (typeof value === 'object' && value !== null) || typeof value === 'function'
+}
+
+function isChalkFormatter(value: unknown): value is ChalkFormatter {
+  if (!isObjectLike(value)) return false
+
+  return (
+    typeof value.blue === 'function' &&
+    typeof value.green === 'function' &&
+    typeof value.yellow === 'function' &&
+    typeof value.red === 'function' &&
+    typeof value.cyan === 'function' &&
+    typeof value.dim === 'function' &&
+    typeof value.bold === 'function'
+  )
+}
+
+export function resolveChalkFormatter(moduleLike: unknown): ChalkFormatter {
+  const queue: unknown[] = [moduleLike]
+  const seen = new Set<unknown>()
+
+  while (queue.length > 0) {
+    const candidate = queue.shift()
+    if (!candidate || seen.has(candidate)) continue
+    seen.add(candidate)
+
+    if (isChalkFormatter(candidate)) {
+      return candidate
+    }
+
+    if (isObjectLike(candidate) && 'default' in candidate) {
+      queue.push(candidate.default)
+    }
+  }
+
+  return passthroughChalk
+}
+
+const chalk = resolveChalkFormatter(chalkModule)
 
 /**
  * Logger interface — used by service layer for dependency injection.

@@ -235,17 +235,17 @@ export function PublicNav({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
   const t =
     lang === 'zh'
       ? {
-        product: '产品',
-        platform: '开放平台',
-        login: '登录',
-        launch: '启动！',
-      }
+          product: '产品',
+          platform: '开放平台',
+          login: '登录',
+          launch: '启动！',
+        }
       : {
-        product: 'Product',
-        platform: 'Platform',
-        login: 'Login',
-        launch: 'Launch',
-      }
+          product: 'Product',
+          platform: 'Platform',
+          login: 'Login',
+          launch: 'Launch',
+        }
   const base = getBase()
   const prefix = lang === 'zh' ? '/zh' : ''
   return (
@@ -324,89 +324,89 @@ export function PublicFooter({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
   const columns =
     lang === 'zh'
       ? [
-        {
-          title: '产品',
-          links: [
-            { text: '频道', href: `${base}${prefix}/product/channels` },
-            { text: 'AI 搭子', href: `${base}${prefix}/product/ai-assistants` },
-            { text: '社区', href: `${base}${prefix}/product/communities` },
-            { text: '工作区', href: `${base}${prefix}/product/workspace` },
-            { text: '店铺', href: `${base}${prefix}/product/shop` },
-            { text: '桌面端下载', href: `${base}${prefix}/product/download` },
-          ],
-        },
-        {
-          title: '资源',
-          links: [
-            { text: '产品文档', href: `${base}${prefix}/product/` },
-            { text: 'API 文档', href: `${base}${prefix}/platform/introduction` },
-            { text: '定价', href: `${base}${prefix}/pricing` },
-          ],
-        },
-        {
-          title: '社区',
-          links: [
-            { text: 'GitHub', href: 'https://github.com/buggyblues/shadow', external: true },
-            { text: 'Discord', href: '#' },
-            { text: 'Twitter / X', href: '#' },
-          ],
-        },
-        {
-          title: '法律',
-          links: [
-            { text: 'Privacy', href: `${base}${prefix}/privacy` },
-            { text: 'Terms', href: `${base}${prefix}/terms` },
-            { text: '社区公约', href: `${base}${prefix}/community-guidelines` },
-            {
-              text: 'Skills',
-              href: 'https://github.com/buggyblues/shadow/blob/main/skills/shadowob-cli/SKILL.md',
-              external: true,
-            },
-          ],
-        },
-      ]
+          {
+            title: '产品',
+            links: [
+              { text: '频道', href: `${base}${prefix}/product/channels` },
+              { text: 'AI 搭子', href: `${base}${prefix}/product/ai-assistants` },
+              { text: '社区', href: `${base}${prefix}/product/communities` },
+              { text: '工作区', href: `${base}${prefix}/product/workspace` },
+              { text: '店铺', href: `${base}${prefix}/product/shop` },
+              { text: '桌面端下载', href: `${base}${prefix}/product/download` },
+            ],
+          },
+          {
+            title: '资源',
+            links: [
+              { text: '产品文档', href: `${base}${prefix}/product/` },
+              { text: 'API 文档', href: `${base}${prefix}/platform/introduction` },
+              { text: '定价', href: `${base}${prefix}/pricing` },
+            ],
+          },
+          {
+            title: '社区',
+            links: [
+              { text: 'GitHub', href: 'https://github.com/buggyblues/shadow', external: true },
+              { text: 'Discord', href: '#' },
+              { text: 'Twitter / X', href: '#' },
+            ],
+          },
+          {
+            title: '法律',
+            links: [
+              { text: 'Privacy', href: `${base}${prefix}/privacy` },
+              { text: 'Terms', href: `${base}${prefix}/terms` },
+              { text: '社区公约', href: `${base}${prefix}/community-guidelines` },
+              {
+                text: 'Skills',
+                href: 'https://github.com/buggyblues/shadow/blob/main/skills/shadowob-cli/SKILL.md',
+                external: true,
+              },
+            ],
+          },
+        ]
       : [
-        {
-          title: 'Product',
-          links: [
-            { text: 'Channels', href: `${base}${prefix}/product/channels` },
-            { text: 'AI Buddies', href: `${base}${prefix}/product/ai-assistants` },
-            { text: 'Communities', href: `${base}${prefix}/product/communities` },
-            { text: 'Workspace', href: `${base}${prefix}/product/workspace` },
-            { text: 'Shop', href: `${base}${prefix}/product/shop` },
-            { text: 'Desktop Download', href: `${base}${prefix}/product/download` },
-          ],
-        },
-        {
-          title: 'Resources',
-          links: [
-            { text: 'Product Docs', href: `${base}${prefix}/product/` },
-            { text: 'API Reference', href: `${base}${prefix}/platform/introduction` },
-            { text: 'Pricing', href: `${base}${prefix}/pricing` },
-          ],
-        },
-        {
-          title: 'Community',
-          links: [
-            { text: 'GitHub', href: 'https://github.com/buggyblues/shadow', external: true },
-            { text: 'Discord', href: '#' },
-            { text: 'Twitter / X', href: '#' },
-          ],
-        },
-        {
-          title: 'Legal',
-          links: [
-            { text: 'Privacy', href: `${base}${prefix}/privacy` },
-            { text: 'Terms', href: `${base}${prefix}/terms` },
-            { text: 'Community Guidelines', href: `${base}${prefix}/community-guidelines` },
-            {
-              text: 'Skills',
-              href: 'https://github.com/buggyblues/shadow/blob/main/skills/shadowob-cli/SKILL.md',
-              external: true,
-            },
-          ],
-        },
-      ]
+          {
+            title: 'Product',
+            links: [
+              { text: 'Channels', href: `${base}${prefix}/product/channels` },
+              { text: 'AI Buddies', href: `${base}${prefix}/product/ai-assistants` },
+              { text: 'Communities', href: `${base}${prefix}/product/communities` },
+              { text: 'Workspace', href: `${base}${prefix}/product/workspace` },
+              { text: 'Shop', href: `${base}${prefix}/product/shop` },
+              { text: 'Desktop Download', href: `${base}${prefix}/product/download` },
+            ],
+          },
+          {
+            title: 'Resources',
+            links: [
+              { text: 'Product Docs', href: `${base}${prefix}/product/` },
+              { text: 'API Reference', href: `${base}${prefix}/platform/introduction` },
+              { text: 'Pricing', href: `${base}${prefix}/pricing` },
+            ],
+          },
+          {
+            title: 'Community',
+            links: [
+              { text: 'GitHub', href: 'https://github.com/buggyblues/shadow', external: true },
+              { text: 'Discord', href: '#' },
+              { text: 'Twitter / X', href: '#' },
+            ],
+          },
+          {
+            title: 'Legal',
+            links: [
+              { text: 'Privacy', href: `${base}${prefix}/privacy` },
+              { text: 'Terms', href: `${base}${prefix}/terms` },
+              { text: 'Community Guidelines', href: `${base}${prefix}/community-guidelines` },
+              {
+                text: 'Skills',
+                href: 'https://github.com/buggyblues/shadow/blob/main/skills/shadowob-cli/SKILL.md',
+                external: true,
+              },
+            ],
+          },
+        ]
 
   return (
     <footer
