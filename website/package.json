@@ -20,6 +20,6 @@
     "@tailwindcss/postcss": "^4.2.2",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^22",
-    "tailwindcss": "^4.2.2"
+    "tailwindcss": "^4.2.4"
   }
 }
