@@ -102,7 +102,7 @@ export function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            autoComplete="off"
+            autoComplete="current-password"
             data-1p-ignore
             data-lpignore="true"
             data-form-type="other"
