@@ -28,12 +28,12 @@ const OPENCLAW_STATE_DIR = '/home/openclaw/.openclaw'
 const SLASH_COMMANDS_INDEX_PATH = join(OPENCLAW_STATE_DIR, 'shadow', 'slash-commands.json')
 const CONFIG_MOUNT = '/etc/openclaw'
 const EXTENSIONS_DIR = '/app/extensions'
+const RUNTIME_EXTENSIONS_PATH = join(CONFIG_MOUNT, 'runtime-extensions.json')
 const GATEWAY_PORT = parseInt(process.env.OPENCLAW_GATEWAY_PORT ?? '3100', 10)
 const OPENCLAW_HTTP_PORT = GATEWAY_PORT + 1
 const LOG_DIR = '/var/log/openclaw'
 const SHARED_WORKSPACE_PATH = process.env.SHARED_WORKSPACE_PATH ?? ''
 const SKILLS_DIR = process.env.SKILLS_DIR ?? ''
-const CLOUD_DISABLED_BUNDLED_PLUGINS = ['bonjour']
 const RUNTIME_DEPS_WARM_SCRIPT = '/app/warm-runtime-deps.mjs'
 const DEFAULT_PLUGIN_STAGE_DIR = '/opt/openclaw-runtime-deps'
 let runtimeDepsStageDir = process.env.OPENCLAW_PLUGIN_STAGE_DIR || DEFAULT_PLUGIN_STAGE_DIR
@@ -87,6 +87,26 @@ function loadMountedConfig() {
   }
 }
 
+function loadRuntimeExtensions() {
+  if (!existsSync(RUNTIME_EXTENSIONS_PATH)) {
+    return {}
+  }
+
+  try {
+    const raw = readFileSync(RUNTIME_EXTENSIONS_PATH, 'utf-8')
+    const extensions = JSON.parse(raw)
+    if (!extensions || typeof extensions !== 'object' || Array.isArray(extensions)) {
+      console.warn('[entrypoint] Ignoring invalid runtime extensions payload')
+      return {}
+    }
+    console.log('[entrypoint] Loaded runtime extensions from ConfigMap')
+    return extensions
+  } catch (err) {
+    console.warn(`[entrypoint] Failed to parse runtime extensions: ${err.message}`)
+    return {}
+  }
+}
+
 function resolveEnvVars(obj) {
   if (typeof obj === 'string') {
     return obj.replace(/\$\{env:([^}]+)\}/g, (_, key) => {
@@ -110,40 +130,6 @@ function resolveEnvVars(obj) {
 
 function generateOpenClawConfig(mountedConfig) {
   const config = resolveEnvVars(mountedConfig)
-
-  // Ensure plugins are configured to load the shadowob plugin from the extensions directory.
-  // OpenClaw discovers plugins via plugins.load.paths (not extensions.searchPaths).
-  // Matches the desktop app's plugin config structure.
-  if (!config.plugins) {
-    config.plugins = {}
-  }
-  config.plugins.enabled = true
-  if (!config.plugins.load) {
-    config.plugins.load = {}
-  }
-  // OpenClaw treats each path in load.paths as a direct plugin directory
-  // (matches how the desktop app calls resolveShadowPlugin() → "/path/to/shadowob").
-  config.plugins.load.paths = [join(EXTENSIONS_DIR, 'shadowob')]
-  if (!config.plugins.entries) {
-    config.plugins.entries = {}
-  }
-  if (!config.plugins.entries['openclaw-shadowob']) {
-    config.plugins.entries['openclaw-shadowob'] = { enabled: true }
-  }
-  for (const pluginId of CLOUD_DISABLED_BUNDLED_PLUGINS) {
-    if (!config.plugins.entries[pluginId]) {
-      config.plugins.entries[pluginId] = { enabled: false }
-    }
-  }
-
-  // Ensure channels.shadowob exists — OpenClaw's configMayNeedPluginManifestRegistry()
-  // only triggers plugin discovery when a non-built-in channel is present in config.
-  if (!config.channels) {
-    config.channels = {}
-  }
-  if (!config.channels.shadowob) {
-    config.channels.shadowob = { enabled: true }
-  }
 
   // Set gateway port. The runner health server uses GATEWAY_PORT, so OpenClaw
   // itself must bind to the adjacent port in both CLI args and persisted config.
@@ -344,13 +330,7 @@ function normalizeSlashInteraction(value) {
   const kind = typeof value.kind === 'string' ? value.kind.trim().toLowerCase() : ''
   if (!['buttons', 'select', 'form', 'approval'].includes(kind)) return undefined
   const out = { kind }
-  for (const key of [
-    'id',
-    'prompt',
-    'submitLabel',
-    'responsePrompt',
-    'approvalCommentLabel',
-  ]) {
+  for (const key of ['id', 'prompt', 'submitLabel', 'responsePrompt', 'approvalCommentLabel']) {
     if (typeof value[key] === 'string' && value[key].trim()) out[key] = value[key].trim()
   }
   if (typeof value.oneShot === 'boolean') out.oneShot = value.oneShot
@@ -359,9 +339,7 @@ function normalizeSlashInteraction(value) {
       .filter((field) => field && typeof field === 'object' && !Array.isArray(field))
       .map((field, index) => ({
         id:
-          typeof field.id === 'string' && field.id.trim()
-            ? field.id.trim()
-            : `field_${index + 1}`,
+          typeof field.id === 'string' && field.id.trim() ? field.id.trim() : `field_${index + 1}`,
         kind:
           typeof field.kind === 'string' &&
           ['text', 'textarea', 'number', 'checkbox', 'select'].includes(field.kind)
@@ -403,81 +381,6 @@ function frontmatterInteraction(data) {
   })
 }
 
-function gstackShortName(name) {
-  return name.replace(/^gstack(?:-openclaw)?-/, '')
-}
-
-function inferSlashInteraction({ name, packId }) {
-  const shortName = packId === 'gstack' ? gstackShortName(name) : name
-  if (packId === 'gstack' && shortName === 'office-hours') {
-    return {
-      id: 'slash:gstack:office-hours',
-      kind: 'form',
-      prompt:
-        '先填写这 6 个 office-hours 问题。Strategy Buddy 会基于这些答案产出问题重构、MVP 范围和 90 天路线图。',
-      submitLabel: '提交',
-      responsePrompt:
-        'Office-hours answers submitted. Run the gstack CEO review now. Produce a concrete response before asking for approval: 1) reframed problem, 2) MVP scope, 3) 90-day roadmap, 4) risks and assumptions. Only after those sections are visible, send one approval interactive block for that exact proposal.',
-      oneShot: true,
-      fields: [
-        {
-          id: 'pain',
-          kind: 'textarea',
-          label: '痛点是什么？给具体例子，不要假设场景。',
-          required: true,
-          maxLength: 2000,
-        },
-        {
-          id: 'status_quo',
-          kind: 'textarea',
-          label: '现在怎么解决？你或用户目前用什么办法应对？',
-          required: true,
-          maxLength: 2000,
-        },
-        {
-          id: 'user',
-          kind: 'textarea',
-          label: '谁会用它？第一个愿意付费或每天使用的人长什么样？',
-          required: true,
-          maxLength: 2000,
-        },
-        {
-          id: 'founder_edge',
-          kind: 'textarea',
-          label: '为什么是你来做？你的独特洞察、资源、渠道或经历是什么？',
-          required: true,
-          maxLength: 2000,
-        },
-        {
-          id: 'desired_outcome',
-          kind: 'textarea',
-          label: '你想要的是方案，还是结果？用户真正得到什么？',
-          required: true,
-          maxLength: 2000,
-        },
-        {
-          id: 'tomorrow_use',
-          kind: 'textarea',
-          label: '如果明天这个产品就存在，你最想用它做什么？从开始到结束描述一个场景。',
-          required: true,
-          maxLength: 2000,
-        },
-      ],
-    }
-  }
-  return undefined
-}
-
-function inferSlashAliases({ name, packId }) {
-  const aliases = []
-  if (packId === 'gstack') {
-    const shortName = gstackShortName(name)
-    if (shortName && shortName !== name) aliases.push(shortName)
-    if (shortName === 'office-hours') aliases.push('office-hour')
-  }
-  return aliases
-}
-
 function derivePackId(path) {
   const parts = path.split('/').filter(Boolean)
   const idx = parts.lastIndexOf('agent-packs')
@@ -497,7 +400,74 @@ function deriveSlashDescription(body, frontmatter) {
   return undefined
 }
 
-function readSlashCommand(path, fallbackName) {
+function runtimeSlashRules(runtimeExtensions) {
+  const rules = runtimeExtensions?.slashCommands?.rules
+  return Array.isArray(rules) ? rules.filter((rule) => rule && typeof rule === 'object') : []
+}
+
+function asStringArray(value) {
+  if (typeof value === 'string') return [value]
+  return Array.isArray(value) ? value.filter((item) => typeof item === 'string') : []
+}
+
+function matchesSlashCommandRule(rule, command, context) {
+  const match = rule.match
+  if (!match || typeof match !== 'object') return true
+
+  if (typeof match.packId === 'string' && match.packId !== context.packId) {
+    return false
+  }
+
+  const names = [...asStringArray(match.name), ...asStringArray(match.names)]
+  if (
+    names.length > 0 &&
+    !names.some((name) => name.toLowerCase() === command.name.toLowerCase())
+  ) {
+    return false
+  }
+
+  if (typeof match.namePattern === 'string' && match.namePattern.trim()) {
+    try {
+      if (!new RegExp(match.namePattern).test(command.name)) return false
+    } catch (err) {
+      console.warn(`[entrypoint] Ignoring invalid slash command rule pattern: ${err.message}`)
+      return false
+    }
+  }
+
+  const pathIncludes = asStringArray(match.sourcePathIncludes)
+  if (pathIncludes.length > 0 && !pathIncludes.some((needle) => context.path.includes(needle))) {
+    return false
+  }
+
+  return true
+}
+
+function applySlashCommandRules(command, context, runtimeExtensions) {
+  const rules = runtimeSlashRules(runtimeExtensions)
+  if (rules.length === 0) return command
+
+  for (const rule of rules) {
+    if (!matchesSlashCommandRule(rule, command, context)) continue
+
+    const aliases = asStringArray(rule.aliases)
+      .map(normalizeSlashCommandName)
+      .filter(Boolean)
+      .filter((alias) => alias.toLowerCase() !== command.name.toLowerCase())
+    if (aliases.length > 0) {
+      command.aliases = [...new Set([...(command.aliases ?? []), ...aliases])]
+    }
+
+    const interaction = normalizeSlashInteraction(rule.interaction)
+    if (interaction && !command.interaction) {
+      command.interaction = interaction
+    }
+  }
+
+  return command
+}
+
+function readSlashCommand(path, fallbackName, runtimeExtensions) {
   const text = readMaybe(path).trim()
   if (!text) return null
   const { data, body } = parseFrontmatter(text)
@@ -508,29 +478,31 @@ function readSlashCommand(path, fallbackName) {
     .map(normalizeSlashCommandName)
     .filter(Boolean)
     .filter((alias) => alias.toLowerCase() !== name.toLowerCase())
-  aliases.push(...inferSlashAliases({ name, packId, body, path }))
   const description = deriveSlashDescription(body, data)
-  const interaction =
-    frontmatterInteraction(data) ?? inferSlashInteraction({ name, packId, body, path })
+  const interaction = frontmatterInteraction(data)
 
-  return {
-    name,
-    ...(description ? { description } : {}),
-    ...(aliases.length > 0 ? { aliases: [...new Set(aliases)] } : {}),
-    ...(packId ? { packId } : {}),
-    ...(interaction ? { interaction } : {}),
-    sourcePath: path,
-    body: text.slice(0, 20_000),
-  }
+  return applySlashCommandRules(
+    {
+      name,
+      ...(description ? { description } : {}),
+      ...(aliases.length > 0 ? { aliases: [...new Set(aliases)] } : {}),
+      ...(packId ? { packId } : {}),
+      ...(interaction ? { interaction } : {}),
+      sourcePath: path,
+      body: text.slice(0, 20_000),
+    },
+    { path, packId, body, frontmatter: data },
+    runtimeExtensions,
+  )
 }
 
-function discoverSlashCommands(commandsDirs) {
+function discoverSlashCommands(commandsDirs, runtimeExtensions) {
   const commands = []
   const seen = new Set()
   for (const dir of commandsDirs) {
     for (const file of listFiles(dir, '.md')) {
       const fallbackName = file.split('/').pop().replace(/\.md$/, '')
-      const command = readSlashCommand(file, fallbackName)
+      const command = readSlashCommand(file, fallbackName, runtimeExtensions)
       if (!command) continue
       const key = command.name.toLowerCase()
       if (seen.has(key)) continue
@@ -544,7 +516,7 @@ function discoverSlashCommands(commandsDirs) {
       for (const candidate of candidates) {
         const path = join(childDir, candidate)
         if (!existsSync(path)) continue
-        const command = readSlashCommand(path, fallbackName)
+        const command = readSlashCommand(path, fallbackName, runtimeExtensions)
         if (!command) break
         const key = command.name.toLowerCase()
         if (!seen.has(key)) {
@@ -564,63 +536,70 @@ function writeSlashCommandIndex(commands) {
   process.env.SHADOW_SLASH_COMMANDS_PATH = SLASH_COMMANDS_INDEX_PATH
 }
 
-function shadowobChannelConfigMetadata() {
-  return {
-    label: 'ShadowOwnBuddy',
-    description: 'Shadow server channel integration — chat with AI agents in Shadow channels',
-    schema: {
-      $schema: 'http://json-schema.org/draft-07/schema#',
-      type: 'object',
-      additionalProperties: true,
-      properties: {
-        name: { type: 'string' },
-        enabled: { type: 'boolean' },
-        token: { type: 'string' },
-        serverUrl: { type: 'string' },
-        buddyId: { type: 'string' },
-        buddyName: { type: 'string' },
-        buddyDescription: { type: 'string' },
-        replyToMode: { type: 'string', enum: ['first', 'all', 'off'] },
-        accountAgentMap: {
-          type: 'object',
-          additionalProperties: { type: 'string' },
-        },
-        accounts: {
-          type: 'object',
-          additionalProperties: {
-            type: 'object',
-            additionalProperties: true,
-            properties: {
-              enabled: { type: 'boolean' },
-              token: { type: 'string' },
-              serverUrl: { type: 'string' },
-              buddyId: { type: 'string' },
-              buddyName: { type: 'string' },
-              buddyDescription: { type: 'string' },
-              agentId: { type: 'string' },
-            },
-          },
-        },
-      },
-    },
-    uiHints: {
-      token: {
-        label: 'Agent Token',
-        sensitive: true,
-        placeholder: 'Paste the JWT token generated in Shadow -> Agents',
-      },
-      serverUrl: {
-        label: 'Server URL',
-        placeholder: 'https://shadowob.com',
-      },
-      enabled: {
-        label: 'Enabled',
-      },
-    },
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function mergePlainObjects(target, source) {
+  const out = { ...(isPlainObject(target) ? target : {}) }
+  if (!isPlainObject(source)) return out
+
+  for (const [key, value] of Object.entries(source)) {
+    if (isPlainObject(value) && isPlainObject(out[key])) {
+      out[key] = mergePlainObjects(out[key], value)
+    } else {
+      out[key] = value
+    }
+  }
+  return out
+}
+
+function resolveManifestPatchPath(patch) {
+  if (typeof patch.manifestPath === 'string' && patch.manifestPath.trim()) {
+    const manifestPath = patch.manifestPath.trim()
+    return manifestPath.startsWith('/') ? manifestPath : join('/app', manifestPath)
+  }
+
+  if (typeof patch.extensionId === 'string' && /^[A-Za-z0-9._-]+$/.test(patch.extensionId)) {
+    return join(EXTENSIONS_DIR, patch.extensionId, 'openclaw.plugin.json')
+  }
+
+  return null
+}
+
+function runtimeManifestPatches(runtimeExtensions) {
+  const patches = runtimeExtensions?.openclaw?.manifestPatches
+  return Array.isArray(patches) ? patches.filter((patch) => isPlainObject(patch)) : []
+}
+
+function applyRuntimeManifestPatches(runtimeExtensions) {
+  for (const patch of runtimeManifestPatches(runtimeExtensions)) {
+    const manifestPath = resolveManifestPatchPath(patch)
+    if (!manifestPath || !existsSync(manifestPath)) continue
+
+    try {
+      let manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
+      if (!isPlainObject(manifest)) continue
+
+      if (isPlainObject(patch.merge)) {
+        manifest = mergePlainObjects(manifest, patch.merge)
+      }
+      if (isPlainObject(patch.channelEnvVars)) {
+        manifest.channelEnvVars = mergePlainObjects(manifest.channelEnvVars, patch.channelEnvVars)
+      }
+      if (isPlainObject(patch.channelConfigs)) {
+        manifest.channelConfigs = mergePlainObjects(manifest.channelConfigs, patch.channelConfigs)
+      }
+
+      writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf-8')
+      console.log(`[entrypoint] Applied runtime manifest patch: ${manifestPath}`)
+    } catch (err) {
+      console.warn(`[entrypoint] Failed to apply manifest patch ${manifestPath}: ${err.message}`)
+    }
   }
 }
 
-function mergeShadowPacks(config) {
+function mergeShadowPacks(config, runtimeExtensions) {
   const agentsDirs = splitDirs(process.env.SHADOW_PACK_AGENTS_DIRS)
   const mcpDirs = splitDirs(process.env.SHADOW_PACK_MCP_DIRS)
   const hooksDirs = splitDirs(process.env.SHADOW_PACK_HOOKS_DIRS)
@@ -758,7 +737,7 @@ function mergeShadowPacks(config) {
   // ── Slash commands ────────────────────────────────────────────────────────
   const slashCommandDirs = [...new Set([...commandsDirs, ...skillsDirs])]
   if (slashCommandDirs.length > 0) {
-    const slashCommands = discoverSlashCommands(slashCommandDirs)
+    const slashCommands = discoverSlashCommands(slashCommandDirs, runtimeExtensions)
     writeSlashCommandIndex(slashCommands)
     console.log(`[entrypoint] Indexed ${slashCommands.length} pack slash command(s)`)
   }
@@ -778,52 +757,17 @@ function verifyExtensions() {
 
   console.log(`[entrypoint] Found ${extensions.length} extension(s): ${extensions.join(', ')}`)
 
-  // Verify shadowob plugin
-  const shadowobDir = join(EXTENSIONS_DIR, 'shadowob')
-  if (existsSync(shadowobDir)) {
+  for (const extensionId of extensions) {
+    const extensionDir = join(EXTENSIONS_DIR, extensionId)
     const hasEntry =
-      existsSync(join(shadowobDir, 'index.mjs')) ||
-      existsSync(join(shadowobDir, 'dist', 'index.js'))
+      existsSync(join(extensionDir, 'index.mjs')) ||
+      existsSync(join(extensionDir, 'dist', 'index.js')) ||
+      existsSync(join(extensionDir, 'openclaw.plugin.json'))
     if (hasEntry) {
-      console.log('[entrypoint] ✓ shadowob plugin verified')
+      console.log(`[entrypoint] ✓ extension verified: ${extensionId}`)
     } else {
-      console.warn('[entrypoint] ⚠ shadowob plugin missing entry point')
+      console.warn(`[entrypoint] ⚠ extension missing entry point: ${extensionId}`)
     }
-  }
-}
-
-function ensureShadowobManifestMetadata() {
-  const manifestPath = join(EXTENSIONS_DIR, 'shadowob', 'openclaw.plugin.json')
-  if (!existsSync(manifestPath)) return
-
-  try {
-    const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
-    if (!manifest || typeof manifest !== 'object') return
-
-    let changed = false
-    if (!manifest.channelConfigs || typeof manifest.channelConfigs !== 'object') {
-      manifest.channelConfigs = {}
-      changed = true
-    }
-    if (!manifest.channelConfigs.shadowob) {
-      manifest.channelConfigs.shadowob = shadowobChannelConfigMetadata()
-      changed = true
-    }
-    if (!manifest.channelEnvVars || typeof manifest.channelEnvVars !== 'object') {
-      manifest.channelEnvVars = {}
-      changed = true
-    }
-    if (!manifest.channelEnvVars.shadowob) {
-      manifest.channelEnvVars.shadowob = ['SHADOW_SERVER_URL', 'SHADOW_AGENT_TOKEN']
-      changed = true
-    }
-
-    if (changed) {
-      writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8')
-      console.log('[entrypoint] Patched shadowob plugin manifest channel metadata')
-    }
-  } catch (err) {
-    console.warn(`[entrypoint] Failed to patch shadowob plugin manifest: ${err.message}`)
   }
 }
 
@@ -903,10 +847,9 @@ function startHealthServer() {
 // ─── Gateway Process ────────────────────────────────────────────────────────
 
 function clearStaleRuntimeDependencyLocks() {
-  const depsRoots = [
-    runtimeDepsStageDir,
-    join(OPENCLAW_STATE_DIR, 'plugin-runtime-deps'),
-  ].filter((entry, index, values) => entry && values.indexOf(entry) === index)
+  const depsRoots = [runtimeDepsStageDir, join(OPENCLAW_STATE_DIR, 'plugin-runtime-deps')].filter(
+    (entry, index, values) => entry && values.indexOf(entry) === index,
+  )
 
   for (const depsRoot of depsRoots) {
     if (!existsSync(depsRoot)) continue
@@ -1107,10 +1050,7 @@ function startGateway(_healthServer) {
       }
     }
 
-    if (
-      healthRequiresShadowChannel &&
-      line.includes('[ws] ✓ Joined channel room')
-    ) {
+    if (healthRequiresShadowChannel && line.includes('[ws] ✓ Joined channel room')) {
       shadowChannelReady = true
       clearTimeout(gatewayGraceTimer)
       if (!gatewayHealthy) {
@@ -1190,9 +1130,12 @@ async function main() {
 
   // 1. Load config
   const mountedConfig = loadMountedConfig()
+  const runtimeExtensions = loadRuntimeExtensions()
   const baseConfig = generateOpenClawConfig(mountedConfig)
-  const openclawConfig = mergeShadowPacks(baseConfig)
-  healthRequiresShadowChannel = openclawConfig.channels?.shadowob?.enabled !== false
+  const openclawConfig = mergeShadowPacks(baseConfig, runtimeExtensions)
+  healthRequiresShadowChannel =
+    isPlainObject(openclawConfig.channels?.shadowob) &&
+    openclawConfig.channels.shadowob.enabled !== false
   const packInstructionChunks = Array.isArray(openclawConfig.__packInstructionChunks)
     ? openclawConfig.__packInstructionChunks
     : []
@@ -1281,8 +1224,9 @@ async function main() {
     console.log(`[entrypoint] Skills directory ready: ${SKILLS_DIR}`)
   }
 
-  // 3. Verify extensions and pre-stage plugin runtime deps before chat traffic.
-  ensureShadowobManifestMetadata()
+  // 3. Apply plugin-provided runtime metadata, then pre-stage plugin runtime deps
+  // before chat traffic.
+  applyRuntimeManifestPatches(runtimeExtensions)
   verifyExtensions()
   prepareWritableRuntimeDepsStage()
   warmBundledPluginRuntimeDeps(configPath)

@@ -12,6 +12,16 @@ import type {
 import { deepMerge } from '../utils/deep-merge.js'
 import type { PluginConfigFragment } from './types.js'
 
+function pluginLoadPaths(value: unknown): string[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+  const load = (value as { load?: unknown }).load
+  if (!load || typeof load !== 'object' || Array.isArray(load)) return []
+  const paths = (load as { paths?: unknown }).paths
+  return Array.isArray(paths)
+    ? paths.filter((path): path is string => typeof path === 'string' && path.length > 0)
+    : []
+}
+
 /**
  * Merge plugin config fragment(s) into a base OpenClaw config.
  * Accepts a single fragment or an array of fragments.
@@ -41,10 +51,20 @@ export function mergePluginFragments(
     // Plugins/MCP: deep merge
     if (fragment.plugins) {
       if (!result.plugins) result.plugins = {} as Record<string, unknown>
+      const existingLoadPaths = pluginLoadPaths(result.plugins)
+      const fragmentLoadPaths = pluginLoadPaths(fragment.plugins)
       result.plugins = deepMerge(
         result.plugins as Record<string, unknown>,
         fragment.plugins as Record<string, unknown>,
       ) as OpenClawConfig['plugins']
+      const mergedLoadPaths = [...existingLoadPaths, ...fragmentLoadPaths]
+      if (mergedLoadPaths.length > 0) {
+        const plugins = result.plugins as Record<string, Record<string, unknown>>
+        plugins.load = {
+          ...(plugins.load ?? {}),
+          paths: [...new Set(mergedLoadPaths)],
+        }
+      }
     }
 
     // Skills: deep merge

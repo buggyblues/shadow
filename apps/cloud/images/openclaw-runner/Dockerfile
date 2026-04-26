@@ -20,7 +20,6 @@ WORKDIR /build
 
 # git is required by some npm packages during install
 RUN apk add --no-cache git
-COPY apps/cloud/images/openclaw-runner/patch-shadowob-manifest.mjs /tmp/patch-shadowob-manifest.mjs
 COPY packages/openclaw-shadowob /tmp/openclaw-shadowob
 
 # Install OpenClaw and shadowob plugin
@@ -31,7 +30,6 @@ RUN npm init -y && \
     cp -r /tmp/openclaw-shadowob/* extensions/shadowob/ && \
     test -f extensions/shadowob/dist/index.js || \
       (echo "Missing packages/openclaw-shadowob/dist/index.js; build the local package before building this image." && exit 1) && \
-    node /tmp/patch-shadowob-manifest.mjs extensions/shadowob/openclaw.plugin.json && \
     find extensions/shadowob -type d \( -name "src" -o -name "__tests__" \) \
       -exec rm -rf {} + 2>/dev/null || true && \
     # Cleanup dev artifacts to reduce image size

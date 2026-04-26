@@ -138,6 +138,8 @@ describe('parser', () => {
 
       // Should have channels.shadowob.accounts
       expect(result.channels?.shadowob?.accounts?.['bot-1']).toBeDefined()
+      expect(result.plugins?.load?.paths).toContain('/app/extensions/shadowob')
+      expect(result.plugins?.entries?.['openclaw-shadowob']?.enabled).toBe(true)
 
       // Should have agent in agents.list
       expect(result.agents?.list).toBeDefined()
@@ -213,7 +215,7 @@ describe('parser', () => {
       expect(result.plugins?.entries?.acpx?.enabled).toBe(true)
     })
 
-    it('should return empty bindings when no shadowob plugin', () => {
+    it('should not inject shadowob channel config when no shadowob plugin is enabled', () => {
       const config: CloudConfig = {
         version: '1',
         deployments: {
@@ -228,7 +230,7 @@ describe('parser', () => {
       }
 
       const result = buildOpenClawConfig(config.deployments!.agents[0], config)
-      expect(result.channels).toEqual({ shadowob: { enabled: false } })
+      expect(result.channels).toBeUndefined()
       expect(result.bindings).toBeUndefined()
     })
 

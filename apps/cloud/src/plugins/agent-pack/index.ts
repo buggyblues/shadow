@@ -46,6 +46,7 @@ import type {
   PluginK8sProvider,
   PluginK8sResult,
   PluginManifest,
+  PluginSlashCommandRule,
   PluginValidationResult,
 } from '../types.js'
 import {
@@ -98,6 +99,9 @@ export interface AgentPackOptions {
   packs?: PackOption[]
   mountPath?: string
   poll?: string | number
+  slashCommands?: {
+    rules?: PluginSlashCommandRule[]
+  }
 }
 
 export const validateAgentPackOptions: (input: unknown) => typia.IValidation<AgentPackOptions> =
@@ -422,6 +426,13 @@ const plugin = definePlugin(manifest as PluginManifest, (api) => {
 
     const mountPath = opts.mountPath ?? DEFAULT_MOUNT
     return buildAgentPackPrompt(packs, mountPath)
+  })
+
+  api.onBuildRuntime((context: PluginBuildContext) => {
+    const opts = readOptions(context.agent)
+    const rules = opts?.slashCommands?.rules?.filter((rule) => rule && typeof rule === 'object')
+    if (!rules?.length) return
+    return { slashCommands: { rules } }
   })
 
   api.onValidate((context: PluginBuildContext): PluginValidationResult | void => {

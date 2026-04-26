@@ -37,13 +37,86 @@ interface ShadowobPluginConfig {
   servers?: Array<{ url: string }>
 }
 
+const SHADOWOB_OPENCLAW_EXTENSION_ID = 'shadowob'
+const SHADOWOB_OPENCLAW_PLUGIN_ID = 'openclaw-shadowob'
+const SHADOWOB_OPENCLAW_EXTENSION_PATH = `/app/extensions/${SHADOWOB_OPENCLAW_EXTENSION_ID}`
+
+function shadowobOpenClawPluginConfig(): Pick<PluginConfigFragment, 'plugins'> {
+  return {
+    plugins: {
+      enabled: true,
+      load: { paths: [SHADOWOB_OPENCLAW_EXTENSION_PATH] },
+      entries: { [SHADOWOB_OPENCLAW_PLUGIN_ID]: { enabled: true } },
+    },
+  }
+}
+
+function shadowobChannelConfigMetadata(): Record<string, unknown> {
+  return {
+    label: 'ShadowOwnBuddy',
+    description: 'Shadow server channel integration — chat with AI agents in Shadow channels',
+    schema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      additionalProperties: true,
+      properties: {
+        name: { type: 'string' },
+        enabled: { type: 'boolean' },
+        token: { type: 'string' },
+        serverUrl: { type: 'string' },
+        buddyId: { type: 'string' },
+        buddyName: { type: 'string' },
+        buddyDescription: { type: 'string' },
+        replyToMode: { type: 'string', enum: ['first', 'all', 'off'] },
+        accountAgentMap: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+        },
+        accounts: {
+          type: 'object',
+          additionalProperties: {
+            type: 'object',
+            additionalProperties: true,
+            properties: {
+              enabled: { type: 'boolean' },
+              token: { type: 'string' },
+              serverUrl: { type: 'string' },
+              buddyId: { type: 'string' },
+              buddyName: { type: 'string' },
+              buddyDescription: { type: 'string' },
+              agentId: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+    uiHints: {
+      token: {
+        label: 'Agent Token',
+        sensitive: true,
+        placeholder: 'Paste the JWT token generated in Shadow -> Agents',
+      },
+      serverUrl: {
+        label: 'Server URL',
+        placeholder: 'https://shadowob.com',
+      },
+      enabled: {
+        label: 'Enabled',
+      },
+    },
+  }
+}
+
 function buildShadowConfig(context: PluginBuildContext): PluginConfigFragment {
   const agentConfig = context.agentConfig
   const shadowConfig = agentConfig as unknown as ShadowobPluginConfig
   const bindings = shadowConfig.bindings?.filter((b) => b.agentId === context.agent.id) ?? []
+  const pluginConfig = shadowobOpenClawPluginConfig()
   // Always emit channel config — disabled fallback ensures the always-installed
   // openclaw-shadowob extension passes OpenClaw config validation.
-  if (bindings.length === 0) return { channels: { shadowob: { enabled: false } } }
+  if (bindings.length === 0) {
+    return { ...pluginConfig, channels: { shadowob: { enabled: false } } }
+  }
 
   const accounts: Record<string, Record<string, unknown>> = {}
   const configBindings: Array<Record<string, unknown>> = []
@@ -78,12 +151,29 @@ function buildShadowConfig(context: PluginBuildContext): PluginConfigFragment {
   }
 
   return {
+    ...pluginConfig,
     channels: { shadowob: { enabled: true, accounts } },
     bindings: configBindings,
   }
 }
 
 export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig, (api) => {
+  api.onBuildRuntime(() => ({
+    openclaw: {
+      manifestPatches: [
+        {
+          extensionId: SHADOWOB_OPENCLAW_EXTENSION_ID,
+          channelEnvVars: {
+            shadowob: ['SHADOW_SERVER_URL', 'SHADOW_AGENT_TOKEN'],
+          },
+          channelConfigs: {
+            shadowob: shadowobChannelConfigMetadata(),
+          },
+        },
+      ],
+    },
+  }))
+
   api.onValidate((context) => {
     const errors: PluginValidationError[] = []
 

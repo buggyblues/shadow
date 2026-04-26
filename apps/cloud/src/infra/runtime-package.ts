@@ -1,6 +1,10 @@
-import { collectPluginBuildEnvVars } from '../config/openclaw-builder.js'
+import {
+  collectPluginBuildEnvVars,
+  collectPluginRuntimeExtensions,
+} from '../config/openclaw-builder.js'
 import { buildOpenClawConfig } from '../config/parser.js'
 import type { AgentDeployment, CloudConfig, OpenClawConfig } from '../config/schema.js'
+import type { PluginRuntimeExtension } from '../plugins/types.js'
 import { toProviderSecretEnvKey, withLegacyEnvAliases } from '../utils/env-names.js'
 
 const SECRET_ENV_MARKERS = [
@@ -63,6 +67,12 @@ function collectRegistrySecretEnv(
   return secretEnv
 }
 
+function hasRuntimeExtensions(extension: PluginRuntimeExtension): boolean {
+  return Boolean(
+    extension.openclaw?.manifestPatches?.length || extension.slashCommands?.rules?.length,
+  )
+}
+
 export function buildAgentRuntimePackage(options: {
   agent: AgentDeployment
   config: CloudConfig
@@ -75,6 +85,7 @@ export function buildAgentRuntimePackage(options: {
     ...(extraEnv ?? {}),
   }
   const openclawConfig = buildOpenClawConfig(agent, config, cwd, runtimeEnv)
+  const runtimeExtensions = collectPluginRuntimeExtensions(agent, config, cwd, runtimeEnv)
 
   const workspaceFiles = (openclawConfig._workspaceFiles ?? {}) as Record<string, string>
   delete openclawConfig._workspaceFiles
@@ -103,6 +114,9 @@ export function buildAgentRuntimePackage(options: {
   const configData: Record<string, string> = {
     'config.json': JSON.stringify(openclawConfig, null, 2),
     ...workspaceFiles,
+  }
+  if (hasRuntimeExtensions(runtimeExtensions)) {
+    configData['runtime-extensions.json'] = JSON.stringify(runtimeExtensions, null, 2)
   }
   const plainEnv: Record<string, string> = {}
   const secretData: Record<string, string> = collectRegistrySecretEnv(agent, config)

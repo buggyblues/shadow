@@ -1,7 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import type { CloudConfig } from '../../src/config/schema.js'
 import { buildManifests } from '../../src/infra/index.js'
 import { buildAgentRuntimePackage } from '../../src/infra/runtime-package.js'
+import { loadAllPlugins } from '../../src/plugins/loader.js'
+import { getPluginRegistry, resetPluginRegistry } from '../../src/plugins/registry.js'
+
+beforeAll(async () => {
+  resetPluginRegistry()
+  await loadAllPlugins(getPluginRegistry())
+})
 
 describe('buildAgentRuntimePackage', () => {
   it('splits config files, plain env, and secrets consistently', () => {
@@ -58,6 +65,66 @@ describe('buildAgentRuntimePackage', () => {
       EXTERNAL_SERVICE_TOKEN: 'vault-token',
       INTERNAL_SECRET: 'top-secret',
     })
+  })
+
+  it('writes plugin runtime extensions outside openclaw.json', () => {
+    const config: CloudConfig = {
+      version: '1',
+      use: [
+        {
+          plugin: 'shadowob',
+          options: {
+            buddies: [{ id: 'bot-1', name: 'Buddy' }],
+            bindings: [{ agentId: 'agent-1', targetId: 'bot-1' }],
+          },
+        },
+      ],
+      deployments: {
+        agents: [
+          {
+            id: 'agent-1',
+            runtime: 'openclaw',
+            use: [
+              {
+                plugin: 'agent-pack',
+                options: {
+                  packs: [{ id: 'gstack', url: 'https://github.com/garrytan/gstack' }],
+                  slashCommands: {
+                    rules: [
+                      {
+                        match: { packId: 'gstack', namePattern: 'office-hours$' },
+                        aliases: ['office-hour'],
+                        interaction: {
+                          kind: 'form',
+                          prompt: 'Fill the office-hours form.',
+                          fields: [{ id: 'pain', kind: 'textarea', label: 'Pain' }],
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+            configuration: {},
+          },
+        ],
+      },
+    }
+
+    const runtimePackage = buildAgentRuntimePackage({
+      agent: config.deployments!.agents[0]!,
+      config,
+      extraEnv: { SHADOW_SERVER_URL: 'http://shadow.local' },
+    })
+
+    const openclawConfig = JSON.parse(runtimePackage.configData['config.json']!)
+    const runtimeExtensions = JSON.parse(runtimePackage.configData['runtime-extensions.json']!)
+
+    expect(openclawConfig.plugins.load.paths).toContain('/app/extensions/shadowob')
+    expect(openclawConfig.channels.shadowob.accounts['bot-1']).toBeDefined()
+    expect(runtimeExtensions.openclaw.manifestPatches[0].extensionId).toBe('shadowob')
+    expect(runtimeExtensions.slashCommands.rules[0].match.packId).toBe('gstack')
+    expect(runtimeExtensions.slashCommands.rules[0].interaction.kind).toBe('form')
   })
 })
 

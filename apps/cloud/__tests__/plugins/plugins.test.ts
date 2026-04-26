@@ -351,6 +351,18 @@ describe('mergePluginFragments', () => {
     expect(entries['plugin-1']).toBeDefined()
     expect(entries['plugin-2']).toBeDefined()
   })
+
+  it('should merge plugin load paths without overwriting earlier plugins', () => {
+    const base: PluginConfigFragment = {
+      plugins: { load: { paths: ['/app/extensions/a'] } },
+    }
+    const fragment: PluginConfigFragment = {
+      plugins: { load: { paths: ['/app/extensions/b', '/app/extensions/a'] } },
+    }
+    const result = mergePluginFragments(base as any, fragment)
+
+    expect(result.plugins?.load?.paths).toEqual(['/app/extensions/a', '/app/extensions/b'])
+  })
 })
 
 describe('resolveAgentPluginConfig', () => {

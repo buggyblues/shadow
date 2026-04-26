@@ -16,7 +16,11 @@ import {
   resolvePluginSecrets,
 } from '../plugins/config-merger.js'
 import { getPluginRegistry } from '../plugins/registry.js'
-import type { PluginBuildContext, PluginDefinition } from '../plugins/types.js'
+import type {
+  PluginBuildContext,
+  PluginDefinition,
+  PluginRuntimeExtension,
+} from '../plugins/types.js'
 import { getRuntime } from '../runtimes/index.js'
 
 import type {
@@ -488,6 +492,43 @@ export function collectPluginBuildEnvVars(
   return envVars
 }
 
+function mergeRuntimeExtensions(
+  target: PluginRuntimeExtension,
+  fragment: PluginRuntimeExtension,
+): PluginRuntimeExtension {
+  const manifestPatches = [
+    ...(target.openclaw?.manifestPatches ?? []),
+    ...(fragment.openclaw?.manifestPatches ?? []),
+  ]
+  const slashRules = [
+    ...(target.slashCommands?.rules ?? []),
+    ...(fragment.slashCommands?.rules ?? []),
+  ]
+
+  return {
+    ...(manifestPatches.length > 0 ? { openclaw: { manifestPatches } } : {}),
+    ...(slashRules.length > 0 ? { slashCommands: { rules: slashRules } } : {}),
+  }
+}
+
+export function collectPluginRuntimeExtensions(
+  agent: AgentDeployment,
+  config: CloudConfig,
+  cwd?: string,
+  env?: RuntimeEnv,
+): PluginRuntimeExtension {
+  let runtimeExtensions: PluginRuntimeExtension = {}
+
+  forEachEnabledPlugin(agent, config, cwd, env, ({ pluginDef, context }) => {
+    for (const fn of pluginDef._hooks.buildRuntime) {
+      const fragment = fn(context)
+      if (fragment) runtimeExtensions = mergeRuntimeExtensions(runtimeExtensions, fragment)
+    }
+  })
+
+  return runtimeExtensions
+}
+
 /**
  * Run the plugin pipeline — iterate enabled plugins, call their providers, and merge results.
  *
@@ -621,21 +662,7 @@ export function buildOpenClawConfig(
   //     stored snapshots still produce a valid OpenClaw config.
   normalizeLegacyToolsConfig(openclawConfig.tools)
 
-  // 18. Ensure shadowob channel has a disabled fallback config so the
-  //     always-installed openclaw-shadowob extension passes validation.
-  const existingChannels = (openclawConfig as Record<string, unknown>).channels as
-    | Record<string, unknown>
-    | undefined
-  if (!existingChannels?.shadowob && !existingChannels?.['openclaw-shadowob']) {
-    if (!openclawConfig.channels) {
-      ;(openclawConfig as Record<string, unknown>).channels = {}
-    }
-    ;((openclawConfig as Record<string, unknown>).channels as Record<string, unknown>).shadowob = {
-      enabled: false,
-    }
-  }
-
-  // 19. Strip strict-schema-violating fields after plugins have contributed
+  // 18. Strip strict-schema-violating fields after plugins have contributed
   //     their prompt/context additions.
   const workspaceFiles = stripAndCollectWorkspaceFiles(openclawConfig)
   if (Object.keys(workspaceFiles).length > 0) {

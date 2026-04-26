@@ -271,6 +271,62 @@ export interface PluginSecretField {
   runtime?: boolean
 }
 
+// ─── Runtime Extension Types ────────────────────────────────────────────────
+
+export interface PluginSlashCommandInteractionField {
+  id: string
+  kind?: 'text' | 'textarea' | 'number' | 'checkbox' | 'select'
+  label: string
+  placeholder?: string
+  defaultValue?: string
+  required?: boolean
+  maxLength?: number
+}
+
+export interface PluginSlashCommandInteraction {
+  kind: 'buttons' | 'select' | 'form' | 'approval'
+  id?: string
+  prompt?: string
+  submitLabel?: string
+  responsePrompt?: string
+  approvalCommentLabel?: string
+  oneShot?: boolean
+  fields?: PluginSlashCommandInteractionField[]
+}
+
+export interface PluginSlashCommandRule {
+  match?: {
+    packId?: string
+    name?: string
+    names?: string[]
+    /** JavaScript regexp source matched against the discovered command name. */
+    namePattern?: string
+    sourcePathIncludes?: string | string[]
+  }
+  aliases?: string[]
+  interaction?: PluginSlashCommandInteraction
+}
+
+export interface PluginOpenClawManifestPatch {
+  /** Extension folder under /app/extensions, e.g. "shadowob". */
+  extensionId?: string
+  /** Absolute manifest path, or path relative to /app. Prefer extensionId. */
+  manifestPath?: string
+  /** Generic deep-merge patch for manifest fields. */
+  merge?: Record<string, unknown>
+  channelEnvVars?: Record<string, string[]>
+  channelConfigs?: Record<string, unknown>
+}
+
+export interface PluginRuntimeExtension {
+  openclaw?: {
+    manifestPatches?: PluginOpenClawManifestPatch[]
+  }
+  slashCommands?: {
+    rules?: PluginSlashCommandRule[]
+  }
+}
+
 // ─── K8s Artifact Types ──────────────────────────────────────────────────────
 
 export interface PluginK8sInitContainer {
@@ -385,6 +441,9 @@ export interface PluginAPI {
   /** Emit environment variables to inject into the agent container */
   onBuildEnv(fn: (ctx: PluginBuildContext) => Record<string, string> | void): void
 
+  /** Emit runner-consumed extension metadata, written outside openclaw.json. */
+  onBuildRuntime(fn: (ctx: PluginBuildContext) => PluginRuntimeExtension | void): void
+
   /** Emit extra Kubernetes resource manifests */
   onBuildResources(fn: (ctx: PluginBuildContext) => Record<string, unknown>[]): void
 
@@ -410,6 +469,7 @@ export interface PluginHooks {
   buildConfig: Array<(ctx: PluginBuildContext) => PluginConfigFragment | void>
   buildPrompt: Array<(ctx: PluginBuildContext) => string | void>
   buildEnv: Array<(ctx: PluginBuildContext) => Record<string, string> | void>
+  buildRuntime: Array<(ctx: PluginBuildContext) => PluginRuntimeExtension | void>
   buildResources: Array<(ctx: PluginBuildContext) => Record<string, unknown>[]>
   validate: Array<(ctx: PluginBuildContext) => PluginValidationResult | void>
   provision: Array<(ctx: PluginProvisionContext) => Promise<PluginProvisionResult>>

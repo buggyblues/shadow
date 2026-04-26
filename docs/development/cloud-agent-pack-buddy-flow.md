@@ -36,6 +36,8 @@ Cloud Core 只做微内核：读取模板、加载插件、收集配置碎片、
 1. Cloud runner 在启动时扫描 pack，把命令写入 Shadow agent config。
 2. Shadow Server 暴露 `GET /api/channels/:id/slash-commands`，供频道输入框补全。
 
+命令的交互行为由插件通过 `onBuildRuntime` 写入 `runtime-extensions.json`，或由上游命令 frontmatter 自带 `interaction` 声明。runner 只执行通用的规则合并，不允许在容器入口里写仓库名、命令名或表单字段特例。
+
 如果命令带 `interaction`，无参数触发时 Buddy 必须先发送交互组件，而不是直接进入纯聊天。典型链路是：
 
 1. 用户输入 `/office-hour`。
@@ -93,4 +95,4 @@ Buddy 在线不能只看 Pod `Running`。runner 分两个健康层级：
 6. **交互 smoke**：表单或审批提交后服务端记录状态，刷新后控件仍锁定。
 7. **内容 smoke**：需要路线图/MVP/审批的命令，必须先给完整内容，再给审批动作。
 
-这套流程是以后批量兼容更多开源 agent 项目的基线。新增项目时优先扩展 autoDetect 的形态识别和插件 metadata，不在 Cloud handler 里打项目特例补丁。
+这套流程是以后批量兼容更多开源 agent 项目的基线。新增项目时优先扩展 autoDetect 的形态识别、模板声明和插件 runtime metadata，不在 Cloud handler 或 runner entrypoint 里打项目特例补丁。

@@ -74,7 +74,70 @@
                   "ref": "main"
                 }
               ],
-              "poll": "1h"
+              "poll": "1h",
+              "slashCommands": {
+                "rules": [
+                  {
+                    "match": {
+                      "packId": "gstack",
+                      "namePattern": "^(gstack(-openclaw)?-)?office-hours$"
+                    },
+                    "aliases": ["office-hours", "office-hour"],
+                    "interaction": {
+                      "id": "slash:gstack:office-hours",
+                      "kind": "form",
+                      "prompt": "先填写这 6 个 office-hours 问题。Strategy Buddy 会基于这些答案产出问题重构、MVP 范围和 90 天路线图。",
+                      "submitLabel": "提交",
+                      "responsePrompt": "Office-hours answers submitted. Run the gstack CEO review now. Produce a concrete response before asking for approval: 1) reframed problem, 2) MVP scope, 3) 90-day roadmap, 4) risks and assumptions. Only after those sections are visible, send one approval interactive block for that exact proposal.",
+                      "oneShot": true,
+                      "fields": [
+                        {
+                          "id": "pain",
+                          "kind": "textarea",
+                          "label": "痛点是什么？给具体例子，不要假设场景。",
+                          "required": true,
+                          "maxLength": 2000
+                        },
+                        {
+                          "id": "status_quo",
+                          "kind": "textarea",
+                          "label": "现在怎么解决？你或用户目前用什么办法应对？",
+                          "required": true,
+                          "maxLength": 2000
+                        },
+                        {
+                          "id": "user",
+                          "kind": "textarea",
+                          "label": "谁会用它？第一个愿意付费或每天使用的人长什么样？",
+                          "required": true,
+                          "maxLength": 2000
+                        },
+                        {
+                          "id": "founder_edge",
+                          "kind": "textarea",
+                          "label": "为什么是你来做？你的独特洞察、资源、渠道或经历是什么？",
+                          "required": true,
+                          "maxLength": 2000
+                        },
+                        {
+                          "id": "desired_outcome",
+                          "kind": "textarea",
+                          "label": "你想要的是方案，还是结果？用户真正得到什么？",
+                          "required": true,
+                          "maxLength": 2000
+                        },
+                        {
+                          "id": "tomorrow_use",
+                          "kind": "textarea",
+                          "label": "如果明天这个产品就存在，你最想用它做什么？从开始到结束描述一个场景。",
+                          "required": true,
+                          "maxLength": 2000
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
             }
           }
         ],
