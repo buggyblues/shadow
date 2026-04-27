@@ -26,7 +26,7 @@ export function DoctorPage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('doctor.title') }]}
+      breadcrumb={[]}
       title={t('doctor.title')}
       description={t('doctor.subtitle')}
       narrow

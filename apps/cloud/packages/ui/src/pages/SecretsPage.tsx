@@ -350,7 +350,7 @@ export function SecretsPage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('secrets.title') }]}
+      breadcrumb={[]}
       title={t('secrets.title')}
       description={t('secrets.description')}
       narrow

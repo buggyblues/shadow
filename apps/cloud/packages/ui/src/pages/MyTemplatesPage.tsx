@@ -681,7 +681,7 @@ export function MyTemplatesPage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('templates.title') }]}
+      breadcrumb={[]}
       title={t('templates.title')}
       headerContent={
         <div className="space-y-3">

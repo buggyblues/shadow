@@ -319,7 +319,7 @@ export function StorePage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('store.title') }]}
+      breadcrumb={[]}
       title={t('store.title')}
       description={t('store.description')}
       headerContent={

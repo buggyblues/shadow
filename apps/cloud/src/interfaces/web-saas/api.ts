@@ -269,16 +269,20 @@ export const saasApi = {
 
   // Templates
   templates: {
-    list: (params?: { category?: string; q?: string }) => {
+    list: (params?: { category?: string; q?: string; locale?: string }) => {
       const qs = new URLSearchParams()
       if (params?.category) qs.set('category', params.category)
       if (params?.q) qs.set('q', params.q)
+      if (params?.locale) qs.set('locale', params.locale)
       const query = qs.toString()
       return get<SaasTemplate[]>(`/templates${query ? `?${query}` : ''}`)
     },
     mine: () => get<SaasTemplate[]>('/templates/mine'),
     mineOne: (slug: string) => get<SaasTemplate>(`/templates/mine/${encodeURIComponent(slug)}`),
-    get: (slug: string) => get<SaasTemplate>(`/templates/${encodeURIComponent(slug)}`),
+    get: (slug: string, locale?: string) => {
+      const qs = locale ? `?locale=${encodeURIComponent(locale)}` : ''
+      return get<SaasTemplate>(`/templates/${encodeURIComponent(slug)}${qs}`)
+    },
     envRefs: (slug: string) =>
       get<{ template: string; requiredEnvVars: string[] }>(
         `/templates/${encodeURIComponent(slug)}/env-refs`,

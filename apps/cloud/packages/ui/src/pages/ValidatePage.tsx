@@ -49,7 +49,7 @@ export function ValidatePage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('validate.title') }]}
+      breadcrumb={[]}
       title={t('validate.title')}
       description={t('validate.description')}
       actions={

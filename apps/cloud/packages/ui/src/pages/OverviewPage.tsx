@@ -263,7 +263,7 @@ export function OverviewPage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('overview.title') }]}
+      breadcrumb={[]}
       title={t('overview.subtitle')}
       description={t('overview.description')}
       headerContent={

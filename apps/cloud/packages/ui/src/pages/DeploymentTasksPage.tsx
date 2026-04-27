@@ -73,7 +73,7 @@ export function DeploymentTasksPage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('nav.deployTasks') }]}
+      breadcrumb={[]}
       title={t('deployTask.listTitle')}
       description={t('deployTask.listDescription')}
       headerContent={

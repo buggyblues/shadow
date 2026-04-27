@@ -246,8 +246,8 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
       }),
     putSettings: () => Promise.resolve({ ok: true }),
     oauthInit: () => Promise.resolve({ url: '' }),
-    catalog: (_locale: string) =>
-      saasApi.templates.list().then((rows) => ({
+    catalog: (locale: string) =>
+      saasApi.templates.list({ locale }).then((rows) => ({
         source: 'community' as const,
         templates: rows.map(toTemplateSummary),
         categories: buildTemplateCategories(rows),
@@ -266,8 +266,8 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
 
   // ── Templates ────────────────────────────────────────────────────────────
   templates: {
-    list: () =>
-      saasApi.templates.list().then((rows) =>
+    list: (locale?: string) =>
+      saasApi.templates.list({ locale }).then((rows) =>
         rows.map((t) => ({
           name: t.slug,
           namespace: getTemplateMeta(t).namespace,
@@ -277,13 +277,13 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
           tags: t.tags ?? [],
         })),
       ),
-    catalog: (_locale: string) =>
-      saasApi.templates.list().then((rows) => ({
+    catalog: (locale: string) =>
+      saasApi.templates.list({ locale }).then((rows) => ({
         templates: rows.map(toTemplateSummary),
         categories: buildTemplateCategories(rows),
       })),
-    listByLocale: (_locale: string) =>
-      saasApi.templates.list().then((rows) =>
+    listByLocale: (locale: string) =>
+      saasApi.templates.list({ locale }).then((rows) =>
         rows.map((t) => ({
           name: t.slug,
           namespace: getTemplateMeta(t).namespace,
@@ -293,9 +293,9 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
           tags: t.tags ?? [],
         })),
       ),
-    detail: async (name: string, _locale: string) => {
+    detail: async (name: string, locale: string) => {
       const [template, envRefs] = await Promise.all([
-        saasApi.templates.get(name),
+        saasApi.templates.get(name, locale),
         saasApi.templates.envRefs(name).catch(() => ({ template: name, requiredEnvVars: [] })),
       ])
       return {

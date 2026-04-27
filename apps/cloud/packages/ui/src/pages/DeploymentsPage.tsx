@@ -590,7 +590,7 @@ export function DeploymentsPage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('deployments.title') }]}
+      breadcrumb={[]}
       title={t('deployments.title')}
       description={t('deployments.description')}
       actions={

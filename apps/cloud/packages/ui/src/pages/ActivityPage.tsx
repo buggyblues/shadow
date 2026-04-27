@@ -184,7 +184,7 @@ export function ActivityPage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('activity.title') }]}
+      breadcrumb={[]}
       title={t('activity.title')}
       description={t('activity.description')}
       actions={

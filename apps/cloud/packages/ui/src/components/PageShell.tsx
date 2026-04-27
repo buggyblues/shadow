@@ -34,7 +34,7 @@ export function PageShell({
         className,
       )}
     >
-      <Breadcrumb items={breadcrumb} className="mb-4" />
+      {breadcrumb.length > 0 && <Breadcrumb items={breadcrumb} className="mb-4" />}
 
       <GlassPanel as="section" className="p-5 md:p-6">
         {/* Title row */}

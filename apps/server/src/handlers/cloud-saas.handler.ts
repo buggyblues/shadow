@@ -111,6 +111,47 @@ function nonEmptyProcessEnv(key: string): string | undefined {
   return value && value.trim() !== '' ? value : undefined
 }
 
+/**
+ * Resolve i18n dict from a template's `content.i18n` field for the given locale.
+ * Falls back to 'en' if the requested locale isn't available.
+ */
+function resolveTemplateI18nDict(
+  content: Record<string, unknown>,
+  locale: string,
+): Record<string, string> {
+  const i18n = content.i18n as Record<string, Record<string, string>> | undefined
+  if (!i18n) return {}
+  const baseLocale = locale.split('-')[0] ?? locale
+  return i18n[locale] ?? (baseLocale !== locale ? i18n[baseLocale] : undefined) ?? i18n.en ?? {}
+}
+
+/**
+ * Resolve a string value that may contain `${i18n:key}` references.
+ */
+function resolveI18nValue(value: string, i18nDict: Record<string, string>): string {
+  const match = /^\$\{i18n:([^}]+)\}$/.exec(value)
+  if (!match?.[1]) return value
+  return i18nDict[match[1]] ?? value
+}
+
+/**
+ * Deep-resolve `${i18n:...}` placeholders in an object's string values.
+ */
+function resolveI18nInObject(obj: unknown, i18nDict: Record<string, string>): unknown {
+  if (typeof obj === 'string') return resolveI18nValue(obj, i18nDict)
+  if (Array.isArray(obj)) return obj.map((item) => resolveI18nInObject(item, i18nDict))
+  if (obj && typeof obj === 'object') {
+    const result: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(obj)) {
+      // Skip the i18n section itself — it's the source, not a target
+      if (key === 'i18n') continue
+      result[key] = resolveI18nInObject(value, i18nDict)
+    }
+    return result
+  }
+  return obj
+}
+
 function providerProfileScope(profileId: string): string {
   return `${PROVIDER_PROFILE_SCOPE_PREFIX}${profileId}`
 }
@@ -741,11 +782,12 @@ export function createCloudSaasHandler(container: AppContainer) {
   /**
    * GET /api/cloud-saas/templates
    * List all approved templates (official + community).
-   * Supports optional `category` and `q` (search) query params.
+   * Supports optional `category`, `q` (search), and `locale` query params.
    */
   h.get('/templates', async (c) => {
     const category = c.req.query('category')
     const q = c.req.query('q')?.toLowerCase()
+    const locale = c.req.query('locale') ?? 'en'
     const dao = container.resolve('cloudTemplateDao')
     let templates = (await dao.listApproved()).filter((template) =>
       isDeployableTemplateContent(template.content),
@@ -761,7 +803,18 @@ export function createCloudSaasHandler(container: AppContainer) {
           (t.tags as string[] | null)?.some((tag) => tag.toLowerCase().includes(q)),
       )
     }
-    return c.json(templates)
+    // Resolve ${i18n:...} placeholders in name, description, and content
+    const localized = templates.map((t) => {
+      const content = t.content as Record<string, unknown>
+      const i18nDict = resolveTemplateI18nDict(content, locale)
+      return {
+        ...t,
+        name: resolveI18nValue(t.name, i18nDict),
+        description: t.description ? resolveI18nValue(t.description, i18nDict) : t.description,
+        content: resolveI18nInObject(content, i18nDict),
+      }
+    })
+    return c.json(localized)
   })
 
   /**
@@ -810,6 +863,7 @@ export function createCloudSaasHandler(container: AppContainer) {
    */
   h.get('/templates/:slug', async (c) => {
     const slug = c.req.param('slug')
+    const locale = c.req.query('locale') ?? 'en'
     const dao = container.resolve('cloudTemplateDao')
     const template = await dao.findBySlug(slug)
     if (!template || template.reviewStatus !== 'approved') {
@@ -818,7 +872,17 @@ export function createCloudSaasHandler(container: AppContainer) {
     if (!isDeployableTemplateContent(template.content)) {
       return c.json({ ok: false, error: 'Template is not deployable' }, 422)
     }
-    return c.json(template)
+    // Resolve ${i18n:...} placeholders
+    const content = template.content as Record<string, unknown>
+    const i18nDict = resolveTemplateI18nDict(content, locale)
+    return c.json({
+      ...template,
+      name: resolveI18nValue(template.name, i18nDict),
+      description: template.description
+        ? resolveI18nValue(template.description, i18nDict)
+        : template.description,
+      content: resolveI18nInObject(content, i18nDict),
+    })
   })
 
   h.get('/templates/:slug/env-refs', async (c) => {

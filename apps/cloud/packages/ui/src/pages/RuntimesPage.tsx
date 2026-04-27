@@ -17,7 +17,7 @@ export function RuntimesPage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('runtimes.title') }]}
+      breadcrumb={[]}
       title={t('runtimes.title')}
       description={t('runtimes.subtitle')}
       narrow

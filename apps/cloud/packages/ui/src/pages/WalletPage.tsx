@@ -83,11 +83,7 @@ export function WalletPage() {
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1
 
   return (
-    <PageShell
-      breadcrumb={[{ label: t('nav.wallet') }]}
-      title={t('wallet.title')}
-      description={t('wallet.description')}
-    >
+    <PageShell breadcrumb={[]} title={t('wallet.title')} description={t('wallet.description')}>
       {/* Balance card */}
       <GlassPanel className="mb-4 flex items-center justify-between p-5 md:p-6">
         <div className="flex items-center gap-3">

@@ -146,7 +146,7 @@ export function CommunityPage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('nav.community') }]}
+      breadcrumb={[]}
       title={t('community.title')}
       description={t('community.description')}
     >

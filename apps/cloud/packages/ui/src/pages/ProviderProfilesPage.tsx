@@ -629,7 +629,7 @@ export function ProviderProfilesPage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('providers.title') }]}
+      breadcrumb={[]}
       title={t('providers.title')}
       description={t('providers.description')}
       narrow

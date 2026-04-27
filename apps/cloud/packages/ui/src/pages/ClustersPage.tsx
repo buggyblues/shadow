@@ -326,7 +326,7 @@ export function ClustersPage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('nav.clusters') }]}
+      breadcrumb={[]}
       title={t('clusters.title')}
       description={t('clusters.description')}
       actions={
