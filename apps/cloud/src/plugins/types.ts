@@ -216,7 +216,7 @@ export interface PluginMCPServer {
 
 // ─── Provider / Secret Capability Types ─────────────────────────────────────
 
-export type ModelTag = 'default' | 'fast' | 'flash' | 'reasoning' | 'vision'
+export type ModelTag = 'default' | 'fast' | 'flash' | 'reasoning' | 'vision' | 'tools'
 
 export interface ProviderModelEntry {
   /** Model ID within the provider. */

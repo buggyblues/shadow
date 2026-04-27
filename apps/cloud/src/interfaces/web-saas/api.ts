@@ -158,6 +158,23 @@ export interface SaasProviderCatalog {
   }>
 }
 
+export interface SaasLlmProviderModel {
+  id: string
+  name?: string
+  tags?: string[]
+  contextWindow?: number
+  maxTokens?: number
+  cost?: {
+    input?: number
+    output?: number
+  }
+  capabilities?: {
+    vision?: boolean
+    tools?: boolean
+    reasoning?: boolean
+  }
+}
+
 export interface SaasProviderProfile {
   id: string
   providerId: string
@@ -167,6 +184,65 @@ export interface SaasProviderProfile {
   config: Record<string, unknown>
   envVars: Array<{ key: string; maskedValue: string; isSecret: boolean }>
   updatedAt?: string
+}
+
+export interface SaasLlmRoutableModel extends SaasLlmProviderModel {
+  ref: string
+  providerId: string
+  profileId: string
+  profileName: string
+  enabled: boolean
+}
+
+export interface SaasLlmRouteAssignment {
+  selector: string
+  primary?: string
+  fallbacks: string[]
+}
+
+export interface SaasLlmLimitRule {
+  id: string
+  metric: 'tokens' | 'cost'
+  threshold: number
+  period: 'day' | 'month'
+  blockRequests: boolean
+  enabled: boolean
+  triggered: number
+}
+
+export interface SaasLlmRoutingPolicy {
+  enabled: boolean
+  defaultRoute: SaasLlmRouteAssignment
+  complexity: Record<'simple' | 'standard' | 'complex' | 'reasoning', SaasLlmRouteAssignment>
+  limits: {
+    requestsPerMinute: number
+    concurrentRequests: number
+    monthlyBudgetUsd?: number
+  }
+  fallback: {
+    enabled: boolean
+    statusCodes: number[]
+  }
+  rules: SaasLlmLimitRule[]
+}
+
+export interface SaasLlmProviderRoutingState {
+  policy: SaasLlmRoutingPolicy
+  models: SaasLlmRoutableModel[]
+  summary: {
+    profiles: number
+    enabledProfiles: number
+    models: number
+    enabledModels: number
+  }
+}
+
+export interface SaasLlmRoutingResolveResult {
+  route: 'default' | 'simple' | 'standard' | 'complex' | 'reasoning'
+  selector: string
+  model: SaasLlmRoutableModel | null
+  fallbacks: SaasLlmRoutableModel[]
+  reason: 'primary' | 'tag_match' | 'default' | 'unresolved'
 }
 
 export interface SaasProviderTestResult {
@@ -385,6 +461,23 @@ export const saasApi = {
     }) => put<{ ok: boolean; profile?: SaasProviderProfile }>('/provider-profiles', data),
     test: (id: string) =>
       post<SaasProviderTestResult>(`/provider-profiles/${encodeURIComponent(id)}/test`, {}),
+    refreshModels: (id: string) =>
+      post<
+        SaasProviderTestResult & {
+          models?: SaasLlmProviderModel[]
+          profile?: SaasProviderProfile
+        }
+      >(`/provider-profiles/${encodeURIComponent(id)}/models/refresh`, {}),
     delete: (id: string) => del<{ ok: boolean }>(`/provider-profiles/${encodeURIComponent(id)}`),
+  },
+  providerRouting: {
+    get: () => get<SaasLlmProviderRoutingState>('/provider-routing'),
+    put: (policy: SaasLlmRoutingPolicy) =>
+      put<{ ok: boolean; policy: SaasLlmRoutingPolicy }>('/provider-routing', { policy }),
+    resolve: (data: { selector?: string; tags?: string[] }) =>
+      post<{ ok: boolean; resolved: SaasLlmRoutingResolveResult }>(
+        '/provider-routing/resolve',
+        data,
+      ),
   },
 }

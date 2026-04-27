@@ -1,0 +1,40 @@
+{
+  "id": "z-ai",
+  "name": "Z.ai",
+  "description": "Connect agents to Z.ai GLM models through the OpenAI-compatible API",
+  "version": "1.0.0",
+  "category": "ai-provider",
+  "icon": "brain",
+  "website": "https://z.ai",
+  "docs": "https://docs.z.ai",
+  "auth": {
+    "type": "api-key",
+    "fields": [
+      {
+        "key": "ZAI_API_KEY",
+        "label": "API Key",
+        "description": "Z.ai API key",
+        "required": true,
+        "sensitive": true
+      }
+    ]
+  },
+  "config": {
+    "type": "object",
+    "properties": {
+      "defaultModel": {
+        "type": "string",
+        "default": "glm-4.5",
+        "description": "Default GLM model"
+      },
+      "baseUrl": {
+        "type": "string",
+        "default": "https://api.z.ai/api/paas/v4",
+        "description": "Z.ai OpenAI-compatible base URL"
+      }
+    }
+  },
+  "capabilities": ["auth-provider"],
+  "tags": ["ai", "llm", "glm", "zai", "zhipu", "openai-compatible"],
+  "popularity": 70
+}

@@ -81,9 +81,15 @@ Interactive message blocks are stored in `message.metadata.interactive`; one-sho
 | GET    | `/api/cloud-saas/provider-profiles`           | List encrypted provider profiles |
 | PUT    | `/api/cloud-saas/provider-profiles`           | Create or update a provider profile |
 | POST   | `/api/cloud-saas/provider-profiles/:id/test`  | Test provider credentials |
+| POST   | `/api/cloud-saas/provider-profiles/:id/models/refresh` | Discover and persist provider models |
 | DELETE | `/api/cloud-saas/provider-profiles/:id`       | Delete a provider profile |
+| GET    | `/api/cloud-saas/provider-routing`            | Read the LLM routing policy and routable models |
+| PUT    | `/api/cloud-saas/provider-routing`            | Update the LLM routing policy, limits, and fallback chain |
+| POST   | `/api/cloud-saas/provider-routing/resolve`    | Resolve a selector or tags to a concrete model route |
 
-Provider profile secrets are stored through the Cloud env var KMS path. Templates using the `model-provider` plugin receive matching runtime secrets and model metadata, including user-defined tags such as `default`, `fast`, `reasoning`, and `vision`.
+Provider profile secrets are stored through the Cloud env var KMS path. Phase 1 supports API-key provider profiles only. Templates using the `model-provider` plugin receive matching runtime secrets and model metadata, including user-defined tags such as `default`, `fast`, `reasoning`, `vision`, and `tools`. Routing policy also persists token/cost threshold rules with alert-only or hard-limit behavior for the future proxy.
+
+The LLM Gateway management APIs above do not yet expose a public `/v1/chat/completions` proxy token or base URL. That runtime gateway is a later server feature; current profiles are used for encrypted storage, model discovery, routing policy, and deployment-time injection.
 
 ## File Upload
 

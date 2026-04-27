@@ -119,6 +119,23 @@ export interface ProviderCatalogEntry {
   }>
 }
 
+export interface LlmProviderModel {
+  id: string
+  name?: string
+  tags?: string[]
+  contextWindow?: number
+  maxTokens?: number
+  cost?: {
+    input?: number
+    output?: number
+  }
+  capabilities?: {
+    vision?: boolean
+    tools?: boolean
+    reasoning?: boolean
+  }
+}
+
 export interface ProviderProfile {
   id: string
   providerId: string
@@ -128,6 +145,65 @@ export interface ProviderProfile {
   config: Record<string, unknown>
   envVars: Array<{ key: string; maskedValue: string; isSecret: boolean }>
   updatedAt?: string
+}
+
+export interface LlmRoutableModel extends LlmProviderModel {
+  ref: string
+  providerId: string
+  profileId: string
+  profileName: string
+  enabled: boolean
+}
+
+export interface LlmRouteAssignment {
+  selector: string
+  primary?: string
+  fallbacks: string[]
+}
+
+export interface LlmLimitRule {
+  id: string
+  metric: 'tokens' | 'cost'
+  threshold: number
+  period: 'day' | 'month'
+  blockRequests: boolean
+  enabled: boolean
+  triggered: number
+}
+
+export interface LlmRoutingPolicy {
+  enabled: boolean
+  defaultRoute: LlmRouteAssignment
+  complexity: Record<'simple' | 'standard' | 'complex' | 'reasoning', LlmRouteAssignment>
+  limits: {
+    requestsPerMinute: number
+    concurrentRequests: number
+    monthlyBudgetUsd?: number
+  }
+  fallback: {
+    enabled: boolean
+    statusCodes: number[]
+  }
+  rules: LlmLimitRule[]
+}
+
+export interface LlmProviderRoutingState {
+  policy: LlmRoutingPolicy
+  models: LlmRoutableModel[]
+  summary: {
+    profiles: number
+    enabledProfiles: number
+    models: number
+    enabledModels: number
+  }
+}
+
+export interface LlmRoutingResolveResult {
+  route: 'default' | 'simple' | 'standard' | 'complex' | 'reasoning'
+  selector: string
+  model: LlmRoutableModel | null
+  fallbacks: LlmRoutableModel[]
+  reason: 'primary' | 'tag_match' | 'default' | 'unresolved'
 }
 
 export interface ProviderTestResult {
@@ -585,10 +661,25 @@ export const api = {
     }) => put<{ ok: boolean; profile?: ProviderProfile }>('/provider-profiles', data),
     test: (id: string) =>
       post<ProviderTestResult>(`/provider-profiles/${encodeURIComponent(id)}/test`, {}),
+    refreshModels: (id: string) =>
+      post<
+        ProviderTestResult & {
+          models?: LlmProviderModel[]
+          profile?: ProviderProfile
+        }
+      >(`/provider-profiles/${encodeURIComponent(id)}/models/refresh`, {}),
     delete: (id: string) =>
       fetch(`${BASE}/provider-profiles/${encodeURIComponent(id)}`, { method: 'DELETE' }).then((r) =>
         r.json(),
       ) as Promise<{ ok: boolean }>,
+  },
+
+  providerRouting: {
+    get: () => get<LlmProviderRoutingState>('/provider-routing'),
+    put: (policy: LlmRoutingPolicy) =>
+      put<{ ok: boolean; policy: LlmRoutingPolicy }>('/provider-routing', { policy }),
+    resolve: (data: { selector?: string; tags?: string[] }) =>
+      post<{ ok: boolean; resolved: LlmRoutingResolveResult }>('/provider-routing/resolve', data),
   },
 
   activity: {

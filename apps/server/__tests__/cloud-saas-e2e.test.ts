@@ -12,6 +12,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
+import { createServer } from 'node:http'
 import { extractCloudSaasRuntime } from '@shadowob/cloud'
 import { eq, like } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
@@ -377,7 +378,12 @@ describe('Cloud SaaS — deployment + billing', () => {
     const catalogs = (await catalogsRes.json()) as {
       providers: Array<{ provider: { id: string } }>
     }
-    expect(catalogs.providers.some((entry) => entry.provider.id === 'anthropic')).toBe(true)
+    const providerIds = catalogs.providers.map((entry) => entry.provider.id)
+    expect(providerIds).toContain('anthropic')
+    expect(providerIds).toContain('qwen')
+    expect(providerIds).toContain('minimax')
+    expect(providerIds).toContain('moonshot')
+    expect(providerIds).toContain('zai')
 
     const profileRes = await req('PUT', '/api/cloud-saas/provider-profiles', {
       providerId: 'anthropic',
@@ -445,6 +451,192 @@ describe('Cloud SaaS — deployment + billing', () => {
         ],
       },
     ])
+  })
+
+  it('refreshes provider models and resolves Manifest-style routing policy', async () => {
+    const modelServer = createServer((request, response) => {
+      const url = new URL(request.url ?? '/', 'http://mock.local')
+      if (url.pathname === '/v1/models') {
+        expect(request.headers.authorization).toBe('Bearer mock-openai-key')
+        response.writeHead(200, { 'Content-Type': 'application/json' })
+        response.end(
+          JSON.stringify({
+            data: [
+              { id: 'mock-fast-mini', object: 'model' },
+              { id: 'mock-reasoning-r1', object: 'model' },
+            ],
+          }),
+        )
+        return
+      }
+      if (url.pathname === '/gemini/models') {
+        expect(url.searchParams.get('key')).toBe('mock-gemini-key')
+        expect(request.headers.authorization).toBeUndefined()
+        response.writeHead(200, { 'Content-Type': 'application/json' })
+        response.end(
+          JSON.stringify({
+            models: [{ name: 'models/gemini-2.0-flash', inputTokenLimit: 1_048_576 }],
+          }),
+        )
+        return
+      }
+
+      response.writeHead(404)
+      response.end()
+    })
+    await new Promise<void>((resolve) => modelServer.listen(0, '127.0.0.1', resolve))
+
+    try {
+      const address = modelServer.address()
+      const port = typeof address === 'object' && address ? address.port : 0
+      const baseUrl = `http://127.0.0.1:${port}/v1`
+      const profileRes = await req('PUT', '/api/cloud-saas/provider-profiles', {
+        providerId: 'openai',
+        name: 'Mock OpenAI Gateway',
+        config: {
+          baseUrl,
+          apiFormat: 'openai',
+          authType: 'api_key',
+        },
+        envVars: { OPENAI_API_KEY: 'mock-openai-key' },
+      })
+      expect(profileRes.status).toBe(200)
+      const profileBody = (await profileRes.json()) as { profile: { id: string } }
+
+      const refreshRes = await req(
+        'POST',
+        `/api/cloud-saas/provider-profiles/${profileBody.profile.id}/models/refresh`,
+      )
+      expect(refreshRes.status).toBe(200)
+      const refreshBody = (await refreshRes.json()) as {
+        ok: boolean
+        models: Array<{ id: string; tags: string[] }>
+      }
+      expect(refreshBody.ok).toBe(true)
+      expect(refreshBody.models.map((model) => model.id)).toEqual([
+        'mock-fast-mini',
+        'mock-reasoning-r1',
+      ])
+      expect(refreshBody.models[0]?.tags).toContain('fast')
+      expect(refreshBody.models[1]?.tags).toContain('reasoning')
+
+      const geminiProfileRes = await req('PUT', '/api/cloud-saas/provider-profiles', {
+        providerId: 'gemini',
+        name: 'Mock Gemini Gateway',
+        config: {
+          baseUrl: `http://127.0.0.1:${port}/gemini`,
+          authType: 'api_key',
+        },
+        envVars: { GOOGLE_AI_API_KEY: 'mock-gemini-key' },
+      })
+      expect(geminiProfileRes.status).toBe(200)
+      const geminiProfileBody = (await geminiProfileRes.json()) as { profile: { id: string } }
+      const geminiRefreshRes = await req(
+        'POST',
+        `/api/cloud-saas/provider-profiles/${geminiProfileBody.profile.id}/models/refresh`,
+      )
+      expect(geminiRefreshRes.status).toBe(200)
+      const geminiRefreshBody = (await geminiRefreshRes.json()) as {
+        ok: boolean
+        models: Array<{ id: string; tags: string[]; contextWindow?: number }>
+        profile: { config: { apiFormat?: string } }
+      }
+      expect(geminiRefreshBody.ok).toBe(true)
+      expect(geminiRefreshBody.profile.config.apiFormat).toBe('gemini')
+      expect(geminiRefreshBody.models[0]).toMatchObject({
+        id: 'gemini-2.0-flash',
+        contextWindow: 1_048_576,
+      })
+      expect(geminiRefreshBody.models[0]?.tags).toContain('fast')
+
+      const routingRes = await req('GET', '/api/cloud-saas/provider-routing')
+      expect(routingRes.status).toBe(200)
+      const routingBody = (await routingRes.json()) as {
+        policy: {
+          defaultRoute: { selector: string; fallbacks: string[] }
+          complexity: { reasoning: { selector: string; primary?: string; fallbacks: string[] } }
+        }
+        models: Array<{ ref: string; id: string }>
+      }
+      const fastRef = routingBody.models.find((model) => model.id === 'mock-fast-mini')?.ref
+      const reasoningRef = routingBody.models.find((model) => model.id === 'mock-reasoning-r1')?.ref
+      expect(fastRef).toBe(`${profileBody.profile.id}/mock-fast-mini`)
+      expect(reasoningRef).toBe(`${profileBody.profile.id}/mock-reasoning-r1`)
+
+      const policy = {
+        ...routingBody.policy,
+        defaultRoute: {
+          selector: 'fast',
+          primary: fastRef,
+          fallbacks: reasoningRef ? [reasoningRef] : [],
+        },
+        complexity: {
+          ...routingBody.policy.complexity,
+          reasoning: {
+            selector: 'reasoning',
+            primary: reasoningRef,
+            fallbacks: fastRef ? [fastRef] : [],
+          },
+        },
+        limits: {
+          requestsPerMinute: 30,
+          concurrentRequests: 3,
+          monthlyBudgetUsd: 25,
+        },
+        fallback: {
+          enabled: true,
+          statusCodes: [429, 500, 502, 503],
+        },
+        rules: [
+          {
+            id: 'rule-tokens-day',
+            metric: 'tokens',
+            threshold: 123,
+            period: 'day',
+            blockRequests: false,
+            enabled: true,
+            triggered: 0,
+          },
+        ],
+        enabled: true,
+      }
+      const saveRoutingRes = await req('PUT', '/api/cloud-saas/provider-routing', { policy })
+      expect(saveRoutingRes.status).toBe(200)
+
+      const savedRoutingRes = await req('GET', '/api/cloud-saas/provider-routing')
+      expect(savedRoutingRes.status).toBe(200)
+      const savedRoutingBody = (await savedRoutingRes.json()) as {
+        policy: { rules: Array<{ id: string; metric: string; threshold: number; period: string }> }
+      }
+      expect(savedRoutingBody.policy.rules[0]).toMatchObject({
+        id: 'rule-tokens-day',
+        metric: 'tokens',
+        threshold: 123,
+        period: 'day',
+      })
+
+      const resolveFastRes = await req('POST', '/api/cloud-saas/provider-routing/resolve', {
+        selector: 'default',
+      })
+      expect(resolveFastRes.status).toBe(200)
+      const resolveFastBody = (await resolveFastRes.json()) as {
+        resolved: { model: { ref: string }; fallbacks: Array<{ ref: string }> }
+      }
+      expect(resolveFastBody.resolved.model.ref).toBe(fastRef)
+      expect(resolveFastBody.resolved.fallbacks[0]?.ref).toBe(reasoningRef)
+
+      const resolveReasoningRes = await req('POST', '/api/cloud-saas/provider-routing/resolve', {
+        selector: 'reasoning',
+      })
+      expect(resolveReasoningRes.status).toBe(200)
+      const resolveReasoningBody = (await resolveReasoningRes.json()) as {
+        resolved: { model: { ref: string }; fallbacks: Array<{ ref: string }> }
+      }
+      expect(resolveReasoningBody.resolved.model.ref).toBe(reasoningRef)
+      expect(resolveReasoningBody.resolved.fallbacks[0]?.ref).toBe(fastRef)
+    } finally {
+      await new Promise<void>((resolve) => modelServer.close(() => resolve()))
+    }
   })
 
   it('POST /api/cloud-saas/deployments deducts coins, creates deployment, and redacts config secrets', async () => {

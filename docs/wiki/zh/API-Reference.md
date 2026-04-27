@@ -81,9 +81,15 @@ Authorization: Bearer <token>
 | GET    | `/api/cloud-saas/provider-profiles`      | 列出加密存储的供应商 Profile |
 | PUT    | `/api/cloud-saas/provider-profiles`      | 创建或更新供应商 Profile |
 | POST   | `/api/cloud-saas/provider-profiles/:id/test` | 测试供应商凭据 |
+| POST   | `/api/cloud-saas/provider-profiles/:id/models/refresh` | 发现并持久化供应商模型 |
 | DELETE | `/api/cloud-saas/provider-profiles/:id`  | 删除供应商 Profile |
+| GET    | `/api/cloud-saas/provider-routing`       | 读取 LLM 路由策略和可路由模型 |
+| PUT    | `/api/cloud-saas/provider-routing`       | 更新 LLM 路由策略、限流和 fallback 链 |
+| POST   | `/api/cloud-saas/provider-routing/resolve` | 将 selector 或 tags 解析为具体模型路由 |
 
-供应商密钥复用 Cloud env var KMS 加密链路。使用 `model-provider` 插件的模板会获得匹配的运行时密钥和模型元数据，包括用户配置的 `default`、`fast`、`reasoning`、`vision` 等标签。
+供应商密钥复用 Cloud env var KMS 加密链路。第一期只支持 API Key 类型的供应商 Profile。使用 `model-provider` 插件的模板会获得匹配的运行时密钥和模型元数据，包括用户配置的 `default`、`fast`、`reasoning`、`vision`、`tools` 等标签。路由策略也会持久化 token/成本阈值规则，支持提醒型规则和后续代理网关使用的硬限额规则。
+
+上面的 LLM Gateway 管理接口目前还没有对外暴露 `/v1/chat/completions` 代理 Token 或 Base URL。运行时网关属于后续服务端能力；当前 Profile 用于加密存储、模型发现、路由策略和部署时注入。
 
 ## 文件上传
 

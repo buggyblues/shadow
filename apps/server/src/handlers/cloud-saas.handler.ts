@@ -27,6 +27,18 @@ import type { AppContainer } from '../container'
 import { cloudDeployments, cloudTemplates } from '../db/schema'
 import { decrypt, encrypt } from '../lib/kms'
 import { authMiddleware } from '../middleware/auth.middleware'
+import {
+  DEFAULT_LLM_ROUTING_POLICY,
+  type LlmProviderApiFormat,
+  type LlmRoutableModel,
+  type LlmRoutingPolicy,
+  makeModelRef,
+  normalizeLlmProviderConfig,
+  normalizeLlmProviderModels,
+  normalizeLlmRoutingPolicy,
+  parseDiscoveredModelsFromResponse,
+  resolveLlmRoute,
+} from '../services/llm-provider-platform'
 
 // ─── Resource tier cost map (Shrimp Coins / month) ──────────────────────────
 
@@ -46,7 +58,9 @@ const PROVIDER_PROFILE_META_KEYS = {
 } as const
 const PROVIDER_PROFILE_META_KEY_SET = new Set<string>(Object.values(PROVIDER_PROFILE_META_KEYS))
 const PROVIDER_PROFILE_MODELS_ENV_KEY = 'SHADOW_PROVIDER_PROFILE_MODELS_JSON'
-const PROVIDER_MODEL_TAGS = ['default', 'fast', 'flash', 'reasoning', 'vision'] as const
+const PROVIDER_ROUTING_SCOPE = 'provider-routing:default'
+const PROVIDER_ROUTING_POLICY_KEY = 'SHADOW_PROVIDER_ROUTING_POLICY_JSON'
+const PROVIDER_MODEL_TAGS = ['default', 'fast', 'flash', 'reasoning', 'vision', 'tools'] as const
 const PROVIDER_MODEL_TAG_SET = new Set<string>(PROVIDER_MODEL_TAGS)
 
 type ProviderCatalogView = Awaited<ReturnType<typeof listProviderCatalogs>>[number]['provider']
@@ -284,7 +298,7 @@ async function testProviderConnection(
     let url = `${baseUrl}/models`
     const headers: Record<string, string> = { Accept: 'application/json' }
 
-    if (provider.api === 'google-generative-ai') {
+    if (provider.api === 'google' || provider.api === 'google-generative-ai') {
       url = `${baseUrl}/models?key=${encodeURIComponent(apiKey.value)}`
     } else if (provider.api === 'anthropic-messages') {
       headers['x-api-key'] = apiKey.value
@@ -313,6 +327,93 @@ async function testProviderConnection(
   } finally {
     clearTimeout(timeout)
   }
+}
+
+function providerProfileApiFormat(
+  provider: ProviderCatalogView,
+  config: Record<string, unknown>,
+): LlmProviderApiFormat {
+  const normalized = normalizeLlmProviderConfig(config)
+  if (normalized.apiFormat) return normalized.apiFormat
+  if (provider.api === 'google' || provider.api === 'google-generative-ai') return 'gemini'
+  return provider.api === 'anthropic' || provider.api === 'anthropic-messages'
+    ? 'anthropic'
+    : 'openai'
+}
+
+async function discoverProviderProfileModels(
+  provider: ProviderCatalogView,
+  values: Map<string, string>,
+  config: Record<string, unknown>,
+): Promise<{ ok: boolean; status?: number; message: string; models: ProviderProfileModelView[] }> {
+  const apiKey = firstProviderApiKey(provider, values)
+  const apiFormat = providerProfileApiFormat(provider, config)
+  const baseUrl = providerProfileBaseUrl(provider, values, config)
+
+  if (!baseUrl) return { ok: false, message: 'Missing provider base URL', models: [] }
+  if (!apiKey) return { ok: false, message: 'Missing provider API key', models: [] }
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8_000)
+  try {
+    const url =
+      apiFormat === 'anthropic'
+        ? `${baseUrl}/models?limit=100`
+        : apiFormat === 'gemini'
+          ? `${baseUrl}/models${apiKey ? `?key=${encodeURIComponent(apiKey.value)}` : ''}`
+          : `${baseUrl}/models`
+    const headers: Record<string, string> = { Accept: 'application/json' }
+    if (apiKey) {
+      if (apiFormat === 'anthropic') {
+        headers['x-api-key'] = apiKey.value
+        headers['anthropic-version'] = '2023-06-01'
+      } else if (apiFormat === 'openai') {
+        headers.Authorization = `Bearer ${apiKey.value}`
+      }
+    }
+
+    const response = await fetch(url, { headers, signal: controller.signal })
+    if (!response.ok) {
+      const body = await response.text().catch(() => '')
+      return {
+        ok: false,
+        status: response.status,
+        message: body.trim().slice(0, 240) || `Provider returned ${response.status}`,
+        models: [],
+      }
+    }
+
+    const body = await response.json()
+    const models = parseDiscoveredModelsFromResponse(body, apiFormat)
+    return {
+      ok: true,
+      status: response.status,
+      message: `Discovered ${models.length} model(s)`,
+      models,
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : 'Model discovery failed',
+      models: [],
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+function buildRoutableModels(profiles: ProviderProfileView[]): LlmRoutableModel[] {
+  return profiles.flatMap((profile) => {
+    const config = normalizeLlmProviderConfig(profile.config)
+    return (config.models ?? []).map((model) => ({
+      ...model,
+      ref: makeModelRef(profile.id, model.id),
+      providerId: profile.providerId,
+      profileId: profile.id,
+      profileName: profile.name,
+      enabled: profile.enabled,
+    }))
+  })
 }
 
 function collectProviderProfileIds(
@@ -485,6 +586,29 @@ export function createCloudSaasHandler(container: AppContainer) {
     }
 
     return profiles.sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  async function readProviderRoutingPolicy(userId: string): Promise<LlmRoutingPolicy> {
+    const envDao = container.resolve('cloudEnvVarDao')
+    const vars = await envDao.listByUser(userId, PROVIDER_ROUTING_SCOPE)
+    const found = vars.find((entry) => entry.key === PROVIDER_ROUTING_POLICY_KEY)
+    if (!found) return DEFAULT_LLM_ROUTING_POLICY
+    return normalizeLlmRoutingPolicy(parseProviderProfileConfig(decrypt(found.encryptedValue)))
+  }
+
+  async function writeProviderRoutingPolicy(
+    userId: string,
+    policy: LlmRoutingPolicy,
+  ): Promise<LlmRoutingPolicy> {
+    const envDao = container.resolve('cloudEnvVarDao')
+    const normalized = normalizeLlmRoutingPolicy(policy)
+    await envDao.upsertScoped({
+      userId,
+      scope: PROVIDER_ROUTING_SCOPE,
+      key: PROVIDER_ROUTING_POLICY_KEY,
+      encryptedValue: encrypt(JSON.stringify(normalized)),
+    })
+    return normalized
   }
 
   async function resolveCreateRuntimeEnvVars(
@@ -1907,6 +2031,70 @@ export function createCloudSaasHandler(container: AppContainer) {
   })
 
   /**
+   * GET /api/cloud-saas/provider-routing
+   * Return the Manifest-inspired route policy plus routable models.
+   */
+  h.get('/provider-routing', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const [profiles, policy] = await Promise.all([
+      readProviderProfiles(user.userId),
+      readProviderRoutingPolicy(user.userId),
+    ])
+    const models = buildRoutableModels(profiles)
+    return c.json({
+      policy,
+      models,
+      summary: {
+        profiles: profiles.length,
+        enabledProfiles: profiles.filter((profile) => profile.enabled).length,
+        models: models.length,
+        enabledModels: models.filter((model) => model.enabled).length,
+      },
+    })
+  })
+
+  /**
+   * PUT /api/cloud-saas/provider-routing
+   * Persist the global provider route policy.
+   */
+  h.put('/provider-routing', zValidator('json', z.object({ policy: z.unknown() })), async (c) => {
+    const user = c.get('user') as { userId: string }
+    const input = c.req.valid('json')
+    const policy = await writeProviderRoutingPolicy(
+      user.userId,
+      normalizeLlmRoutingPolicy(input.policy),
+    )
+    return c.json({ ok: true, policy })
+  })
+
+  /**
+   * POST /api/cloud-saas/provider-routing/resolve
+   * Resolve a selector/tag request against saved profiles and policy.
+   */
+  h.post(
+    '/provider-routing/resolve',
+    zValidator(
+      'json',
+      z.object({
+        selector: z.string().max(120).optional(),
+        tags: z.array(z.string().min(1).max(80)).max(8).optional(),
+      }),
+    ),
+    async (c) => {
+      const user = c.get('user') as { userId: string }
+      const input = c.req.valid('json')
+      const [profiles, policy] = await Promise.all([
+        readProviderProfiles(user.userId),
+        readProviderRoutingPolicy(user.userId),
+      ])
+      return c.json({
+        ok: true,
+        resolved: resolveLlmRoute(policy, buildRoutableModels(profiles), input),
+      })
+    },
+  )
+
+  /**
    * PUT /api/cloud-saas/provider-profiles
    * Upsert a provider profile into the encrypted env store.
    */
@@ -2002,6 +2190,50 @@ export function createCloudSaasHandler(container: AppContainer) {
 
     const config = parseProviderProfileConfig(values.get(PROVIDER_PROFILE_META_KEYS.configJson))
     return c.json(await testProviderConnection(provider, values, config))
+  })
+
+  /**
+   * POST /api/cloud-saas/provider-profiles/:id/models/refresh
+   * Discover models from the provider-native API and persist the result.
+   */
+  h.post('/provider-profiles/:id/models/refresh', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const profileId = normalizeProviderProfileId(c.req.param('id'))
+    if (!profileId) return c.json({ ok: false, error: 'Invalid provider profile' }, 400)
+
+    const envDao = container.resolve('cloudEnvVarDao')
+    const scope = providerProfileScope(profileId)
+    const scopedVars = await envDao.listByUser(user.userId, scope)
+    if (scopedVars.length === 0) {
+      return c.json({ ok: false, error: 'Provider profile not found' }, 404)
+    }
+
+    const values = new Map(scopedVars.map((v) => [v.key, decrypt(v.encryptedValue)]))
+    const providerId = values.get(PROVIDER_PROFILE_META_KEYS.providerId)
+    const provider = (await listProviderCatalogs())
+      .map((entry) => entry.provider)
+      .find((catalog) => catalog.id === providerId)
+    if (!provider) return c.json({ ok: false, error: 'Unknown provider' }, 422)
+
+    const config = parseProviderProfileConfig(values.get(PROVIDER_PROFILE_META_KEYS.configJson))
+    const result = await discoverProviderProfileModels(provider, values, config)
+    if (!result.ok) return c.json(result, result.status && result.status >= 400 ? 502 : 200)
+
+    const nextConfig = {
+      ...config,
+      apiFormat: providerProfileApiFormat(provider, config),
+      models: normalizeLlmProviderModels(result.models),
+      discoveredAt: new Date().toISOString(),
+    }
+    await envDao.upsertScoped({
+      userId: user.userId,
+      scope,
+      key: PROVIDER_PROFILE_META_KEYS.configJson,
+      encryptedValue: encrypt(JSON.stringify(nextConfig)),
+    })
+
+    const profile = (await readProviderProfiles(user.userId)).find((p) => p.id === profileId)
+    return c.json({ ...result, profile })
   })
 
   /**

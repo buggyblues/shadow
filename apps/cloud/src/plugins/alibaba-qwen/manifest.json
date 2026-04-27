@@ -1,0 +1,41 @@
+{
+  "id": "alibaba-qwen",
+  "name": "Alibaba Qwen",
+  "description": "Connect agents to Alibaba Cloud DashScope Qwen models through the OpenAI-compatible API",
+  "version": "1.0.0",
+  "category": "ai-provider",
+  "icon": "brain",
+  "website": "https://www.alibabacloud.com/en/solutions/generative-ai/qwen",
+  "docs": "https://help.aliyun.com/zh/model-studio/developer-reference/compatibility-of-openai-with-dashscope",
+  "auth": {
+    "type": "api-key",
+    "fields": [
+      {
+        "key": "DASHSCOPE_API_KEY",
+        "label": "API Key",
+        "description": "Alibaba Cloud DashScope API key",
+        "required": true,
+        "sensitive": true,
+        "placeholder": "sk-..."
+      }
+    ]
+  },
+  "config": {
+    "type": "object",
+    "properties": {
+      "defaultModel": {
+        "type": "string",
+        "default": "qwen-plus",
+        "description": "Default Qwen model"
+      },
+      "baseUrl": {
+        "type": "string",
+        "default": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "description": "DashScope OpenAI-compatible base URL"
+      }
+    }
+  },
+  "capabilities": ["auth-provider"],
+  "tags": ["ai", "llm", "qwen", "alibaba", "dashscope", "openai-compatible"],
+  "popularity": 73
+}

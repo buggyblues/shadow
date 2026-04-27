@@ -1,0 +1,41 @@
+{
+  "id": "minimax",
+  "name": "MiniMax",
+  "description": "Connect agents to MiniMax models through the OpenAI-compatible API",
+  "version": "1.0.0",
+  "category": "ai-provider",
+  "icon": "brain",
+  "website": "https://www.minimax.io",
+  "docs": "https://www.minimax.io/platform/document/ChatCompletion",
+  "auth": {
+    "type": "api-key",
+    "fields": [
+      {
+        "key": "MINIMAX_API_KEY",
+        "label": "API Key",
+        "description": "MiniMax API key",
+        "required": true,
+        "sensitive": true,
+        "placeholder": "sk-..."
+      }
+    ]
+  },
+  "config": {
+    "type": "object",
+    "properties": {
+      "defaultModel": {
+        "type": "string",
+        "default": "MiniMax-M2.1",
+        "description": "Default MiniMax model"
+      },
+      "baseUrl": {
+        "type": "string",
+        "default": "https://api.minimax.io/v1",
+        "description": "MiniMax OpenAI-compatible base URL"
+      }
+    }
+  },
+  "capabilities": ["auth-provider"],
+  "tags": ["ai", "llm", "minimax", "openai-compatible"],
+  "popularity": 70
+}

@@ -4,6 +4,12 @@ import type {
   ShadowCategory,
   ShadowChannel,
   ShadowChannelSlashCommand,
+  ShadowCloudProviderCatalog,
+  ShadowCloudProviderModel,
+  ShadowCloudProviderProfile,
+  ShadowCloudProviderRoutingState,
+  ShadowCloudRoutingPolicy,
+  ShadowCloudRoutingResolveResult,
   ShadowContract,
   ShadowDmChannel,
   ShadowFriendship,
@@ -1654,6 +1660,79 @@ export class ShadowClient {
 
   async getWalletTransactions(): Promise<ShadowTransaction[]> {
     return this.request('/api/wallet/transactions')
+  }
+
+  // ── Cloud SaaS Provider Gateway ─────────────────────────────────────
+
+  async listCloudProviderCatalogs(): Promise<{ providers: ShadowCloudProviderCatalog[] }> {
+    return this.request('/api/cloud-saas/provider-catalogs')
+  }
+
+  async listCloudProviderProfiles(): Promise<{ profiles: ShadowCloudProviderProfile[] }> {
+    return this.request('/api/cloud-saas/provider-profiles')
+  }
+
+  async upsertCloudProviderProfile(data: {
+    id?: string
+    providerId: string
+    name: string
+    enabled?: boolean
+    config?: Record<string, unknown>
+    envVars?: Record<string, string>
+  }): Promise<{ ok: boolean; success?: boolean; profile?: ShadowCloudProviderProfile }> {
+    return this.request('/api/cloud-saas/provider-profiles', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async testCloudProviderProfile(profileId: string): Promise<Record<string, unknown>> {
+    return this.request(`/api/cloud-saas/provider-profiles/${encodeURIComponent(profileId)}/test`, {
+      method: 'POST',
+    })
+  }
+
+  async refreshCloudProviderProfileModels(profileId: string): Promise<{
+    ok: boolean
+    success?: boolean
+    status?: number | null
+    message?: string
+    models?: ShadowCloudProviderModel[]
+    profile?: ShadowCloudProviderProfile
+  }> {
+    return this.request(
+      `/api/cloud-saas/provider-profiles/${encodeURIComponent(profileId)}/models/refresh`,
+      { method: 'POST' },
+    )
+  }
+
+  async deleteCloudProviderProfile(profileId: string): Promise<{ ok: boolean; success?: boolean }> {
+    return this.request(`/api/cloud-saas/provider-profiles/${encodeURIComponent(profileId)}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async getCloudProviderRouting(): Promise<ShadowCloudProviderRoutingState> {
+    return this.request('/api/cloud-saas/provider-routing')
+  }
+
+  async updateCloudProviderRouting(
+    policy: ShadowCloudRoutingPolicy,
+  ): Promise<{ ok: boolean; success?: boolean; policy: ShadowCloudRoutingPolicy }> {
+    return this.request('/api/cloud-saas/provider-routing', {
+      method: 'PUT',
+      body: JSON.stringify({ policy }),
+    })
+  }
+
+  async resolveCloudProviderRoute(data: {
+    selector?: string
+    tags?: string[]
+  }): Promise<{ ok: boolean; success?: boolean; resolved: ShadowCloudRoutingResolveResult }> {
+    return this.request('/api/cloud-saas/provider-routing/resolve', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
   }
 
   // ── Recharge (Stripe) ───────────────────────────────────────────────

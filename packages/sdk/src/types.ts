@@ -505,6 +505,115 @@ export interface ShadowTransaction {
   createdAt: string
 }
 
+// ─── Cloud SaaS Provider Gateway Types ─────────────────────────────────────
+
+export interface ShadowCloudProviderCatalog {
+  pluginId: string
+  pluginName: string
+  provider: Record<string, unknown>
+  secretFields?: Record<string, unknown>[]
+}
+
+export interface ShadowCloudProviderEnvVar {
+  key: string
+  maskedValue: string
+  isSecret: boolean
+}
+
+export interface ShadowCloudProviderModel {
+  id: string
+  name?: string
+  tags?: string[]
+  contextWindow?: number
+  maxTokens?: number
+  cost?: {
+    input?: number
+    output?: number
+  }
+  capabilities?: {
+    vision?: boolean
+    tools?: boolean
+    reasoning?: boolean
+  }
+}
+
+export interface ShadowCloudProviderProfile {
+  id: string
+  providerId: string
+  name: string
+  scope: string
+  enabled: boolean
+  config: {
+    baseUrl?: string
+    apiFormat?: 'openai' | 'anthropic' | 'gemini'
+    authType?: 'api_key'
+    discoveredAt?: string
+    models?: ShadowCloudProviderModel[]
+    [key: string]: unknown
+  }
+  envVars: ShadowCloudProviderEnvVar[]
+  updatedAt?: string
+}
+
+export interface ShadowCloudRouteAssignment {
+  selector: string
+  primary?: string
+  fallbacks: string[]
+}
+
+export interface ShadowCloudLimitRule {
+  id: string
+  metric: 'tokens' | 'cost'
+  threshold: number
+  period: 'day' | 'month'
+  blockRequests: boolean
+  enabled: boolean
+  triggered: number
+}
+
+export interface ShadowCloudRoutingPolicy {
+  enabled: boolean
+  defaultRoute: ShadowCloudRouteAssignment
+  complexity: Record<'simple' | 'standard' | 'complex' | 'reasoning', ShadowCloudRouteAssignment>
+  limits: {
+    requestsPerMinute: number
+    concurrentRequests: number
+    monthlyBudgetUsd?: number
+  }
+  fallback: {
+    enabled: boolean
+    statusCodes: number[]
+  }
+  rules: ShadowCloudLimitRule[]
+}
+
+export interface ShadowCloudRoutableModel extends ShadowCloudProviderModel {
+  ref: string
+  providerId: string
+  profileId: string
+  profileName: string
+  enabled: boolean
+}
+
+export interface ShadowCloudProviderRoutingState {
+  policy: ShadowCloudRoutingPolicy
+  models: ShadowCloudRoutableModel[]
+  summary: {
+    profiles: number
+    enabledProfiles: number
+    models: number
+    enabledModels: number
+  }
+}
+
+export interface ShadowCloudRoutingResolveResult {
+  route: 'default' | 'simple' | 'standard' | 'complex' | 'reasoning'
+  selector: string
+  model: ShadowCloudRoutableModel | null
+  fallbacks: ShadowCloudRoutableModel[]
+  reason: 'primary' | 'tag_match' | 'default' | 'unresolved'
+}
+
 // ─── Task Center Types ──────────────────────────────────────────────────────
 
 export interface ShadowTask {

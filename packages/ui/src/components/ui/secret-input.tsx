@@ -29,10 +29,10 @@ const SecretInput = React.forwardRef<HTMLInputElement, SecretInputProps>(
             id={id}
             type="text"
             className={cn(
-              'flex w-full bg-white dark:bg-[rgba(0,0,0,0.3)] border-2 border-[#F1F5F9] dark:border-[rgba(255,255,255,0.1)] text-text-primary rounded-[20px] px-6 py-4 pr-14 text-base font-bold outline-none transition-all placeholder:text-text-muted/30 disabled:cursor-not-allowed disabled:opacity-50 shadow-[inset_2px_2px_6px_rgba(0,0,0,0.06)] dark:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.25)]',
-              'focus:border-primary-strong dark:focus:border-primary focus:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.04),0_0_0_4px_rgba(0,198,209,0.12)] dark:focus:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.15),0_0_0_4px_rgba(0,243,255,0.1)]',
+              'flex h-12 w-full rounded-2xl border border-border-subtle/55 bg-bg-primary/45 px-4 py-0 pr-12 text-sm font-bold text-text-primary outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all placeholder:text-text-muted/35 disabled:cursor-not-allowed disabled:opacity-50',
+              'focus:border-primary/70 focus:bg-bg-primary/60 focus:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_0_4px_rgba(0,198,209,0.12)]',
               error &&
-                'border-danger focus:shadow-[0_0_0_5px_rgba(255,42,85,0.15)] focus:border-danger',
+                'border-danger focus:border-danger focus:shadow-[0_0_0_4px_rgba(255,42,85,0.15)]',
               className,
             )}
             ref={ref}
@@ -58,7 +58,7 @@ const SecretInput = React.forwardRef<HTMLInputElement, SecretInputProps>(
             type="button"
             aria-label={revealed ? 'Hide secret value' : 'Show secret value'}
             onClick={() => setRevealed((prev) => !prev)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-11 w-11 items-center justify-center rounded-[16px] border-2 border-[#F1F5F9] dark:border-[rgba(255,255,255,0.1)] bg-white/70 dark:bg-[rgba(0,0,0,0.2)] text-text-muted transition-colors hover:bg-bg-modifier-hover hover:text-text-primary"
+            className="absolute right-2 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl border border-border-subtle/45 bg-bg-secondary/30 text-text-muted transition-colors hover:bg-bg-modifier-hover hover:text-text-primary"
           >
             {revealed ? <EyeOff size={14} /> : <Eye size={14} />}
           </button>

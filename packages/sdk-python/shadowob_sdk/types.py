@@ -114,6 +114,66 @@ class ShadowInviteCode:
 
 
 @dataclass
+class ShadowCloudProviderModel:
+    id: str
+    name: str | None = None
+    tags: list[str] = field(default_factory=list)
+    context_window: int | None = None
+    max_tokens: int | None = None
+    cost: dict[str, float] | None = None
+    capabilities: dict[str, bool] | None = None
+
+
+@dataclass
+class ShadowCloudProviderProfile:
+    id: str
+    provider_id: str
+    name: str
+    scope: str
+    enabled: bool
+    config: dict[str, Any] = field(default_factory=dict)
+    env_vars: list[dict[str, Any]] = field(default_factory=list)
+    updated_at: str | None = None
+
+
+@dataclass
+class ShadowCloudRouteAssignment:
+    selector: str
+    fallbacks: list[str] = field(default_factory=list)
+    primary: str | None = None
+
+
+@dataclass
+class ShadowCloudLimitRule:
+    id: str
+    metric: str
+    threshold: float
+    period: str
+    block_requests: bool
+    enabled: bool
+    triggered: int = 0
+
+
+@dataclass
+class ShadowCloudRoutingPolicy:
+    enabled: bool
+    default_route: ShadowCloudRouteAssignment
+    complexity: dict[str, ShadowCloudRouteAssignment]
+    limits: dict[str, Any] = field(default_factory=dict)
+    fallback: dict[str, Any] = field(default_factory=dict)
+    rules: list[ShadowCloudLimitRule] = field(default_factory=list)
+
+
+@dataclass
+class ShadowCloudRoutableModel(ShadowCloudProviderModel):
+    ref: str = ""
+    provider_id: str = ""
+    profile_id: str = ""
+    profile_name: str = ""
+    enabled: bool = True
+
+
+@dataclass
 class ShadowSlashCommand:
     name: str
     description: str | None = None

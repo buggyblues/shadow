@@ -580,7 +580,14 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
     list: () => saasApi.providerProfiles.list(),
     upsert: (data) => saasApi.providerProfiles.upsert(data),
     test: (id) => saasApi.providerProfiles.test(id),
+    refreshModels: (id) => saasApi.providerProfiles.refreshModels(id),
     delete: (id) => saasApi.providerProfiles.delete(id),
+  },
+
+  providerRouting: {
+    get: () => saasApi.providerRouting.get(),
+    put: (policy) => saasApi.providerRouting.put(policy),
+    resolve: (data) => saasApi.providerRouting.resolve(data),
   },
 
   // ── Doctor (saas: no local infra checks — return empty healthy result) ────
