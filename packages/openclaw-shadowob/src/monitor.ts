@@ -79,12 +79,70 @@ export function resolveShadowAgentIdFromConfig(config: unknown, accountId: strin
 
 const RECENT_MESSAGE_CATCHUP_WINDOW_MS = 30 * 60 * 1000
 const MAX_TRACKED_MESSAGE_IDS = 1000
+const SHADOW_API_RETRY_ATTEMPTS = 5
+const SHADOW_API_RETRY_DELAY_MS = 750
 
 export type { ShadowMessageWatermarks } from './monitor/state.js'
 
 function getMessageCreatedMs(message: Pick<ShadowMessage, 'createdAt'>): number | null {
   const createdMs = Date.parse(message.createdAt)
   return Number.isFinite(createdMs) ? createdMs : null
+}
+
+function delay(ms: number, abortSignal?: AbortSignal): Promise<void> {
+  if (!abortSignal) return new Promise((resolve) => setTimeout(resolve, ms))
+  if (abortSignal.aborted) return Promise.resolve()
+  const signal = abortSignal
+
+  return new Promise((resolve) => {
+    const timeout = setTimeout(done, ms)
+
+    function done() {
+      clearTimeout(timeout)
+      signal.removeEventListener('abort', done)
+      resolve()
+    }
+
+    signal.addEventListener('abort', done, { once: true })
+  })
+}
+
+async function runShadowApiOperation<T>(
+  label: string,
+  operation: () => Promise<T>,
+  options: {
+    runtime: { error?: (msg: string) => void }
+    abortSignal?: AbortSignal
+    attempts?: number
+    delayMs?: number
+  },
+): Promise<T> {
+  const attempts = options.attempts ?? SHADOW_API_RETRY_ATTEMPTS
+  const delayMs = options.delayMs ?? SHADOW_API_RETRY_DELAY_MS
+  let lastError: unknown
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    if (options.abortSignal?.aborted) {
+      throw lastError ?? new Error(`${label} aborted`)
+    }
+
+    try {
+      return await operation()
+    } catch (err) {
+      lastError = err
+      if (attempt >= attempts) break
+
+      const waitMs = delayMs * attempt
+      options.runtime.error?.(
+        `[shadow-api] ${label} failed (attempt ${attempt}/${attempts}): ${String(
+          err,
+        )}; retrying in ${waitMs}ms`,
+      )
+      await delay(waitMs, options.abortSignal)
+    }
+  }
+
+  throw lastError
 }
 
 export function shouldCatchUpShadowMessage(
@@ -155,7 +213,11 @@ export async function monitorShadowProvider(
   const slashCommands = await loadLocalSlashCommands(runtime)
   if (agentId) {
     try {
-      await registerAgentSlashCommands({ account, agentId, commands: slashCommands })
+      await runShadowApiOperation(
+        'register slash commands',
+        () => registerAgentSlashCommands({ account, agentId, commands: slashCommands }),
+        { runtime, abortSignal },
+      )
       runtime.log?.(`[slash] Registered ${slashCommands.length} slash command(s) with Shadow`)
     } catch (err) {
       runtime.error?.(`[slash] Failed to register slash commands: ${String(err)}`)
@@ -183,7 +245,11 @@ export async function monitorShadowProvider(
 
   if (agentId) {
     try {
-      remoteConfig = await client.getAgentConfig(agentId)
+      remoteConfig = await runShadowApiOperation(
+        'fetch remote config',
+        () => client.getAgentConfig(agentId),
+        { runtime, abortSignal },
+      )
       runtime.log?.(`[config] Fetched remote config: ${remoteConfig.servers.length} server(s)`)
 
       for (const server of remoteConfig.servers) {
@@ -395,7 +461,11 @@ export async function monitorShadowProvider(
     if (!agentId) return
     runtime.log?.(`[ws] Received server:joined for server ${data.serverId} — refreshing channels`)
     try {
-      const updatedConfig = await client.getAgentConfig(agentId)
+      const updatedConfig = await runShadowApiOperation(
+        'refresh remote config',
+        () => client.getAgentConfig(agentId),
+        { runtime, abortSignal },
+      )
       runtime.log?.(`[config] Refreshed config: ${updatedConfig.servers.length} server(s)`)
       for (const server of updatedConfig.servers) {
         for (const ch of server.channels) {

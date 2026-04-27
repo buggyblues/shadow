@@ -12,6 +12,7 @@ Upload a file attachment. Uses multipart form data.
 |-------|------|----------|-------------|
 | `file` | File | Yes | The file to upload |
 | `messageId` | string | No | Link attachment to a message |
+| `dmMessageId` | string | No | Link attachment to a DM message |
 
 **Response:**
 
@@ -28,13 +29,18 @@ Upload a file attachment. Uses multipart form data.
 :::code-group
 
 ```ts [TypeScript]
-const formData = new FormData()
-formData.append('file', blob, 'photo.png')
-const attachment = await client.uploadFile(formData)
+const attachment = await client.uploadMedia(blob, 'photo.png', 'image/png', {
+  dmMessageId: 'dm-message-id',
+})
 ```
 
 ```python [Python]
-attachment = client.upload_file(open("photo.png", "rb"))
+attachment = client.upload_media(
+    file_bytes,
+    "photo.png",
+    "image/png",
+    dm_message_id="dm-message-id",
+)
 ```
 
 :::

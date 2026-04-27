@@ -133,7 +133,7 @@ export async function processShadowDmMessage(params: {
     To: `shadowob:dm:${dmChannelId}`,
     SessionKey: route.sessionKey,
     AccountId: route.accountId,
-    ChatType: 'dm',
+    ChatType: 'direct',
     ConversationLabel: peerId,
     SenderName: senderName,
     SenderId: senderId,

@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 # ─── OpenClaw Runner ──────────────────────────────────────────────────────
 # Container image for OpenClaw gateway runtime.
 #
@@ -18,23 +20,22 @@ FROM node:22-alpine AS builder
 
 WORKDIR /build
 
+ARG OPENCLAW_VERSION=latest
+ARG SHADOWOB_OPENCLAW_PLUGIN_VERSION=latest
+
 # git is required by some npm packages during install
 RUN apk add --no-cache git
-COPY packages/openclaw-shadowob /tmp/openclaw-shadowob
 
 # Install OpenClaw and shadowob plugin
-RUN npm init -y && \
-    npm install openclaw@latest @shadowob/openclaw-shadowob@latest && \
-    # Setup extensions directory
-    mkdir -p extensions/shadowob && \
-    cp -r /tmp/openclaw-shadowob/* extensions/shadowob/ && \
-    test -f extensions/shadowob/dist/index.js || \
-      (echo "Missing packages/openclaw-shadowob/dist/index.js; build the local package before building this image." && exit 1) && \
-    find extensions/shadowob -type d \( -name "src" -o -name "__tests__" \) \
-      -exec rm -rf {} + 2>/dev/null || true && \
-    # Cleanup dev artifacts to reduce image size
-    # NOTE: preserve openclaw/docs/reference/templates — OpenClaw needs these at runtime
-    find node_modules -type d \( -name ".github" -o -name "test" -o -name "tests" \
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    npm init -y && \
+    npm install --prefer-offline --no-audit --fund=false \
+      "openclaw@${OPENCLAW_VERSION}" \
+      "@shadowob/openclaw-shadowob@${SHADOWOB_OPENCLAW_PLUGIN_VERSION}"
+
+# Cleanup dev artifacts to reduce image size. This depends only on npm deps,
+# so local plugin edits do not force the dependency install/cleanup layers.
+RUN find node_modules -type d \( -name ".github" -o -name "test" -o -name "tests" \
       -o -name "__tests__" -o -name "examples" \) \
       -exec rm -rf {} + 2>/dev/null || true && \
     find node_modules -type d -name "docs" ! -path "*/openclaw/docs*" \
@@ -42,6 +43,29 @@ RUN npm init -y && \
     find node_modules \( -name "*.d.ts" -o -name "*.d.ts.map" -o -name "*.js.map" \
       -o -name "CHANGELOG.md" -o -name "README.md" \) \
       -delete 2>/dev/null || true
+
+# Overlay local Shadow packages after dependency installation. This keeps the
+# heavy npm install layer cached while smoke tests iterate on plugin/SDK code,
+# and prevents the local plugin from accidentally resolving an older published
+# SDK from /app/node_modules.
+COPY packages/shared /tmp/shadowob-shared
+COPY packages/sdk /tmp/shadowob-sdk
+COPY packages/openclaw-shadowob /tmp/openclaw-shadowob
+RUN for pkg in shared sdk; do \
+      if [ ! -f "/tmp/shadowob-${pkg}/dist/index.js" ]; then \
+        echo "Missing packages/${pkg}/dist/index.js; build local Shadow packages before building this image."; \
+        exit 1; \
+      fi; \
+      rm -rf "node_modules/@shadowob/${pkg}" && \
+      mkdir -p "node_modules/@shadowob/${pkg}" && \
+      cp -r "/tmp/shadowob-${pkg}/package.json" "/tmp/shadowob-${pkg}/dist" "node_modules/@shadowob/${pkg}/"; \
+    done
+RUN mkdir -p extensions/shadowob && \
+    cp -r /tmp/openclaw-shadowob/* extensions/shadowob/ && \
+    test -f extensions/shadowob/dist/index.js || \
+      (echo "Missing packages/openclaw-shadowob/dist/index.js; build the local package before building this image." && exit 1) && \
+    find extensions/shadowob -type d \( -name "src" -o -name "__tests__" \) \
+      -exec rm -rf {} + 2>/dev/null || true
 
 # ── Stage 2: Runner ─────────────────────────────────────────────────────
 FROM node:22-alpine AS runner
@@ -60,12 +84,12 @@ RUN deluser node && \
 
 # Setup directories
 WORKDIR /app
-RUN mkdir -p /home/openclaw/.openclaw /etc/openclaw /var/log/openclaw /tmp/openclaw && \
-    chown -R openclaw:openclaw /home/openclaw /var/log/openclaw /tmp/openclaw /app
+RUN mkdir -p /home/openclaw/.openclaw /etc/openclaw /var/log/openclaw /tmp/openclaw /tmp/npm-cache && \
+    chown -R openclaw:openclaw /home/openclaw /var/log/openclaw /tmp/openclaw /tmp/npm-cache /app
 
-# Copy from builder (large layer, changes when deps update)
+# Copy stable OpenClaw runtime deps first. Keep local extensions out of this
+# section so plugin edits do not invalidate runtime dependency warmup.
 COPY --from=builder --chown=openclaw:openclaw /build/node_modules ./node_modules
-COPY --from=builder --chown=openclaw:openclaw /build/extensions ./extensions
 COPY --from=builder --chown=openclaw:openclaw /build/package.json ./package.json
 
 # Symlink openclaw to PATH (local install only, no global npm install)
@@ -75,9 +99,15 @@ RUN ln -s /app/node_modules/.bin/openclaw /usr/local/bin/openclaw
 # does not spend minutes installing optional tool/provider packages.
 COPY --chown=openclaw:openclaw apps/cloud/images/openclaw-runner/warm-runtime-deps.mjs ./warm-runtime-deps.mjs
 ENV OPENCLAW_PLUGIN_STAGE_DIR=/opt/openclaw-runtime-deps
-RUN mkdir -p /opt/openclaw-runtime-deps /tmp/npm-cache && \
+ENV npm_config_cache=/tmp/npm-cache
+RUN --mount=type=cache,target=/tmp/npm-cache,sharing=locked \
+    mkdir -p /opt/openclaw-runtime-deps && \
     node /app/warm-runtime-deps.mjs && \
-    chown -R openclaw:openclaw /opt/openclaw-runtime-deps /tmp/npm-cache
+    chown -R openclaw:openclaw /opt/openclaw-runtime-deps
+
+# Copy local extensions after dependency warmup. This layer changes frequently
+# during plugin development, but the heavy npm/runtime dependency layers do not.
+COPY --from=builder --chown=openclaw:openclaw /build/extensions ./extensions
 
 # Copy entrypoint (small, changes often → last COPY for cache)
 COPY --chown=openclaw:openclaw apps/cloud/images/openclaw-runner/entrypoint.mjs ./entrypoint.mjs
@@ -89,7 +119,8 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
 EXPOSE 3100
 
 ENV NODE_ENV=production
-ENV OPENCLAW_GATEWAY_PORT=3100
+ENV OPENCLAW_HEALTH_PORT=3100
+ENV OPENCLAW_GATEWAY_PORT=3101
 ENV OPENCLAW_NO_RESPAWN=1
 ENV OPENCLAW_PLUGIN_STAGE_DIR=/opt/openclaw-runtime-deps
 

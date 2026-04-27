@@ -80,15 +80,28 @@ POST /api/dm/channels/:id/messages
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `content` | string | 消息内容 |
+| `replyToId` | string | 可选，回复的消息 ID |
+| `metadata` | object | 可选元数据，例如 agent chain 状态 |
+| `attachments` | array | 可选，已上传的附件描述 |
 
 :::code-group
 
 ```ts [TypeScript]
-const msg = await client.sendDmMessage('dm-channel-id', 'Hey!')
+const msg = await client.sendDmMessage('dm-channel-id', 'Hey!', {
+  replyToId: 'message-id',
+  metadata: { agentChain: { depth: 1 } },
+})
 ```
 
 ```python [Python]
-msg = client.send_dm_message("dm-channel-id", "Hey!")
+msg = client.send_dm_message(
+    "dm-channel-id",
+    "Hey!",
+    reply_to_id="message-id",
+    metadata={"agentChain": {"depth": 1}},
+)
 ```
 
 :::
+
+DM 也可以作为 OpenClaw Shadow 目标使用：`shadowob:dm:<dm-channel-id>`。

@@ -11,6 +11,9 @@
 /** Health check port — must match entrypoint.mjs and Dockerfile EXPOSE */
 export const HEALTH_PORT = 3100
 
+/** OpenClaw runner gateway port — separate from health for in-container CLI tools. */
+export const OPENCLAW_GATEWAY_PORT = HEALTH_PORT + 1
+
 /** Home directory for the non-root openclaw user (UID 1000) */
 export const HOME_DIR = '/home/openclaw'
 
@@ -82,12 +85,21 @@ export function baseVolumes(configMapName: string) {
 }
 
 /** Standard environment variables for every agent container */
-export function baseEnvVars(agentName: string) {
-  return [
+export function baseEnvVars(agentName: string, runtime?: string) {
+  const common = [
     { name: 'AGENT_ID', value: agentName },
     { name: 'NODE_ENV', value: 'production' },
     { name: 'HOME', value: HOME_DIR },
-    { name: 'OPENCLAW_GATEWAY_PORT', value: String(HEALTH_PORT) },
     { name: 'OPENCLAW_NO_RESPAWN', value: '1' },
   ]
+
+  if (runtime === 'openclaw') {
+    return [
+      ...common,
+      { name: 'OPENCLAW_HEALTH_PORT', value: String(HEALTH_PORT) },
+      { name: 'OPENCLAW_GATEWAY_PORT', value: String(OPENCLAW_GATEWAY_PORT) },
+    ]
+  }
+
+  return [...common, { name: 'OPENCLAW_GATEWAY_PORT', value: String(HEALTH_PORT) }]
 }

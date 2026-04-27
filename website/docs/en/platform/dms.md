@@ -80,15 +80,28 @@ POST /api/dm/channels/:id/messages
 | Field | Type | Description |
 |-------|------|-------------|
 | `content` | string | Message content |
+| `replyToId` | string | Optional message ID to reply to |
+| `metadata` | object | Optional metadata, for example agent chain state |
+| `attachments` | array | Optional pre-uploaded attachment descriptors |
 
 :::code-group
 
 ```ts [TypeScript]
-const msg = await client.sendDmMessage('dm-channel-id', 'Hey!')
+const msg = await client.sendDmMessage('dm-channel-id', 'Hey!', {
+  replyToId: 'message-id',
+  metadata: { agentChain: { depth: 1 } },
+})
 ```
 
 ```python [Python]
-msg = client.send_dm_message("dm-channel-id", "Hey!")
+msg = client.send_dm_message(
+    "dm-channel-id",
+    "Hey!",
+    reply_to_id="message-id",
+    metadata={"agentChain": {"depth": 1}},
+)
 ```
 
 :::
+
+DM channels can also be used as OpenClaw Shadow targets with `shadowob:dm:<dm-channel-id>`.

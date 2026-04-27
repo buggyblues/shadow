@@ -96,6 +96,12 @@ const shadowInteractiveFormFieldSchema = objectSchema({
 })
 
 export const shadowMessageToolSchemaProperties = {
+  kind: optionalSchema(
+    enumSchema(
+      ['buttons', 'select', 'form', 'approval'],
+      'Shadow interactive dialog kind. Use with action "send" when buttons, select, form, or approval UI is needed.',
+    ),
+  ),
   prompt: optionalSchema(
     stringSchema('Prompt rendered inside a Shadow interactive block; usually match message.'),
   ),

@@ -191,7 +191,12 @@ export class ShadowSocket {
   }
 
   /** Send a DM message via WebSocket */
-  sendDmMessage(data: { dmChannelId: string; content: string; replyToId?: string }): void {
+  sendDmMessage(data: {
+    dmChannelId: string
+    content: string
+    replyToId?: string
+    metadata?: Record<string, unknown>
+  }): void {
     this.socket.emit('dm:send' as string, data)
   }
 

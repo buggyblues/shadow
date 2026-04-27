@@ -22,6 +22,14 @@ solo-*.png
 !packages/openclaw-shadowob/package.json
 !packages/openclaw-shadowob/skills/
 !packages/openclaw-shadowob/skills/**
+!packages/shared/
+!packages/shared/dist/
+!packages/shared/dist/**
+!packages/shared/package.json
+!packages/sdk/
+!packages/sdk/dist/
+!packages/sdk/dist/**
+!packages/sdk/package.json
 website/doc_build
 docs/e2e
 !docs/e2e/screenshots

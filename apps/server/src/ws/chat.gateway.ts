@@ -205,7 +205,12 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
     // dm:send — send a DM message
     socket.on(
       'dm:send',
-      async (data: { dmChannelId: string; content: string; replyToId?: string }) => {
+      async (data: {
+        dmChannelId: string
+        content: string
+        replyToId?: string
+        metadata?: Record<string, unknown>
+      }) => {
         if (!userId) return
         try {
           const dmService = container.resolve('dmService')
@@ -220,6 +225,8 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
             userId,
             data.content,
             data.replyToId,
+            undefined,
+            data.metadata,
           )
 
           // Broadcast to DM room

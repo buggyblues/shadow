@@ -27,8 +27,11 @@ const OPENCLAW_STATE_DIR = '/home/openclaw/.openclaw'
 const CONFIG_MOUNT = '/etc/openclaw'
 const EXTENSIONS_DIR = '/app/extensions'
 const RUNTIME_EXTENSIONS_PATH = join(CONFIG_MOUNT, 'runtime-extensions.json')
-const GATEWAY_PORT = parseInt(process.env.OPENCLAW_GATEWAY_PORT ?? '3100', 10)
-const OPENCLAW_HTTP_PORT = GATEWAY_PORT + 1
+const HEALTH_PORT = parseInt(process.env.OPENCLAW_HEALTH_PORT ?? '3100', 10)
+const OPENCLAW_HTTP_PORT = parseInt(
+  process.env.OPENCLAW_GATEWAY_PORT ?? String(HEALTH_PORT + 1),
+  10,
+)
 const LOG_DIR = '/var/log/openclaw'
 const SHARED_WORKSPACE_PATH = process.env.SHARED_WORKSPACE_PATH ?? ''
 const SKILLS_DIR = process.env.SKILLS_DIR ?? ''
@@ -145,8 +148,8 @@ function resolveEnvVars(obj) {
 function generateOpenClawConfig(mountedConfig) {
   const config = resolveEnvVars(mountedConfig)
 
-  // Set gateway port. The runner health server uses GATEWAY_PORT, so OpenClaw
-  // itself must bind to the adjacent port in both CLI args and persisted config.
+  // Set the actual OpenClaw gateway port. The runner health server is separate
+  // so in-container OpenClaw CLI commands can rely on OPENCLAW_GATEWAY_PORT.
   if (!config.gateway) {
     config.gateway = {}
   }
@@ -411,8 +414,8 @@ function startHealthServer() {
     }
   })
 
-  server.listen(GATEWAY_PORT, '0.0.0.0', () => {
-    console.log(`[entrypoint] Health server listening on :${GATEWAY_PORT}`)
+  server.listen(HEALTH_PORT, '0.0.0.0', () => {
+    console.log(`[entrypoint] Health server listening on :${HEALTH_PORT}`)
   })
 
   return server

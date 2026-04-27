@@ -72,7 +72,7 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
   const mergedExtraEnv = { ...runtimeEnv, ...extraEnv }
 
   const envVars: k8s.types.input.core.v1.EnvVar[] = [
-    ...baseEnvVars(agentName),
+    ...baseEnvVars(agentName, agent.runtime),
     ...Object.entries(mergedExtraEnv).map(([name, value]) => ({ name, value })),
   ]
 

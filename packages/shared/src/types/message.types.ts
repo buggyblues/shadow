@@ -96,6 +96,7 @@ export interface DmMessage {
   authorId: string
   replyToId: string | null
   isEdited: boolean
+  metadata?: Record<string, unknown> | null
   createdAt: string
   updatedAt: string
   author?: {

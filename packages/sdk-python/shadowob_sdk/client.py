@@ -487,9 +487,23 @@ class ShadowClient:
             params["cursor"] = cursor
         return self._get(f"/api/dm/channels/{channel_id}/messages", params=params)
 
-    def send_dm_message(self, channel_id: str, content: str) -> dict[str, Any]:
+    def send_dm_message(
+        self,
+        channel_id: str,
+        content: str,
+        reply_to_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        attachments: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"content": content}
+        if reply_to_id:
+            payload["replyToId"] = reply_to_id
+        if metadata is not None:
+            payload["metadata"] = metadata
+        if attachments is not None:
+            payload["attachments"] = attachments
         return self._post(
-            f"/api/dm/channels/{channel_id}/messages", json={"content": content}
+            f"/api/dm/channels/{channel_id}/messages", json=payload
         )
 
     # ── Notifications ────────────────────────────────────────────────────
@@ -584,11 +598,14 @@ class ShadowClient:
         filename: str,
         content_type: str,
         message_id: str | None = None,
+        dm_message_id: str | None = None,
     ) -> dict[str, Any]:
         files = {"file": (filename, file_bytes, content_type)}
         data = {}
         if message_id:
             data["messageId"] = message_id
+        if dm_message_id:
+            data["dmMessageId"] = dm_message_id
         resp = self._http.post(
             "/api/media/upload",
             files=files,

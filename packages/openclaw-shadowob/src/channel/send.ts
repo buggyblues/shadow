@@ -9,8 +9,15 @@ export async function sendShadowMessage(params: {
   replyToId?: string
   metadata?: Record<string, unknown>
 }) {
-  const { channelId, threadId: parsedThreadId } = parseTarget(params.to)
+  const { channelId, threadId: parsedThreadId, dmChannelId } = parseTarget(params.to)
   const threadId = params.threadId ?? parsedThreadId
+
+  if (dmChannelId) {
+    return params.client.sendDmMessage(dmChannelId, params.content, {
+      replyToId: params.replyToId,
+      metadata: params.metadata,
+    })
+  }
 
   if (threadId && channelId) {
     return params.client.sendMessage(channelId, params.content, {
@@ -33,5 +40,5 @@ export async function sendShadowMessage(params: {
     })
   }
 
-  throw new Error('Could not resolve target channel or thread')
+  throw new Error('Could not resolve target channel, thread, or DM')
 }

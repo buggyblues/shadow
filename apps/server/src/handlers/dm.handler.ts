@@ -59,6 +59,7 @@ export function createDmHandler(container: AppContainer) {
       z.object({
         content: z.string().min(1).max(LIMITS.MESSAGE_CONTENT_MAX),
         replyToId: z.string().uuid().optional(),
+        metadata: z.record(z.unknown()).optional(),
         attachments: z
           .array(
             z.object({
@@ -74,7 +75,7 @@ export function createDmHandler(container: AppContainer) {
     async (c) => {
       const dmService = container.resolve('dmService')
       const id = c.req.param('id')
-      const { content, replyToId, attachments } = c.req.valid('json')
+      const { content, replyToId, attachments, metadata } = c.req.valid('json')
       const user = c.get('user')
 
       // Verify participant
@@ -83,7 +84,14 @@ export function createDmHandler(container: AppContainer) {
         return c.json({ ok: false, error: 'Not a participant of this DM channel' }, 403)
       }
 
-      const message = await dmService.sendMessage(id, user.userId, content, replyToId, attachments)
+      const message = await dmService.sendMessage(
+        id,
+        user.userId,
+        content,
+        replyToId,
+        attachments,
+        metadata,
+      )
 
       // Broadcast to DM room via WebSocket
       const io = container.resolve('io')

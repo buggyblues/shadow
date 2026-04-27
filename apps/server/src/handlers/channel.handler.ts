@@ -309,7 +309,16 @@ export function createChannelHandler(container: AppContainer) {
     const body = await c.req.json<{
       mentionOnly?: boolean
       mode?: 'replyAll' | 'mentionOnly' | 'custom' | 'disabled'
-      config?: { replyToUsers?: string[]; keywords?: string[]; mentionOnly?: boolean }
+      config?: {
+        replyToUsers?: string[]
+        keywords?: string[]
+        mentionOnly?: boolean
+        replyToBuddy?: boolean
+        maxBuddyChainDepth?: number
+        buddyBlacklist?: string[]
+        buddyWhitelist?: string[]
+        smartReply?: boolean
+      }
     }>()
 
     // Verify channel exists
@@ -352,6 +361,21 @@ export function createChannelHandler(container: AppContainer) {
           }
           if (body.config?.keywords?.length) {
             config.keywords = body.config.keywords
+          }
+          if (typeof body.config?.replyToBuddy === 'boolean') {
+            config.replyToBuddy = body.config.replyToBuddy
+          }
+          if (typeof body.config?.maxBuddyChainDepth === 'number') {
+            config.maxBuddyChainDepth = body.config.maxBuddyChainDepth
+          }
+          if (body.config?.buddyBlacklist?.length) {
+            config.buddyBlacklist = body.config.buddyBlacklist
+          }
+          if (body.config?.buddyWhitelist?.length) {
+            config.buddyWhitelist = body.config.buddyWhitelist
+          }
+          if (typeof body.config?.smartReply === 'boolean') {
+            config.smartReply = body.config.smartReply
           }
           config.mentionOnly = mentionOnly
           break

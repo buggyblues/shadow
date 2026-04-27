@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { cors } from 'hono/cors'
+import { lookup } from 'mime-types'
 import type { AppContainer } from './container'
 import { createAdminHandler } from './handlers/admin.handler'
 import { createAgentHandler } from './handlers/agent.handler'
@@ -86,6 +87,21 @@ export function createApp(container: AppContainer) {
 
   // Health check
   app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
+
+  // Public media content refs returned by MediaService.upload(), e.g. /shadow/uploads/file.txt.
+  app.get('/:bucket/uploads/:filename', async (c) => {
+    const bucket = c.req.param('bucket')
+    const filename = c.req.param('filename')
+    const mediaService = container.resolve('mediaService')
+    const contentRef = `/${bucket}/uploads/${filename}`
+    const buffer = await mediaService.getFileBuffer(contentRef)
+    if (!buffer) return c.json({ ok: false, error: 'File not found' }, 404)
+
+    return c.body(new Uint8Array(buffer), 200, {
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'Content-Type': lookup(filename) || 'application/octet-stream',
+    })
+  })
 
   // Public endpoint for homepage / Buddy Market (no auth required)
   app.get('/api/public/marketplace', async (c) => {

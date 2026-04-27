@@ -27,7 +27,7 @@ export const shadowPlugin = createChatChannelPlugin<ShadowAccountConfig>({
     },
 
     capabilities: {
-      chatTypes: ['channel', 'thread'],
+      chatTypes: ['channel', 'thread', 'direct'],
       reactions: true,
       threads: true,
       media: true,
@@ -90,7 +90,7 @@ shadowPlugin.meta = {
 }
 
 shadowPlugin.capabilities = {
-  chatTypes: ['channel', 'thread'],
+  chatTypes: ['channel', 'thread', 'direct'],
   reactions: true,
   threads: true,
   media: true,
@@ -158,7 +158,7 @@ shadowPlugin.streaming = {
 
 shadowPlugin.messaging = {
   normalizeTarget: (raw: string): string | undefined => {
-    if (/^(shadowob|openclaw-shadowob):(channel|thread):.+$/i.test(raw)) return raw
+    if (/^(shadowob|openclaw-shadowob):(channel|thread|dm):.+$/i.test(raw)) return raw
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw)) {
       return `shadowob:channel:${raw}`
     }
@@ -167,21 +167,35 @@ shadowPlugin.messaging = {
   parseExplicitTarget: ({ raw }) => {
     const normalized = shadowPlugin.messaging?.normalizeTarget?.(raw)
     if (!normalized) return null
-    const match = normalized.match(/^(?:shadowob|openclaw-shadowob):(channel|thread):(.+)$/i)
+    const match = normalized.match(/^(?:shadowob|openclaw-shadowob):(channel|thread|dm):(.+)$/i)
     if (!match) return { to: normalized, chatType: 'channel' as const }
+    if (match[1] === 'dm') return { to: normalized, chatType: 'direct' as const }
     return match[1] === 'thread'
       ? { to: normalized, threadId: match[2], chatType: 'channel' as const }
       : { to: normalized, chatType: 'channel' as const }
   },
-  inferTargetChatType: () => 'channel',
+  inferTargetChatType: ({ to }) =>
+    /^(?:shadowob|openclaw-shadowob):dm:/i.test(to) ? 'direct' : 'channel',
   resolveSessionTarget: ({ id, threadId }) =>
     threadId ? `shadowob:channel:${id}:thread:${threadId}` : `shadowob:channel:${id}`,
   resolveOutboundSessionRoute: ({ cfg, agentId, accountId, target, threadId }) => {
     const normalized = shadowPlugin.messaging?.normalizeTarget?.(target) ?? target
-    const match = normalized.match(/^(?:shadowob|openclaw-shadowob):(channel|thread):(.+)$/i)
+    const match = normalized.match(/^(?:shadowob|openclaw-shadowob):(channel|thread|dm):(.+)$/i)
     if (!match) return null
     const kind = match[1]!
     const id = match[2]!
+    if (kind === 'dm') {
+      return buildChannelOutboundSessionRoute({
+        cfg,
+        agentId,
+        channel: 'shadowob',
+        accountId,
+        peer: { kind: 'direct', id },
+        chatType: 'direct',
+        from: `shadowob:dm:${id}`,
+        to: `shadowob:dm:${id}`,
+      })
+    }
     const route = buildChannelOutboundSessionRoute({
       cfg,
       agentId,
@@ -202,9 +216,9 @@ shadowPlugin.messaging = {
   },
   targetResolver: {
     looksLikeId: (raw: string): boolean =>
-      /^(shadowob|openclaw-shadowob):(channel|thread):.+$/i.test(raw) ||
+      /^(shadowob|openclaw-shadowob):(channel|thread|dm):.+$/i.test(raw) ||
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw),
-    hint: 'Provide a Shadow channel UUID or shadowob:channel:<uuid>',
+    hint: 'Provide a Shadow channel UUID, shadowob:channel:<uuid>, or shadowob:dm:<uuid>',
   },
 }
 

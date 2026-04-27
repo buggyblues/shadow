@@ -36,7 +36,7 @@ echo "▸ Starting container..."
 docker run -d \
   --name "$CONTAINER_NAME" \
   -e OPENCLAW_API_KEY="test-key-not-real" \
-  -e HEALTH_PORT="$HEALTH_PORT" \
+  -e OPENCLAW_HEALTH_PORT="$HEALTH_PORT" \
   -p "0:$HEALTH_PORT" \
   "$IMAGE_NAME"
 

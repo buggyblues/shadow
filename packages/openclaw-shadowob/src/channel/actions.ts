@@ -142,12 +142,16 @@ export const shadowMessageActions = {
         const mediaUrl =
           (params.media as string) ?? (params.path as string) ?? (params.filePath as string) ?? ''
 
-        const { channelId, threadId: parsedThreadId } = parseTarget(to)
+        const { channelId, threadId: parsedThreadId, dmChannelId } = parseTarget(to)
         const threadId = (params.threadId as string) ?? parsedThreadId
 
         const content = text || '\u200B'
         let message: Awaited<ReturnType<typeof client.sendMessage>> | undefined
-        if (threadId) {
+        if (dmChannelId) {
+          message = await client.sendDmMessage(dmChannelId, content, {
+            replyToId: params.replyTo as string | undefined,
+          })
+        } else if (threadId) {
           message = await client.sendToThread(threadId, content)
         } else if (channelId) {
           message = await client.sendMessage(channelId, content, {
@@ -156,7 +160,7 @@ export const shadowMessageActions = {
         } else {
           return textResult({
             ok: false,
-            error: 'Could not resolve target channel or thread',
+            error: 'Could not resolve target channel, thread, or DM',
           })
         }
 
@@ -165,9 +169,17 @@ export const shadowMessageActions = {
           if (!raw) throw new Error('Invalid base64 attachment payload')
           const bytes = Buffer.from(raw, 'base64')
           const blob = new Blob([Uint8Array.from(bytes)], { type: contentType })
-          await client.uploadMedia(blob, filename, contentType, message.id)
+          await client.uploadMedia(
+            blob,
+            filename,
+            contentType,
+            dmChannelId ? { dmMessageId: message.id } : message.id,
+          )
         } else if (mediaUrl) {
-          await client.uploadMediaFromUrl(mediaUrl, message.id)
+          await client.uploadMediaFromUrl(
+            mediaUrl,
+            dmChannelId ? { dmMessageId: message.id } : message.id,
+          )
         } else {
           return textResult({
             ok: false,

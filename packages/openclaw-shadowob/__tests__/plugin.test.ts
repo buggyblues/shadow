@@ -435,6 +435,7 @@ describe('Plugin Entry Point', () => {
     expect(discovery?.actions).not.toContain('send-interactive')
     expect(discovery?.capabilities).toContain('interactive')
     const schema = Array.isArray(discovery?.schema) ? discovery.schema[0] : discovery?.schema
+    expect(schema?.properties.kind).toBeDefined()
     expect(schema?.properties.buttons).toBeDefined()
     expect(schema?.properties.fields).toBeDefined()
     expect(schema?.properties.approvalCommentLabel).toBeDefined()
@@ -575,6 +576,7 @@ describe('Shadow Outbound', () => {
       threadId: 'xyz',
     })
     expect(parseTarget('shadowob:thread:xyz')).toEqual({ threadId: 'xyz' })
+    expect(parseTarget('shadowob:dm:dm-123')).toEqual({ dmChannelId: 'dm-123' })
   })
 
   it('should parse target with openclaw-shadowob prefix', async () => {
@@ -622,6 +624,54 @@ describe('Shadow Outbound', () => {
       })
     } finally {
       sendMessage.mockRestore()
+    }
+  })
+
+  it('should expose DM targets through plugin messaging and outbound delivery', async () => {
+    const { ShadowClient } = await import('@shadowob/sdk')
+    const { shadowPlugin } = await import('../src/channel.js')
+    const { shadowOutbound } = await import('../src/outbound.js')
+    const sendDmMessage = vi.spyOn(ShadowClient.prototype, 'sendDmMessage').mockResolvedValue({
+      id: 'dm-msg-1',
+      content: 'Hello DM',
+      channelId: 'dm:dm-123',
+      dmChannelId: 'dm-123',
+      authorId: 'bot-1',
+      createdAt: '2026-04-27T00:00:00.000Z',
+      updatedAt: '2026-04-27T00:00:00.000Z',
+    } as never)
+
+    try {
+      expect(shadowPlugin.capabilities?.chatTypes).toContain('direct')
+      expect(shadowPlugin.messaging?.parseExplicitTarget?.({ raw: 'shadowob:dm:dm-123' })).toEqual({
+        to: 'shadowob:dm:dm-123',
+        chatType: 'direct',
+      })
+
+      const result = await shadowOutbound.sendText({
+        cfg: {
+          channels: {
+            shadowob: {
+              token: 'tok',
+              serverUrl: 'http://localhost:3002',
+            },
+          },
+        },
+        to: 'shadowob:dm:dm-123',
+        text: 'Hello DM',
+      })
+
+      expect(sendDmMessage).toHaveBeenCalledWith('dm-123', 'Hello DM', {
+        replyToId: undefined,
+      })
+      expect(result).toMatchObject({
+        channel: 'shadowob',
+        messageId: 'dm-msg-1',
+        dmChannelId: 'dm-123',
+        conversationId: 'dm-123',
+      })
+    } finally {
+      sendDmMessage.mockRestore()
     }
   })
 

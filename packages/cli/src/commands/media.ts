@@ -11,10 +11,17 @@ export function createMediaCommand(): Command {
     .description('Upload a file')
     .requiredOption('--file <path>', 'File path to upload')
     .option('--message-id <id>', 'Associate with message')
+    .option('--dm-message-id <id>', 'Associate with DM message')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')
     .action(
-      async (options: { file: string; messageId?: string; profile?: string; json?: boolean }) => {
+      async (options: {
+        file: string
+        messageId?: string
+        dmMessageId?: string
+        profile?: string
+        json?: boolean
+      }) => {
         try {
           const client = await getClient(options.profile)
           const buffer = readFileSync(options.file)
@@ -37,7 +44,9 @@ export function createMediaCommand(): Command {
             buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
             filename,
             contentType,
-            options.messageId,
+            options.dmMessageId
+              ? { messageId: options.messageId, dmMessageId: options.dmMessageId }
+              : options.messageId,
           )
           output(result, { json: options.json })
         } catch (error) {

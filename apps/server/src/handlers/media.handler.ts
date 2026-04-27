@@ -20,6 +20,22 @@ export function createMediaHandler(container: AppContainer) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
+    const dmMessageId = body.dmMessageId
+    const dmService = typeof dmMessageId === 'string' ? container.resolve('dmService') : null
+
+    if (typeof dmMessageId === 'string' && dmService) {
+      const message = await dmService.getMessageById(dmMessageId)
+      if (!message) {
+        return c.json({ ok: false, error: 'DM message not found' }, 404)
+      }
+
+      const user = c.get('user')
+      const isParticipant = await dmService.isParticipant(message.dmChannelId, user.userId)
+      if (!isParticipant) {
+        return c.json({ ok: false, error: 'Not a participant of this DM channel' }, 403)
+      }
+    }
+
     const result = await mediaService.upload(buffer, file.name, file.type)
 
     // If messageId is provided, create attachment record (channel message)
@@ -61,9 +77,7 @@ export function createMediaHandler(container: AppContainer) {
     }
 
     // If dmMessageId is provided, create DM attachment record
-    const dmMessageId = body.dmMessageId
-    if (typeof dmMessageId === 'string') {
-      const dmService = container.resolve('dmService')
+    if (typeof dmMessageId === 'string' && dmService) {
       await dmService.createAttachment({
         dmMessageId,
         filename: file.name,

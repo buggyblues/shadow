@@ -11,7 +11,8 @@ POST /api/media/upload
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `file` | File | 是 | 要上传的文件 |
-| `messageId` | string | 否 | 将附件关联到消息 |
+| `messageId` | string | 否 | 将附件关联到频道消息 |
+| `dmMessageId` | string | 否 | 将附件关联到私信消息 |
 
 **响应：**
 
@@ -28,13 +29,18 @@ POST /api/media/upload
 :::code-group
 
 ```ts [TypeScript]
-const formData = new FormData()
-formData.append('file', blob, 'photo.png')
-const attachment = await client.uploadFile(formData)
+const attachment = await client.uploadMedia(blob, 'photo.png', 'image/png', {
+  dmMessageId: 'dm-message-id',
+})
 ```
 
 ```python [Python]
-attachment = client.upload_file(open("photo.png", "rb"))
+attachment = client.upload_media(
+    file_bytes,
+    "photo.png",
+    "image/png",
+    dm_message_id="dm-message-id",
+)
 ```
 
 :::

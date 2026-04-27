@@ -723,7 +723,11 @@ export class ShadowClient {
   async sendDmMessage(
     channelId: string,
     content: string,
-    options?: { replyToId?: string; metadata?: Record<string, unknown> },
+    options?: {
+      replyToId?: string
+      metadata?: Record<string, unknown>
+      attachments?: { filename: string; url: string; contentType: string; size: number }[]
+    },
   ): Promise<ShadowMessage> {
     return this.request(`/api/dm/channels/${channelId}/messages`, {
       method: 'POST',
@@ -731,6 +735,7 @@ export class ShadowClient {
         content,
         replyToId: options?.replyToId,
         ...(options?.metadata ? { metadata: options.metadata } : {}),
+        ...(options?.attachments ? { attachments: options.attachments } : {}),
       }),
     })
   }
@@ -806,13 +811,16 @@ export class ShadowClient {
     file: Blob | ArrayBuffer,
     filename: string,
     contentType: string,
-    messageId?: string,
+    messageId?: string | { messageId?: string; dmMessageId?: string },
   ): Promise<{ url: string; key: string; size: number }> {
     const formData = new FormData()
     const blob = file instanceof Blob ? file : new Blob([file], { type: contentType })
     formData.append('file', blob, filename)
-    if (messageId) {
+    if (typeof messageId === 'string') {
       formData.append('messageId', messageId)
+    } else if (messageId) {
+      if (messageId.messageId) formData.append('messageId', messageId.messageId)
+      if (messageId.dmMessageId) formData.append('dmMessageId', messageId.dmMessageId)
     }
 
     const url = `${this.baseUrl}/api/media/upload`
@@ -836,7 +844,7 @@ export class ShadowClient {
    */
   async uploadMediaFromUrl(
     mediaUrl: string,
-    messageId?: string,
+    messageId?: string | { messageId?: string; dmMessageId?: string },
   ): Promise<{ url: string; key: string; size: number }> {
     // Dynamic imports for Node.js fs/path/os
     // @ts-expect-error - Dynamic import types may not resolve in Alpine Docker builds

@@ -280,7 +280,7 @@ export function buildManifests(options: InfraOptions) {
     initContainers = pluginK8s.initContainers as unknown as Array<Record<string, unknown>>
 
     const envList = [
-      ...baseEnvVars(agentName),
+      ...baseEnvVars(agentName, agent.runtime),
       ...Object.entries(runtimePackage.plainEnv).map(([name, value]) => ({ name, value })),
       ...pluginK8s.envVars,
     ]

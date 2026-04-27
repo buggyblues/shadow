@@ -355,6 +355,9 @@ export interface DmMessage {
     avatarUrl?: string
     isBot?: boolean
   }
+  replyToId?: string | null
+  attachments?: ShadowAttachment[]
+  metadata?: ShadowMessageMetadata | null
   createdAt: string
 }
 

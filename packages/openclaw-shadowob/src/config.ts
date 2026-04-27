@@ -55,9 +55,9 @@ export function getAccountConfig(
 
     if (merged.token) {
       return {
+        ...merged,
         token: merged.token,
         serverUrl: merged.serverUrl ?? 'https://shadowob.com',
-        enabled: merged.enabled,
       }
     }
 
