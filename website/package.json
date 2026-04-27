@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "rspress dev",
-    "dev:frontend": "rspress dev",
+    "dev:frontend": "rspress dev --port 3010",
     "build": "rspress build",
     "preview": "rspress preview",
     "test:e2e": "playwright test",
