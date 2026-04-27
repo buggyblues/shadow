@@ -185,6 +185,8 @@ function generateOpenClawConfig(mountedConfig) {
     console.log(`[entrypoint] Skills directory: ${SKILLS_DIR}`)
   }
 
+  ensureBundledExtensionsConfigured(config)
+
   return config
 }
 
@@ -196,6 +198,62 @@ function listChildDirs(dir) {
   } catch {
     return []
   }
+}
+
+function resolveExtensionManifest(extensionDir) {
+  const manifestPath = join(extensionDir, 'openclaw.plugin.json')
+  if (!existsSync(manifestPath)) return null
+
+  try {
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
+    return isPlainObject(manifest) ? manifest : null
+  } catch (err) {
+    console.warn(`[entrypoint] Failed to parse extension manifest ${manifestPath}: ${err.message}`)
+    return null
+  }
+}
+
+function ensureBundledExtensionsConfigured(config) {
+  const extensionDirs = listChildDirs(EXTENSIONS_DIR).filter((dir) => {
+    return (
+      existsSync(join(dir, 'openclaw.plugin.json')) ||
+      existsSync(join(dir, 'package.json')) ||
+      existsSync(join(dir, 'dist', 'index.js')) ||
+      existsSync(join(dir, 'index.mjs'))
+    )
+  })
+  if (extensionDirs.length === 0) return
+
+  if (!config.plugins || !isPlainObject(config.plugins)) config.plugins = {}
+  if (config.plugins.enabled !== false) config.plugins.enabled = true
+  if (!config.plugins.load || !isPlainObject(config.plugins.load)) config.plugins.load = {}
+
+  const existingPaths = Array.isArray(config.plugins.load.paths)
+    ? config.plugins.load.paths.filter((value) => typeof value === 'string')
+    : []
+  config.plugins.load.paths = [...new Set([...existingPaths, ...extensionDirs])]
+
+  if (!config.plugins.entries || !isPlainObject(config.plugins.entries)) {
+    config.plugins.entries = {}
+  }
+
+  for (const extensionDir of extensionDirs) {
+    const manifest = resolveExtensionManifest(extensionDir)
+    const id =
+      typeof manifest?.id === 'string' && manifest.id.trim()
+        ? manifest.id.trim()
+        : basename(extensionDir)
+    const existing = config.plugins.entries[id]
+    if (isPlainObject(existing)) {
+      config.plugins.entries[id] = { enabled: true, ...existing }
+    } else if (existing == null) {
+      config.plugins.entries[id] = { enabled: true }
+    }
+  }
+
+  console.log(
+    `[entrypoint] Configured ${extensionDirs.length} bundled extension load path(s): ${extensionDirs.join(', ')}`,
+  )
 }
 
 function isPlainObject(value) {
@@ -566,7 +624,11 @@ function startGateway(_healthServer) {
       }
     }
 
-    if (healthRequiresShadowChannel && line.includes('[ws] ✓ Joined channel room')) {
+    if (
+      healthRequiresShadowChannel &&
+      (line.includes('[ws] ✓ Joined channel room') ||
+        line.includes('[ws] Shadow channel monitor ready'))
+    ) {
       shadowChannelReady = true
       clearTimeout(gatewayGraceTimer)
       if (!gatewayHealthy) {

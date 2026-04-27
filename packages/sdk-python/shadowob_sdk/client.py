@@ -447,9 +447,17 @@ class ShadowClient:
             params["cursor"] = cursor
         return self._get(f"/api/threads/{thread_id}/messages", params=params)
 
-    def send_to_thread(self, thread_id: str, content: str) -> dict[str, Any]:
+    def send_to_thread(
+        self,
+        thread_id: str,
+        content: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"content": content}
+        if metadata is not None:
+            payload["metadata"] = metadata
         return self._post(
-            f"/api/threads/{thread_id}/messages", json={"content": content}
+            f"/api/threads/{thread_id}/messages", json=payload
         )
 
     # ── DMs ──────────────────────────────────────────────────────────────

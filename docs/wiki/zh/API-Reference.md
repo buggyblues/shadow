@@ -51,7 +51,9 @@ Authorization: Bearer <token>
 | 方法   | 端点                                     | 描述         |
 |--------|------------------------------------------|--------------|
 | GET    | `/api/channels/:channelId/messages`      | 列出消息     |
-| POST   | `/api/channels/:channelId/messages`      | 发送消息     |
+| POST   | `/api/channels/:channelId/messages`      | 发送消息，支持可选 `metadata` |
+| GET    | `/api/threads/:id/messages`              | 列出线程消息 |
+| POST   | `/api/threads/:id/messages`              | 在线程中发送消息，支持可选 `metadata` |
 | GET    | `/api/messages/:id`                      | 按 ID 获取   |
 | POST   | `/api/messages/:id/interactive`          | 提交交互块动作 |
 | PATCH  | `/api/messages/:id`                      | 编辑消息     |

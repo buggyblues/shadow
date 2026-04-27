@@ -15,6 +15,14 @@ import type { ShadowAccountConfig } from './types.js'
 /** Max single-message content length (matches server LIMITS.MESSAGE_CONTENT_MAX) */
 const CHUNK_SIZE = 16000
 
+type ShadowOutboundDeliveryResult = {
+  channel: string
+  messageId: string
+  channelId?: string
+  conversationId?: string
+  meta?: Record<string, unknown>
+}
+
 /**
  * Split text into chunks that fit within the server's message length limit.
  * Prefers breaking at paragraph boundaries (\n\n), then line breaks (\n),
@@ -69,7 +77,10 @@ export function parseTarget(to: string): { channelId?: string; threadId?: string
     parts[1] === 'channel' &&
     parts[2]
   ) {
-    return { channelId: parts[2] }
+    return {
+      channelId: parts[2],
+      ...(parts[3] === 'thread' && parts[4] ? { threadId: parts[4] } : {}),
+    }
   }
   if (
     (prefix === 'shadowob' || prefix === 'openclaw-shadowob' || prefix === 'shadow') &&
@@ -91,16 +102,174 @@ function resolveClient(
   return { client: new ShadowClient(account.serverUrl, account.token), account }
 }
 
+async function sendTextChunks(params: {
+  client: ShadowClient
+  to: string
+  text: string
+  threadId?: string | number | null
+  replyToMessageId?: string | null
+}): Promise<{ message: ShadowMessage; channelId?: string; threadId?: string }> {
+  const { channelId, threadId: parsedThreadId } = parseTarget(params.to)
+  const threadId =
+    params.threadId !== undefined && params.threadId !== null
+      ? String(params.threadId)
+      : parsedThreadId
+
+  const chunks = chunkText(params.text)
+  let lastMessage: ShadowMessage | undefined
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i]!
+    const replyTo = i === 0 ? (params.replyToMessageId ?? undefined) : lastMessage?.id
+    if (threadId && channelId) {
+      lastMessage = await params.client.sendMessage(channelId, chunk, {
+        threadId,
+        replyToId: replyTo,
+      })
+    } else if (threadId) {
+      lastMessage = await params.client.sendToThread(threadId, chunk)
+    } else if (channelId) {
+      lastMessage = await params.client.sendMessage(channelId, chunk, {
+        replyToId: replyTo,
+      })
+    } else {
+      throw new Error('Could not resolve target channel or thread')
+    }
+  }
+
+  if (!lastMessage) {
+    throw new Error('No message was sent')
+  }
+  return { message: lastMessage, channelId, threadId }
+}
+
+function toDeliveryResult(params: {
+  message: ShadowMessage
+  channelId?: string
+  threadId?: string
+}): ShadowOutboundDeliveryResult {
+  return {
+    channel: 'shadowob',
+    messageId: params.message.id,
+    channelId: params.channelId ?? params.message.channelId,
+    conversationId: params.threadId ?? params.channelId ?? params.message.channelId,
+    ...(params.threadId ? { meta: { threadId: params.threadId } } : {}),
+  }
+}
+
+async function sendMediaToShadow(params: {
+  client: ShadowClient
+  to: string
+  filePath?: string
+  mediaUrl?: string
+  mediaUrls?: string[]
+  text?: string
+  threadId?: string | number | null
+  replyToMessageId?: string | null
+}): Promise<ShadowOutboundDeliveryResult> {
+  const mediaUrls = [params.mediaUrl ?? params.filePath, ...(params.mediaUrls ?? [])].filter(
+    Boolean,
+  ) as string[]
+  if (mediaUrls.length === 0) {
+    throw new Error('No media URL or file path provided')
+  }
+
+  const sent = await sendTextChunks({
+    client: params.client,
+    to: params.to,
+    text: params.text || '\u200B',
+    threadId: params.threadId,
+    replyToMessageId: params.replyToMessageId,
+  })
+
+  let result = toDeliveryResult(sent)
+  const uploadErrors: string[] = []
+
+  for (const mediaUrl of mediaUrls) {
+    try {
+      await params.client.uploadMediaFromUrl(mediaUrl, sent.message.id)
+    } catch (err) {
+      const fallback = await sendTextChunks({
+        client: params.client,
+        to: params.to,
+        text: mediaUrl,
+        threadId: params.threadId,
+        replyToMessageId: result.messageId,
+      })
+      uploadErrors.push(err instanceof Error ? err.message : String(err))
+      const fallbackResult = toDeliveryResult(fallback)
+      result = {
+        ...fallbackResult,
+        meta: {
+          ...(fallbackResult.meta ?? {}),
+          mediaUploadFallback: true,
+          mediaUploadErrors: uploadErrors,
+        },
+      }
+    }
+  }
+
+  return result
+}
+
 /**
  * SDK-compliant outbound adapter.
  *
- * Uses the `attachedResults` pattern for sendText (returns messageId)
- * and `base` pattern for sendMedia.
+ * OpenClaw calls the top-level `sendText`/`sendMedia` functions for channel
+ * delivery. The legacy `attachedResults` and `base` shapes remain for older
+ * runtime builds and tests.
  */
 export const shadowOutbound = {
   deliveryMode: 'direct' as const,
   chunker: chunkText,
   textChunkLimit: CHUNK_SIZE,
+
+  sendText: async (params: {
+    cfg: OpenClawConfig
+    to: string
+    text: string
+    accountId?: string | null
+    replyToId?: string | null
+    threadId?: string | number | null
+  }): Promise<ShadowOutboundDeliveryResult> => {
+    const resolved = resolveClient(params.cfg, params.accountId ?? undefined)
+    if (!resolved) throw new Error('Shadow account not configured')
+
+    const sent = await sendTextChunks({
+      client: resolved.client,
+      to: params.to,
+      text: params.text,
+      threadId: params.threadId,
+      replyToMessageId: params.replyToId,
+    })
+    return toDeliveryResult(sent)
+  },
+
+  sendMedia: async (params: {
+    cfg: OpenClawConfig
+    to: string
+    filePath?: string
+    mediaUrl?: string
+    mediaUrls?: string[]
+    text?: string
+    accountId?: string | null
+    threadId?: string | number | null
+    replyToId?: string | null
+  }): Promise<ShadowOutboundDeliveryResult> => {
+    const resolved = resolveClient(params.cfg, params.accountId ?? undefined)
+    if (!resolved) throw new Error('Shadow account not configured')
+
+    return sendMediaToShadow({
+      client: resolved.client,
+      to: params.to,
+      filePath: params.filePath,
+      mediaUrl: params.mediaUrl,
+      mediaUrls: params.mediaUrls,
+      text: params.text,
+      threadId: params.threadId,
+      replyToMessageId: params.replyToId,
+    })
+  },
 
   attachedResults: {
     sendText: async (params: {
@@ -114,31 +283,14 @@ export const shadowOutbound = {
       const resolved = resolveClient(params.cfg, params.accountId)
       if (!resolved) throw new Error('Shadow account not configured')
 
-      const { client } = resolved
-      const { channelId, threadId: parsedThreadId } = parseTarget(params.to)
-      const threadId = params.threadId ?? parsedThreadId
-
-      const chunks = chunkText(params.text)
-      let lastMessageId: string | undefined
-
-      for (let i = 0; i < chunks.length; i++) {
-        const chunk = chunks[i]!
-        // First chunk uses the original replyToId; subsequent chunks reply to the previous one
-        const replyTo = i === 0 ? params.replyToMessageId : lastMessageId
-        let message: ShadowMessage
-        if (threadId) {
-          message = await client.sendToThread(threadId, chunk)
-        } else if (channelId) {
-          message = await client.sendMessage(channelId, chunk, {
-            replyToId: replyTo,
-          })
-        } else {
-          throw new Error('Could not resolve target channel or thread')
-        }
-        lastMessageId = message.id
-      }
-
-      return { messageId: lastMessageId! }
+      const sent = await sendTextChunks({
+        client: resolved.client,
+        to: params.to,
+        text: params.text,
+        threadId: params.threadId,
+        replyToMessageId: params.replyToMessageId,
+      })
+      return { messageId: sent.message.id }
     },
   },
 
@@ -157,47 +309,16 @@ export const shadowOutbound = {
       const resolved = resolveClient(params.cfg, params.accountId)
       if (!resolved) throw new Error('Shadow account not configured')
 
-      const { client } = resolved
-      const { channelId, threadId: parsedThreadId } = parseTarget(params.to)
-      const threadId = params.threadId ?? parsedThreadId
-
-      // Collect all media URLs
-      const mediaUrls = [params.mediaUrl ?? params.filePath, ...(params.mediaUrls ?? [])].filter(
-        Boolean,
-      ) as string[]
-
-      // Create a message to attach media to (chunk text if it exceeds limit)
-      const content = params.text || '\u200B'
-      const contentChunks = chunkText(content)
-      let message: ShadowMessage | undefined
-
-      for (let i = 0; i < contentChunks.length; i++) {
-        const chunk = contentChunks[i]!
-        const replyTo = i === 0 ? params.replyToMessageId : message?.id
-        if (threadId) {
-          message = await client.sendToThread(threadId, chunk)
-        } else if (channelId) {
-          message = await client.sendMessage(channelId, chunk, {
-            replyToId: replyTo,
-          })
-        } else {
-          throw new Error('Could not resolve target channel or thread')
-        }
-      }
-
-      // Upload each media URL, fallback to sending URL as text on failure
-      for (const mediaUrl of mediaUrls) {
-        try {
-          await client.uploadMediaFromUrl(mediaUrl, message!.id)
-        } catch {
-          // Fallback: send the URL as text
-          if (threadId) {
-            await client.sendToThread(threadId, mediaUrl)
-          } else if (channelId) {
-            await client.sendMessage(channelId, mediaUrl)
-          }
-        }
-      }
+      await sendMediaToShadow({
+        client: resolved.client,
+        to: params.to,
+        filePath: params.filePath,
+        mediaUrl: params.mediaUrl,
+        mediaUrls: params.mediaUrls,
+        text: params.text,
+        threadId: params.threadId,
+        replyToMessageId: params.replyToMessageId,
+      })
     },
   },
 }

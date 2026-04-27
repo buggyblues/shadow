@@ -677,10 +677,17 @@ export class ShadowClient {
     return this.request<ShadowMessage[]>(`/api/threads/${threadId}/messages?${params}`)
   }
 
-  async sendToThread(threadId: string, content: string): Promise<ShadowMessage> {
+  async sendToThread(
+    threadId: string,
+    content: string,
+    options?: { metadata?: Record<string, unknown> },
+  ): Promise<ShadowMessage> {
     return this.request<ShadowMessage>(`/api/threads/${threadId}/messages`, {
       method: 'POST',
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({
+        content,
+        ...(options?.metadata ? { metadata: options.metadata } : {}),
+      }),
     })
   }
 

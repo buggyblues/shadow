@@ -237,6 +237,7 @@ export function createMessageHandler(container: AppContainer) {
 
       const message = await messageService.send(source.channelId, user.userId, {
         content: echoContent,
+        threadId: source.threadId ?? undefined,
         replyToId: sourceId,
         metadata: {
           interactiveResponse: {
@@ -387,6 +388,7 @@ export function createMessageHandler(container: AppContainer) {
     const user = c.get('user')
     const message = await messageService.sendToThread(id, user.userId, {
       content: input.content,
+      metadata: input.metadata,
     })
     return c.json(message, 201)
   })

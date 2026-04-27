@@ -51,7 +51,9 @@ Authorization: Bearer <token>
 | Method | Endpoint                                      | Description              |
 |--------|-----------------------------------------------|--------------------------|
 | GET    | `/api/channels/:channelId/messages`           | List channel messages    |
-| POST   | `/api/channels/:channelId/messages`           | Send a message           |
+| POST   | `/api/channels/:channelId/messages`           | Send a message; accepts optional `metadata` |
+| GET    | `/api/threads/:id/messages`                   | List thread messages     |
+| POST   | `/api/threads/:id/messages`                   | Send a thread message; accepts optional `metadata` |
 | GET    | `/api/messages/:id`                           | Get message by ID        |
 | POST   | `/api/messages/:id/interactive`               | Submit interactive block action |
 | PATCH  | `/api/messages/:id`                           | Edit a message           |

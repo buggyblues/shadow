@@ -379,6 +379,34 @@ describe('ShadowClient REST API', () => {
       | undefined
     expect(interactiveState?.response?.values?.name).toBe('Alice')
     expect(interactiveState?.response?.responseMessageId).toBe(formEcho.id)
+
+    const parent = await client.sendMessage(channelId, 'Thread parent')
+    const thread = await client.createThread(channelId, 'Interactive thread', parent.id)
+    const threadFormBlock = {
+      id: `ia_thread_form_${Date.now().toString(36)}`,
+      kind: 'form' as const,
+      prompt: 'Thread form',
+      fields: [{ id: 'scope', kind: 'textarea' as const, label: 'Scope' }],
+    }
+    const threadFormSent = await client.sendToThread(thread.id, 'Thread form please', {
+      metadata: { interactive: threadFormBlock },
+    })
+    const threadFormRes = await fetch(`${baseUrl}/api/messages/${threadFormSent.id}/interactive`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${user2Token}`,
+      },
+      body: JSON.stringify({
+        blockId: threadFormBlock.id,
+        actionId: 'submit',
+        value: 'submit',
+        values: { scope: 'Keep the answer inside this thread' },
+      }),
+    })
+    expect(threadFormRes.status).toBeLessThan(300)
+    const threadFormEcho = (await threadFormRes.json()) as { id: string; threadId?: string | null }
+    expect(threadFormEcho.threadId).toBe(thread.id)
   })
 })
 

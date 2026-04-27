@@ -152,6 +152,40 @@ def test_submit_interactive_action_posts_to_source_message(monkeypatch):
     client.close()
 
 
+def test_send_to_thread_posts_metadata(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    captured = {}
+
+    def fake_post(path, json=None):
+        captured["path"] = path
+        captured["json"] = json
+        return {"id": "thread-message-1"}
+
+    monkeypatch.setattr(client, "_post", fake_post)
+
+    result = client.send_to_thread(
+        "thread-1",
+        "Thread reply",
+        metadata={"agentChain": {"agentId": "agent-1", "depth": 1, "participants": ["bot-1"]}},
+    )
+
+    assert captured == {
+        "path": "/api/threads/thread-1/messages",
+        "json": {
+            "content": "Thread reply",
+            "metadata": {
+                "agentChain": {
+                    "agentId": "agent-1",
+                    "depth": 1,
+                    "participants": ["bot-1"],
+                }
+            },
+        },
+    }
+    assert result == {"id": "thread-message-1"}
+    client.close()
+
+
 def test_delete_policy_resolves_policy_id_before_delete(monkeypatch):
     client = ShadowClient("https://example.com", "test-token")
     captured = {}

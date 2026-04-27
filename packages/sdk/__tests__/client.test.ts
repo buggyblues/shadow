@@ -251,6 +251,29 @@ describe('ShadowClient', () => {
       )
     })
 
+    it('should call sendToThread with metadata', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ id: 'tm1' }),
+      })
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.sendToThread('thread-1', 'Thread reply', {
+        metadata: { agentChain: { agentId: 'agent-1', depth: 1, participants: ['bot-1'] } },
+      })
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/threads/thread-1/messages',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            content: 'Thread reply',
+            metadata: { agentChain: { agentId: 'agent-1', depth: 1, participants: ['bot-1'] } },
+          }),
+        }),
+      )
+    })
+
     it('should call getMessages with channel ID', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,

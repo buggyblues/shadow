@@ -97,3 +97,8 @@ export type ReplyPayload = {
   mediaUrls?: string[]
   [key: string]: unknown
 }
+
+export type ShadowRuntimeLogger = {
+  log?: (msg: string) => void
+  error?: (msg: string) => void
+}

@@ -259,6 +259,45 @@ describe('Slash Commands', () => {
     expect(prompt).toContain('Command definition:\n# Audit')
   })
 
+  it('should send slash-command interactive prompts back into the source thread', async () => {
+    const { sendSlashCommandInteractivePrompt } = await import('../src/monitor/slash-commands.js')
+    const sendMessage = vi.fn().mockResolvedValue({ id: 'prompt-1' })
+
+    await sendSlashCommandInteractivePrompt({
+      match: {
+        command: {
+          name: 'office-hour',
+          interaction: {
+            id: 'office-hour',
+            kind: 'form',
+            fields: [{ id: 'problem', label: 'Problem', kind: 'textarea' }],
+          },
+        },
+        invokedName: 'office-hour',
+        args: '',
+      },
+      messageId: 'source-message',
+      channelId: 'channel-1',
+      threadId: 'thread-1',
+      client: { sendMessage } as never,
+      runtime: {},
+      agentId: 'agent-1',
+      botUserId: 'bot-1',
+    })
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      'channel-1',
+      expect.stringContaining('/office-hour needs input'),
+      expect.objectContaining({
+        replyToId: 'source-message',
+        threadId: 'thread-1',
+        metadata: expect.objectContaining({
+          interactive: expect.objectContaining({ id: 'office-hour:source-message' }),
+        }),
+      }),
+    )
+  })
+
   it('should catch up missed user messages without replaying processed or old messages', async () => {
     const { shouldCatchUpShadowMessage } = await import('../src/monitor.js')
     const startedAtMs = Date.parse('2026-04-26T04:10:00.000Z')
@@ -419,6 +458,22 @@ describe('Plugin Entry Point', () => {
     expect(shadowPlugin.actions?.supportsAction?.({ action: 'pin' })).toBe(false)
   })
 
+  it('should preserve metadata when sending to a thread-only target', async () => {
+    const { sendShadowMessage } = await import('../src/channel/send.js')
+    const sendToThread = vi.fn().mockResolvedValue({ id: 'msg-1' })
+
+    await sendShadowMessage({
+      client: { sendToThread } as never,
+      to: 'shadowob:thread:thread-1',
+      content: 'Fill this in',
+      metadata: { interactive: { id: 'form-1', kind: 'form' } },
+    })
+
+    expect(sendToThread).toHaveBeenCalledWith('thread-1', 'Fill this in', {
+      metadata: { interactive: { id: 'form-1', kind: 'form' } },
+    })
+  })
+
   it('should reject approval dialogs that do not include the visible proposal', async () => {
     const { shadowPlugin } = await import('../src/channel.js')
     const result = await shadowPlugin.actions?.handleAction?.({
@@ -515,6 +570,10 @@ describe('Shadow Outbound', () => {
   it('should parse target with shadowob prefix', async () => {
     const { parseTarget } = await import('../src/outbound.js')
     expect(parseTarget('shadowob:channel:abc')).toEqual({ channelId: 'abc' })
+    expect(parseTarget('shadowob:channel:abc:thread:xyz')).toEqual({
+      channelId: 'abc',
+      threadId: 'xyz',
+    })
     expect(parseTarget('shadowob:thread:xyz')).toEqual({ threadId: 'xyz' })
   })
 
@@ -527,6 +586,144 @@ describe('Shadow Outbound', () => {
   it('should fallback to raw string as channel ID', async () => {
     const { parseTarget } = await import('../src/outbound.js')
     expect(parseTarget('some-uuid')).toEqual({ channelId: 'some-uuid' })
+  })
+
+  it('should expose the official OpenClaw sendText adapter', async () => {
+    const { ShadowClient } = await import('@shadowob/sdk')
+    const { shadowOutbound } = await import('../src/outbound.js')
+    const sendMessage = vi.spyOn(ShadowClient.prototype, 'sendMessage').mockResolvedValue({
+      id: 'msg-1',
+      content: 'Hello',
+      channelId: 'ch-123',
+      authorId: 'bot-1',
+      createdAt: '2026-04-27T00:00:00.000Z',
+      updatedAt: '2026-04-27T00:00:00.000Z',
+    } as never)
+
+    try {
+      const result = await shadowOutbound.sendText({
+        cfg: {
+          channels: {
+            shadowob: {
+              token: 'tok',
+              serverUrl: 'http://localhost:3002',
+            },
+          },
+        },
+        to: 'shadowob:channel:ch-123',
+        text: 'Hello',
+      })
+
+      expect(sendMessage).toHaveBeenCalledWith('ch-123', 'Hello', { replyToId: undefined })
+      expect(result).toMatchObject({
+        channel: 'shadowob',
+        messageId: 'msg-1',
+        channelId: 'ch-123',
+      })
+    } finally {
+      sendMessage.mockRestore()
+    }
+  })
+
+  it('should send official OpenClaw text deliveries into thread-only targets', async () => {
+    const { ShadowClient } = await import('@shadowob/sdk')
+    const { shadowOutbound } = await import('../src/outbound.js')
+    const sendToThread = vi.spyOn(ShadowClient.prototype, 'sendToThread').mockResolvedValue({
+      id: 'thread-msg-1',
+      content: 'Hello thread',
+      channelId: 'ch-123',
+      threadId: 'thread-123',
+      authorId: 'bot-1',
+      createdAt: '2026-04-27T00:00:00.000Z',
+      updatedAt: '2026-04-27T00:00:00.000Z',
+    } as never)
+
+    try {
+      const result = await shadowOutbound.sendText({
+        cfg: {
+          channels: {
+            shadowob: {
+              token: 'tok',
+              serverUrl: 'http://localhost:3002',
+            },
+          },
+        },
+        to: 'shadowob:thread:thread-123',
+        text: 'Hello thread',
+      })
+
+      expect(sendToThread).toHaveBeenCalledWith('thread-123', 'Hello thread')
+      expect(result).toMatchObject({
+        channel: 'shadowob',
+        messageId: 'thread-msg-1',
+        conversationId: 'thread-123',
+        meta: { threadId: 'thread-123' },
+      })
+    } finally {
+      sendToThread.mockRestore()
+    }
+  })
+
+  it('should expose the official OpenClaw sendMedia adapter and continue after upload fallback', async () => {
+    const { ShadowClient } = await import('@shadowob/sdk')
+    const { shadowOutbound } = await import('../src/outbound.js')
+    const sendMessage = vi
+      .spyOn(ShadowClient.prototype, 'sendMessage')
+      .mockResolvedValueOnce({
+        id: 'caption-msg',
+        content: 'Files',
+        channelId: 'ch-123',
+        authorId: 'bot-1',
+        createdAt: '2026-04-27T00:00:00.000Z',
+        updatedAt: '2026-04-27T00:00:00.000Z',
+      } as never)
+      .mockResolvedValueOnce({
+        id: 'fallback-msg',
+        content: 'file:///missing.png',
+        channelId: 'ch-123',
+        authorId: 'bot-1',
+        createdAt: '2026-04-27T00:00:01.000Z',
+        updatedAt: '2026-04-27T00:00:01.000Z',
+      } as never)
+    const uploadMediaFromUrl = vi
+      .spyOn(ShadowClient.prototype, 'uploadMediaFromUrl')
+      .mockRejectedValueOnce(new Error('missing file'))
+      .mockResolvedValueOnce({ url: '/media/ok.png', key: 'ok.png', size: 42 })
+
+    try {
+      const result = await shadowOutbound.sendMedia({
+        cfg: {
+          channels: {
+            shadowob: {
+              token: 'tok',
+              serverUrl: 'http://localhost:3002',
+            },
+          },
+        },
+        to: 'shadowob:channel:ch-123',
+        text: 'Files',
+        mediaUrls: ['file:///missing.png', 'file:///ok.png'],
+      })
+
+      expect(uploadMediaFromUrl).toHaveBeenCalledTimes(2)
+      expect(sendMessage).toHaveBeenNthCalledWith(1, 'ch-123', 'Files', {
+        replyToId: undefined,
+      })
+      expect(sendMessage).toHaveBeenNthCalledWith(2, 'ch-123', 'file:///missing.png', {
+        replyToId: 'caption-msg',
+      })
+      expect(result).toMatchObject({
+        channel: 'shadowob',
+        messageId: 'fallback-msg',
+        meta: {
+          mediaUploadFallback: true,
+          mediaUploadErrors: ['missing file'],
+        },
+      })
+    } finally {
+      sendMessage.mockRestore()
+      uploadMediaFromUrl.mockRestore()
+    }
   })
 })
 
