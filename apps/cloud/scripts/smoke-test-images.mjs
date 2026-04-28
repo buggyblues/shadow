@@ -21,7 +21,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const REGISTRY = process.env.SHADOW_REGISTRY ?? 'ghcr.io/shadowob'
+const REGISTRY = process.env.SHADOW_REGISTRY ?? 'ghcr.io/buggyblues'
 
 const IMAGES = ['openclaw-runner', 'claude-runner']
 
