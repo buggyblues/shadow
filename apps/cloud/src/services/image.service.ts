@@ -46,7 +46,7 @@ export class ImageService {
 
   /** Get the container registry URL. */
   getRegistry(): string {
-    return process.env.SHADOWOB_REGISTRY ?? 'ghcr.io/shadowob'
+    return process.env.SHADOWOB_REGISTRY ?? process.env.SHADOW_REGISTRY ?? 'ghcr.io/shadowob'
   }
 
   /** Get all available image names. */

@@ -80,6 +80,10 @@ describe('OpenClaw Adapter', () => {
     expect(adapter.requiresGit).toBe(false)
   })
 
+  it('uses the current Shadow runner image by default', () => {
+    expect(adapter.defaultImage).toBe('ghcr.io/shadowob/openclaw-runner:latest')
+  })
+
   it('acpRuntime returns null (no ACP harness)', () => {
     expect(adapter.acpRuntime(makeAgent())).toBeNull()
   })

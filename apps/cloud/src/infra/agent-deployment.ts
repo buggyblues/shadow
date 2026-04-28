@@ -43,6 +43,8 @@ export interface AgentDeploymentOptions {
   sharedWorkspaceMountPath?: string
   /** Skills install directory inside the container */
   skillsInstallDir?: string
+  /** Pod-template annotations that should trigger rollout when changed. */
+  podTemplateAnnotations?: Record<string, string>
   resourceOptions?: pulumi.CustomResourceOptions
 }
 
@@ -175,6 +177,10 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
               app: 'shadowob-cloud',
               agent: agentName,
               runtime: agent.runtime,
+            },
+            annotations: {
+              ...options.podTemplateAnnotations,
+              ...pluginArtifacts.annotations,
             },
           },
           spec: {

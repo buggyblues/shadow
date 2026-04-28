@@ -6,12 +6,13 @@
  */
 
 import type { AgentDeployment, OpenClawAgentConfig, OpenClawConfig } from '../config/schema.js'
+import { DEFAULT_OPENCLAW_RUNNER_IMAGE } from '../infra/constants.js'
 import { type RuntimeAdapter, registerRuntime } from './index.js'
 
 const openclawAdapter: RuntimeAdapter = {
   id: 'openclaw',
   name: 'OpenClaw Gateway',
-  defaultImage: 'ghcr.io/buggyblues/openclaw-runner:latest',
+  defaultImage: DEFAULT_OPENCLAW_RUNNER_IMAGE,
   packages: [],
   requiresGit: false,
 

@@ -11,6 +11,7 @@ import {
   baseVolumeMounts,
   baseVolumes,
   DEFAULT_IMAGES,
+  DEFAULT_OPENCLAW_RUNNER_IMAGE,
   DEFAULT_RESOURCES,
   HEALTH_PORT,
   healthPortForRuntime,
@@ -18,6 +19,7 @@ import {
   PULUMI_SKIP_AWAIT_ANNOTATIONS,
   probesForRuntime,
 } from './constants.js'
+import { stableHash } from './hash.js'
 import { createNetworking } from './networking.js'
 import { collectPluginK8sArtifacts } from './plugin-k8s.js'
 import { buildAgentRuntimePackage } from './runtime-package.js'
@@ -90,6 +92,12 @@ export function createInfraProgram(options: InfraOptions) {
         config,
         extraEnv: env,
       })
+      const image = agent.image ?? DEFAULT_IMAGES[agent.runtime] ?? DEFAULT_OPENCLAW_RUNNER_IMAGE
+      const runtimePackageHash = stableHash({
+        configData: runtimePackage.configData,
+        secretData: runtimePackage.secretData,
+        image,
+      })
 
       // ConfigMap + Secret
       const configRes = createConfigResources({
@@ -115,6 +123,10 @@ export function createInfraProgram(options: InfraOptions) {
         sharedWorkspacePvcName,
         sharedWorkspaceMountPath,
         skillsInstallDir,
+        podTemplateAnnotations: {
+          'shadowob.cloud/runtime-package-hash': runtimePackageHash,
+          'shadowob.cloud/runner-image': image,
+        },
         resourceOptions: {
           dependsOn: [
             shared.namespace,
@@ -254,7 +266,12 @@ export function buildManifests(options: InfraOptions) {
     })
 
     // Deployment
-    const image = agent.image ?? DEFAULT_IMAGES[agent.runtime] ?? DEFAULT_IMAGES.openclaw
+    const image = agent.image ?? DEFAULT_IMAGES[agent.runtime] ?? DEFAULT_OPENCLAW_RUNNER_IMAGE
+    const runtimePackageHash = stableHash({
+      configData: runtimePackage.configData,
+      secretData: runtimePackage.secretData,
+      image,
+    })
     const healthPort = healthPortForRuntime(agent.runtime)
     const { livenessProbe, readinessProbe, startupProbe } = probesForRuntime(agent.runtime)
 
@@ -338,7 +355,14 @@ export function buildManifests(options: InfraOptions) {
         replicas: agent.replicas ?? 1,
         selector: { matchLabels: { app: 'shadowob-cloud', agent: agentName } },
         template: {
-          metadata: { labels: { app: 'shadowob-cloud', agent: agentName, runtime: agent.runtime } },
+          metadata: {
+            labels: { app: 'shadowob-cloud', agent: agentName, runtime: agent.runtime },
+            annotations: {
+              'shadowob.cloud/runtime-package-hash': runtimePackageHash,
+              'shadowob.cloud/runner-image': image,
+              ...pluginK8s.annotations,
+            },
+          },
           spec: {
             securityContext: buildSecurityContext(),
             containers: [
