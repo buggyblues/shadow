@@ -9,6 +9,7 @@
 import { readFileSync } from 'node:fs'
 import * as k8s from '@pulumi/kubernetes'
 import type { SharedWorkspaceConfig } from '../config/schema.js'
+import { PULUMI_MANAGED_ANNOTATIONS } from './constants.js'
 
 export interface SharedResourcesOptions {
   namespace: string
@@ -47,6 +48,7 @@ export function createSharedResources(options: SharedResourcesOptions) {
           'shadowob-cloud/managed': 'true',
           'managed-by': 'shadowob-cloud-cli',
         },
+        annotations: PULUMI_MANAGED_ANNOTATIONS,
       },
     },
     { provider },
@@ -67,6 +69,7 @@ export function createSharedResources(options: SharedResourcesOptions) {
             'shadowob-cloud/managed': 'true',
             'managed-by': 'shadowob-cloud-cli',
           },
+          annotations: PULUMI_MANAGED_ANNOTATIONS,
         },
         spec: {
           accessModes: [ws.accessMode ?? 'ReadWriteOnce'],

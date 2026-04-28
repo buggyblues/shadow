@@ -216,7 +216,7 @@ export interface PluginMCPServer {
 
 // ─── Provider / Secret Capability Types ─────────────────────────────────────
 
-export type ModelTag = 'default' | 'fast' | 'flash' | 'reasoning' | 'vision'
+export type ModelTag = 'default' | 'fast' | 'flash' | 'reasoning' | 'vision' | 'tools'
 
 export interface ProviderModelEntry {
   /** Model ID within the provider. */
@@ -378,6 +378,13 @@ export interface PluginK8sVolumeMount {
   readOnly?: boolean
 }
 
+export interface PluginK8sConfigMap {
+  name: string
+  data: Record<string, string>
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
+}
+
 export interface PluginK8sEnvVar {
   name: string
   value?: string
@@ -388,6 +395,8 @@ export interface PluginK8sResult {
   initContainers?: PluginK8sInitContainer[]
   /** Helper containers that run for the lifetime of the pod. */
   sidecars?: PluginK8sSidecar[]
+  /** Plugin-owned ConfigMaps that pod volumes may reference. */
+  configMaps?: PluginK8sConfigMap[]
   volumes?: PluginK8sVolume[]
   volumeMounts?: PluginK8sVolumeMount[]
   envVars?: PluginK8sEnvVar[]

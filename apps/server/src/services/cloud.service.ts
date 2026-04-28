@@ -44,11 +44,22 @@ export class CloudService {
         )
         continue
       }
-      const name = slug
-        .split('-')
-        .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-        .join(' ')
-      await this.deps.cloudTemplateDao.upsertOfficial({ slug, name, content })
+      const name =
+        typeof content.title === 'string' && content.title.trim()
+          ? content.title
+          : slug
+              .split('-')
+              .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+              .join(' ')
+      const description =
+        typeof content.description === 'string' && content.description.trim()
+          ? content.description
+          : undefined
+      const tags = Array.isArray(content.tags)
+        ? content.tags.filter((tag): tag is string => typeof tag === 'string')
+        : undefined
+
+      await this.deps.cloudTemplateDao.upsertOfficial({ slug, name, description, tags, content })
     }
   }
 

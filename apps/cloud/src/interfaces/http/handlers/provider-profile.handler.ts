@@ -4,6 +4,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { Hono } from 'hono'
+import { normalizeLlmProviderConfig } from '../../../application/llm-provider-platform.js'
 import { listProviderCatalogs } from '../../../application/provider-catalogs.js'
 import type { HandlerContext } from './types.js'
 
@@ -139,6 +140,41 @@ export function createProviderProfileHandler(ctx: HandlerContext): Hono {
       message:
         enabled && providerId && hasKey ? 'Connection check ready' : 'Missing provider credentials',
       checkedAt: new Date().toISOString(),
+    })
+  })
+
+  app.post('/provider-profiles/:id/models/refresh', async (c) => {
+    const profileId = normalizeProviderProfileId(c.req.param('id'))
+    const scope = providerProfileScope(profileId)
+    const values = new Map(
+      ctx.envVarDao.findByScope(scope).map((entry) => [entry.key, entry.value]),
+    )
+    const providerId = values.get(META_KEYS.providerId)
+    const config = parseConfig(values.get(META_KEYS.configJson))
+    const catalogs = await listProviderCatalogs()
+    const catalog = catalogs.find((entry) => entry.provider.id === providerId)
+    const configuredModels = normalizeLlmProviderConfig(config).models ?? []
+    const catalogModels =
+      catalog?.provider.models.map((model) => ({
+        id: model.id,
+        name: model.name,
+        tags: model.tags,
+        contextWindow: model.contextWindow,
+        maxTokens: model.maxTokens,
+      })) ?? []
+    const models = configuredModels.length > 0 ? configuredModels : catalogModels
+    const nextConfig = {
+      ...config,
+      models,
+      discoveredAt: new Date().toISOString(),
+    }
+    ctx.envVarDao.upsert(scope, META_KEYS.configJson, JSON.stringify(nextConfig), true)
+    return c.json({
+      ok: true,
+      status: null,
+      message: `Discovered ${models.length} model(s)`,
+      models,
+      profile: readProfiles(ctx).find((profile) => profile.id === profileId),
     })
   })
 

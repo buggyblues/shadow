@@ -36,7 +36,7 @@ import type {
 
 type RuntimeEnv = Record<string, string | undefined>
 
-const CLOUD_DISABLED_BUNDLED_PLUGINS = ['bonjour'] as const
+const CLOUD_REMOVED_BUNDLED_PLUGINS = ['bonjour'] as const
 
 // ─── Sub-builders ────────────────────────────────────────────────────────────
 
@@ -99,14 +99,12 @@ function copyOpenClawSections(oc: OpenClawConfig | undefined): Partial<OpenClawC
   return result
 }
 
-function applyCloudRunnerPluginDefaults(openclawConfig: OpenClawConfig): void {
-  if (!openclawConfig.plugins) openclawConfig.plugins = {}
-  if (!openclawConfig.plugins.entries) openclawConfig.plugins.entries = {}
+function stripCloudRemovedBundledPlugins(openclawConfig: OpenClawConfig): void {
+  const entries = openclawConfig.plugins?.entries
+  if (!entries) return
 
-  for (const pluginId of CLOUD_DISABLED_BUNDLED_PLUGINS) {
-    if (!openclawConfig.plugins.entries[pluginId]) {
-      openclawConfig.plugins.entries[pluginId] = { enabled: false }
-    }
+  for (const pluginId of CLOUD_REMOVED_BUNDLED_PLUGINS) {
+    delete entries[pluginId]
   }
 }
 
@@ -348,7 +346,7 @@ function buildGatewayConfig(
   const { host: gwHost, ...restGateway } = userGateway as OpenClawGatewayConfig & { host?: string }
   const gateway = {
     mode: 'local' as const,
-    port: 3100,
+    port: 3101,
     bind: 'lan',
     auth: { mode: 'token' as const },
     ...existing,
@@ -658,8 +656,8 @@ export function buildOpenClawConfig(
   // 15. Plugin pipeline — merge enabled plugin configs (channels, bindings, resources)
   applyPluginPipeline(agent, config, openclawConfig, cwd, env)
 
-  // 16. Cloud runner defaults for bundled plugins that are not useful in k8s.
-  applyCloudRunnerPluginDefaults(openclawConfig)
+  // 16. Remove bundled plugin config entries not installed in the cloud runner.
+  stripCloudRemovedBundledPlugins(openclawConfig)
 
   // 17. Normalize legacy tool config fragments so historical templates and
   //     stored snapshots still produce a valid OpenClaw config.

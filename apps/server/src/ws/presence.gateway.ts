@@ -61,8 +61,11 @@ export function setupPresenceGateway(
         const wasEmpty = (await redis.sCard(presenceKeys.onlineSockets(userId))) === 1
         if (wasEmpty) {
           const userDao = container.resolve('userDao')
-          void userDao.updateStatus(userId, 'online')
-          void broadcastPresenceToRooms(io, container, userId, { userId, status: 'online' })
+          await userDao.updateStatus(userId, 'online')
+          await broadcastPresenceToRooms(io, container, userId, {
+            userId,
+            status: 'online',
+          })
         }
       }
     })
@@ -75,8 +78,11 @@ export function setupPresenceGateway(
           const size = await redis.sCard(presenceKeys.onlineSockets(userId))
           if (size === 1) {
             const userDao = container.resolve('userDao')
-            void userDao.updateStatus(userId, 'online')
-            void broadcastPresenceToRooms(io, container, userId, { userId, status: 'online' })
+            await userDao.updateStatus(userId, 'online')
+            await broadcastPresenceToRooms(io, container, userId, {
+              userId,
+              status: 'online',
+            })
           }
         }
       } catch (err) {
@@ -90,7 +96,10 @@ export function setupPresenceGateway(
       async ({ status }: { status: 'online' | 'idle' | 'dnd' | 'offline' }) => {
         const userDao = container.resolve('userDao')
         await userDao.updateStatus(userId, status)
-        await broadcastPresenceToRooms(io, container, userId, { userId, status })
+        await broadcastPresenceToRooms(io, container, userId, {
+          userId,
+          status,
+        })
       },
     )
 
@@ -133,8 +142,11 @@ export function setupPresenceGateway(
             await redis.del(presenceKeys.onlineSockets(userId))
             await redis.del(presenceKeys.userActivity(userId))
             const userDao = container.resolve('userDao')
-            void userDao.updateStatus(userId, 'offline')
-            void broadcastPresenceToRooms(io, container, userId, { userId, status: 'offline' })
+            await userDao.updateStatus(userId, 'offline')
+            await broadcastPresenceToRooms(io, container, userId, {
+              userId,
+              status: 'offline',
+            })
           }
         }
       } catch (err) {
@@ -175,8 +187,11 @@ export async function forceDisconnectUser(
       await redis.del(presenceKeys.userActivity(userId))
     }
     const userDao = container.resolve('userDao')
-    void userDao.updateStatus(userId, 'offline')
-    void broadcastPresenceToRooms(io, container, userId, { userId, status: 'offline' })
+    await userDao.updateStatus(userId, 'offline')
+    await broadcastPresenceToRooms(io, container, userId, {
+      userId,
+      status: 'offline',
+    })
   } catch (err) {
     logger.warn({ err, userId }, 'Failed to force-disconnect user')
   }

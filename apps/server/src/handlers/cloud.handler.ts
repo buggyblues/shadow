@@ -5,6 +5,23 @@ import type { AppContainer } from '../container'
 import { encrypt } from '../lib/kms'
 import { authMiddleware } from '../middleware/auth.middleware'
 
+function resolveTemplateI18nDict(
+  content: Record<string, unknown>,
+  locale: string,
+): Record<string, string> {
+  const i18n = content.i18n as Record<string, Record<string, string>> | undefined
+  if (!i18n) return {}
+  const baseLocale = locale.split('-')[0] ?? locale
+  return i18n[locale] ?? (baseLocale !== locale ? i18n[baseLocale] : undefined) ?? i18n.en ?? {}
+}
+
+function resolveI18nValue(value: unknown, i18nDict: Record<string, string>): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const match = /^\$\{i18n:([^}]+)\}$/.exec(value)
+  if (!match?.[1]) return value
+  return i18nDict[match[1]] ?? value
+}
+
 export function createCloudHandler(container: AppContainer) {
   const h = new Hono()
 
@@ -13,9 +30,27 @@ export function createCloudHandler(container: AppContainer) {
   // ─── Templates ────────────────────────────────────────────────────────────
 
   h.get('/templates', async (c) => {
+    const locale = c.req.query('locale') ?? 'en'
     const dao = container.resolve('cloudTemplateDao')
     const templates = await dao.listApproved()
-    return c.json(templates)
+    return c.json(
+      templates.map((template) => {
+        const content = template.content as Record<string, unknown>
+        const i18nDict = resolveTemplateI18nDict(content, locale)
+        return {
+          ...template,
+          name: template.slug,
+          title:
+            resolveI18nValue(content.title, i18nDict) ??
+            resolveI18nValue(template.name, i18nDict) ??
+            template.slug,
+          description:
+            resolveI18nValue(template.description, i18nDict) ??
+            resolveI18nValue(content.description, i18nDict) ??
+            null,
+        }
+      }),
+    )
   })
 
   h.post(

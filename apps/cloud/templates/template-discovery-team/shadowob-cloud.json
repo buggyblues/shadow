@@ -1,5 +1,8 @@
 {
   "version": "1",
+  "name": "template-discovery-team",
+  "title": "${i18n:title}",
+  "description": "${i18n:description}",
   "environment": "development",
   "use": [
     {
@@ -11,16 +14,37 @@
             "name": "Template Discovery Hub",
             "slug": "template-hub",
             "channels": [
-              { "id": "discover", "title": "Discover Templates", "type": "text" },
-              { "id": "deploy-guide", "title": "Deployment Guide", "type": "text" },
-              { "id": "status", "title": "Status", "type": "text" }
+              {
+                "id": "discover",
+                "title": "Discover Templates",
+                "type": "text"
+              },
+              {
+                "id": "deploy-guide",
+                "title": "Deployment Guide",
+                "type": "text"
+              },
+              {
+                "id": "status",
+                "title": "Status",
+                "type": "text"
+              }
             ]
           }
         ],
         "buddies": [
-          { "id": "scout-bot", "name": "Template Scout" },
-          { "id": "advisor-bot", "name": "Template Advisor" },
-          { "id": "mentor-bot", "name": "Deploy Mentor" }
+          {
+            "id": "scout-bot",
+            "name": "Template Scout"
+          },
+          {
+            "id": "advisor-bot",
+            "name": "Template Advisor"
+          },
+          {
+            "id": "mentor-bot",
+            "name": "Deploy Mentor"
+          }
         ],
         "bindings": [
           {
@@ -29,7 +53,9 @@
             "servers": ["template-hub"],
             "channels": ["discover", "status"],
             "agentId": "template-scout",
-            "replyPolicy": { "mode": "mentionOnly" }
+            "replyPolicy": {
+              "mode": "mentionOnly"
+            }
           },
           {
             "targetId": "advisor-bot",
@@ -37,7 +63,9 @@
             "servers": ["template-hub"],
             "channels": ["discover"],
             "agentId": "template-advisor",
-            "replyPolicy": { "mode": "replyAll" }
+            "replyPolicy": {
+              "mode": "replyAll"
+            }
           },
           {
             "targetId": "mentor-bot",
@@ -45,7 +73,9 @@
             "servers": ["template-hub"],
             "channels": ["deploy-guide"],
             "agentId": "deploy-mentor",
-            "replyPolicy": { "mode": "replyAll" }
+            "replyPolicy": {
+              "mode": "replyAll"
+            }
           }
         ]
       }
@@ -59,21 +89,35 @@
         "baseUrl": "https://api.deepseek.com/v1",
         "apiKey": "${env:DEEPSEEK_API_KEY}",
         "models": [
-          { "id": "deepseek-chat", "contextWindow": 65536 },
-          { "id": "deepseek-reasoner", "contextWindow": 65536 }
+          {
+            "id": "deepseek-chat",
+            "contextWindow": 65536
+          },
+          {
+            "id": "deepseek-reasoner",
+            "contextWindow": 65536
+          }
         ]
       }
     ],
     "configurations": [
       {
         "id": "discovery-base",
-        "model": { "preferred": "deepseek/deepseek-chat" },
+        "model": {
+          "preferred": "deepseek/deepseek-chat"
+        },
         "openclaw": {
           "tools": {
             "profile": "messaging",
-            "web": { "fetch": { "enabled": true } }
+            "web": {
+              "fetch": {
+                "enabled": true
+              }
+            }
           },
-          "session": { "dmScope": "per-peer" },
+          "session": {
+            "dmScope": "per-peer"
+          },
           "messages": {
             "ackReaction": "🔍",
             "ackReactionScope": "all",
@@ -93,7 +137,9 @@
         "id": "mentor-config",
         "extends": "discovery-base",
         "openclaw": {
-          "messages": { "ackReaction": "📦" }
+          "messages": {
+            "ackReaction": "📦"
+          }
         }
       }
     ]
@@ -118,10 +164,18 @@
             }
           }
         ],
-        "configuration": { "extends": "discovery-base" },
+        "configuration": {
+          "extends": "discovery-base"
+        },
         "resources": {
-          "requests": { "cpu": "100m", "memory": "256Mi" },
-          "limits": { "cpu": "500m", "memory": "512Mi" }
+          "requests": {
+            "cpu": "100m",
+            "memory": "256Mi"
+          },
+          "limits": {
+            "cpu": "500m",
+            "memory": "512Mi"
+          }
         }
       },
       {
@@ -141,10 +195,18 @@
             }
           }
         ],
-        "configuration": { "extends": "advisor-config" },
+        "configuration": {
+          "extends": "advisor-config"
+        },
         "resources": {
-          "requests": { "cpu": "200m", "memory": "512Mi" },
-          "limits": { "cpu": "1000m", "memory": "1Gi" }
+          "requests": {
+            "cpu": "200m",
+            "memory": "512Mi"
+          },
+          "limits": {
+            "cpu": "1000m",
+            "memory": "1Gi"
+          }
         }
       },
       {
@@ -164,12 +226,30 @@
             }
           }
         ],
-        "configuration": { "extends": "mentor-config" },
+        "configuration": {
+          "extends": "mentor-config"
+        },
         "resources": {
-          "requests": { "cpu": "200m", "memory": "512Mi" },
-          "limits": { "cpu": "1000m", "memory": "1Gi" }
+          "requests": {
+            "cpu": "200m",
+            "memory": "512Mi"
+          },
+          "limits": {
+            "cpu": "1000m",
+            "memory": "1Gi"
+          }
         }
       }
     ]
+  },
+  "i18n": {
+    "en": {
+      "title": "Template Discovery Team",
+      "description": "Help customers choose and deploy the right Shadow template with agents that search the store, translate requirements into recommendations, and guide local or cloud rollout step by step."
+    },
+    "zh-CN": {
+      "title": "模板发现团队",
+      "description": "帮助客户选择并部署合适的 Shadow 模板：智能体会搜索模板商店、把需求转化为推荐，并逐步指导本地或云端上线。"
+    }
   }
 }

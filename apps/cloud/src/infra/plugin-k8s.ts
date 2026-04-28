@@ -9,6 +9,7 @@
 import type { AgentDeployment, CloudConfig } from '../config/schema.js'
 import { getPluginRegistry } from '../plugins/registry.js'
 import type {
+  PluginK8sConfigMap,
   PluginK8sContext,
   PluginK8sEnvVar,
   PluginK8sInitContainer,
@@ -21,6 +22,7 @@ import type {
 export interface CollectedK8sArtifacts {
   initContainers: PluginK8sInitContainer[]
   sidecars: PluginK8sSidecar[]
+  configMaps: PluginK8sConfigMap[]
   volumes: PluginK8sVolume[]
   volumeMounts: PluginK8sVolumeMount[]
   envVars: PluginK8sEnvVar[]
@@ -41,6 +43,7 @@ export function collectPluginK8sArtifacts(
   const result: CollectedK8sArtifacts = {
     initContainers: [],
     sidecars: [],
+    configMaps: [],
     volumes: [],
     volumeMounts: [],
     envVars: [],
@@ -68,6 +71,9 @@ export function collectPluginK8sArtifacts(
     }
     if (artifacts.sidecars?.length) {
       result.sidecars.push(...artifacts.sidecars)
+    }
+    if (artifacts.configMaps?.length) {
+      result.configMaps.push(...artifacts.configMaps)
     }
     if (artifacts.volumes?.length) {
       result.volumes.push(...artifacts.volumes)

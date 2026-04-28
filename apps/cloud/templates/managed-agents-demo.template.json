@@ -1,9 +1,10 @@
 {
-  "$comment": "Template with managed-agents features: vault isolation, permissions, networking, versioning",
   "version": "1",
-  "name": "${i18n:name}",
+  "name": "managed-agents-demo",
+  "title": "${i18n:title}",
   "description": "${i18n:description}",
   "environment": "development",
+  "$comment": "Template with managed-agents features: vault isolation, permissions, networking, versioning",
   "registry": {
     "vaults": {
       "default": {
@@ -115,19 +116,19 @@
       }
     ]
   },
-  "i18n": {
-    "en": {
-      "name": "Managed Agents Demo",
-      "description": "Demonstrates P0/P1 managed-agents features"
-    },
-    "zh-CN": {
-      "name": "托管智能体演示",
-      "description": "演示 P0/P1 托管智能体功能"
-    }
-  },
   "use": [
     {
       "plugin": "model-provider"
     }
-  ]
+  ],
+  "i18n": {
+    "en": {
+      "title": "Managed Agents Demo",
+      "description": "Evaluate safer managed-agent operations with a demo team that showcases vault isolation, permission boundaries, network controls, and sandboxed runtimes before customers roll them into production."
+    },
+    "zh-CN": {
+      "title": "托管智能体演示",
+      "description": "通过演示团队评估更安全的托管智能体运行方式，展示 vault 隔离、权限边界、网络控制和沙箱运行时，便于客户在生产落地前完成验证。"
+    }
+  }
 }

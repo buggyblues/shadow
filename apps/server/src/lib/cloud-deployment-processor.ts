@@ -4,7 +4,9 @@
  * Runs in-process with the server. Requires access to PostgreSQL and a reachable
  * Kubernetes cluster via KUBECONFIG.
  */
+import { createHash } from 'node:crypto'
 import {
+  attachCloudSaasProvisionState,
   createContainer,
   deleteNamespace,
   extractCloudSaasRuntime,
@@ -27,6 +29,25 @@ const RECONCILE_INTERVAL_MS = Number(process.env.RECONCILE_INTERVAL_MS ?? 60_000
 
 type CloudDeploymentRecord = NonNullable<Awaited<ReturnType<CloudDeploymentDao['findByIdOnly']>>>
 type DeploymentStatus = CloudDeploymentRecord['status']
+
+function extractKubeContext(kubeconfigYaml: string): string | undefined {
+  const match = kubeconfigYaml.match(/current-context:\s*(\S+)/)
+  return match?.[1]
+}
+
+function sanitizePulumiStackPart(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9_.-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function resolveDeploymentStackName(deployment: CloudDeploymentRecord): string {
+  const clusterKey = deployment.clusterId ?? 'platform'
+  const clusterHash = createHash('sha256').update(clusterKey).digest('hex').slice(0, 10)
+  const namespace = sanitizePulumiStackPart(deployment.namespace).slice(0, 60) || 'deployment'
+  return `saas-${namespace}-${clusterHash}`
+}
 
 /**
  * In-process registry of currently-running deploy operations.
@@ -159,7 +180,24 @@ async function withLockedDeployment(
       return
     }
 
-    await run(latest)
+    const operationLockAcquired = await deploymentDao.tryAcquireOperationLock(latest)
+    if (!operationLockAcquired) {
+      return
+    }
+
+    try {
+      const refreshed = await deploymentDao.findByIdOnly(deploymentId)
+      if (!refreshed || !expectedStatuses.includes(refreshed.status)) {
+        return
+      }
+      await run(refreshed)
+    } finally {
+      try {
+        await deploymentDao.releaseOperationLock(latest)
+      } catch {
+        // best effort unlock
+      }
+    }
   } finally {
     try {
       await deploymentDao.releaseWorkerLock(deploymentId)
@@ -172,15 +210,18 @@ async function withLockedDeployment(
 async function resolveClusterRuntime(
   clusterId: string | null,
   clusterDao: CloudClusterDao,
-): Promise<{ name: string; kubeconfig: string } | null> {
+): Promise<{ id: string; name: string; kubeconfig: string; context?: string } | null> {
   if (!clusterId) return null
 
   const cluster = await clusterDao.findByIdOnly(clusterId)
   if (!cluster?.kubeconfigEncrypted) return null
+  const kubeconfig = decrypt(cluster.kubeconfigEncrypted)
 
   return {
+    id: cluster.id,
     name: cluster.name,
-    kubeconfig: decrypt(cluster.kubeconfigEncrypted),
+    kubeconfig,
+    context: extractKubeContext(kubeconfig),
   }
 }
 
@@ -208,6 +249,16 @@ async function processDeployment(
   container: ServiceContainer,
 ) {
   logger.info({ deploymentId: deployment.id, deploymentName: deployment.name }, 'Deploying stack')
+
+  const newer = await deploymentDao.findNewerCurrentInNamespace(deployment)
+  if (newer) {
+    const message = `Superseded by newer deployment ${newer.id}; skipping stale deploy for namespace "${deployment.namespace}"`
+    await deploymentDao.appendLog(deployment.id, message, 'warn')
+    await deploymentDao.updateStatus(deployment.id, 'failed', 'superseded-by-newer-deployment')
+    logger.warn({ deploymentId: deployment.id, newerDeploymentId: newer.id }, message)
+    return
+  }
+
   await deploymentDao.updateStatus(deployment.id, 'deploying')
   await deploymentDao.appendLog(deployment.id, `Starting deployment: ${deployment.name}`, 'info')
 
@@ -220,18 +271,32 @@ async function processDeployment(
 
   try {
     const cluster = await resolveClusterRuntime(deployment.clusterId, clusterDao)
+    const stackName = resolveDeploymentStackName(deployment)
     if (cluster) {
-      await deploymentDao.appendLog(deployment.id, `Using BYOK cluster: ${cluster.name}`, 'info')
+      await deploymentDao.appendLog(
+        deployment.id,
+        `Using BYOK cluster: ${cluster.name} (id=${cluster.id}, context=${cluster.context ?? 'unknown'})`,
+        'info',
+      )
+    } else {
+      await deploymentDao.appendLog(
+        deployment.id,
+        `Using platform/default cluster (context=${process.env.KUBECONFIG_CONTEXT ?? 'rancher-desktop'}, kubeconfig=${process.env.KUBECONFIG ?? '~/.kube/config'})`,
+        'info',
+      )
     }
+    await deploymentDao.appendLog(deployment.id, `Pulumi stack: ${stackName}`, 'info')
 
     // Validate configSnapshot
     if (!deployment.configSnapshot) {
       throw new Error('No config snapshot found for this deployment. Cannot deploy.')
     }
 
-    const { configSnapshot, envVars: runtimeEnvVars } = extractCloudSaasRuntime(
-      deployment.configSnapshot,
-    )
+    const {
+      configSnapshot,
+      envVars: runtimeEnvVars,
+      provisionState,
+    } = extractCloudSaasRuntime(deployment.configSnapshot)
 
     if (!configSnapshot) {
       throw new Error('No valid config snapshot found for this deployment. Cannot deploy.')
@@ -250,12 +315,28 @@ async function processDeployment(
       'info',
     )
 
+    let provisionStatePersisted = false
+    const persistProvisionState = async (state: NonNullable<typeof provisionState>) => {
+      await deploymentDao.updateConfigSnapshot(
+        deployment.id,
+        attachCloudSaasProvisionState(deployment.configSnapshot, state),
+      )
+      provisionStatePersisted = true
+      await deploymentDao.appendLog(
+        deployment.id,
+        'Provision state persisted for future redeploys',
+        'info',
+      )
+    }
+
     const result = await container.deploymentRuntime.deployFromSnapshot({
       configSnapshot,
       runtimeEnvVars,
       namespace: deployment.namespace,
-      stack: deployment.id,
+      stack: stackName,
       cluster,
+      provisionState,
+      onProvisionState: persistProvisionState,
       shadowUrl,
       k8sShadowUrl: podShadowUrl,
       shadowToken,
@@ -279,6 +360,9 @@ async function processDeployment(
       `Deployment complete! ${result.agentCount} agent(s) in namespace "${result.namespace}"`,
       'info',
     )
+    if (result.provisionState && !provisionStatePersisted) {
+      await persistProvisionState(result.provisionState)
+    }
     await deploymentDao.updateStatus(deployment.id, 'deployed')
     logger.info(
       { deploymentId: deployment.id, agentCount: result.agentCount },
@@ -309,13 +393,23 @@ async function processDestroy(
   await deploymentDao.appendLog(deployment.id, `Starting destroy: ${deployment.name}`, 'info')
 
   try {
+    const newer = await deploymentDao.findNewerCurrentInNamespace(deployment)
+    if (newer) {
+      const message = `Superseded by newer deployment ${newer.id}; refusing to destroy namespace "${deployment.namespace}"`
+      await deploymentDao.appendLog(deployment.id, message, 'warn')
+      await deploymentDao.updateStatus(deployment.id, 'failed', 'superseded-by-newer-deployment')
+      logger.warn({ deploymentId: deployment.id, newerDeploymentId: newer.id }, message)
+      return
+    }
+
     const cluster = await resolveClusterRuntime(deployment.clusterId, clusterDao)
     const { configSnapshot } = extractCloudSaasRuntime(deployment.configSnapshot)
     const clusterKubeconfig = cluster?.kubeconfig
+    const stackName = resolveDeploymentStackName(deployment)
 
     await container.deploymentRuntime.destroy({
       namespace: deployment.namespace,
-      stack: deployment.id,
+      stack: stackName,
       cluster,
       configSnapshot,
     })
@@ -344,7 +438,7 @@ async function processDestroy(
       `Namespace "${deployment.namespace}" destroyed successfully`,
       'info',
     )
-    await deploymentDao.updateStatus(deployment.id, 'destroyed')
+    await deploymentDao.markNamespaceRowsDestroyed(deployment)
     logger.info({ deploymentId: deployment.id }, 'Destroy completed')
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

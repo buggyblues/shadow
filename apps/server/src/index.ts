@@ -134,6 +134,7 @@ async function main() {
     {
       fetch: app.fetch,
       port: PORT,
+      hostname: '0.0.0.0',
     },
     (info) => {
       logger.info(`🚀 Shadow Server running on http://localhost:${info.port}`)

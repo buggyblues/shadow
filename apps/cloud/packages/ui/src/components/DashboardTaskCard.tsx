@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
 interface DashboardTaskCardProps {
-  id: number
+  id: number | string
   statusLabel: string
   statusVariant: BadgeProps['variant']
   running?: boolean

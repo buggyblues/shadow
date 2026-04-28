@@ -67,7 +67,7 @@ test.describe('Main Deploy Flow', () => {
 
     // Step 1: Review Template
     await expect(page.getByText('Review Template')).toBeVisible({ timeout: 10_000 })
-    await expect(page.getByRole('heading', { name: 'shadowob-cloud' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Shadow Cloud Basic' })).toBeVisible()
 
     // Click Continue
     await page.getByRole('button', { name: 'Continue' }).click()

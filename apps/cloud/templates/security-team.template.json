@@ -1,12 +1,9 @@
 {
   "version": "1.0.0",
-  "name": "${i18n:name}",
+  "name": "security-team",
+  "title": "${i18n:title}",
   "description": "${i18n:description}",
   "environment": "production",
-  "team": {
-    "name": "security-team",
-    "description": "Continuous security monitoring: vulnerabilities, dependencies, and secrets"
-  },
   "use": [
     {
       "plugin": "model-provider"
@@ -239,12 +236,12 @@
   },
   "i18n": {
     "en": {
-      "name": "Security Team",
-      "description": "Three-agent security team: vulnerability scanner, dependency auditor, and secrets detective. Continuously monitors your codebase and infrastructure for security issues."
+      "title": "Security Team",
+      "description": "Strengthen product security with agents that scan code, audit dependencies, and hunt leaked secrets, surfacing prioritized findings before vulnerabilities reach customers."
     },
     "zh-CN": {
-      "name": "安全团队",
-      "description": "三智能体安全团队：漏洞扫描器、依赖审计员和密钥侦探。持续监控代码安全、依赖漏洞和密钥泄露。"
+      "title": "安全团队",
+      "description": "用代码扫描、依赖审计和密钥泄露排查智能体强化产品安全，在漏洞影响客户之前给出可排序、可处理的风险发现。"
     }
   }
 }

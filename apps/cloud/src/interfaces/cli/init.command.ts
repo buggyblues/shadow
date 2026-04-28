@@ -39,15 +39,18 @@ export function createInitCommand(container: ServiceContainer) {
         if (options.list) {
           console.log('\nAvailable templates:\n')
           const maxName = Math.max(...templates.map((t) => t.name.length), 6)
-          const header = `  ${'TEMPLATE'.padEnd(maxName)}  AGENTS  DESCRIPTION`
+          const maxTitle = Math.min(Math.max(...templates.map((t) => t.title.length), 5), 32)
+          const header = `  ${'TEMPLATE'.padEnd(maxName)}  ${'TITLE'.padEnd(maxTitle)}  AGENTS  DESCRIPTION`
           console.log(header)
-          console.log(`  ${'-'.repeat(maxName)}  ------  -----------`)
+          console.log(`  ${'-'.repeat(maxName)}  ${'-'.repeat(maxTitle)}  ------  -----------`)
           for (const t of templates) {
             const nameStr = t.name.padEnd(maxName)
+            const title = t.title.length > maxTitle ? `${t.title.slice(0, maxTitle - 1)}…` : t.title
+            const titleStr = title.padEnd(maxTitle)
             const agentStr = String(t.agentCount).padStart(6)
             const desc =
               t.description.length > 60 ? `${t.description.slice(0, 57)}...` : t.description
-            console.log(`  ${nameStr}  ${agentStr}  ${desc}`)
+            console.log(`  ${nameStr}  ${titleStr}  ${agentStr}  ${desc}`)
           }
           console.log()
           console.log('  Use: shadowob-cloud init --template <name> [-o output.json]')

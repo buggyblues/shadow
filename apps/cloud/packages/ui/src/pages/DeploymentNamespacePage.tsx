@@ -19,7 +19,6 @@ import {
   DollarSign,
   Download,
   FileText,
-  FolderClock,
   FolderOpen,
   Info,
   Loader2,
@@ -36,12 +35,10 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Breadcrumb } from '@/components/Breadcrumb'
-import { CliCommandSnippet } from '@/components/CliCommandSnippet'
 import { DangerConfirmDialog } from '@/components/DangerConfirmDialog'
 import { DashboardEmptyState } from '@/components/DashboardEmptyState'
 import { DashboardNamespaceCard } from '@/components/DashboardNamespaceCard'
 import { DashboardTabsList } from '@/components/DashboardTabsList'
-import { DashboardTaskCard } from '@/components/DashboardTaskCard'
 import { EnvVarEditorDialog } from '@/components/EnvVarEditorDialog'
 import { LogsPanel } from '@/components/LogsPanel'
 import { StatCard } from '@/components/StatCard'
@@ -57,13 +54,9 @@ import {
 } from '@/lib/api'
 import { useApiClient } from '@/lib/api-context'
 import { formatDisplayCost, formatTokenCount, formatUsdCost } from '@/lib/store-data'
-import { cn, formatTimestamp, getAge, getReadyReplicas, isDeploymentReady } from '@/lib/utils'
+import { cn, formatTimestamp, getAge, isDeploymentReady } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/stores/toast'
-
-function getReplicas(dep: Deployment): number {
-  return getReadyReplicas(dep.ready)
-}
 
 function getPodStatusType(status: string): 'success' | 'warning' | 'error' | 'info' {
   if (status === 'Running') return 'success'
@@ -108,51 +101,17 @@ function getProviderMetricDisplay(
 
 function AgentCard({
   deployment,
-  namespace,
   selected,
   onSelect,
   onOpenLogs,
 }: {
   deployment: Deployment
-  namespace: string
   selected: boolean
   onSelect: () => void
   onOpenLogs: () => void
 }) {
-  const api = useApiClient()
   const { t } = useTranslation()
-  const toast = useToast()
-  const queryClient = useQueryClient()
-  const addActivity = useAppStore((state) => state.addActivity)
-  const [replicas, setReplicas] = useState<number | null>(null)
   const ready = isDeploymentReady(deployment.ready)
-  const currentReplicas = replicas ?? getReplicas(deployment)
-
-  const scaleMutation = useMutation({
-    mutationFn: (count: number) => api.deployments.scale(namespace, deployment.name, count),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['deployments'] })
-      toast.success(
-        t('deployments.scaledAgent', {
-          agent: deployment.name,
-          count: replicas ?? currentReplicas,
-        }),
-      )
-      addActivity({
-        type: 'scale',
-        title: `Scaled ${deployment.name}`,
-        detail: `Replicas: ${replicas ?? currentReplicas}`,
-        namespace,
-      })
-    },
-    onError: () => toast.error(t('deployments.scaleFailed', { agent: deployment.name })),
-  })
-
-  const handleScale = (delta: number) => {
-    const next = Math.max(0, currentReplicas + delta)
-    setReplicas(next)
-    scaleMutation.mutate(next)
-  }
 
   return (
     <div
@@ -208,30 +167,6 @@ function AgentCard({
           badgeVariant={ready ? 'success' : 'warning'}
           badgeText={deployment.ready}
         />
-
-        <div className="flex items-center rounded-lg border border-border-dim">
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
-            onClick={() => handleScale(-1)}
-            disabled={scaleMutation.isPending || currentReplicas <= 0}
-          >
-            −
-          </Button>
-          <span className="text-xs font-mono px-2 min-w-[2rem] text-center">{currentReplicas}</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
-            onClick={() => handleScale(1)}
-            disabled={scaleMutation.isPending}
-          >
-            +
-          </Button>
-        </div>
       </div>
     </div>
   )
@@ -289,9 +224,6 @@ function PodsPanel({
                 {t('monitoring.name')}
               </TableHead>
               <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
-                {t('monitoring.ready')}
-              </TableHead>
-              <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
                 {t('deployments.restarts')}
               </TableHead>
               <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
@@ -306,12 +238,11 @@ function PodsPanel({
                   <StatusBadge
                     dotStatus={getPodStatusType(pod.status)}
                     dotLabel={pod.status}
-                    badgeVariant={pod.ready === '1/1' ? 'success' : 'warning'}
-                    badgeText={pod.ready}
+                    badgeVariant={pod.status === 'Running' ? 'success' : 'warning'}
+                    badgeText={pod.status}
                   />
                 </TableCell>
                 <TableCell>{pod.name}</TableCell>
-                <TableCell className="text-xs font-mono text-text-secondary">{pod.ready}</TableCell>
                 <TableCell>{pod.restarts}</TableCell>
                 <TableCell>{getAge(pod.age)}</TableCell>
               </TableRow>
@@ -329,7 +260,9 @@ function NamespaceLogsTab({ namespace, agent }: { namespace: string; agent: stri
   const logRef = useRef<HTMLDivElement>(null)
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(200)
-  const { lines, status, error, connect, disconnect, clear } = useSSEStream({ maxLines: 4000 })
+  const { lines, status, error, connect, disconnect, clear } = useSSEStream({
+    maxLines: 4000,
+  })
 
   const {
     data: history,
@@ -354,6 +287,10 @@ function NamespaceLogsTab({ namespace, agent }: { namespace: string; agent: stri
   }, [lines.length])
 
   const connected = status === 'connecting' || status === 'connected'
+  const liveLines = useMemo(
+    () => lines.map((line) => (line.startsWith('i18n:') ? t(line.slice(5)) : line)),
+    [lines, t],
+  )
 
   const handleConnect = () => {
     if (!agent) return
@@ -362,7 +299,7 @@ function NamespaceLogsTab({ namespace, agent }: { namespace: string; agent: stri
 
   const handleDownload = () => {
     const historyLines = history?.lines ?? []
-    const content = [...historyLines, '', '--- LIVE ---', ...lines].join('\n')
+    const content = [...historyLines, '', '--- LIVE ---', ...liveLines].join('\n')
     const blob = new Blob([content], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
@@ -463,7 +400,7 @@ function NamespaceLogsTab({ namespace, agent }: { namespace: string; agent: stri
             <p className="text-xs text-text-muted">{t('deployments.liveLogsDescription')}</p>
           </div>
           <div className="flex items-center gap-2">
-            {(lines.length > 0 || connected) && (
+            {(liveLines.length > 0 || connected) && (
               <Button
                 type="button"
                 onClick={() => {
@@ -494,7 +431,7 @@ function NamespaceLogsTab({ namespace, agent }: { namespace: string; agent: stri
 
         <LogsPanel
           headerLeft={`${namespace}/${agent}`}
-          lines={lines}
+          lines={liveLines}
           emptyText={connected ? t('deployments.waitingForLogs') : t('deployments.connectLiveLogs')}
           bodyRef={logRef}
         />
@@ -537,7 +474,9 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
       await api.deployments.env.upsert(namespace, form.key, form.value, form.isSecret)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['deployment-env', namespace] })
+      queryClient.invalidateQueries({
+        queryKey: ['deployment-env', namespace],
+      })
       setDialogMode(null)
       setEditEntry(null)
       toast.success(t('secrets.valueSaved'))
@@ -548,7 +487,9 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
   const deleteMutation = useMutation({
     mutationFn: (key: string) => api.deployments.env.delete(namespace, key),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['deployment-env', namespace] })
+      queryClient.invalidateQueries({
+        queryKey: ['deployment-env', namespace],
+      })
       setDeleteKey(null)
       toast.success(t('secrets.valueDeleted'))
     },
@@ -558,7 +499,11 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
   const handleEditStart = async (entry: EnvVarListEntry) => {
     try {
       const { envVar } = await api.deployments.env.getOne(namespace, entry.key)
-      setEditEntry({ key: envVar.key, value: envVar.value, isSecret: envVar.isSecret })
+      setEditEntry({
+        key: envVar.key,
+        value: envVar.value,
+        isSecret: envVar.isSecret,
+      })
       setDialogMode('edit')
     } catch {
       toast.error(t('secrets.valueLoadFailed'))
@@ -747,76 +692,6 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
   )
 }
 
-function NamespaceTasksTab({ namespace }: { namespace: string }) {
-  const api = useApiClient()
-  const { t } = useTranslation()
-  const { data, isLoading } = useQuery({
-    queryKey: ['deploy-tasks'],
-    queryFn: api.deployTasks.list,
-    refetchInterval: 5_000,
-  })
-
-  const tasks = useMemo(() => {
-    return [...(data?.tasks ?? [])]
-      .filter((item) => item.task.namespace === namespace)
-      .sort((left, right) => right.task.id - left.task.id)
-  }, [data?.tasks, namespace])
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-14 text-text-muted text-sm">
-        <Loader2 size={16} className="animate-spin mr-2" />
-        {t('common.loading')}
-      </div>
-    )
-  }
-
-  if (tasks.length === 0) {
-    return (
-      <DashboardEmptyState
-        icon={FolderClock}
-        title={t('deployTask.noTasks')}
-        description={t('deployments.noTasksInNamespace')}
-      />
-    )
-  }
-
-  return (
-    <div className="space-y-2">
-      {tasks.map(({ task, active }) => {
-        const running = active || task.status === 'running' || task.status === 'pending'
-        const variant =
-          task.status === 'deployed'
-            ? 'success'
-            : task.status === 'failed'
-              ? 'danger'
-              : task.status === 'running'
-                ? 'info'
-                : ('neutral' as const)
-
-        return (
-          <Link
-            key={task.id}
-            to="/deploy-tasks/$taskId"
-            params={{ taskId: String(task.id) }}
-            className="block"
-          >
-            <DashboardTaskCard
-              id={task.id}
-              statusLabel={t(`deployTask.statuses.${task.status}`)}
-              statusVariant={variant}
-              running={running}
-              timestamp={formatTimestamp(task.updatedAt ?? task.createdAt)}
-              meta={task.templateSlug ? <span>{task.templateSlug}</span> : undefined}
-              error={task.error}
-            />
-          </Link>
-        )
-      })}
-    </div>
-  )
-}
-
 function NamespaceCostTab({ namespace }: { namespace: string }) {
   const api = useApiClient()
   const { t, i18n } = useTranslation()
@@ -846,15 +721,15 @@ function NamespaceCostTab({ namespace }: { namespace: string }) {
     )
   }
 
+  const translateCostMessage = (message: string) =>
+    message.startsWith('i18n:') ? t(message.slice(5)) : message
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label={t('deployments.namespaceCost')}
-          value={formatDisplayCost(data, {
-            locale: i18n.language,
-            shrimpUnitLabel: t('deploy.shrimpCoins'),
-          })}
+          label={t('deployments.tokenCost')}
+          value={formatUsdCost(data.totalUsd, i18n.language)}
           icon={<DollarSign size={13} />}
           color="green"
         />
@@ -941,7 +816,9 @@ function NamespaceCostTab({ namespace }: { namespace: string }) {
               <p className="text-xs text-text-muted">{t('deployments.noProvidersReported')}</p>
             )}
 
-            {agent.message && <p className="text-xs text-yellow-500 mt-3">{agent.message}</p>}
+            {agent.message && (
+              <p className="text-xs text-yellow-500 mt-3">{translateCostMessage(agent.message)}</p>
+            )}
           </div>
         ))}
       </div>
@@ -994,29 +871,6 @@ function NamespaceInfoTab({
           >
             {totalRestarts}
           </span>
-        </div>
-      </div>
-
-      <div className="bg-bg-secondary border border-border-subtle rounded-lg p-4">
-        <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
-          <Terminal size={14} className="text-text-muted" />
-          {t('deployments.kubectlCommands')}
-        </h3>
-        <div className="space-y-2">
-          <CliCommandSnippet
-            title={t('deployments.viewAgents')}
-            command={`kubectl get deployments -n ${namespace}`}
-          />
-          <CliCommandSnippet
-            title={t('deployments.viewPods')}
-            command={`kubectl get pods -n ${namespace}`}
-          />
-          {agent && (
-            <CliCommandSnippet
-              title={t('clusters.viewLogs')}
-              command={`kubectl logs -n ${namespace} -l app=${agent} --tail=200`}
-            />
-          )}
         </div>
       </div>
     </div>
@@ -1079,50 +933,59 @@ export function DeploymentNamespacePage() {
     staleTime: 10_000,
   })
 
-  const tasksQuery = useQuery({
+  const deployTasksQuery = useQuery({
     queryKey: ['deploy-tasks'],
     queryFn: api.deployTasks.list,
-    refetchInterval: 5_000,
+    refetchInterval: 10_000,
+    staleTime: 5_000,
   })
 
-  const tasks = useMemo(() => {
-    return [...(tasksQuery.data?.tasks ?? [])]
+  const latestTask = useMemo(() => {
+    return (deployTasksQuery.data?.tasks ?? [])
       .filter((item) => item.task.namespace === namespace)
-      .sort((left, right) => right.task.id - left.task.id)
-  }, [tasksQuery.data?.tasks, namespace])
+      .sort((left, right) => {
+        const leftTime = Date.parse(left.task.updatedAt ?? left.task.createdAt ?? '') || 0
+        const rightTime = Date.parse(right.task.updatedAt ?? right.task.createdAt ?? '') || 0
+        return rightTime - leftTime
+      })[0]
+  }, [deployTasksQuery.data?.tasks, namespace])
 
-  const latestTask = tasks[0]
+  const redeployMutation = useMutation({
+    mutationFn: async () => {
+      if (!latestTask) return null
+      return api.deployTasks.redeployToTaskId(latestTask.task.id)
+    },
+    onSuccess: (nextTaskId) => {
+      if (!nextTaskId) {
+        toast.error(t('deployments.noTaskToRedeploy'))
+        return
+      }
+      queryClient.invalidateQueries({ queryKey: ['deploy-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['deployments'] })
+      navigate({ to: '/deploy-tasks/$taskId', params: { taskId: String(nextTaskId) } })
+    },
+    onError: () => toast.error(t('deployments.redeployFailed')),
+  })
 
   const destroyMutation = useMutation({
     mutationFn: () => api.destroy({ namespace }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deployments'] })
       toast.success(t('clusters.destroyed') + ` ${namespace}`)
-      addActivity({ type: 'destroy', title: `Destroyed namespace ${namespace}`, namespace })
+      addActivity({
+        type: 'destroy',
+        title: `Destroyed namespace ${namespace}`,
+        namespace,
+      })
       navigate({ to: '/deployments' })
     },
     onError: () => toast.error(t('deployments.destroyNamespaceFailed')),
   })
 
-  const handleRedeploy = async () => {
-    if (!latestTask) {
-      toast.error(t('deployments.noTaskToRedeploy'))
-      return
-    }
-
-    const nextTaskId = await api.deployTasks.redeployToTaskId(latestTask.task.id)
-    if (!nextTaskId) {
-      toast.error(t('deployments.redeployFailed'))
-      return
-    }
-    navigate({ to: '/deploy-tasks/$taskId', params: { taskId: String(nextTaskId) } })
-  }
-
   const readyAgents = namespaceDeployments.filter((deployment) =>
     isDeploymentReady(deployment.ready),
   ).length
   const selectedPods = selectedPodsQuery.data ?? []
-  const runningTasks = tasks.filter((item) => item.active || item.task.status === 'running').length
 
   const tabs = [
     {
@@ -1131,15 +994,17 @@ export function DeploymentNamespacePage() {
       icon: <Box size={13} />,
       count: namespaceDeployments.length,
     },
-    { id: 'logs', label: t('deployments.tabLogs'), icon: <FileText size={13} /> },
+    {
+      id: 'logs',
+      label: t('deployments.tabLogs'),
+      icon: <FileText size={13} />,
+    },
     { id: 'env', label: t('deployments.tabEnv'), icon: <Variable size={13} /> },
     {
-      id: 'tasks',
-      label: t('deployments.tabTasks'),
-      icon: <FolderClock size={13} />,
-      count: tasks.length,
+      id: 'cost',
+      label: t('deployments.costTab'),
+      icon: <DollarSign size={13} />,
     },
-    { id: 'cost', label: t('deployments.costTab'), icon: <DollarSign size={13} /> },
     { id: 'info', label: t('deployments.tabInfo'), icon: <Info size={13} /> },
   ]
 
@@ -1153,7 +1018,9 @@ export function DeploymentNamespacePage() {
         <DashboardEmptyState
           icon={FolderOpen}
           title={t('deployments.noDeploymentsInNamespace')}
-          description={t('deployments.noDeploymentsInNamespaceDescription', { namespace })}
+          description={t('deployments.noDeploymentsInNamespaceDescription', {
+            namespace,
+          })}
           action={
             <Button asChild variant="primary" size="sm">
               <Link to="/store">
@@ -1188,8 +1055,9 @@ export function DeploymentNamespacePage() {
             type="button"
             onClick={() => {
               void refetch()
-              void queryClient.invalidateQueries({ queryKey: ['namespace-costs', namespace] })
-              void queryClient.invalidateQueries({ queryKey: ['deploy-tasks'] })
+              void queryClient.invalidateQueries({
+                queryKey: ['namespace-costs', namespace],
+              })
             }}
             variant="ghost"
             size="sm"
@@ -1198,18 +1066,21 @@ export function DeploymentNamespacePage() {
             <RefreshCw size={12} />
             {t('common.refresh')}
           </Button>
-          {latestTask && (
-            <Button
-              type="button"
-              onClick={() => void handleRedeploy()}
-              variant="ghost"
-              size="sm"
-              className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
-            >
+          <Button
+            type="button"
+            onClick={() => redeployMutation.mutate()}
+            disabled={!latestTask || redeployMutation.isPending}
+            variant="primary"
+            size="sm"
+            className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
+          >
+            {redeployMutation.isPending ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
               <Rocket size={12} />
-              {t('deployTask.redeploy')}
-            </Button>
-          )}
+            )}
+            {t('deployTask.redeploy')}
+          </Button>
           <Button
             type="button"
             onClick={() => setDestroyOpen(true)}
@@ -1242,11 +1113,8 @@ export function DeploymentNamespacePage() {
           color="blue"
         />
         <StatCard
-          label={t('deployments.namespaceCost')}
-          value={formatDisplayCost(namespaceCostQuery.data ?? {}, {
-            locale: i18n.language,
-            shrimpUnitLabel: t('deploy.shrimpCoins'),
-          })}
+          label={t('deployments.tokenCost')}
+          value={formatUsdCost(namespaceCostQuery.data?.totalUsd ?? null, i18n.language)}
           icon={<DollarSign size={13} />}
           color="purple"
         />
@@ -1262,12 +1130,6 @@ export function DeploymentNamespacePage() {
             <p className="text-xs text-text-muted">{t('deployments.agentSelectorDescription')}</p>
           </div>
         }
-        headerRight={
-          <div className="flex items-center gap-2 text-xs text-text-muted">
-            <FolderClock size={12} />
-            {t('deployments.runningTasksCount', { count: runningTasks })}
-          </div>
-        }
         rows={
           <div className="p-5">
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
@@ -1275,7 +1137,6 @@ export function DeploymentNamespacePage() {
                 <AgentCard
                   key={`${deployment.namespace}/${deployment.name}`}
                   deployment={deployment}
-                  namespace={namespace}
                   selected={selectedAgent === deployment.name}
                   onSelect={() => setSelectedAgent(deployment.name)}
                   onOpenLogs={() => {
@@ -1299,7 +1160,6 @@ export function DeploymentNamespacePage() {
         )}
         {activeTab === 'logs' && <NamespaceLogsTab namespace={namespace} agent={selectedAgent} />}
         {activeTab === 'env' && <NamespaceEnvironmentTab namespace={namespace} />}
-        {activeTab === 'tasks' && <NamespaceTasksTab namespace={namespace} />}
         {activeTab === 'cost' && <NamespaceCostTab namespace={namespace} />}
         {activeTab === 'info' && (
           <NamespaceInfoTab

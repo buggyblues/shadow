@@ -6,6 +6,9 @@ on:
       - main
     paths:
       - 'apps/cloud/images/openclaw-runner/**'
+      - 'packages/openclaw-shadowob/**'
+      - 'packages/sdk/**'
+      - 'packages/shared/**'
   workflow_dispatch:
     inputs:
       tag:
@@ -15,7 +18,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: buggyblues/openclaw-runner
+  IMAGE_NAME: shadowob/openclaw-runner
 
 jobs:
   build-and-push:
@@ -28,6 +31,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build local Shadow packages
+        run: pnpm build:packages
 
       - name: Set up QEMU (for cross-platform builds)
         uses: docker/setup-qemu-action@v3
@@ -55,10 +73,11 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: apps/cloud/images/openclaw-runner
+          context: .
+          file: apps/cloud/images/openclaw-runner/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=min

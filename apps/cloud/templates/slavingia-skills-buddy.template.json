@@ -1,12 +1,9 @@
 {
   "version": "1.0.0",
-  "name": "${i18n:name}",
+  "name": "slavingia-skills-buddy",
+  "title": "${i18n:title}",
   "description": "${i18n:description}",
   "environment": "production",
-  "team": {
-    "name": "slavingia-skills-buddy",
-    "description": "Single Solo Buddy powered by slavingia/skills — Sahil Lavingia's curated skills library. Multi-purpose: writing, decision-making, design, leverage."
-  },
   "use": [
     {
       "plugin": "model-provider"
@@ -94,12 +91,12 @@
   },
   "i18n": {
     "en": {
-      "name": "Solo Skills Buddy",
-      "description": "Single Solo Buddy powered live by slavingia/skills — Sahil Lavingia's curated skills for writing, decision-making, design taste, and high-leverage solo work."
+      "title": "Solo Skills Buddy",
+      "description": "Equip solo operators with a high-leverage AI partner that applies Sahil Lavingia's curated skills to writing, decisions, design taste, and focused execution."
     },
     "zh-CN": {
-      "name": "Solo 技能 Buddy",
-      "description": "单 Buddy 模板，部署时动态拉取 slavingia/skills（Sahil Lavingia 精选技能集）—— 写作、决策、设计审美、高杠杆独立工作。"
+      "title": "Solo 技能 Buddy",
+      "description": "为独立操作者配备高杠杆 AI 伙伴，将 Sahil Lavingia 精选技能用于写作、决策、设计品味和聚焦执行。"
     }
   }
 }

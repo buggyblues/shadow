@@ -125,6 +125,7 @@ function StepOverview({ name }: { name: string }) {
   })
 
   const template = data?.template
+  const displayTitle = template?.title || name
   const highlightItems =
     template?.highlights && template.highlights.length > 0
       ? template.highlights
@@ -143,7 +144,7 @@ function StepOverview({ name }: { name: string }) {
         <div className="flex items-start gap-4">
           <span className="text-4xl">{template?.emoji ?? '📦'}</span>
           <div className="flex-1">
-            <h3 className="text-xl font-bold mb-1">{name}</h3>
+            <h3 className="text-xl font-bold mb-1">{displayTitle}</h3>
             <p className="text-sm text-text-secondary mb-3">
               {template?.description ??
                 (ownTemplate ? t('deploy.ownTemplateDescription') : t('common.loading'))}
@@ -1066,6 +1067,7 @@ function StepDeploy({
     queryFn: () => api.templates.detail(name, i18n.language),
   })
   const template = detailData?.template
+  const displayTitle = template?.title || name
   const targetNamespace = config.namespace || template?.namespace || name
 
   // Fetch wallet balance
@@ -1469,7 +1471,7 @@ function StepDeploy({
               <span className="text-xs text-text-muted">{t('deploy.template')}</span>
               <span className="text-sm font-medium flex items-center gap-2">
                 <span>{template?.emoji ?? '📦'}</span>
-                {name}
+                {displayTitle}
               </span>
             </div>
             <div className="px-5 py-3 flex items-center justify-between">

@@ -1,6 +1,7 @@
 {
   "version": "1.0.0",
-  "name": "${i18n:name}",
+  "name": "shadowob-cloud",
+  "title": "${i18n:title}",
   "description": "${i18n:description}",
   "environment": "production",
   "use": [
@@ -90,12 +91,12 @@
   },
   "i18n": {
     "en": {
-      "name": "Shadow Cloud Basic",
-      "description": "Basic single-agent template with a general AI assistant. Quick-start template for Shadow Cloud deployment."
+      "title": "Shadow Cloud Basic",
+      "description": "Launch a dependable general-purpose AI assistant in minutes, giving teams a low-friction way to answer questions, research, summarize, and validate Shadow Cloud before expanding."
     },
     "zh-CN": {
-      "name": "Shadow Cloud 基础版",
-      "description": "基础单智能体模板，包含一个通用 AI 助手。适用于 Shadow Cloud 快速部署。"
+      "title": "Shadow Cloud 基础版",
+      "description": "几分钟内启动一个可靠的通用 AI 助手，让团队以低门槛完成问答、研究、总结和 Shadow Cloud 验证，再逐步扩展更多智能体能力。"
     }
   }
 }

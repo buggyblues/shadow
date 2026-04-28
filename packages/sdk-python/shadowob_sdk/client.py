@@ -871,6 +871,28 @@ class ShadowClient:
     def get_wallet_transactions(self) -> list[dict[str, Any]]:
         return self._get("/api/wallet/transactions")
 
+    # ── Cloud SaaS Provider Gateway ────────────────────────────────────
+
+    def list_cloud_provider_catalogs(self) -> dict[str, Any]:
+        return self._get("/api/cloud-saas/provider-catalogs")
+
+    def list_cloud_provider_profiles(self) -> dict[str, Any]:
+        return self._get("/api/cloud-saas/provider-profiles")
+
+    def upsert_cloud_provider_profile(self, **kwargs: Any) -> dict[str, Any]:
+        return self._put("/api/cloud-saas/provider-profiles", json=kwargs)
+
+    def test_cloud_provider_profile(self, profile_id: str) -> dict[str, Any]:
+        return self._post(f"/api/cloud-saas/provider-profiles/{profile_id}/test")
+
+    def refresh_cloud_provider_profile_models(self, profile_id: str) -> dict[str, Any]:
+        return self._post(
+            f"/api/cloud-saas/provider-profiles/{profile_id}/models/refresh"
+        )
+
+    def delete_cloud_provider_profile(self, profile_id: str) -> dict[str, Any]:
+        return self._delete(f"/api/cloud-saas/provider-profiles/{profile_id}")
+
     def get_entitlements(self, server_id: str) -> list[dict[str, Any]]:
         return self._get(f"/api/servers/{server_id}/shop/entitlements")
 

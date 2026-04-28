@@ -1086,7 +1086,7 @@ export function MonitoringPage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('nav.monitoring') }]}
+      breadcrumb={[]}
       title={t('monitoring.title')}
       description={t('monitoring.description')}
       actions={

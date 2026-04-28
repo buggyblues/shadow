@@ -1,12 +1,9 @@
 {
   "version": "1.0.0",
-  "name": "${i18n:name}",
+  "name": "research-team",
+  "title": "${i18n:title}",
   "description": "${i18n:description}",
   "environment": "production",
-  "team": {
-    "name": "research-team",
-    "description": "Market intelligence, competitive monitoring, and research synthesis"
-  },
   "use": [
     {
       "plugin": "model-provider"
@@ -211,12 +208,12 @@
   },
   "i18n": {
     "en": {
-      "name": "Research Team",
-      "description": "Three-agent research and intelligence team: market researcher, competitor monitor, and weekly digest curator. Keeps you informed about trends, competitors, and opportunities without manual research."
+      "title": "Research Team",
+      "description": "Turn market noise into decisions with agents that research topics, monitor competitors, and publish weekly digests so teams spot trends and opportunities without manual scanning."
     },
     "zh-CN": {
-      "name": "研究团队",
-      "description": "三智能体研究情报团队：市场研究员、竞品监控和周报编辑。自动收集市场洞察和竞争分析。"
+      "title": "研究团队",
+      "description": "把市场噪音转化为决策依据：智能体负责专题研究、竞品监控和周报汇总，让团队无需手动扫描也能发现趋势与机会。"
     }
   }
 }

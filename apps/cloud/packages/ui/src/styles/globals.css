@@ -51,6 +51,30 @@
   --radius-input: 22px;
 }
 
+/* ── Detail page layout ────────────────────────────────────────────── */
+
+.detail-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .detail-layout {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    row-gap: 12px;
+    column-gap: 24px;
+  }
+
+  .detail-sidebar {
+    margin: 0;
+    align-self: start;
+    position: sticky;
+    top: 0;
+  }
+}
+
 /* ── Fonts ──────────────────────────────────────────────────────────── */
 
 @layer base {

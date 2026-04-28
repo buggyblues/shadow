@@ -1,12 +1,9 @@
 {
   "version": "1.0.0",
-  "name": "${i18n:name}",
+  "name": "gstack-buddy",
+  "title": "${i18n:title}",
   "description": "${i18n:description}",
   "environment": "production",
-  "team": {
-    "name": "gstack-buddy",
-    "description": "Single Strategy Buddy that runs garrytan/gstack's OpenClaw methodology artifacts — office-hours, ceo-review, retro, and gstack-lite planning discipline — for product/strategy reviews."
-  },
   "use": [
     {
       "plugin": "model-provider"
@@ -107,12 +104,12 @@
   },
   "i18n": {
     "en": {
-      "name": "gstack Strategy Buddy",
-      "description": "Single Strategy Buddy that runs Garry Tan's gstack OpenClaw methodology — office-hours interrogations, CEO review, weekly retros, and gstack-lite planning discipline — pulled live from garrytan/gstack."
+      "title": "gstack Strategy Buddy",
+      "description": "Bring YC-style strategic pressure testing into planning with a focused strategy agent that runs office hours, CEO reviews, retros, and gstack-lite discipline from the live gstack playbook."
     },
     "zh-CN": {
-      "name": "gstack 战略 Buddy",
-      "description": "单 Buddy 模板，运行 Garry Tan 的 gstack OpenClaw 方法 —— office-hours 六问、CEO 评审、周复盘与 gstack-lite 规划纪律，部署时从 garrytan/gstack 动态拉取。"
+      "title": "gstack 战略 Buddy",
+      "description": "把 YC 风格的战略压力测试带入规划流程：一个专注的战略智能体会基于实时 gstack playbook 运行 office hours、CEO review、复盘和 gstack-lite 规划纪律。"
     }
   }
 }

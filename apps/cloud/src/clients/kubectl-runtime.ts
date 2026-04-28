@@ -17,6 +17,7 @@ export interface K8sPodSummary {
   status: string
   restarts: number
   age: string
+  containers: string[]
 }
 
 export interface K8sExecResult {
@@ -130,13 +131,75 @@ function withKubeconfig<T>(kubeconfig: string | undefined, fn: (kubeArgs: string
   }
 }
 
-function execKubectl(args: string[], kubeconfig?: string, timeout = 15_000): string {
+async function withKubeconfigAsync<T>(
+  kubeconfig: string | undefined,
+  fn: (kubeArgs: string[]) => Promise<T>,
+): Promise<T> {
+  const explicitKubeconfig = kubeconfig?.trim() ? kubeconfig : undefined
+  const ambientKubeconfig = explicitKubeconfig ? undefined : resolveAmbientKubeconfig()
+  const effectiveKubeconfig = explicitKubeconfig ?? ambientKubeconfig?.kubeconfig
+  if (!effectiveKubeconfig) {
+    return fn([])
+  }
+
+  const { args, cleanup } = createTempKubeconfig(
+    effectiveKubeconfig,
+    !explicitKubeconfig,
+    explicitKubeconfig ? true : (ambientKubeconfig?.shouldRewriteLoopback ?? true),
+  )
+  try {
+    return await fn(args)
+  } finally {
+    cleanup()
+  }
+}
+
+function execKubectl(args: string[], kubeconfig?: string, timeout = 3_000): string {
   return withKubeconfig(kubeconfig, (kubeArgs) =>
     execFileSync('kubectl', [...kubeArgs, ...args], {
       encoding: 'utf-8',
       timeout,
       stdio: ['ignore', 'pipe', 'pipe'],
     }),
+  )
+}
+
+function execKubectlAsync(args: string[], kubeconfig?: string, timeout = 3_000): Promise<string> {
+  return withKubeconfigAsync(
+    kubeconfig,
+    (kubeArgs) =>
+      new Promise((resolve, reject) => {
+        const proc = spawn('kubectl', [...kubeArgs, ...args], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+        })
+        let stdout = ''
+        let stderr = ''
+        let timedOut = false
+        const timer = setTimeout(() => {
+          timedOut = true
+          proc.kill('SIGTERM')
+        }, timeout)
+
+        proc.stdout?.on('data', (chunk: Buffer) => {
+          stdout += chunk.toString('utf-8')
+        })
+        proc.stderr?.on('data', (chunk: Buffer) => {
+          stderr += chunk.toString('utf-8')
+        })
+        proc.on('error', (err) => {
+          clearTimeout(timer)
+          reject(err)
+        })
+        proc.on('close', (code) => {
+          clearTimeout(timer)
+          if (code === 0) {
+            resolve(stdout)
+            return
+          }
+          const reason = stderr.trim() || stdout.trim() || `kubectl exited with code ${code ?? 1}`
+          reject(new Error(timedOut ? `kubectl timed out after ${timeout}ms: ${reason}` : reason))
+        })
+      }),
   )
 }
 
@@ -160,6 +223,34 @@ export function listPods(namespace: string, kubeconfig?: string): K8sPodSummary[
         status: (status.phase as string) ?? 'Unknown',
         restarts,
         age: (meta.creationTimestamp as string) ?? '',
+        containers: containers.map((container) => String(container.name ?? '')).filter(Boolean),
+      }
+    })
+  } catch {
+    return []
+  }
+}
+
+export async function listPodsAsync(
+  namespace: string,
+  kubeconfig?: string,
+): Promise<K8sPodSummary[]> {
+  try {
+    const out = await execKubectlAsync(['-n', namespace, 'get', 'pods', '-o', 'json'], kubeconfig)
+    const data = JSON.parse(out) as { items?: Array<Record<string, unknown>> }
+    return (data.items ?? []).map((item) => {
+      const meta = (item.metadata ?? {}) as Record<string, unknown>
+      const status = (item.status ?? {}) as Record<string, unknown>
+      const containers = (status.containerStatuses ?? []) as Array<Record<string, unknown>>
+      const restarts = containers.reduce((s, c) => s + ((c.restartCount as number) ?? 0), 0)
+      const ready = containers.filter((c) => c.ready).length
+      return {
+        name: meta.name as string,
+        ready: `${ready}/${containers.length}`,
+        status: (status.phase as string) ?? 'Unknown',
+        restarts,
+        age: (meta.creationTimestamp as string) ?? '',
+        containers: containers.map((container) => String(container.name ?? '')).filter(Boolean),
       }
     })
   } catch {
@@ -208,12 +299,29 @@ export function readPodLogs(opts: {
   tail?: number
   timestamps?: boolean
   kubeconfig?: string
+  timeout?: number
 }): string {
   const args = ['logs', '-n', opts.namespace, opts.pod]
   if (opts.container) args.push('-c', opts.container)
   if (opts.tail !== undefined) args.push(`--tail=${opts.tail}`)
   if (opts.timestamps) args.push('--timestamps')
-  return execKubectl(args, opts.kubeconfig)
+  return execKubectl(args, opts.kubeconfig, opts.timeout)
+}
+
+export async function readPodLogsAsync(opts: {
+  namespace: string
+  pod: string
+  container?: string
+  tail?: number
+  timestamps?: boolean
+  kubeconfig?: string
+  timeout?: number
+}): Promise<string> {
+  const args = ['logs', '-n', opts.namespace, opts.pod]
+  if (opts.container) args.push('-c', opts.container)
+  if (opts.tail !== undefined) args.push(`--tail=${opts.tail}`)
+  if (opts.timestamps) args.push('--timestamps')
+  return execKubectlAsync(args, opts.kubeconfig, opts.timeout)
 }
 
 export function execInPod(opts: {
@@ -241,6 +349,60 @@ export function execInPod(opts: {
       exitCode: result.status ?? 1,
     }
   })
+}
+
+export function execInPodAsync(opts: {
+  namespace: string
+  pod: string
+  command: string[]
+  container?: string
+  kubeconfig?: string
+  timeout?: number
+}): Promise<K8sExecResult> {
+  return withKubeconfigAsync(
+    opts.kubeconfig,
+    (kubeArgs) =>
+      new Promise((resolve) => {
+        const args = [...kubeArgs, '-n', opts.namespace, 'exec', opts.pod]
+        if (opts.container) args.push('-c', opts.container)
+        args.push('--', ...opts.command)
+
+        const proc = spawn('kubectl', args, {
+          stdio: ['ignore', 'pipe', 'pipe'],
+        })
+        let stdout = ''
+        let stderr = ''
+        let timedOut = false
+        const timeout = opts.timeout ?? 15_000
+        const timer = setTimeout(() => {
+          timedOut = true
+          proc.kill('SIGTERM')
+        }, timeout)
+
+        proc.stdout?.on('data', (chunk: Buffer) => {
+          stdout += chunk.toString('utf-8')
+        })
+        proc.stderr?.on('data', (chunk: Buffer) => {
+          stderr += chunk.toString('utf-8')
+        })
+        proc.on('error', (err) => {
+          clearTimeout(timer)
+          resolve({
+            stdout,
+            stderr: stderr || err.message,
+            exitCode: 1,
+          })
+        })
+        proc.on('close', (code) => {
+          clearTimeout(timer)
+          resolve({
+            stdout,
+            stderr,
+            exitCode: timedOut ? 124 : (code ?? 1),
+          })
+        })
+      }),
+  )
 }
 
 export function listManagedNamespaces(kubeconfig?: string): string[] | null {

@@ -19,14 +19,14 @@ Search the Shadow template store and return a filtered, structured list of match
 ## Steps
 
 1. Call `GET ${env:SHADOW_BASE_URL}/api/cloud/templates` with header `Authorization: Bearer ${env:SHADOW_API_TOKEN}`.
-2. Parse the JSON response — it is an array where each entry has: `name`, `description`, `teamName`, `agentCount`, `namespace`.
-3. Filter entries by matching the user's search keywords (case-insensitive) against `name`, `description`, and `teamName`.
+2. Parse the JSON response — it is an array where each entry has: `name`, `title`, `description`, `agentCount`, `namespace`.
+3. Filter entries by matching the user's search keywords (case-insensitive) against `name`, `title`, and `description`.
 4. Return at most 10 results, formatted as:
 
 ```
 📦 Found N matching templates:
 
-1. **{teamName}** (`{name}`)
+1. **{title}** (`{name}`)
    {description}
    Agents: {agentCount} · Namespace: {namespace}
 ```

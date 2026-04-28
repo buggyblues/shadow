@@ -21,8 +21,8 @@ export interface Pod {
 
 export interface Template {
   name: string
+  title: string
   description: string
-  teamName: string
   agentCount: number
   tags?: string[]
   namespace: string
@@ -119,6 +119,23 @@ export interface ProviderCatalogEntry {
   }>
 }
 
+export interface LlmProviderModel {
+  id: string
+  name?: string
+  tags?: string[]
+  contextWindow?: number
+  maxTokens?: number
+  cost?: {
+    input?: number
+    output?: number
+  }
+  capabilities?: {
+    vision?: boolean
+    tools?: boolean
+    reasoning?: boolean
+  }
+}
+
 export interface ProviderProfile {
   id: string
   providerId: string
@@ -201,7 +218,7 @@ export interface ConfigFile {
 }
 
 export interface DeployTask {
-  id: number
+  id: number | string
   namespace: string
   templateSlug: string | null
   version: number | null
@@ -337,7 +354,7 @@ async function postRaw(path: string, body: unknown): Promise<Response> {
   return res
 }
 
-async function extractTaskIdFromSse(response: Response): Promise<number | null> {
+async function extractTaskIdFromSse(response: Response): Promise<number | string | null> {
   const reader = response.body?.getReader()
   if (!reader) return null
 
@@ -361,6 +378,10 @@ async function extractTaskIdFromSse(response: Response): Promise<number | null> 
           if (Number.isFinite(taskId)) {
             void reader.cancel()
             return taskId
+          }
+          if (typeof payload.id === 'string' && payload.id.trim().length > 0) {
+            void reader.cancel()
+            return payload.id
           }
         }
       } catch {
@@ -391,11 +412,6 @@ export const api = {
       ),
     logsUrl: (namespace: string, id: string) =>
       `${BASE}/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(id)}/logs`,
-    scale: (namespace: string, id: string, replicas: number) =>
-      post<{ ok: boolean }>(
-        `/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(id)}/scale`,
-        { replicas },
-      ),
     costs: () => get<CostOverviewSummary>('/deployments/costs'),
     namespaceCosts: (namespace: string) =>
       get<NamespaceCostSummary>(`/deployments/${encodeURIComponent(namespace)}/costs`),
@@ -585,6 +601,13 @@ export const api = {
     }) => put<{ ok: boolean; profile?: ProviderProfile }>('/provider-profiles', data),
     test: (id: string) =>
       post<ProviderTestResult>(`/provider-profiles/${encodeURIComponent(id)}/test`, {}),
+    refreshModels: (id: string) =>
+      post<
+        ProviderTestResult & {
+          models?: LlmProviderModel[]
+          profile?: ProviderProfile
+        }
+      >(`/provider-profiles/${encodeURIComponent(id)}/models/refresh`, {}),
     delete: (id: string) =>
       fetch(`${BASE}/provider-profiles/${encodeURIComponent(id)}`, { method: 'DELETE' }).then((r) =>
         r.json(),

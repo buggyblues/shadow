@@ -12,7 +12,8 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { extractCloudSaasRuntime } from '@shadowob/cloud'
+import { createServer } from 'node:http'
+import { attachCloudSaasProvisionState, extractCloudSaasRuntime } from '@shadowob/cloud'
 import { eq, like } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import { Hono } from 'hono'
@@ -233,6 +234,109 @@ describe('Cloud SaaS — wallet', () => {
   })
 })
 
+describe('Cloud SaaS — env vars', () => {
+  it('GET /api/cloud-saas/global-envvars tolerates unreadable legacy values', async () => {
+    const [legacyUser] = await db
+      .insert(schema.users)
+      .values({
+        email: `saas-legacy-env-${Date.now()}@example.com`,
+        displayName: 'Legacy Env User',
+        username: uniqueName('saas-legacy-env'),
+        passwordHash: 'test-hash',
+      })
+      .returning()
+    const legacyUserId = legacyUser!.id
+    const legacyToken = signAccessToken({
+      userId: legacyUserId,
+      email: legacyUser!.email,
+      username: legacyUser!.username,
+    })
+
+    try {
+      await db.insert(schema.cloudEnvVars).values({
+        userId: legacyUserId,
+        scope: 'global',
+        key: 'BROKEN_LEGACY_KEY',
+        encryptedValue: 'not-valid-ciphertext',
+      })
+
+      const listRes = await req('GET', '/api/cloud-saas/global-envvars', undefined, legacyToken)
+      expect(listRes.status).toBe(200)
+      const listBody = (await listRes.json()) as {
+        envVars: Array<{ key: string }>
+      }
+      expect(listBody.envVars.some((entry) => entry.key === 'BROKEN_LEGACY_KEY')).toBe(true)
+
+      const getRes = await req(
+        'GET',
+        '/api/cloud-saas/global-envvars/BROKEN_LEGACY_KEY',
+        undefined,
+        legacyToken,
+      )
+      expect(getRes.status).toBe(422)
+    } finally {
+      await db
+        .delete(schema.users)
+        .where(eq(schema.users.id, legacyUserId))
+        .catch(() => {})
+    }
+  })
+})
+
+describe('Cloud SaaS — deployment listing', () => {
+  it('GET /api/cloud-saas/deployments returns newest records first', async () => {
+    const namespace = uniqueName('e2e-list-order')
+    try {
+      await db.insert(schema.cloudDeployments).values([
+        {
+          userId,
+          namespace,
+          name: `${namespace}-old`,
+          status: 'failed',
+          agentCount: 1,
+          configSnapshot: makeConfigSnapshot('old-secret'),
+          createdAt: new Date('2099-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2099-01-01T00:00:00.000Z'),
+        },
+        {
+          userId,
+          namespace,
+          name: `${namespace}-new`,
+          status: 'deployed',
+          agentCount: 1,
+          configSnapshot: makeConfigSnapshot('new-secret'),
+          createdAt: new Date('2099-01-02T00:00:00.000Z'),
+          updatedAt: new Date('2099-01-02T00:00:00.000Z'),
+        },
+      ])
+
+      const res = await req('GET', '/api/cloud-saas/deployments?limit=2&offset=0')
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Array<{
+        namespace: string
+        name: string
+      }>
+      expect(body[0]).toMatchObject({ namespace, name: `${namespace}-new` })
+
+      const historyRes = await req(
+        'GET',
+        '/api/cloud-saas/deployments?includeHistory=1&limit=10&offset=0',
+      )
+      expect(historyRes.status).toBe(200)
+      const history = (await historyRes.json()) as Array<{ namespace: string; name: string }>
+      expect(history.filter((row) => row.namespace === namespace).map((row) => row.name)).toEqual([
+        `${namespace}-new`,
+        `${namespace}-old`,
+      ])
+    } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+})
+
 describe('Cloud SaaS — create a community template', () => {
   it('POST /api/cloud-saas/templates creates a draft community template', async () => {
     const slug = uniqueName('e2e-community-template')
@@ -371,80 +475,374 @@ describe('Cloud SaaS — deployment + billing', () => {
     expect(runtime.DEEPSEEK_API_KEY).toBe('saved-deepseek-key')
   })
 
-  it('stores provider profiles and injects the selected profile during deploy', async () => {
-    const catalogsRes = await req('GET', '/api/cloud-saas/provider-catalogs')
-    expect(catalogsRes.status).toBe(200)
-    const catalogs = (await catalogsRes.json()) as {
-      providers: Array<{ provider: { id: string } }>
-    }
-    expect(catalogs.providers.some((entry) => entry.provider.id === 'anthropic')).toBe(true)
+  it('stores provider profiles and injects selected real provider env during deploy', async () => {
+    const previousShadowServerUrl = process.env.SHADOW_SERVER_URL
+    process.env.SHADOW_SERVER_URL = 'http://server.test:3002'
 
-    const profileRes = await req('PUT', '/api/cloud-saas/provider-profiles', {
-      providerId: 'anthropic',
-      name: 'Anthropic Test',
-      config: {
-        baseUrl: 'https://anthropic-proxy.example.test',
-        models: [
-          {
-            id: 'claude-profile-model',
-            name: 'Claude Profile Model',
-            tags: ['default', 'reasoning'],
-            contextWindow: 200000,
-            maxTokens: 8192,
-          },
-        ],
-      },
-      envVars: { ANTHROPIC_API_KEY: 'profile-anthropic-key' },
-    })
-    expect(profileRes.status).toBe(200)
-    const profileBody = (await profileRes.json()) as { profile: { id: string; providerId: string } }
-    expect(profileBody.profile.providerId).toBe('anthropic')
+    try {
+      const catalogsRes = await req('GET', '/api/cloud-saas/provider-catalogs')
+      expect(catalogsRes.status).toBe(200)
+      const catalogs = (await catalogsRes.json()) as {
+        providers: Array<{ provider: { id: string } }>
+      }
+      const providerIds = catalogs.providers.map((entry) => entry.provider.id)
+      expect(providerIds).toContain('anthropic')
+      expect(providerIds).toContain('qwen')
+      expect(providerIds).toContain('minimax')
+      expect(providerIds).toContain('moonshot')
+      expect(providerIds).toContain('zai')
 
-    const listRes = await req('GET', '/api/cloud-saas/provider-profiles')
-    expect(listRes.status).toBe(200)
-    const listBody = (await listRes.json()) as {
-      profiles: Array<{ id: string; envVars: unknown[] }>
-    }
-    expect(
-      listBody.profiles.find((profile) => profile.id === profileBody.profile.id)?.envVars,
-    ).toHaveLength(1)
-
-    const createRes = await req('POST', '/api/cloud-saas/deployments', {
-      namespace: uniqueName('e2e-provider-profile-ns'),
-      name: uniqueName('e2e-provider-profile-deploy'),
-      templateSlug: officialTemplateSlug,
-      resourceTier: 'lightweight',
-      configSnapshot: {
-        ...makeConfigSnapshot('provider-profile-secret'),
-        use: [{ plugin: 'model-provider', options: { profileId: profileBody.profile.id } }],
-      },
-    })
-
-    expect(createRes.status).toBe(201)
-    const deployment = (await createRes.json()) as { id: string }
-    const [stored] = await db
-      .select()
-      .from(schema.cloudDeployments)
-      .where(eq(schema.cloudDeployments.id, deployment.id))
-      .limit(1)
-
-    const runtime = extractCloudSaasRuntime(stored?.configSnapshot).envVars
-    expect(runtime.ANTHROPIC_API_KEY).toBe('profile-anthropic-key')
-    expect(runtime.ANTHROPIC_BASE_URL).toBe('https://anthropic-proxy.example.test')
-    expect(JSON.parse(runtime.SHADOW_PROVIDER_PROFILE_MODELS_JSON)).toMatchObject([
-      {
+      const profileRes = await req('PUT', '/api/cloud-saas/provider-profiles', {
         providerId: 'anthropic',
-        profileId: profileBody.profile.id,
-        models: [
-          {
-            id: 'claude-profile-model',
-            tags: ['default', 'reasoning'],
-            contextWindow: 200000,
-            maxTokens: 8192,
-          },
-        ],
-      },
-    ])
+        name: 'Anthropic Test',
+        config: {
+          baseUrl: 'https://anthropic-proxy.example.test',
+          models: [
+            {
+              id: 'claude-profile-model',
+              name: 'Claude Profile Model',
+              tags: ['default', 'reasoning'],
+              contextWindow: 200000,
+              maxTokens: 8192,
+            },
+          ],
+        },
+        envVars: { ANTHROPIC_API_KEY: 'profile-anthropic-key' },
+      })
+      expect(profileRes.status).toBe(200)
+      const profileBody = (await profileRes.json()) as {
+        profile: { id: string; providerId: string }
+      }
+      expect(profileBody.profile.providerId).toBe('anthropic')
+
+      const listRes = await req('GET', '/api/cloud-saas/provider-profiles')
+      expect(listRes.status).toBe(200)
+      const listBody = (await listRes.json()) as {
+        profiles: Array<{ id: string; envVars: unknown[] }>
+      }
+      expect(
+        listBody.profiles.find((profile) => profile.id === profileBody.profile.id)?.envVars,
+      ).toHaveLength(1)
+
+      const createRes = await req('POST', '/api/cloud-saas/deployments', {
+        namespace: uniqueName('e2e-provider-profile-ns'),
+        name: uniqueName('e2e-provider-profile-deploy'),
+        templateSlug: officialTemplateSlug,
+        resourceTier: 'lightweight',
+        envVars: {
+          ANTHROPIC_API_KEY: 'stale-explicit-key',
+          ANTHROPIC_BASE_URL: 'https://api.anthropic.com/v1',
+        },
+        configSnapshot: {
+          ...makeConfigSnapshot('provider-profile-secret'),
+          use: [
+            {
+              plugin: 'model-provider',
+              options: { profileId: profileBody.profile.id },
+            },
+          ],
+        },
+      })
+
+      expect(createRes.status).toBe(201)
+      const deployment = (await createRes.json()) as { id: string }
+      const [stored] = await db
+        .select()
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.id, deployment.id))
+        .limit(1)
+
+      const runtime = extractCloudSaasRuntime(stored?.configSnapshot).envVars
+      expect(runtime.ANTHROPIC_API_KEY).toBe('profile-anthropic-key')
+      expect(runtime.ANTHROPIC_BASE_URL).toBe('https://anthropic-proxy.example.test')
+      expect(runtime.OPENAI_COMPATIBLE_BASE_URL).toBeUndefined()
+      expect(runtime.OPENAI_COMPATIBLE_API_KEY).toBeUndefined()
+      expect(runtime.OPENAI_COMPATIBLE_MODEL_ID).toBeUndefined()
+      const modelSets = JSON.parse(runtime.SHADOW_PROVIDER_PROFILE_MODELS_JSON ?? '[]') as Array<{
+        providerId: string
+        profileId: string
+        models: Array<{ id: string; tags?: string[] }>
+      }>
+      expect(modelSets).toEqual([
+        {
+          providerId: 'anthropic',
+          profileId: profileBody.profile.id,
+          models: [
+            expect.objectContaining({
+              id: 'claude-profile-model',
+              tags: ['default', 'reasoning'],
+            }),
+          ],
+        },
+      ])
+    } finally {
+      if (previousShadowServerUrl === undefined) {
+        delete process.env.SHADOW_SERVER_URL
+      } else {
+        process.env.SHADOW_SERVER_URL = previousShadowServerUrl
+      }
+    }
+  })
+
+  it('tests anthropic-compatible profiles through a configured model when model listing is unavailable', async () => {
+    const providerServer = createServer((request, response) => {
+      const url = new URL(request.url ?? '/', 'http://mock.local')
+      if (url.pathname === '/apps/anthropic/models') {
+        expect(request.headers['x-api-key']).toBe('mock-anthropic-key')
+        response.writeHead(404, { 'Content-Type': 'application/json' })
+        response.end(JSON.stringify({ error: 'models endpoint unavailable' }))
+        return
+      }
+      if (url.pathname === '/apps/anthropic/messages') {
+        expect(request.method).toBe('POST')
+        expect(request.headers['x-api-key']).toBe('mock-anthropic-key')
+        expect(request.headers['anthropic-version']).toBe('2023-06-01')
+        let body = ''
+        request.on('data', (chunk) => {
+          body += chunk
+        })
+        request.on('end', () => {
+          const parsed = JSON.parse(body) as { model: string }
+          expect(parsed.model).toBe('qwen3.6-plus')
+          response.writeHead(200, { 'Content-Type': 'application/json' })
+          response.end(
+            JSON.stringify({
+              id: 'msg_test',
+              type: 'message',
+              role: 'assistant',
+              content: [{ type: 'text', text: 'ok' }],
+            }),
+          )
+        })
+        return
+      }
+
+      response.writeHead(404)
+      response.end()
+    })
+    await new Promise<void>((resolve) => providerServer.listen(0, '127.0.0.1', resolve))
+
+    try {
+      const address = providerServer.address()
+      const port = typeof address === 'object' && address ? address.port : 0
+      const profileRes = await req('PUT', '/api/cloud-saas/provider-profiles', {
+        providerId: 'anthropic',
+        name: 'Anthropic Compatible Gateway',
+        config: {
+          baseUrl: `http://127.0.0.1:${port}/apps/anthropic`,
+          apiFormat: 'anthropic',
+          authType: 'api_key',
+          models: [{ id: 'qwen3.6-plus', tags: ['default'] }],
+        },
+        envVars: { ANTHROPIC_API_KEY: 'mock-anthropic-key' },
+      })
+      expect(profileRes.status).toBe(200)
+      const profileBody = (await profileRes.json()) as {
+        profile: { id: string }
+      }
+
+      const testRes = await req(
+        'POST',
+        `/api/cloud-saas/provider-profiles/${profileBody.profile.id}/test`,
+      )
+      expect(testRes.status).toBe(200)
+      const testBody = (await testRes.json()) as { ok: boolean; status?: number; message: string }
+      expect(testBody).toMatchObject({
+        ok: true,
+        status: 200,
+        message: 'Connection succeeded',
+      })
+    } finally {
+      await new Promise<void>((resolve) => providerServer.close(() => resolve()))
+    }
+  })
+
+  it('refreshes provider models and deploys the profile selected by model tag', async () => {
+    const modelServer = createServer((request, response) => {
+      const url = new URL(request.url ?? '/', 'http://mock.local')
+      if (url.pathname === '/v1/models') {
+        expect(request.headers.authorization).toBe('Bearer mock-openai-key')
+        response.writeHead(200, { 'Content-Type': 'application/json' })
+        response.end(
+          JSON.stringify({
+            data: [
+              { id: 'mock-fast-mini', object: 'model' },
+              { id: 'mock-reasoning-r1', object: 'model' },
+            ],
+          }),
+        )
+        return
+      }
+      if (url.pathname === '/gemini/models') {
+        expect(url.searchParams.get('key')).toBe('mock-gemini-key')
+        expect(request.headers.authorization).toBeUndefined()
+        response.writeHead(200, { 'Content-Type': 'application/json' })
+        response.end(
+          JSON.stringify({
+            models: [{ name: 'models/gemini-2.0-flash', inputTokenLimit: 1_048_576 }],
+          }),
+        )
+        return
+      }
+
+      response.writeHead(404)
+      response.end()
+    })
+    await new Promise<void>((resolve) => modelServer.listen(0, '127.0.0.1', resolve))
+
+    try {
+      const address = modelServer.address()
+      const port = typeof address === 'object' && address ? address.port : 0
+      const baseUrl = `http://127.0.0.1:${port}/v1`
+      const profileRes = await req('PUT', '/api/cloud-saas/provider-profiles', {
+        providerId: 'openai',
+        name: 'Mock OpenAI Gateway',
+        config: {
+          baseUrl,
+          apiFormat: 'openai',
+          authType: 'api_key',
+          models: [{ id: 'seed-model', tags: ['default'] }],
+        },
+        envVars: { OPENAI_API_KEY: 'mock-openai-key' },
+      })
+      expect(profileRes.status).toBe(200)
+      const profileBody = (await profileRes.json()) as {
+        profile: { id: string }
+      }
+
+      const refreshRes = await req(
+        'POST',
+        `/api/cloud-saas/provider-profiles/${profileBody.profile.id}/models/refresh`,
+      )
+      expect(refreshRes.status).toBe(200)
+      const refreshBody = (await refreshRes.json()) as {
+        ok: boolean
+        models: Array<{ id: string; tags: string[] }>
+      }
+      expect(refreshBody.ok).toBe(true)
+      expect(refreshBody.models.map((model) => model.id)).toEqual([
+        'mock-fast-mini',
+        'mock-reasoning-r1',
+      ])
+      expect(refreshBody.models[0]?.tags).toContain('fast')
+      expect(refreshBody.models[1]?.tags).toContain('reasoning')
+
+      const geminiProfileRes = await req('PUT', '/api/cloud-saas/provider-profiles', {
+        providerId: 'gemini',
+        name: 'Mock Gemini Gateway',
+        config: {
+          baseUrl: `http://127.0.0.1:${port}/gemini`,
+          authType: 'api_key',
+          models: [{ id: 'models/gemini-seed', tags: ['default'] }],
+        },
+        envVars: { GOOGLE_AI_API_KEY: 'mock-gemini-key' },
+      })
+      expect(geminiProfileRes.status).toBe(200)
+      const geminiProfileBody = (await geminiProfileRes.json()) as {
+        profile: { id: string }
+      }
+      const geminiRefreshRes = await req(
+        'POST',
+        `/api/cloud-saas/provider-profiles/${geminiProfileBody.profile.id}/models/refresh`,
+      )
+      expect(geminiRefreshRes.status).toBe(200)
+      const geminiRefreshBody = (await geminiRefreshRes.json()) as {
+        ok: boolean
+        models: Array<{ id: string; tags: string[]; contextWindow?: number }>
+        profile: { config: { apiFormat?: string } }
+      }
+      expect(geminiRefreshBody.ok).toBe(true)
+      expect(geminiRefreshBody.profile.config.apiFormat).toBe('gemini')
+      expect(geminiRefreshBody.models[0]).toMatchObject({
+        id: 'gemini-2.0-flash',
+        contextWindow: 1_048_576,
+      })
+      expect(geminiRefreshBody.models[0]?.tags).toContain('fast')
+
+      const createRes = await req('POST', '/api/cloud-saas/deployments', {
+        namespace: uniqueName('e2e-provider-selector-ns'),
+        name: uniqueName('e2e-provider-selector-deploy'),
+        templateSlug: officialTemplateSlug,
+        resourceTier: 'lightweight',
+        configSnapshot: {
+          ...makeConfigSnapshot('provider-selector-secret'),
+          use: [
+            {
+              plugin: 'model-provider',
+              options: { profileId: profileBody.profile.id, selector: 'reasoning' },
+            },
+          ],
+        },
+      })
+      expect(createRes.status).toBe(201)
+      const deployment = (await createRes.json()) as { id: string }
+      const [stored] = await db
+        .select()
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.id, deployment.id))
+        .limit(1)
+      const runtime = extractCloudSaasRuntime(stored?.configSnapshot).envVars
+      expect(runtime.OPENAI_API_KEY).toBe('mock-openai-key')
+      expect(runtime.OPENAI_COMPATIBLE_BASE_URL).toBeUndefined()
+      const modelSets = JSON.parse(runtime.SHADOW_PROVIDER_PROFILE_MODELS_JSON ?? '[]') as Array<{
+        providerId: string
+        profileId: string
+        models: Array<{ id: string; tags?: string[] }>
+      }>
+      expect(modelSets).toEqual([
+        {
+          providerId: 'openai',
+          profileId: profileBody.profile.id,
+          models: [
+            expect.objectContaining({ id: 'mock-fast-mini', tags: ['fast'] }),
+            expect.objectContaining({ id: 'mock-reasoning-r1', tags: ['reasoning'] }),
+          ],
+        },
+      ])
+    } finally {
+      await new Promise<void>((resolve) => modelServer.close(() => resolve()))
+    }
+  })
+
+  it('GET /api/cloud-saas/provider-profiles ignores unreadable legacy provider values', async () => {
+    const [legacyUser] = await db
+      .insert(schema.users)
+      .values({
+        email: `saas-legacy-provider-${Date.now()}@example.com`,
+        displayName: 'Legacy Provider User',
+        username: uniqueName('saas-legacy-provider'),
+        passwordHash: 'test-hash',
+      })
+      .returning()
+    const legacyUserId = legacyUser!.id
+    const legacyToken = signAccessToken({
+      userId: legacyUserId,
+      email: legacyUser!.email,
+      username: legacyUser!.username,
+    })
+
+    try {
+      await db.insert(schema.cloudEnvVars).values([
+        {
+          userId: legacyUserId,
+          scope: 'provider:legacy-bad-profile',
+          key: 'SHADOW_PROVIDER_ID',
+          encryptedValue: 'not-valid-ciphertext',
+        },
+      ])
+
+      const res = await req('GET', '/api/cloud-saas/provider-profiles', undefined, legacyToken)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as {
+        profiles: unknown[]
+      }
+      expect(body.profiles).toEqual([])
+    } finally {
+      await db
+        .delete(schema.users)
+        .where(eq(schema.users.id, legacyUserId))
+        .catch(() => {})
+    }
   })
 
   it('POST /api/cloud-saas/deployments deducts coins, creates deployment, and redacts config secrets', async () => {
@@ -506,7 +904,7 @@ describe('Cloud SaaS — deployment + billing', () => {
     expect(deployTx).toBeDefined()
   })
 
-  it('GET /api/cloud-saas/deployments/costs and /:id/costs return Shrimp billing summaries', async () => {
+  it('GET /api/cloud-saas/deployments/costs and /:id/costs return token usage summaries', async () => {
     const namespace = uniqueName('e2e-costs-ns')
     const createRes = await req('POST', '/api/cloud-saas/deployments', {
       namespace,
@@ -517,7 +915,7 @@ describe('Cloud SaaS — deployment + billing', () => {
     })
 
     expect(createRes.status).toBe(201)
-    const deployment = (await createRes.json()) as { id: string; monthlyCost: number | null }
+    const deployment = (await createRes.json()) as { id: string }
 
     const namespaceCostsRes = await req('GET', `/api/cloud-saas/deployments/${deployment.id}/costs`)
     expect(namespaceCostsRes.status).toBe(200)
@@ -528,23 +926,162 @@ describe('Cloud SaaS — deployment + billing', () => {
       agents: Array<{ billingAmount: number | null; billingUnit: string }>
     }
     expect(namespaceCosts.namespace).toBe(namespace)
-    expect(namespaceCosts.billingUnit).toBe('shrimp')
-    expect(namespaceCosts.billingAmount).toBe(deployment.monthlyCost)
+    expect(namespaceCosts.billingUnit).toBe('usd')
+    expect(namespaceCosts.billingAmount).toBe(null)
     expect(Array.isArray(namespaceCosts.agents)).toBe(true)
     expect(namespaceCosts.agents.length).toBeGreaterThan(0)
-    expect(namespaceCosts.agents.every((agent) => agent.billingUnit === 'shrimp')).toBe(true)
+    expect(namespaceCosts.agents.every((agent) => agent.billingUnit === 'usd')).toBe(true)
 
     const overviewRes = await req('GET', '/api/cloud-saas/deployments/costs')
     expect(overviewRes.status).toBe(200)
     const overview = (await overviewRes.json()) as {
       billingUnit: string
-      namespaces: Array<{ namespace: string; billingUnit: string; billingAmount: number | null }>
+      namespaces: Array<{
+        namespace: string
+        billingUnit: string
+        billingAmount: number | null
+      }>
     }
-    expect(overview.billingUnit).toBe('shrimp')
+    expect(overview.billingUnit).toBe('usd')
     const matchingNamespace = overview.namespaces.find((item) => item.namespace === namespace)
     expect(matchingNamespace).toBeDefined()
-    expect(matchingNamespace?.billingUnit).toBe('shrimp')
-    expect(matchingNamespace?.billingAmount).toBe(deployment.monthlyCost)
+    expect(matchingNamespace?.billingUnit).toBe('usd')
+    expect(matchingNamespace?.billingAmount).toBe(null)
+  })
+
+  it('POST /api/cloud-saas/deployments/:id/redeploy creates a durable history entry without charging again', async () => {
+    const namespace = uniqueName('e2e-redeploy-ns')
+    const walletBefore = (await (await req('GET', '/api/cloud-saas/wallet')).json()) as {
+      balance: number
+    }
+
+    try {
+      const [existing] = await db
+        .insert(schema.cloudDeployments)
+        .values({
+          userId,
+          namespace,
+          name: `${namespace}-agent`,
+          status: 'deployed',
+          agentCount: 1,
+          configSnapshot: makeConfigSnapshot('redeploy-secret'),
+          templateSlug: officialTemplateSlug,
+          resourceTier: 'lightweight',
+          monthlyCost: 500,
+          saasMode: true,
+        })
+        .returning()
+
+      const redeployRes = await req('POST', `/api/cloud-saas/deployments/${existing!.id}/redeploy`)
+      expect(redeployRes.status).toBe(201)
+      const redeployed = (await redeployRes.json()) as {
+        id: string
+        namespace: string
+        status: string
+      }
+      expect(redeployed.id).not.toBe(existing!.id)
+      expect(redeployed.namespace).toBe(namespace)
+      expect(redeployed.status).toBe('pending')
+
+      const historyRes = await req(
+        'GET',
+        '/api/cloud-saas/deployments?includeHistory=1&limit=10&offset=0',
+      )
+      const history = (await historyRes.json()) as Array<{ id: string; namespace: string }>
+      expect(history.filter((row) => row.namespace === namespace).map((row) => row.id)).toContain(
+        existing!.id,
+      )
+      expect(history.filter((row) => row.namespace === namespace).map((row) => row.id)).toContain(
+        redeployed.id,
+      )
+
+      const walletAfter = (await (await req('GET', '/api/cloud-saas/wallet')).json()) as {
+        balance: number
+      }
+      expect(walletAfter.balance).toBe(walletBefore.balance)
+    } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
+  it('guards deployment instances by namespace and preserves provision state on redeploy', async () => {
+    const namespace = uniqueName('e2e-instance-ns')
+    const provisionState = {
+      provisionedAt: '2026-04-28T00:00:00.000Z',
+      namespace,
+      plugins: {
+        shadowob: {
+          servers: { main: 'server-1' },
+          channels: { general: 'channel-1' },
+          buddies: {
+            'strategy-buddy': {
+              agentId: 'agent-1',
+              userId: 'bot-user-1',
+              token: 'agent-token-1',
+            },
+          },
+        },
+      },
+    }
+
+    try {
+      const [existing] = await db
+        .insert(schema.cloudDeployments)
+        .values({
+          userId,
+          namespace,
+          name: `${namespace}-agent`,
+          status: 'deployed',
+          agentCount: 1,
+          configSnapshot: attachCloudSaasProvisionState(
+            makeConfigSnapshot('redeploy-state-secret'),
+            provisionState,
+          ),
+          templateSlug: officialTemplateSlug,
+          resourceTier: 'lightweight',
+          monthlyCost: 500,
+          saasMode: true,
+        })
+        .returning()
+
+      const duplicateRes = await req('POST', '/api/cloud-saas/deployments', {
+        namespace,
+        name: `${namespace}-duplicate`,
+        templateSlug: officialTemplateSlug,
+        resourceTier: 'lightweight',
+        configSnapshot: makeConfigSnapshot('duplicate-secret'),
+      })
+      expect(duplicateRes.status).toBe(409)
+
+      const redeployRes = await req('POST', `/api/cloud-saas/deployments/${existing!.id}/redeploy`)
+      expect(redeployRes.status).toBe(201)
+      const redeployed = (await redeployRes.json()) as { id: string }
+      const [storedRedeploy] = await db
+        .select()
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.id, redeployed.id))
+        .limit(1)
+
+      const runtime = extractCloudSaasRuntime(storedRedeploy?.configSnapshot)
+      expect(runtime.provisionState?.plugins.shadowob).toEqual(provisionState.plugins.shadowob)
+
+      const redeployAgainRes = await req(
+        'POST',
+        `/api/cloud-saas/deployments/${existing!.id}/redeploy`,
+      )
+      expect(redeployAgainRes.status).toBe(409)
+
+      const destroyOldRes = await req('DELETE', `/api/cloud-saas/deployments/${existing!.id}`)
+      expect(destroyOldRes.status).toBe(409)
+    } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
   })
 
   it('POST /api/cloud-saas/deployments/:id/cancel marks a pending deployment as cancelling', async () => {
@@ -561,7 +1098,10 @@ describe('Cloud SaaS — deployment + billing', () => {
 
     const cancelRes = await req('POST', `/api/cloud-saas/deployments/${deployment.id}/cancel`)
     expect(cancelRes.status).toBe(200)
-    const cancelBody = (await cancelRes.json()) as { ok: boolean; status: string }
+    const cancelBody = (await cancelRes.json()) as {
+      ok: boolean
+      status: string
+    }
     expect(cancelBody.ok).toBe(true)
     expect(cancelBody.status).toBe('cancelling')
 

@@ -6,7 +6,7 @@
  * - NetworkPolicy: default deny-all, allow egress 443 (LLM API) + 53 (DNS)
  */
 
-import { HEALTH_PORT } from './constants.js'
+import { HEALTH_PORT, PULUMI_MANAGED_ANNOTATIONS } from './constants.js'
 
 /**
  * Generate a Pod SecurityContext for agent containers.
@@ -66,6 +66,7 @@ export function buildNetworkPolicy(
         name: `${agentName}-netpol`,
         namespace,
         labels: { app: 'shadowob-cloud', agent: agentName },
+        annotations: PULUMI_MANAGED_ANNOTATIONS,
       },
       spec: {
         podSelector: {
@@ -86,6 +87,7 @@ export function buildNetworkPolicy(
         name: `${agentName}-netpol`,
         namespace,
         labels: { app: 'shadowob-cloud', agent: agentName },
+        annotations: PULUMI_MANAGED_ANNOTATIONS,
       },
       spec: {
         podSelector: {
@@ -149,10 +151,11 @@ export function buildNetworkPolicy(
       ...(networking?.allowedHosts?.length
         ? {
             annotations: {
+              ...PULUMI_MANAGED_ANNOTATIONS,
               'shadowob-cloud/allowed-hosts': networking.allowedHosts.join(','),
             },
           }
-        : {}),
+        : { annotations: PULUMI_MANAGED_ANNOTATIONS }),
     },
     spec: {
       podSelector: {

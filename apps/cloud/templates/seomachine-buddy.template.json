@@ -1,12 +1,9 @@
 {
   "version": "1.0.0",
-  "name": "${i18n:name}",
+  "name": "seomachine-buddy",
+  "title": "${i18n:title}",
   "description": "${i18n:description}",
   "environment": "production",
-  "team": {
-    "name": "seomachine-buddy",
-    "description": "Single SEO Buddy powered by TheCraigHewitt/seomachine — using its Claude commands, agents, and context templates for keyword research, content briefs, on-page audits, and topical-authority planning."
-  },
   "use": [
     {
       "plugin": "model-provider"
@@ -99,12 +96,12 @@
   },
   "i18n": {
     "en": {
-      "name": "SEO Machine Buddy",
-      "description": "Single SEO Buddy powered live by TheCraigHewitt/seomachine — keyword research, content briefs, on-page audits, and topical-authority planning via the upstream Claude commands, agents, and context files."
+      "title": "SEO Machine Buddy",
+      "description": "Accelerate search growth with a focused SEO agent that turns upstream seomachine playbooks into keyword research, content briefs, on-page audits, and topical authority plans."
     },
     "zh-CN": {
-      "name": "SEO 机器 Buddy",
-      "description": "单 Buddy 模板，从 TheCraigHewitt/seomachine 动态拉取 Claude 命令、代理说明与上下文文件 —— 关键词研究、内容简报、On-page 审计、主题权威规划。"
+      "title": "SEO 机器 Buddy",
+      "description": "用专注的 SEO 智能体加速自然搜索增长，将上游 seomachine playbook 转化为关键词研究、内容简报、站内审计和主题权威规划。"
     }
   }
 }

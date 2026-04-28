@@ -29,6 +29,13 @@ describe('template-schema consistency (TPL-02)', () => {
     // version is required
     expect(content).toHaveProperty('version')
     expect(typeof content.version).toBe('string')
+    expect(content.name).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    expect(content.title).toBe('${i18n:title}')
+    expect(content.description).toBe('${i18n:description}')
+    expect(content).not.toHaveProperty('team')
+    const i18n = content.i18n as Record<string, Record<string, string>> | undefined
+    expect(i18n?.en?.title).toBeTruthy()
+    expect(i18n?.['zh-CN']?.title).toBeTruthy()
   })
 
   it.each(templateFiles)('%s has deployments.agents array', (file) => {
@@ -93,6 +100,13 @@ describe('folder-based template consistency (TPL-03)', () => {
     const content = parseJsonc<Record<string, unknown>>(readFileSync(file, 'utf-8'), file)
     expect(content).toHaveProperty('version')
     expect(typeof content.version).toBe('string')
+    expect(content.name).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    expect(content.title).toBe('${i18n:title}')
+    expect(content.description).toBe('${i18n:description}')
+    expect(content).not.toHaveProperty('team')
+    const i18n = content.i18n as Record<string, Record<string, string>> | undefined
+    expect(i18n?.en?.title).toBeTruthy()
+    expect(i18n?.['zh-CN']?.title).toBeTruthy()
   })
 
   it.each(folderTemplates)('%s/shadowob-cloud.json has deployments.agents array', (slug) => {

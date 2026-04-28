@@ -10,8 +10,6 @@ import {
   FolderOpen,
   Layers,
   Loader2,
-  Minus,
-  Plus,
   RefreshCw,
   Rocket,
   RotateCcw,
@@ -36,14 +34,7 @@ import { useDebounce } from '@/hooks/useDebounce'
 import { type Deployment, type DeployTaskListItem } from '@/lib/api'
 import { useApiClient } from '@/lib/api-context'
 import { formatDisplayCost, formatTokenCount } from '@/lib/store-data'
-import {
-  formatTimestamp,
-  getAge,
-  getReadyReplicas,
-  groupBy,
-  isDeploymentReady,
-  pluralize,
-} from '@/lib/utils'
+import { formatTimestamp, getAge, groupBy, isDeploymentReady, pluralize } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/stores/toast'
 
@@ -66,53 +57,15 @@ interface NamespaceGroup {
 function getStatusVariant(status: string): 'neutral' | 'success' | 'warning' | 'danger' | 'info' {
   if (status === 'deployed') return 'success'
   if (status === 'failed') return 'danger'
-  if (status === 'running') return 'info'
-  if (status === 'pending') return 'warning'
+  if (status === 'running' || status === 'deploying' || status === 'destroying') return 'info'
+  if (status === 'pending' || status === 'cancelling') return 'warning'
   return 'neutral'
 }
 
 // ── Deployment Row ────────────────────────────────────────────────────────────
 
 function DeploymentRow({ dep }: { dep: Deployment }) {
-  const api = useApiClient()
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const toast = useToast()
-  const addActivity = useAppStore((s) => s.addActivity)
   const ready = isDeploymentReady(dep.ready)
-  const [replicas, setReplicas] = useState<number | null>(null)
-
-  const currentReplicas =
-    replicas ??
-    (() => {
-      return getReadyReplicas(dep.ready)
-    })()
-
-  const scaleMutation = useMutation({
-    mutationFn: (count: number) => api.deployments.scale(dep.namespace, dep.name, count),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['deployments'] })
-      toast.success(
-        t('deployments.scaledAgent', {
-          agent: dep.name,
-          count: replicas ?? currentReplicas,
-        }),
-      )
-      addActivity({
-        type: 'scale',
-        title: t('deploymentDetail.scaleActivityTitle', { agent: dep.name }),
-        detail: t('deploymentDetail.scaleActivityDetail', { count: replicas ?? currentReplicas }),
-        namespace: dep.namespace,
-      })
-    },
-    onError: () => toast.error(t('deployments.scaleFailed', { agent: dep.name })),
-  })
-
-  const handleScale = (delta: number) => {
-    const next = Math.max(0, currentReplicas + delta)
-    setReplicas(next)
-    scaleMutation.mutate(next)
-  }
 
   return (
     <DashboardListRow
@@ -134,30 +87,6 @@ function DeploymentRow({ dep }: { dep: Deployment }) {
             badgeVariant={ready ? 'success' : 'warning'}
             badgeText={dep.ready}
           />
-
-          <div className="flex items-center rounded border border-border-subtle bg-bg-secondary/40">
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              onClick={() => handleScale(-1)}
-              disabled={scaleMutation.isPending || currentReplicas <= 0}
-            >
-              <Minus size={11} />
-            </Button>
-            <span className="text-xs font-mono px-1.5 min-w-[1.2rem] text-center">
-              {currentReplicas}
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              onClick={() => handleScale(1)}
-              disabled={scaleMutation.isPending}
-            >
-              <Plus size={11} />
-            </Button>
-          </div>
 
           <Link
             to="/deployments/$namespace"
@@ -186,7 +115,7 @@ function NamespaceCard({
   isDestroying: boolean
   isDiscovered: boolean
   onDestroy: (ns: string) => void
-  onRedeploy: (taskId: number) => void
+  onRedeploy: (taskId: number | string) => void
   onRollback: (ns: string) => void
 }) {
   const { t, i18n } = useTranslation()
@@ -342,7 +271,13 @@ function TasksPanel({ tasks }: { tasks: DeployTaskListItem[] }) {
   return (
     <div className="space-y-2">
       {tasks.map(({ task, active }) => {
-        const running = active || task.status === 'running' || task.status === 'pending'
+        const running =
+          active ||
+          task.status === 'running' ||
+          task.status === 'pending' ||
+          task.status === 'deploying' ||
+          task.status === 'cancelling' ||
+          task.status === 'destroying'
         return (
           <Link
             key={task.id}
@@ -480,7 +415,7 @@ export function DeploymentsPage() {
     },
   })
 
-  const handleRedeploy = async (taskId: number) => {
+  const handleRedeploy = async (taskId: number | string) => {
     const nextTaskId = await api.deployTasks.redeployToTaskId(taskId)
     if (!nextTaskId) return
     navigate({ to: '/deploy-tasks/$taskId', params: { taskId: String(nextTaskId) } })
@@ -497,7 +432,10 @@ export function DeploymentsPage() {
     for (const item of tasks) {
       const ns = item.task.namespace
       const existing = map.get(ns)
-      if (!existing || item.task.id > existing.task.id) {
+      const itemTime = Date.parse(item.task.updatedAt ?? item.task.createdAt ?? '') || 0
+      const existingTime =
+        Date.parse(existing?.task.updatedAt ?? existing?.task.createdAt ?? '') || 0
+      if (!existing || itemTime >= existingTime) {
         map.set(ns, item)
       }
     }
@@ -590,7 +528,7 @@ export function DeploymentsPage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('deployments.title') }]}
+      breadcrumb={[]}
       title={t('deployments.title')}
       description={t('deployments.description')}
       actions={

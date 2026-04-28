@@ -14,7 +14,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import {
   Activity,
-  BarChart3,
   Box,
   CheckCircle,
   Download,
@@ -23,14 +22,12 @@ import {
   FolderClock,
   Loader2,
   Lock,
-  Minus,
   Pencil,
   Plus,
   RefreshCw,
   Rocket,
   Save,
   Settings,
-  Terminal,
   Trash2,
   Variable,
   XCircle,
@@ -38,7 +35,6 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Breadcrumb } from '@/components/Breadcrumb'
-import { CliCommandSnippet } from '@/components/CliCommandSnippet'
 import { DangerConfirmDialog } from '@/components/DangerConfirmDialog'
 import { DashboardEmptyState } from '@/components/DashboardEmptyState'
 import { DashboardTabsList } from '@/components/DashboardTabsList'
@@ -108,9 +104,6 @@ function PodsTab({ pods, isLoading }: { pods: Pod[] | undefined; isLoading: bool
                 {t('monitoring.name')}
               </TableHead>
               <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
-                {t('monitoring.ready')}
-              </TableHead>
-              <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
                 {t('deployments.restarts')}
               </TableHead>
               <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
@@ -125,14 +118,11 @@ function PodsTab({ pods, isLoading }: { pods: Pod[] | undefined; isLoading: bool
                   <StatusBadge
                     dotStatus={getPodStatusType(pod.status)}
                     dotLabel={pod.status}
-                    badgeVariant={pod.ready === '1/1' ? 'success' : 'warning'}
-                    badgeText={pod.ready}
+                    badgeVariant={pod.status === 'Running' ? 'success' : 'warning'}
+                    badgeText={pod.status}
                   />
                 </TableCell>
                 <TableCell>{pod.name}</TableCell>
-                <TableCell>
-                  <span className="font-mono text-xs text-text-secondary">{pod.ready}</span>
-                </TableCell>
                 <TableCell>
                   {Number(pod.restarts) > 0 ? (
                     <span className="text-warning">{pod.restarts}</span>
@@ -289,27 +279,6 @@ function InfoTab({
           >
             {totalRestarts}
           </span>
-        </div>
-      </Card>
-
-      <Card variant="glass">
-        <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-text-primary">
-          <Terminal size={14} className="text-text-muted" />
-          {t('deploymentDetail.info.cliCommands')}
-        </h3>
-        <div className="space-y-2">
-          <CliCommandSnippet
-            title={t('deploymentDetail.info.viewPods')}
-            command={`kubectl get pods -n ${namespace}`}
-          />
-          <CliCommandSnippet
-            title={t('deploymentDetail.info.viewLogs')}
-            command={`kubectl logs -n ${namespace} -l app=${id} --tail=100`}
-          />
-          <CliCommandSnippet
-            title={t('deploymentDetail.info.scaleDeployment')}
-            command={`kubectl scale deployment ${id} -n ${namespace} --replicas=N`}
-          />
         </div>
       </Card>
     </div>
@@ -677,15 +646,25 @@ function TasksTab({ namespace }: { namespace: string }) {
   return (
     <div className="space-y-2">
       {tasks.map(({ task, active }) => {
-        const running = active || task.status === 'running' || task.status === 'pending'
+        const running =
+          active ||
+          task.status === 'running' ||
+          task.status === 'pending' ||
+          task.status === 'deploying' ||
+          task.status === 'cancelling' ||
+          task.status === 'destroying'
         const statusVariant =
           task.status === 'deployed'
             ? 'success'
             : task.status === 'failed'
               ? 'danger'
-              : task.status === 'running'
+              : task.status === 'running' ||
+                  task.status === 'deploying' ||
+                  task.status === 'destroying'
                 ? 'info'
-                : ('neutral' as const)
+                : task.status === 'pending' || task.status === 'cancelling'
+                  ? 'warning'
+                  : ('neutral' as const)
 
         return (
           <Link
@@ -719,8 +698,6 @@ export function DeploymentDetailPage() {
   const navigate = useNavigate()
   const toast = useToast()
   const addActivity = useAppStore((s) => s.addActivity)
-  const [replicas, setReplicas] = useState<number | null>(null)
-  const initialReplicasSet = useRef(false)
   const [showDestroy, setShowDestroy] = useState(false)
   const [activeTab, setActiveTab] = useState('pods')
 
@@ -728,29 +705,6 @@ export function DeploymentDetailPage() {
     queryKey: ['pods', namespace, id],
     queryFn: () => api.deployments.pods(namespace, id),
     refetchInterval: 10_000,
-  })
-
-  useEffect(() => {
-    if (pods && !initialReplicasSet.current) {
-      initialReplicasSet.current = true
-      setReplicas(pods.length)
-    }
-  }, [pods])
-
-  const scaleMutation = useMutation({
-    mutationFn: (count: number) => api.deployments.scale(namespace, id, count),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pods', namespace, id] })
-      queryClient.invalidateQueries({ queryKey: ['deployments'] })
-      toast.success(t('deploymentDetail.scaleSuccess', { count: replicas ?? 0 }))
-      addActivity({
-        type: 'scale',
-        title: t('deploymentDetail.scaleActivityTitle', { agent: id }),
-        detail: t('deploymentDetail.scaleActivityDetail', { count: replicas ?? 0 }),
-        namespace,
-      })
-    },
-    onError: () => toast.error(t('deploymentDetail.scaleFailed')),
   })
 
   const destroyMutation = useMutation({
@@ -767,12 +721,6 @@ export function DeploymentDetailPage() {
     },
     onError: () => toast.error(t('deployments.destroyNamespaceFailed')),
   })
-
-  const handleScale = (delta: number) => {
-    const next = Math.max(0, (replicas ?? 0) + delta)
-    setReplicas(next)
-    scaleMutation.mutate(next)
-  }
 
   const handleRedeploy = async () => {
     // Find the latest task for this namespace
@@ -827,33 +775,6 @@ export function DeploymentDetailPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* Scale controls */}
-          <div className="flex items-center gap-1 rounded-xl border border-border-subtle bg-bg-secondary/50 p-1 shadow-sm">
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
-              onClick={() => handleScale(-1)}
-              disabled={scaleMutation.isPending || (replicas ?? 0) <= 0}
-            >
-              <Minus size={14} />
-            </Button>
-            <span className="min-w-[2rem] px-2 text-center text-sm font-mono text-text-primary">
-              {replicas ?? '—'}
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
-              onClick={() => handleScale(1)}
-              disabled={scaleMutation.isPending}
-            >
-              <Plus size={14} />
-            </Button>
-          </div>
-
           <Button
             type="button"
             variant="primary"
@@ -880,7 +801,7 @@ export function DeploymentDetailPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 mb-6">
         <StatCard
           label={t('deploymentDetail.stats.pods')}
           value={podCount}
@@ -897,12 +818,6 @@ export function DeploymentDetailPage() {
           value={podCount - running}
           icon={<XCircle size={13} />}
           color={podCount - running > 0 ? 'yellow' : 'default'}
-        />
-        <StatCard
-          label={t('deploymentDetail.stats.replicas')}
-          value={replicas ?? '—'}
-          icon={<BarChart3 size={13} />}
-          color="blue"
         />
       </div>
 

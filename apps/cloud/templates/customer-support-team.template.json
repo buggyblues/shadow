@@ -1,12 +1,9 @@
 {
   "version": "1.0.0",
-  "name": "${i18n:name}",
+  "name": "customer-support-team",
+  "title": "${i18n:title}",
   "description": "${i18n:description}",
   "environment": "production",
-  "team": {
-    "name": "customer-support-team",
-    "description": "Automated customer support: triage, resolution, and escalation"
-  },
   "use": [
     {
       "plugin": "model-provider"
@@ -169,12 +166,12 @@
   },
   "i18n": {
     "en": {
-      "name": "Customer Support Team",
-      "description": "Two-agent support team: a triage agent that categorizes and routes incoming tickets, and a resolution agent that auto-resolves common issues and escalates complex ones."
+      "title": "Customer Support Team",
+      "description": "Reduce support load with a two-agent team that triages inbound tickets, resolves routine requests, and escalates complex cases with context so customers get faster answers without losing human control."
     },
     "zh-CN": {
-      "name": "客户支持团队",
-      "description": "双智能体支持团队：分诊智能体负责分类和路由工单，解决智能体负责处理常见问题并起草回复。"
+      "title": "客户支持团队",
+      "description": "通过双智能体团队降低支持压力：自动分诊工单、处理常见请求，并携带上下文升级复杂问题，让客户更快获得答复，同时保留人工掌控。"
     }
   }
 }

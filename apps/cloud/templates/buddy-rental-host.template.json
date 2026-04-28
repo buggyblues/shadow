@@ -1,6 +1,7 @@
 {
   "version": "1.0.0",
-  "name": "${i18n:name}",
+  "name": "buddy-rental-host",
+  "title": "${i18n:title}",
   "description": "${i18n:description}",
   "environment": "production",
   "use": [
@@ -131,12 +132,12 @@
   },
   "i18n": {
     "en": {
-      "name": "Buddy Rental Host",
-      "description": "Template for hosting OpenClaw rentals via the Shadow claw marketplace. Includes a rental manager buddy for listing/contract management and a renter-facing assistant buddy."
+      "title": "Buddy Rental Host",
+      "description": "Turn OpenClaw rentals into a managed customer experience with agents that publish listings, answer renter questions, monitor usage, and keep operators responsive without manual marketplace upkeep."
     },
     "zh-CN": {
-      "name": "Buddy 租赁主机",
-      "description": "通过 Shadow 虾爪市场托管 OpenClaw 租赁的模板。包含一个租赁管理 Buddy（负责挂单与合约管理）和一个面向租户的助手 Buddy。"
+      "title": "Buddy 租赁主机",
+      "description": "将 OpenClaw 租赁变成可运营的客户体验：智能体负责发布租赁挂单、回答租户问题、监控使用情况，并让运营方无需手动维护市场也能保持及时响应。"
     }
   }
 }

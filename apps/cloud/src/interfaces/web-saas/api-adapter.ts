@@ -54,6 +54,35 @@ type TemplateDeployments = {
 
 const deploymentCacheByNamespace = new Map<string, SaasDeployment>()
 const deploymentCacheById = new Map<string, SaasDeployment>()
+const VISIBLE_DEPLOYMENT_STATUSES = new Set<SaasDeployment['status']>([
+  'pending',
+  'deploying',
+  'cancelling',
+  'deployed',
+  'destroying',
+])
+
+function deploymentSortTime(row: SaasDeployment): number {
+  return Date.parse(row.updatedAt || row.createdAt || '') || 0
+}
+
+function isVisibleDeployment(row: SaasDeployment): boolean {
+  return VISIBLE_DEPLOYMENT_STATUSES.has(row.status)
+}
+
+function newestVisibleDeploymentsByNamespace(rows: SaasDeployment[]): SaasDeployment[] {
+  const byNamespace = new Map<string, SaasDeployment>()
+  for (const row of rows) {
+    if (!isVisibleDeployment(row)) continue
+    const existing = byNamespace.get(row.namespace)
+    if (!existing || deploymentSortTime(row) >= deploymentSortTime(existing)) {
+      byNamespace.set(row.namespace, row)
+    }
+  }
+  return [...byNamespace.values()].sort(
+    (left, right) => deploymentSortTime(right) - deploymentSortTime(left),
+  )
+}
 
 function syncDeploymentCache(rows: SaasDeployment[]) {
   for (const row of rows) {
@@ -62,17 +91,18 @@ function syncDeploymentCache(rows: SaasDeployment[]) {
   }
 }
 
-async function listSaasDeployments(): Promise<SaasDeployment[]> {
-  const rows = await saasApi.deployments.list()
+function replaceDeploymentCache(rows: SaasDeployment[]) {
+  deploymentCacheByNamespace.clear()
+  deploymentCacheById.clear()
   syncDeploymentCache(rows)
-  return rows.filter(
-    (row) =>
-      row.status === 'pending' ||
-      row.status === 'deploying' ||
-      row.status === 'cancelling' ||
-      row.status === 'deployed' ||
-      row.status === 'destroying',
+}
+
+async function listSaasDeployments(): Promise<SaasDeployment[]> {
+  const rows = newestVisibleDeploymentsByNamespace(
+    await saasApi.deployments.list({ limit: 100, offset: 0 }),
   )
+  replaceDeploymentCache(rows)
+  return rows
 }
 
 async function resolveDeploymentByNamespace(namespace: string): Promise<SaasDeployment | null> {
@@ -107,7 +137,12 @@ function getDeploymentAgentEntries(
 
   if (mapped.length > 0) return mapped
 
-  return [{ name: deployment.name, replicas: Math.max(deployment.agentCount ?? 1, 1) }]
+  return [
+    {
+      name: deployment.name,
+      replicas: Math.max(deployment.agentCount ?? 1, 1),
+    },
+  ]
 }
 
 function expandDeploymentRows(deployment: SaasDeployment): Deployment[] {
@@ -122,6 +157,38 @@ function expandDeploymentRows(deployment: SaasDeployment): Deployment[] {
     available: deployment.status === 'deployed' ? String(agent.replicas) : '0',
     age: deployment.createdAt,
   }))
+}
+
+function isActiveDeployment(row: SaasDeployment): boolean {
+  return (
+    row.status === 'pending' ||
+    row.status === 'deploying' ||
+    row.status === 'cancelling' ||
+    row.status === 'destroying'
+  )
+}
+
+function deploymentTaskUrl(id: string): string {
+  return `/cloud/deploy-tasks/${encodeURIComponent(id)}`
+}
+
+function toDeployTaskItem(deployment: SaasDeployment) {
+  return {
+    task: {
+      id: deployment.id,
+      namespace: deployment.namespace,
+      templateSlug: deployment.templateSlug,
+      version: null,
+      status: deployment.status,
+      config: deployment.configSnapshot ?? {},
+      agentCount: deployment.agentCount,
+      error: deployment.errorMessage,
+      createdAt: deployment.createdAt,
+      updatedAt: deployment.updatedAt,
+    },
+    url: deploymentTaskUrl(deployment.id),
+    active: isActiveDeployment(deployment),
+  }
 }
 
 function filterPodsByAgent(
@@ -140,7 +207,7 @@ function filterPodsByAgent(
       ? pods.filter(
           (pod) =>
             pod.name.includes(agent) ||
-            pod.containers.some(
+            (pod.containers ?? []).some(
               (containerName) => containerName === agent || containerName.includes(agent),
             ),
         )
@@ -192,9 +259,9 @@ function toTemplateSummary(t: SaasTemplate) {
   const meta = getTemplateMeta(t)
   return {
     name: t.slug,
+    title: t.name || t.slug,
     namespace: meta.namespace,
     description: t.description ?? '',
-    teamName: 'Shadow Cloud',
     agentCount: meta.agentCount,
     tags: Array.isArray(t.tags) ? t.tags : [],
     category: (t.category as TemplateCategoryId) ?? 'demo',
@@ -246,8 +313,8 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
       }),
     putSettings: () => Promise.resolve({ ok: true }),
     oauthInit: () => Promise.resolve({ url: '' }),
-    catalog: (_locale: string) =>
-      saasApi.templates.list().then((rows) => ({
+    catalog: (locale: string) =>
+      saasApi.templates.list({ locale }).then((rows) => ({
         source: 'community' as const,
         templates: rows.map(toTemplateSummary),
         categories: buildTemplateCategories(rows),
@@ -266,36 +333,36 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
 
   // ── Templates ────────────────────────────────────────────────────────────
   templates: {
-    list: () =>
-      saasApi.templates.list().then((rows) =>
+    list: (locale?: string) =>
+      saasApi.templates.list({ locale }).then((rows) =>
         rows.map((t) => ({
           name: t.slug,
+          title: t.name || t.slug,
           namespace: getTemplateMeta(t).namespace,
           description: t.description ?? '',
-          teamName: 'Shadow Cloud',
           agentCount: getTemplateMeta(t).agentCount,
           tags: t.tags ?? [],
         })),
       ),
-    catalog: (_locale: string) =>
-      saasApi.templates.list().then((rows) => ({
+    catalog: (locale: string) =>
+      saasApi.templates.list({ locale }).then((rows) => ({
         templates: rows.map(toTemplateSummary),
         categories: buildTemplateCategories(rows),
       })),
-    listByLocale: (_locale: string) =>
-      saasApi.templates.list().then((rows) =>
+    listByLocale: (locale: string) =>
+      saasApi.templates.list({ locale }).then((rows) =>
         rows.map((t) => ({
           name: t.slug,
+          title: t.name || t.slug,
           namespace: getTemplateMeta(t).namespace,
           description: t.description ?? '',
-          teamName: 'Shadow Cloud',
           agentCount: getTemplateMeta(t).agentCount,
           tags: t.tags ?? [],
         })),
       ),
-    detail: async (name: string, _locale: string) => {
+    detail: async (name: string, locale: string) => {
       const [template, envRefs] = await Promise.all([
-        saasApi.templates.get(name),
+        saasApi.templates.get(name, locale),
         saasApi.templates.envRefs(name).catch(() => ({ template: name, requiredEnvVars: [] })),
       ])
       return {
@@ -347,7 +414,10 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
         .then((t) => ({ name: t.slug, slug: t.slug })),
     delete: (name: string) => saasApi.templates.delete(name),
     versions: (_name: string) =>
-      Promise.resolve({ current: 1, versions: [{ version: 1, createdAt: now(), current: true }] }),
+      Promise.resolve({
+        current: 1,
+        versions: [{ version: 1, createdAt: now(), current: true }],
+      }),
     restoreVersion: (_name: string, _version: number) =>
       Promise.resolve({ ok: true, restoredVersion: _version }),
     share: (name: string) =>
@@ -391,7 +461,11 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
             },
           },
         })
-        .then((template) => ({ ok: true, name: template.slug, source: data.url })),
+        .then((template) => ({
+          ok: true,
+          name: template.slug,
+          source: data.url,
+        })),
   },
 
   // ── Deployments ──────────────────────────────────────────────────────────
@@ -402,13 +476,6 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
         const ns = [...new Set(rows.map((d) => d.namespace))]
         return { configured: ns, discovered: [], all: ns }
       }),
-    scale: async (namespace: string, _id: string, agentCount: number) => {
-      const deployment = await resolveDeploymentByNamespace(namespace)
-      if (!deployment) return { ok: true }
-      const updated = await saasApi.deployments.scale(deployment.id, agentCount)
-      syncDeploymentCache([updated])
-      return { ok: true }
-    },
     costs: () => saasApi.deployments.costs(),
     namespaceCosts: async (namespace: string) => {
       const deployment = await resolveDeploymentByNamespace(namespace)
@@ -439,7 +506,9 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
       if (!deployment) {
         return `${BASE}/deployments/${encodeURIComponent(namespace)}/logs`
       }
-      return `${BASE}/deployments/${encodeURIComponent(deployment.id)}/pod-logs?agent=${encodeURIComponent(agent)}`
+      return `${BASE}/deployments/${encodeURIComponent(
+        deployment.id,
+      )}/pod-logs?agent=${encodeURIComponent(agent)}&container=openclaw`
     },
     logsHistory: async (namespace: string, agent: string, page = 1, limit = 200) => {
       const deployment = await resolveDeploymentByNamespace(namespace)
@@ -455,7 +524,11 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
         }
       }
 
-      return saasApi.deployments.logsHistory(deployment.id, { agent, page, limit })
+      return saasApi.deployments.logsHistory(deployment.id, {
+        agent,
+        page,
+        limit,
+      })
     },
     env: {
       list: async (namespace: string, mode: 'effective' | 'scoped' = 'effective') => {
@@ -524,33 +597,32 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
     },
   },
 
-  // ── Deploy Tasks (stubs — no saas equivalent) ────────────────────────────
+  // ── Deploy Tasks (SaaS deployment rows are durable task history) ─────────
   deployTasks: {
-    list: () => Promise.resolve({ tasks: [] }),
-    get: async (id: number | string) => ({
-      task: {
-        id: Number(id),
-        namespace: '',
-        templateSlug: null,
-        version: null,
-        status: 'failed',
-        config: {},
-        agentCount: 0,
-        error: 'Deploy tasks are not available in SaaS mode.',
-        createdAt: now(),
-        updatedAt: now(),
-      },
-      url: '',
-      active: false,
-    }),
-    streamUrl: (_id: number | string) => '',
-    redeploy: async (_id: number | string) =>
-      new Response(JSON.stringify({ ok: false }), {
-        status: 501,
+    list: () =>
+      saasApi.deployments.list({ limit: 100, offset: 0, includeHistory: true }).then((rows) => ({
+        tasks: rows.map(toDeployTaskItem),
+      })),
+    get: (id: number | string) =>
+      saasApi.deployments.get(String(id)).then((deployment) => toDeployTaskItem(deployment)),
+    streamUrl: (id: number | string) => saasApi.deployments.logsUrl(String(id)),
+    redeploy: async (id: number | string) => {
+      const deployment = await saasApi.deployments.redeploy(String(id))
+      deploymentCacheById.set(deployment.id, deployment)
+      deploymentCacheByNamespace.set(deployment.namespace, deployment)
+      return new Response(JSON.stringify({ id: deployment.id, ok: true }), {
+        status: 200,
         headers: { 'Content-Type': 'application/json' },
-      }),
-    redeployToTaskId: (_id: number | string) => Promise.resolve(0),
-    redeployUrl: (_id: number | string) => '',
+      })
+    },
+    redeployToTaskId: async (id: number | string) => {
+      const deployment = await saasApi.deployments.redeploy(String(id))
+      deploymentCacheById.set(deployment.id, deployment)
+      deploymentCacheByNamespace.set(deployment.namespace, deployment)
+      return deployment.id
+    },
+    redeployUrl: (id: number | string) =>
+      `${BASE}/deployments/${encodeURIComponent(String(id))}/redeploy`,
   },
 
   // ── Env Vars (global scope in SaaS — stubs) ──────────────────────────────
@@ -580,6 +652,7 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
     list: () => saasApi.providerProfiles.list(),
     upsert: (data) => saasApi.providerProfiles.upsert(data),
     test: (id) => saasApi.providerProfiles.test(id),
+    refreshModels: (id) => saasApi.providerProfiles.refreshModels(id),
     delete: (id) => saasApi.providerProfiles.delete(id),
   },
 
@@ -612,7 +685,10 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
     return { ok: true }
   },
 
-  rollback: async (options: { namespace: string }) => ({ ok: true, namespace: options.namespace }),
+  rollback: async (options: { namespace: string }) => ({
+    ok: true,
+    namespace: options.namespace,
+  }),
 
   // ── Activity ─────────────────────────────────────────────────────────────
   activity: {
@@ -643,7 +719,9 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
       manifests: [],
       count: 0,
     }),
-    openclawConfig: async (_options: { config: unknown; agentId: string }) => ({ config: {} }),
+    openclawConfig: async (_options: { config: unknown; agentId: string }) => ({
+      config: {},
+    }),
   },
 
   images: async () => [],

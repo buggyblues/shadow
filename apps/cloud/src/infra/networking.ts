@@ -4,17 +4,19 @@
 
 import * as k8s from '@pulumi/kubernetes'
 import type * as pulumi from '@pulumi/pulumi'
+import { PULUMI_MANAGED_ANNOTATIONS, PULUMI_SKIP_AWAIT_ANNOTATIONS } from './constants.js'
 
 export interface NetworkingOptions {
   agentName: string
   namespace: string | pulumi.Input<string>
   port: number
+  targetPort?: number
   provider: k8s.Provider
   resourceOptions?: pulumi.CustomResourceOptions
 }
 
 export function createNetworking(options: NetworkingOptions) {
-  const { agentName, namespace, port, provider, resourceOptions } = options
+  const { agentName, namespace, port, targetPort, provider, resourceOptions } = options
 
   const service = new k8s.core.v1.Service(
     `${agentName}-svc`,
@@ -26,6 +28,10 @@ export function createNetworking(options: NetworkingOptions) {
           app: 'shadowob-cloud',
           agent: agentName,
         },
+        annotations: {
+          ...PULUMI_MANAGED_ANNOTATIONS,
+          ...PULUMI_SKIP_AWAIT_ANNOTATIONS,
+        },
       },
       spec: {
         selector: {
@@ -36,7 +42,7 @@ export function createNetworking(options: NetworkingOptions) {
           {
             name: 'health',
             port,
-            targetPort: port,
+            targetPort: targetPort ?? port,
             protocol: 'TCP',
           },
         ],

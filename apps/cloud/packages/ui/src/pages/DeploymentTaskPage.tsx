@@ -18,8 +18,8 @@ import { useToast } from '@/stores/toast'
 function getStatusVariant(status: string): 'neutral' | 'success' | 'warning' | 'danger' | 'info' {
   if (status === 'deployed') return 'success'
   if (status === 'failed') return 'danger'
-  if (status === 'running') return 'info'
-  if (status === 'pending') return 'warning'
+  if (status === 'running' || status === 'deploying' || status === 'destroying') return 'info'
+  if (status === 'pending' || status === 'cancelling') return 'warning'
   return 'neutral'
 }
 
@@ -27,7 +27,7 @@ export function DeploymentTaskPage() {
   const { t } = useTranslation()
   const toast = useToast()
   const params = useParams({ strict: false }) as { taskId: string }
-  const taskId = Number(params.taskId)
+  const taskId = params.taskId
   const logRef = useRef<HTMLDivElement>(null)
   const { lines, status: streamStatus, error, connect } = useSSEStream({ maxLines: 4000 })
 
@@ -39,7 +39,7 @@ export function DeploymentTaskPage() {
   } = useQuery({
     queryKey: ['deploy-task', taskId],
     queryFn: () => api.deployTasks.get(taskId),
-    enabled: Number.isInteger(taskId) && taskId > 0,
+    enabled: taskId.trim().length > 0,
     refetchInterval: 2_000,
   })
 
@@ -51,7 +51,7 @@ export function DeploymentTaskPage() {
   }, [data?.url])
 
   useEffect(() => {
-    if (!Number.isInteger(taskId) || taskId <= 0) return
+    if (taskId.trim().length === 0) return
     connect(api.deployTasks.streamUrl(taskId))
   }, [taskId, connect])
 
@@ -73,7 +73,7 @@ export function DeploymentTaskPage() {
     }
   }
 
-  if (!Number.isInteger(taskId) || taskId <= 0) {
+  if (taskId.trim().length === 0) {
     return (
       <div className="p-6">
         <DashboardEmptyState
@@ -110,7 +110,12 @@ export function DeploymentTaskPage() {
     )
   }
 
-  const running = task.status === 'running' || task.status === 'pending'
+  const running =
+    task.status === 'running' ||
+    task.status === 'pending' ||
+    task.status === 'deploying' ||
+    task.status === 'cancelling' ||
+    task.status === 'destroying'
   const success = task.status === 'deployed'
   const failed = task.status === 'failed'
 

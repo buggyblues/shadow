@@ -2,31 +2,38 @@ import { randomUUID } from 'node:crypto'
 import { zValidator } from '@hono/zod-validator'
 import {
   type CostOverviewSummary,
-  collectNamespaceCost,
   collectRuntimeEnvRequirements,
   deleteNamespace,
-  execInPod,
+  execInPodAsync,
   extractRequiredEnvVars,
   listManagedNamespaces,
-  listPods,
+  listPodsAsync,
   listProviderCatalogs,
   loadCloudConfigSchema,
   type NamespaceCostSummary,
+  OPENCLAW_USAGE_COMMANDS,
+  parseOpenClawUsageOutput,
   prepareCloudSaasConfigSnapshot,
-  readPodLogs,
+  readPodLogsAsync,
   sanitizeCloudSaasDeployment,
   spawnPodLogStream,
   summarizeCloudConfigValidation,
   summarizeCostOverview,
   validateCloudSaasConfigSnapshot,
 } from '@shadowob/cloud'
-import { eq, sql } from 'drizzle-orm'
+import { and, desc, eq, ne, sql } from 'drizzle-orm'
 import { type Context, Hono } from 'hono'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
 import { cloudDeployments, cloudTemplates } from '../db/schema'
 import { decrypt, encrypt } from '../lib/kms'
 import { authMiddleware } from '../middleware/auth.middleware'
+import {
+  type LlmProviderApiFormat,
+  normalizeLlmProviderConfig,
+  normalizeLlmProviderModels,
+  parseDiscoveredModelsFromResponse,
+} from '../services/llm-provider-platform'
 
 // ─── Resource tier cost map (Shrimp Coins / month) ──────────────────────────
 
@@ -46,8 +53,10 @@ const PROVIDER_PROFILE_META_KEYS = {
 } as const
 const PROVIDER_PROFILE_META_KEY_SET = new Set<string>(Object.values(PROVIDER_PROFILE_META_KEYS))
 const PROVIDER_PROFILE_MODELS_ENV_KEY = 'SHADOW_PROVIDER_PROFILE_MODELS_JSON'
-const PROVIDER_MODEL_TAGS = ['default', 'fast', 'flash', 'reasoning', 'vision'] as const
+const PROVIDER_MODEL_TAGS = ['default', 'fast', 'flash', 'reasoning', 'vision', 'tools'] as const
 const PROVIDER_MODEL_TAG_SET = new Set<string>(PROVIDER_MODEL_TAGS)
+
+type CloudDeploymentRow = typeof cloudDeployments.$inferSelect
 
 type ProviderCatalogView = Awaited<ReturnType<typeof listProviderCatalogs>>[number]['provider']
 
@@ -79,6 +88,17 @@ type ProviderProfileModelView = {
   }
 }
 
+type ProviderRuntimeProfile = {
+  id: string
+  providerId: string
+  name: string
+  provider: ProviderCatalogView
+  values: Map<string, string>
+  apiKey: { key: string; value: string }
+  baseUrl: string
+  models: ProviderProfileModelView[]
+}
+
 function getPrimarySchema(): Record<string, unknown> {
   return loadCloudConfigSchema()
 }
@@ -95,6 +115,73 @@ function isDeployableTemplateContent(content: unknown): boolean {
 function nonEmptyProcessEnv(key: string): string | undefined {
   const value = process.env[key]
   return value && value.trim() !== '' ? value : undefined
+}
+
+/**
+ * Resolve i18n dict from a template's `content.i18n` field for the given locale.
+ * Falls back to 'en' if the requested locale isn't available.
+ */
+function resolveTemplateI18nDict(
+  content: Record<string, unknown>,
+  locale: string,
+): Record<string, string> {
+  const i18n = content.i18n as Record<string, Record<string, string>> | undefined
+  if (!i18n) return {}
+  const baseLocale = locale.split('-')[0] ?? locale
+  return i18n[locale] ?? (baseLocale !== locale ? i18n[baseLocale] : undefined) ?? i18n.en ?? {}
+}
+
+/**
+ * Resolve a string value that may contain `${i18n:key}` references.
+ */
+function resolveI18nValue(value: string, i18nDict: Record<string, string>): string {
+  const match = /^\$\{i18n:([^}]+)\}$/.exec(value)
+  if (!match?.[1]) return value
+  return i18nDict[match[1]] ?? value
+}
+
+/**
+ * Deep-resolve `${i18n:...}` placeholders in an object's string values.
+ */
+function resolveI18nInObject(obj: unknown, i18nDict: Record<string, string>): unknown {
+  if (typeof obj === 'string') return resolveI18nValue(obj, i18nDict)
+  if (Array.isArray(obj)) return obj.map((item) => resolveI18nInObject(item, i18nDict))
+  if (obj && typeof obj === 'object') {
+    const result: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(obj)) {
+      // Skip the i18n section itself — it's the source, not a target
+      if (key === 'i18n') continue
+      result[key] = resolveI18nInObject(value, i18nDict)
+    }
+    return result
+  }
+  return obj
+}
+
+function localizeTemplateRecord<
+  T extends { name: string; description: string | null; content: unknown },
+>(template: T, locale: string): T {
+  const content = template.content as Record<string, unknown>
+  const i18nDict = resolveTemplateI18nDict(content, locale)
+  const resolvedName = resolveI18nValue(template.name, i18nDict)
+  const finalName =
+    resolvedName === template.name
+      ? (i18nDict.title ?? i18nDict.name ?? template.name)
+      : resolvedName
+  const resolvedDesc = template.description
+    ? resolveI18nValue(template.description, i18nDict)
+    : undefined
+  const finalDesc =
+    resolvedDesc === template.description
+      ? (i18nDict.description ?? template.description)
+      : (resolvedDesc ?? i18nDict.description)
+
+  return {
+    ...template,
+    name: finalName,
+    description: finalDesc ?? null,
+    content: resolveI18nInObject(content, i18nDict),
+  }
 }
 
 function providerProfileScope(profileId: string): string {
@@ -123,6 +210,51 @@ function parseProviderProfileConfig(value: string | undefined): Record<string, u
       : {}
   } catch {
     return {}
+  }
+}
+
+function isMaskedPlaceholderValue(value: unknown): boolean {
+  return typeof value === 'string' && /^[*•●∙·]{3,}$/u.test(value.trim())
+}
+
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+function normalizeProviderBaseUrlValue(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  if (isMaskedPlaceholderValue(value)) return undefined
+  const normalized = normalizeBaseUrl(value)
+  if (!normalized) return undefined
+  return isValidHttpUrl(normalized) ? normalized : undefined
+}
+
+function safeDecryptProviderValue(value: string, scope: string, key: string): string | null {
+  try {
+    return decrypt(value)
+  } catch (err) {
+    console.warn(
+      `[cloud-saas] ignoring unreadable provider env value scope=${scope} key=${key}:`,
+      err instanceof Error ? err.message : err,
+    )
+    return null
+  }
+}
+
+function safeDecryptEnvValue(value: string, scope: string, key: string): string | null {
+  try {
+    return decrypt(value)
+  } catch (err) {
+    console.warn(
+      `[cloud-saas] ignoring unreadable env value scope=${scope} key=${key}:`,
+      err instanceof Error ? err.message : err,
+    )
+    return null
   }
 }
 
@@ -253,20 +385,58 @@ function providerProfileBaseUrl(
   values: Map<string, string>,
   config: Record<string, unknown>,
 ): string | undefined {
-  const configBaseUrl = config.baseUrl
+  const configBaseUrl = normalizeProviderBaseUrlValue(config.baseUrl)
   const envBaseUrl = provider.baseUrlEnvKey ? values.get(provider.baseUrlEnvKey) : undefined
   return normalizeBaseUrl(
-    typeof configBaseUrl === 'string' && configBaseUrl.trim()
-      ? configBaseUrl
-      : envBaseUrl || defaultProviderBaseUrl(provider),
+    configBaseUrl ?? normalizeProviderBaseUrlValue(envBaseUrl) ?? defaultProviderBaseUrl(provider),
   )
+}
+
+function sanitizeStoredProviderProfileConfig(
+  config: Record<string, unknown>,
+): Record<string, unknown> {
+  const normalized = normalizeLlmProviderConfig(config)
+  const baseUrl = normalizeProviderBaseUrlValue(config.baseUrl)
+  return {
+    ...(baseUrl ? { baseUrl } : {}),
+    ...(normalized.apiFormat ? { apiFormat: normalized.apiFormat } : {}),
+    ...(normalized.authType ? { authType: normalized.authType } : {}),
+    ...(normalized.discoveredAt ? { discoveredAt: normalized.discoveredAt } : {}),
+    models: normalizeProviderProfileModels(config),
+  }
+}
+
+function validateProviderProfileConfigForSave(
+  config: Record<string, unknown> | undefined,
+): { ok: true; config: Record<string, unknown> } | { ok: false; error: string } {
+  const raw = config ?? {}
+  const baseUrlValue = typeof raw.baseUrl === 'string' ? raw.baseUrl.trim() : ''
+  if (
+    baseUrlValue &&
+    !isMaskedPlaceholderValue(baseUrlValue) &&
+    !normalizeProviderBaseUrlValue(baseUrlValue)
+  ) {
+    return { ok: false, error: 'Invalid Base URL' }
+  }
+
+  const sanitized = sanitizeStoredProviderProfileConfig(raw)
+  if (normalizeProviderProfileModels(sanitized).length === 0) {
+    return { ok: false, error: 'At least one model is required' }
+  }
+
+  return { ok: true, config: sanitized }
 }
 
 async function testProviderConnection(
   provider: ProviderCatalogView,
   values: Map<string, string>,
   config: Record<string, unknown>,
-): Promise<{ ok: boolean; status?: number; message: string; checkedAt: string }> {
+): Promise<{
+  ok: boolean
+  status?: number
+  message: string
+  checkedAt: string
+}> {
   const checkedAt = new Date().toISOString()
   const apiKey = firstProviderApiKey(provider, values)
   if (!apiKey) {
@@ -284,7 +454,7 @@ async function testProviderConnection(
     let url = `${baseUrl}/models`
     const headers: Record<string, string> = { Accept: 'application/json' }
 
-    if (provider.api === 'google-generative-ai') {
+    if (provider.api === 'google' || provider.api === 'google-generative-ai') {
       url = `${baseUrl}/models?key=${encodeURIComponent(apiKey.value)}`
     } else if (provider.api === 'anthropic-messages') {
       headers['x-api-key'] = apiKey.value
@@ -295,9 +465,20 @@ async function testProviderConnection(
 
     const response = await fetch(url, { headers, signal: controller.signal })
     if (response.ok) {
-      return { ok: true, status: response.status, message: 'Connection succeeded', checkedAt }
+      return {
+        ok: true,
+        status: response.status,
+        message: 'Connection succeeded',
+        checkedAt,
+      }
     }
     const body = await response.text().catch(() => '')
+    if (response.status === 404) {
+      const model = normalizeProviderProfileModels(config)[0]?.id
+      if (model) {
+        return await testProviderModelRequest(provider, baseUrl, apiKey, config, model, checkedAt)
+      }
+    }
     return {
       ok: false,
       status: response.status,
@@ -309,6 +490,167 @@ async function testProviderConnection(
       ok: false,
       message: err instanceof Error ? err.message : 'Connection failed',
       checkedAt,
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function testProviderModelRequest(
+  provider: ProviderCatalogView,
+  baseUrl: string,
+  apiKey: { key: string; value: string },
+  config: Record<string, unknown>,
+  model: string,
+  checkedAt: string,
+): Promise<{
+  ok: boolean
+  status?: number
+  message: string
+  checkedAt: string
+}> {
+  const apiFormat = providerProfileApiFormat(provider, config)
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  }
+  let url: string
+  let body: unknown
+
+  if (apiFormat === 'anthropic') {
+    url = `${baseUrl}/messages`
+    headers['x-api-key'] = apiKey.value
+    headers['anthropic-version'] = '2023-06-01'
+    body = {
+      model,
+      max_tokens: 1,
+      messages: [{ role: 'user', content: 'ping' }],
+    }
+  } else if (apiFormat === 'gemini') {
+    const modelPath = model.startsWith('models/') ? model : `models/${model}`
+    url = `${baseUrl}/${modelPath}:generateContent?key=${encodeURIComponent(apiKey.value)}`
+    body = {
+      contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
+      generationConfig: { maxOutputTokens: 1 },
+    }
+  } else {
+    url = `${baseUrl}/chat/completions`
+    headers.Authorization = `Bearer ${apiKey.value}`
+    body = {
+      model,
+      max_tokens: 1,
+      messages: [{ role: 'user', content: 'ping' }],
+      stream: false,
+    }
+  }
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8_000)
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+    if (response.ok) {
+      return {
+        ok: true,
+        status: response.status,
+        message: 'Connection succeeded',
+        checkedAt,
+      }
+    }
+    const responseBody = await response.text().catch(() => '')
+    return {
+      ok: false,
+      status: response.status,
+      message: responseBody.trim().slice(0, 240) || `Provider returned ${response.status}`,
+      checkedAt,
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : 'Connection failed',
+      checkedAt,
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+function providerProfileApiFormat(
+  provider: ProviderCatalogView,
+  config: Record<string, unknown>,
+): LlmProviderApiFormat {
+  const normalized = normalizeLlmProviderConfig(config)
+  if (normalized.apiFormat) return normalized.apiFormat
+  if (provider.api === 'google' || provider.api === 'google-generative-ai') return 'gemini'
+  return provider.api === 'anthropic' || provider.api === 'anthropic-messages'
+    ? 'anthropic'
+    : 'openai'
+}
+
+async function discoverProviderProfileModels(
+  provider: ProviderCatalogView,
+  values: Map<string, string>,
+  config: Record<string, unknown>,
+): Promise<{
+  ok: boolean
+  status?: number
+  message: string
+  models: ProviderProfileModelView[]
+}> {
+  const apiKey = firstProviderApiKey(provider, values)
+  const apiFormat = providerProfileApiFormat(provider, config)
+  const baseUrl = providerProfileBaseUrl(provider, values, config)
+
+  if (!baseUrl) return { ok: false, message: 'Missing provider base URL', models: [] }
+  if (!apiKey) return { ok: false, message: 'Missing provider API key', models: [] }
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8_000)
+  try {
+    const url =
+      apiFormat === 'anthropic'
+        ? `${baseUrl}/models?limit=100`
+        : apiFormat === 'gemini'
+          ? `${baseUrl}/models${apiKey ? `?key=${encodeURIComponent(apiKey.value)}` : ''}`
+          : `${baseUrl}/models`
+    const headers: Record<string, string> = { Accept: 'application/json' }
+    if (apiKey) {
+      if (apiFormat === 'anthropic') {
+        headers['x-api-key'] = apiKey.value
+        headers['anthropic-version'] = '2023-06-01'
+      } else if (apiFormat === 'openai') {
+        headers.Authorization = `Bearer ${apiKey.value}`
+      }
+    }
+
+    const response = await fetch(url, { headers, signal: controller.signal })
+    if (!response.ok) {
+      const body = await response.text().catch(() => '')
+      return {
+        ok: false,
+        status: response.status,
+        message: body.trim().slice(0, 240) || `Provider returned ${response.status}`,
+        models: [],
+      }
+    }
+
+    const body = await response.json()
+    const models = parseDiscoveredModelsFromResponse(body, apiFormat)
+    return {
+      ok: true,
+      status: response.status,
+      message: `Discovered ${models.length} model(s)`,
+      models,
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : 'Model discovery failed',
+      models: [],
     }
   } finally {
     clearTimeout(timeout)
@@ -343,6 +685,67 @@ function collectProviderProfileIds(
 
   for (const child of Object.values(record)) collectProviderProfileIds(child, out, depth + 1)
   return out
+}
+
+function collectModelProviderSelectors(
+  value: unknown,
+  out = new Set<string>(),
+  depth = 0,
+): Set<string> {
+  if (depth > 32 || !value || typeof value !== 'object') return out
+
+  if (Array.isArray(value)) {
+    for (const item of value) collectModelProviderSelectors(item, out, depth + 1)
+    return out
+  }
+
+  const record = value as Record<string, unknown>
+  if (record.plugin === 'model-provider') {
+    const options = record.options as Record<string, unknown> | undefined
+    for (const key of ['selector', 'tag', 'model']) {
+      const value = options?.[key]
+      if (typeof value === 'string' && value.trim()) out.add(value.trim().toLowerCase())
+    }
+  }
+
+  for (const child of Object.values(record)) collectModelProviderSelectors(child, out, depth + 1)
+  return out
+}
+
+function providerModelMatchesSelector(
+  model: ProviderProfileModelView,
+  profileId: string,
+  selector: string,
+): boolean {
+  const normalized = selector.trim().toLowerCase()
+  if (!normalized) return false
+  if (model.id.toLowerCase() === normalized) return true
+  if (`${profileId}/${model.id}`.toLowerCase() === normalized) return true
+  return (model.tags ?? []).some((tag) => tag.toLowerCase() === normalized)
+}
+
+function selectRuntimeProviderProfiles(
+  profiles: ProviderRuntimeProfile[],
+  selectors: string[],
+): ProviderRuntimeProfile[] {
+  if (profiles.length === 0) return []
+  const wanted = selectors.length > 0 ? selectors : ['default']
+  const selected = new Map<string, ProviderRuntimeProfile>()
+
+  for (const selector of wanted) {
+    const match =
+      profiles.find((profile) =>
+        profile.models.some((model) => providerModelMatchesSelector(model, profile.id, selector)),
+      ) ??
+      profiles.find((profile) =>
+        profile.models.some((model) => providerModelMatchesSelector(model, profile.id, 'default')),
+      ) ??
+      profiles[0]
+
+    if (match) selected.set(match.id, match)
+  }
+
+  return [...selected.values()]
 }
 
 type DeploymentAgentConfig = {
@@ -380,6 +783,132 @@ function getDeploymentAgentNames(deployment: {
   return [deployment.name]
 }
 
+function buildUnavailableNamespaceCost(
+  deployment: {
+    namespace: string
+    name: string
+    agentCount?: number | null
+    configSnapshot?: unknown
+  },
+  message = 'i18n:deployments.costUsageUnavailableMessage',
+): NamespaceCostSummary {
+  const agentNames = getDeploymentAgentNames(deployment)
+  const agents = agentNames.map((agentName) => ({
+    agentName,
+    podName: null,
+    totalUsd: null,
+    billingAmount: null,
+    billingUnit: 'usd' as const,
+    totalTokens: null,
+    providers: [],
+    source: 'unavailable' as const,
+    message,
+  }))
+
+  return {
+    namespace: deployment.namespace,
+    totalUsd: null,
+    billingAmount: null,
+    billingUnit: 'usd',
+    totalTokens: null,
+    agents,
+    availableAgents: 0,
+    unavailableAgents: agents.length,
+    generatedAt: new Date().toISOString(),
+  }
+}
+
+async function collectSaasNamespaceCost(
+  deployment: {
+    namespace: string
+    name: string
+    agentCount?: number | null
+    configSnapshot?: unknown
+  },
+  kubeconfig?: string,
+): Promise<NamespaceCostSummary> {
+  const agentNames = getDeploymentAgentNames(deployment)
+  const pods = await listPodsAsync(deployment.namespace, kubeconfig)
+
+  if (pods.length === 0) {
+    return buildUnavailableNamespaceCost(deployment, 'i18n:deployments.costNoRunningPod')
+  }
+
+  const agents = await Promise.all(
+    agentNames.map(async (agentName) => {
+      const matching = pods.filter((pod) => pod.name.includes(agentName))
+      const candidates = matching.length > 0 ? matching : pods
+      const pod =
+        candidates.find((candidate) => candidate.status === 'Running') ?? candidates[0] ?? null
+
+      if (!pod) {
+        return {
+          agentName,
+          podName: null,
+          totalUsd: null,
+          billingAmount: null,
+          billingUnit: 'usd' as const,
+          totalTokens: null,
+          providers: [],
+          source: 'unavailable' as const,
+          message: 'i18n:deployments.costNoRunningPod',
+        }
+      }
+
+      for (const command of OPENCLAW_USAGE_COMMANDS) {
+        const result = await execInPodAsync({
+          namespace: deployment.namespace,
+          pod: pod.name,
+          container: 'openclaw',
+          command,
+          kubeconfig,
+          timeout: 10_000,
+        })
+        const parsed = parseOpenClawUsageOutput(result.stdout, result.stderr)
+        if (!parsed) continue
+
+        return {
+          agentName,
+          podName: pod.name,
+          totalUsd: parsed.totalUsd,
+          billingAmount: parsed.totalUsd,
+          billingUnit: 'usd' as const,
+          totalTokens: parsed.totalTokens,
+          providers: parsed.providers,
+          source: parsed.source,
+          message: null,
+        }
+      }
+
+      return {
+        agentName,
+        podName: pod.name,
+        totalUsd: null,
+        billingAmount: null,
+        billingUnit: 'usd' as const,
+        totalTokens: null,
+        providers: [],
+        source: 'unavailable' as const,
+        message: 'i18n:deployments.costUsageUnavailableMessage',
+      }
+    }),
+  )
+
+  const totalUsd = sumNullable(agents.map((agent) => agent.totalUsd))
+
+  return {
+    namespace: deployment.namespace,
+    totalUsd,
+    billingAmount: totalUsd,
+    billingUnit: 'usd',
+    totalTokens: sumNullable(agents.map((agent) => agent.totalTokens)),
+    agents,
+    availableAgents: agents.filter((agent) => agent.source !== 'unavailable').length,
+    unavailableAgents: agents.filter((agent) => agent.source === 'unavailable').length,
+    generatedAt: new Date().toISOString(),
+  }
+}
+
 function sumNullable(values: Array<number | null>): number | null {
   const filtered = values.filter((value): value is number => value !== null)
   return filtered.length > 0 ? filtered.reduce((sum, value) => sum + value, 0) : null
@@ -403,13 +932,92 @@ function isVisibleDeploymentStatus(status: string): boolean {
   )
 }
 
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+function newestVisibleDeploymentsByNamespace<
+  T extends {
+    namespace: string
+    status: string
+    updatedAt?: Date | null
+    createdAt?: Date | null
+  },
+>(rows: T[]): T[] {
+  const byNamespace = new Map<string, T>()
+  for (const row of rows) {
+    if (!isVisibleDeploymentStatus(row.status)) continue
+    const existing = byNamespace.get(row.namespace)
+    const rowTime = (row.updatedAt ?? row.createdAt)?.getTime?.() ?? 0
+    const existingTime = (existing?.updatedAt ?? existing?.createdAt)?.getTime?.() ?? 0
+    if (!existing || rowTime >= existingTime) {
+      byNamespace.set(row.namespace, row)
+    }
+  }
+  return [...byNamespace.values()].sort((left, right) => {
+    const leftTime = (left.updatedAt ?? left.createdAt)?.getTime?.() ?? 0
+    const rightTime = (right.updatedAt ?? right.createdAt)?.getTime?.() ?? 0
+    return rightTime - leftTime
+  })
 }
 
-function getBearerToken(authHeader: string | undefined): string | undefined {
-  const match = authHeader?.match(/^Bearer\s+(.+)$/i)
-  return match?.[1]?.trim() || undefined
+async function reconcileUserDeploymentRowsWithCluster(
+  container: AppContainer,
+  userId: string,
+  rows: CloudDeploymentRow[],
+): Promise<CloudDeploymentRow[]> {
+  const namespaces = listManagedNamespaces()
+  if (namespaces === null || namespaces.length === 0) return rows
+
+  const present = new Set(namespaces)
+  const rowsByNamespace = new Map<string, CloudDeploymentRow[]>()
+  for (const row of rows) {
+    const scoped = rowsByNamespace.get(row.namespace) ?? []
+    scoped.push(row)
+    rowsByNamespace.set(row.namespace, scoped)
+  }
+
+  const db = container.resolve('db')
+  const dao = container.resolve('cloudDeploymentDao')
+  const nextRows = [...rows]
+
+  for (const namespace of present) {
+    const scoped = rowsByNamespace.get(namespace) ?? []
+    if (scoped.some((row) => isVisibleDeploymentStatus(row.status))) continue
+
+    const candidate = scoped
+      .filter(
+        (row) =>
+          row.status === 'failed' &&
+          (row.errorMessage === 'orphaned-by-cluster' ||
+            row.errorMessage?.includes('Namespace') ||
+            row.errorMessage?.includes('orphan')),
+      )
+      .sort((left, right) => {
+        const leftTime = (left.updatedAt ?? left.createdAt)?.getTime?.() ?? 0
+        const rightTime = (right.updatedAt ?? right.createdAt)?.getTime?.() ?? 0
+        return rightTime - leftTime
+      })[0]
+    if (!candidate) continue
+
+    const [updated] = await db
+      .update(cloudDeployments)
+      .set({ status: 'deployed', errorMessage: null, updatedAt: new Date() })
+      .where(and(eq(cloudDeployments.id, candidate.id), eq(cloudDeployments.userId, userId)))
+      .returning()
+    if (!updated) continue
+
+    await dao.appendLog(
+      updated.id,
+      `[reconcile] Namespace "${namespace}" exists on the cluster; restored deployment row after server restart`,
+      'info',
+    )
+    const index = nextRows.findIndex((row) => row.id === updated.id)
+    if (index >= 0) nextRows[index] = updated
+    else nextRows.unshift(updated)
+  }
+
+  return nextRows
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function requestOrigin(c: Context): string | undefined {
@@ -417,6 +1025,18 @@ function requestOrigin(c: Context): string | undefined {
   if (!host) return undefined
   const proto = c.req.header('x-forwarded-proto') ?? 'http'
   return `${proto}://${host}`
+}
+
+function getBearerToken(authHeader: string | undefined): string | undefined {
+  const match = authHeader?.match(/^Bearer\s+(.+)$/i)
+  return match?.[1]?.trim() || undefined
+}
+
+function addProviderManagedEnvKeys(keys: Set<string>, provider: ProviderCatalogView): void {
+  keys.add(provider.envKey)
+  for (const alias of provider.envKeyAliases ?? []) keys.add(alias)
+  if (provider.baseUrlEnvKey) keys.add(provider.baseUrlEnvKey)
+  if (provider.modelEnvKey) keys.add(provider.modelEnvKey)
 }
 
 export function createCloudSaasHandler(container: AppContainer) {
@@ -454,7 +1074,11 @@ export function createCloudSaasHandler(container: AppContainer) {
 
     const profiles: ProviderProfileView[] = []
     for (const [scope, scopedVars] of byScope) {
-      const values = new Map(scopedVars.map((v) => [v.key, decrypt(v.encryptedValue)]))
+      const values = new Map<string, string>()
+      for (const variable of scopedVars) {
+        const decrypted = safeDecryptProviderValue(variable.encryptedValue, scope, variable.key)
+        if (decrypted !== null) values.set(variable.key, decrypted)
+      }
       const fallbackId = scope.slice(PROVIDER_PROFILE_SCOPE_PREFIX.length)
       const id = values.get(PROVIDER_PROFILE_META_KEYS.id) ?? fallbackId
       const providerId = values.get(PROVIDER_PROFILE_META_KEYS.providerId) ?? ''
@@ -468,7 +1092,9 @@ export function createCloudSaasHandler(container: AppContainer) {
         name,
         scope,
         enabled,
-        config: parseProviderProfileConfig(values.get(PROVIDER_PROFILE_META_KEYS.configJson)),
+        config: sanitizeStoredProviderProfileConfig(
+          parseProviderProfileConfig(values.get(PROVIDER_PROFILE_META_KEYS.configJson)),
+        ),
         envVars: scopedVars
           .filter((v) => !isProviderProfileMetaKey(v.key))
           .map((v) => ({
@@ -481,6 +1107,67 @@ export function createCloudSaasHandler(container: AppContainer) {
           .filter((value): value is string => Boolean(value))
           .sort()
           .at(-1),
+      })
+    }
+
+    return profiles.sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  async function readProviderRuntimeProfiles(
+    userId: string,
+    profileIds?: string[],
+  ): Promise<ProviderRuntimeProfile[]> {
+    const requestedIds =
+      profileIds && profileIds.length > 0
+        ? new Set(profileIds.map(normalizeProviderProfileId))
+        : null
+    const envDao = container.resolve('cloudEnvVarDao')
+    const vars = await envDao.listByUser(userId)
+    const catalogs = (await listProviderCatalogs()).map((entry) => entry.provider)
+    const byScope = new Map<string, typeof vars>()
+    for (const variable of vars) {
+      if (!variable.scope.startsWith(PROVIDER_PROFILE_SCOPE_PREFIX)) continue
+      const scoped = byScope.get(variable.scope) ?? []
+      scoped.push(variable)
+      byScope.set(variable.scope, scoped)
+    }
+
+    const profiles: ProviderRuntimeProfile[] = []
+    for (const [scope, scopedVars] of byScope) {
+      const values = new Map<string, string>()
+      for (const variable of scopedVars) {
+        const decrypted = safeDecryptProviderValue(variable.encryptedValue, scope, variable.key)
+        if (decrypted !== null) values.set(variable.key, decrypted)
+      }
+
+      const fallbackId = scope.slice(PROVIDER_PROFILE_SCOPE_PREFIX.length)
+      const id = normalizeProviderProfileId(values.get(PROVIDER_PROFILE_META_KEYS.id) ?? fallbackId)
+      if (!id || (requestedIds && !requestedIds.has(id))) continue
+      if (!parseProviderProfileEnabled(values.get(PROVIDER_PROFILE_META_KEYS.enabled))) continue
+
+      const providerId = values.get(PROVIDER_PROFILE_META_KEYS.providerId) ?? ''
+      const provider = catalogs.find((catalog) => catalog.id === providerId)
+      if (!provider) continue
+
+      const rawConfig = parseProviderProfileConfig(
+        values.get(PROVIDER_PROFILE_META_KEYS.configJson),
+      )
+      const config = sanitizeStoredProviderProfileConfig(rawConfig)
+      const apiKey = firstProviderApiKey(provider, values)
+      const baseUrl = providerProfileBaseUrl(provider, values, config)
+      const models = normalizeProviderProfileModels(config)
+      if (!apiKey || !baseUrl || models.length === 0) continue
+
+      const name = values.get(PROVIDER_PROFILE_META_KEYS.name) ?? providerId
+      profiles.push({
+        id,
+        providerId,
+        name,
+        provider,
+        values,
+        apiKey,
+        baseUrl,
+        models,
       })
     }
 
@@ -509,13 +1196,14 @@ export function createCloudSaasHandler(container: AppContainer) {
       (value) => value === '__SAVED__',
     )
     const runtimeEnvRequirements = await collectRuntimeEnvRequirements(configSnapshot)
+    const usesModelProvider = configUsesPlugin(configSnapshot, 'model-provider')
     const explicitProviderProfileIds = [...collectProviderProfileIds(configSnapshot)]
       .map(normalizeProviderProfileId)
       .filter(Boolean)
     const providerProfileIds =
       explicitProviderProfileIds.length > 0
         ? explicitProviderProfileIds
-        : configUsesPlugin(configSnapshot, 'model-provider')
+        : usesModelProvider
           ? (await readProviderProfiles(userId))
               .filter((profile) => profile.enabled)
               .map((p) => p.id)
@@ -531,26 +1219,71 @@ export function createCloudSaasHandler(container: AppContainer) {
       providerProfileIds.length > 0
         ? (await listProviderCatalogs()).map((entry) => entry.provider)
         : []
+    const providerManagedEnvKeys = new Set<string>([PROVIDER_PROFILE_MODELS_ENV_KEY])
+    for (const provider of providerCatalogs)
+      addProviderManagedEnvKeys(providerManagedEnvKeys, provider)
+
+    if (usesModelProvider && providerProfileIds.length > 0) {
+      const runtimeProfiles = await readProviderRuntimeProfiles(userId, providerProfileIds)
+      const selectors = [...collectModelProviderSelectors(configSnapshot)]
+      const selectedProfiles = selectRuntimeProviderProfiles(runtimeProfiles, selectors)
+      if (selectedProfiles.length === 0) {
+        const err = new Error('No enabled provider profile matches the requested model selector')
+        ;(err as { status?: number }).status = 422
+        throw err
+      }
+
+      for (const profile of selectedProfiles) {
+        providerProfileValues.set(profile.apiKey.key, profile.apiKey.value)
+        if (profile.provider.baseUrlEnvKey) {
+          providerProfileValues.set(profile.provider.baseUrlEnvKey, profile.baseUrl)
+        }
+        for (const [key, value] of profile.values) {
+          if (isProviderProfileMetaKey(key)) continue
+          if (key === profile.apiKey.key) continue
+          providerProfileValues.set(key, value)
+        }
+        providerProfileModelSets.push({
+          providerId: profile.providerId,
+          profileId: profile.id,
+          models: profile.models,
+        })
+      }
+    }
+
     if (needsSavedLookup || runtimeEnvRequirements.length > 0 || providerProfileIds.length > 0) {
       const envDao = container.resolve('cloudEnvVarDao')
       const globalVars = await envDao.listByUser(userId, 'global')
       for (const variable of globalVars) {
-        savedValues.set(variable.key, decrypt(variable.encryptedValue))
+        const decrypted = safeDecryptEnvValue(variable.encryptedValue, 'global', variable.key)
+        if (decrypted !== null) savedValues.set(variable.key, decrypted)
       }
       for (const profileId of providerProfileIds) {
+        if (usesModelProvider) continue
         const scopedVars = await envDao.listByUser(userId, providerProfileScope(profileId))
-        const values = new Map(scopedVars.map((v) => [v.key, decrypt(v.encryptedValue)]))
+        const scope = providerProfileScope(profileId)
+        const values = new Map<string, string>()
+        for (const variable of scopedVars) {
+          const decrypted = safeDecryptProviderValue(variable.encryptedValue, scope, variable.key)
+          if (decrypted !== null) values.set(variable.key, decrypted)
+        }
         const providerId = values.get(PROVIDER_PROFILE_META_KEYS.providerId)
         if (!parseProviderProfileEnabled(values.get(PROVIDER_PROFILE_META_KEYS.enabled))) continue
         const provider = providerCatalogs.find((catalog) => catalog.id === providerId)
-        const config = parseProviderProfileConfig(values.get(PROVIDER_PROFILE_META_KEYS.configJson))
-        const baseUrl = config.baseUrl
-        if (provider?.baseUrlEnvKey && typeof baseUrl === 'string' && baseUrl.trim()) {
+        const config = sanitizeStoredProviderProfileConfig(
+          parseProviderProfileConfig(values.get(PROVIDER_PROFILE_META_KEYS.configJson)),
+        )
+        const baseUrl = provider ? providerProfileBaseUrl(provider, values, config) : undefined
+        if (provider?.baseUrlEnvKey && baseUrl) {
           providerProfileValues.set(provider.baseUrlEnvKey, baseUrl)
         }
         const models = normalizeProviderProfileModels(config)
         if (provider && models.length > 0) {
-          providerProfileModelSets.push({ providerId: provider.id, profileId, models })
+          providerProfileModelSets.push({
+            providerId: provider.id,
+            profileId,
+            models,
+          })
         }
         const model = config.modelId ?? config.defaultModel ?? config.model
         if (provider?.modelEnvKey && typeof model === 'string' && model.trim()) {
@@ -573,17 +1306,33 @@ export function createCloudSaasHandler(container: AppContainer) {
     const explicitKeys = new Set(Object.keys(inputEnvVars ?? {}))
     for (const key of runtimeEnvRequirements) {
       if (explicitKeys.has(key)) continue
+      if (
+        usesModelProvider &&
+        providerProfileIds.length > 0 &&
+        providerManagedEnvKeys.has(key) &&
+        !providerProfileValues.has(key)
+      ) {
+        continue
+      }
       const value =
         providerProfileValues.get(key) ?? savedValues.get(key) ?? nonEmptyProcessEnv(key)
       if (value !== undefined) envVars[key] = value
     }
 
     for (const [key, value] of providerProfileValues) {
-      if (!explicitKeys.has(key) && value !== undefined) envVars[key] = value
+      const shouldOverrideExplicit =
+        usesModelProvider && providerManagedEnvKeys.has(key) && value !== undefined
+      if ((!explicitKeys.has(key) || shouldOverrideExplicit) && value !== undefined) {
+        envVars[key] = value
+      }
     }
 
     for (const [key, value] of Object.entries(inputEnvVars ?? {})) {
       if (typeof value !== 'string') continue
+
+      if (usesModelProvider && providerManagedEnvKeys.has(key) && providerProfileValues.has(key)) {
+        continue
+      }
 
       if (value === '__SAVED__') {
         const savedValue = savedValues.get(key)
@@ -608,7 +1357,10 @@ export function createCloudSaasHandler(container: AppContainer) {
       return c.json(summarizeCloudConfigValidation(config))
     } catch (err) {
       return c.json(
-        { ok: false, error: err instanceof Error ? err.message : 'Invalid request' },
+        {
+          ok: false,
+          error: err instanceof Error ? err.message : 'Invalid request',
+        },
         400,
       )
     }
@@ -617,11 +1369,12 @@ export function createCloudSaasHandler(container: AppContainer) {
   /**
    * GET /api/cloud-saas/templates
    * List all approved templates (official + community).
-   * Supports optional `category` and `q` (search) query params.
+   * Supports optional `category`, `q` (search), and `locale` query params.
    */
   h.get('/templates', async (c) => {
     const category = c.req.query('category')
     const q = c.req.query('q')?.toLowerCase()
+    const locale = c.req.query('locale') ?? 'en'
     const dao = container.resolve('cloudTemplateDao')
     let templates = (await dao.listApproved()).filter((template) =>
       isDeployableTemplateContent(template.content),
@@ -629,15 +1382,19 @@ export function createCloudSaasHandler(container: AppContainer) {
     if (category) {
       templates = templates.filter((t) => t.category === category)
     }
+    const localized = templates.map((t) => localizeTemplateRecord(t, locale))
     if (q) {
-      templates = templates.filter(
-        (t) =>
-          t.name.toLowerCase().includes(q) ||
-          (t.description ?? '').toLowerCase().includes(q) ||
-          (t.tags as string[] | null)?.some((tag) => tag.toLowerCase().includes(q)),
+      return c.json(
+        localized.filter(
+          (t) =>
+            t.slug.toLowerCase().includes(q) ||
+            t.name.toLowerCase().includes(q) ||
+            (t.description ?? '').toLowerCase().includes(q) ||
+            (t.tags as string[] | null)?.some((tag) => tag.toLowerCase().includes(q)),
+        ),
       )
     }
-    return c.json(templates)
+    return c.json(localized)
   })
 
   /**
@@ -647,12 +1404,12 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.get('/templates/mine', async (c) => {
     const user = c.get('user') as { userId: string }
     const db = container.resolve('db')
-    const { eq, and, ne } = await import('drizzle-orm')
     const templates = await db
       .select()
       .from(cloudTemplates)
       .where(and(eq(cloudTemplates.authorId, user.userId), ne(cloudTemplates.source, 'official')))
-      .orderBy(cloudTemplates.updatedAt)
+      .orderBy(desc(cloudTemplates.updatedAt))
+      .limit(100)
     return c.json(templates)
   })
 
@@ -686,6 +1443,7 @@ export function createCloudSaasHandler(container: AppContainer) {
    */
   h.get('/templates/:slug', async (c) => {
     const slug = c.req.param('slug')
+    const locale = c.req.query('locale') ?? 'en'
     const dao = container.resolve('cloudTemplateDao')
     const template = await dao.findBySlug(slug)
     if (!template || template.reviewStatus !== 'approved') {
@@ -694,7 +1452,7 @@ export function createCloudSaasHandler(container: AppContainer) {
     if (!isDeployableTemplateContent(template.content)) {
       return c.json({ ok: false, error: 'Template is not deployable' }, 422)
     }
-    return c.json(template)
+    return c.json(localizeTemplateRecord(template, locale))
   })
 
   h.get('/templates/:slug/env-refs', async (c) => {
@@ -707,7 +1465,10 @@ export function createCloudSaasHandler(container: AppContainer) {
     if (!isDeployableTemplateContent(template.content)) {
       return c.json({ ok: false, error: 'Template is not deployable' }, 422)
     }
-    return c.json({ template: slug, requiredEnvVars: extractRequiredEnvVars(template.content) })
+    return c.json({
+      template: slug,
+      requiredEnvVars: extractRequiredEnvVars(template.content),
+    })
   })
 
   /**
@@ -802,7 +1563,9 @@ export function createCloudSaasHandler(container: AppContainer) {
         .update(cloudTemplates)
         .set({
           ...(input.name !== undefined && { name: input.name }),
-          ...(input.description !== undefined && { description: input.description }),
+          ...(input.description !== undefined && {
+            description: input.description,
+          }),
           ...(input.content !== undefined && { content: input.content }),
           ...(input.tags !== undefined && { tags: input.tags }),
           ...(input.category !== undefined && { category: input.category }),
@@ -892,22 +1655,31 @@ export function createCloudSaasHandler(container: AppContainer) {
     const limit = Math.min(Number(c.req.query('limit')) || 50, 100)
     const offset = Math.max(Number(c.req.query('offset')) || 0, 0)
     const includeOrphans = c.req.query('includeOrphans') === '1'
+    const includeHistory = c.req.query('includeHistory') === '1'
     const db = container.resolve('db')
     const rows = await db
       .select()
       .from(cloudDeployments)
       .where(eq(cloudDeployments.userId, user.userId))
-      .orderBy(cloudDeployments.createdAt)
+      .orderBy(desc(cloudDeployments.updatedAt))
       .limit(limit)
       .offset(offset)
 
-    const sanitizedRows = rows.map((row) => sanitizeCloudSaasDeployment(row))
+    const reconciledRows = await reconcileUserDeploymentRowsWithCluster(
+      container,
+      user.userId,
+      rows,
+    )
+    const visibleRows = newestVisibleDeploymentsByNamespace(reconciledRows)
+    const sanitizedRows = (includeHistory ? reconciledRows : visibleRows).map((row) =>
+      sanitizeCloudSaasDeployment(row),
+    )
 
     if (!includeOrphans) {
       return c.json(sanitizedRows)
     }
 
-    const known = new Set(rows.map((r) => r.namespace))
+    const known = new Set(visibleRows.map((row) => row.namespace))
     // Reconcile only against the platform default cluster — BYOK clusters
     // would require iterating users' clusters and decrypting each kubeconfig,
     // which is too heavy for a list endpoint. Orphans on BYOK are detected
@@ -928,24 +1700,22 @@ export function createCloudSaasHandler(container: AppContainer) {
       .select()
       .from(cloudDeployments)
       .where(eq(cloudDeployments.userId, user.userId))
-      .orderBy(cloudDeployments.createdAt)
+      .orderBy(desc(cloudDeployments.updatedAt))
 
-    const visibleRows = rows.filter((row) => isVisibleDeploymentStatus(row.status))
+    const visibleRows = newestVisibleDeploymentsByNamespace(rows)
     const summaries = await Promise.all(
-      visibleRows.map(async (deployment) => {
-        const kubeconfig = (await resolveKubeconfig(deployment)) ?? undefined
-        return collectNamespaceCost({
-          namespace: deployment.namespace,
-          agentNames: getDeploymentAgentNames(deployment),
-          billingAmount: deployment.monthlyCost ?? null,
-          billingUnit: 'shrimp',
-          runtime: { listPods, execInPod },
-          kubeconfig,
-        })
+      visibleRows.map(async (row) => {
+        try {
+          const kubeconfig = (await resolveKubeconfig(row)) ?? undefined
+          return await collectSaasNamespaceCost(row, kubeconfig)
+        } catch (err) {
+          console.warn('[cloud-saas] failed to collect deployment costs:', err)
+          return buildUnavailableNamespaceCost(row)
+        }
       }),
     )
 
-    const overview: CostOverviewSummary = summarizeCostOverview(summaries, 'shrimp')
+    const overview: CostOverviewSummary = summarizeCostOverview(summaries, 'usd')
 
     return c.json(overview)
   })
@@ -970,15 +1740,14 @@ export function createCloudSaasHandler(container: AppContainer) {
     const deployment = await dao.findById(id, user.userId)
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
 
-    const kubeconfig = (await resolveKubeconfig(deployment)) ?? undefined
-    const summary: NamespaceCostSummary = collectNamespaceCost({
-      namespace: deployment.namespace,
-      agentNames: getDeploymentAgentNames(deployment),
-      billingAmount: deployment.monthlyCost ?? null,
-      billingUnit: 'shrimp',
-      runtime: { listPods, execInPod },
-      kubeconfig,
-    })
+    let summary: NamespaceCostSummary
+    try {
+      const kubeconfig = (await resolveKubeconfig(deployment)) ?? undefined
+      summary = await collectSaasNamespaceCost(deployment, kubeconfig)
+    } catch (err) {
+      console.warn('[cloud-saas] failed to collect namespace costs:', err)
+      summary = buildUnavailableNamespaceCost(deployment)
+    }
 
     return c.json(summary)
   })
@@ -1043,111 +1812,153 @@ export function createCloudSaasHandler(container: AppContainer) {
       const baseCost = template.baseCost ?? 0
       const monthlyCost = (TIER_COST[input.resourceTier] ?? 0) + baseCost
 
-      // Deduct Shrimp Coins
-      const walletService = container.resolve('walletService')
-      const deployRefId = crypto.randomUUID()
-      let charged = false
-      let deploymentId: string | null = null
+      // Get or use platform cluster, then reserve the namespace at the
+      // deployment-instance level. A template can be deployed multiple times,
+      // but each live instance must own a distinct namespace.
+      const clusterDao = container.resolve('cloudClusterDao')
+      const clusters = await clusterDao.listByUser(user.userId)
+      const platformCluster = clusters.find((cl) => cl.isPlatform) ?? null
+      const deploymentDao = container.resolve('cloudDeploymentDao')
+      const operationScope = {
+        userId: user.userId,
+        clusterId: platformCluster?.id ?? null,
+        namespace: input.namespace,
+      }
+      const namespaceLockAcquired = await deploymentDao.tryAcquireOperationLock(operationScope)
+      if (!namespaceLockAcquired) {
+        return c.json({ ok: false, error: 'Deployment namespace is currently busy' }, 409)
+      }
 
       try {
-        await walletService.debit(
-          user.userId,
-          monthlyCost,
-          deployRefId,
-          'cloud_deploy',
-          `部署 ${template.name} (${input.resourceTier})`,
-        )
-        charged = true
-
-        // Get or use platform cluster
-        const clusterDao = container.resolve('cloudClusterDao')
-        const clusters = await clusterDao.listByUser(user.userId)
-        const platformCluster = clusters.find((cl) => cl.isPlatform) ?? null
-
-        // Create deployment record
-        const deploymentDao = container.resolve('cloudDeploymentDao')
-        const deployment = await deploymentDao.create({
+        const existingInstance = await deploymentDao.findLatestCurrentInNamespace({
           userId: user.userId,
           clusterId: platformCluster?.id ?? null,
           namespace: input.namespace,
-          name: input.name,
-          agentCount: input.agentCount,
-          configSnapshot: storedConfigSnapshot,
         })
-
-        if (!deployment) {
-          throw new Error('Failed to create deployment')
+        if (existingInstance) {
+          return c.json(
+            {
+              ok: false,
+              error:
+                'A deployment already owns this namespace. Redeploy the existing instance or choose another namespace.',
+            },
+            409,
+          )
         }
-        deploymentId = deployment.id
 
-        // Set SaaS fields
-        const [updated] = await db
-          .update(cloudDeployments)
-          .set({
-            templateSlug: input.templateSlug,
-            resourceTier: input.resourceTier,
+        // Deduct Shrimp Coins
+        const walletService = container.resolve('walletService')
+        const deployRefId = crypto.randomUUID()
+        let charged = false
+        let deploymentId: string | null = null
+
+        try {
+          await walletService.debit(
+            user.userId,
             monthlyCost,
-            saasMode: true,
+            deployRefId,
+            'cloud_deploy',
+            `部署 ${template.name} (${input.resourceTier})`,
+          )
+          charged = true
+
+          // Create deployment record
+          const deployment = await deploymentDao.create({
+            userId: user.userId,
+            clusterId: platformCluster?.id ?? null,
+            namespace: input.namespace,
+            name: input.name,
+            agentCount: input.agentCount,
+            configSnapshot: storedConfigSnapshot,
           })
-          .where(eq(cloudDeployments.id, deployment.id))
-          .returning()
 
-        if (!updated) {
-          throw new Error('Failed to finalize deployment metadata')
-        }
-
-        // Increment template deploy_count
-        await db
-          .update(cloudTemplates)
-          .set({ deployCount: sql`${cloudTemplates.deployCount} + 1` })
-          .where(eq(cloudTemplates.slug, input.templateSlug))
-
-        const activityDao = container.resolve('cloudActivityDao')
-        await activityDao.log({
-          userId: user.userId,
-          type: 'deploy',
-          namespace: input.namespace,
-          meta: { templateSlug: input.templateSlug, resourceTier: input.resourceTier, monthlyCost },
-        })
-
-        return c.json(sanitizeCloudSaasDeployment(updated), 201)
-      } catch (err) {
-        if (deploymentId) {
-          try {
-            await db.delete(cloudDeployments).where(eq(cloudDeployments.id, deploymentId))
-          } catch (cleanupErr) {
-            console.error(
-              '[cloud-saas] failed to clean up deployment after create error:',
-              cleanupErr,
-            )
+          if (!deployment) {
+            throw new Error('Failed to create deployment')
           }
-        }
+          deploymentId = deployment.id
 
-        if (charged) {
-          try {
-            await walletService.refund(
-              user.userId,
+          // Set SaaS fields
+          const [updated] = await db
+            .update(cloudDeployments)
+            .set({
+              templateSlug: input.templateSlug,
+              resourceTier: input.resourceTier,
               monthlyCost,
-              deployRefId,
-              'cloud_deploy',
-              `部署退款 ${template.name} (${input.resourceTier})`,
-            )
-          } catch (refundErr) {
-            console.error('[cloud-saas] failed to refund wallet after create error:', refundErr)
-          }
-        }
+              saasMode: true,
+            })
+            .where(eq(cloudDeployments.id, deployment.id))
+            .returning()
 
-        const status =
-          typeof (err as { status?: number }).status === 'number'
-            ? (err as { status: number }).status
-            : 500
-        return c.json(
-          {
-            ok: false,
-            error: err instanceof Error ? err.message : 'Failed to create deployment',
-          },
-          { status: status as 400 | 404 | 409 | 422 | 500 },
-        )
+          if (!updated) {
+            throw new Error('Failed to finalize deployment metadata')
+          }
+
+          // Increment template deploy_count
+          await db
+            .update(cloudTemplates)
+            .set({ deployCount: sql`${cloudTemplates.deployCount} + 1` })
+            .where(eq(cloudTemplates.slug, input.templateSlug))
+
+          const activityDao = container.resolve('cloudActivityDao')
+          await activityDao.log({
+            userId: user.userId,
+            type: 'deploy',
+            namespace: input.namespace,
+            meta: {
+              templateSlug: input.templateSlug,
+              resourceTier: input.resourceTier,
+              monthlyCost,
+            },
+          })
+
+          return c.json(sanitizeCloudSaasDeployment(updated), 201)
+        } catch (err) {
+          if (deploymentId) {
+            try {
+              const deploymentDao = container.resolve('cloudDeploymentDao')
+              await deploymentDao.updateStatus(
+                deploymentId,
+                'failed',
+                err instanceof Error ? err.message : 'Failed to create deployment',
+              )
+              await deploymentDao.appendLog(
+                deploymentId,
+                `[error] ${err instanceof Error ? err.message : String(err)}`,
+                'error',
+              )
+            } catch (cleanupErr) {
+              console.error('[cloud-saas] failed to persist deployment create error:', cleanupErr)
+            }
+          }
+
+          if (charged) {
+            try {
+              await walletService.refund(
+                user.userId,
+                monthlyCost,
+                deployRefId,
+                'cloud_deploy',
+                `部署退款 ${template.name} (${input.resourceTier})`,
+              )
+            } catch (refundErr) {
+              console.error('[cloud-saas] failed to refund wallet after create error:', refundErr)
+            }
+          }
+
+          const status =
+            typeof (err as { status?: number }).status === 'number'
+              ? (err as { status: number }).status
+              : 500
+          return c.json(
+            {
+              ok: false,
+              error: err instanceof Error ? err.message : 'Failed to create deployment',
+            },
+            { status: status as 400 | 404 | 409 | 422 | 500 },
+          )
+        }
+      } finally {
+        await deploymentDao.releaseOperationLock(operationScope).catch(() => {})
       }
     },
   )
@@ -1162,15 +1973,48 @@ export function createCloudSaasHandler(container: AppContainer) {
     const dao = container.resolve('cloudDeploymentDao')
     const deployment = await dao.findById(id, user.userId)
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
-    await dao.updateStatus(id, 'destroying')
-    const activityDao = container.resolve('cloudActivityDao')
-    await activityDao.log({
-      userId: user.userId,
-      type: 'destroy',
-      namespace: deployment.namespace,
-      meta: { deploymentId: id },
-    })
-    return c.json({ ok: true })
+
+    if (!isVisibleDeploymentStatus(deployment.status)) {
+      return c.json(
+        { ok: false, error: `Cannot destroy deployment in status "${deployment.status}"` },
+        422,
+      )
+    }
+
+    const operationLockAcquired = await dao.tryAcquireOperationLock(deployment)
+    if (!operationLockAcquired) {
+      return c.json({ ok: false, error: 'Deployment namespace is currently busy' }, 409)
+    }
+
+    try {
+      const current = await dao.findLatestCurrentInNamespace({
+        userId: user.userId,
+        clusterId: deployment.clusterId,
+        namespace: deployment.namespace,
+      })
+      if (!current || current.id !== deployment.id) {
+        return c.json(
+          {
+            ok: false,
+            error:
+              'Cannot destroy a historical deployment. Destroy the current deployment instance.',
+          },
+          409,
+        )
+      }
+
+      await dao.updateStatus(id, 'destroying')
+      const activityDao = container.resolve('cloudActivityDao')
+      await activityDao.log({
+        userId: user.userId,
+        type: 'destroy',
+        namespace: deployment.namespace,
+        meta: { deploymentId: id },
+      })
+      return c.json({ ok: true })
+    } finally {
+      await dao.releaseOperationLock(deployment).catch(() => {})
+    }
   })
 
   /**
@@ -1187,7 +2031,10 @@ export function createCloudSaasHandler(container: AppContainer) {
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
     if (deployment.status !== 'pending' && deployment.status !== 'deploying') {
       return c.json(
-        { ok: false, error: `Cannot cancel deployment in status "${deployment.status}"` },
+        {
+          ok: false,
+          error: `Cannot cancel deployment in status "${deployment.status}"`,
+        },
         422,
       )
     }
@@ -1197,68 +2044,105 @@ export function createCloudSaasHandler(container: AppContainer) {
   })
 
   /**
-   * POST /api/cloud-saas/deployments/:id/scale
-   * Scale a deployment to a new agent count.
-   * Updates agentCount in DB and re-enqueues the deployment so the worker
-   * runs a Pulumi update to reconcile the desired agent count.
+   * POST /api/cloud-saas/deployments/:id/redeploy
+   * Re-enqueue the same namespace/config as a new deployment history entry.
+   * Redeploy is operational, not a fresh purchase, so it does not debit wallet.
    */
-  h.post(
-    '/deployments/:id/scale',
-    zValidator('json', z.object({ agentCount: z.number().int().min(0).max(50) })),
-    async (c) => {
-      const user = c.get('user') as { userId: string }
-      const id = c.req.param('id')
-      const { agentCount } = c.req.valid('json')
-      const dao = container.resolve('cloudDeploymentDao')
-      const deployment = await dao.findById(id, user.userId)
-      if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
-      if (deployment.status === 'deploying' || deployment.status === 'destroying') {
-        return c.json({ ok: false, error: 'Deployment is currently in progress' }, 422)
+  h.post('/deployments/:id/redeploy', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const id = c.req.param('id')
+    const dao = container.resolve('cloudDeploymentDao')
+    const deployment = await dao.findById(id, user.userId)
+    if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+    if (deployment.status === 'destroyed') {
+      return c.json({ ok: false, error: 'Destroyed deployments cannot be redeployed' }, 422)
+    }
+    if (
+      deployment.status === 'pending' ||
+      deployment.status === 'deploying' ||
+      deployment.status === 'cancelling' ||
+      deployment.status === 'destroying'
+    ) {
+      return c.json({ ok: false, error: 'Deployment is currently in progress' }, 422)
+    }
+    const operationLockAcquired = await dao.tryAcquireOperationLock(deployment)
+    if (!operationLockAcquired) {
+      return c.json({ ok: false, error: 'Deployment namespace is currently busy' }, 409)
+    }
+    try {
+      const current = await dao.findLatestCurrentInNamespace({
+        userId: user.userId,
+        clusterId: deployment.clusterId,
+        namespace: deployment.namespace,
+      })
+      if (current && current.id !== deployment.id) {
+        return c.json(
+          {
+            ok: false,
+            error:
+              'Cannot redeploy a historical deployment. Redeploy the current deployment instance.',
+          },
+          409,
+        )
+      }
+      const activeOperation = await dao.findActiveOperationInNamespace({
+        userId: user.userId,
+        clusterId: deployment.clusterId,
+        namespace: deployment.namespace,
+        excludeId: deployment.id,
+      })
+      if (activeOperation) {
+        return c.json({ ok: false, error: 'Deployment namespace is currently busy' }, 409)
+      }
+      if (!deployment.configSnapshot || typeof deployment.configSnapshot !== 'object') {
+        return c.json({ ok: false, error: 'Deployment has no config snapshot to redeploy' }, 422)
       }
 
-      // Patch the configSnapshot to reflect the new agentCount if possible
-      let configSnapshot = deployment.configSnapshot as Record<string, unknown> | null
-      if (configSnapshot && typeof configSnapshot === 'object') {
-        const deployments = configSnapshot.deployments as Record<string, unknown> | undefined
-        if (deployments && Array.isArray(deployments.agents)) {
-          // Set replicas on all agents (Pulumi infra program reads this)
-          configSnapshot = {
-            ...configSnapshot,
-            deployments: {
-              ...deployments,
-              agents: (deployments.agents as Array<Record<string, unknown>>).map((agent) => ({
-                ...agent,
-                replicas: agentCount,
-              })),
-            },
-          }
-        }
+      const next = await dao.create({
+        userId: user.userId,
+        clusterId: deployment.clusterId,
+        namespace: deployment.namespace,
+        name: deployment.name,
+        agentCount: deployment.agentCount,
+        configSnapshot: deployment.configSnapshot,
+      })
+      if (!next) {
+        return c.json({ ok: false, error: 'Failed to create redeployment' }, 500)
       }
 
       const db = container.resolve('db')
       const [updated] = await db
         .update(cloudDeployments)
         .set({
-          agentCount,
-          configSnapshot: configSnapshot ?? deployment.configSnapshot,
-          status: 'pending', // re-enqueue for worker to apply via Pulumi
+          templateSlug: deployment.templateSlug,
+          resourceTier: deployment.resourceTier,
+          monthlyCost: deployment.monthlyCost,
+          saasMode: deployment.saasMode,
           updatedAt: new Date(),
         })
-        .where(eq(cloudDeployments.id, id))
+        .where(eq(cloudDeployments.id, next.id))
         .returning()
+
+      await dao.appendLog(next.id, `[redeploy] Recreated from deployment ${deployment.id}`, 'info')
+
       const activityDao = container.resolve('cloudActivityDao')
       await activityDao.log({
         userId: user.userId,
-        type: 'scale',
+        type: 'deploy',
         namespace: deployment.namespace,
-        meta: { deploymentId: id, agentCount },
+        meta: {
+          deploymentId: next.id,
+          redeployFrom: deployment.id,
+          templateSlug: deployment.templateSlug,
+          resourceTier: deployment.resourceTier,
+        },
       })
-      if (!updated) {
-        return c.json({ ok: false, error: 'Failed to update deployment' }, 500)
-      }
-      return c.json(sanitizeCloudSaasDeployment(updated))
-    },
-  )
+
+      return c.json(sanitizeCloudSaasDeployment(updated ?? next), 201)
+    } finally {
+      await dao.releaseOperationLock(deployment).catch(() => {})
+    }
+  })
 
   /**
    * GET /api/cloud-saas/deployments/:id/logs
@@ -1287,7 +2171,14 @@ export function createCloudSaasHandler(container: AppContainer) {
             while (!c.req.raw.signal.aborted) {
               const logs = await dao.getLogs(id)
               for (const log of logs.slice(sentCount)) {
-                send({ level: log.level, message: log.message, createdAt: log.createdAt }, 'log')
+                send(
+                  {
+                    level: log.level,
+                    message: log.message,
+                    createdAt: log.createdAt,
+                  },
+                  'log',
+                )
               }
               sentCount = logs.length
 
@@ -1317,7 +2208,9 @@ export function createCloudSaasHandler(container: AppContainer) {
             }
           } catch (err) {
             send(
-              { error: err instanceof Error ? err.message : 'Failed to stream deployment logs' },
+              {
+                error: err instanceof Error ? err.message : 'Failed to stream deployment logs',
+              },
               'error',
             )
           } finally {
@@ -1378,12 +2271,15 @@ export function createCloudSaasHandler(container: AppContainer) {
     const vars = await envDao.listByUser(user.userId, deploymentId)
     const found = vars.find((v) => v.key === key)
     if (!found) return c.json({ ok: false, error: 'Not found' }, 404)
-    const { decrypt } = await import('../lib/kms')
+    const value = safeDecryptEnvValue(found.encryptedValue, deploymentId, found.key)
+    if (value === null) {
+      return c.json({ ok: false, error: 'Env var cannot be decrypted' }, 422)
+    }
     return c.json({
       envVar: {
         scope: deploymentId,
         key: found.key,
-        value: decrypt(found.encryptedValue),
+        value,
         isSecret: true,
         groupName: found.groupId ? (groupNames.get(found.groupId) ?? 'default') : 'default',
       },
@@ -1426,7 +2322,7 @@ export function createCloudSaasHandler(container: AppContainer) {
 
     if (agentParam || podParam) {
       const kubeconfig = (await resolveKubeconfig(deployment)) ?? undefined
-      const pods = listPods(deployment.namespace, kubeconfig)
+      const pods = await listPodsAsync(deployment.namespace, kubeconfig)
       let podName = podParam
       if (!podName && agentParam) {
         podName = pods.find((pod) => pod.name.includes(agentParam))?.name
@@ -1441,13 +2337,26 @@ export function createCloudSaasHandler(container: AppContainer) {
 
       try {
         const requestedTail = page * limit
-        const allLines = readPodLogs({
-          namespace: deployment.namespace,
-          pod: podName,
-          tail: requestedTail,
-          timestamps: true,
-          kubeconfig,
-        })
+        const allLines = (
+          await readPodLogsAsync({
+            namespace: deployment.namespace,
+            pod: podName,
+            container: 'openclaw',
+            tail: requestedTail,
+            timestamps: true,
+            kubeconfig,
+            timeout: 5_000,
+          }).catch(() =>
+            readPodLogsAsync({
+              namespace: deployment.namespace,
+              pod: podName,
+              tail: requestedTail,
+              timestamps: true,
+              kubeconfig,
+              timeout: 5_000,
+            }),
+          )
+        )
           .split('\n')
           .map((line) => line.trimEnd())
           .filter(Boolean)
@@ -1465,7 +2374,29 @@ export function createCloudSaasHandler(container: AppContainer) {
           hasMore: allLines.length >= requestedTail,
         })
       } catch (err) {
-        return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 500)
+        const logs = await dao.getLogs(id)
+        const lines = logs.map((l) =>
+          l.level ? `[${l.level.toUpperCase()}] ${l.message}` : l.message,
+        )
+        if (lines.length > 0) {
+          return c.json({
+            namespace: deployment.namespace,
+            agent: agentParam ?? podName,
+            podName,
+            page,
+            limit,
+            lines: lines.slice(-limit),
+            hasMore: lines.length > limit,
+            warning: err instanceof Error ? err.message : String(err),
+          })
+        }
+        return c.json(
+          {
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          },
+          500,
+        )
       }
     }
 
@@ -1510,7 +2441,7 @@ export function createCloudSaasHandler(container: AppContainer) {
     const deployment = await dao.findById(id, user.userId)
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
     const kubeconfig = (await resolveKubeconfig(deployment)) ?? undefined
-    const pods = listPods(deployment.namespace, kubeconfig)
+    const pods = await listPodsAsync(deployment.namespace, kubeconfig)
     return c.json({ pods })
   })
 
@@ -1536,7 +2467,7 @@ export function createCloudSaasHandler(container: AppContainer) {
 
     // If no pod is specified, pick the first running pod in the namespace.
     let pod: string | undefined = podParam
-    const pods = listPods(deployment.namespace, kubeconfig)
+    const pods = await listPodsAsync(deployment.namespace, kubeconfig)
     if (!pod && agentParam) {
       pod = pods.find((item) => item.name.includes(agentParam))?.name ?? undefined
     }
@@ -1559,25 +2490,56 @@ export function createCloudSaasHandler(container: AppContainer) {
           const { proc, cleanup } = spawnPodLogStream({
             namespace: deployment.namespace,
             pod: pod as string,
-            container: containerParam,
+            container: containerParam ?? 'openclaw',
             follow: true,
             tail,
             kubeconfig,
           })
 
           let stdoutBuf = ''
+          let stdoutLines = 0
+          let stderrText = ''
           proc.stdout?.on('data', (chunk: Buffer) => {
             stdoutBuf += chunk.toString('utf-8')
             const lines = stdoutBuf.split('\n')
             stdoutBuf = lines.pop() ?? ''
             for (const line of lines) {
-              if (line.length > 0) send({ stream: 'stdout', line })
+              if (line.length > 0) {
+                stdoutLines += 1
+                send({ stream: 'stdout', line })
+              }
             }
           })
           proc.stderr?.on('data', (chunk: Buffer) => {
-            send({ stream: 'stderr', line: chunk.toString('utf-8').trimEnd() })
+            stderrText += chunk.toString('utf-8')
           })
-          proc.on('close', (code) => {
+          proc.on('close', async (code) => {
+            if (stdoutLines === 0 && code !== 0) {
+              try {
+                const snapshot = await readPodLogsAsync({
+                  namespace: deployment.namespace,
+                  pod: pod as string,
+                  container: containerParam ?? 'openclaw',
+                  tail,
+                  timestamps: true,
+                  kubeconfig,
+                  timeout: 5_000,
+                })
+                for (const line of snapshot.split('\n').filter(Boolean)) {
+                  send({ stream: 'stdout', line })
+                }
+              } catch {
+                send(
+                  {
+                    stream: 'stderr',
+                    line: stderrText.trim() || 'i18n:deployments.liveLogsUnavailableTransport',
+                  },
+                  'warning',
+                )
+              }
+            } else if (stderrText.trim()) {
+              send({ stream: 'stderr', line: stderrText.trim() }, 'warning')
+            }
             send({ exitCode: code ?? 0 }, 'end')
             cleanup()
             controller.close()
@@ -1635,7 +2597,10 @@ export function createCloudSaasHandler(container: AppContainer) {
     // Bypass the normal "pending → deploying → deployed" pipeline.
     await dao.updateStatus(created.id, 'deployed')
     await dao.appendLog(created.id, '[reconcile] Adopted orphan namespace', 'info')
-    return c.json({ ok: true, deployment: sanitizeCloudSaasDeployment(created) })
+    return c.json({
+      ok: true,
+      deployment: sanitizeCloudSaasDeployment(created),
+    })
   })
 
   /**
@@ -1867,12 +2832,15 @@ export function createCloudSaasHandler(container: AppContainer) {
     const vars = await envDao.listByUser(user.userId, 'global')
     const found = vars.find((v) => v.key === key)
     if (!found) return c.json({ ok: false, error: 'Not found' }, 404)
-    const { decrypt } = await import('../lib/kms')
+    const value = safeDecryptEnvValue(found.encryptedValue, 'global', found.key)
+    if (value === null) {
+      return c.json({ ok: false, error: 'Env var cannot be decrypted' }, 422)
+    }
     return c.json({
       envVar: {
         scope: 'global',
         key: found.key,
-        value: decrypt(found.encryptedValue),
+        value,
         isSecret: true,
         groupName: found.groupId ? (groupNames.get(found.groupId) ?? 'default') : 'default',
       },
@@ -1931,6 +2899,10 @@ export function createCloudSaasHandler(container: AppContainer) {
       if (!providerExists) {
         return c.json({ ok: false, error: 'Unknown provider' }, 422)
       }
+      const normalizedConfig = validateProviderProfileConfigForSave(input.config)
+      if (!normalizedConfig.ok) {
+        return c.json({ ok: false, error: normalizedConfig.error }, 422)
+      }
 
       const profileId =
         normalizeProviderProfileId(input.id ?? `${input.providerId}-${randomUUID().slice(0, 8)}`) ||
@@ -1941,7 +2913,7 @@ export function createCloudSaasHandler(container: AppContainer) {
         [PROVIDER_PROFILE_META_KEYS.id]: profileId,
         [PROVIDER_PROFILE_META_KEYS.providerId]: input.providerId,
         [PROVIDER_PROFILE_META_KEYS.name]: input.name,
-        [PROVIDER_PROFILE_META_KEYS.configJson]: JSON.stringify(input.config ?? {}),
+        [PROVIDER_PROFILE_META_KEYS.configJson]: JSON.stringify(normalizedConfig.config),
         [PROVIDER_PROFILE_META_KEYS.enabled]: String(input.enabled ?? true),
       }
 
@@ -1984,7 +2956,12 @@ export function createCloudSaasHandler(container: AppContainer) {
       return c.json({ ok: false, error: 'Provider profile not found' }, 404)
     }
 
-    const values = new Map(scopedVars.map((v) => [v.key, decrypt(v.encryptedValue)]))
+    const scope = providerProfileScope(profileId)
+    const values = new Map<string, string>()
+    for (const variable of scopedVars) {
+      const decrypted = safeDecryptProviderValue(variable.encryptedValue, scope, variable.key)
+      if (decrypted !== null) values.set(variable.key, decrypted)
+    }
     if (!parseProviderProfileEnabled(values.get(PROVIDER_PROFILE_META_KEYS.enabled))) {
       return c.json({
         ok: false,
@@ -2002,6 +2979,54 @@ export function createCloudSaasHandler(container: AppContainer) {
 
     const config = parseProviderProfileConfig(values.get(PROVIDER_PROFILE_META_KEYS.configJson))
     return c.json(await testProviderConnection(provider, values, config))
+  })
+
+  /**
+   * POST /api/cloud-saas/provider-profiles/:id/models/refresh
+   * Discover models from the provider-native API and persist the result.
+   */
+  h.post('/provider-profiles/:id/models/refresh', async (c) => {
+    const user = c.get('user') as { userId: string }
+    const profileId = normalizeProviderProfileId(c.req.param('id'))
+    if (!profileId) return c.json({ ok: false, error: 'Invalid provider profile' }, 400)
+
+    const envDao = container.resolve('cloudEnvVarDao')
+    const scope = providerProfileScope(profileId)
+    const scopedVars = await envDao.listByUser(user.userId, scope)
+    if (scopedVars.length === 0) {
+      return c.json({ ok: false, error: 'Provider profile not found' }, 404)
+    }
+
+    const values = new Map<string, string>()
+    for (const variable of scopedVars) {
+      const decrypted = safeDecryptProviderValue(variable.encryptedValue, scope, variable.key)
+      if (decrypted !== null) values.set(variable.key, decrypted)
+    }
+    const providerId = values.get(PROVIDER_PROFILE_META_KEYS.providerId)
+    const provider = (await listProviderCatalogs())
+      .map((entry) => entry.provider)
+      .find((catalog) => catalog.id === providerId)
+    if (!provider) return c.json({ ok: false, error: 'Unknown provider' }, 422)
+
+    const config = parseProviderProfileConfig(values.get(PROVIDER_PROFILE_META_KEYS.configJson))
+    const result = await discoverProviderProfileModels(provider, values, config)
+    if (!result.ok) return c.json(result, result.status && result.status >= 400 ? 502 : 200)
+
+    const nextConfig = {
+      ...config,
+      apiFormat: providerProfileApiFormat(provider, config),
+      models: normalizeLlmProviderModels(result.models),
+      discoveredAt: new Date().toISOString(),
+    }
+    await envDao.upsertScoped({
+      userId: user.userId,
+      scope,
+      key: PROVIDER_PROFILE_META_KEYS.configJson,
+      encryptedValue: encrypt(JSON.stringify(nextConfig)),
+    })
+
+    const profile = (await readProviderProfiles(user.userId)).find((p) => p.id === profileId)
+    return c.json({ ...result, profile })
   })
 
   /**

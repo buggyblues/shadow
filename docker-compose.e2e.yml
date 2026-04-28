@@ -7,7 +7,7 @@ x-e2e-node: &e2e-node
     cache_from:
       - type=gha
     cache_to:
-      - type=gha,mode=max
+      - type=gha,mode=min
   working_dir: /workspace
   init: true
   environment:

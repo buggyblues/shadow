@@ -161,7 +161,10 @@ interface PodInfo {
 
 ```typescript
 interface TemplateInfo {
+  // Stable kebab-case slug used for routes and CLI references.
   name: string
+  // Locale-aware display title.
+  title: string
   description?: string
   agentCount: number
   tags?: string[]

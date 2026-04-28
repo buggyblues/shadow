@@ -234,7 +234,7 @@ describe('parser', () => {
       expect(result.bindings).toBeUndefined()
     })
 
-    it('should disable cloud-incompatible bundled plugins by default', () => {
+    it('should not emit cloud-missing bundled plugins by default', () => {
       const config: CloudConfig = {
         version: '1',
         deployments: {
@@ -249,10 +249,10 @@ describe('parser', () => {
       }
 
       const result = buildOpenClawConfig(config.deployments!.agents[0], config)
-      expect(result.plugins?.entries?.bonjour?.enabled).toBe(false)
+      expect(result.plugins?.entries?.bonjour).toBeUndefined()
     })
 
-    it('should preserve explicit bundled plugin opt-ins', () => {
+    it('should strip explicit config for cloud-missing bundled plugins', () => {
       const config: CloudConfig = {
         version: '1',
         deployments: {
@@ -275,7 +275,7 @@ describe('parser', () => {
       }
 
       const result = buildOpenClawConfig(config.deployments!.agents[0], config)
-      expect(result.plugins?.entries?.bonjour?.enabled).toBe(true)
+      expect(result.plugins?.entries?.bonjour).toBeUndefined()
     })
 
     it('should generate skills config from cloud-level skills registry', () => {
@@ -601,6 +601,7 @@ describe('parser', () => {
         const openclawConfig = buildOpenClawConfig(resolvedAgent, resolved)
         expect(openclawConfig.models?.providers?.anthropic).toMatchObject({
           apiKey: '${env:ANTHROPIC_API_KEY}',
+          baseUrl: 'https://api.anthropic.com/v1',
         })
       } finally {
         if (originalAnthropicKey === undefined) {

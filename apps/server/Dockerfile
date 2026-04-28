@@ -66,6 +66,13 @@ RUN --mount=type=cache,id=shadow-pnpm-store,target=/pnpm/store \
             --ignore-scripts \
             --package-import-method=copy
 
+# Prewarm Pulumi's CLI and Kubernetes provider during image build so the first
+# deployment does not spend user-visible time downloading them.
+RUN mkdir -p /root/.shadowob/pulumi/home && \
+    node --input-type=module -e "import { PulumiCommand } from './apps/cloud/node_modules/@pulumi/pulumi/automation/index.js'; await PulumiCommand.install({ root: '/root/.shadowob/pulumi/cli', skipVersionCheck: true })" && \
+    K8S_PROVIDER_VERSION="$(node -e "console.log(require('./apps/cloud/node_modules/@pulumi/kubernetes/package.json').version)")" && \
+    PULUMI_HOME=/root/.shadowob/pulumi/home /root/.shadowob/pulumi/cli/bin/pulumi plugin install resource kubernetes "v${K8S_PROVIDER_VERSION}" --non-interactive
+
 COPY --from=builder /app/packages/shared/dist packages/shared/dist
 COPY --from=builder /app/packages/sdk/dist packages/sdk/dist
 COPY --from=builder /app/apps/server/dist apps/server/dist

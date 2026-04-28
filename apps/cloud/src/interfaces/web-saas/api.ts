@@ -43,7 +43,10 @@ async function put<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function del<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { method: 'DELETE', headers: getAuthHeaders() })
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  })
   if (!res.ok) throw new Error(`DELETE ${path} failed: ${res.status}`)
   return res.json() as Promise<T>
 }
@@ -158,6 +161,23 @@ export interface SaasProviderCatalog {
   }>
 }
 
+export interface SaasLlmProviderModel {
+  id: string
+  name?: string
+  tags?: string[]
+  contextWindow?: number
+  maxTokens?: number
+  cost?: {
+    input?: number
+    output?: number
+  }
+  capabilities?: {
+    vision?: boolean
+    tools?: boolean
+    reasoning?: boolean
+  }
+}
+
 export interface SaasProviderProfile {
   id: string
   providerId: string
@@ -193,16 +213,20 @@ export const saasApi = {
 
   // Templates
   templates: {
-    list: (params?: { category?: string; q?: string }) => {
+    list: (params?: { category?: string; q?: string; locale?: string }) => {
       const qs = new URLSearchParams()
       if (params?.category) qs.set('category', params.category)
       if (params?.q) qs.set('q', params.q)
+      if (params?.locale) qs.set('locale', params.locale)
       const query = qs.toString()
       return get<SaasTemplate[]>(`/templates${query ? `?${query}` : ''}`)
     },
     mine: () => get<SaasTemplate[]>('/templates/mine'),
     mineOne: (slug: string) => get<SaasTemplate>(`/templates/mine/${encodeURIComponent(slug)}`),
-    get: (slug: string) => get<SaasTemplate>(`/templates/${encodeURIComponent(slug)}`),
+    get: (slug: string, locale?: string) => {
+      const qs = locale ? `?locale=${encodeURIComponent(locale)}` : ''
+      return get<SaasTemplate>(`/templates/${encodeURIComponent(slug)}${qs}`)
+    },
     envRefs: (slug: string) =>
       get<{ template: string; requiredEnvVars: string[] }>(
         `/templates/${encodeURIComponent(slug)}/env-refs`,
@@ -233,10 +257,14 @@ export const saasApi = {
 
   // Deployments
   deployments: {
-    list: (params?: { limit?: number; offset?: number }) =>
-      get<SaasDeployment[]>(
-        `/deployments${params ? `?limit=${params.limit ?? 50}&offset=${params.offset ?? 0}` : ''}`,
-      ),
+    list: (params: { limit?: number; offset?: number; includeHistory?: boolean } = {}) => {
+      const qs = new URLSearchParams({
+        limit: String(params.limit ?? 100),
+        offset: String(params.offset ?? 0),
+      })
+      if (params.includeHistory) qs.set('includeHistory', '1')
+      return get<SaasDeployment[]>(`/deployments?${qs.toString()}`)
+    },
     get: (id: string) => get<SaasDeployment>(`/deployments/${encodeURIComponent(id)}`),
     create: (data: {
       namespace: string
@@ -248,11 +276,11 @@ export const saasApi = {
       envVars?: Record<string, string>
     }) => post<SaasDeployment>('/deployments', data),
     delete: (id: string) => del<{ ok: boolean }>(`/deployments/${encodeURIComponent(id)}`),
+    redeploy: (id: string) =>
+      post<SaasDeployment>(`/deployments/${encodeURIComponent(id)}/redeploy`, {}),
     costs: () => get<CostOverviewSummary>('/deployments/costs'),
     namespaceCosts: (id: string) =>
       get<NamespaceCostSummary>(`/deployments/${encodeURIComponent(id)}/costs`),
-    scale: (id: string, agentCount: number) =>
-      post<SaasDeployment>(`/deployments/${encodeURIComponent(id)}/scale`, { agentCount }),
     logsUrl: (id: string) => `${BASE}/deployments/${encodeURIComponent(id)}/logs`,
     logsHistory: (
       id: string,
@@ -294,7 +322,7 @@ export const saasApi = {
       get<{
         items: SaasDeployment[]
         _orphans?: string[]
-      }>(`/deployments?includeOrphans=1`),
+      }>(`/deployments?includeOrphans=1&limit=100&offset=0`),
     claimOrphan: (namespace: string) =>
       post<{ ok: boolean; deployment: SaasDeployment }>(
         `/deployments/orphans/${encodeURIComponent(namespace)}/claim`,
@@ -309,10 +337,18 @@ export const saasApi = {
     list: (deploymentId: string) =>
       get<SaasEnvVar[]>(`/envvars/${encodeURIComponent(deploymentId)}`),
     update: (deploymentId: string, vars: Array<{ key: string; value: string }>) =>
-      put<{ ok: boolean }>(`/envvars/${encodeURIComponent(deploymentId)}`, { vars }),
+      put<{ ok: boolean }>(`/envvars/${encodeURIComponent(deploymentId)}`, {
+        vars,
+      }),
     getOne: (deploymentId: string, key: string) =>
       get<{
-        envVar: { scope: string; key: string; value: string; isSecret: boolean; groupName: string }
+        envVar: {
+          scope: string
+          key: string
+          value: string
+          isSecret: boolean
+          groupName: string
+        }
       }>(`/envvars/${encodeURIComponent(deploymentId)}/${encodeURIComponent(key)}`),
     delete: (deploymentId: string, key: string) =>
       del<{ ok: boolean }>(
@@ -325,17 +361,20 @@ export const saasApi = {
   // recharge flow (window event 'shadow:open-recharge') instead.
   wallet: {
     get: () => get<SaasWallet>('/wallet'),
-    transactions: (params?: { limit?: number; offset?: number }) =>
-      get<{ transactions: SaasTransaction[]; total: number; limit: number; offset: number }>(
-        `/wallet/transactions${params ? `?limit=${params.limit ?? 50}&offset=${params.offset ?? 0}` : ''}`,
-      ),
+    transactions: (params: { limit?: number; offset?: number } = {}) =>
+      get<{
+        transactions: SaasTransaction[]
+        total: number
+        limit: number
+        offset: number
+      }>(`/wallet/transactions?limit=${params.limit ?? 50}&offset=${params.offset ?? 0}`),
   },
 
   // Activity
   activity: {
-    list: (params?: { limit?: number; offset?: number }) =>
+    list: (params: { limit?: number; offset?: number } = {}) =>
       get<SaasActivityEntry[]>(
-        `/activity${params ? `?limit=${params.limit ?? 50}&offset=${params.offset ?? 0}` : ''}`,
+        `/activity?limit=${params.limit ?? 50}&offset=${params.offset ?? 0}`,
       ),
   },
 
@@ -358,10 +397,21 @@ export const saasApi = {
       })),
     getOne: (key: string) =>
       get<{
-        envVar: { scope: string; key: string; value: string; isSecret: boolean; groupName: string }
+        envVar: {
+          scope: string
+          key: string
+          value: string
+          isSecret: boolean
+          groupName: string
+        }
       }>(`/global-envvars/${encodeURIComponent(key)}`),
     upsert: (key: string, value: string, isSecret?: boolean, groupName?: string) =>
-      put<{ ok: boolean }>('/global-envvars', { key, value, isSecret, groupName }),
+      put<{ ok: boolean }>('/global-envvars', {
+        key,
+        value,
+        isSecret,
+        groupName,
+      }),
     delete: (key: string) => del<{ ok: boolean }>(`/global-envvars/${encodeURIComponent(key)}`),
     createGroup: (name: string) =>
       post<{ ok: boolean; name: string }>('/global-envvars/groups', { name }),
@@ -385,6 +435,13 @@ export const saasApi = {
     }) => put<{ ok: boolean; profile?: SaasProviderProfile }>('/provider-profiles', data),
     test: (id: string) =>
       post<SaasProviderTestResult>(`/provider-profiles/${encodeURIComponent(id)}/test`, {}),
+    refreshModels: (id: string) =>
+      post<
+        SaasProviderTestResult & {
+          models?: SaasLlmProviderModel[]
+          profile?: SaasProviderProfile
+        }
+      >(`/provider-profiles/${encodeURIComponent(id)}/models/refresh`, {}),
     delete: (id: string) => del<{ ok: boolean }>(`/provider-profiles/${encodeURIComponent(id)}`),
   },
 }

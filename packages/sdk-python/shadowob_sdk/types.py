@@ -114,6 +114,29 @@ class ShadowInviteCode:
 
 
 @dataclass
+class ShadowCloudProviderModel:
+    id: str
+    name: str | None = None
+    tags: list[str] = field(default_factory=list)
+    context_window: int | None = None
+    max_tokens: int | None = None
+    cost: dict[str, float] | None = None
+    capabilities: dict[str, bool] | None = None
+
+
+@dataclass
+class ShadowCloudProviderProfile:
+    id: str
+    provider_id: str
+    name: str
+    scope: str
+    enabled: bool
+    config: dict[str, Any] = field(default_factory=dict)
+    env_vars: list[dict[str, Any]] = field(default_factory=list)
+    updated_at: str | None = None
+
+
+@dataclass
 class ShadowSlashCommand:
     name: str
     description: str | None = None

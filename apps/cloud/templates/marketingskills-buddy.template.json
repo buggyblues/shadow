@@ -1,12 +1,9 @@
 {
   "version": "1.0.0",
-  "name": "${i18n:name}",
+  "name": "marketingskills-buddy",
+  "title": "${i18n:title}",
   "description": "${i18n:description}",
   "environment": "production",
-  "team": {
-    "name": "marketingskills-buddy",
-    "description": "Single Marketing Buddy powered live by community-curated marketing skills (coreyhaines31/marketingskills) — CRO, copy, SEO, paid, email, and growth — pulled at deploy time."
-  },
   "use": [
     {
       "plugin": "model-provider"
@@ -94,12 +91,12 @@
   },
   "i18n": {
     "en": {
-      "name": "Marketing Skills Buddy",
-      "description": "Single Marketing Buddy powered live by coreyhaines31/marketingskills — CRO, copy, SEO, paid, email, and growth — pulled at deploy time so the agent always tracks the upstream community."
+      "title": "Marketing Skills Buddy",
+      "description": "Give growth teams an always-current marketing copilot powered by community playbooks for CRO, copy, SEO, paid, email, and growth decisions, refreshed from upstream skills at deploy time."
     },
     "zh-CN": {
-      "name": "营销技能 Buddy",
-      "description": "单 Buddy 模板，部署时动态拉取社区仓库 coreyhaines31/marketingskills（CRO、文案、SEO、付费、邮件、增长），始终保持与上游一致。"
+      "title": "营销技能 Buddy",
+      "description": "为增长团队提供始终更新的营销协作智能体：部署时从上游技能库拉取 CRO、文案、SEO、付费、邮件和增长 playbook，辅助关键增长决策。"
     }
   }
 }

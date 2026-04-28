@@ -153,11 +153,84 @@ describe('buildManifests', () => {
 
     const container = deployment.spec.template.spec.containers[0]
     expect(container.env).toEqual(expect.arrayContaining([{ name: 'PUBLIC_FLAG', value: '1' }]))
+    expect(container.env).toEqual(
+      expect.arrayContaining([
+        { name: 'OPENCLAW_HEALTH_PORT', value: '3102' },
+        { name: 'OPENCLAW_GATEWAY_PORT', value: '3101' },
+      ]),
+    )
     expect(container.env).not.toEqual(
       expect.arrayContaining([{ name: 'INTERNAL_SECRET', value: 'top-secret' }]),
     )
     expect(container.envFrom).toEqual(
       expect.arrayContaining([{ secretRef: { name: 'agent-1-secrets' } }]),
     )
+    expect(container.ports).toEqual([{ containerPort: 3102, name: 'health' }])
+    expect(container.startupProbe.httpGet).toMatchObject({ path: '/live', port: 3102 })
+    expect(container.readinessProbe.httpGet).toMatchObject({ path: '/ready', port: 3102 })
+    expect(deployment.spec.template.metadata.annotations).toMatchObject({
+      'shadowob.cloud/runner-image': 'ghcr.io/shadowob/openclaw-runner:latest',
+    })
+    expect(
+      deployment.spec.template.metadata.annotations['shadowob.cloud/runtime-package-hash'],
+    ).toMatch(/^[a-f0-9]{64}$/)
+  })
+
+  it('changes the pod-template package hash when runtime config changes', () => {
+    const makeConfig = (secret: string): CloudConfig => ({
+      version: '1',
+      deployments: {
+        agents: [
+          {
+            id: 'agent-1',
+            runtime: 'openclaw',
+            env: {
+              INTERNAL_SECRET: secret,
+            },
+            configuration: {},
+          },
+        ],
+      },
+    })
+
+    const first = buildManifests({ config: makeConfig('first-secret'), namespace: 'hash-a' })
+    const second = buildManifests({ config: makeConfig('second-secret'), namespace: 'hash-b' })
+    const firstDeployment = first.find((manifest) => manifest.kind === 'Deployment')!
+    const secondDeployment = second.find((manifest) => manifest.kind === 'Deployment')!
+
+    expect(
+      firstDeployment.spec.template.metadata.annotations['shadowob.cloud/runtime-package-hash'],
+    ).not.toBe(
+      secondDeployment.spec.template.metadata.annotations['shadowob.cloud/runtime-package-hash'],
+    )
+  })
+
+  it('marks generated resources for repeatable Pulumi ownership and fast service creation', () => {
+    const config: CloudConfig = {
+      version: '1',
+      deployments: {
+        agents: [
+          {
+            id: 'agent-1',
+            runtime: 'openclaw',
+            configuration: {},
+          },
+        ],
+      },
+    }
+
+    const manifests = buildManifests({ config, namespace: 'test-runtime-package' })
+    const managedKinds = ['Namespace', 'ConfigMap', 'Secret', 'Deployment', 'Service']
+
+    for (const kind of managedKinds) {
+      const manifest = manifests.find((item) => item.kind === kind)!
+      expect(manifest.metadata.annotations).toMatchObject({ 'pulumi.com/patchForce': 'true' })
+    }
+
+    const service = manifests.find((item) => item.kind === 'Service')!
+    expect(service.metadata.annotations).toMatchObject({ 'pulumi.com/skipAwait': 'true' })
+    expect(service.spec.ports).toEqual([
+      { name: 'health', port: 3100, targetPort: 3102, protocol: 'TCP' },
+    ])
   })
 })

@@ -2,10 +2,16 @@
  * agent-pack plugin — unit tests for the multi-kind, registry-free pack puller.
  */
 
+import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
-import { buildAgentPackPrompt, resolvePacks } from '../../src/plugins/agent-pack/index.js'
+import agentPackPlugin, {
+  buildAgentPackPrompt,
+  resolvePacks,
+} from '../../src/plugins/agent-pack/index.js'
 import {
   buildAgentPackInitContainer,
+  buildAgentPackInitScript,
+  buildAgentPackSyncScript,
   parsePollInterval,
   type ResolvedPack,
   sanitizeId,
@@ -229,12 +235,24 @@ describe('agent-pack k8s helpers', () => {
         instructionFiles: ['CLAUDE.md', 'AGENTS.md'],
       },
     ]
-    const init = buildAgentPackInitContainer(packs, '/agent-packs', 'agent-packs')
-    expect(init.image).toBe('node:22-alpine')
+    const init = buildAgentPackInitContainer(
+      packs,
+      '/agent-packs',
+      'agent-packs',
+      'agent-pack-scripts',
+    )
+    expect(init.image).toBe('node:22-bookworm')
     expect(init.command[0]).toBe('/bin/sh')
-    expect(init.command[1]).toBe('-c')
-    const script = init.command[2]!
-    expect(script).toContain('apk add --no-cache git')
+    expect(init.command[1]).toBe('/opt/shadow-agent-pack/init.sh')
+    expect(init.securityContext).toMatchObject({
+      runAsNonRoot: true,
+      runAsUser: 1000,
+      runAsGroup: 1000,
+      capabilities: { drop: ['ALL'] },
+    })
+    const script = buildAgentPackInitScript(packs, '/agent-packs')
+    expect(script).toContain('command -v git')
+    expect(script).not.toContain('apk add')
     expect(script).toContain('https://github.com/x/y')
     expect(script).toContain('https://github.com/a/b')
     expect(script).toContain('/agent-packs/marketingskills/skills')
@@ -259,12 +277,41 @@ describe('agent-pack k8s helpers', () => {
         instructionFiles: [],
       },
     ]
-    const init = buildAgentPackInitContainer(packs, '/agent-packs', 'agent-packs')
-    const script = init.command[2]!
+    const script = buildAgentPackInitScript(packs, '/agent-packs')
+    expect(script).not.toContain('; ;')
     expect(script).toContain('basename "$f" .md')
     expect(script).toContain('/agent-packs/seomachine/commands/$slug/SKILL.md')
     expect(script).toContain('/agent-packs/seomachine/agents/$slug/AGENT.md')
     expect(script).toContain('/agent-packs/seomachine/agents/$slug/SKILL.md')
+  })
+
+  it('generates shell scripts that pass sh syntax validation', () => {
+    const packs = resolvePacks({
+      packs: [{ id: 'gstack', url: 'https://github.com/garrytan/gstack' }],
+    })
+    const initScript = buildAgentPackInitScript(packs, '/agent-packs', {
+      enabled: true,
+      outputPath: '/agent-packs/.shadow/slash-commands.json',
+      inferInteractions: true,
+      rules: [],
+    })
+    const syncScript = buildAgentPackSyncScript({
+      packs,
+      mountPath: '/agent-packs',
+      intervalSec: 3600,
+      slashCommandIndex: {
+        enabled: true,
+        outputPath: '/agent-packs/.shadow/slash-commands.json',
+        inferInteractions: true,
+        rules: [],
+      },
+    })
+
+    for (const script of [initScript, syncScript]) {
+      const result = spawnSync('/bin/sh', ['-n'], { input: script, encoding: 'utf8' })
+      expect(result.stderr).toBe('')
+      expect(result.status).toBe(0)
+    }
   })
 
   it('copies root SKILL.md files for single-skill repositories', () => {
@@ -279,8 +326,7 @@ describe('agent-pack k8s helpers', () => {
         instructionFiles: [],
       },
     ]
-    const init = buildAgentPackInitContainer(packs, '/agent-packs', 'agent-packs')
-    const script = init.command[2]!
+    const script = buildAgentPackInitScript(packs, '/agent-packs')
     expect(script).toContain('if [ -f "/tmp/agent-pack-src-gstack/SKILL.md" ]')
     expect(script).toContain('/agent-packs/gstack/skills/gstack/SKILL.md')
   })
@@ -297,8 +343,7 @@ describe('agent-pack k8s helpers', () => {
         instructionFiles: [],
       },
     ]
-    const init = buildAgentPackInitContainer(packs, '/agent-packs', 'agent-packs')
-    const script = init.command[2]!
+    const script = buildAgentPackInitScript(packs, '/agent-packs')
     expect(script).toContain("-name '*-SKILL.md'")
     expect(script).toContain("sed 's/-SKILL$//'")
     expect(script).toContain('/agent-packs/seomachine/skills/$slug/SKILL.md')
@@ -316,8 +361,7 @@ describe('agent-pack k8s helpers', () => {
         instructionFiles: [],
       },
     ]
-    const init = buildAgentPackInitContainer(packs, '/agent-packs', 'agent-packs')
-    const script = init.command[2]!
+    const script = buildAgentPackInitScript(packs, '/agent-packs')
     expect(script).toContain("-maxdepth 6 -type f -name 'SKILL.md'")
     expect(script).toContain('cp -r "$d/." "/agent-packs/wshobson-agents/skills/$slug/"')
   })
@@ -337,8 +381,7 @@ describe('agent-pack k8s helpers', () => {
         instructionFiles: [],
       },
     ]
-    const init = buildAgentPackInitContainer(packs, '/agent-packs', 'agent-packs')
-    const script = init.command[2]!
+    const script = buildAgentPackInitScript(packs, '/agent-packs')
     expect(script).toContain('if [ -f "/tmp/agent-pack-src-cursor-rules/.cursorrules" ]')
     expect(script).toContain("-name '*.mdc'")
   })
@@ -354,16 +397,59 @@ describe('agent-pack k8s helpers', () => {
         instructionFiles: [],
       },
     ]
-    const init = buildAgentPackInitContainer(packs, '/agent-packs', 'agent-packs', {
+    const slashCommandIndex = {
       enabled: true,
       outputPath: '/agent-packs/.shadow/slash-commands.json',
       inferInteractions: true,
       rules: [],
-    })
-    const script = init.command[2]!
+    }
+    const init = buildAgentPackInitContainer(
+      packs,
+      '/agent-packs',
+      'agent-packs',
+      'agent-pack-scripts',
+      slashCommandIndex,
+    )
+    expect(init.command[1]).toBe('/opt/shadow-agent-pack/init.sh')
+    const script = buildAgentPackInitScript(packs, '/agent-packs', slashCommandIndex)
     expect(script).toContain('/tmp/agent-pack-slash-indexer.mjs')
     expect(script).toContain("--mount-path '/agent-packs'")
     expect(script).toContain("--output '/agent-packs/.shadow/slash-commands.json'")
     expect(script).toContain('Wrote ')
+  })
+
+  it('runs helper containers without package installs while keeping the pod non-root', () => {
+    const result = agentPackPlugin.k8s?.buildK8s(
+      {
+        id: 'strategy-buddy',
+        runtime: 'openclaw',
+        use: [
+          {
+            plugin: 'agent-pack',
+            options: {
+              packs: [{ id: 'gstack', url: 'https://github.com/garrytan/gstack' }],
+              poll: '1h',
+            },
+          },
+        ],
+      } as never,
+      { agent: {} as never, config: {} as never, namespace: 'gstack-buddy' },
+    )
+
+    expect(result?.initContainers?.[0]?.securityContext).toMatchObject({
+      runAsNonRoot: true,
+      runAsUser: 1000,
+      runAsGroup: 1000,
+      capabilities: { drop: ['ALL'] },
+    })
+    expect(result?.sidecars?.[0]?.securityContext).toMatchObject({
+      runAsNonRoot: true,
+      runAsUser: 1000,
+      runAsGroup: 1000,
+      capabilities: { drop: ['ALL'] },
+    })
+
+    const skillsEnv = result?.envVars?.find((env) => env.name === 'SHADOW_PACK_SKILLS_DIRS')
+    expect(skillsEnv?.value).toBe('/agent-packs/gstack/skills')
   })
 })

@@ -128,6 +128,8 @@ export interface AgentCompliance {
 /**
  * Team / agent pack metadata — groups agents into a cohesive named team.
  * Inspired by CrewClaw's "Agent Packs" concept.
+ *
+ * @deprecated Template metadata should use top-level `title` and `description`.
  */
 export interface TeamConfig {
   /** Team display name */

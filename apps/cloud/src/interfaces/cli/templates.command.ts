@@ -33,8 +33,8 @@ export function createTemplatesCommand(container: ServiceContainer) {
         }
         container.logger.info(`Available templates (${templates.length}):`)
         for (const t of templates) {
-          container.logger.info(`  ${t.name}`)
-          container.logger.dim(`    ${t.teamName} · ${t.agentCount} agent(s) · ns: ${t.namespace}`)
+          container.logger.info(`  ${t.title} (${t.name})`)
+          container.logger.dim(`    ${t.agentCount} agent(s) · ns: ${t.namespace}`)
           if (t.description) container.logger.dim(`    ${t.description}`)
         }
       }),
@@ -54,7 +54,7 @@ export function createTemplatesCommand(container: ServiceContainer) {
         const results = all.filter(
           (t) =>
             t.name.toLowerCase().includes(lower) ||
-            t.teamName.toLowerCase().includes(lower) ||
+            t.title.toLowerCase().includes(lower) ||
             t.description.toLowerCase().includes(lower),
         )
         if (results.length === 0) {
@@ -63,8 +63,8 @@ export function createTemplatesCommand(container: ServiceContainer) {
         }
         container.logger.info(`Found ${results.length} template(s) matching "${query}":`)
         for (const t of results) {
-          container.logger.info(`  ${t.name}`)
-          container.logger.dim(`    ${t.teamName} · ${t.agentCount} agent(s)`)
+          container.logger.info(`  ${t.title} (${t.name})`)
+          container.logger.dim(`    ${t.agentCount} agent(s)`)
           if (t.description) container.logger.dim(`    ${t.description}`)
         }
       }),

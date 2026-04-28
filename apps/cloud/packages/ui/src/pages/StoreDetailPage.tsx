@@ -1,25 +1,7 @@
-import { Badge, Button, EmptyState, GlassCard } from '@shadowob/ui'
+import { Button, EmptyState, GlassCard, GlassPanel } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
-import {
-  ArrowLeft,
-  BookOpen,
-  CalendarClock,
-  CheckCircle,
-  Clock,
-  Cpu,
-  FileText,
-  FolderOpen,
-  GitFork,
-  Key,
-  Layers,
-  Rocket,
-  Settings,
-  Shield,
-  Star,
-  Users,
-  Zap,
-} from 'lucide-react'
+import { ArrowLeft, BookOpen, Clock, FolderOpen, GitFork, Key, Rocket, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -31,105 +13,11 @@ import {
 import { useApiClient } from '@/lib/api-context'
 import { useToast } from '@/stores/toast'
 
-function getCategoryLabel(
-  category: string,
-  translate: (key: string, options?: Record<string, unknown>) => string,
-) {
-  return translate(`store.categories.${category}`)
-}
-
-function getDifficultyLabel(
-  difficulty: string,
-  translate: (key: string, options?: Record<string, unknown>) => string,
-) {
-  return translate(`store.difficulties.${difficulty}`)
-}
-
-function OverviewTab({
-  overview,
-  features,
-  useCases,
-  requirements,
-}: {
-  overview: string[]
-  features: string[]
-  useCases: string[]
-  requirements: string[]
-}) {
-  const { t } = useTranslation()
-
-  return (
-    <div className="space-y-6">
-      <GlassCard className="rounded-3xl p-5 space-y-4">
-        {overview.map((paragraph) => (
-          <p key={paragraph} className="text-sm leading-7 text-text-secondary">
-            {paragraph}
-          </p>
-        ))}
-      </GlassCard>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <GlassCard className="rounded-3xl p-5 space-y-4">
-          <h3 className="text-sm font-black flex items-center gap-2 text-text-primary">
-            <Zap size={14} className="text-accent" />
-            {t('storeDetail.features')}
-          </h3>
-          <div className="grid grid-cols-1 gap-2">
-            {features.map((feature) => (
-              <div
-                key={feature}
-                className="flex items-center gap-2 rounded-xl border border-border-subtle bg-bg-tertiary/60 px-4 py-3 text-text-primary"
-              >
-                <CheckCircle size={14} className="text-green-400 shrink-0" />
-                <span className="text-sm">{feature}</span>
-              </div>
-            ))}
-          </div>
-        </GlassCard>
-
-        <GlassCard className="rounded-3xl p-5 space-y-4">
-          <h3 className="text-sm font-black flex items-center gap-2 text-text-primary">
-            <Layers size={14} className="text-[var(--color-nf-indigo)]" />
-            {t('storeDetail.useCases')}
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {useCases.map((useCase) => (
-              <span
-                key={useCase}
-                className="rounded-full border border-[rgba(124,77,255,0.2)] bg-bg-tertiary/60 px-3 py-2 text-xs text-text-secondary"
-              >
-                {useCase}
-              </span>
-            ))}
-          </div>
-        </GlassCard>
-      </div>
-
-      <GlassCard className="rounded-3xl p-5 space-y-4">
-        <h3 className="text-sm font-black flex items-center gap-2 text-text-primary">
-          <Shield size={14} className="text-danger" />
-          {t('storeDetail.requirements')}
-        </h3>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {requirements.map((requirement) => (
-            <div
-              key={requirement}
-              className="rounded-xl border border-border-subtle bg-bg-tertiary/60 px-4 py-3 text-sm text-text-secondary"
-            >
-              {requirement}
-            </div>
-          ))}
-        </div>
-      </GlassCard>
-    </div>
-  )
-}
-
 export function StoreDetailPage() {
   const api = useApiClient()
   const { t, i18n } = useTranslation()
   const { name } = useParams({ strict: false }) as { name: string }
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState('agents')
   const toast = useToast()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -158,7 +46,6 @@ export function StoreDetailPage() {
   const agents = parseTemplateAgents(templateData)
 
   const tabs = [
-    { id: 'overview', label: t('storeDetail.overview'), icon: <BookOpen size={13} /> },
     {
       id: 'agents',
       label: t('storeDetail.agents'),
@@ -168,7 +55,7 @@ export function StoreDetailPage() {
     {
       id: 'config',
       label: t('storeDetail.configuration'),
-      icon: <Settings size={13} />,
+      icon: <BookOpen size={13} />,
     },
   ]
 
@@ -188,41 +75,14 @@ export function StoreDetailPage() {
     )
   }
 
+  const displayTitle = detail?.title || name
+
   return (
     <TemplateDetailShell
-      breadcrumbItems={[{ label: t('store.title'), to: '/store' }, { label: name }]}
+      breadcrumbItems={[{ label: t('store.title'), to: '/store' }, { label: displayTitle }]}
       heroIcon={<span className="text-5xl">{detail?.emoji ?? '📦'}</span>}
-      title={name}
+      title={displayTitle}
       description={detail?.description ?? t('common.loading')}
-      badges={
-        detail ? (
-          <>
-            <Badge variant="neutral">{getCategoryLabel(detail.category, t)}</Badge>
-            <Badge variant="neutral">{getDifficultyLabel(detail.difficulty, t)}</Badge>
-            {detail.featured && (
-              <Badge variant="info">
-                <Star size={10} />
-                {t('store.featured')}
-              </Badge>
-            )}
-          </>
-        ) : null
-      }
-      chips={
-        detail ? (
-          <>
-            {detail.highlights.map((highlight) => (
-              <div
-                key={highlight}
-                className="flex items-center gap-1.5 rounded-full border border-border-subtle bg-bg-secondary/70 px-3 py-2 text-xs text-text-primary"
-              >
-                <Zap size={11} className="text-accent" />
-                {highlight}
-              </div>
-            ))}
-          </>
-        ) : null
-      }
       actions={
         <>
           <Button asChild variant="primary">
@@ -250,70 +110,35 @@ export function StoreDetailPage() {
       }
       sidebar={
         detail ? (
-          <GlassCard className="rounded-3xl p-5 space-y-5">
-            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-text-muted">
+          <GlassCard className="rounded-3xl pt-3 px-5 pb-5">
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-text-muted mb-3">
               {t('templateDetail.quickInfo')}
             </h3>
 
-            <div className="space-y-3">
+            <div className="space-y-3 text-sm">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-xs flex items-center gap-1.5 text-text-muted">
+                <span className="text-xs text-text-muted flex items-center gap-1.5">
                   <Users size={12} />
                   {t('deploy.agentsLabel')}
                 </span>
                 <span className="text-sm font-bold text-text-primary">{detail.agentCount}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-xs flex items-center gap-1.5 text-text-muted">
+                <span className="text-xs text-text-muted flex items-center gap-1.5">
                   <FolderOpen size={12} />
                   {t('deploy.namespaceLabel')}
                 </span>
                 <code className="text-sm text-text-primary">{detail.namespace}</code>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-xs flex items-center gap-1.5 text-text-muted">
+                <span className="text-xs text-text-muted flex items-center gap-1.5">
                   <Clock size={12} />
                   {t('deploy.deployTimeLabel')}
                 </span>
                 <span className="text-sm text-text-primary">{detail.estimatedDeployTime}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-xs flex items-center gap-1.5 text-text-muted">
-                  <Cpu size={12} />
-                  {t('storeDetail.team')}
-                </span>
-                <span className="text-sm text-text-primary">{detail.teamName}</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs flex items-center gap-1.5 text-text-muted">
-                  <Star size={12} />
-                  {t('storeDetail.popularity')}
-                </span>
-                <span className="text-sm text-text-primary">{detail.popularity}%</span>
-              </div>
-            </div>
-
-            <div className="space-y-3 border-t border-border-subtle pt-4">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs flex items-center gap-1.5 text-text-muted">
-                  <FileText size={12} />
-                  {t('storeDetail.file')}
-                </span>
-                <code className="text-[11px] text-text-primary">{detail.file}</code>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs flex items-center gap-1.5 text-text-muted">
-                  <CalendarClock size={12} />
-                  {t('storeDetail.updated')}
-                </span>
-                <span className="text-xs text-text-primary">
-                  {detail.lastUpdated
-                    ? new Date(detail.lastUpdated).toLocaleDateString(i18n.language)
-                    : t('common.none')}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs flex items-center gap-1.5 text-text-muted">
+                <span className="text-xs text-text-muted flex items-center gap-1.5">
                   <Key size={12} />
                   {t('storeDetail.requiredEnvVars')}
                 </span>
@@ -324,7 +149,7 @@ export function StoreDetailPage() {
             </div>
 
             {detail.requiredEnvVars.length > 0 && (
-              <div className="space-y-2 border-t border-border-subtle pt-4">
+              <div className="space-y-2 mt-4 pt-3 border-t border-border-subtle">
                 <div className="text-[11px] font-semibold text-text-muted">
                   {t('storeDetail.requiredEnvVars')}
                 </div>
@@ -341,7 +166,7 @@ export function StoreDetailPage() {
               </div>
             )}
 
-            <div className="space-y-2 border-t border-border-subtle pt-4">
+            <div className="space-y-2 mt-4 pt-3 border-t border-border-subtle">
               <div className="text-[11px] font-semibold text-text-muted">
                 {t('storeDetail.cliQuickDeploy')}
               </div>
@@ -356,31 +181,24 @@ export function StoreDetailPage() {
       activeTab={activeTab}
       onTabChange={setActiveTab}
     >
-      {activeTab === 'overview' && detail && (
-        <OverviewTab
-          overview={detail.overview}
-          features={detail.features}
-          useCases={detail.useCases}
-          requirements={detail.requirements}
-        />
-      )}
+      <GlassPanel className="rounded-3xl p-5">
+        {activeTab === 'agents' && (
+          <TemplateAgentsTab
+            agents={agents}
+            emptyTitle={t('storeDetail.agentDetailsUnavailable')}
+            emptyDescription={t('storeDetail.deployToSeeConfig')}
+            introText={t('storeDetail.includesAgents', { count: agents.length })}
+          />
+        )}
 
-      {activeTab === 'agents' && (
-        <TemplateAgentsTab
-          agents={agents}
-          emptyTitle={t('storeDetail.agentDetailsUnavailable')}
-          emptyDescription={t('storeDetail.deployToSeeConfig')}
-          introText={t('storeDetail.includesAgents', { count: agents.length })}
-        />
-      )}
-
-      {activeTab === 'config' && (
-        <TemplateConfigTab
-          templateData={templateData}
-          description={t('storeDetail.fullTemplateConfig')}
-          title={configLoading ? t('common.loading') : t('storeDetail.templateConfiguration')}
-        />
-      )}
+        {activeTab === 'config' && (
+          <TemplateConfigTab
+            templateData={templateData}
+            description={t('storeDetail.fullTemplateConfig')}
+            title={configLoading ? t('common.loading') : t('storeDetail.templateConfiguration')}
+          />
+        )}
+      </GlassPanel>
     </TemplateDetailShell>
   )
 }

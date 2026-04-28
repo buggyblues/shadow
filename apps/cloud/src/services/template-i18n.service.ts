@@ -29,9 +29,11 @@ export interface TemplateCategoryInfo {
 }
 
 export interface TemplateCatalogSummary {
+  /** Stable kebab-case template slug */
   name: string
+  /** Locale-aware display title */
+  title: string
   description: string
-  teamName: string
   agentCount: number
   namespace: string
   category: TemplateCategoryId
@@ -1053,8 +1055,8 @@ export class TemplateI18nService {
 
     return {
       name: template.name,
+      title: template.title,
       description: template.description,
-      teamName: template.teamName,
       agentCount: template.agentCount,
       namespace: template.namespace,
       category: registry?.category ?? 'demo',

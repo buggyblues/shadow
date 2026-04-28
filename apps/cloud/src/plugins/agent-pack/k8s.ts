@@ -19,8 +19,20 @@
 import type { PluginK8sInitContainer, PluginK8sSidecar } from '../types.js'
 import { AGENT_PACK_SLASH_INDEXER_SCRIPT } from './indexer-script.js'
 
-const AGENT_PACK_IMAGE = 'node:22-alpine'
+const AGENT_PACK_IMAGE = 'node:22-bookworm'
 const SLASH_INDEXER_PATH = '/tmp/agent-pack-slash-indexer.mjs'
+export const AGENT_PACK_SCRIPT_MOUNT_PATH = '/opt/shadow-agent-pack'
+const AGENT_PACK_HELPER_SECURITY_CONTEXT = {
+  runAsNonRoot: true,
+  runAsUser: 1000,
+  runAsGroup: 1000,
+  allowPrivilegeEscalation: false,
+  capabilities: { drop: ['ALL'] },
+}
+const AGENT_PACK_TOOL_CHECKS = [
+  'command -v git >/dev/null 2>&1 || { echo "[agent-pack] git is missing from helper image" >&2; exit 127; }',
+  'command -v node >/dev/null 2>&1 || { echo "[agent-pack] node is missing from helper image" >&2; exit 127; }',
+]
 
 /** Kinds of artifact a pack can contribute to an agent. */
 export type PackKind =
@@ -184,7 +196,13 @@ function buildMountCopySnippet(
       // OpenClaw can discover them via skills.load.extraDirs.
       const descriptorName = mount.kind === 'agents' ? 'AGENT.md' : 'SKILL.md'
       const rootSkillSlug = sanitizeId(pack.id)
-      const normalizeTopLevelFile = `base="$(basename "$f" .md)"; if [ "$base" = "SKILL" ]; then slug="${rootSkillSlug}"; else slug="$base"; fi; ${mount.kind === 'skills' ? `slug="$(printf '%s' "$slug" | sed 's/-SKILL$//')"; ` : ''}slug="$(printf '%s' "$slug" | tr -cs 'A-Za-z0-9._-' '-' | sed 's/^-//;s/-$//')"; [ -n "$slug" ] || slug="item"; mkdir -p "${dest}/$slug"; cp "$f" "${dest}/$slug/${descriptorName}"; ${mount.kind === 'agents' ? `cp "$f" "${dest}/$slug/SKILL.md";` : ''}`
+      const descriptorCopies =
+        mount.kind === 'agents'
+          ? `cp "$f" "${dest}/$slug/${descriptorName}"; cp "$f" "${dest}/$slug/SKILL.md"`
+          : `cp "$f" "${dest}/$slug/${descriptorName}"`
+      const stripSkillSuffix =
+        mount.kind === 'skills' ? `slug="$(printf '%s' "$slug" | sed 's/-SKILL$//')"; ` : ''
+      const normalizeTopLevelFile = `base="$(basename "$f" .md)"; if [ "$base" = "SKILL" ]; then slug="${rootSkillSlug}"; else slug="$base"; fi; ${stripSkillSuffix}slug="$(printf '%s' "$slug" | tr -cs 'A-Za-z0-9._-' '-' | sed 's/^-//;s/-$//')"; [ -n "$slug" ] || slug="item"; mkdir -p "${dest}/$slug"; ${descriptorCopies}`
       const normalizeNestedSkillDir = `d="$(dirname "$f")"; rel="$d"; case "$rel" in "${from}"/*) rel="\${rel#${from}/}" ;; *) rel="$(basename "$d")" ;; esac; slug="$(basename "$d")"; slug="$(printf '%s' "$slug" | sed 's/-SKILL$//' | tr -cs 'A-Za-z0-9._-' '-' | sed 's/^-//;s/-$//')"; [ -n "$slug" ] || slug="${rootSkillSlug}"; if [ -e "${dest}/$slug" ]; then slug="$(printf '%s' "$rel" | sed 's/-SKILL$//' | tr '/ ' '--' | tr -cs 'A-Za-z0-9._-' '-' | sed 's/^-//;s/-$//')"; fi; [ -n "$slug" ] || slug="${rootSkillSlug}"; mkdir -p "${dest}/$slug"; cp -r "$d/." "${dest}/$slug/"`
       if (mount.include && mount.include.length > 0) {
         for (const name of mount.include) {
@@ -305,25 +323,23 @@ export function buildAgentPackInitContainer(
   packs: ResolvedPack[],
   mountPath: string,
   volumeName: string,
+  scriptVolumeName: string,
   slashCommandIndex?: SlashCommandIndexOptions,
 ): PluginK8sInitContainer {
-  const script = [
-    'apk add --no-cache git >/dev/null',
-    ...packs.map((p) => buildPackCloneSnippet(p, mountPath)),
-    buildSlashCommandIndexSnippet(mountPath, slashCommandIndex),
-  ]
-    .filter(Boolean)
-    .join('\n')
   return {
     name: 'agent-pack-clone',
     image: AGENT_PACK_IMAGE,
     imagePullPolicy: 'IfNotPresent',
-    command: ['/bin/sh', '-c', `set -e\n${script}`],
-    volumeMounts: [{ name: volumeName, mountPath }],
+    command: ['/bin/sh', `${AGENT_PACK_SCRIPT_MOUNT_PATH}/init.sh`],
+    volumeMounts: [
+      { name: volumeName, mountPath },
+      { name: scriptVolumeName, mountPath: AGENT_PACK_SCRIPT_MOUNT_PATH, readOnly: true },
+    ],
     resources: {
       requests: { cpu: '25m', memory: '64Mi' },
       limits: { cpu: '250m', memory: '256Mi' },
     },
+    securityContext: AGENT_PACK_HELPER_SECURITY_CONTEXT,
   }
 }
 
@@ -334,17 +350,58 @@ export function buildAgentPackSyncSidecar(opts: {
   packs: ResolvedPack[]
   mountPath: string
   volumeName: string
+  scriptVolumeName: string
   intervalSec: number
   slashCommandIndex?: SlashCommandIndexOptions
 }): PluginK8sSidecar | undefined {
-  const { packs, mountPath, volumeName, intervalSec, slashCommandIndex } = opts
+  const { volumeName, scriptVolumeName, intervalSec } = opts
   if (!intervalSec || intervalSec <= 0) return undefined
 
+  return {
+    name: 'agent-pack-sync',
+    image: AGENT_PACK_IMAGE,
+    imagePullPolicy: 'IfNotPresent',
+    command: ['/bin/sh', `${AGENT_PACK_SCRIPT_MOUNT_PATH}/sync.sh`],
+    volumeMounts: [
+      { name: volumeName, mountPath: opts.mountPath },
+      { name: scriptVolumeName, mountPath: AGENT_PACK_SCRIPT_MOUNT_PATH, readOnly: true },
+    ],
+    resources: {
+      requests: { cpu: '25m', memory: '64Mi' },
+      limits: { cpu: '250m', memory: '256Mi' },
+    },
+    securityContext: AGENT_PACK_HELPER_SECURITY_CONTEXT,
+  }
+}
+
+export function buildAgentPackInitScript(
+  packs: ResolvedPack[],
+  mountPath: string,
+  slashCommandIndex?: SlashCommandIndexOptions,
+): string {
+  return [
+    'set -e',
+    ...AGENT_PACK_TOOL_CHECKS,
+    ...packs.map((p) => buildPackCloneSnippet(p, mountPath)),
+    buildSlashCommandIndexSnippet(mountPath, slashCommandIndex),
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+export function buildAgentPackSyncScript(opts: {
+  packs: ResolvedPack[]
+  mountPath: string
+  intervalSec: number
+  slashCommandIndex?: SlashCommandIndexOptions
+}): string {
+  const { packs, mountPath, intervalSec, slashCommandIndex } = opts
   const cloneAll = packs.map((p) => buildPackCloneSnippet(p, mountPath)).join('\n')
   const indexCommands = buildSlashCommandIndexSnippet(mountPath, slashCommandIndex)
-  const script = `
+
+  return `
 set -e
-apk add --no-cache git >/dev/null
+${AGENT_PACK_TOOL_CHECKS.join('\n')}
 RUN_SCRIPT() {
 ${cloneAll}
 ${indexCommands}
@@ -355,16 +412,4 @@ while true; do
   sleep ${intervalSec}
 done
 `.trim()
-
-  return {
-    name: 'agent-pack-sync',
-    image: AGENT_PACK_IMAGE,
-    imagePullPolicy: 'IfNotPresent',
-    command: ['/bin/sh', '-c', script],
-    volumeMounts: [{ name: volumeName, mountPath }],
-    resources: {
-      requests: { cpu: '25m', memory: '64Mi' },
-      limits: { cpu: '250m', memory: '256Mi' },
-    },
-  }
 }

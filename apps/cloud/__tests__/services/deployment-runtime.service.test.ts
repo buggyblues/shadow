@@ -378,9 +378,24 @@ users:
 
   it('passes runtime env overrides without mutating process.env', async () => {
     delete process.env.SHADOW_RUNTIME_TEST_TOKEN
+    const provisionState = {
+      provisionedAt: '2026-04-28T00:00:00.000Z',
+      plugins: {
+        shadowob: {
+          buddies: {
+            'strategy-buddy': {
+              agentId: 'agent-1',
+              userId: 'user-1',
+              token: 'agent-token',
+            },
+          },
+        },
+      },
+    }
 
     const up = vi.fn().mockImplementation(async (options) => {
       expect(options.runtimeEnvVars).toEqual({ SHADOW_RUNTIME_TEST_TOKEN: 'tenant-a-token' })
+      expect(options.initialProvisionState).toEqual(provisionState)
       expect(process.env.SHADOW_RUNTIME_TEST_TOKEN).toBeUndefined()
 
       return {
@@ -411,6 +426,7 @@ users:
         EMPTY_RUNTIME_VALUE: '',
         SAVED_RUNTIME_VALUE: '__SAVED__',
       },
+      provisionState,
     })
 
     expect(up).toHaveBeenCalledOnce()

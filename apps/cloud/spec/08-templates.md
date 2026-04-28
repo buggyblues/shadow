@@ -286,13 +286,13 @@ describe('template validation', () => {
 ### 7.2 统一要求
 
 **所有模板必须包含**:
-- `name` (string, 必选)
+- `name` (string, 必选，稳定 kebab-case slug，例如 `customer-support-team`)
+- `title` (string, 必选，可通过 `${i18n:title}` 本地化)
 - `version` (semver string, 必选)
-- `description` (string, 必选, 一句话说明)
+- `description` (string, 必选，可通过 `${i18n:description}` 本地化；说明该 Agent Team 能为客户带来的独特价值)
 - `tags` (string[], 必选, 至少 1 个标签)
 
 **可选元数据**:
-- `team` (string)
 - `icon` (emoji string)
 - `author` (string)
 - `minVersion` (最低 shadowob-cloud CLI 版本)
@@ -303,11 +303,14 @@ describe('template validation', () => {
 interface TemplateFile extends CloudConfig {
   // 模板元数据
   $schema?: string
+  /** Stable kebab-case slug */
   name: string
+  /** Locale-aware display title */
+  title: string
   version: string
+  /** Locale-aware customer value proposition */
   description: string
   tags: string[]
-  team?: string
   icon?: string
   author?: string
   minVersion?: string
@@ -325,8 +328,9 @@ interface TemplateFile extends CloudConfig {
 ```jsonc
 {
   "name": "shadowob-cloud",
+  "title": "${i18n:title}",
   "version": "1.0.0",
-  "description": "Basic single-agent deployment",
+  "description": "${i18n:description}",
   "tags": ["basic", "starter"],
   "namespace": "shadowob-cloud",
   "providers": [{
@@ -350,8 +354,9 @@ interface TemplateFile extends CloudConfig {
 ```jsonc
 {
   "name": "gitagent-from-repo",
+  "title": "${i18n:title}",
   "version": "1.0.0",
-  "description": "Deploy an agent from a GitAgent-standard repository",
+  "description": "${i18n:description}",
   "tags": ["gitagent", "git"],
   "namespace": "shadowob-cloud",
   "providers": [{

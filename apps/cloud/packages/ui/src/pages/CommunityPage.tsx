@@ -29,7 +29,8 @@ function CommunityCard({
   forking: boolean
 }) {
   const { t } = useTranslation()
-  const summary = template.overview?.[0] ?? template.description
+  const displayTitle = template.title || template.name
+  const summary = template.description || template.overview?.[0]
   const words = template.name.split('-').slice(0, 2)
 
   return (
@@ -67,9 +68,7 @@ function CommunityCard({
             {template.category}
           </Badge>
         </div>
-        <p className="line-clamp-1 text-[15px] font-extrabold tracking-[-0.02em] text-text-primary">
-          {template.name}
-        </p>
+        <p className="line-clamp-1 text-[15px] font-extrabold text-text-primary">{displayTitle}</p>
         <p className="line-clamp-2 text-xs leading-5 text-text-secondary">{summary}</p>
         <div className="mt-auto flex items-center gap-2 pt-2">
           <Button
@@ -139,6 +138,7 @@ export function CommunityPage() {
     return templates.filter(
       (t) =>
         t.name.toLowerCase().includes(q) ||
+        t.title.toLowerCase().includes(q) ||
         t.description.toLowerCase().includes(q) ||
         t.category.toLowerCase().includes(q),
     )
@@ -146,7 +146,7 @@ export function CommunityPage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('nav.community') }]}
+      breadcrumb={[]}
       title={t('community.title')}
       description={t('community.description')}
     >

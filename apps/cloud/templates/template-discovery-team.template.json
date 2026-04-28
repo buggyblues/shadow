@@ -1,15 +1,9 @@
 {
   "version": "1.0.0",
-  "name": "${i18n:name}",
+  "name": "template-discovery-team",
+  "title": "${i18n:title}",
   "description": "${i18n:description}",
   "environment": "production",
-  "team": {
-    "name": "template-discovery-team",
-    "description": "Three-agent team that searches the Shadow template store, recommends the best match for your use case, and guides you through local or cloud deployment step-by-step.",
-    "defaultCompliance": {
-      "riskTier": "low"
-    }
-  },
   "use": [
     {
       "plugin": "model-provider"
@@ -181,12 +175,12 @@
   },
   "i18n": {
     "en": {
-      "name": "Template Discovery Team",
-      "description": "Three-agent team: a Scout that searches the Shadow template store, an Advisor that matches templates to your use case, and a Deploy Mentor that guides you step-by-step through local or cloud deployment."
+      "title": "Template Discovery Team",
+      "description": "Help customers choose and deploy the right Shadow template with agents that search the store, translate requirements into recommendations, and guide local or cloud rollout step by step."
     },
     "zh-CN": {
-      "name": "模板发现团队",
-      "description": "三智能体团队：Scout 负责搜索 Shadow 模板商店，Advisor 根据你的使用场景匹配最合适的模板，Deploy Mentor 逐步指导你完成本地或云端部署。"
+      "title": "模板发现团队",
+      "description": "帮助客户选择并部署合适的 Shadow 模板：智能体会搜索模板商店、把需求转化为推荐，并逐步指导本地或云端上线。"
     }
   }
 }

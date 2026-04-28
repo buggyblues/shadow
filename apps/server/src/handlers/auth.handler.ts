@@ -4,9 +4,25 @@ import { z } from 'zod'
 import type { AppContainer } from '../container'
 import { verifyToken } from '../lib/jwt'
 import { logger } from '../lib/logger'
+import { getRedisClient, presenceKeys } from '../lib/redis'
 import { authMiddleware } from '../middleware/auth.middleware'
 import { changePasswordSchema, loginSchema, registerSchema } from '../validators/auth.schema'
 import { forceDisconnectUser } from '../ws/presence.gateway'
+
+async function resolveLiveUserStatus(
+  userId: string,
+  fallback: 'online' | 'idle' | 'dnd' | 'offline',
+): Promise<'online' | 'idle' | 'dnd' | 'offline'> {
+  try {
+    const redis = await getRedisClient()
+    if (!redis) return fallback
+    const sockets = await redis.sCard(presenceKeys.onlineSockets(userId))
+    return sockets > 0 ? 'online' : fallback
+  } catch (err) {
+    logger.warn({ err, userId }, 'Failed to resolve live user presence')
+    return fallback
+  }
+}
 
 export function createAuthHandler(container: AppContainer) {
   const authHandler = new Hono()
@@ -44,7 +60,8 @@ export function createAuthHandler(container: AppContainer) {
     const authService = container.resolve('authService')
     const user = c.get('user')
     const result = await authService.getMe(user.userId)
-    return c.json(result)
+    const status = await resolveLiveUserStatus(result.id, result.status)
+    return c.json({ ...result, status })
   })
 
   // PATCH /api/auth/me — update profile
@@ -80,7 +97,10 @@ export function createAuthHandler(container: AppContainer) {
       const ipAddress =
         c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? c.req.header('x-real-ip')
       const userAgent = c.req.header('user-agent')
-      await authService.changePassword(user.userId, input, { ipAddress, userAgent })
+      await authService.changePassword(user.userId, input, {
+        ipAddress,
+        userAgent,
+      })
       return c.json({ ok: true })
     },
   )
@@ -125,7 +145,12 @@ export function createAuthHandler(container: AppContainer) {
       userId: string
       status: string
       totalOnlineSeconds: number
-      botUser?: { id: string; username: string; displayName: string; avatarUrl: string | null }
+      botUser?: {
+        id: string
+        username: string
+        displayName: string
+        avatarUrl: string | null
+      }
     }> = []
     if (!user.isBot) {
       const agents = await agentDao.findByOwnerId(user.id)
@@ -150,13 +175,14 @@ export function createAuthHandler(container: AppContainer) {
       )
     }
 
+    const status = await resolveLiveUserStatus(user.id, user.status)
     return c.json({
       id: user.id,
       username: user.username,
       displayName: user.displayName ?? user.username,
       avatarUrl: user.avatarUrl,
       isBot: user.isBot,
-      status: user.status,
+      status,
       createdAt: user.createdAt,
       agent: agent
         ? {
@@ -164,7 +190,9 @@ export function createAuthHandler(container: AppContainer) {
             ownerId: agent.ownerId,
             status: agent.status,
             totalOnlineSeconds: agent.totalOnlineSeconds ?? 0,
-            config: { description: (agent.config as Record<string, unknown>)?.description },
+            config: {
+              description: (agent.config as Record<string, unknown>)?.description,
+            },
           }
         : undefined,
       ownerProfile,
@@ -187,9 +215,9 @@ export function createAuthHandler(container: AppContainer) {
       serverDao.findByUserId(userId),
       agentDao.findByOwnerId(userId),
       walletService.getOrCreateWallet(userId).catch(() => ({ balance: 0 })),
-      taskCenterService
-        .getTaskCenter(userId)
-        .catch(() => ({ summary: { totalTasks: 0, claimableTasks: 0, completedTasks: 0 } })),
+      taskCenterService.getTaskCenter(userId).catch(() => ({
+        summary: { totalTasks: 0, claimableTasks: 0, completedTasks: 0 },
+      })),
       taskCenterService
         .getReferralSummary(userId)
         .catch(() => ({ successfulInvites: 0, totalInviteRewards: 0 })),
@@ -266,12 +294,18 @@ export function createAuthHandler(container: AppContainer) {
         result.redirect.startsWith('com.shadowob.mobile://')
       ) {
         // Mobile: redirect with tokens as query params for deep linking
-        const callbackUrl = `${result.redirect}?access_token=${encodeURIComponent(result.accessToken)}&refresh_token=${encodeURIComponent(result.refreshToken)}`
+        const callbackUrl = `${result.redirect}?access_token=${encodeURIComponent(
+          result.accessToken,
+        )}&refresh_token=${encodeURIComponent(result.refreshToken)}`
         return c.redirect(callbackUrl)
       }
 
       // Web: redirect to frontend callback page with tokens in hash
-      const callbackUrl = `/app/oauth-callback#access_token=${encodeURIComponent(result.accessToken)}&refresh_token=${encodeURIComponent(result.refreshToken)}&redirect=${encodeURIComponent(result.redirect)}`
+      const callbackUrl = `/app/oauth-callback#access_token=${encodeURIComponent(
+        result.accessToken,
+      )}&refresh_token=${encodeURIComponent(
+        result.refreshToken,
+      )}&redirect=${encodeURIComponent(result.redirect)}`
       return c.redirect(callbackUrl)
     } catch (error) {
       logger.warn({ err: error, provider }, 'External OAuth callback failed')

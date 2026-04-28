@@ -51,7 +51,7 @@
     "dev": "pnpm dev:prepare && pnpm dev:infra && pnpm -r --parallel --filter @shadowob/server --filter @shadowob/web --filter @shadowob/admin dev",
     "dev:prepare": "node scripts/ensure-dev-builds.mjs",
     "dev:infra": "docker compose up -d postgres redis minio && docker compose stop server web admin",
-    "dev:infra:frontend": "docker compose up -d postgres redis minio server && docker compose stop web admin",
+    "dev:infra:frontend": "docker compose up -d postgres redis minio server --build && docker compose stop web admin",
     "dev:infra:down": "docker compose stop postgres redis minio",
     "dev:backend": "pnpm dev:prepare && pnpm dev:infra && pnpm -r --parallel --filter @shadowob/server --filter @shadowob/cloud dev:backend",
     "dev:frontend": "pnpm dev:prepare && pnpm dev:infra:frontend && pnpm -r --parallel --filter @shadowob/web --filter @shadowob/admin --filter @shadowob/cloud --filter @shadowob/website dev:frontend",

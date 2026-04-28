@@ -505,6 +505,56 @@ export interface ShadowTransaction {
   createdAt: string
 }
 
+// ─── Cloud SaaS Provider Gateway Types ─────────────────────────────────────
+
+export interface ShadowCloudProviderCatalog {
+  pluginId: string
+  pluginName: string
+  provider: Record<string, unknown>
+  secretFields?: Record<string, unknown>[]
+}
+
+export interface ShadowCloudProviderEnvVar {
+  key: string
+  maskedValue: string
+  isSecret: boolean
+}
+
+export interface ShadowCloudProviderModel {
+  id: string
+  name?: string
+  tags?: string[]
+  contextWindow?: number
+  maxTokens?: number
+  cost?: {
+    input?: number
+    output?: number
+  }
+  capabilities?: {
+    vision?: boolean
+    tools?: boolean
+    reasoning?: boolean
+  }
+}
+
+export interface ShadowCloudProviderProfile {
+  id: string
+  providerId: string
+  name: string
+  scope: string
+  enabled: boolean
+  config: {
+    baseUrl?: string
+    apiFormat?: 'openai' | 'anthropic' | 'gemini'
+    authType?: 'api_key'
+    discoveredAt?: string
+    models?: ShadowCloudProviderModel[]
+    [key: string]: unknown
+  }
+  envVars: ShadowCloudProviderEnvVar[]
+  updatedAt?: string
+}
+
 // ─── Task Center Types ──────────────────────────────────────────────────────
 
 export interface ShadowTask {

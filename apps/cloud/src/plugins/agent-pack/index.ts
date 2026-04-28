@@ -52,6 +52,8 @@ import type {
 import {
   agentPackSlashCommandsIndexPath,
   buildAgentPackInitContainer,
+  buildAgentPackInitScript,
+  buildAgentPackSyncScript,
   buildAgentPackSyncSidecar,
   DEFAULT_INSTRUCTION_FILES,
   type PackKind,
@@ -63,6 +65,7 @@ import {
 import manifest from './manifest.json' with { type: 'json' }
 
 const VOLUME_NAME = 'agent-packs'
+const SCRIPT_VOLUME_NAME = 'agent-pack-scripts'
 const DEFAULT_MOUNT = '/agent-packs'
 
 /** Kinds wired into OpenClaw `skills.load.extraDirs`. */
@@ -360,17 +363,19 @@ const agentPackK8sProvider: PluginK8sProvider = {
       packs,
       mountPath,
       VOLUME_NAME,
+      SCRIPT_VOLUME_NAME,
       slashCommandIndex,
     )
+    const scriptConfigMapName = `${agent.id}-agent-pack-scripts`
 
     // Aggregate per-kind directory lists so the agent runtime can consume
     // them via env vars (no schema change required in OpenClaw today).
-    const byKind = new Map<PackKind, string[]>()
+    const byKind = new Map<PackKind, Set<string>>()
     for (const p of packs) {
       for (const m of p.mounts) {
-        const list = byKind.get(m.kind) ?? []
-        list.push(`${mountPath}/${p.id}/${m.kind}`)
-        byKind.set(m.kind, list)
+        const dirs = byKind.get(m.kind) ?? new Set<string>()
+        dirs.add(`${mountPath}/${p.id}/${m.kind}`)
+        byKind.set(m.kind, dirs)
       }
     }
 
@@ -387,13 +392,42 @@ const agentPackK8sProvider: PluginK8sProvider = {
     }
     for (const [kind, dirs] of byKind) {
       const name = envForKind[kind]
-      if (name) envVars.push({ name, value: dirs.join(':') })
+      if (name) envVars.push({ name, value: [...dirs].join(':') })
     }
     envVars.push({ name: 'SHADOW_PACK_MOUNT_ROOT', value: mountPath })
 
     const result: PluginK8sResult = {
       initContainers: [initContainer],
-      volumes: [{ name: VOLUME_NAME, spec: { emptyDir: {} } }],
+      configMaps: [
+        {
+          name: scriptConfigMapName,
+          data: {
+            'init.sh': buildAgentPackInitScript(packs, mountPath, slashCommandIndex),
+            'sync.sh': buildAgentPackSyncScript({
+              packs,
+              mountPath,
+              intervalSec: parsePollInterval(opts.poll),
+              slashCommandIndex,
+            }),
+          },
+          labels: {
+            app: 'shadowob-cloud',
+            agent: agent.id,
+          },
+        },
+      ],
+      volumes: [
+        { name: VOLUME_NAME, spec: { emptyDir: {} } },
+        {
+          name: SCRIPT_VOLUME_NAME,
+          spec: {
+            configMap: {
+              name: scriptConfigMapName,
+              defaultMode: 0o755,
+            },
+          },
+        },
+      ],
       volumeMounts: [{ name: VOLUME_NAME, mountPath, readOnly: false }],
       envVars,
       labels: {
@@ -408,6 +442,7 @@ const agentPackK8sProvider: PluginK8sProvider = {
       packs,
       mountPath,
       volumeName: VOLUME_NAME,
+      scriptVolumeName: SCRIPT_VOLUME_NAME,
       intervalSec: parsePollInterval(opts.poll),
       slashCommandIndex,
     })

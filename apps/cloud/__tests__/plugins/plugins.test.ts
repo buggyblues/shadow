@@ -172,19 +172,20 @@ describe('loadAllPlugins', () => {
     const registry = createPluginRegistry()
     await loadAllPlugins(registry)
 
-    // Should have loaded 67 plugins (75 minus 8 removed placeholders)
-    expect(registry.size).toBeGreaterThanOrEqual(67)
-
-    // Spot-check some specific plugins
-    expect(registry.get('shadowob')).toBeDefined()
-    expect(registry.get('slack')).toBeDefined()
-    expect(registry.get('github')).toBeDefined()
-    expect(registry.get('openai')).toBeDefined()
-    expect(registry.get('deepseek')).toBeDefined()
-    expect(registry.get('stripe')).toBeDefined()
-    expect(registry.get('notion')).toBeDefined()
-    expect(registry.get('discord')).toBeDefined()
-    expect(registry.get('anthropic')).toBeDefined()
+    expect(
+      registry
+        .getAll()
+        .map((plugin) => plugin.manifest.id)
+        .sort(),
+    ).toEqual([
+      'agent-pack',
+      'gitagent',
+      'github',
+      'model-provider',
+      'notion',
+      'shadowob',
+      'stripe',
+    ])
   }, 30_000)
 
   it('should expose provider catalogs for selector plugins', async () => {
@@ -591,55 +592,6 @@ describe('model-provider plugin', () => {
   })
 })
 
-// ─── Channel plugin implementations ───────────────────────────────────────
-
-describe('Channel plugins', () => {
-  it('discord plugin should produce channel config', async () => {
-    const mod = await import('../../src/plugins/discord/index.js')
-    const plugin = mod.default as PluginDefinition
-    expect(plugin.manifest.id).toBe('discord')
-    expect(plugin.manifest.capabilities).toContain('channel')
-
-    const ctx = makeBuildContext({
-      secrets: { DISCORD_BOT_TOKEN: 'tok' },
-      agentConfig: { channels: ['123'], guildId: 'guild-1' },
-    })
-    const fragment = plugin._hooks.buildConfig[0]!(ctx)
-    expect(fragment?.channels).toHaveProperty('discord')
-    expect(fragment?.bindings).toHaveLength(1)
-  })
-
-  it('telegram plugin should produce channel config', async () => {
-    const mod = await import('../../src/plugins/telegram/index.js')
-    const plugin = mod.default as PluginDefinition
-    const ctx = makeBuildContext({ secrets: { TELEGRAM_BOT_TOKEN: 'tok' }, agentConfig: {} })
-    const fragment = plugin._hooks.buildConfig[0]!(ctx)
-    expect(fragment?.channels).toHaveProperty('telegram')
-  })
-
-  it('slack plugin should produce channel config', async () => {
-    const mod = await import('../../src/plugins/slack/index.js')
-    const plugin = mod.default as PluginDefinition
-    const ctx = makeBuildContext({
-      secrets: { SLACK_BOT_TOKEN: 'tok' },
-      agentConfig: { channels: ['general'] },
-    })
-    const fragment = plugin._hooks.buildConfig[0]!(ctx)
-    expect(fragment?.channels).toHaveProperty('slack')
-  })
-
-  it('line plugin should produce channel config', async () => {
-    const mod = await import('../../src/plugins/line/index.js')
-    const plugin = mod.default as PluginDefinition
-    const ctx = makeBuildContext({
-      secrets: { LINE_CHANNEL_ACCESS_TOKEN: 'tok', LINE_CHANNEL_SECRET: 'sec' },
-      agentConfig: {},
-    })
-    const fragment = plugin._hooks.buildConfig[0]!(ctx)
-    expect(fragment?.channels).toHaveProperty('line')
-  })
-})
-
 // ─── Tool plugin implementations ──────────────────────────────────────────
 
 describe('Tool plugins', () => {
@@ -662,14 +614,5 @@ describe('Tool plugins', () => {
     const ctx = makeBuildContext({ secrets: { STRIPE_SECRET_KEY: 'sk_test' }, agentConfig: {} })
     const result = plugin._hooks.validate[0]!(ctx)
     expect(result?.valid).toBe(true)
-  })
-
-  it('openai plugin should validate missing API key', async () => {
-    const mod = await import('../../src/plugins/openai/index.js')
-    const plugin = mod.default as PluginDefinition
-    const ctx = makeBuildContext({ secrets: {}, agentConfig: {} })
-    const result = plugin._hooks.validate[0]!(ctx)!
-    expect(result.valid).toBe(false)
-    expect(result.errors[0].message).toContain('API Key')
   })
 })

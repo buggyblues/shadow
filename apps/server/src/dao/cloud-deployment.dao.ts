@@ -1,11 +1,41 @@
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm'
 import { type Database, workerLockClient } from '../db'
 import { cloudDeploymentLogs, cloudDeployments } from '../db/schema'
+
+const ACTIVE_OPERATION_STATUSES = ['pending', 'deploying', 'destroying', 'cancelling'] as const
+const CURRENT_INSTANCE_STATUSES = [
+  'pending',
+  'deploying',
+  'deployed',
+  'destroying',
+  'cancelling',
+] as const
+
+type CloudDeploymentStatus = (typeof cloudDeployments.$inferSelect)['status']
+type CloudDeploymentRow = typeof cloudDeployments.$inferSelect
 
 export class CloudDeploymentDao {
   constructor(private deps: { db: Database }) {}
   private get db() {
     return this.deps.db
+  }
+
+  private namespaceScopeWhere(data: {
+    userId: string
+    namespace: string
+    clusterId?: string | null
+  }) {
+    return and(
+      eq(cloudDeployments.userId, data.userId),
+      eq(cloudDeployments.namespace, data.namespace),
+      data.clusterId
+        ? eq(cloudDeployments.clusterId, data.clusterId)
+        : isNull(cloudDeployments.clusterId),
+    )
+  }
+
+  private operationLockKey(data: { userId: string; namespace: string; clusterId?: string | null }) {
+    return `cloud-deployment:${data.userId}:${data.clusterId ?? 'platform'}:${data.namespace}`
   }
 
   async findById(id: string, userId: string) {
@@ -75,6 +105,96 @@ export class CloudDeploymentDao {
    */
   async listLive() {
     return this.db.select().from(cloudDeployments).where(eq(cloudDeployments.status, 'deployed'))
+  }
+
+  async findLatestCurrentInNamespace(data: {
+    userId: string
+    namespace: string
+    clusterId?: string | null
+    excludeId?: string
+  }) {
+    const filters = [
+      this.namespaceScopeWhere(data),
+      inArray(cloudDeployments.status, [...CURRENT_INSTANCE_STATUSES]),
+    ]
+    if (data.excludeId) filters.push(ne(cloudDeployments.id, data.excludeId))
+
+    const result = await this.db
+      .select()
+      .from(cloudDeployments)
+      .where(and(...filters))
+      .orderBy(desc(cloudDeployments.updatedAt), desc(cloudDeployments.createdAt))
+      .limit(1)
+    return result[0] ?? null
+  }
+
+  async findActiveOperationInNamespace(data: {
+    userId: string
+    namespace: string
+    clusterId?: string | null
+    excludeId?: string
+  }) {
+    const filters = [
+      this.namespaceScopeWhere(data),
+      inArray(cloudDeployments.status, [...ACTIVE_OPERATION_STATUSES]),
+    ]
+    if (data.excludeId) filters.push(ne(cloudDeployments.id, data.excludeId))
+
+    const result = await this.db
+      .select()
+      .from(cloudDeployments)
+      .where(and(...filters))
+      .orderBy(desc(cloudDeployments.updatedAt), desc(cloudDeployments.createdAt))
+      .limit(1)
+    return result[0] ?? null
+  }
+
+  async findNewerCurrentInNamespace(deployment: CloudDeploymentRow) {
+    const result = await this.db
+      .select()
+      .from(cloudDeployments)
+      .where(
+        and(
+          this.namespaceScopeWhere(deployment),
+          inArray(cloudDeployments.status, [...CURRENT_INSTANCE_STATUSES]),
+          ne(cloudDeployments.id, deployment.id),
+          sql`${cloudDeployments.createdAt} > ${deployment.createdAt}`,
+        ),
+      )
+      .orderBy(desc(cloudDeployments.createdAt))
+      .limit(1)
+    return result[0] ?? null
+  }
+
+  async updateConfigSnapshot(id: string, configSnapshot: unknown) {
+    const result = await this.db
+      .update(cloudDeployments)
+      .set({ configSnapshot, updatedAt: new Date() })
+      .where(eq(cloudDeployments.id, id))
+      .returning()
+    return result[0] ?? null
+  }
+
+  async markNamespaceRowsDestroyed(data: {
+    userId: string
+    namespace: string
+    clusterId?: string | null
+    errorMessage?: string | null
+  }) {
+    return this.db
+      .update(cloudDeployments)
+      .set({
+        status: 'destroyed' as CloudDeploymentStatus,
+        errorMessage: data.errorMessage ?? null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          this.namespaceScopeWhere(data),
+          inArray(cloudDeployments.status, [...CURRENT_INSTANCE_STATUSES]),
+        ),
+      )
+      .returning()
   }
 
   async create(data: {
@@ -156,6 +276,28 @@ export class CloudDeploymentDao {
   async releaseWorkerLock(deploymentId: string): Promise<void> {
     await workerLockClient`
       select pg_advisory_unlock(hashtext(${deploymentId}))
+    `
+  }
+
+  async tryAcquireOperationLock(data: {
+    userId: string
+    namespace: string
+    clusterId?: string | null
+  }): Promise<boolean> {
+    const [row] = await workerLockClient<{ locked?: unknown }[]>`
+      select pg_try_advisory_lock(hashtext(${this.operationLockKey(data)})) as locked
+    `
+    const locked = row?.locked
+    return locked === true || locked === 't' || locked === 1 || locked === '1'
+  }
+
+  async releaseOperationLock(data: {
+    userId: string
+    namespace: string
+    clusterId?: string | null
+  }): Promise<void> {
+    await workerLockClient`
+      select pg_advisory_unlock(hashtext(${this.operationLockKey(data)}))
     `
   }
 }

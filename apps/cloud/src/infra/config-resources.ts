@@ -4,6 +4,7 @@
 
 import * as k8s from '@pulumi/kubernetes'
 import type * as pulumi from '@pulumi/pulumi'
+import { PULUMI_MANAGED_ANNOTATIONS } from './constants.js'
 import { type AgentRuntimePackage } from './runtime-package.js'
 
 export interface ConfigResourcesOptions {
@@ -30,6 +31,7 @@ export function createConfigResources(options: ConfigResourcesOptions) {
           app: 'shadowob-cloud',
           agent: agentName,
         },
+        annotations: PULUMI_MANAGED_ANNOTATIONS,
       },
       data: runtimePackage.configData,
     },
@@ -46,6 +48,7 @@ export function createConfigResources(options: ConfigResourcesOptions) {
           app: 'shadowob-cloud',
           agent: agentName,
         },
+        annotations: PULUMI_MANAGED_ANNOTATIONS,
       },
       type: 'Opaque',
       stringData: runtimePackage.secretData,

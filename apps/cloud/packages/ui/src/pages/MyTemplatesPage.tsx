@@ -160,7 +160,7 @@ function TemplateCard({
   const overview = useMemo(() => getMyTemplateOverview(content), [content])
   const sourceType = getTemplateSourceType(templateSlug)
   const summaryText =
-    baseTemplate?.overview[0] ?? baseTemplate?.description ?? t('templateDetail.customDescription')
+    baseTemplate?.description ?? baseTemplate?.overview[0] ?? t('templateDetail.customDescription')
   const displayEmoji =
     baseTemplate?.emoji ?? (sourceType === 'git' ? '🌿' : sourceType === 'store' ? '🛍️' : '✨')
   const updatedLabel = new Date(updatedAt).toLocaleDateString(i18n.language, {
@@ -183,7 +183,7 @@ function TemplateCard({
                   <Link
                     to="/my-templates/$name"
                     params={{ name }}
-                    className="truncate text-[17px] font-extrabold tracking-[-0.02em] text-text-primary transition-colors hover:text-primary"
+                    className="truncate text-[17px] font-extrabold text-text-primary transition-colors hover:text-primary"
                   >
                     {name}
                   </Link>
@@ -344,7 +344,9 @@ function ForkDialog({
     const q = searchQuery.toLowerCase()
     return templates.filter(
       (template) =>
-        template.name.toLowerCase().includes(q) || template.description?.toLowerCase().includes(q),
+        template.name.toLowerCase().includes(q) ||
+        template.title.toLowerCase().includes(q) ||
+        template.description?.toLowerCase().includes(q),
     )
   }, [templates, searchQuery])
 
@@ -419,7 +421,7 @@ function ForkDialog({
                           active ? 'text-text-primary' : 'text-text-secondary',
                         )}
                       >
-                        {template.name}
+                        {template.title || template.name}
                       </span>
                       <span className="ml-2 shrink-0 text-xs text-text-muted">
                         {t('store.agentCount', { count: template.agentCount })}
@@ -681,7 +683,7 @@ export function MyTemplatesPage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('templates.title') }]}
+      breadcrumb={[]}
       title={t('templates.title')}
       headerContent={
         <div className="space-y-3">

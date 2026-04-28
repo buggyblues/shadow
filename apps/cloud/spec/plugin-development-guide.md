@@ -494,9 +494,9 @@ it('produces valid K8s manifests', async () => {
 
 ## 6. Plugin Examples
 
-### Communication Plugin (Slack)
+### Communication Plugin (Slack-style)
 
-Full implementation: `src/plugins/slack/`
+Historical example; Slack is not part of the default bundled plugin surface.
 
 - Capability: `channel`, `notification`
 - Auth: `token` (Bot Token)
@@ -522,9 +522,9 @@ Full implementation: `src/plugins/posthog/`
 - buildOpenClawConfig → plugins.entries.posthog
 - No provisioning needed
 
-### Auth Provider Plugin (OpenAI)
+### Auth Provider Plugin (OpenAI-style)
 
-Full implementation: `src/plugins/openai/`
+Provider catalogs now live in `src/plugins/model-provider/`; provider-specific plugins are not bundled by default.
 
 - Capability: `auth-provider`
 - Auth: `api-key`

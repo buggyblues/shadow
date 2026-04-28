@@ -8,11 +8,14 @@
 import type { TemplateDao } from '../dao/template.dao.js'
 
 export interface TemplateMeta {
+  /** Stable kebab-case template slug */
   name: string
+  /** Locale-aware display title */
+  title: string
   /** Relative path to the config file from templatesDir */
   file: string
+  /** Locale-aware customer value proposition */
   description: string
-  teamName: string
   agentCount: number
   namespace: string
   /** Absolute path to the directory containing the config (for relative path resolution) */
@@ -37,11 +40,11 @@ export class TemplateService {
       if (!raw) {
         results.push({
           name: record.slug,
+          title: record.slug,
           file: record.isFolder
             ? `${record.slug}/shadowob-cloud.json`
             : `${record.slug}.template.json`,
           description: '',
-          teamName: record.slug,
           agentCount: 0,
           namespace: record.slug,
           dir: record.dir,
@@ -52,17 +55,21 @@ export class TemplateService {
       const indexMeta = record.indexPath ? await this.dao.readJson(record.indexPath) : null
       const source = indexMeta ?? raw
       const i18nDict = resolveI18nDict(source, locale)
-      const team = source.team as Record<string, unknown> | undefined
+      const legacyDisplayName = resolveI18nValue(source.name, i18nDict)
 
       results.push({
         name: record.slug,
+        title:
+          resolveI18nValue(source.title, i18nDict) ??
+          (legacyDisplayName && legacyDisplayName !== record.slug
+            ? legacyDisplayName
+            : undefined) ??
+          record.slug,
         file: record.isFolder
           ? `${record.slug}/shadowob-cloud.json`
           : `${record.slug}.template.json`,
         dir: record.dir,
-        description:
-          resolveI18nValue(source.description, i18nDict) ?? (team?.description as string) ?? '',
-        teamName: resolveI18nValue(source.name, i18nDict) ?? (team?.name as string) ?? record.slug,
+        description: resolveI18nValue(source.description, i18nDict) ?? '',
         agentCount: (((raw.deployments as Record<string, unknown>)?.agents as unknown[]) ?? [])
           .length,
         namespace:
@@ -111,9 +118,10 @@ function resolveI18nDict(
   locale?: string,
 ): Record<string, string> | undefined {
   const i18n = raw.i18n as Record<string, Record<string, string>> | undefined
-  if (!i18n || !locale) return undefined
-  const baseLocale = locale.split('-')[0]
-  return i18n[locale] ?? (baseLocale ? i18n[baseLocale] : undefined) ?? i18n.en
+  if (!i18n) return undefined
+  const requestedLocale = locale ?? 'en'
+  const baseLocale = requestedLocale.split('-')[0]
+  return i18n[requestedLocale] ?? (baseLocale ? i18n[baseLocale] : undefined) ?? i18n.en
 }
 
 /**

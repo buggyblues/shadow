@@ -28,7 +28,7 @@ Score each candidate against the user's requirements:
 Present the top recommendation first, then alternatives:
 
 ```
-✅ Best Match: **{teamName}** (`{slug}`)
+✅ Best Match: **{title}** (`{slug}`)
 {description}
 
 Why it fits:
@@ -38,7 +38,7 @@ Why it fits:
 ⚠️ Gaps / trade-offs:
 - {gap 1 — be honest}
 
-Runner-up: **{teamName}** (`{slug}`) — {one-line reason}
+Runner-up: **{title}** (`{slug}`) — {one-line reason}
 ```
 
 Always end with: "Does this match what you had in mind? If yes, I'll hand off to the Deploy Mentor."

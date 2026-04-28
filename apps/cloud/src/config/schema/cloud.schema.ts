@@ -39,9 +39,11 @@ export interface CloudPluginInstanceConfig {
 export interface CloudConfig {
   /** Config version */
   version: string
-  /** Human-readable name for this deployment config (shown in console) */
+  /** Stable kebab-case config/template slug */
   name?: string
-  /** Description of what this agent team does */
+  /** Human-readable title for this deployment config (shown in console) */
+  title?: string
+  /** Description of the customer value this agent team provides */
   description?: string
   /** Deployment environment */
   environment?: 'development' | 'staging' | 'production'
@@ -56,14 +58,16 @@ export interface CloudConfig {
    *
    * @example
    * {
-   *   "en": { "team.name": "Research Team", "team.desc": "AI research agents" },
-   *   "zh-CN": { "team.name": "研究团队", "team.desc": "AI 研究 Agent 集群" }
+   *   "en": { "title": "Research Team", "description": "AI research agents" },
+   *   "zh-CN": { "title": "研究团队", "description": "AI 研究 Agent 集群" }
    * }
    */
   i18n?: Record<string, Record<string, string>>
   /**
    * Team / agent pack definition.
    * Groups agents with shared defaults.
+   *
+   * @deprecated Template metadata should use top-level `title` and `description`.
    */
   team?: TeamConfig
   /**

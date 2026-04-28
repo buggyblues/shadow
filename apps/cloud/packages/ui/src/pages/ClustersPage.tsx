@@ -20,8 +20,6 @@ import {
   ChevronRight,
   FolderOpen,
   Layers,
-  Minus,
-  Plus,
   RefreshCw,
   Rocket,
   Trash2,
@@ -37,7 +35,7 @@ import { StatsGrid } from '@/components/StatsGrid'
 import { StatusDot } from '@/components/StatusDot'
 import { useDebounce } from '@/hooks/useDebounce'
 import { api, type Deployment } from '@/lib/api'
-import { getAge, getReadyReplicas, groupBy, isDeploymentReady, pluralize } from '@/lib/utils'
+import { getAge, groupBy, isDeploymentReady, pluralize } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/stores/toast'
 
@@ -119,44 +117,7 @@ function NamespaceCard({
 }
 
 function DeploymentRow({ dep }: { dep: Deployment }) {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const toast = useToast()
-  const addActivity = useAppStore((s) => s.addActivity)
   const ready = isDeploymentReady(dep.ready)
-  const [replicas, setReplicas] = useState<number | null>(null)
-
-  const currentReplicas =
-    replicas ??
-    (() => {
-      return getReadyReplicas(dep.ready)
-    })()
-
-  const scaleMutation = useMutation({
-    mutationFn: (count: number) => api.deployments.scale(dep.namespace, dep.name, count),
-    onSuccess: (_data, count) => {
-      queryClient.invalidateQueries({ queryKey: ['deployments'] })
-      toast.success(
-        t('deployments.scaledAgent', {
-          agent: dep.name,
-          count,
-        }),
-      )
-      addActivity({
-        type: 'scale',
-        title: t('deploymentDetail.scaleActivityTitle', { agent: dep.name }),
-        detail: t('deploymentDetail.scaleActivityDetail', { count }),
-        namespace: dep.namespace,
-      })
-    },
-    onError: () => toast.error(t('deployments.scaleFailed', { agent: dep.name })),
-  })
-
-  const handleScale = (delta: number) => {
-    const next = Math.max(0, currentReplicas + delta)
-    setReplicas(next)
-    scaleMutation.mutate(next)
-  }
 
   return (
     <div className="px-5 py-3 flex items-center justify-between hover:bg-bg-modifier-hover transition-colors">
@@ -178,31 +139,6 @@ function DeploymentRow({ dep }: { dep: Deployment }) {
         <Badge variant={ready ? 'success' : 'warning'} size="sm">
           {dep.ready}
         </Badge>
-
-        {/* Scale controls inline */}
-        <div className="flex items-center border border-border-dim rounded">
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            onClick={() => handleScale(-1)}
-            disabled={scaleMutation.isPending || currentReplicas <= 0}
-          >
-            <Minus size={11} />
-          </Button>
-          <span className="text-xs font-mono px-1.5 min-w-[1.2rem] text-center">
-            {currentReplicas}
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            onClick={() => handleScale(1)}
-            disabled={scaleMutation.isPending}
-          >
-            <Plus size={11} />
-          </Button>
-        </div>
 
         <Link
           to="/deployments/$namespace"
@@ -326,7 +262,7 @@ export function ClustersPage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('nav.clusters') }]}
+      breadcrumb={[]}
       title={t('clusters.title')}
       description={t('clusters.description')}
       actions={

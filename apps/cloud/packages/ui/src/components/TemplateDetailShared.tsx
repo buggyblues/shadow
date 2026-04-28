@@ -409,55 +409,51 @@ export function TemplateDetailShell({
   children: ReactNode
 }) {
   return (
-    <div className="mx-auto max-w-[1440px] space-y-5 p-6 md:px-8">
-      <Breadcrumb items={breadcrumbItems} className="mb-1" />
+    <div className="mx-auto max-w-[1440px] px-4 md:px-6 detail-layout">
+      <div className="min-w-0 space-y-3">
+        <GlassPanel className="p-6">
+          <Breadcrumb items={breadcrumbItems} className="mb-3" />
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
-        <div className="min-w-0 space-y-5">
-          <GlassPanel className="p-6">
-            <div className="flex flex-col gap-5 md:flex-row md:items-start">
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[28px] border border-border-subtle bg-bg-secondary/50">
-                {heroIcon}
-              </div>
+          <div className="flex flex-col gap-5 md:flex-row md:items-start">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[28px] border border-border-subtle bg-bg-secondary/50">
+              {heroIcon}
+            </div>
 
-              <div className="min-w-0 flex-1 space-y-4">
-                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                  <div className="min-w-0 space-y-3">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <h1 className="text-[1.875rem] font-extrabold tracking-[-0.03em] text-text-primary md:text-[2.125rem]">
-                        {title}
-                      </h1>
-                      {titleMeta}
-                    </div>
-
-                    <div className="max-w-3xl text-sm leading-7 text-text-secondary">
-                      {description}
-                    </div>
-
-                    {supportingText && <div>{supportingText}</div>}
+            <div className="min-w-0 flex-1 space-y-4">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="min-w-0 space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h1 className="text-[1.875rem] font-extrabold tracking-[-0.03em] text-text-primary md:text-[2.125rem]">
+                      {title}
+                    </h1>
+                    {titleMeta}
                   </div>
 
-                  {titleActions && <div className="shrink-0">{titleActions}</div>}
+                  <div className="max-w-3xl text-sm leading-7 text-text-secondary">
+                    {description}
+                  </div>
+
+                  {supportingText && <div>{supportingText}</div>}
                 </div>
 
-                {badges && <div className="flex flex-wrap items-center gap-2.5">{badges}</div>}
-                {chips && <div className="flex flex-wrap gap-2.5">{chips}</div>}
-                {actions && (
-                  <div className="flex flex-wrap items-center gap-2.5 pt-1">{actions}</div>
-                )}
+                {titleActions && <div className="shrink-0">{titleActions}</div>}
               </div>
+
+              {badges && <div className="flex flex-wrap items-center gap-2.5">{badges}</div>}
+              {chips && <div className="flex flex-wrap gap-2.5">{chips}</div>}
+              {actions && <div className="flex flex-wrap items-center gap-2.5 pt-1">{actions}</div>}
             </div>
-          </GlassPanel>
+          </div>
+        </GlassPanel>
 
-          <Tabs value={activeTab} onChange={onTabChange}>
-            <DashboardTabsList tabs={tabs} />
-          </Tabs>
+        <Tabs value={activeTab} onChange={onTabChange}>
+          <DashboardTabsList tabs={tabs} />
+        </Tabs>
 
-          <div>{children}</div>
-        </div>
-
-        <div className="w-full xl:sticky xl:top-6 xl:shrink-0">{sidebar}</div>
+        {children}
       </div>
+
+      <div className="detail-sidebar">{sidebar}</div>
     </div>
   )
 }

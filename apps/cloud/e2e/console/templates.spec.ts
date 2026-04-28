@@ -11,16 +11,13 @@
 
 import { expect, test } from '@playwright/test'
 
-// Expected templates on the page (slug → display name substring that appears in the card title)
-// Card titles use the raw template slug, so use substrings of the slug itself
+// Expected templates on the page (slug → localized title substring that appears in the card title)
 const EXPECTED_TEMPLATES: Record<string, string> = {
-  'solopreneur-pack': 'solopreneur',
-  'devops-team': 'devops',
-  'code-review-team': 'code-review',
-  'customer-support-team': 'customer-support',
-  'metrics-team': 'metrics',
-  'security-team': 'security',
-  'research-team': 'research',
+  'shadowob-cloud': 'Shadow Cloud Basic',
+  'devops-team': 'DevOps',
+  'customer-support-team': 'Customer Support',
+  'security-team': 'Security',
+  'research-team': 'Research',
 }
 
 test.describe('Console → Store page', () => {
@@ -62,14 +59,14 @@ test.describe('Console → Store page', () => {
     await expect(page.getByRole('link', { name: 'Deploy Template' })).toBeVisible()
   })
 
-  test('solopreneur-pack Deploy modal shows correct config info', async ({ page }) => {
-    // Navigate to the solopreneur-pack detail page
-    const card = page.locator('a[href*="/store/solopreneur-pack"]').first()
+  test('shadowob-cloud Deploy modal shows correct config info', async ({ page }) => {
+    // Navigate to the shadowob-cloud detail page
+    const card = page.locator('a[href*="/store/shadowob-cloud"]').first()
     await card.click()
-    await expect(page).toHaveURL(/\/store\/solopreneur-pack$/)
+    await expect(page).toHaveURL(/\/store\/shadowob-cloud$/)
 
-    // Verify template name is shown
-    await expect(page.getByRole('heading', { name: 'solopreneur-pack' })).toBeVisible()
+    // Verify template title is shown
+    await expect(page.getByRole('heading', { name: 'Shadow Cloud Basic' })).toBeVisible()
 
     // Deploy link should be available
     await expect(page.getByRole('link', { name: 'Deploy Template' })).toBeVisible()

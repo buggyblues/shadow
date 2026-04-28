@@ -1,22 +1,9 @@
 {
-  "i18n": {
-    "en": {
-      "name": "${i18n:name}",
-      "description": "${i18n:description}"
-    },
-    "zh-CN": {
-      "name": "GitAgent 仓库部署",
-      "description": "从 gitagent 标准 Git 仓库部署一个或多个智能体。支持通过 SSH 密钥或 HTTPS 令牌访问私有仓库。使用 Docker 镜像层或 Kubernetes init 容器将仓库文件叠加到智能体运行时。"
-    }
-  },
   "version": "1.0.0",
-  "name": "GitAgent from Repository",
-  "description": "Deploy one or more agents whose soul, rules, skills, tools, hooks, and scheduler are all defined in a gitagent-standard git repository. Supports private repos via SSH keys or HTTPS tokens. Uses Docker image layers (build-image) or Kubernetes init-containers (init-container) to overlay the repository files into the agent runtime.",
+  "name": "gitagent-from-repo",
+  "title": "${i18n:title}",
+  "description": "${i18n:description}",
   "environment": "production",
-  "team": {
-    "name": "gitagent-team",
-    "description": "Agents sourced from a gitagent-standard git repository"
-  },
   "deployments": {
     "namespace": "gitagent-team",
     "imagePullPolicy": "IfNotPresent",
@@ -268,5 +255,15 @@
     {
       "plugin": "model-provider"
     }
-  ]
+  ],
+  "i18n": {
+    "en": {
+      "title": "GitAgent from Repository",
+      "description": "Ship repository-defined agents directly from Git so teams can version souls, rules, skills, tools, hooks, and schedulers with code while supporting private repos and repeatable cloud deployment."
+    },
+    "zh-CN": {
+      "title": "GitAgent 仓库部署",
+      "description": "直接从 Git 发布仓库定义的智能体，让团队把 soul、rules、skills、tools、hooks 和 scheduler 与代码一起版本化，同时支持私有仓库和可重复的云端部署。"
+    }
+  }
 }

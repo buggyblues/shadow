@@ -8,11 +8,15 @@
       "type": "string"
     },
     "name": {
-      "description": "Human-readable name for this deployment config (shown in console)",
+      "description": "Stable kebab-case config/template slug",
+      "type": "string"
+    },
+    "title": {
+      "description": "Human-readable title for this deployment config (shown in console)",
       "type": "string"
     },
     "description": {
-      "description": "Description of what this agent team does",
+      "description": "Description of the customer value this agent team provides",
       "type": "string"
     },
     "environment": {

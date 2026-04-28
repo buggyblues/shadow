@@ -1,12 +1,9 @@
 {
   "version": "1.0.0",
-  "name": "${i18n:name}",
+  "name": "devops-team",
+  "title": "${i18n:title}",
   "description": "${i18n:description}",
   "environment": "production",
-  "team": {
-    "name": "devops-team",
-    "description": "24/7 DevOps monitoring, incident response, and business metrics team"
-  },
   "use": [
     {
       "plugin": "model-provider"
@@ -391,12 +388,12 @@
   },
   "i18n": {
     "en": {
-      "name": "DevOps & Metrics Team",
-      "description": "Five-agent DevOps and metrics team: infrastructure monitor, CI/CD watcher, incident responder, daily data analyst, and anomaly alerter. Covers 24/7 system health, pipeline status, incident coordination, and business metrics reporting."
+      "title": "DevOps & Metrics Team",
+      "description": "Keep systems healthier with a five-agent operations team that watches infrastructure, pipelines, incidents, daily analytics, and anomalies so customers catch failures earlier and coordinate response faster."
     },
     "zh-CN": {
-      "name": "DevOps 与数据团队",
-      "description": "五智能体 DevOps 与数据团队：基础设施监控、CI/CD 监控、事件响应、每日数据分析、异常告警。全面覆盖系统健康、流水线状态、事件协调与业务指标报告。"
+      "title": "DevOps 与数据团队",
+      "description": "用五智能体运维团队持续守护基础设施、流水线、事件、每日数据和异常指标，帮助客户更早发现故障，并更快完成协同响应。"
     }
   }
 }

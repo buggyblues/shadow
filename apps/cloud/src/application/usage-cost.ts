@@ -75,14 +75,14 @@ export interface UsageCostRuntime {
   }): UsageCostExecResult
 }
 
-interface ParsedUsageSnapshot {
+export interface ParsedUsageSnapshot {
   totalUsd: number | null
   totalTokens: number | null
   providers: ProviderUsageSummary[]
   source: 'json' | 'text'
 }
 
-const EXEC_CANDIDATES: string[][] = [
+export const OPENCLAW_USAGE_COMMANDS: string[][] = [
   ['openclaw', 'status', '--usage', '--json'],
   ['openclaw', 'status', '--json', '--usage'],
   ['openclaw', 'status', '--usage'],
@@ -431,6 +431,11 @@ function formatUnavailableMessage(reason: string, model: string | null): string 
   return `${reason} Model: ${model}. OpenClaw did not receive usage details from the current provider for this pod.`
 }
 
+export function parseOpenClawUsageOutput(stdout: string, stderr = ''): ParsedUsageSnapshot | null {
+  const jsonCandidate = tryParseJson(stdout)
+  return (jsonCandidate ? parseUsageJson(jsonCandidate) : null) ?? parseUsageText(stdout || stderr)
+}
+
 function preferRunningPods(pods: UsageCostPodSummary[], agentName: string): UsageCostPodSummary[] {
   return pods
     .filter((pod) => pod.name.includes(agentName))
@@ -474,7 +479,7 @@ export function collectAgentUsage(opts: {
 
   let unavailableMessage: string | null = null
 
-  for (const command of EXEC_CANDIDATES) {
+  for (const command of OPENCLAW_USAGE_COMMANDS) {
     const result = opts.runtime.execInPod({
       namespace: opts.namespace,
       pod: pod.name,

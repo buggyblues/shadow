@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { ProvisionState } from '../utils/state.js'
 
 export const CLOUD_SAAS_RUNTIME_KEY = '__shadowobRuntime'
 
@@ -23,6 +24,7 @@ const cloudConfigSnapshotSchema = z
 const runtimeMetadataSchema = z
   .object({
     envVars: z.record(z.string()).default({}),
+    provisionState: z.unknown().optional(),
   })
   .passthrough()
 
@@ -52,6 +54,24 @@ function normalizeRuntimeEnvVars(envVars?: Record<string, string>): Record<strin
   }
 
   return normalized
+}
+
+function normalizeProvisionState(value: unknown): ProvisionState | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+
+  const candidate = value as Record<string, unknown>
+  const plugins = candidate.plugins
+  if (!plugins || typeof plugins !== 'object' || Array.isArray(plugins)) return null
+
+  return {
+    provisionedAt:
+      typeof candidate.provisionedAt === 'string'
+        ? candidate.provisionedAt
+        : new Date().toISOString(),
+    ...(typeof candidate.stackName === 'string' ? { stackName: candidate.stackName } : {}),
+    ...(typeof candidate.namespace === 'string' ? { namespace: candidate.namespace } : {}),
+    plugins: plugins as Record<string, Record<string, unknown>>,
+  }
 }
 
 function isLoopbackShadowUrl(url?: string): boolean {
@@ -131,6 +151,7 @@ export function prepareCloudSaasConfigSnapshot(
 ): Record<string, unknown> {
   const validated = validateCloudSaasConfigSnapshot(configSnapshot)
   const runtimeEnvVars = normalizeRuntimeEnvVars(envVars)
+  const runtime = runtimeMetadataSchema.safeParse(validated[CLOUD_SAAS_RUNTIME_KEY])
 
   if (Object.keys(runtimeEnvVars).length === 0) {
     return validated
@@ -139,7 +160,26 @@ export function prepareCloudSaasConfigSnapshot(
   return {
     ...validated,
     [CLOUD_SAAS_RUNTIME_KEY]: {
+      ...(runtime.success && runtime.data && typeof runtime.data === 'object' ? runtime.data : {}),
       envVars: runtimeEnvVars,
+    },
+  }
+}
+
+export function attachCloudSaasProvisionState(
+  configSnapshot: unknown,
+  provisionState: ProvisionState,
+): Record<string, unknown> {
+  const validated = validateCloudSaasConfigSnapshot(configSnapshot)
+  const runtime = runtimeMetadataSchema.safeParse(validated[CLOUD_SAAS_RUNTIME_KEY])
+  const envVars = runtime.success ? normalizeRuntimeEnvVars(runtime.data.envVars) : {}
+
+  return {
+    ...validated,
+    [CLOUD_SAAS_RUNTIME_KEY]: {
+      ...(runtime.success && runtime.data && typeof runtime.data === 'object' ? runtime.data : {}),
+      envVars,
+      provisionState,
     },
   }
 }
@@ -147,9 +187,10 @@ export function prepareCloudSaasConfigSnapshot(
 export function extractCloudSaasRuntime(configSnapshot: unknown): {
   configSnapshot: Record<string, unknown> | null
   envVars: Record<string, string>
+  provisionState: ProvisionState | null
 } {
   if (!configSnapshot || typeof configSnapshot !== 'object' || Array.isArray(configSnapshot)) {
-    return { configSnapshot: null, envVars: {} }
+    return { configSnapshot: null, envVars: {}, provisionState: null }
   }
 
   const snapshot = { ...(configSnapshot as Record<string, unknown>) }
@@ -159,6 +200,7 @@ export function extractCloudSaasRuntime(configSnapshot: unknown): {
   return {
     configSnapshot: snapshot,
     envVars: runtime.success ? normalizeRuntimeEnvVars(runtime.data.envVars) : {},
+    provisionState: runtime.success ? normalizeProvisionState(runtime.data.provisionState) : null,
   }
 }
 

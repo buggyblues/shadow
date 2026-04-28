@@ -21,7 +21,7 @@ export function ImagesPage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('images.title') }]}
+      breadcrumb={[]}
       title={t('images.title')}
       description={t('images.subtitle')}
       narrow

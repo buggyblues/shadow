@@ -25,8 +25,8 @@ import { formatTimestamp } from '@/lib/utils'
 function getStatusVariant(status: string): 'neutral' | 'success' | 'warning' | 'danger' | 'info' {
   if (status === 'deployed') return 'success'
   if (status === 'failed') return 'danger'
-  if (status === 'running') return 'info'
-  if (status === 'pending') return 'warning'
+  if (status === 'running' || status === 'deploying' || status === 'destroying') return 'info'
+  if (status === 'pending' || status === 'cancelling') return 'warning'
   return 'neutral'
 }
 
@@ -50,7 +50,7 @@ export function DeploymentTasksPage() {
     },
   })
 
-  const handleRedeploy = async (taskId: number) => {
+  const handleRedeploy = async (taskId: number | string) => {
     const nextTaskId = await api.deployTasks.redeployToTaskId(taskId)
     if (!nextTaskId) return
     navigate({ to: '/deploy-tasks/$taskId', params: { taskId: String(nextTaskId) } })
@@ -73,7 +73,7 @@ export function DeploymentTasksPage() {
 
   return (
     <PageShell
-      breadcrumb={[{ label: t('nav.deployTasks') }]}
+      breadcrumb={[]}
       title={t('deployTask.listTitle')}
       description={t('deployTask.listDescription')}
       headerContent={
@@ -135,7 +135,13 @@ export function DeploymentTasksPage() {
 
           {tasks.map(({ task, url, active }) => {
             const absoluteUrl = new URL(url, window.location.origin).toString()
-            const running = active || task.status === 'running' || task.status === 'pending'
+            const running =
+              active ||
+              task.status === 'running' ||
+              task.status === 'pending' ||
+              task.status === 'deploying' ||
+              task.status === 'cancelling' ||
+              task.status === 'destroying'
 
             return (
               <div key={task.id} className="space-y-2">

@@ -12,10 +12,9 @@ import {
   baseVolumeMounts,
   baseVolumes,
   DEFAULT_RESOURCES,
-  HEALTH_PORT,
-  LIVENESS_PROBE,
-  READINESS_PROBE,
-  STARTUP_PROBE,
+  healthPortForRuntime,
+  PULUMI_MANAGED_ANNOTATIONS,
+  probesForRuntime,
 } from './constants.js'
 import { collectPluginK8sArtifacts } from './plugin-k8s.js'
 import { buildContainerSecurityContext, buildSecurityContext } from './security.js'
@@ -44,6 +43,8 @@ export interface AgentDeploymentOptions {
   sharedWorkspaceMountPath?: string
   /** Skills install directory inside the container */
   skillsInstallDir?: string
+  /** Pod-template annotations that should trigger rollout when changed. */
+  podTemplateAnnotations?: Record<string, string>
   resourceOptions?: pulumi.CustomResourceOptions
 }
 
@@ -63,6 +64,8 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
 
   const image = agent.image ?? getRuntime(agent.runtime).defaultImage
   const replicas = agent.replicas ?? 1
+  const healthPort = healthPortForRuntime(agent.runtime)
+  const { livenessProbe, readinessProbe, startupProbe } = probesForRuntime(agent.runtime)
 
   // Default to IfNotPresent — works for local builds (Rancher Desktop) and cached registry images
   const imagePullPolicy = options.imagePullPolicy ?? 'IfNotPresent'
@@ -84,6 +87,25 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
   // Collect K8s artifacts from all plugins (init containers, volumes, env vars, labels)
   const ns = namespaceName ?? (typeof namespace === 'string' ? namespace : 'default')
   const pluginArtifacts = collectPluginK8sArtifacts(agent, config, ns)
+  const pluginConfigMaps = pluginArtifacts.configMaps.map(
+    (configMap) =>
+      new k8s.core.v1.ConfigMap(
+        configMap.name,
+        {
+          metadata: {
+            name: configMap.name,
+            namespace,
+            labels: configMap.labels,
+            annotations: {
+              ...PULUMI_MANAGED_ANNOTATIONS,
+              ...configMap.annotations,
+            },
+          },
+          data: configMap.data,
+        },
+        { provider, ...resourceOptions },
+      ),
+  )
 
   for (const ic of pluginArtifacts.initContainers) {
     initContainers.push(ic as unknown as k8s.types.input.core.v1.Container)
@@ -116,6 +138,14 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
     envVars.push({ name: 'SKILLS_DIR', value: options.skillsInstallDir })
   }
 
+  const resourceDependsOn = (
+    Array.isArray(resourceOptions?.dependsOn)
+      ? resourceOptions.dependsOn
+      : resourceOptions?.dependsOn
+        ? [resourceOptions.dependsOn]
+        : []
+  ) as pulumi.Input<pulumi.Resource>[]
+
   const deployment = new k8s.apps.v1.Deployment(
     agentName,
     {
@@ -128,7 +158,10 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
           runtime: agent.runtime,
           ...pluginArtifacts.labels,
         },
-        annotations: pluginArtifacts.annotations,
+        annotations: {
+          ...PULUMI_MANAGED_ANNOTATIONS,
+          ...pluginArtifacts.annotations,
+        },
       },
       spec: {
         replicas,
@@ -145,6 +178,10 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
               agent: agentName,
               runtime: agent.runtime,
             },
+            annotations: {
+              ...options.podTemplateAnnotations,
+              ...pluginArtifacts.annotations,
+            },
           },
           spec: {
             initContainers: initContainers.length > 0 ? initContainers : undefined,
@@ -154,15 +191,15 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
                 name: agent.runtime,
                 image,
                 imagePullPolicy,
-                ports: [{ containerPort: HEALTH_PORT, name: 'health' }],
+                ports: [{ containerPort: healthPort, name: 'health' }],
                 env: envVars,
                 envFrom: [{ secretRef: { name: secretName } }],
                 volumeMounts,
                 resources: (agent.resources ?? DEFAULT_RESOURCES) as Record<string, unknown>,
                 securityContext: buildContainerSecurityContext(),
-                livenessProbe: LIVENESS_PROBE,
-                readinessProbe: READINESS_PROBE,
-                startupProbe: STARTUP_PROBE,
+                livenessProbe,
+                readinessProbe,
+                startupProbe,
               },
               // Plugin-contributed helper containers (e.g. gitagent git-pull loop)
               ...pluginArtifacts.sidecars.map(
@@ -186,7 +223,11 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
         },
       },
     },
-    { provider, ...resourceOptions },
+    {
+      ...resourceOptions,
+      provider,
+      dependsOn: [...resourceDependsOn, ...pluginConfigMaps],
+    },
   )
 
   return { deployment }

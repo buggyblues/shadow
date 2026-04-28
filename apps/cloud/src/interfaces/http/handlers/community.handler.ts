@@ -57,6 +57,22 @@ export interface CatalogResponse {
   source: 'community' | 'local'
 }
 
+function normalizeCatalogTemplate(template: unknown): unknown {
+  if (!template || typeof template !== 'object' || Array.isArray(template)) return template
+
+  const { teamName: legacyTitle, ...rest } = template as Record<string, unknown>
+  const title =
+    typeof rest.title === 'string'
+      ? rest.title
+      : typeof legacyTitle === 'string'
+        ? legacyTitle
+        : typeof rest.name === 'string'
+          ? rest.name
+          : ''
+
+  return { ...rest, title }
+}
+
 function getCommunitySettings(): CommunitySettings {
   const settings = readSettings()
   const raw = settings.community as Partial<CommunitySettings> | undefined
@@ -130,7 +146,10 @@ export function createCommunityHandler(ctx: HandlerContext): Hono {
       )
       if (res.ok) {
         const data = (await res.json()) as Record<string, unknown>
-        return c.json({ ...(data as object), source: 'community' })
+        const templates = Array.isArray(data.templates)
+          ? data.templates.map(normalizeCatalogTemplate)
+          : data.templates
+        return c.json({ ...(data as object), templates, source: 'community' })
       }
     } catch {
       // Fall through to local catalog

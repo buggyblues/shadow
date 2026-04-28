@@ -1,9 +1,10 @@
 /**
- * model-provider plugin — thin selector/router over provider catalogs declared
- * by provider plugins.
+ * model-provider plugin — selector over built-in provider catalogs.
  *
- * Provider-specific knowledge lives in each provider plugin via
- * api.addProviderCatalog(). This plugin only:
+ * Provider-specific plugins are intentionally not loaded in the default runtime
+ * surface; common provider catalogs live here so Shadow Cloud can inject the
+ * selected real provider credentials into OpenClaw at deploy time.
+ * This plugin only:
  *   - sniffs available provider env/profile values,
  *   - emits OpenClaw models.providers entries, and
  *   - selects primary/fallback model refs by tag.
@@ -30,6 +31,139 @@ type ProviderProfileModelSet = {
   profileId?: string
   models: ProviderModelEntry[]
 }
+
+const BUILTIN_PROVIDER_CATALOGS: ProviderCatalog[] = [
+  {
+    id: 'anthropic',
+    api: 'anthropic-messages',
+    envKey: 'ANTHROPIC_API_KEY',
+    envKeyAliases: ['ANTHROPIC_AUTH_TOKEN'],
+    baseUrl: 'https://api.anthropic.com/v1',
+    baseUrlEnvKey: 'ANTHROPIC_BASE_URL',
+    modelEnvKey: 'ANTHROPIC_MODEL',
+    priority: 10,
+    models: [
+      { id: 'claude-sonnet-4-5', tags: ['default', 'vision'] },
+      { id: 'claude-3-5-haiku-20241022', tags: ['flash'] },
+      { id: 'claude-opus-4-5', tags: ['reasoning'] },
+    ],
+  },
+  {
+    id: 'openai',
+    api: 'openai-completions',
+    envKey: 'OPENAI_API_KEY',
+    baseUrl: 'https://api.openai.com/v1',
+    priority: 20,
+    models: [
+      { id: 'gpt-4o', tags: ['default', 'vision'] },
+      { id: 'gpt-4o-mini', tags: ['flash'] },
+      { id: 'o3', tags: ['reasoning'] },
+    ],
+  },
+  {
+    id: 'gemini',
+    api: 'google-generative-ai',
+    envKey: 'GEMINI_API_KEY',
+    envKeyAliases: ['GOOGLE_API_KEY', 'GOOGLE_AI_API_KEY'],
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+    priority: 30,
+    models: [
+      { id: 'gemini-2.0-flash', tags: ['default', 'flash', 'vision'] },
+      { id: 'gemini-2.5-pro', tags: ['reasoning'] },
+    ],
+  },
+  {
+    id: 'deepseek',
+    api: 'openai-completions',
+    envKey: 'DEEPSEEK_API_KEY',
+    baseUrl: 'https://api.deepseek.com/v1',
+    priority: 50,
+    models: [
+      { id: 'deepseek-chat', tags: ['default', 'flash'] },
+      { id: 'deepseek-reasoner', tags: ['reasoning'] },
+    ],
+  },
+  {
+    id: 'qwen',
+    api: 'openai-completions',
+    envKey: 'DASHSCOPE_API_KEY',
+    envKeyAliases: ['ALIBABA_API_KEY', 'QWEN_API_KEY'],
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    priority: 52,
+    models: [
+      { id: 'qwen-turbo', name: 'Qwen Turbo', tags: ['fast', 'flash'] },
+      { id: 'qwen-plus', name: 'Qwen Plus', tags: ['default'] },
+      { id: 'qwen-max', name: 'Qwen Max', tags: ['reasoning'] },
+      { id: 'qwen-vl-plus', name: 'Qwen VL Plus', tags: ['vision'] },
+    ],
+  },
+  {
+    id: 'minimax',
+    api: 'openai-completions',
+    envKey: 'MINIMAX_API_KEY',
+    baseUrl: 'https://api.minimax.io/v1',
+    priority: 54,
+    models: [
+      { id: 'MiniMax-M2.1', name: 'MiniMax M2.1', tags: ['default'] },
+      {
+        id: 'MiniMax-M2.1-highspeed',
+        name: 'MiniMax M2.1 Highspeed',
+        tags: ['fast', 'flash'],
+      },
+      { id: 'MiniMax-M2.5', name: 'MiniMax M2.5', tags: ['reasoning'] },
+    ],
+  },
+  {
+    id: 'moonshot',
+    api: 'openai-completions',
+    envKey: 'MOONSHOT_API_KEY',
+    envKeyAliases: ['KIMI_API_KEY'],
+    baseUrl: 'https://api.moonshot.ai/v1',
+    priority: 56,
+    models: [
+      { id: 'moonshot-v1-8k', name: 'Moonshot 8K', tags: ['fast', 'flash'] },
+      { id: 'moonshot-v1-32k', name: 'Moonshot 32K', tags: ['default'] },
+      { id: 'moonshot-v1-128k', name: 'Moonshot 128K', tags: ['reasoning'] },
+    ],
+  },
+  {
+    id: 'zai',
+    api: 'openai-completions',
+    envKey: 'ZAI_API_KEY',
+    envKeyAliases: ['ZHIPUAI_API_KEY', 'GLM_API_KEY', 'BIGMODEL_API_KEY'],
+    baseUrl: 'https://api.z.ai/api/paas/v4',
+    priority: 58,
+    models: [
+      {
+        id: 'glm-4.5-air',
+        name: 'GLM 4.5 Air',
+        tags: ['fast', 'flash', 'reasoning'],
+      },
+      { id: 'glm-4.5', name: 'GLM 4.5', tags: ['default', 'reasoning'] },
+      { id: 'glm-4.5v', name: 'GLM 4.5V', tags: ['vision'] },
+    ],
+  },
+  {
+    id: 'openrouter',
+    api: 'openai-completions',
+    envKey: 'OPENROUTER_API_KEY',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    priority: 60,
+    models: [{ id: 'auto', tags: ['default', 'flash', 'reasoning', 'vision'] }],
+  },
+  {
+    id: 'grok',
+    api: 'openai-completions',
+    envKey: 'XAI_API_KEY',
+    envKeyAliases: ['GROK_API_KEY'],
+    baseUrl: 'https://api.x.ai/v1',
+    priority: 62,
+    models: [
+      { id: 'grok-4.1', name: 'Grok 4.1', tags: ['default', 'reasoning'] },
+      { id: 'grok-4.1-fast', name: 'Grok 4.1 Fast', tags: ['fast', 'flash'] },
+    ],
+  },
+]
 
 function providerCatalogs(ctx: PluginBuildContext): ProviderCatalog[] {
   return ctx.pluginRegistry
@@ -174,23 +308,36 @@ function buildProviderEntry(
   return { catalog: resolved.catalog, entry }
 }
 
-function resolveModelsByTag(catalogs: ProviderCatalog[], tag: ModelTag): string[] {
+function resolveModelsBySelector(catalogs: ProviderCatalog[], selector: string): string[] {
   const refs: string[] = []
-  const aliases = modelTagAliases(tag)
+  const normalized = selector.trim().toLowerCase()
+  const tag = (ALL_TAGS as readonly string[]).includes(normalized)
+    ? (normalized as ModelTag)
+    : undefined
+  const aliases = tag ? modelTagAliases(tag) : []
   for (const catalog of catalogs) {
-    const model = catalog.models.find((m) => m.tags?.some((modelTag) => aliases.includes(modelTag)))
+    const model = catalog.models.find(
+      (m) =>
+        m.id.toLowerCase() === normalized ||
+        `${catalog.id}/${m.id}`.toLowerCase() === normalized ||
+        m.tags?.some((modelTag) => aliases.includes(modelTag)),
+    )
     if (model) refs.push(`${catalog.id}/${model.id}`)
   }
   return refs
 }
 
-function selectedTag(ctx: PluginBuildContext): ModelTag {
+function selectedSelector(ctx: PluginBuildContext): string {
   const agentUseEntry = ctx.agent.use?.find((e) => e.plugin === 'model-provider')
   const templateUseEntry = ctx.config.use?.find((e) => e.plugin === 'model-provider')
-  const rawTag = (agentUseEntry?.options?.tag ?? templateUseEntry?.options?.tag ?? 'default') as
-    | string
-    | undefined
-  return (ALL_TAGS as readonly string[]).includes(rawTag ?? '') ? (rawTag as ModelTag) : 'default'
+  const rawSelector = (agentUseEntry?.options?.selector ??
+    agentUseEntry?.options?.tag ??
+    agentUseEntry?.options?.model ??
+    templateUseEntry?.options?.selector ??
+    templateUseEntry?.options?.tag ??
+    templateUseEntry?.options?.model ??
+    'default') as string | undefined
+  return rawSelector?.trim() || 'default'
 }
 
 function envCandidates(catalogs: ProviderCatalog[]): string[] {
@@ -205,6 +352,10 @@ function envCandidates(catalogs: ProviderCatalog[]): string[] {
 }
 
 export default definePlugin(manifest as PluginManifest, (api) => {
+  for (const catalog of BUILTIN_PROVIDER_CATALOGS) {
+    api.addProviderCatalog(catalog)
+  }
+
   api.addProviderCatalog({
     id: 'custom',
     api: 'openai-completions',
@@ -259,7 +410,7 @@ export default definePlugin(manifest as PluginManifest, (api) => {
       },
     }
 
-    const modelRefs = resolveModelsByTag(discovered, selectedTag(ctx))
+    const modelRefs = resolveModelsBySelector(discovered, selectedSelector(ctx))
     if (modelRefs.length > 0) {
       const [primary, ...fallbacks] = modelRefs
       fragment.agents = {
