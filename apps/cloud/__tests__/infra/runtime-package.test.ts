@@ -169,7 +169,7 @@ describe('buildManifests', () => {
     expect(container.startupProbe.httpGet).toMatchObject({ path: '/live', port: 3102 })
     expect(container.readinessProbe.httpGet).toMatchObject({ path: '/ready', port: 3102 })
     expect(deployment.spec.template.metadata.annotations).toMatchObject({
-      'shadowob.cloud/runner-image': 'ghcr.io/shadowob/openclaw-runner:latest',
+      'shadowob.cloud/runner-image': 'ghcr.io/buggyblues/openclaw-runner:latest',
     })
     expect(
       deployment.spec.template.metadata.annotations['shadowob.cloud/runtime-package-hash'],

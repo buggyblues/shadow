@@ -44,16 +44,16 @@ export const PULUMI_SKIP_AWAIT_ANNOTATIONS = {
 
 /** Default OpenClaw runner image.
  *
- * The repo image builder publishes/tags `ghcr.io/shadowob/openclaw-runner`.
+ * The repo image builder publishes/tags `ghcr.io/buggyblues/openclaw-runner`.
  * Keep this default aligned with the builder so cloud deployments do not
- * accidentally run the older `buggyblues` image that lacks newer plugin
+ * accidentally run an unpublishable or stale image that lacks newer plugin
  * actions such as Shadow interactive `message.send`.
  */
 export const DEFAULT_OPENCLAW_RUNNER_IMAGE =
   process.env.SHADOWOB_OPENCLAW_RUNNER_IMAGE ??
   process.env.SHADOW_OPENCLAW_RUNNER_IMAGE ??
   process.env.OPENCLAW_RUNNER_IMAGE ??
-  'ghcr.io/shadowob/openclaw-runner:latest'
+  'ghcr.io/buggyblues/openclaw-runner:latest'
 
 /** Default container images per runtime */
 export const DEFAULT_IMAGES: Record<string, string> = {

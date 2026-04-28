@@ -19,7 +19,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 const WORKSPACE_ROOT = join(ROOT, '..', '..')
 const IMAGES_DIR = join(ROOT, 'images')
-const REGISTRY = process.env.SHADOWOB_REGISTRY ?? process.env.SHADOW_REGISTRY ?? 'ghcr.io/shadowob'
+const REGISTRY = process.env.SHADOWOB_REGISTRY ?? process.env.SHADOW_REGISTRY ?? 'ghcr.io/buggyblues'
 
 const IMAGES = ['openclaw-runner', 'claude-runner']
 
