@@ -1793,15 +1793,25 @@
         },
         "shadowob": {
           "description": "Shadow/ShadowOB channel config",
-          "type": "object",
-          "properties": {
-            "enabled": {
-              "type": "boolean"
+          "allOf": [
+            {
+              "$ref": "#/definitions/OpenClawChannelBase"
             },
-            "accounts": {
-              "$ref": "#/definitions/Record%3Cstring%2C%7Btoken%3F%3Astring%7Cundefined%3BserverUrl%3F%3Astring%7Cundefined%3Benabled%3F%3Aboolean%7Cundefined%3B%7D%3E"
+            {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "capabilities": {
+                  "$ref": "#/definitions/OpenClawChannelCapabilities"
+                },
+                "accounts": {
+                  "$ref": "#/definitions/Record%3Cstring%2C%7Btoken%3F%3Astring%7Cundefined%3BserverUrl%3F%3Astring%7Cundefined%3Benabled%3F%3Aboolean%7Cundefined%3Bcapabilities%3F%3AOpenClawChannelCapabilities%7Cundefined%3B%7D%3E"
+                }
+              }
             }
-          }
+          ]
         }
       }
     },
@@ -1812,6 +1822,10 @@
         "enabled": {
           "description": "Whether channel is enabled",
           "type": "boolean"
+        },
+        "capabilities": {
+          "description": "Channel-specific feature gates such as inline buttons or file uploads",
+          "$ref": "#/definitions/OpenClawChannelCapabilities"
         },
         "dmPolicy": {
           "description": "DM policy",
@@ -1953,7 +1967,29 @@
         }
       }
     },
-    "Record<string,{token?:string|undefined;serverUrl?:string|undefined;enabled?:boolean|undefined;}>": {
+    "OpenClawChannelCapabilities": {
+      "type": "object",
+      "additionalProperties": {},
+      "properties": {
+        "inlineButtons": {
+          "description": "Inline button scope: off, DM-only, group-only, all, or allowlist",
+          "enum": ["all", "allowlist", "dm", false, "group", "off", true]
+        },
+        "uploadFile": {
+          "description": "Canonical OpenClaw file upload action support",
+          "type": "boolean"
+        },
+        "interactive": {
+          "description": "Native interactive message support",
+          "type": "boolean"
+        },
+        "forms": {
+          "description": "Native form message support",
+          "type": "boolean"
+        }
+      }
+    },
+    "Record<string,{token?:string|undefined;serverUrl?:string|undefined;enabled?:boolean|undefined;capabilities?:OpenClawChannelCapabilities|undefined;}>": {
       "type": "object"
     },
     "OpenClawAcpConfig": {
