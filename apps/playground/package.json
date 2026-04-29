@@ -14,11 +14,11 @@
     "@shadowob/ui": "workspace:*",
     "clsx": "^2.1.1",
     "lucide-react": "^0.474.0",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.2",
-    "tailwindcss": "^4.2.2"
+    "tailwindcss": "^4.2.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
