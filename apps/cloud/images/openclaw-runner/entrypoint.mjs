@@ -217,6 +217,8 @@ function generateOpenClawConfig(mountedConfig) {
   ensureOpenClawBuiltInPluginsAllowed(config)
   ensureBonjourPluginDisabled(config)
   ensureCloudMemorySearchDefaults(config)
+  ensureCloudBrowserDefaults(config)
+  ensureBrowserPluginEnabled(config)
   if (!config.meta || !isPlainObject(config.meta)) {
     config.meta = {}
   }
@@ -289,6 +291,33 @@ function ensureCloudMemorySearchDefaults(config) {
     const extensionPath = resolveSqliteVecExtensionPath()
     if (extensionPath) defaults.memorySearch.store.vector.extensionPath = extensionPath
   }
+}
+
+function ensureCloudBrowserDefaults(config) {
+  if (!config.browser || !isPlainObject(config.browser)) config.browser = {}
+  const browser = config.browser
+  if (typeof browser.headless !== 'boolean') browser.headless = true
+  if (typeof browser.noSandbox !== 'boolean') browser.noSandbox = true
+  if (typeof browser.executablePath !== 'string' || !browser.executablePath.trim()) {
+    browser.executablePath = process.env.CHROME_BIN || '/usr/bin/chromium'
+  }
+  const extraArgs = Array.isArray(browser.extraArgs)
+    ? browser.extraArgs.filter((value) => typeof value === 'string' && value.trim())
+    : []
+  const args = new Set(extraArgs)
+  args.add('--disable-dev-shm-usage')
+  browser.extraArgs = [...args]
+}
+
+function ensureBrowserPluginEnabled(config) {
+  if (!config.plugins || !isPlainObject(config.plugins)) config.plugins = {}
+  if (!config.plugins.entries || !isPlainObject(config.plugins.entries)) {
+    config.plugins.entries = {}
+  }
+  const existing = config.plugins.entries.browser
+  config.plugins.entries.browser = isPlainObject(existing)
+    ? { ...existing, enabled: true }
+    : { enabled: true }
 }
 
 function normalizeEnvString(value) {

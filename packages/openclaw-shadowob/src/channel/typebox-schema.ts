@@ -2,13 +2,23 @@ type TypeBoxCompatibleSchema = Record<PropertyKey, unknown>
 
 const TYPEBOX_KIND = Symbol.for('TypeBox.Kind')
 const TYPEBOX_OPTIONAL = Symbol.for('TypeBox.Optional')
+const OPENCLAW_TYPEBOX_KIND = '~kind'
+const OPENCLAW_TYPEBOX_OPTIONAL = '~optional'
 
 function typeboxSchema(kind: string, schema: Record<string, unknown>): TypeBoxCompatibleSchema {
-  return Object.assign(schema, { [TYPEBOX_KIND]: kind })
+  Object.defineProperties(schema, {
+    [TYPEBOX_KIND]: { value: kind },
+    [OPENCLAW_TYPEBOX_KIND]: { value: kind },
+  })
+  return schema
 }
 
 function optionalSchema(schema: TypeBoxCompatibleSchema): TypeBoxCompatibleSchema {
-  return Object.assign(schema, { [TYPEBOX_OPTIONAL]: 'Optional' })
+  Object.defineProperties(schema, {
+    [TYPEBOX_OPTIONAL]: { value: 'Optional' },
+    [OPENCLAW_TYPEBOX_OPTIONAL]: { value: 'Optional' },
+  })
+  return schema
 }
 
 function stringSchema(description?: string): TypeBoxCompatibleSchema {
@@ -56,6 +66,7 @@ function objectSchema(
 ): TypeBoxCompatibleSchema {
   const required = Object.entries(properties)
     .filter(([, schema]) => schema[TYPEBOX_OPTIONAL] !== 'Optional')
+    .filter(([, schema]) => schema[OPENCLAW_TYPEBOX_OPTIONAL] !== 'Optional')
     .map(([key]) => key)
 
   return typeboxSchema('Object', {

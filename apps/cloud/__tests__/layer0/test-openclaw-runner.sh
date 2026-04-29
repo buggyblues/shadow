@@ -92,15 +92,27 @@ CONFIG_DEFAULTS=$(docker exec -i "$CONTAINER_NAME" node - <<'NODE' 2>/dev/null |
 const { readFileSync } = require('node:fs')
 const config = JSON.parse(readFileSync('/tmp/openclaw/config/openclaw.json', 'utf8'))
 const vector = config.agents?.defaults?.memorySearch?.store?.vector
+const browser = config.browser
 const errors = []
 if (config.gateway?.bind !== 'loopback') errors.push(`gateway.bind=${config.gateway?.bind}`)
 if (config.discovery?.mdns?.mode !== 'off') errors.push(`discovery.mdns.mode=${config.discovery?.mdns?.mode}`)
 if (config.plugins?.entries?.bonjour?.enabled !== false) {
   errors.push(`plugins.entries.bonjour.enabled=${config.plugins?.entries?.bonjour?.enabled}`)
 }
+if (config.plugins?.entries?.browser?.enabled !== true) {
+  errors.push(`plugins.entries.browser.enabled=${config.plugins?.entries?.browser?.enabled}`)
+}
 if (vector?.enabled !== true) errors.push(`memory vector enabled=${vector?.enabled}`)
 if (typeof vector?.extensionPath !== 'string' || !vector.extensionPath.endsWith('.so')) {
   errors.push(`memory vector extensionPath=${vector?.extensionPath}`)
+}
+if (browser?.headless !== true) errors.push(`browser.headless=${browser?.headless}`)
+if (browser?.noSandbox !== true) errors.push(`browser.noSandbox=${browser?.noSandbox}`)
+if (browser?.executablePath !== '/usr/bin/chromium') {
+  errors.push(`browser.executablePath=${browser?.executablePath}`)
+}
+if (!Array.isArray(browser?.extraArgs) || !browser.extraArgs.includes('--disable-dev-shm-usage')) {
+  errors.push(`browser.extraArgs=${browser?.extraArgs}`)
 }
 if (errors.length) {
   console.error(errors.join('\n'))
