@@ -287,8 +287,13 @@ export const saasApi = {
       del<{ ok: boolean; taskId?: string; status?: SaasDeployment['status'] }>(
         `/deployments/${encodeURIComponent(id)}`,
       ),
-    redeploy: (id: string) =>
-      post<SaasDeployment>(`/deployments/${encodeURIComponent(id)}/redeploy`, {}),
+    redeploy: (
+      id: string,
+      data?: {
+        configSnapshot?: Record<string, unknown>
+        envVars?: Record<string, string>
+      },
+    ) => post<SaasDeployment>(`/deployments/${encodeURIComponent(id)}/redeploy`, data ?? {}),
     costs: () => get<CostOverviewSummary>('/deployments/costs'),
     namespaceCosts: (id: string) =>
       get<NamespaceCostSummary>(`/deployments/${encodeURIComponent(id)}/costs`),

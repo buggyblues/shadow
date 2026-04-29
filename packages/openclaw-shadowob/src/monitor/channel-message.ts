@@ -142,9 +142,17 @@ export async function processShadowMessage(params: {
   const baseBodyForAgent = slashCommandMatch
     ? formatSlashCommandPrompt(cleanBody, slashCommandMatch)
     : cleanBody
+  const serverInfo = channelServerMap.get(channelId)
+  const channelContextLines = serverInfo
+    ? [
+        `Shadow server: ${serverInfo.serverName} (${serverInfo.serverSlug})`,
+        `Shadow channel: #${serverInfo.channelName}`,
+      ]
+    : [`Shadow channel ID: ${channelId}`]
+  const bodyWithChannelContext = `${channelContextLines.join('\n')}\n\n${baseBodyForAgent}`
   const bodyForAgent = interactiveResponseContext.text
-    ? `${interactiveResponseContext.text}\n\nUser message:\n${baseBodyForAgent}`
-    : baseBodyForAgent
+    ? `${interactiveResponseContext.text}\n\nUser message:\n${bodyWithChannelContext}`
+    : bodyWithChannelContext
   const body = core.channel.reply.formatAgentEnvelope({
     channel: 'Shadow',
     from: senderName,
@@ -153,7 +161,6 @@ export async function processShadowMessage(params: {
     body: bodyForAgent,
   })
 
-  const serverInfo = channelServerMap.get(channelId)
   const escapedBotUsername = botUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const mentionRegex = new RegExp(`@${escapedBotUsername}(?:\\s|$)`, 'i')
   const wasMentioned = mentionRegex.test(message.content)
@@ -251,10 +258,10 @@ export async function processShadowMessage(params: {
 
   const typingCbs = createTypingCallbacks({
     start: async () => {
-      socket.sendTyping(channelId)
+      socket.updateActivity(channelId, 'thinking')
     },
     onStartError: (err) => {
-      runtime.error?.(`[typing] Failed to send typing indicator: ${String(err)}`)
+      runtime.error?.(`[activity] Failed to publish thinking status: ${String(err)}`)
     },
   })
 

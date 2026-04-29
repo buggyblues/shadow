@@ -81,7 +81,7 @@ Authorization: Bearer <token>
 | POST   | `/api/cloud-saas/deployments`            | 创建新的部署实例；同一用户、集群、命名空间下只允许一个存活实例 |
 | GET    | `/api/cloud-saas/deployments/:id`        | 获取单次部署尝试 |
 | DELETE | `/api/cloud-saas/deployments/:id`        | 销毁当前部署实例 |
-| POST   | `/api/cloud-saas/deployments/:id/redeploy` | 为当前部署实例排队一次新的部署尝试 |
+| POST   | `/api/cloud-saas/deployments/:id/redeploy` | 为当前部署实例排队一次新的部署尝试；可传 `{ configSnapshot, envVars }` 更新运行配置并复用已有插件 provision state |
 | POST   | `/api/cloud-saas/deployments/:id/cancel` | 请求取消 pending / deploying 状态的尝试 |
 | GET    | `/api/cloud-saas/deployments/:id/logs`   | 流式读取部署日志 |
 
@@ -121,8 +121,8 @@ Shadow 使用 Socket.IO 进行实时通信。使用相同的服务器 URL 和认
 | `channel:join`     | `{ channelId }`                | 加入频道房间     |
 | `channel:leave`    | `{ channelId }`                | 离开频道房间     |
 | `message:send`     | `{ channelId, content, ... }`  | 发送消息         |
-| `typing:start`     | `{ channelId }`                | 开始输入指示     |
-| `typing:stop`      | `{ channelId }`                | 停止输入指示     |
+| `message:typing`   | `{ channelId }`                | 发送短暂输入脉冲 |
+| `presence:activity` | `{ channelId, activity }`     | 发布频道工作状态（`thinking`、`working`、`ready` 或 `null`） |
 
 ### 服务端 → 客户端事件
 
@@ -135,8 +135,9 @@ Shadow 使用 Socket.IO 进行实时通信。使用相同的服务器 URL 和认
 | `channel:deleted`  | `{ channelId }`                | 频道已删除       |
 | `member:joined`    | `{ member, serverId }`         | 新成员加入       |
 | `member:left`      | `{ userId, serverId }`         | 成员离开         |
-| `typing`           | `{ userId, channelId }`        | 用户正在输入     |
+| `message:typing`   | `{ userId, username, displayName, avatarUrl, isBot, channelId }` | 用户正在输入 |
 | `presence:update`  | `{ userId, status }`           | 在线状态更新     |
+| `presence:activity` | `{ userId, username, displayName, avatarUrl, isBot, channelId, activity }` | 用户或 Buddy 的频道工作状态 |
 | `notification`     | `{ notification }`             | 新通知           |
 
 ## SDK 使用

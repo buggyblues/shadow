@@ -807,21 +807,34 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension = {
     envVars?: Record<string, string>
   }) => {
     try {
-      const created = await saasApi.deployments.create({
-        namespace: config.namespace,
-        name: config.name,
-        templateSlug: config.templateSlug,
-        resourceTier: (config.resourceTier as ResourceTier) ?? 'lightweight',
-        agentCount: 1,
-        configSnapshot: config.configSnapshot ?? {},
-        envVars: config.envVars,
-      })
-      syncDeploymentCache([created])
+      const existing = (
+        await saasApi.deployments.list({ limit: 100, offset: 0, includeHistory: true })
+      ).find(
+        (row) =>
+          row.namespace === config.namespace &&
+          row.templateSlug === config.templateSlug &&
+          row.status !== 'destroyed',
+      )
+      const deployment = existing
+        ? await saasApi.deployments.redeploy(existing.id, {
+            configSnapshot: config.configSnapshot ?? {},
+            envVars: config.envVars,
+          })
+        : await saasApi.deployments.create({
+            namespace: config.namespace,
+            name: config.name,
+            templateSlug: config.templateSlug,
+            resourceTier: (config.resourceTier as ResourceTier) ?? 'lightweight',
+            agentCount: 1,
+            configSnapshot: config.configSnapshot ?? {},
+            envVars: config.envVars,
+          })
+      syncDeploymentCache([deployment])
 
       return {
         success: true,
-        deploymentId: created.id,
-        status: created.status,
+        deploymentId: deployment.id,
+        status: deployment.status,
       }
     } catch (err) {
       return {

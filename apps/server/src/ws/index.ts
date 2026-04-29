@@ -1,4 +1,4 @@
-import type { Server as SocketIOServer } from 'socket.io'
+import type { Socket, Server as SocketIOServer } from 'socket.io'
 import type { AppContainer } from '../container'
 import { verifyToken } from '../lib/jwt'
 import { logger } from '../lib/logger'
@@ -7,6 +7,24 @@ import { setupAppGateway } from './app.gateway'
 import { setupChatGateway } from './chat.gateway'
 import { setupNotificationGateway } from './notification.gateway'
 import { setupPresenceGateway } from './presence.gateway'
+
+async function hydrateSocketUser(
+  socket: Socket,
+  container: AppContainer,
+  userId: string,
+  fallbackUsername?: string | null,
+) {
+  const user = await container
+    .resolve('userDao')
+    .findById(userId)
+    .catch(() => null)
+  const username = user?.username ?? fallbackUsername ?? userId
+  socket.data.userId = userId
+  socket.data.username = username
+  socket.data.displayName = user?.displayName ?? username
+  socket.data.avatarUrl = user?.avatarUrl ?? null
+  socket.data.isBot = user?.isBot ?? false
+}
 
 export function setupWebSocket(io: SocketIOServer, container: AppContainer): void {
   // Auth middleware for Socket.IO
@@ -19,14 +37,12 @@ export function setupWebSocket(io: SocketIOServer, container: AppContainer): voi
 
     try {
       const payload = verifyToken(token)
-      socket.data.userId = payload.userId
-      socket.data.username = payload.username
+      await hydrateSocketUser(socket, container, payload.userId, payload.username)
       next()
     } catch (err) {
       const agent = await container.resolve('agentDao').findByLastToken(token)
       if (agent) {
-        socket.data.userId = agent.userId
-        socket.data.username = 'agent'
+        await hydrateSocketUser(socket, container, agent.userId, 'agent')
         next()
         return
       }

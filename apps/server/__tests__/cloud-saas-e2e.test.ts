@@ -115,6 +115,31 @@ async function req(method: string, path: string, body?: unknown, authToken = tok
   })
 }
 
+async function readDeploymentDetail(deploymentId: string) {
+  const res = await req('GET', `/api/cloud-saas/deployments/${deploymentId}`)
+  expect(res.status).toBe(200)
+  return (await res.json()) as {
+    id: string
+    status: string
+    errorMessage: string | null
+    blockedBy?: unknown
+  }
+}
+
+async function waitForDeploymentStatus(
+  deploymentId: string,
+  expectedStatus: string,
+  timeoutMs = 5_000,
+) {
+  const deadline = Date.now() + timeoutMs
+  let detail = await readDeploymentDetail(deploymentId)
+  while (detail.status !== expectedStatus && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    detail = await readDeploymentDetail(deploymentId)
+  }
+  return detail
+}
+
 /* ── Setup ── */
 
 beforeAll(async () => {
@@ -435,15 +460,13 @@ describe('Cloud SaaS — deployment state consistency', () => {
         ok: boolean
         status: string
       }
-      expect(cancelled).toMatchObject({ ok: true, status: 'failed' })
+      expect(cancelled.ok).toBe(true)
+      expect(['cancelling', 'failed']).toContain(cancelled.status)
 
-      const cancelledDetailRes = await req('GET', `/api/cloud-saas/deployments/${created.id}`)
-      expect(cancelledDetailRes.status).toBe(200)
-      const cancelledDetail = (await cancelledDetailRes.json()) as {
-        id: string
-        status: string
-        errorMessage: string | null
-      }
+      const cancelledDetail =
+        cancelled.status === 'failed'
+          ? await readDeploymentDetail(created.id)
+          : await waitForDeploymentStatus(created.id, 'failed')
       expect(cancelledDetail).toMatchObject({
         id: created.id,
         status: 'failed',
@@ -1812,7 +1835,13 @@ describe('Cloud SaaS — deployment + billing', () => {
       })
       expect(duplicateRes.status).toBe(409)
 
-      const redeployRes = await req('POST', `/api/cloud-saas/deployments/${existing!.id}/redeploy`)
+      const redeployRes = await req(
+        'POST',
+        `/api/cloud-saas/deployments/${existing!.id}/redeploy`,
+        {
+          configSnapshot: makeConfigSnapshot('updated-redeploy-secret'),
+        },
+      )
       expect(redeployRes.status).toBe(201)
       const redeployed = (await redeployRes.json()) as { id: string }
       const [storedRedeploy] = await db
@@ -1822,6 +1851,7 @@ describe('Cloud SaaS — deployment + billing', () => {
         .limit(1)
 
       const runtime = extractCloudSaasRuntime(storedRedeploy?.configSnapshot)
+      expect(runtime.configSnapshot?.apiKey).toBe('updated-redeploy-secret')
       expect(runtime.provisionState?.plugins.shadowob).toEqual(provisionState.plugins.shadowob)
 
       const redeployAgainRes = await req(

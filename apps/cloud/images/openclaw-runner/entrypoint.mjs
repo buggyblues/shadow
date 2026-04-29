@@ -311,6 +311,9 @@ function ensureCloudBrowserDefaults(config) {
 
 function ensureBrowserPluginEnabled(config) {
   if (!config.plugins || !isPlainObject(config.plugins)) config.plugins = {}
+  if (Array.isArray(config.plugins.allow) && !config.plugins.allow.includes('browser')) {
+    config.plugins.allow = [...config.plugins.allow, 'browser']
+  }
   if (!config.plugins.entries || !isPlainObject(config.plugins.entries)) {
     config.plugins.entries = {}
   }

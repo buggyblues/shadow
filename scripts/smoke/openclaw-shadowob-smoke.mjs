@@ -401,6 +401,60 @@ async function createSmokeAgent(session, owner, label) {
   }
 }
 
+async function isSmokeAgentUsable(session, agent) {
+  if (!agent?.agentId || !agent?.agentToken || !agent?.botUser?.id) return false
+  try {
+    await requestJson(session.origin, '/api/auth/me', { token: agent.agentToken })
+    return true
+  } catch (error) {
+    console.warn(
+      `[smoke] Stored smoke Buddy token is not usable; creating a fresh Buddy. ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    )
+    return false
+  }
+}
+
+async function ensureReusableSmokeAgent(session, owner, agent, label) {
+  if (await isSmokeAgentUsable(session, agent)) {
+    await requestJson(session.origin, `/api/servers/${session.server.id}/agents`, {
+      method: 'POST',
+      token: owner.accessToken,
+      body: { agentIds: [agent.agentId] },
+    }).catch((error) => {
+      console.warn(
+        `[smoke] Failed to reattach stored smoke Buddy to server: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      )
+    })
+    await requestJson(session.origin, `/api/channels/${session.channels.generalId}/members`, {
+      method: 'POST',
+      token: owner.accessToken,
+      body: { userId: agent.botUser.id },
+    }).catch((error) => {
+      console.warn(
+        `[smoke] Failed to reattach stored smoke Buddy to channel: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      )
+    })
+    await setChannelPolicy(session, owner, agent.agentId, { mode: 'replyAll' }).catch(() => {})
+    return agent
+  }
+  const fresh = await createSmokeAgent(session, owner, label)
+  await setChannelPolicy(session, owner, fresh.agentId, { mode: 'replyAll' }).catch(() => {})
+  await writeJson(agentPath, fresh).catch((error) => {
+    console.warn(
+      `[smoke] Failed to persist refreshed smoke Buddy: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    )
+  })
+  return fresh
+}
+
 async function fetchRecentDmMessages(session, owner, dmChannelId) {
   return requestJson(session.origin, `/api/dm/channels/${dmChannelId}/messages?limit=50`, {
     token: owner.accessToken,
@@ -1192,6 +1246,15 @@ async function main() {
       suites.has('discussion') ? 'Strategist' : 'Primary',
     )
     await setChannelPolicy(session, setupOwner, agent.agentId, { mode: 'replyAll' })
+  } else {
+    setupOwner = await login(session.origin, session.owner.email, session.owner.password)
+    session = await ensureSmokeSession(session, setupOwner)
+    agent = await ensureReusableSmokeAgent(
+      session,
+      setupOwner,
+      agent,
+      suites.has('discussion') ? 'Strategist' : 'Primary',
+    )
   }
 
   const configuredAgents = [

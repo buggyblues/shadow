@@ -373,7 +373,7 @@ shadowPlugin.heartbeat = {
     socket.connect()
     await new Promise<void>((resolve) => {
       socket.onConnect(() => {
-        socket.sendTyping(targetChannelId)
+        socket.updateActivity(targetChannelId, 'thinking')
         socket.disconnect()
         resolve()
       })

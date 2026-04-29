@@ -55,6 +55,27 @@ class ShadowMessage:
 
 
 @dataclass
+class TypingPayload:
+    channel_id: str
+    user_id: str
+    username: str | None = None
+    display_name: str | None = None
+    avatar_url: str | None = None
+    is_bot: bool | None = None
+
+
+@dataclass
+class PresenceActivityPayload:
+    user_id: str
+    channel_id: str
+    activity: str | None = None
+    username: str | None = None
+    display_name: str | None = None
+    avatar_url: str | None = None
+    is_bot: bool | None = None
+
+
+@dataclass
 class ShadowInteractiveActionInput:
     block_id: str
     action_id: str

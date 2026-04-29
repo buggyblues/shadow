@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { zValidator } from '@hono/zod-validator'
 import {
+  attachCloudSaasProvisionState,
   type CostOverviewSummary,
   collectRuntimeEnvRequirements,
   deleteNamespace,
@@ -2236,13 +2237,63 @@ export function createCloudSaasHandler(container: AppContainer) {
         return c.json({ ok: false, error: 'Deployment has no config snapshot to redeploy' }, 422)
       }
 
+      const body = await c.req.json().catch(() => ({}))
+      const redeployInput = z
+        .object({
+          configSnapshot: z.record(z.unknown()).optional(),
+          envVars: z.record(z.string()).optional(),
+        })
+        .safeParse(body)
+      if (!redeployInput.success) {
+        return c.json({ ok: false, error: 'Invalid redeploy request' }, 422)
+      }
+
+      let nextConfigSnapshot = deployment.configSnapshot
+      let reusedProvisionState = false
+      if (redeployInput.data.configSnapshot) {
+        try {
+          const runtimeEnvVars = await resolveCreateRuntimeEnvVars(
+            user.userId,
+            redeployInput.data.envVars,
+            redeployInput.data.configSnapshot,
+            c.req.header('authorization'),
+            requestOrigin(c),
+          )
+          const prepared = prepareCloudSaasConfigSnapshot(
+            redeployInput.data.configSnapshot,
+            runtimeEnvVars,
+          )
+          const existingRuntime = extractCloudSaasRuntime(deployment.configSnapshot)
+          const incomingRuntime = extractCloudSaasRuntime(prepared)
+          nextConfigSnapshot =
+            !incomingRuntime.provisionState && existingRuntime.provisionState
+              ? attachCloudSaasProvisionState(prepared, existingRuntime.provisionState)
+              : prepared
+          reusedProvisionState = Boolean(
+            existingRuntime.provisionState && !incomingRuntime.provisionState,
+          )
+        } catch (err) {
+          const status =
+            typeof (err as { status?: number }).status === 'number'
+              ? (err as { status: number }).status
+              : 422
+          return c.json(
+            {
+              ok: false,
+              error: err instanceof Error ? err.message : 'Invalid configSnapshot',
+            },
+            { status: status as 400 | 404 | 409 | 422 | 500 },
+          )
+        }
+      }
+
       const next = await dao.create({
         userId: user.userId,
         clusterId: deployment.clusterId,
         namespace: deployment.namespace,
         name: deployment.name,
         agentCount: deployment.agentCount,
-        configSnapshot: deployment.configSnapshot,
+        configSnapshot: nextConfigSnapshot,
       })
       if (!next) {
         return c.json({ ok: false, error: 'Failed to create redeployment' }, 500)
@@ -2262,6 +2313,15 @@ export function createCloudSaasHandler(container: AppContainer) {
         .returning()
 
       await dao.appendLog(next.id, `[redeploy] Recreated from deployment ${deployment.id}`, 'info')
+      if (redeployInput.data.configSnapshot) {
+        await dao.appendLog(
+          next.id,
+          reusedProvisionState
+            ? '[redeploy] Applied updated config snapshot and reused existing Buddy provision state'
+            : '[redeploy] Applied updated config snapshot',
+          'info',
+        )
+      }
       await dao.appendLog(
         next.id,
         `[queue] Redeploy queued for namespace "${deployment.namespace}"`,

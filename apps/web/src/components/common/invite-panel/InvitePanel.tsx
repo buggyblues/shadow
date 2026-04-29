@@ -5,8 +5,11 @@ import { Check, Copy, PawPrint, Search, UserPlus, X } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../../lib/api'
+import { UserAvatar } from '../avatar'
 
 // Types
+type PresenceStatus = 'online' | 'idle' | 'dnd' | 'offline'
+
 interface ServerMember {
   userId: string
   role: string
@@ -16,6 +19,7 @@ interface ServerMember {
     displayName: string | null
     avatarUrl: string | null
     isBot: boolean
+    status?: PresenceStatus | null
   } | null
 }
 
@@ -40,18 +44,6 @@ interface BuddyAgent {
   }
 }
 
-interface Member {
-  id: string
-  userId: string
-  user?: {
-    id: string
-    username: string
-    displayName: string | null
-    avatarUrl: string | null
-    isBot: boolean
-  } | null
-}
-
 // Props
 export interface InvitePanelProps {
   serverId: string
@@ -61,26 +53,147 @@ export interface InvitePanelProps {
   onClose: () => void
 }
 
-// User Avatar Component
-function UserAvatar({
-  avatarUrl,
-  name,
-  size = 'md',
-}: {
-  avatarUrl: string | null
-  name: string
-  size?: 'sm' | 'md'
-}) {
-  const sizeClasses = size === 'sm' ? 'w-6 h-6 text-[11px]' : 'w-8 h-8 text-xs'
+function normalizeStatus(status?: string | null): PresenceStatus {
+  if (status === 'online' || status === 'idle' || status === 'dnd') return status
+  return 'offline'
+}
+
+function normalizeBuddyStatus(status?: string | null): PresenceStatus {
+  if (status === 'running') return 'online'
+  if (status === 'error') return 'dnd'
+  return normalizeStatus(status)
+}
+
+function StatusPill({ status }: { status: PresenceStatus }) {
+  const { t } = useTranslation()
+  const statusClasses: Record<PresenceStatus, string> = {
+    online: 'bg-success/15 text-success border-success/25',
+    idle: 'bg-warning/15 text-warning border-warning/25',
+    dnd: 'bg-danger/15 text-danger border-danger/25',
+    offline: 'bg-text-muted/10 text-text-muted border-border-subtle',
+  }
+  const dotClasses: Record<PresenceStatus, string> = {
+    online: 'bg-success',
+    idle: 'bg-warning',
+    dnd: 'bg-danger',
+    offline: 'bg-text-muted',
+  }
+
   return (
-    <div
-      className={`${sizeClasses} rounded-full bg-bg-tertiary/50 overflow-hidden flex items-center justify-center text-text-primary font-bold shrink-0`}
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusClasses[status]}`}
     >
-      {avatarUrl ? (
-        <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
-      ) : (
-        name.charAt(0).toUpperCase()
+      <span className={`h-1.5 w-1.5 rounded-full ${dotClasses[status]}`} />
+      {t(`member.${status}`)}
+    </span>
+  )
+}
+
+function BuddyBadge() {
+  const { t } = useTranslation()
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-primary/15 px-1.5 py-0.5 text-[11px] font-black text-primary">
+      <Check size={10} />
+      {t('member.buddy')}
+    </span>
+  )
+}
+
+function BuddyInviteRow({
+  user,
+  description,
+  ownerName,
+  status,
+  selected,
+  selectable,
+  action,
+  onSelect,
+}: {
+  user: {
+    id: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+  }
+  description?: string | null
+  ownerName?: string | null
+  status: PresenceStatus
+  selected?: boolean
+  selectable?: boolean
+  action?: {
+    label: string
+    disabled?: boolean
+    loading?: boolean
+    onClick: () => void
+  }
+  onSelect?: () => void
+}) {
+  const { t } = useTranslation()
+  const name = user.displayName || user.username
+  const content = (
+    <>
+      {selectable && (
+        <div
+          className={`mt-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
+            selected
+              ? 'border-accent bg-accent text-white'
+              : 'border-border-subtle text-transparent'
+          }`}
+        >
+          <Check size={13} />
+        </div>
       )}
+      <UserAvatar userId={user.id} avatarUrl={user.avatarUrl} displayName={name} size="sm" />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <p className="truncate text-sm font-semibold text-text-primary">{name}</p>
+          <BuddyBadge />
+          <StatusPill status={status} />
+        </div>
+        <p className="truncate text-xs text-text-muted">@{user.username}</p>
+        {description && (
+          <p className="mt-1 line-clamp-2 text-xs text-text-secondary">{description}</p>
+        )}
+        {ownerName && (
+          <p className="mt-1 text-[11px] text-text-muted/80">
+            {t('channel.buddyOwner')} {ownerName}
+          </p>
+        )}
+      </div>
+      {action && (
+        <Button
+          variant="accent"
+          size="xs"
+          onClick={action.onClick}
+          disabled={action.disabled}
+          loading={action.loading}
+          className="shrink-0"
+        >
+          {action.label}
+        </Button>
+      )}
+    </>
+  )
+
+  if (selectable) {
+    return (
+      <button
+        type="button"
+        onClick={onSelect}
+        className={`mb-1 flex w-full items-start gap-3 rounded-lg border px-3 py-2 text-left transition ${
+          selected
+            ? 'border-accent/40 bg-accent/15'
+            : 'border-border-subtle bg-bg-tertiary/45 hover:bg-bg-modifier-hover'
+        }`}
+      >
+        {content}
+      </button>
+    )
+  }
+
+  return (
+    <div className="mb-1 flex items-start gap-3 rounded-lg border border-border-subtle bg-bg-tertiary/45 px-3 py-2">
+      {content}
     </div>
   )
 }
@@ -235,35 +348,6 @@ export function InvitePanel({
     }
   }
 
-  const handleAddSingleBuddy = async (agentId: string) => {
-    setAddingSingleId(agentId)
-    try {
-      await fetchApi(`/api/servers/${serverId}/agents`, {
-        method: 'POST',
-        body: JSON.stringify({ agentIds: [agentId] }),
-      })
-      if (channelId) {
-        const agent = myBuddies.find((a) => a.id === agentId)
-        if (agent?.botUser?.id) {
-          await fetchApi(`/api/channels/${channelId}/members`, {
-            method: 'POST',
-            body: JSON.stringify({ userId: agent.botUser.id }),
-          })
-        }
-      }
-      queryClient.invalidateQueries({ queryKey: ['server-members', serverId] })
-      queryClient.invalidateQueries({ queryKey: ['members'] })
-      if (channelId) {
-        queryClient.invalidateQueries({ queryKey: ['channel-members', channelId] })
-      }
-      onClose()
-    } catch {
-      /* error handled silently */
-    } finally {
-      setAddingSingleId(null)
-    }
-  }
-
   const handleAddServerBotToChannel = async (botUserId: string) => {
     if (!channelId) return
     setAddingSingleId(botUserId)
@@ -352,7 +436,7 @@ export function InvitePanel({
             }`}
           >
             <PawPrint size={14} />
-            Buddy ({buddyCount})
+            {t('member.buddies')} ({buddyCount})
           </button>
         </div>
 
@@ -398,7 +482,12 @@ export function InvitePanel({
                     key={u.id}
                     className="flex items-center gap-3 px-3 py-2 rounded-lg bg-bg-tertiary/50 border border-border-subtle"
                   >
-                    <UserAvatar avatarUrl={u.avatarUrl} name={u.displayName || u.username} />
+                    <UserAvatar
+                      userId={u.id}
+                      avatarUrl={u.avatarUrl}
+                      displayName={u.displayName || u.username}
+                      size="sm"
+                    />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm text-text-primary truncate">
                         {u.displayName || u.username}
@@ -428,43 +517,25 @@ export function InvitePanel({
                   </p>
                   {filteredServerBots.map((m) => {
                     const u = m.user!
-                    const name = u.displayName || u.username
                     const agent = myBuddies.find((a) => a.botUser?.id === u.id)
                     const description = agent?.config?.description
                     const isAdding = addingSingleId === u.id
 
                     return (
-                      <div
+                      <BuddyInviteRow
                         key={u.id}
-                        className="flex items-start gap-3 px-3 py-2 rounded-lg bg-bg-tertiary/50 border border-border-subtle mb-1"
-                      >
-                        <UserAvatar avatarUrl={u.avatarUrl} name={name} />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-sm text-text-primary truncate">{name}</p>
-                            <span className="text-[11px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-[3px] font-black flex items-center gap-0.5 shrink-0">
-                              <Check size={8} className="text-white" />
-                              Buddy
-                            </span>
-                          </div>
-                          {description && (
-                            <p className="text-xs text-text-muted mt-0.5 line-clamp-1">
-                              {description}
-                            </p>
-                          )}
-                          <p className="text-[11px] text-text-muted/70">
-                            {t('member.notInChannel')}
-                          </p>
-                        </div>
-                        <Button
-                          variant="accent"
-                          size="xs"
-                          onClick={() => handleAddServerBotToChannel(u.id)}
-                          disabled={isAdding}
-                        >
-                          {isAdding ? t('common.loading') : t('member.addToChannel')}
-                        </Button>
-                      </div>
+                        user={u}
+                        description={description ?? t('member.notInChannel')}
+                        status={
+                          agent ? normalizeBuddyStatus(agent.status) : normalizeStatus(u.status)
+                        }
+                        action={{
+                          label: isAdding ? t('common.loading') : t('member.addToChannel'),
+                          disabled: isAdding,
+                          loading: isAdding,
+                          onClick: () => handleAddServerBotToChannel(u.id),
+                        }}
+                      />
                     )
                   })}
                 </div>
@@ -480,65 +551,24 @@ export function InvitePanel({
                   )}
                   {filteredMyBuddies.map((buddy) => {
                     const u = buddy.botUser!
-                    const name = u.displayName || u.username
                     const description =
                       typeof buddy.config?.description === 'string'
                         ? buddy.config.description
                         : null
                     const ownerName = buddy.owner?.displayName ?? buddy.owner?.username ?? null
                     const isSelected = selectedBuddyIds.has(buddy.id)
-                    const isAdding = addingSingleId === buddy.id
 
                     return (
-                      <button
+                      <BuddyInviteRow
                         key={buddy.id}
-                        type="button"
-                        onClick={() => toggleBuddy(buddy.id)}
-                        className={`flex items-start gap-3 w-full px-3 py-2 rounded-lg text-left transition mb-1 ${
-                          isSelected
-                            ? 'bg-accent/15 border border-accent/30'
-                            : 'bg-bg-tertiary/50 border border-border-subtle hover:bg-bg-modifier-hover'
-                        }`}
-                      >
-                        {/* Checkbox */}
-                        <div
-                          className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${
-                            isSelected
-                              ? 'border-accent bg-accent'
-                              : 'border-border-subtle bg-transparent'
-                          }`}
-                        >
-                          {isSelected && <Check size={12} className="text-white" />}
-                        </div>
-                        {/* Avatar */}
-                        <UserAvatar avatarUrl={u.avatarUrl} name={name} />
-                        {/* Info */}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-sm text-text-primary truncate">{name}</p>
-                            <PawPrint size={12} className="text-accent shrink-0" />
-                            <span
-                              className={`w-2 h-2 rounded-full shrink-0 ${
-                                buddy.status === 'running'
-                                  ? 'bg-success'
-                                  : buddy.status === 'error'
-                                    ? 'bg-danger'
-                                    : 'bg-text-muted'
-                              }`}
-                            />
-                          </div>
-                          {description && (
-                            <p className="text-xs text-text-muted mt-0.5 line-clamp-1">
-                              {description}
-                            </p>
-                          )}
-                          {ownerName && (
-                            <p className="text-[11px] text-text-muted/70">
-                              {t('channel.buddyOwner')} {ownerName}
-                            </p>
-                          )}
-                        </div>
-                      </button>
+                        user={u}
+                        description={description}
+                        ownerName={ownerName}
+                        status={normalizeBuddyStatus(buddy.status)}
+                        selected={isSelected}
+                        selectable
+                        onSelect={() => toggleBuddy(buddy.id)}
+                      />
                     )
                   })}
                 </div>

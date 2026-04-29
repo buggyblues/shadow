@@ -278,6 +278,9 @@ export interface TypingPayload {
   channelId: string
   userId: string
   username: string
+  displayName?: string | null
+  avatarUrl?: string | null
+  isBot?: boolean
 }
 
 export interface PresenceChangePayload {
@@ -289,6 +292,10 @@ export interface PresenceActivityPayload {
   userId: string
   activity: string | null
   channelId: string
+  username?: string | null
+  displayName?: string | null
+  avatarUrl?: string | null
+  isBot?: boolean
 }
 
 export interface MemberJoinPayload {
@@ -640,6 +647,7 @@ export interface ServerEventMap {
   'message:new': (message: ShadowMessage) => void
   'message:updated': (message: ShadowMessage) => void
   'message:deleted': (payload: MessageDeletedPayload) => void
+  'message:typing': (payload: TypingPayload) => void
   'member:typing': (payload: TypingPayload) => void
   'member:join': (payload: MemberJoinPayload) => void
   'member:leave': (payload: MemberLeavePayload) => void

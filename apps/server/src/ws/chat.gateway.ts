@@ -174,8 +174,18 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
     // message:typing
     socket.on('message:typing', ({ channelId }: { channelId: string }) => {
       if (!userId) return
-      const username = socket.data.username as string
-      socket.to(`channel:${channelId}`).emit('message:typing', { channelId, userId, username })
+      const username = (socket.data.username as string | undefined) ?? userId
+      const displayName = (socket.data.displayName as string | undefined) ?? username
+      const avatarUrl = (socket.data.avatarUrl as string | null | undefined) ?? null
+      const isBot = Boolean(socket.data.isBot)
+      socket.to(`channel:${channelId}`).emit('message:typing', {
+        channelId,
+        userId,
+        username,
+        displayName,
+        avatarUrl,
+        isBot,
+      })
     })
 
     // ---- DM (Direct Message) Events ----

@@ -56,6 +56,27 @@ import type {
 import { normalizeMessage } from '../../../../../src/types/message'
 
 const PAGE_SIZE = 50
+const TYPING_STATUS_TTL_MS = 3500
+const ACTIVE_WORK_STATUS_TTL_MS = 65_000
+const READY_STATUS_TTL_MS = 3500
+
+type ChannelWorkActivity = 'typing' | 'thinking' | 'working' | 'ready' | 'preparing' | string
+
+interface ChannelWorkEvent {
+  channelId: string
+  userId: string
+  username?: string | null
+  displayName?: string | null
+  avatarUrl?: string | null
+  isBot?: boolean
+}
+
+interface ChannelWorkStatus {
+  userId: string
+  username: string
+  displayName: string
+  activity: ChannelWorkActivity
+}
 
 export default function ChannelViewScreen() {
   const { serverSlug, channelId } = useLocalSearchParams<{
@@ -75,11 +96,8 @@ export default function ChannelViewScreen() {
   const [inputText, setInputText] = useState('')
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [sending, setSending] = useState(false)
-  const [typingUsers, setTypingUsers] = useState<string[]>([])
   const [systemEvents, setSystemEvents] = useState<SystemEvent[]>([])
-  const [activityUsers, setActivityUsers] = useState<
-    { userId: string; username: string; activity: string }[]
-  >([])
+  const [channelWorkStatuses, setChannelWorkStatuses] = useState<ChannelWorkStatus[]>([])
   const [pendingFiles, setPendingFiles] = useState<
     Array<{ uri: string; name: string; type: string; size?: number }>
   >([])
@@ -125,7 +143,7 @@ export default function ChannelViewScreen() {
   }, [channelId])
 
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const typingUsersTimeout = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const channelWorkTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const {
     isRecording,
     isHolding,
@@ -244,6 +262,73 @@ export default function ChannelViewScreen() {
         (m) => m.user.status === 'online' || m.user.status === 'idle' || m.user.status === 'dnd',
       ).length,
     [channelMembers],
+  )
+
+  const clearChannelWorkTimer = useCallback((userId: string) => {
+    const existing = channelWorkTimers.current[userId]
+    if (existing) {
+      clearTimeout(existing)
+      delete channelWorkTimers.current[userId]
+    }
+  }, [])
+
+  const removeChannelWorkStatus = useCallback(
+    (userId: string) => {
+      clearChannelWorkTimer(userId)
+      setChannelWorkStatuses((prev) => prev.filter((status) => status.userId !== userId))
+    },
+    [clearChannelWorkTimer],
+  )
+
+  const resolveChannelWorkName = useCallback(
+    (payload: ChannelWorkEvent) => {
+      if (payload.displayName?.trim()) return payload.displayName.trim()
+      if (payload.username?.trim()) return payload.username.trim()
+      const member = channelMembers.find((m) => m.userId === payload.userId)
+      return member?.user.displayName || member?.user.username || t('member.buddy', 'Buddy')
+    },
+    [channelMembers, t],
+  )
+
+  const upsertChannelWorkStatus = useCallback(
+    (payload: ChannelWorkEvent & { activity: ChannelWorkActivity }, ttlMs: number) => {
+      const displayName = resolveChannelWorkName(payload)
+      const username = payload.username?.trim() || displayName
+      clearChannelWorkTimer(payload.userId)
+      setChannelWorkStatuses((prev) => [
+        ...prev.filter((status) => status.userId !== payload.userId),
+        {
+          userId: payload.userId,
+          username,
+          displayName,
+          activity: payload.activity,
+        },
+      ])
+      channelWorkTimers.current[payload.userId] = setTimeout(() => {
+        removeChannelWorkStatus(payload.userId)
+      }, ttlMs)
+    },
+    [clearChannelWorkTimer, removeChannelWorkStatus, resolveChannelWorkName],
+  )
+
+  const formatChannelWorkStatus = useCallback(
+    (status: ChannelWorkStatus) => {
+      const name = status.displayName || status.username || t('member.buddy', 'Buddy')
+      const key =
+        status.activity === 'typing'
+          ? 'chat.channelWorkTyping'
+          : status.activity === 'thinking'
+            ? 'chat.channelWorkThinking'
+            : status.activity === 'working'
+              ? 'chat.channelWorkWorking'
+              : status.activity === 'ready'
+                ? 'chat.channelWorkReady'
+                : status.activity === 'preparing'
+                  ? 'chat.channelWorkPreparing'
+                  : 'chat.channelWorkStatus'
+      return t(key, { name, status: status.activity })
+    },
+    [t],
   )
 
   // ---------- Search ----------
@@ -484,6 +569,9 @@ export default function ChannelViewScreen() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: channelId is intentionally the trigger
   useEffect(() => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: false })
+    setChannelWorkStatuses([])
+    Object.values(channelWorkTimers.current).forEach(clearTimeout)
+    channelWorkTimers.current = {}
   }, [channelId])
 
   // ---------- WebSocket: join/leave ----------
@@ -681,25 +769,12 @@ export default function ChannelViewScreen() {
   useSocketEvent(
     'message:typing',
     useCallback(
-      ({
-        channelId: typingChannelId,
-        userId,
-        username,
-      }: {
-        channelId: string
-        userId: string
-        username: string
-      }) => {
-        if (typingChannelId !== channelId || !userId) return
-        if (userId === currentUser?.id) return
-        setTypingUsers((prev) => (prev.includes(username) ? prev : [...prev, username]))
-        if (typingUsersTimeout.current[userId]) clearTimeout(typingUsersTimeout.current[userId])
-        typingUsersTimeout.current[userId] = setTimeout(() => {
-          setTypingUsers((prev) => prev.filter((n) => n !== username))
-          delete typingUsersTimeout.current[userId]
-        }, 3000)
+      (payload: ChannelWorkEvent) => {
+        if (payload.channelId !== channelId || !payload.userId) return
+        if (payload.userId === currentUser?.id) return
+        upsertChannelWorkStatus({ ...payload, activity: 'typing' }, TYPING_STATUS_TTL_MS)
       },
-      [channelId, currentUser?.id],
+      [channelId, currentUser?.id, upsertChannelWorkStatus],
     ),
   )
 
@@ -750,37 +825,22 @@ export default function ChannelViewScreen() {
   useSocketEvent(
     'presence:activity',
     useCallback(
-      (payload: {
-        userId: string
-        channelId: string
-        activity: string | null
-        username?: string
-      }) => {
+      (payload: ChannelWorkEvent & { activity: string | null }) => {
         if (payload.channelId !== channelId) return
-        setActivityUsers((prev) => {
-          if (!payload.activity) return prev.filter((u) => u.userId !== payload.userId)
-          const existing = prev.find((u) => u.userId === payload.userId)
-          if (existing)
-            return prev.map((u) =>
-              u.userId === payload.userId ? { ...u, activity: payload.activity! } : u,
-            )
-          return [
-            ...prev,
-            {
-              userId: payload.userId,
-              username: payload.username ?? 'Buddy',
-              activity: payload.activity,
-            },
-          ]
-        })
+        if (!payload.activity) {
+          removeChannelWorkStatus(payload.userId)
+          return
+        }
+        const ttl = payload.activity === 'ready' ? READY_STATUS_TTL_MS : ACTIVE_WORK_STATUS_TTL_MS
+        upsertChannelWorkStatus({ ...payload, activity: payload.activity }, ttl)
       },
-      [channelId],
+      [channelId, removeChannelWorkStatus, upsertChannelWorkStatus],
     ),
   )
 
   useEffect(() => {
     return () => {
-      Object.values(typingUsersTimeout.current).forEach(clearTimeout)
+      Object.values(channelWorkTimers.current).forEach(clearTimeout)
       if (typingTimeout.current) clearTimeout(typingTimeout.current)
     }
   }, [])
@@ -1393,21 +1453,19 @@ export default function ChannelViewScreen() {
         </Pressable>
       )}
 
-      {/* Activity indicator */}
-      {activityUsers.length > 0 && (
+      {/* Channel work status */}
+      {channelWorkStatuses.length > 0 && (
         <View style={[styles.activityBar, { backgroundColor: colors.surface }]}>
-          {activityUsers.map((u) => (
-            <View key={u.userId} style={styles.activityRow}>
+          {channelWorkStatuses.map((status) => (
+            <View key={status.userId} style={styles.activityRow}>
               <View style={[styles.pulseDot, { backgroundColor: colors.primary }]} />
               <Text style={[styles.activityText, { color: colors.textMuted }]} numberOfLines={1}>
-                {u.username} {u.activity}
+                {formatChannelWorkStatus(status)}
               </Text>
             </View>
           ))}
         </View>
       )}
-
-      {/* Typing indicator */}
 
       {/* @mention autocomplete dropdown */}
       {mentionResults.length > 0 && mentionQuery !== null && (
@@ -1511,7 +1569,7 @@ export default function ChannelViewScreen() {
           onRemovePendingFile={removePendingFile}
           replyTo={replyTo}
           onClearReply={() => setReplyTo(null)}
-          typingUsers={typingUsers}
+          typingUsers={[]}
           isRecording={isRecording}
           isHolding={isHolding}
           keyboardVisible={keyboardVisible}

@@ -81,7 +81,7 @@ Interactive message blocks are stored in `message.metadata.interactive`; one-sho
 | POST   | `/api/cloud-saas/deployments`                 | Create a new deployment instance; live namespaces are unique per user and cluster |
 | GET    | `/api/cloud-saas/deployments/:id`             | Get a deployment attempt |
 | DELETE | `/api/cloud-saas/deployments/:id`             | Destroy the current deployment instance |
-| POST   | `/api/cloud-saas/deployments/:id/redeploy`    | Enqueue a new attempt for the current deployment instance |
+| POST   | `/api/cloud-saas/deployments/:id/redeploy`    | Enqueue a new attempt for the current deployment instance; optional body `{ configSnapshot, envVars }` updates runtime config while reusing existing plugin provision state |
 | POST   | `/api/cloud-saas/deployments/:id/cancel`      | Request cancellation of a pending or deploying attempt |
 | GET    | `/api/cloud-saas/deployments/:id/logs`        | Stream deployment logs |
 
@@ -121,8 +121,8 @@ Shadow uses Socket.IO for real-time communication. Connect to the same server UR
 | `channel:join`      | `{ channelId }`                | Join a channel room       |
 | `channel:leave`     | `{ channelId }`                | Leave a channel room      |
 | `message:send`      | `{ channelId, content, ... }`  | Send a message            |
-| `typing:start`      | `{ channelId }`                | Start typing indicator    |
-| `typing:stop`       | `{ channelId }`                | Stop typing indicator     |
+| `message:typing`    | `{ channelId }`                | Send a short typing pulse |
+| `presence:activity` | `{ channelId, activity }`      | Publish channel work status (`thinking`, `working`, `ready`, or `null`) |
 
 ### Server → Client Events
 
@@ -135,8 +135,9 @@ Shadow uses Socket.IO for real-time communication. Connect to the same server UR
 | `channel:deleted`   | `{ channelId }`                | Channel was deleted       |
 | `member:joined`     | `{ member, serverId }`         | New member joined server  |
 | `member:left`       | `{ userId, serverId }`         | Member left server        |
-| `typing`            | `{ userId, channelId }`        | User is typing            |
+| `message:typing`    | `{ userId, username, displayName, avatarUrl, isBot, channelId }` | User is typing |
 | `presence:update`   | `{ userId, status }`           | User online/offline       |
+| `presence:activity` | `{ userId, username, displayName, avatarUrl, isBot, channelId, activity }` | User or Buddy channel work status |
 | `notification`      | `{ notification }`             | New notification          |
 
 ## SDK Usage

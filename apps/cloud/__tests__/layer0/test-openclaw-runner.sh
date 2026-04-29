@@ -102,6 +102,9 @@ if (config.plugins?.entries?.bonjour?.enabled !== false) {
 if (config.plugins?.entries?.browser?.enabled !== true) {
   errors.push(`plugins.entries.browser.enabled=${config.plugins?.entries?.browser?.enabled}`)
 }
+if (Array.isArray(config.plugins?.allow) && !config.plugins.allow.includes('browser')) {
+  errors.push(`plugins.allow=${config.plugins.allow.join(',')}`)
+}
 if (vector?.enabled !== true) errors.push(`memory vector enabled=${vector?.enabled}`)
 if (typeof vector?.extensionPath !== 'string' || !vector.extensionPath.endsWith('.so')) {
   errors.push(`memory vector extensionPath=${vector?.extensionPath}`)
@@ -184,6 +187,23 @@ else
   docker exec "$CONTAINER_NAME" sh -lc 'ls -ld /app /app/extensions /home/openclaw/.openclaw' || true
   exit 1
 fi
+
+# 11. OpenClaw agent skills need browser control, git, and Python available in the runner.
+echo "▸ Checking OpenClaw toolchain dependencies..."
+TOOLCHAIN_CHECK=$(docker exec "$CONTAINER_NAME" sh -lc '
+  command -v git >/dev/null &&
+  command -v python3 >/dev/null &&
+  node -e "require.resolve(\"playwright-core\")" >/dev/null &&
+  python3 --version >/dev/null &&
+  git --version >/dev/null &&
+  echo ok
+' 2>/dev/null || true)
+if [ "$TOOLCHAIN_CHECK" != "ok" ]; then
+  echo "✗ Missing OpenClaw toolchain dependencies"
+  docker exec "$CONTAINER_NAME" sh -lc 'command -v git || true; command -v python3 || true; node -e "console.log(require.resolve(\"playwright-core\"))" || true' || true
+  exit 1
+fi
+echo "✓ OpenClaw toolchain dependencies are installed"
 
 echo ""
 echo "=== Layer 0: openclaw-runner — ALL CHECKS PASSED ==="

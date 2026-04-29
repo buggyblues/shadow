@@ -103,6 +103,31 @@ interface SystemEvent {
   timestamp: number
 }
 
+type ChannelWorkActivity = 'typing' | 'thinking' | 'working' | 'ready' | 'preparing' | string
+
+interface ChannelWorkEvent {
+  userId: string
+  username?: string | null
+  displayName?: string | null
+  avatarUrl?: string | null
+  isBot?: boolean
+  channelId: string
+}
+
+interface ChannelActivityEvent extends ChannelWorkEvent {
+  activity: string | null
+}
+
+interface ChannelWorkStatus {
+  userId: string
+  username: string
+  displayName: string
+  avatarUrl: string | null
+  isBot: boolean
+  activity: ChannelWorkActivity
+  updatedAt: number
+}
+
 /** Pre-computed timeline item with grouping info */
 type TimelineItem =
   | { kind: 'message'; data: Message; isGrouped: boolean }
@@ -113,6 +138,9 @@ type InteractiveResponse = NonNullable<
 >
 
 const VIRTUALIZE_MESSAGE_THRESHOLD = 40
+const TYPING_STATUS_TTL_MS = 3500
+const ACTIVE_WORK_STATUS_TTL_MS = 65_000
+const READY_STATUS_TTL_MS = 3500
 
 /** Estimated height by content type — used for virtualizer initial estimates */
 function estimateItemSize(item: TimelineItem): number {
@@ -138,18 +166,16 @@ export function ChatArea() {
   const [replyToId, setReplyToId] = useState<string | null>(null)
   const [droppedFiles, setDroppedFiles] = useState<File[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
-  const [typingUsers, setTypingUsers] = useState<string[]>([])
   const [lastReadCount, setLastReadCount] = useState(0)
   const [highlightMsgId, setHighlightMsgId] = useState<string | null>(null)
   const [systemEvents, setSystemEvents] = useState<SystemEvent[]>([])
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set())
-  const [activityUsers, setActivityUsers] = useState<
-    { userId: string; username: string; activity: string }[]
-  >([])
+  const [channelWorkStatuses, setChannelWorkStatuses] = useState<ChannelWorkStatus[]>([])
   const initialScrollDoneRef = useRef(false)
   const prevMessageCountRef = useRef(0)
   const shouldStickToBottomRef = useRef(true)
+  const channelWorkTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const [previewFile, setPreviewFile] = useState<{
     id: string
     filename: string
@@ -383,21 +409,96 @@ export function ChatArea() {
     },
   )
 
-  // Listen for typing indicators
-  useSocketEvent(
-    'message:typing',
-    (data: { userId: string; username: string; channelId: string }) => {
-      if (data.channelId === activeChannelId && data.userId !== user?.id) {
-        setTypingUsers((prev) => {
-          if (prev.includes(data.username)) return prev
-          return [...prev, data.username]
-        })
-        // Remove after 3 seconds
-        setTimeout(() => {
-          setTypingUsers((prev) => prev.filter((u) => u !== data.username))
-        }, 3000)
-      }
+  const clearChannelWorkTimer = useCallback((userId: string) => {
+    const existing = channelWorkTimersRef.current[userId]
+    if (existing) {
+      clearTimeout(existing)
+      delete channelWorkTimersRef.current[userId]
+    }
+  }, [])
+
+  const removeChannelWorkStatus = useCallback(
+    (userId: string) => {
+      clearChannelWorkTimer(userId)
+      setChannelWorkStatuses((prev) => prev.filter((status) => status.userId !== userId))
     },
+    [clearChannelWorkTimer],
+  )
+
+  const resolveChannelWorkName = useCallback(
+    (data: ChannelWorkEvent) => {
+      if (data.displayName?.trim()) return data.displayName.trim()
+      if (data.username?.trim()) return data.username.trim()
+
+      const members = queryClient.getQueryData<
+        {
+          userId: string
+          user?: { displayName?: string | null; username?: string | null }
+        }[]
+      >(['members', activeServerId])
+      const member = members?.find((m) => m.userId === data.userId)
+      return (
+        member?.user?.displayName?.trim() ||
+        member?.user?.username?.trim() ||
+        t('member.buddy', 'Buddy')
+      )
+    },
+    [activeServerId, queryClient, t],
+  )
+
+  const upsertChannelWorkStatus = useCallback(
+    (data: ChannelWorkEvent & { activity: ChannelWorkActivity }, ttlMs: number) => {
+      const displayName = resolveChannelWorkName(data)
+      const username = data.username?.trim() || displayName
+
+      clearChannelWorkTimer(data.userId)
+      setChannelWorkStatuses((prev) => {
+        const next = prev.filter((status) => status.userId !== data.userId)
+        return [
+          ...next,
+          {
+            userId: data.userId,
+            username,
+            displayName,
+            avatarUrl: data.avatarUrl ?? null,
+            isBot: data.isBot ?? true,
+            activity: data.activity,
+            updatedAt: Date.now(),
+          },
+        ]
+      })
+
+      channelWorkTimersRef.current[data.userId] = setTimeout(() => {
+        removeChannelWorkStatus(data.userId)
+      }, ttlMs)
+    },
+    [clearChannelWorkTimer, removeChannelWorkStatus, resolveChannelWorkName],
+  )
+
+  // Listen for typing indicators
+  useSocketEvent('message:typing', (data: ChannelWorkEvent) => {
+    if (data.channelId !== activeChannelId || data.userId === user?.id) return
+    upsertChannelWorkStatus({ ...data, activity: 'typing' }, TYPING_STATUS_TTL_MS)
+  })
+
+  const formatChannelWorkStatus = useCallback(
+    (status: ChannelWorkStatus) => {
+      const name = status.displayName || status.username || t('member.buddy', 'Buddy')
+      const key =
+        status.activity === 'typing'
+          ? 'chat.channelWorkTyping'
+          : status.activity === 'thinking'
+            ? 'chat.channelWorkThinking'
+            : status.activity === 'working'
+              ? 'chat.channelWorkWorking'
+              : status.activity === 'ready'
+                ? 'chat.channelWorkReady'
+                : status.activity === 'preparing'
+                  ? 'chat.channelWorkPreparing'
+                  : 'chat.channelWorkStatus'
+      return t(key, { name, status: status.activity })
+    },
+    [t],
   )
 
   // Listen for member join events
@@ -456,38 +557,23 @@ export function ChatArea() {
   })
 
   // Listen for agent activity status
-  useSocketEvent(
-    'presence:activity',
-    (data: { userId: string; activity: string | null; channelId: string }) => {
-      if (data.channelId !== activeChannelId) return
-      setActivityUsers((prev) => {
-        if (!data.activity) {
-          return prev.filter((u) => u.userId !== data.userId)
-        }
-        // Look up display name from members cache
-        const members = queryClient.getQueryData<
-          { userId: string; user?: { displayName?: string; username?: string } }[]
-        >(['members', activeServerId])
-        const member = members?.find((m) => m.userId === data.userId)
-        const displayName = member?.user?.displayName || member?.user?.username || data.userId
+  useSocketEvent('presence:activity', (data: ChannelActivityEvent) => {
+    if (data.channelId !== activeChannelId) return
+    if (!data.activity) {
+      removeChannelWorkStatus(data.userId)
+      return
+    }
 
-        const existing = prev.find((u) => u.userId === data.userId)
-        if (existing) {
-          return prev.map((u) =>
-            u.userId === data.userId
-              ? { ...u, activity: data.activity as string, username: displayName }
-              : u,
-          )
-        }
-        return [...prev, { userId: data.userId, username: displayName, activity: data.activity }]
-      })
-    },
-  )
+    const ttl = data.activity === 'ready' ? READY_STATUS_TTL_MS : ACTIVE_WORK_STATUS_TTL_MS
+    upsertChannelWorkStatus({ ...data, activity: data.activity }, ttl)
+  })
 
   // Clear system events and activity on channel change
   useEffect(() => {
     setSystemEvents([])
-    setActivityUsers([])
+    setChannelWorkStatuses([])
+    Object.values(channelWorkTimersRef.current).forEach(clearTimeout)
+    channelWorkTimersRef.current = {}
   }, [activeChannelId])
 
   // Refetch messages on socket reconnect to catch any missed while offline
@@ -991,51 +1077,20 @@ export function ChatArea() {
           )}
         </div>
 
-        {/* Typing indicator */}
-        {typingUsers.length > 0 && (
-          <div className="px-4 py-1 text-xs text-primary">
-            <span className="inline-flex gap-0.5 mr-1">
-              <span
-                className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"
-                style={{ animationDelay: '0ms' }}
-              />
-              <span
-                className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"
-                style={{ animationDelay: '150ms' }}
-              />
-              <span
-                className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"
-                style={{ animationDelay: '300ms' }}
-              />
-            </span>
-            {t('chat.typingIndicator', { users: typingUsers.join('、') })}
-          </div>
-        )}
-
-        {/* Agent activity indicator */}
-        {activityUsers.length > 0 && (
-          <div className="px-4 py-1 text-xs text-text-muted flex items-center gap-1">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
-            </span>
-            {activityUsers
-              .map((u) => {
-                const activityLabel =
-                  u.activity === 'thinking'
-                    ? t('member.activityThinking')
-                    : u.activity === 'working'
-                      ? t('member.activityWorking')
-                      : u.activity === 'ready'
-                        ? t('member.activityReady')
-                        : u.activity === 'preparing'
-                          ? t('member.activityPreparing')
-                          : u.activity
-                return `Buddy ${u.username} ${activityLabel}`
-              })
-              .join('、')}
-          </div>
-        )}
+        {/* Channel work status */}
+        <div className="min-h-8 px-4 py-1 text-xs text-text-muted flex items-center">
+          {channelWorkStatuses.length > 0 && (
+            <div className="min-w-0 inline-flex items-center gap-2 rounded-lg border border-primary/15 bg-primary/10 px-2.5 py-1 text-primary">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
+              </span>
+              <span className="truncate">
+                {channelWorkStatuses.map(formatChannelWorkStatus).join('、')}
+              </span>
+            </div>
+          )}
+        </div>
 
         {/* Message input or selection toolbar */}
         {selectionMode ? (

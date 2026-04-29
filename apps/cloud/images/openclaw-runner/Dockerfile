@@ -22,6 +22,7 @@ WORKDIR /build
 
 ARG OPENCLAW_VERSION=2026.4.24
 ARG SHADOWOB_OPENCLAW_PLUGIN_VERSION=latest
+ARG PLAYWRIGHT_VERSION=latest
 
 # git is required by some npm packages during install. Enable pnpm here so the
 # local Shadow workspace packages are built inside the image, not copied as
@@ -39,7 +40,8 @@ RUN --mount=type=cache,target=/root/.npm,sharing=locked \
     npm init -y && \
     npm install --prefer-offline --no-audit --fund=false \
       "openclaw@${OPENCLAW_VERSION}" \
-      "@shadowob/openclaw-shadowob@${SHADOWOB_OPENCLAW_PLUGIN_VERSION}"
+      "@shadowob/openclaw-shadowob@${SHADOWOB_OPENCLAW_PLUGIN_VERSION}" \
+      "playwright-core@${PLAYWRIGHT_VERSION}"
 
 # Cleanup dev artifacts to reduce image size. This depends only on npm deps,
 # so local plugin edits do not force the dependency install/cleanup layers.
@@ -95,6 +97,8 @@ FROM node:22-bookworm-slim AS runner
 LABEL org.opencontainers.image.source="https://github.com/nicepkg/shadow"
 LABEL org.opencontainers.image.description="Shadow Cloud OpenClaw Runner"
 
+ARG PLAYWRIGHT_VERSION=latest
+
 # Install runtime dependencies (rarely changes → good cache layer). Chromium
 # and Playwright browsers are intentionally baked into the image so OpenClaw
 # browser/canvas tools do not try to bootstrap them after the gateway is live.
@@ -108,6 +112,7 @@ RUN apt-get update && \
       fonts-liberation \
       fonts-noto-cjk \
       fonts-noto-color-emoji \
+      git \
       libasound2 \
       libatk-bridge2.0-0 \
       libatk1.0-0 \
@@ -120,11 +125,15 @@ RUN apt-get update && \
       libxcomposite1 \
       libxdamage1 \
       libxrandr2 \
+      python-is-python3 \
+      python3 \
+      python3-pip \
+      python3-venv \
       tini \
       xdg-utils && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p /ms-playwright && \
-    npx -y playwright@latest install --with-deps chromium && \
+    npx -y "playwright@${PLAYWRIGHT_VERSION}" install --with-deps chromium && \
     chmod -R 755 /ms-playwright
 
 # Create non-root user openclaw:1000
