@@ -828,15 +828,15 @@ async function runThreadSmoke(session, owner, agent, marker) {
 async function runMediaOutboundSmoke(session, owner, agent, marker, container) {
   const channelExpected = `${marker}_OUTBOUND_CHANNEL_ATTACHMENT`
   const channelStartedAt = Date.now()
-  const channelResult = runShadowAction(container, 'send-file', {
+  const channelFilePath = `/tmp/shadow-outbound-${marker.toLowerCase()}.txt`
+  writeContainerTextFile(container, channelFilePath, `outbound channel attachment ${marker}`)
+  const channelResult = runOpenClawMessageSend(container, {
     target: `shadowob:channel:${session.channels.generalId}`,
     message: channelExpected,
-    filename: `shadow-outbound-${marker.toLowerCase()}.txt`,
-    contentType: 'text/plain',
-    buffer: Buffer.from(`outbound channel attachment ${marker}`, 'utf8').toString('base64'),
+    media: channelFilePath,
   })
-  if (!channelResult?.ok) {
-    throw new Error(`Channel send-file action failed: ${JSON.stringify(channelResult)}`)
+  if (!channelResult) {
+    throw new Error('Channel OpenClaw message send returned no output')
   }
   const channelMessage = await waitForBotReply(
     session,
@@ -851,7 +851,7 @@ async function runMediaOutboundSmoke(session, owner, agent, marker, container) {
   const dm = await createDmChannel(session, owner, agent.botUser.id)
   const dmExpected = `${marker}_OUTBOUND_DM_ATTACHMENT`
   const dmStartedAt = Date.now()
-  const dmResult = runShadowAction(container, 'send-file', {
+  const dmResult = runShadowAction(container, 'upload-file', {
     target: `shadowob:dm:${dm.id}`,
     message: dmExpected,
     filename: `shadow-dm-outbound-${marker.toLowerCase()}.txt`,
@@ -859,7 +859,7 @@ async function runMediaOutboundSmoke(session, owner, agent, marker, container) {
     buffer: Buffer.from(`outbound DM attachment ${marker}`, 'utf8').toString('base64'),
   })
   if (!dmResult?.ok) {
-    throw new Error(`DM send-file action failed: ${JSON.stringify(dmResult)}`)
+    throw new Error(`DM upload-file action failed: ${JSON.stringify(dmResult)}`)
   }
   const dmMessage = await waitForDmMessage(
     session,
@@ -1025,15 +1025,54 @@ async function runDiscussionChainSmoke(session, owner, configuredAgents, marker)
 }
 
 function dockerExec(container, args) {
-  const result = spawnSync('docker', ['exec', container, ...args], {
-    encoding: 'utf8',
-  })
+  const result = spawnSync(
+    'docker',
+    [
+      'exec',
+      '-e',
+      'OPENCLAW_CONFIG_PATH=/tmp/openclaw/config/openclaw.json',
+      '-e',
+      'HOME=/home/openclaw',
+      container,
+      ...args,
+    ],
+    {
+      encoding: 'utf8',
+    },
+  )
   if (result.status !== 0) {
     throw new Error(
       `docker exec ${args.join(' ')} failed (${result.status}): ${result.stdout}\n${result.stderr}`,
     )
   }
   return result.stdout
+}
+
+function writeContainerTextFile(container, filePath, content) {
+  const code = `
+    import fs from 'node:fs/promises'
+    await fs.writeFile(${JSON.stringify(filePath)}, ${JSON.stringify(content)}, 'utf8')
+  `
+  dockerExec(container, ['node', '--input-type=module', '-e', code])
+}
+
+function runOpenClawMessageSend(container, params) {
+  return dockerExec(container, [
+    'openclaw',
+    'message',
+    'send',
+    '--channel',
+    'shadowob',
+    '--account',
+    params.account ?? 'default',
+    '--target',
+    params.target,
+    '--message',
+    params.message,
+    '--media',
+    params.media,
+    '--json',
+  ]).trim()
 }
 
 function runShadowAction(container, action, params, accountId = 'default') {
@@ -1093,11 +1132,17 @@ function runActionSurfaceSmoke(container) {
   const surface = JSON.parse(lines.at(-1) ?? 'null')
   const actions = new Set(surface?.actions ?? [])
   const promptText = (surface?.promptHints ?? []).join('\n')
-  for (const action of ['send', 'send-interactive', 'send-file']) {
+  for (const action of ['send', 'upload-file']) {
     if (!actions.has(action)) throw new Error(`Expected action ${action} to be discovered`)
     if (surface?.supports?.[action] !== true) throw new Error(`Expected action ${action} support`)
   }
-  for (const action of ['upload-file', 'sendAttachment', 'get-server', 'update-homepage']) {
+  for (const action of [
+    'send-interactive',
+    'send-file',
+    'sendAttachment',
+    'get-server',
+    'update-homepage',
+  ]) {
     if (actions.has(action)) throw new Error(`Removed action ${action} was still discovered`)
     if (surface?.supports?.[action] !== false) {
       throw new Error(`Removed action ${action} was still supported`)
@@ -1112,13 +1157,22 @@ function runActionSurfaceSmoke(container) {
   if (surface?.mediaSourceParams?.sendAttachment) {
     throw new Error('sendAttachment media source params were still present')
   }
-  if (surface?.mediaSourceParams?.['upload-file']) {
-    throw new Error('upload-file media source params were still present')
+  if (surface?.mediaSourceParams?.['send-file']) {
+    throw new Error('send-file media source params were still present')
+  }
+  if (!surface?.mediaSourceParams?.['upload-file']?.includes('path')) {
+    throw new Error('upload-file media source params did not include path')
   }
   return {
     actions: [...actions],
-    fileAction: 'send-file',
-    removedActions: ['upload-file', 'sendAttachment', 'get-server', 'update-homepage'],
+    fileAction: 'upload-file',
+    removedActions: [
+      'send-interactive',
+      'send-file',
+      'sendAttachment',
+      'get-server',
+      'update-homepage',
+    ],
   }
 }
 

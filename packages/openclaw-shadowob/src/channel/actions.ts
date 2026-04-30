@@ -11,14 +11,7 @@ import {
 import { sendShadowMessage } from './send.js'
 import { shadowMessageToolSchemaProperties } from './typebox-schema.js'
 
-const SHADOW_DISCOVERED_ACTIONS = [
-  'send',
-  'send-interactive',
-  'send-file',
-  'react',
-  'edit',
-  'delete',
-] as const
+const SHADOW_DISCOVERED_ACTIONS = ['send', 'upload-file', 'react', 'edit', 'delete'] as const
 
 const SHADOW_HANDLED_ACTIONS = [...SHADOW_DISCOVERED_ACTIONS, 'get-connection-status'] as const
 
@@ -55,6 +48,49 @@ function readAttachmentSource(params: Record<string, unknown>) {
   )
 }
 
+function hasAttachmentPayload(params: Record<string, unknown>) {
+  return Boolean(firstString(params.buffer) || readAttachmentSource(params))
+}
+
+function readAttachmentContentType(params: Record<string, unknown>) {
+  return firstString(params.contentType, params.mimeType) ?? 'application/octet-stream'
+}
+
+function readAttachmentFilename(params: Record<string, unknown>) {
+  return firstString(params.filename, params.title) ?? 'file'
+}
+
+async function uploadShadowAttachment(params: {
+  client: ShadowClient
+  to: string
+  messageId: string
+  actionParams: Record<string, unknown>
+}) {
+  const contentType = readAttachmentContentType(params.actionParams)
+  const filename = readAttachmentFilename(params.actionParams)
+  const uploadTarget = parseTarget(params.to).dmChannelId
+    ? { dmMessageId: params.messageId }
+    : params.messageId
+  const base64Buffer = firstString(params.actionParams.buffer)
+  const mediaUrl = readAttachmentSource(params.actionParams)
+
+  if (base64Buffer) {
+    const raw = base64Buffer.includes(',') ? (base64Buffer.split(',')[1] ?? '') : base64Buffer
+    if (!raw) throw new Error('Invalid base64 attachment payload')
+    const bytes = Buffer.from(raw, 'base64')
+    const blob = new Blob([Uint8Array.from(bytes)], { type: contentType })
+    await params.client.uploadMedia(blob, filename, contentType, uploadTarget)
+    return { filename, contentType, source: 'buffer' as const }
+  }
+
+  if (mediaUrl) {
+    await params.client.uploadMediaFromUrl(mediaUrl, uploadTarget)
+    return { filename, contentType, source: 'media' as const, mediaUrl }
+  }
+
+  throw new Error('No buffer or media URL provided for attachment')
+}
+
 export const shadowMessageActions = {
   describeMessageTool: () =>
     ({
@@ -65,15 +101,23 @@ export const shadowMessageActions = {
         properties: shadowMessageToolSchemaProperties,
       },
       mediaSourceParams: {
-        'send-file': ['media', 'mediaUrl', 'url', 'path', 'filePath', 'file', 'fileUrl', 'buffer'],
+        'upload-file': [
+          'media',
+          'mediaUrl',
+          'url',
+          'path',
+          'filePath',
+          'file',
+          'fileUrl',
+          'buffer',
+        ],
       },
     }) as unknown as ReturnType<
       NonNullable<import('openclaw/plugin-sdk').ChannelPlugin['actions']>['describeMessageTool']
     >,
 
   messageActionTargetAliases: {
-    'send-file': { aliases: ['recipient', 'to', 'channelId'] },
-    'send-interactive': { aliases: ['recipient'] },
+    'upload-file': { aliases: ['recipient', 'to', 'channelId'] },
   } as Record<string, { aliases: string[] }>,
 
   supportsAction: ({ action }: { action: string }): boolean =>
@@ -96,11 +140,12 @@ export const shadowMessageActions = {
         if (!to) return textResult({ ok: false, error: 'target is required' })
 
         const interactiveBlock = resolveShadowInteractiveBlock(params)
+        const hasAttachment = hasAttachmentPayload(params)
         const content =
           firstString(params.message, params.content, params.text, params.caption, params.prompt) ??
           (interactiveBlock ? '[interactive]' : '')
-        if (!content.trim() && !interactiveBlock) {
-          return textResult({ ok: false, error: 'message is required' })
+        if (!content.trim() && !interactiveBlock && !hasAttachment) {
+          return textResult({ ok: false, error: 'message or attachment is required' })
         }
         const approvalError = validateApprovalMessageContent(content, interactiveBlock)
         if (approvalError) return textResult({ ok: false, error: approvalError })
@@ -108,12 +153,20 @@ export const shadowMessageActions = {
         const message = await sendShadowMessage({
           client,
           to,
-          content: content.trim() ? content : '[interactive]',
+          content: content.trim() ? content : interactiveBlock ? '[interactive]' : '\u200B',
           threadId: params.threadId as string | undefined,
           replyToId:
             (params.replyTo as string | undefined) ?? (params.replyToId as string | undefined),
           metadata: interactiveBlock ? { interactive: interactiveBlock } : undefined,
         })
+        const attachment = hasAttachment
+          ? await uploadShadowAttachment({
+              client,
+              to,
+              messageId: message.id,
+              actionParams: params,
+            })
+          : undefined
 
         return textResult({
           ok: true,
@@ -121,113 +174,47 @@ export const shadowMessageActions = {
           messageId: message.id,
           interactive: !!interactiveBlock,
           kind: interactiveBlock?.kind,
+          attachment: !!attachment,
+          filename: attachment?.filename,
         })
       } catch (err) {
         return textResult({ ok: false, error: err instanceof Error ? err.message : String(err) })
       }
     }
 
-    if (action === 'send-file') {
+    if (action === 'upload-file') {
       try {
         const client = new ShadowClient(account.serverUrl, account.token)
         const to = readMessageTarget(params)
         if (!to) return textResult({ ok: false, error: 'target is required' })
+        if (!hasAttachmentPayload(params)) {
+          return textResult({
+            ok: false,
+            error: 'upload-file requires buffer, media, path, or filePath',
+          })
+        }
         const text = firstString(params.message, params.content, params.text, params.caption) ?? ''
-        const filename = (params.filename as string) || 'file'
-        const contentType =
-          (params.contentType as string) ||
-          (params.mimeType as string) ||
-          'application/octet-stream'
-        const base64Buffer = params.buffer as string | undefined
-        const mediaUrl = readAttachmentSource(params)
-
-        const { channelId, threadId: parsedThreadId, dmChannelId } = parseTarget(to)
-        const threadId = (params.threadId as string) ?? parsedThreadId
-
-        const content = text || '\u200B'
-        let message: Awaited<ReturnType<typeof client.sendMessage>> | undefined
-        if (dmChannelId) {
-          message = await client.sendDmMessage(dmChannelId, content, {
-            replyToId: params.replyTo as string | undefined,
-          })
-        } else if (threadId) {
-          message = await client.sendToThread(threadId, content)
-        } else if (channelId) {
-          message = await client.sendMessage(channelId, content, {
-            replyToId: params.replyTo as string | undefined,
-          })
-        } else {
-          return textResult({
-            ok: false,
-            error: 'Could not resolve target channel, thread, or DM',
-          })
-        }
-
-        if (base64Buffer) {
-          const raw = base64Buffer.includes(',') ? (base64Buffer.split(',')[1] ?? '') : base64Buffer
-          if (!raw) throw new Error('Invalid base64 attachment payload')
-          const bytes = Buffer.from(raw, 'base64')
-          const blob = new Blob([Uint8Array.from(bytes)], { type: contentType })
-          await client.uploadMedia(
-            blob,
-            filename,
-            contentType,
-            dmChannelId ? { dmMessageId: message.id } : message.id,
-          )
-        } else if (mediaUrl) {
-          await client.uploadMediaFromUrl(
-            mediaUrl,
-            dmChannelId ? { dmMessageId: message.id } : message.id,
-          )
-        } else {
-          return textResult({
-            ok: false,
-            error: 'No buffer or media URL provided for attachment',
-          })
-        }
+        const message = await sendShadowMessage({
+          client,
+          to,
+          content: text || '\u200B',
+          threadId: params.threadId as string | undefined,
+          replyToId:
+            (params.replyTo as string | undefined) ?? (params.replyToId as string | undefined),
+        })
+        const attachment = await uploadShadowAttachment({
+          client,
+          to,
+          messageId: message.id,
+          actionParams: params,
+        })
 
         return textResult({
           ok: true,
           action: requestedAction,
-          canonicalAction: 'send-file',
+          canonicalAction: 'upload-file',
           messageId: message.id,
-          filename,
-        })
-      } catch (err) {
-        return textResult({ ok: false, error: err instanceof Error ? err.message : String(err) })
-      }
-    }
-
-    if (action === 'send-interactive') {
-      try {
-        const client = new ShadowClient(account.serverUrl, account.token)
-        const to = readMessageTarget(params)
-        const kind = (params.kind as string) ?? 'buttons'
-        const prompt = (params.prompt as string) ?? (params.message as string) ?? ''
-        if (!to) return textResult({ ok: false, error: 'target is required' })
-        if (!['buttons', 'select', 'form', 'approval'].includes(kind)) {
-          return textResult({ ok: false, error: `unsupported interactive kind: ${kind}` })
-        }
-        const block = resolveShadowInteractiveBlock({ ...params, kind, prompt })
-        if (!block) return textResult({ ok: false, error: 'interactive block is required' })
-        const blockId = String(block.id)
-        const content = prompt && prompt.trim() ? prompt : '[interactive]'
-        const approvalError = validateApprovalMessageContent(content, block)
-        if (approvalError) return textResult({ ok: false, error: approvalError })
-        const message = await sendShadowMessage({
-          client,
-          to,
-          content,
-          threadId: params.threadId as string | undefined,
-          replyToId: params.replyTo as string | undefined,
-          metadata: { interactive: block },
-        })
-        return textResult({
-          ok: true,
-          action: 'send-interactive',
-          messageId: message.id,
-          blockId,
-          kind,
+          filename: attachment.filename,
         })
       } catch (err) {
         return textResult({ ok: false, error: err instanceof Error ? err.message : String(err) })
