@@ -449,5 +449,9 @@ export function namespaceExists(namespace: string, kubeconfig?: string): boolean
 }
 
 export function deleteNamespace(namespace: string, kubeconfig?: string): void {
-  execKubectl(['delete', 'namespace', namespace, '--wait=false'], kubeconfig)
+  execKubectl(
+    ['delete', 'namespace', namespace, '--ignore-not-found=true', '--wait=false'],
+    kubeconfig,
+    30_000,
+  )
 }
