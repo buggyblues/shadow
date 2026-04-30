@@ -39,6 +39,18 @@ class ShadowChannel:
 
 
 @dataclass
+class ShadowAttachment:
+    id: str
+    filename: str
+    url: str
+    content_type: str
+    size: int
+    width: int | None = None
+    height: int | None = None
+    workspace_node_id: str | None = None
+
+
+@dataclass
 class ShadowMessage:
     id: str
     content: str
@@ -50,7 +62,7 @@ class ShadowMessage:
     reply_to_id: str | None = None
     is_pinned: bool = False
     author: dict[str, Any] | None = None
-    attachments: list[dict[str, Any]] = field(default_factory=list)
+    attachments: list[dict[str, Any] | ShadowAttachment] = field(default_factory=list)
     metadata: dict[str, Any] | None = None
 
 

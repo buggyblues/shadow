@@ -12,6 +12,7 @@ import type {
   UpdateMessageInput,
   UpdateThreadInput,
 } from '../validators/message.schema'
+import type { WorkspaceService } from './workspace.service'
 
 type MessageWithMetadata = {
   id: string
@@ -63,9 +64,68 @@ export class MessageService {
       channelDao: ChannelDao
       agentDao: AgentDao
       agentDashboardDao: AgentDashboardDao
-      logger: Logger
+      workspaceService?: WorkspaceService
+      logger?: Logger
     },
   ) {}
+
+  private async createWorkspaceNodeForAttachment(
+    channelId: string,
+    messageId: string,
+    attachment: { filename: string; url: string; contentType: string; size: number },
+  ): Promise<string | null> {
+    try {
+      if (!this.deps.workspaceService) return null
+      const channel = await this.deps.channelDao.findById(channelId)
+      if (!channel) return null
+      const workspace = await this.deps.workspaceService.getOrCreateForServer(channel.serverId)
+      const access =
+        channel.isPrivate === true
+          ? { scope: 'channel', serverId: channel.serverId, channelId }
+          : { scope: 'server', serverId: channel.serverId }
+      const node = await this.deps.workspaceService.createFile(workspace.id, {
+        parentId: null,
+        name: attachment.filename,
+        mime: attachment.contentType,
+        sizeBytes: attachment.size,
+        contentRef: attachment.url,
+        previewUrl: attachment.url,
+        metadata: {
+          source: 'channel_message_attachment',
+          channelId,
+          messageId,
+          access,
+        },
+      })
+      return node?.id ?? null
+    } catch (err) {
+      this.deps.logger?.warn?.(
+        { err, channelId, messageId, filename: attachment.filename },
+        'Failed to associate channel attachment with workspace',
+      )
+      return null
+    }
+  }
+
+  async createAttachmentForMessage(
+    messageId: string,
+    channelId: string,
+    attachment: { filename: string; url: string; contentType: string; size: number },
+  ) {
+    const workspaceNodeId = await this.createWorkspaceNodeForAttachment(
+      channelId,
+      messageId,
+      attachment,
+    )
+    return this.deps.messageDao.createAttachment({
+      messageId,
+      filename: attachment.filename,
+      url: attachment.url,
+      contentType: attachment.contentType,
+      size: attachment.size,
+      workspaceNodeId,
+    })
+  }
 
   async getByChannelId(channelId: string, limit?: number, cursor?: string, viewerUserId?: string) {
     const result = await this.deps.messageDao.findByChannelId(channelId, limit, cursor)
@@ -177,13 +237,7 @@ export class MessageService {
     // Create attachment records if provided (pre-uploaded files)
     if (input.attachments && input.attachments.length > 0) {
       for (const att of input.attachments) {
-        await this.deps.messageDao.createAttachment({
-          messageId: message.id,
-          filename: att.filename,
-          url: att.url,
-          contentType: att.contentType,
-          size: att.size,
-        })
+        await this.createAttachmentForMessage(message.id, channelId, att)
       }
     }
 

@@ -268,6 +268,24 @@ export function createAgentHandler(container: AppContainer) {
     try {
       const body = await c.req.json<{ commands?: unknown }>()
       const commands = await agentService.updateSlashCommands(id, user.userId, body.commands)
+      try {
+        const agent = await agentService.getById(id)
+        if (agent) {
+          const io = container.resolve('io')
+          const channelMemberDao = container.resolve('channelMemberDao')
+          const channelIds = await channelMemberDao.getAllChannelIds(agent.userId)
+          for (const channelId of channelIds) {
+            io.to(`channel:${channelId}`).emit('channel:slash-commands-updated', {
+              channelId,
+              agentId: id,
+              botUserId: agent.userId,
+              commandCount: commands.length,
+            })
+          }
+        }
+      } catch {
+        /* non-critical realtime refresh failure */
+      }
       return c.json({ ok: true, commands })
     } catch (err) {
       const status = (err as { status?: number }).status ?? 500

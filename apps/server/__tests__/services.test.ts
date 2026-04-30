@@ -344,6 +344,135 @@ describe('MessageService', () => {
       expect(result.content.length).toBe(agentContent.length)
     })
 
+    it('should auto-link channel attachments into the server workspace', async () => {
+      const mockMessage = {
+        id: 'msg-with-file',
+        content: 'see file',
+        channelId: 'ch1',
+        authorId: 'u1',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isEdited: false,
+        isPinned: false,
+      }
+      const messageDao = createMockMessageDao({
+        create: vi.fn().mockResolvedValue(mockMessage),
+        createAttachment: vi.fn().mockImplementation((data) =>
+          Promise.resolve({
+            id: 'att-1',
+            ...data,
+          }),
+        ),
+        getAttachments: vi.fn().mockResolvedValue([
+          {
+            id: 'att-1',
+            messageId: 'msg-with-file',
+            filename: 'page.html',
+            url: '/shadow/uploads/page.html',
+            contentType: 'text/html',
+            size: 128,
+            workspaceNodeId: 'node-1',
+          },
+        ]),
+      })
+      const userDao = createMockUserDao({
+        findById: vi.fn().mockResolvedValue({ id: 'u1', username: 'testuser', isBot: false }),
+      })
+      const workspaceService = {
+        getOrCreateForServer: vi.fn().mockResolvedValue({ id: 'ws-1', serverId: 'srv-1' }),
+        createFile: vi.fn().mockResolvedValue({ id: 'node-1' }),
+      }
+
+      const service = new MessageService({
+        messageDao: messageDao as any,
+        userDao: userDao as any,
+        channelDao: {
+          findById: vi.fn().mockResolvedValue({ id: 'ch1', serverId: 'srv-1' }),
+          updateLastMessageAt: vi.fn(),
+        } as any,
+        agentDao: {} as any,
+        agentDashboardDao: {} as any,
+        workspaceService: workspaceService as any,
+        logger: { warn: vi.fn() } as any,
+      })
+
+      const result = await service.send('ch1', 'u1', {
+        content: 'see file',
+        attachments: [
+          {
+            filename: 'page.html',
+            url: '/shadow/uploads/page.html',
+            contentType: 'text/html',
+            size: 128,
+          },
+        ],
+      })
+
+      expect(workspaceService.getOrCreateForServer).toHaveBeenCalledWith('srv-1')
+      expect(workspaceService.createFile).toHaveBeenCalledWith(
+        'ws-1',
+        expect.objectContaining({
+          name: 'page.html',
+          mime: 'text/html',
+          contentRef: '/shadow/uploads/page.html',
+          metadata: expect.objectContaining({
+            source: 'channel_message_attachment',
+            channelId: 'ch1',
+            messageId: 'msg-with-file',
+            access: { scope: 'server', serverId: 'srv-1' },
+          }),
+        }),
+      )
+      expect(messageDao.createAttachment).toHaveBeenCalledWith(
+        expect.objectContaining({ workspaceNodeId: 'node-1' }),
+      )
+      expect(result.attachments[0].workspaceNodeId).toBe('node-1')
+    })
+
+    it('should preserve private channel isolation when linking attachments to workspace', async () => {
+      const messageDao = createMockMessageDao({
+        createAttachment: vi.fn().mockImplementation((data) =>
+          Promise.resolve({
+            id: 'att-1',
+            ...data,
+          }),
+        ),
+      })
+      const workspaceService = {
+        getOrCreateForServer: vi.fn().mockResolvedValue({ id: 'ws-1', serverId: 'srv-1' }),
+        createFile: vi.fn().mockResolvedValue({ id: 'node-1' }),
+      }
+      const service = new MessageService({
+        messageDao: messageDao as any,
+        userDao: createMockUserDao() as any,
+        channelDao: {
+          findById: vi
+            .fn()
+            .mockResolvedValue({ id: 'private-ch', serverId: 'srv-1', isPrivate: true }),
+        } as any,
+        agentDao: {} as any,
+        agentDashboardDao: {} as any,
+        workspaceService: workspaceService as any,
+        logger: { warn: vi.fn() } as any,
+      })
+
+      await service.createAttachmentForMessage('msg-1', 'private-ch', {
+        filename: 'secret.html',
+        url: '/shadow/uploads/secret.html',
+        contentType: 'text/html',
+        size: 128,
+      })
+
+      expect(workspaceService.createFile).toHaveBeenCalledWith(
+        'ws-1',
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            access: { scope: 'channel', serverId: 'srv-1', channelId: 'private-ch' },
+          }),
+        }),
+      )
+    })
+
     it('should update message with long content', async () => {
       const longContent = 'B'.repeat(12000)
       const existingMessage = {

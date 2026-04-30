@@ -316,6 +316,13 @@
       "when": 1777195118000,
       "tag": "0044_message_interactive_submissions",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1777195200000,
+      "tag": "0045_attach_channel_attachments_to_workspace",
+      "breakpoints": true
     }
   ]
 }

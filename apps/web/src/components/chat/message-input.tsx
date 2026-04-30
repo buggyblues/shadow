@@ -144,6 +144,31 @@ export function MessageInput({
 
   const slashCommands = slashCommandData?.commands ?? []
 
+  useEffect(() => {
+    const socket = getSocket()
+    const refreshSlashCommands = () => {
+      queryClient.invalidateQueries({ queryKey: ['channel-slash-commands', channelId] })
+    }
+    const handleMemberJoined = (payload: { channelId?: string; isBot?: boolean }) => {
+      if (payload.channelId === channelId && payload.isBot) refreshSlashCommands()
+    }
+    const handleMemberLeft = (payload: { channelId?: string }) => {
+      if (payload.channelId === channelId) refreshSlashCommands()
+    }
+    const handleSlashCommandsUpdated = (payload: { channelId?: string }) => {
+      if (payload.channelId === channelId) refreshSlashCommands()
+    }
+
+    socket.on('member:joined', handleMemberJoined)
+    socket.on('member:left', handleMemberLeft)
+    socket.on('channel:slash-commands-updated', handleSlashCommandsUpdated)
+    return () => {
+      socket.off('member:joined', handleMemberJoined)
+      socket.off('member:left', handleMemberLeft)
+      socket.off('channel:slash-commands-updated', handleSlashCommandsUpdated)
+    }
+  }, [channelId, queryClient])
+
   // Filter members by mention query — buddies first, pinyin support, show all results
   const filteredMembers = useMemo(() => {
     if (mentionQuery === null) return []
@@ -827,7 +852,7 @@ export function MessageInput({
               )}
               {pf.workspaceUrl && (
                 <span className="absolute bottom-0.5 left-0.5 text-[8px] bg-primary/80 text-bg-deep px-1 py-0.5 rounded">
-                  工作区
+                  {t('chat.workspaceFileBadge')}
                 </span>
               )}
               <Button
@@ -888,7 +913,7 @@ export function MessageInput({
             size="icon"
             className="h-9 w-9 shrink-0 self-end mb-[3px]"
             onClick={() => setShowWorkspacePicker(true)}
-            title="从工作区选择文件"
+            title={t('chat.selectWorkspaceFile')}
           >
             <FolderOpen size={20} />
           </Button>
@@ -932,14 +957,13 @@ export function MessageInput({
         multiple
         onChange={handleFileSelect}
         className="hidden"
-        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar,.7z"
       />
 
       {showWorkspacePicker && activeServerId && (
         <WorkspaceFilePicker
           serverId={activeServerId}
           mode="select-file"
-          title="选择工作区文件发送"
+          title={t('chat.selectWorkspaceFileTitle')}
           onConfirm={handleWorkspaceFileSelect}
           onClose={() => setShowWorkspacePicker(false)}
         />

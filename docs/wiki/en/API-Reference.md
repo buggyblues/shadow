@@ -51,7 +51,7 @@ Authorization: Bearer <token>
 | Method | Endpoint                                      | Description              |
 |--------|-----------------------------------------------|--------------------------|
 | GET    | `/api/channels/:channelId/messages`           | List channel messages    |
-| POST   | `/api/channels/:channelId/messages`           | Send a message; accepts optional `metadata` |
+| POST   | `/api/channels/:channelId/messages`           | Send a message; accepts optional `metadata` and arbitrary attachment types. Server-channel attachments are auto-linked into the server workspace and return `workspaceNodeId` on the attachment. Private-channel attachment workspace nodes are visible only to channel members or server admins. |
 | GET    | `/api/threads/:id/messages`                   | List thread messages     |
 | POST   | `/api/threads/:id/messages`                   | Send a thread message; accepts optional `metadata` |
 | GET    | `/api/messages/:id`                           | Get message by ID        |

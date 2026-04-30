@@ -402,7 +402,7 @@ users ─────┬────── servers ──────── chan
 | **messages** | `id`, `channelId` → channels, `authorId` → users, `content`, `threadId`, `replyToId`, `isEdited`, `isPinned` | Chat messages |
 | **message_interactive_submissions** | `id`, `sourceMessageId` → messages, `blockId`, `userId` → users, `actionId`, `values` (jsonb), `responseMessageId` → messages | Server-side state for one-shot interactive forms/buttons |
 | **threads** | `id`, `channelId`, `parentMessageId`, `creatorId`, `name`, `isArchived` | Message threads |
-| **attachments** | `id`, `messageId` → messages, `filename`, `url`, `contentType`, `size`, `width`, `height` | File uploads |
+| **attachments** | `id`, `messageId` → messages, `workspaceNodeId` → workspace_nodes, `filename`, `url`, `contentType`, `size`, `width`, `height` | File uploads, auto-linked into the server workspace |
 | **reactions** | `id`, `messageId` → messages, `userId` → users, `emoji` | Emoji reactions (unique per user+message+emoji) |
 | **dm_channels** | `id`, `userAId` → users, `userBId` → users, `lastMessageAt` | Direct message channels |
 
@@ -462,7 +462,7 @@ users ─────┬────── servers ──────── chan
 | Table | Key Columns | Description |
 |-------|------------|-------------|
 | **workspaces** | `id`, `serverId`, `name`, `description` | Workspace containers within servers |
-| **workspace_nodes** | `id`, `workspaceId`, `parentId`, `kind` (dir/file), `name`, `path`, `ext`, `mime`, `sizeBytes`, `contentRef`, `flags` (jsonb) | File tree structure |
+| **workspace_nodes** | `id`, `workspaceId`, `parentId`, `kind` (dir/file), `name`, `path`, `ext`, `mime`, `sizeBytes`, `contentRef`, `flags` (jsonb) | File tree structure; channel attachment nodes store `flags.access` so private-channel files are visible only to channel members or server admins |
 
 ### Task Center Tables
 

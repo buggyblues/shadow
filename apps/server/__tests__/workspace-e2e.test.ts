@@ -2,7 +2,7 @@
  * Workspace System — End-to-End Tests
  *
  * Tests the complete workspace lifecycle against a real PostgreSQL database:
- *   1. Workspace auto-creation & bootstrap (default folders)
+ *   1. Workspace auto-creation with an empty root
  *   2. Tree retrieval
  *   3. Stats
  *   4. Folder CRUD (create, rename, move, delete)
@@ -45,9 +45,9 @@ let serverId: string
 
 // IDs tracked across tests
 let workspaceId: string
-let docsFolderId: string // default '文档' folder
-let materialsFolderId: string // '素材'
-let archiveFolderId: string // '归档'
+let docsFolderId: string // fixture '文档' folder
+let materialsFolderId: string // fixture '素材' folder
+let archiveFolderId: string // fixture '归档' folder
 let newFolderId: string
 let subFolderId: string
 let fileId1: string
@@ -171,7 +171,7 @@ describe('Workspace auto-creation', () => {
 })
 
 /* ══════════════════════════════════════════════════════════
-   2. Tree & default folders
+   2. Empty tree & fixture folders
    ══════════════════════════════════════════════════════════ */
 
 interface TreeNode {
@@ -182,34 +182,21 @@ interface TreeNode {
   children?: TreeNode[]
 }
 
-describe('Tree & bootstrap folders', () => {
-  it('should return tree with 3 default folders', async () => {
+describe('Tree & fixture folders', () => {
+  it('should return an empty tree for a new workspace', async () => {
     const res = await req('GET', `/api/servers/${serverId}/workspace/tree`, { token: userToken })
     expect(res.status).toBe(200)
     const tree = await json<TreeNode[]>(res)
-    expect(tree.length).toBe(3)
-
-    const names = tree.map((n) => n.name).sort()
-    expect(names).toEqual(['归档', '文档', '素材'])
-
-    for (const node of tree) {
-      expect(node.kind).toBe('dir')
-      expect(node.parentId).toBeNull()
-    }
-
-    // Store IDs for later tests
-    docsFolderId = tree.find((n) => n.name === '文档')!.id
-    materialsFolderId = tree.find((n) => n.name === '素材')!.id
-    archiveFolderId = tree.find((n) => n.name === '归档')!.id
+    expect(tree.length).toBe(0)
   })
 
-  it('should return stats (3 folders, 0 files)', async () => {
+  it('should return stats (0 folders, 0 files)', async () => {
     const res = await req('GET', `/api/servers/${serverId}/workspace/stats`, { token: userToken })
     expect(res.status).toBe(200)
     const stats = await json<{ fileCount: number; folderCount: number; totalCount: number }>(res)
-    expect(stats.folderCount).toBe(3)
+    expect(stats.folderCount).toBe(0)
     expect(stats.fileCount).toBe(0)
-    expect(stats.totalCount).toBe(3)
+    expect(stats.totalCount).toBe(0)
   })
 
   it('should return children of root', async () => {
@@ -218,7 +205,23 @@ describe('Tree & bootstrap folders', () => {
     })
     expect(res.status).toBe(200)
     const children = await json<TreeNode[]>(res)
-    expect(children.length).toBe(3)
+    expect(children.length).toBe(0)
+  })
+
+  it('creates fixture folders used by the rest of this suite', async () => {
+    const created: TreeNode[] = []
+    for (const name of ['文档', '素材', '归档']) {
+      const res = await req('POST', `/api/servers/${serverId}/workspace/folders`, {
+        token: userToken,
+        body: { name },
+      })
+      expect(res.status).toBe(201)
+      created.push(await json<TreeNode>(res))
+    }
+
+    docsFolderId = created.find((n) => n.name === '文档')!.id
+    materialsFolderId = created.find((n) => n.name === '素材')!.id
+    archiveFolderId = created.find((n) => n.name === '归档')!.id
   })
 
   it('should return children of 文档 folder (empty)', async () => {
@@ -449,7 +452,7 @@ describe('File CRUD', () => {
     expect(res.status).toBe(200)
     const stats = await json<{ fileCount: number; folderCount: number; totalCount: number }>(res)
     expect(stats.fileCount).toBe(3)
-    // 3 default + 2 test folders = 5
+    // 3 fixture folders + 2 test folders = 5
     expect(stats.folderCount).toBeGreaterThanOrEqual(5)
   })
 })
@@ -712,7 +715,7 @@ describe('Batch children', () => {
     expect(result.__ROOT__).toBeDefined()
     expect(result[docsFolderId]).toBeDefined()
     expect(result[materialsFolderId]).toBeDefined()
-    expect(result.__ROOT__!.length).toBeGreaterThanOrEqual(3) // 3 default + test folders
+    expect(result.__ROOT__!.length).toBeGreaterThanOrEqual(3) // fixture + test folders
   })
 })
 
@@ -776,5 +779,80 @@ describe('Final cleanup via API', () => {
     // 文档 was deleted, so only 素材 + 归档 + 重命名文件夹 remain at root
     const rootNames = tree.map((n) => n.name)
     expect(rootNames).not.toContain('文档')
+  })
+})
+
+/* ══════════════════════════════════════════════════════════
+   13. Private channel attachment isolation
+   ══════════════════════════════════════════════════════════ */
+
+describe('Workspace access isolation', () => {
+  it('hides private-channel attachment nodes from server members outside the channel', async () => {
+    const userDao = container.resolve('userDao')
+    const serverDao = container.resolve('serverDao')
+    const channelDao = container.resolve('channelDao')
+    const channelMemberDao = container.resolve('channelMemberDao')
+    const workspaceService = container.resolve('workspaceService')
+    const ts = Date.now()
+    const member = await userDao.create({
+      email: `ws-private-member-${ts}@test.local`,
+      username: `wsprivate${ts}`,
+      passwordHash: 'not-used',
+    })
+    const channel = await channelDao.create({
+      name: `private-files-${ts}`,
+      serverId,
+      isPrivate: true,
+    })
+    expect(member).toBeDefined()
+    expect(channel).toBeDefined()
+    if (!member || !channel) return
+
+    try {
+      await serverDao.addMember(serverId, member.id, 'member')
+      const memberToken = signAccessToken({
+        userId: member.id,
+        email: member.email,
+        username: member.username,
+      })
+      const privateFile = await workspaceService.createFile(workspaceId, {
+        name: `secret-${ts}.html`,
+        mime: 'text/html',
+        contentRef: `/shadow/uploads/secret-${ts}.html`,
+        metadata: {
+          source: 'channel_message_attachment',
+          channelId: channel.id,
+          messageId: `msg-${ts}`,
+          access: { scope: 'channel', serverId, channelId: channel.id },
+        },
+      })
+      expect(privateFile).toBeDefined()
+      if (!privateFile) return
+
+      const hiddenFileRes = await req(
+        'GET',
+        `/api/servers/${serverId}/workspace/files/${privateFile.id}`,
+        { token: memberToken },
+      )
+      expect(hiddenFileRes.status).toBe(404)
+
+      const hiddenChildrenRes = await req('GET', `/api/servers/${serverId}/workspace/children`, {
+        token: memberToken,
+      })
+      expect(hiddenChildrenRes.status).toBe(200)
+      const hiddenChildren = await json<TreeNode[]>(hiddenChildrenRes)
+      expect(hiddenChildren.map((node) => node.id)).not.toContain(privateFile.id)
+
+      await channelMemberDao.add(channel.id, member.id)
+      const visibleFileRes = await req(
+        'GET',
+        `/api/servers/${serverId}/workspace/files/${privateFile.id}`,
+        { token: memberToken },
+      )
+      expect(visibleFileRes.status).toBe(200)
+    } finally {
+      await channelDao.delete(channel.id)
+      await userDao.delete(member.id)
+    }
   })
 })

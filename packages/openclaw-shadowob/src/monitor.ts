@@ -546,23 +546,66 @@ export async function monitorShadowProvider(
     runtime.log?.(
       `[ws] Received channel:member-added: channel ${data.channelId} in server ${data.serverId}`,
     )
-    if (!channelPolicies.has(data.channelId)) {
-      const defaultPolicy: ShadowChannelPolicy = {
-        listen: true,
-        reply: true,
-        mentionOnly: false,
-        config: {},
+    const refreshChannelConfig = async () => {
+      if (!agentId) return false
+      try {
+        const updatedConfig = await runShadowApiOperation(
+          'refresh remote config after channel member add',
+          () => client.getAgentConfig(agentId),
+          { runtime, abortSignal },
+        )
+        remoteConfig = updatedConfig
+        for (const server of updatedConfig.servers) {
+          for (const ch of server.channels) {
+            channelServerMap.set(ch.id, {
+              serverId: server.id,
+              serverSlug: server.slug ?? server.id,
+              serverName: server.name,
+              channelName: ch.name,
+            })
+            channelPolicies.set(ch.id, ch.policy)
+          }
+        }
+        const server = updatedConfig.servers.find((candidate) =>
+          candidate.channels.some((ch) => ch.id === data.channelId),
+        )
+        const channel = server?.channels.find((ch) => ch.id === data.channelId)
+        if (channel) {
+          runtime.log?.(
+            `[config] Refreshed new channel context: #${channel.name} (${data.channelId})`,
+          )
+        }
+        return true
+      } catch (err) {
+        runtime.error?.(
+          `[config] Failed to refresh config after channel:member-added: ${String(err)}`,
+        )
+        return false
       }
-      channelPolicies.set(data.channelId, defaultPolicy)
-      allChannelIds.push(data.channelId)
     }
-    socket.joinChannel(data.channelId).then((ack) => {
-      if (ack?.ok) {
-        runtime.log?.(`[ws] ✓ Joined channel room ${data.channelId} after member-added`)
-        runtime.log?.('[ws] Shadow channel monitor ready')
+
+    void (async () => {
+      const refreshed = await refreshChannelConfig()
+      if (!refreshed && !channelPolicies.has(data.channelId)) {
+        const defaultPolicy: ShadowChannelPolicy = {
+          listen: true,
+          reply: true,
+          mentionOnly: false,
+          config: {},
+        }
+        channelPolicies.set(data.channelId, defaultPolicy)
       }
-      enqueueChannelCatchup(data.channelId, 'member-added')
-    })
+      if (!allChannelIds.includes(data.channelId)) {
+        allChannelIds.push(data.channelId)
+      }
+      socket.joinChannel(data.channelId).then((ack) => {
+        if (ack?.ok) {
+          runtime.log?.(`[ws] ✓ Joined channel room ${data.channelId} after member-added`)
+          runtime.log?.('[ws] Shadow channel monitor ready')
+        }
+        enqueueChannelCatchup(data.channelId, 'member-added')
+      })
+    })()
   })
 
   socket.on('channel:member-removed', (data: { channelId: string; serverId?: string }) => {

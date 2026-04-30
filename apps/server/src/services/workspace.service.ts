@@ -9,8 +9,6 @@ import type {
   WorkspaceCommand,
 } from '../validators/workspace.schema'
 
-const DEFAULT_FOLDERS = ['文档', '素材', '归档']
-
 interface TreeNode {
   id: string
   workspaceId: string
@@ -47,7 +45,6 @@ export class WorkspaceService {
         serverId,
         name: '工作区',
       }))!
-      await this.bootstrapWorkspace(workspace.id)
     }
     return workspace!
   }
@@ -66,21 +63,6 @@ export class WorkspaceService {
     const ws = await this.deps.workspaceDao.findById(id)
     if (!ws) throw Object.assign(new Error('Workspace not found'), { status: 404 })
     return this.deps.workspaceDao.update(id, data)
-  }
-
-  // ─── Bootstrap ───
-
-  private async bootstrapWorkspace(workspaceId: string) {
-    for (let i = 0; i < DEFAULT_FOLDERS.length; i++) {
-      const name = DEFAULT_FOLDERS[i]!
-      await this.deps.workspaceNodeDao.createFolder({
-        workspaceId,
-        parentId: null,
-        name,
-        path: `/${name}`,
-        pos: i,
-      })
-    }
   }
 
   // ─── Tree ───

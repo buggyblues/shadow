@@ -148,6 +148,7 @@ export interface ShadowAttachment {
   size: number
   width?: number | null
   height?: number | null
+  workspaceNodeId?: string | null
 }
 
 export interface ShadowChannel {
@@ -301,6 +302,14 @@ export interface MemberLeavePayload {
   userId: string
 }
 
+export interface SlashCommandsUpdatedPayload {
+  channelId: string
+  serverId?: string
+  agentId?: string
+  botUserId?: string
+  commandCount?: number
+}
+
 export interface ReactionPayload {
   messageId: string
   userId: string
@@ -321,12 +330,14 @@ export interface ChannelCreatedPayload {
 
 export interface ChannelMemberAddedPayload {
   channelId: string
-  userId: string
+  serverId?: string
+  userId?: string
 }
 
 export interface ChannelMemberRemovedPayload {
   channelId: string
-  userId: string
+  serverId?: string
+  userId?: string
 }
 
 export interface ServerJoinedPayload {
@@ -642,7 +653,9 @@ export interface ServerEventMap {
   'message:deleted': (payload: MessageDeletedPayload) => void
   'member:typing': (payload: TypingPayload) => void
   'member:join': (payload: MemberJoinPayload) => void
+  'member:joined': (payload: MemberJoinPayload & { isBot?: boolean }) => void
   'member:leave': (payload: MemberLeavePayload) => void
+  'member:left': (payload: MemberLeavePayload) => void
   'presence:change': (payload: PresenceChangePayload) => void
   'presence:activity': (payload: PresenceActivityPayload) => void
   'reaction:add': (payload: ReactionPayload) => void
@@ -652,6 +665,7 @@ export interface ServerEventMap {
   'channel:created': (payload: ChannelCreatedPayload) => void
   'channel:member-added': (payload: ChannelMemberAddedPayload) => void
   'channel:member-removed': (payload: ChannelMemberRemovedPayload) => void
+  'channel:slash-commands-updated': (payload: SlashCommandsUpdatedPayload) => void
   'server:joined': (payload: ServerJoinedPayload) => void
   'agent:policy-changed': (payload: PolicyChangedPayload) => void
   error: (payload: { message: string }) => void

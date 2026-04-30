@@ -234,6 +234,13 @@ export function createChannelHandler(container: AppContainer) {
           isBot: targetUser.isBot ?? false,
         }
         io.to(`channel:${id}`).emit('member:joined', payload)
+        if (targetUser.isBot) {
+          io.to(`channel:${id}`).emit('channel:slash-commands-updated', {
+            channelId: id,
+            serverId: channel.serverId,
+            botUserId: targetUserId,
+          })
+        }
         // Notify the user directly so they can join the channel room
         io.to(`user:${targetUserId}`).emit('channel:member-added', {
           channelId: id,

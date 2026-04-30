@@ -252,6 +252,7 @@ export class MessageDao {
     size: number
     width?: number
     height?: number
+    workspaceNodeId?: string | null
   }) {
     const result = await this.db.insert(attachments).values(data).returning()
     return result[0]

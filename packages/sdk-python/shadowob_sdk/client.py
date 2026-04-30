@@ -127,10 +127,21 @@ class ShadowClient:
         self,
         *,
         name: str,
+        username: str,
+        description: str | None = None,
         display_name: str | None = None,
         avatar_url: str | None = None,
+        kernel_type: str = "openclaw",
+        config: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        data: dict[str, Any] = {"name": name}
+        data: dict[str, Any] = {
+            "name": name,
+            "username": username,
+            "kernelType": kernel_type,
+            "config": config or {},
+        }
+        if description:
+            data["description"] = description
         if display_name:
             data["displayName"] = display_name
         if avatar_url is not None:
@@ -348,12 +359,18 @@ class ShadowClient:
         *,
         thread_id: str | None = None,
         reply_to_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         data: dict[str, Any] = {"content": content}
         if thread_id:
             data["threadId"] = thread_id
         if reply_to_id:
             data["replyToId"] = reply_to_id
+        if metadata is not None:
+            data["metadata"] = metadata
+        if attachments is not None:
+            data["attachments"] = attachments
         return self._post(f"/api/channels/{channel_id}/messages", json=data)
 
     def get_messages(

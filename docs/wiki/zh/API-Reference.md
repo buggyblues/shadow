@@ -51,7 +51,7 @@ Authorization: Bearer <token>
 | 方法   | 端点                                     | 描述         |
 |--------|------------------------------------------|--------------|
 | GET    | `/api/channels/:channelId/messages`      | 列出消息     |
-| POST   | `/api/channels/:channelId/messages`      | 发送消息，支持可选 `metadata` |
+| POST   | `/api/channels/:channelId/messages`      | 发送消息，支持可选 `metadata` 和任意类型附件；服务器频道附件会自动关联到该服务器工作区并在附件上返回 `workspaceNodeId`。私有频道附件的工作区节点仅对频道成员或服务器管理员可见。 |
 | GET    | `/api/threads/:id/messages`              | 列出线程消息 |
 | POST   | `/api/threads/:id/messages`              | 在线程中发送消息，支持可选 `metadata` |
 | GET    | `/api/messages/:id`                      | 按 ID 获取   |

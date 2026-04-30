@@ -36,41 +36,69 @@ export function createMediaHandler(container: AppContainer) {
       }
     }
 
-    const result = await mediaService.upload(buffer, file.name, file.type)
+    const messageId = body.messageId
+    let channelMessage: Awaited<ReturnType<typeof messageDao.findById>> | null = null
+    if (typeof messageId === 'string') {
+      const message = await messageDao.findById(messageId)
+      if (!message) {
+        return c.json({ ok: false, error: 'Message not found' }, 404)
+      }
+      const user = c.get('user')
+      if (message.authorId !== user.userId) {
+        return c.json({ ok: false, error: 'Can only attach files to your own messages' }, 403)
+      }
+      const channelDao = container.resolve('channelDao')
+      const serverDao = container.resolve('serverDao')
+      const channelMemberDao = container.resolve('channelMemberDao')
+      const channel = await channelDao.findById(message.channelId)
+      if (!channel) {
+        return c.json({ ok: false, error: 'Channel not found' }, 404)
+      }
+      const member = await serverDao.getMember(channel.serverId, user.userId)
+      if (!member) {
+        return c.json({ ok: false, error: 'Not a member of this server' }, 403)
+      }
+      if (channel.isPrivate && member.role !== 'owner' && member.role !== 'admin') {
+        const channelMember = await channelMemberDao.get(channel.id, user.userId)
+        if (!channelMember) {
+          return c.json({ ok: false, error: 'Not a member of this channel' }, 403)
+        }
+      }
+      channelMessage = message
+    }
+
+    const contentType = file.type || 'application/octet-stream'
+    const result = await mediaService.upload(buffer, file.name, contentType)
 
     // If messageId is provided, create attachment record (channel message)
-    const messageId = body.messageId
-    if (typeof messageId === 'string') {
-      await messageDao.createAttachment({
-        messageId,
+    if (typeof messageId === 'string' && channelMessage) {
+      const messageService = container.resolve('messageService')
+      await messageService.createAttachmentForMessage(messageId, channelMessage.channelId, {
         filename: file.name,
         url: result.url,
-        contentType: file.type,
+        contentType,
         size: result.size,
       })
 
       // Broadcast message update so realtime clients can render newly attached media
       try {
         const io = container.resolve('io')
-        const message = await messageDao.findById(messageId)
-        if (message) {
-          const author = await userDao.findById(message.authorId)
-          const attachments = await messageDao.getAttachments(messageId)
-          io.to(`channel:${message.channelId}`).emit('message:updated', {
-            ...message,
-            author: author
-              ? {
-                  id: author.id,
-                  username: author.username,
-                  displayName: author.displayName,
-                  avatarUrl: author.avatarUrl,
-                  status: author.status,
-                  isBot: author.isBot,
-                }
-              : null,
-            attachments,
-          })
-        }
+        const author = await userDao.findById(channelMessage.authorId)
+        const attachments = await messageDao.getAttachments(messageId)
+        io.to(`channel:${channelMessage.channelId}`).emit('message:updated', {
+          ...channelMessage,
+          author: author
+            ? {
+                id: author.id,
+                username: author.username,
+                displayName: author.displayName,
+                avatarUrl: author.avatarUrl,
+                status: author.status,
+                isBot: author.isBot,
+              }
+            : null,
+          attachments,
+        })
       } catch (err) {
         console.error('[media] Failed to broadcast message:updated after attachment creation:', err)
       }
@@ -82,7 +110,7 @@ export function createMediaHandler(container: AppContainer) {
         dmMessageId,
         filename: file.name,
         url: result.url,
-        contentType: file.type,
+        contentType,
         size: result.size,
       })
 

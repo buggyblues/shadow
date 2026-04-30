@@ -192,8 +192,11 @@ export class ShadowClient {
   async createAgent(data: {
     name: string
     username: string
+    description?: string
     displayName?: string
     avatarUrl?: string | null
+    kernelType?: string
+    config?: Record<string, unknown>
   }): Promise<{ id: string; token: string; userId: string }> {
     return this.request('/api/agents', {
       method: 'POST',
@@ -550,7 +553,12 @@ export class ShadowClient {
   async sendMessage(
     channelId: string,
     content: string,
-    opts?: { threadId?: string; replyToId?: string; metadata?: Record<string, unknown> },
+    opts?: {
+      threadId?: string
+      replyToId?: string
+      metadata?: Record<string, unknown>
+      attachments?: { filename: string; url: string; contentType: string; size: number }[]
+    },
   ): Promise<ShadowMessage> {
     return this.request<ShadowMessage>(`/api/channels/${channelId}/messages`, {
       method: 'POST',
@@ -559,6 +567,7 @@ export class ShadowClient {
         ...(opts?.threadId ? { threadId: opts.threadId } : {}),
         ...(opts?.replyToId ? { replyToId: opts.replyToId } : {}),
         ...(opts?.metadata ? { metadata: opts.metadata } : {}),
+        ...(opts?.attachments ? { attachments: opts.attachments } : {}),
       }),
     })
   }

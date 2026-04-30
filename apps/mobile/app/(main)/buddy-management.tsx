@@ -69,9 +69,23 @@ function formatDuration(seconds: number): string {
 }
 
 function withRandomSuffix(username: string) {
-  const base = username.replace(/[^a-zA-Z0-9_-]/g, '').trim()
+  const base =
+    username
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, '')
+      .trim() || 'buddy'
   const suffix = Math.random().toString(36).slice(2, 6)
   return `${base.slice(0, 27)}_${suffix}`
+}
+
+function deriveBuddyUsername(name: string) {
+  const username = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 32)
+  return username || 'buddy'
 }
 
 // Generate OpenClaw config commands
@@ -124,6 +138,8 @@ export default function BuddyManagementScreen() {
   const [showCreate, setShowCreate] = useState(false)
   const [createName, setCreateName] = useState('')
   const [createUsername, setCreateUsername] = useState('')
+  const [createUsernameTouched, setCreateUsernameTouched] = useState(false)
+  const [createDescription, setCreateDescription] = useState('')
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [generatedToken, setGeneratedToken] = useState<string | null>(null)
   const [configTab, setConfigTab] = useState<'manual' | 'chat'>('manual')
@@ -144,22 +160,46 @@ export default function BuddyManagementScreen() {
     })
   }, [navigation, t])
 
+  const resetCreateForm = () => {
+    setShowCreate(false)
+    setCreateName('')
+    setCreateUsername('')
+    setCreateUsernameTouched(false)
+    setCreateDescription('')
+  }
+
+  const handleCreateNameChange = (value: string) => {
+    setCreateName(value)
+    if (!createUsernameTouched) {
+      setCreateUsername(deriveBuddyUsername(value))
+    }
+  }
+
+  const handleCreateUsernameChange = (value: string) => {
+    setCreateUsernameTouched(true)
+    setCreateUsername(
+      value
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]/g, '')
+        .slice(0, 32),
+    )
+  }
+
   const createMutation = useMutation({
-    mutationFn: (data: { name: string; username: string }) =>
+    mutationFn: (data: { name: string; username: string; description?: string }) =>
       fetchApi<Agent>('/api/agents', {
         method: 'POST',
         body: JSON.stringify({
           name: data.name.trim(),
-          username: withRandomSuffix(data.username),
+          username: data.username.trim(),
+          description: data.description,
           kernelType: 'openclaw',
           config: {},
         }),
       }),
     onSuccess: async (agent) => {
       queryClient.invalidateQueries({ queryKey: ['agents'] })
-      setShowCreate(false)
-      setCreateName('')
-      setCreateUsername('')
+      resetCreateForm()
       showToast(t('buddyMgmt.created', 'Buddy 已创建'))
       setSelectedAgent(agent)
       // Auto-generate token after creation
@@ -174,9 +214,8 @@ export default function BuddyManagementScreen() {
     onError: (err: Error) => {
       if (err.message?.toLowerCase().includes('username already taken')) {
         setCreateUsername((prev) => withRandomSuffix(prev))
-        showToast(
-          t('buddyMgmt.usernameTaken', 'Username already taken, a new one has been suggested'),
-        )
+        setCreateUsernameTouched(true)
+        showToast(t('agentMgmt.usernameTaken'))
       } else {
         showToast(err.message)
       }
@@ -313,13 +352,11 @@ export default function BuddyManagementScreen() {
               {/* Header */}
               <View style={styles.modalHeader}>
                 <Text style={[styles.modalTitle, { color: colors.text }]}>
-                  {t('buddyMgmt.createBuddy', '创建 Buddy')}
+                  {t('agentMgmt.createTitle')}
                 </Text>
                 <Pressable
                   onPress={() => {
-                    setShowCreate(false)
-                    setCreateName('')
-                    setCreateUsername('')
+                    resetCreateForm()
                   }}
                   style={styles.closeBtn}
                 >
@@ -332,10 +369,17 @@ export default function BuddyManagementScreen() {
                 contentContainerStyle={styles.createFormContent}
                 keyboardShouldPersistTaps="handled"
               >
-                {/* Name Input */}
+                <Text style={[styles.formIntro, { color: colors.textSecondary }]}>
+                  {t('agentMgmt.createIntro')}
+                </Text>
+
+                <Text style={[styles.formSectionTitle, { color: colors.textMuted }]}>
+                  {t('agentMgmt.identitySection')}
+                </Text>
+
                 <View style={styles.formField}>
                   <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-                    {t('buddyMgmt.nameLabel', '名称')}
+                    {t('agentMgmt.nameLabel')}
                   </Text>
                   <TextInput
                     style={[
@@ -346,18 +390,17 @@ export default function BuddyManagementScreen() {
                         color: colors.text,
                       },
                     ]}
-                    placeholder={t('buddyMgmt.namePlaceholder', 'Buddy 名称')}
+                    placeholder={t('agentMgmt.namePlaceholder')}
                     placeholderTextColor={colors.textMuted}
                     value={createName}
-                    onChangeText={setCreateName}
+                    onChangeText={handleCreateNameChange}
                     maxLength={64}
                   />
                 </View>
 
-                {/* Username Input */}
                 <View style={styles.formField}>
                   <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-                    {t('buddyMgmt.usernameLabel', '用户名')}
+                    {t('agentMgmt.usernameLabel')}
                   </Text>
                   <TextInput
                     style={[
@@ -368,21 +411,50 @@ export default function BuddyManagementScreen() {
                         color: colors.text,
                       },
                     ]}
-                    placeholder={t('buddyMgmt.usernamePlaceholder', '用户名（字母、数字、下划线）')}
+                    placeholder={t('agentMgmt.usernamePlaceholder')}
                     placeholderTextColor={colors.textMuted}
                     value={createUsername}
-                    onChangeText={(text) => setCreateUsername(text.replace(/[^a-zA-Z0-9_-]/g, ''))}
+                    onChangeText={handleCreateUsernameChange}
                     autoCapitalize="none"
                     autoCorrect={false}
                     maxLength={32}
                   />
                   <Text style={[styles.fieldHint, { color: colors.textMuted }]}>
-                    将自动添加随机后缀避免重复
+                    {t('agentMgmt.usernameHint')}
                   </Text>
                 </View>
 
-                {/* Spacer for keyboard */}
-                <View style={{ height: 100 }} />
+                <Text style={[styles.formSectionTitle, { color: colors.textMuted }]}>
+                  {t('agentMgmt.profileSection')}
+                </Text>
+
+                <View style={styles.formField}>
+                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                    {t('agentMgmt.descLabel')}
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      styles.textArea,
+                      {
+                        backgroundColor: colors.background,
+                        borderColor: colors.border,
+                        color: colors.text,
+                      },
+                    ]}
+                    placeholder={t('agentMgmt.descPlaceholder')}
+                    placeholderTextColor={colors.textMuted}
+                    value={createDescription}
+                    onChangeText={setCreateDescription}
+                    multiline
+                    maxLength={500}
+                  />
+                  <Text style={[styles.fieldHint, { color: colors.textMuted }]}>
+                    {t('agentMgmt.descriptionHint')}
+                  </Text>
+                </View>
+
+                <View style={{ height: 72 }} />
               </ScrollView>
 
               {/* Footer Buttons */}
@@ -393,9 +465,7 @@ export default function BuddyManagementScreen() {
                     { backgroundColor: colors.background, opacity: pressed ? 0.7 : 1 },
                   ]}
                   onPress={() => {
-                    setShowCreate(false)
-                    setCreateName('')
-                    setCreateUsername('')
+                    resetCreateForm()
                   }}
                 >
                   <Text style={{ color: colors.textSecondary, fontWeight: '700' }}>
@@ -410,7 +480,11 @@ export default function BuddyManagementScreen() {
                   onPress={() =>
                     createName.trim() &&
                     createUsername.trim() &&
-                    createMutation.mutate({ name: createName, username: createUsername })
+                    createMutation.mutate({
+                      name: createName,
+                      username: createUsername,
+                      description: createDescription.trim() || undefined,
+                    })
                   }
                   disabled={
                     !createName.trim() || !createUsername.trim() || createMutation.isPending
@@ -923,6 +997,14 @@ const styles = StyleSheet.create({
   closeBtn: { padding: spacing.xs },
   createForm: { flex: 1 },
   createFormContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
+  formIntro: { fontSize: fontSize.sm, lineHeight: 21, marginBottom: spacing.lg },
+  formSectionTitle: {
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
+    textTransform: 'uppercase',
+  },
   formField: { marginBottom: spacing.md },
   fieldLabel: { fontSize: fontSize.sm, fontWeight: '600', marginBottom: spacing.xs },
   fieldHint: { fontSize: fontSize.xs, marginTop: spacing.xs },
@@ -932,6 +1014,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 12,
     fontSize: fontSize.md,
+  },
+  textArea: {
+    minHeight: 96,
+    textAlignVertical: 'top',
   },
   modalFooter: {
     flexDirection: 'row',
