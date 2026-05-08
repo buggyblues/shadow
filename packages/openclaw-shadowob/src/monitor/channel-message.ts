@@ -339,6 +339,9 @@ export async function processShadowMessage(params: {
     await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
       ctx: ctxPayload,
       cfg,
+      replyOptions: {
+        sourceReplyDeliveryMode: 'automatic',
+      },
       dispatcherOptions: {
         ...replyPipeline,
         deliver: async (payload: ReplyPayload) => {
