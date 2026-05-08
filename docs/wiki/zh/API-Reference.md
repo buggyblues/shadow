@@ -60,12 +60,14 @@ Authorization: Bearer <token>
 `GET /api/play/catalog` 返回玩法卡片、启动状态、门禁、动作元数据和关联的 git 模板。每个首页玩法
 都有对应的 `apps/cloud/templates/*.template.json` 模板；app 会通过统一落地页呈现，客户侧不需要接触内部准备过程。
 
-`POST /api/play/launch` 接收已发布的 `playId` 和可选 `launchSessionId`：
+`POST /api/play/launch` 接收已发布的 `playId`、可选 `launchSessionId`，以及需要会员能力时可选的
+`inviteCode`：
 
 ```json
 {
   "playId": "daily-brief",
-  "launchSessionId": "launch-session-1"
+  "launchSessionId": "launch-session-1",
+  "inviteCode": "INVITE-CODE"
 }
 ```
 
@@ -74,6 +76,8 @@ git-backed catalog 发布。缺失 action 会返回 `PLAY_NOT_CONFIGURED`、`PLA
 `PLAY_MISCONFIGURED` 或 `PLAY_TARGET_UNAVAILABLE` 等结构化 code；启动不再 fallback 到探索页。
 Cloud 模板玩法会从已审核 template content 创建真实 Cloud SaaS deployment，并在 provisioning
 期间返回 `deploymentId`。当 deployment 状态为 `deployed` 且暴露 `shadowServerId` 与 `shadowChannelId` 后，客户端应直接跳入对应频道。
+如果 Cloud 玩法需要 `cloud:deploy` 能力，服务端会在同一次 launch 请求里校验会员状态；请求带有
+`inviteCode` 时，会先兑换邀请码再继续授权，不要求客户端先单独调用会员接口。
 公开频道和私有房间玩法必须由配置指定已有 `serverSlug` / `serverId`，私有房间还必须指定已部署 Buddy 的 `buddyUserIds`。启动器只负责入服、建私有频道、拉 Buddy 和发送欢迎消息，不会为这类玩法创建假服务器或假 Buddy。Cloud 部署玩法会在部署完成后由已 provision 的 Buddy 发送一次欢迎消息。
 Cloud 部署按运行时间计费，价格为 1 虾币 / 小时，计费精度为 15 分钟。API 在排队前会检查钱包是否能覆盖首个小时单位，
 worker 会在运行时真正变为 live 时扣除这首个小时单位。如果钱包余额不足，API 返回

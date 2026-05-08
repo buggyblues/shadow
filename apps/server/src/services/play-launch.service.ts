@@ -54,6 +54,7 @@ type CloudDeployPlayAction = Extract<PlayAction, { kind: 'cloud_deploy' }> & {
 export interface PlayLaunchInput {
   playId?: string
   launchSessionId?: string
+  inviteCode?: string
   locale?: string
 }
 
@@ -656,6 +657,27 @@ export class PlayLaunchService {
     }
   }
 
+  private async requireCloudDeployMember(userId: string, inviteCode?: string) {
+    try {
+      return await this.deps.membershipService.requireMember(userId, 'cloud:deploy')
+    } catch (err) {
+      const appError = err as { code?: string }
+      const normalizedInviteCode = inviteCode?.trim()
+      if (appError.code !== 'INVITE_REQUIRED' || !normalizedInviteCode) {
+        throw err
+      }
+
+      const membership = await this.deps.membershipService.redeemInviteCode(
+        userId,
+        normalizedInviteCode,
+      )
+      if (membership.capabilities.includes('cloud:deploy')) {
+        return membership
+      }
+      return this.deps.membershipService.requireMember(userId, 'cloud:deploy')
+    }
+  }
+
   private async launchCloudDeploy(
     userId: string,
     input: PlayLaunchInput,
@@ -663,7 +685,7 @@ export class PlayLaunchService {
     action: CloudDeployPlayAction,
     context: LaunchRequestContext,
   ) {
-    await this.deps.membershipService.requireMember(userId, 'cloud:deploy')
+    await this.requireCloudDeployMember(userId, input.inviteCode)
     const launchUser = await this.getLaunchUserProfile(userId)
     const template = await this.deps.cloudTemplateDao.findBySlug(action.templateSlug)
     if (!template || !canUseCloudTemplate(template, userId)) {

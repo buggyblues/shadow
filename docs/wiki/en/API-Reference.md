@@ -64,12 +64,14 @@ templates. Every homepage play has a matching git-tracked template under
 `apps/cloud/templates/*.template.json`; the app presents them through a unified landing page and keeps
 internal setup out of the customer-facing flow.
 
-`POST /api/play/launch` accepts a published `playId` and optional `launchSessionId`:
+`POST /api/play/launch` accepts a published `playId`, optional `launchSessionId`, and an
+optional `inviteCode` when member capabilities are required:
 
 ```json
 {
   "playId": "daily-brief",
-  "launchSessionId": "launch-session-1"
+  "launchSessionId": "launch-session-1",
+  "inviteCode": "INVITE-CODE"
 }
 ```
 
@@ -78,6 +80,9 @@ admin-managed website play config or the git-backed catalog. Missing actions ret
 codes such as `PLAY_NOT_CONFIGURED`, `PLAY_COMING_SOON`, `PLAY_MISCONFIGURED`, or
 `PLAY_TARGET_UNAVAILABLE`; launch no longer falls back to Discover. Cloud template plays queue a real
 Cloud SaaS deployment from the approved template content and return `deploymentId` while provisioning.
+If a Cloud play needs the `cloud:deploy` capability, the server checks membership inside the same
+launch request. When `inviteCode` is supplied, the server redeems it before continuing authorization;
+clients do not need to call the membership endpoint first.
 Once the deployment status is `deployed` and exposes `shadowServerId` plus `shadowChannelId`, clients
 should redirect directly into that channel. Public channel and private room plays must point to an
 already configured server; private rooms must also configure deployed `buddyUserIds`. The launcher

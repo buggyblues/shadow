@@ -211,6 +211,7 @@ class ShadowClient:
         *,
         play_id: str | None = None,
         launch_session_id: str | None = None,
+        invite_code: str | None = None,
         locale: str | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {}
@@ -218,6 +219,8 @@ class ShadowClient:
             payload["playId"] = play_id
         if launch_session_id:
             payload["launchSessionId"] = launch_session_id
+        if invite_code:
+            payload["inviteCode"] = invite_code
         if locale:
             payload["locale"] = locale
         return self._post("/api/play/launch", json=payload)

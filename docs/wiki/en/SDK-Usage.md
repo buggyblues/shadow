@@ -91,13 +91,10 @@ await authedClient.updateNotificationChannelPreference({
 const membership = await authedClient.getMembership()
 const plays = await authedClient.getPlayCatalog()
 
-if (!membership.capabilities.includes("cloud:deploy")) {
-  await authedClient.redeemInviteCode("INVITE-CODE")
-}
-
 const launch = await authedClient.launchPlay({
   playId: plays.find((play) => play.template?.slug === "gstack-buddy")?.id ?? "gstack-buddy",
   launchSessionId: "launch-session-1",
+  inviteCode: membership.capabilities.includes("cloud:deploy") ? undefined : "INVITE-CODE",
 })
 
 if (launch.redirectUrl) {
@@ -172,12 +169,10 @@ authed_client.send_message("channel-uuid", "Hello from Python!")
 ```python
 membership = authed_client.get_membership()
 
-if "cloud:deploy" not in membership["capabilities"]:
-    authed_client.redeem_invite_code("INVITE-CODE")
-
 launch = authed_client.launch_play(
     play_id="daily-brief",
     launch_session_id="launch-session-1",
+    invite_code=None if "cloud:deploy" in membership["capabilities"] else "INVITE-CODE",
 )
 
 models = authed_client.list_official_model_proxy_models()

@@ -311,7 +311,11 @@ describe('ShadowClient', () => {
 
       await client.getMembership()
       await client.redeemInviteCode('ABCD1234')
-      await client.launchPlay({ playId: 'daily-brief', launchSessionId: 'launch-session-1' })
+      await client.launchPlay({
+        playId: 'daily-brief',
+        launchSessionId: 'launch-session-1',
+        inviteCode: 'ABCD1234',
+      })
       await client.getPlayCatalog()
 
       expect(mockFetch).toHaveBeenCalledWith(
@@ -329,7 +333,11 @@ describe('ShadowClient', () => {
         'https://api.example.com/api/play/launch',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ playId: 'daily-brief', launchSessionId: 'launch-session-1' }),
+          body: JSON.stringify({
+            playId: 'daily-brief',
+            launchSessionId: 'launch-session-1',
+            inviteCode: 'ABCD1234',
+          }),
         }),
       )
       expect(mockFetch).toHaveBeenCalledWith(

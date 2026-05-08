@@ -125,7 +125,7 @@ See `docs/product/membership-tiers.md` for the extensibility rules.
 ### Play Launch
 
 - `GET /api/play/catalog`: returns the public homepage play catalog.
-- `POST /api/play/launch`: launches a configured play by `playId`. Clients may send `launchSessionId` for retry/idempotency. Cloud plays return `deploymentId` while the real template deployment is pending and may return `redirectUrl` immediately if the template has already provisioned a Shadow server. The public API does not accept raw action objects; actions must come from published admin config. Website/app clients should call it only after the landing page start action, not automatically on page load.
+- `POST /api/play/launch`: launches a configured play by `playId`. Clients may send `launchSessionId` for retry/idempotency and `inviteCode` when the launch is gated by membership. Cloud plays redeem the invite code server-side before checking `cloud:deploy`, return `deploymentId` while the real template deployment is pending, and may return `redirectUrl` immediately if the template has already provisioned a Shadow server. The public API does not accept raw action objects; actions must come from published admin config. Website/app clients should call it only after the landing page start action, not automatically on page load.
 
 ### Official Model Proxy
 

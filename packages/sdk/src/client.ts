@@ -278,6 +278,7 @@ export class ShadowClient {
   async launchPlay(data: {
     playId?: string
     launchSessionId?: string
+    inviteCode?: string
     locale?: string
   }): Promise<ShadowPlayLaunchResult> {
     return this.request('/api/play/launch', {
