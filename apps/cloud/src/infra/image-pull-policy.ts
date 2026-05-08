@@ -10,7 +10,6 @@ export function resolveImagePullPolicy(
 function defaultImagePullPolicy(image: string | undefined): ImagePullPolicy {
   if (!image) return 'IfNotPresent'
   if (image.includes('@sha256:')) return 'IfNotPresent'
-  if (isOfficialOpenClawRunner(image)) return 'IfNotPresent'
 
   const tag = imageTag(image)
   if (tag && tag !== 'latest') return 'IfNotPresent'
@@ -24,11 +23,6 @@ function imageTag(image: string): string | undefined {
   const name = withoutDigest.slice(lastSlash + 1)
   const tagSeparator = name.lastIndexOf(':')
   return tagSeparator >= 0 ? name.slice(tagSeparator + 1) : undefined
-}
-
-function isOfficialOpenClawRunner(image: string): boolean {
-  const normalized = image.toLowerCase()
-  return normalized.startsWith('ghcr.io/buggyblues/openclaw-runner:')
 }
 
 function isLocalImage(image: string): boolean {
