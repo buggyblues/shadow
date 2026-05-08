@@ -372,6 +372,151 @@ describe('Slash Commands', () => {
       ),
     ).toBe(true)
   })
+
+  it('should force automatic source replies for monitored channel dispatches', async () => {
+    vi.useFakeTimers()
+    const { processShadowMessage } = await import('../src/monitor/channel-message.js')
+    const dispatch = vi.fn(async () => undefined)
+    const core = {
+      channel: {
+        routing: {
+          resolveAgentRoute: vi.fn(() => ({
+            agentId: null,
+            sessionKey: null,
+            accountId: 'default',
+          })),
+        },
+        reply: {
+          formatAgentEnvelope: vi.fn((params: { body: string }) => params.body),
+          resolveEnvelopeFormatOptions: vi.fn(() => ({})),
+          finalizeInboundContext: vi.fn((ctx: Record<string, unknown>) => ctx),
+          dispatchReplyWithBufferedBlockDispatcher: dispatch,
+        },
+        session: {
+          resolveStorePath: vi.fn(() => '/tmp/openclaw-shadowob-test-store'),
+          recordInboundSession: vi.fn(async () => undefined),
+        },
+      },
+    } as never
+
+    try {
+      await processShadowMessage({
+        message: {
+          id: 'msg-1',
+          content: '你是谁？',
+          channelId: 'ch-1',
+          authorId: 'user-1',
+          createdAt: '2026-05-08T09:07:40.000Z',
+          updatedAt: '2026-05-08T09:07:40.000Z',
+          author: {
+            id: 'user-1',
+            username: 'volthesitan_971163',
+            displayName: 'Vol',
+            isBot: false,
+          },
+        } as never,
+        account: { token: 'tok', serverUrl: 'http://localhost:3002' },
+        accountId: 'default',
+        config: {},
+        runtime: {},
+        core,
+        botUserId: 'bot-1',
+        botUsername: 'gstack-bot',
+        agentId: 'strategy-buddy',
+        channelPolicies: new Map(),
+        channelServerMap: new Map(),
+        slashCommands: [],
+        socket: {
+          sendTyping: vi.fn(),
+          updateActivity: vi.fn(),
+        } as never,
+      })
+
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          replyOptions: {
+            sourceReplyDeliveryMode: 'automatic',
+          },
+          ctx: expect.objectContaining({
+            ChatType: 'channel',
+            MessageSid: 'msg-1',
+          }),
+        }),
+      )
+      vi.runOnlyPendingTimers()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('should force automatic source replies for monitored DM dispatches', async () => {
+    const { processShadowDmMessage } = await import('../src/monitor/dm-message.js')
+    const dispatch = vi.fn(async () => undefined)
+    const core = {
+      channel: {
+        routing: {
+          resolveAgentRoute: vi.fn(() => ({
+            agentId: null,
+            sessionKey: null,
+            accountId: 'default',
+          })),
+        },
+        reply: {
+          formatAgentEnvelope: vi.fn((params: { body: string }) => params.body),
+          resolveEnvelopeFormatOptions: vi.fn(() => ({})),
+          finalizeInboundContext: vi.fn((ctx: Record<string, unknown>) => ctx),
+          dispatchReplyWithBufferedBlockDispatcher: dispatch,
+        },
+        session: {
+          resolveStorePath: vi.fn(() => '/tmp/openclaw-shadowob-test-store'),
+          recordInboundSession: vi.fn(async () => undefined),
+        },
+      },
+    } as never
+
+    await processShadowDmMessage({
+      dmMessage: {
+        id: 'dm-msg-1',
+        content: '你是谁？',
+        dmChannelId: 'dm-1',
+        channelId: 'dm:dm-1',
+        authorId: 'user-1',
+        senderId: 'user-1',
+        receiverId: 'bot-1',
+        createdAt: '2026-05-08T09:07:40.000Z',
+        author: {
+          id: 'user-1',
+          username: 'volthesitan_971163',
+          displayName: 'Vol',
+          isBot: false,
+        },
+      },
+      account: { token: 'tok', serverUrl: 'http://localhost:3002' },
+      accountId: 'default',
+      config: {},
+      runtime: {},
+      core,
+      botUserId: 'bot-1',
+      botUsername: 'gstack-bot',
+      shadowAgentId: 'strategy-buddy',
+      slashCommands: [],
+      socket: {
+        sendDmTyping: vi.fn(),
+      } as never,
+    })
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        replyOptions: {
+          sourceReplyDeliveryMode: 'automatic',
+        },
+        ctx: expect.objectContaining({
+          ChatType: 'direct',
+          MessageSid: 'dm-msg-1',
+        }),
+      }),
+    )
+  })
 })
 
 // ── Plugin entry point ─────────────────────────────────────────

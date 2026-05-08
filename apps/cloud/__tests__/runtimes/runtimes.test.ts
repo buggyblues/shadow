@@ -99,11 +99,11 @@ describe('OpenClaw Adapter', () => {
     expect(config.acp).toBeUndefined()
   })
 
-  it('applyConfig explicitly disables acpx plugin to prevent spurious backend probes', () => {
+  it('applyConfig does not write acpx plugin config', () => {
     const config = emptyOpenClawConfig()
     const entry = emptyAgentEntry()
     adapter.applyConfig(makeAgent(), entry, config)
-    expect(config.plugins?.entries?.acpx?.enabled).toBe(false)
+    expect(config.plugins?.entries?.acpx).toBeUndefined()
   })
 })
 

@@ -20,15 +20,8 @@ const openclawAdapter: RuntimeAdapter = {
     return null // No ACP — direct gateway mode
   },
 
-  applyConfig(_agent: AgentDeployment, _agentEntry: OpenClawAgentConfig, config: OpenClawConfig) {
-    // No ACP harness for this runtime — explicitly disable ACPX so the stock plugin
-    // does not auto-load and attempt to probe backends (e.g. npx @zed-industries/codex-acp)
-    // which fails in containers where $HOME is read-only.
-    if (!config.plugins) config.plugins = {}
-    if (!config.plugins.entries) config.plugins.entries = {}
-    if (!config.plugins.entries.acpx) {
-      config.plugins.entries.acpx = { enabled: false }
-    }
+  applyConfig(_agent: AgentDeployment, _agentEntry: OpenClawAgentConfig, _config: OpenClawConfig) {
+    // No ACP harness for this runtime.
   },
 
   extraEnv() {
