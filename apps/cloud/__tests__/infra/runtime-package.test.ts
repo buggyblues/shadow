@@ -305,7 +305,7 @@ describe('buildManifests', () => {
     expect(deployment.spec.template.metadata.annotations).toMatchObject({
       'shadowob.cloud/runner-image': 'ghcr.io/buggyblues/openclaw-runner:latest',
     })
-    expect(container.imagePullPolicy).toBe('IfNotPresent')
+    expect(container.imagePullPolicy).toBe('Always')
     expect(
       deployment.spec.template.metadata.annotations['shadowob.cloud/runtime-package-hash'],
     ).toMatch(/^[a-f0-9]{64}$/)
@@ -409,12 +409,21 @@ describe('buildManifests', () => {
     expect(env).toEqual(expect.arrayContaining([{ name: 'TZ', value: 'Asia/Shanghai' }]))
   })
 
-  it('keeps immutable and local runner images cacheable unless explicitly overridden', () => {
+  it('pulls latest registry runner images and keeps immutable/local images cacheable', () => {
     const baseAgent = {
       id: 'agent-1',
       runtime: 'openclaw' as const,
       configuration: {},
     }
+    const latest = buildManifests({
+      namespace: 'pull-policy-latest',
+      config: {
+        version: '1',
+        deployments: {
+          agents: [baseAgent],
+        },
+      },
+    })
     const pinned = buildManifests({
       namespace: 'pull-policy-pinned',
       config: {
@@ -454,6 +463,10 @@ describe('buildManifests', () => {
       },
     })
 
+    expect(
+      latest.find((manifest) => manifest.kind === 'Deployment')!.spec.template.spec.containers[0]
+        .imagePullPolicy,
+    ).toBe('Always')
     expect(
       pinned.find((manifest) => manifest.kind === 'Deployment')!.spec.template.spec.containers[0]
         .imagePullPolicy,
