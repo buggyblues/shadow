@@ -46,6 +46,7 @@ def test_launch_play_posts_launch_session_id(monkeypatch):
     result = client.launch_play(
         play_id="daily-brief",
         launch_session_id="launch-session-1",
+        invite_code="ABCD1234",
     )
 
     assert captured == {
@@ -53,6 +54,7 @@ def test_launch_play_posts_launch_session_id(monkeypatch):
         "json": {
             "playId": "daily-brief",
             "launchSessionId": "launch-session-1",
+            "inviteCode": "ABCD1234",
         },
     }
     assert result["ok"] is True

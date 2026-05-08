@@ -49,6 +49,7 @@ export const playLaunchSchema = z
       .max(128)
       .regex(/^[A-Za-z0-9._:-]+$/)
       .optional(),
+    inviteCode: z.string().min(1).max(64).optional(),
     locale: z.string().max(16).optional(),
   })
   .strict()

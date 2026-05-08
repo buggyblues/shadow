@@ -18,7 +18,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ApiError, fetchApi } from '../lib/api'
 import { getApiErrorMessage } from '../lib/api-errors'
-import { useAuthStore } from '../stores/auth.store'
 
 type PlayAvailability = 'available' | 'gated' | 'coming_soon' | 'misconfigured'
 
@@ -71,6 +70,10 @@ type ServerMeta = {
 
 type LaunchPhase = 'loading' | 'ready' | 'launching' | 'gate' | 'wallet' | 'error'
 
+type LaunchOptions = {
+  inviteCode?: string
+}
+
 function resolveAppUrl(redirectUrl: string) {
   if (/^https?:\/\//.test(redirectUrl)) return redirectUrl
   if (redirectUrl.startsWith('/app/')) return redirectUrl
@@ -112,8 +115,6 @@ function playKind(play: PlayCatalogItem | null) {
 export function PlayLaunchPage() {
   const { t, i18n } = useTranslation()
   const search = useSearch({ strict: false }) as { play?: string }
-  const user = useAuthStore((s) => s.user)
-  const setUser = useAuthStore((s) => s.setUser)
   const launchSessionIdRef = useRef(createLaunchSessionId())
   const stepIndexRef = useRef(0)
   const [play, setPlay] = useState<PlayCatalogItem | null>(null)
@@ -234,8 +235,9 @@ export function PlayLaunchPage() {
     return () => window.clearInterval(interval)
   }, [activeStep, phase])
 
-  const launch = async () => {
+  const launch = async (options: LaunchOptions = {}) => {
     if (!play || !canLaunchPlay(play)) return
+    const normalizedInviteCode = options.inviteCode?.trim()
     setError('')
     setMembershipGate(null)
     setWalletGate(null)
@@ -250,6 +252,7 @@ export function PlayLaunchPage() {
           playId: play.id,
           launchSessionId: launchSessionIdRef.current,
           locale: i18n.language,
+          ...(normalizedInviteCode ? { inviteCode: normalizedInviteCode } : {}),
         }),
       })
       if (result.status === 'deploying') {
@@ -273,6 +276,11 @@ export function PlayLaunchPage() {
       if (err instanceof ApiError && err.code === 'INVITE_REQUIRED') {
         setMembershipGate({ capability: err.capability, message: err.message })
         setPhase('gate')
+        return
+      }
+      if (err instanceof ApiError && err.code === 'INVALID_INVITE_CODE') {
+        setPhase('gate')
+        setError(getApiErrorMessage(err, t, 'settings.membershipRedeemFailed'))
         return
       }
       if (
@@ -310,24 +318,13 @@ export function PlayLaunchPage() {
   }
 
   const redeemInviteAndRetry = async () => {
-    if (!inviteCode.trim()) return
+    const normalizedInviteCode = inviteCode.trim()
+    if (!normalizedInviteCode || redeeming) return
     setError('')
     setRedeeming(true)
     try {
-      const membership = await fetchApi<NonNullable<typeof user>['membership']>(
-        '/api/membership/redeem-invite',
-        {
-          method: 'POST',
-          body: JSON.stringify({ code: inviteCode.trim() }),
-        },
-      )
-      if (user && membership) setUser({ ...user, membership })
-      setInviteCode('')
       setMembershipGate(null)
-      await launch()
-    } catch (err) {
-      setError(getApiErrorMessage(err, t, 'settings.membershipRedeemFailed'))
-      setPhase('gate')
+      await launch({ inviteCode: normalizedInviteCode })
     } finally {
       setRedeeming(false)
     }
@@ -563,7 +560,7 @@ export function PlayLaunchPage() {
                   type="button"
                   className="h-12 w-full rounded-full text-base font-black"
                   disabled={phase === 'loading' || !canLaunchPlay(play)}
-                  onClick={launch}
+                  onClick={() => void launch()}
                 >
                   <Play size={17} fill="currentColor" />
                   {phase === 'loading'

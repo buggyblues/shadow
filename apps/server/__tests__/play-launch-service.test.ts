@@ -66,6 +66,7 @@ describe('play launch orchestration', () => {
     },
     membershipService: {
       requireMember: vi.fn(),
+      redeemInviteCode: vi.fn(),
     },
     cloudTemplateDao: {
       findBySlug: vi.fn(),
@@ -121,6 +122,12 @@ describe('play launch orchestration', () => {
     deps.agentDao.findPlayCatalogBuddyByTemplateSlug.mockResolvedValue(null)
     deps.agentPolicyService.ensureServerDefault.mockResolvedValue(undefined)
     deps.messageService.getByChannelId.mockResolvedValue({ messages: [], hasMore: false })
+    deps.membershipService.requireMember.mockResolvedValue({
+      capabilities: ['cloud:deploy'],
+    })
+    deps.membershipService.redeemInviteCode.mockResolvedValue({
+      capabilities: ['cloud:deploy'],
+    })
     deps.cloudTemplateDao.findBySlug.mockResolvedValue({
       id: 'template-1',
       slug: 'gstack-buddy',
@@ -159,6 +166,16 @@ describe('play launch orchestration', () => {
     })
 
     expect(parsed.success).toBe(false)
+  })
+
+  it('accepts invite codes on play launch requests', () => {
+    const parsed = playLaunchSchema.safeParse({
+      playId: 'gstack-buddy',
+      launchSessionId: 'launch-session-1',
+      inviteCode: 'ABCD1234',
+    })
+
+    expect(parsed.success).toBe(true)
   })
 
   it('ships every default homepage play with a launchable action', () => {
@@ -473,6 +490,45 @@ describe('play launch orchestration', () => {
       if (previousModelProxyEnabled === undefined) delete process.env.SHADOW_MODEL_PROXY_ENABLED
       else process.env.SHADOW_MODEL_PROXY_ENABLED = previousModelProxyEnabled
     }
+  })
+
+  it('redeems an invite code during cloud launch authorization', async () => {
+    deps.membershipService.requireMember.mockRejectedValueOnce(
+      Object.assign(new Error('Invite code required'), {
+        status: 403,
+        code: 'INVITE_REQUIRED',
+      }),
+    )
+    deps.cloudDeploymentDao.findLatestCurrentInNamespace.mockResolvedValue({
+      id: 'deployment-1',
+      status: 'pending',
+      templateSlug: 'gstack-buddy',
+      configSnapshot: templateContent,
+    })
+    vi.spyOn(
+      service as unknown as { findPublishedPlay(playId: string): Promise<unknown> },
+      'findPublishedPlay',
+    ).mockResolvedValue({
+      id: 'gstack-buddy',
+      status: 'gated',
+      action: { kind: 'cloud_deploy', templateSlug: 'gstack-buddy', resourceTier: 'lightweight' },
+    })
+
+    const result = await service.launch('user-1', {
+      playId: 'gstack-buddy',
+      launchSessionId: 'launch-session-redeem',
+      inviteCode: ' abc123 ',
+      locale: 'zh-CN',
+    })
+
+    expect(deps.membershipService.redeemInviteCode).toHaveBeenCalledWith('user-1', 'abc123')
+    expect(deps.membershipService.requireMember).toHaveBeenCalledTimes(1)
+    expect(deps.cloudDeploymentDao.create).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      status: 'deploying',
+      deploymentId: 'deployment-1',
+      templateSlug: 'gstack-buddy',
+    })
   })
 
   it('surfaces a wallet paywall before queueing a cloud deployment without the first hourly unit', async () => {
