@@ -221,6 +221,102 @@ afterAll(async () => {
    ══════════════════════════════════════════════════════════ */
 
 describe('Cloud SaaS — template store', () => {
+  it('POST /api/cloud-saas/diy/generate/stream emits progress and a final draft', async () => {
+    const previousKey = process.env.SHADOW_DIY_CLOUD_GENERATOR_API_KEY
+    delete process.env.SHADOW_DIY_CLOUD_GENERATOR_API_KEY
+
+    try {
+      const res = await req('POST', '/api/cloud-saas/diy/generate/stream', {
+        prompt: '帮我搭一个客服知识库 Buddy，能读取文档、回答常见问题，并提示缺失资料',
+        locale: 'zh-CN',
+        timezone: 'Asia/Shanghai',
+      })
+      expect(res.status).toBe(200)
+      expect(res.headers.get('Content-Type')).toContain('text/event-stream')
+
+      const body = await res.text()
+      expect(body).toContain('event: session')
+      expect(body).toContain('event: progress')
+      expect(body).toContain('event: draft')
+
+      const sessionBlock = body.split('\n\n').find((block) => block.startsWith('event: session\n'))
+      expect(sessionBlock).toBeTruthy()
+      const sessionDataLine = sessionBlock?.split('\n').find((line) => line.startsWith('data: '))
+      const sessionPayload = JSON.parse(sessionDataLine!.slice('data: '.length)) as {
+        sessionId: string
+        expiresAt: string
+      }
+      expect(sessionPayload.sessionId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+      )
+      expect(Date.parse(sessionPayload.expiresAt)).toBeGreaterThan(Date.now())
+
+      const draftBlock = body.split('\n\n').find((block) => block.startsWith('event: draft\n'))
+      expect(draftBlock).toBeTruthy()
+      const dataLine = draftBlock?.split('\n').find((line) => line.startsWith('data: '))
+      const payload = JSON.parse(dataLine!.slice('data: '.length)) as {
+        draft: {
+          agentOutputs: Array<{ step: string; result: unknown; reasons: unknown[]; raw: unknown }>
+          agentReport: { pluginDecisions: unknown[]; templateDecisions: unknown[] }
+          validation: { valid: boolean }
+          steps: Array<{ id: string }>
+        }
+      }
+      expect(payload.draft.validation.valid).toBe(true)
+      expect(payload.draft.agentOutputs.map((output) => output.step)).toEqual([
+        'think',
+        'search',
+        'generate',
+        'validate',
+        'review',
+      ])
+      expect(payload.draft.agentOutputs.every((output) => output.result && output.raw)).toBe(true)
+      expect(payload.draft.agentReport.pluginDecisions.length).toBeGreaterThan(0)
+      expect(payload.draft.agentReport.templateDecisions.length).toBeGreaterThan(0)
+      expect(payload.draft.steps.map((step) => step.id)).toEqual([
+        'think',
+        'search',
+        'generate',
+        'validate',
+        'review',
+      ])
+
+      const progressBlocks = body
+        .split('\n\n')
+        .filter((block) => block.startsWith('event: progress\n'))
+      expect(
+        progressBlocks.some((block) => {
+          const line = block.split('\n').find((item) => item.startsWith('data: '))
+          if (!line) return false
+          const event = JSON.parse(line.slice('data: '.length)) as { output?: unknown }
+          return Boolean(event.output)
+        }),
+      ).toBe(true)
+
+      const sessionRes = await req(
+        'GET',
+        `/api/cloud-saas/diy/sessions/${encodeURIComponent(sessionPayload.sessionId)}`,
+      )
+      expect(sessionRes.status).toBe(200)
+      const sessionBody = (await sessionRes.json()) as {
+        session: { status: string; events: unknown[]; draft?: { validation: { valid: boolean } } }
+      }
+      expect(sessionBody.session.status).toBe('completed')
+      expect(sessionBody.session.events.length).toBeGreaterThan(0)
+      expect(sessionBody.session.draft?.validation.valid).toBe(true)
+
+      const replayRes = await req(
+        'GET',
+        `/api/cloud-saas/diy/sessions/${encodeURIComponent(sessionPayload.sessionId)}/stream`,
+      )
+      expect(replayRes.status).toBe(200)
+      const replayBody = await replayRes.text()
+      expect(replayBody).toContain('event: draft')
+    } finally {
+      if (previousKey) process.env.SHADOW_DIY_CLOUD_GENERATOR_API_KEY = previousKey
+    }
+  })
+
   it('GET /api/cloud-saas/templates returns approved templates', async () => {
     const res = await req('GET', '/api/cloud-saas/templates')
     expect(res.status).toBe(200)

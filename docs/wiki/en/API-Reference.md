@@ -215,6 +215,41 @@ Commerce product cards are stored in `message.metadata.commerceCards`. Clients s
 
 Cloud cost dashboards read Buddy usage from `usage-snapshot` rows. They do not execute commands inside Kubernetes pods at request time.
 
+## Cloud SaaS DIY Generation
+
+| Method | Endpoint                                      | Description              |
+|--------|-----------------------------------------------|--------------------------|
+| GET    | `/api/cloud-saas/diy/plugins`                 | List official plugins available to the DIY generator |
+| GET    | `/api/cloud-saas/diy/plugins/search?q=...`    | Search official DIY plugin capabilities |
+| GET    | `/api/cloud-saas/diy/templates`               | List valid official templates available as references |
+| POST   | `/api/cloud-saas/diy/generate`                | Generate a DIY Cloud draft as one JSON response |
+| POST   | `/api/cloud-saas/diy/generate/stream`         | Create a one-day generation session and stream progress with SSE |
+| GET    | `/api/cloud-saas/diy/sessions/:sessionId`     | Read a cached DIY generation session and its latest progress |
+| GET    | `/api/cloud-saas/diy/sessions/:sessionId/stream` | Replay cached progress and continue streaming a running session |
+
+DIY generation requires the `cloud:diy_generate` membership capability and is rate-limited per user. The streaming endpoint accepts the same JSON body as `/diy/generate`: `prompt`, optional `feedback`, optional bounded `previousConfig`, optional `locale`, and optional `timezone`. It returns `text/event-stream` events named `session`, `progress`, `draft`, `done`, and `error`. The initial `session` event includes a `sessionId` and `expiresAt`; sessions are scoped to the authenticated user and cached for one day. Each `progress` event includes the current step (`think`, `search`, `generate`, `validate`, or `review`) plus a status, localized detail text, optional structured metadata, and when a step finishes, an `output` object.
+
+Each step `output` is a JSON object with this stable shape:
+
+```json
+{
+  "type": "agent_step_output",
+  "schemaVersion": 1,
+  "step": "think",
+  "status": "completed",
+  "title": "Goal breakdown JSON output",
+  "locale": "zh-CN",
+  "timezone": "Asia/Shanghai",
+  "generatedAt": "2026-05-09T00:00:00.000Z",
+  "result": {},
+  "reasons": [],
+  "confidence": 0.86,
+  "raw": {}
+}
+```
+
+`result` contains the normalized step result used by the product UI. `reasons` explains why the Agent made that decision. `raw` contains the raw model/tool JSON for review, with secret-like values redacted before persistence. The final `draft` payload is the same deployable draft returned by the non-streaming endpoint, including `agentOutputs` for all five steps, an `agentReport` with objective decomposition, assumptions, plugin/template selection rationale, validation checks, and any repair notes applied before the template was accepted.
+
 ## Cloud SaaS Deployments
 
 | Method | Endpoint                                      | Description              |

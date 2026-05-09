@@ -1,119 +1,57 @@
-import { Alert, AlertDescription, Badge, Button, Card, Checkbox, cn, Textarea } from '@shadowob/ui'
+import {
+  Alert,
+  AlertDescription,
+  Badge,
+  Button,
+  GlassHeader,
+  GlassPanel,
+  Progress,
+  Textarea,
+} from '@shadowob/ui'
 import { useSearch } from '@tanstack/react-router'
 import {
   ArrowRight,
   BookOpenCheck,
   Bot,
-  CheckCircle2,
   ClipboardCheck,
   Compass,
-  EyeOff,
   FileCode2,
-  KeyRound,
   Layers3,
-  Loader2,
   type LucideIcon,
   MessageSquare,
   RefreshCcw,
   Rocket,
+  Search,
   Server,
+  Settings2,
   ShieldCheck,
   Sparkles,
-  Wallet,
   WandSparkles,
   XCircle,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ApiError, fetchApi } from '../lib/api'
+import { ApiError, fetchApi, fetchApiResponse } from '../lib/api'
 import { getApiErrorMessage } from '../lib/api-errors'
+import {
+  DiyDeployWizardModal,
+  DiyFeedbackModal,
+  DiyStepDirectory,
+  StepHeading,
+} from './diy-cloud-components'
+import {
+  type CloudDeploymentStatus,
+  type CloudTemplateRecord,
+  type DeployPhase,
+  type DiyCloudAgentStepOutput,
+  type DiyCloudDraft,
+  type DiyCloudProgressEvent,
+  type DiyCloudSession,
+  type ServerMeta,
+  STEP_ORDER,
+  type StepId,
+} from './diy-cloud-model'
 
-type StepId = 'think' | 'search' | 'generate' | 'validate' | 'review'
-
-type DiyCloudDraft = {
-  slug: string
-  title: string
-  description: string
-  score: number
-  steps: Array<{
-    id: StepId
-    title: string
-    detail: string
-  }>
-  matchedPlugins: Array<{
-    id: string
-    name: string
-    description: string
-    reason: string
-    capabilities: string[]
-    requiredKeys: string[]
-    docsExcerpt: string
-    matchedTerms: string[]
-  }>
-  referenceTemplates: Array<{
-    slug: string
-    title: string
-    description: string
-    category: string
-    plugins: string[]
-    channels: string[]
-    buddyNames: string[]
-    reason: string
-  }>
-  suggestedSkills: string[]
-  requiredKeys: Array<{
-    key: string
-    label: string
-    description: string
-    source: string
-    sourcePluginId: string
-    sensitive: boolean
-    setupSteps: string[]
-    skipImpact: string
-  }>
-  toolTrace: Array<{
-    tool: 'search_plugins' | 'search_templates'
-    query: string
-    resultIds: string[]
-  }>
-  guidebook: {
-    summary: string
-    beforeDeploy: string[]
-    howToUse: string[]
-    reviewNotes: string[]
-  }
-  template: Record<string, unknown>
-  validation: {
-    valid: boolean
-    agents: number
-    configurations: number
-    violations: Array<{ path: string; prefix: string }>
-    extendsErrors: string[]
-    templateRefs: { env: number; secret: number; file: number }
-  }
-}
-
-type CloudTemplateRecord = {
-  slug: string
-  name: string
-}
-
-type CloudDeploymentStatus = {
-  id: string
-  status: 'pending' | 'deploying' | 'deployed' | 'failed' | 'destroying' | 'destroyed' | string
-  errorMessage?: string | null
-  shadowServerId?: string | null
-  shadowChannelId?: string | null
-}
-
-type ServerMeta = {
-  id: string
-  slug?: string | null
-}
-
-type DeployPhase = 'idle' | 'saving' | 'deploying' | 'polling' | 'redirecting' | 'error'
-
-const STEP_ORDER: StepId[] = ['think', 'search', 'generate', 'validate', 'review']
 const ALWAYS_KEEP_PLUGIN_IDS = new Set(['model-provider', 'shadowob'])
 
 function wait(ms: number) {
@@ -273,21 +211,79 @@ function scoreVariant(score: number) {
   return 'warning' as const
 }
 
+function parseSseBlock(block: string) {
+  let event = 'message'
+  const data: string[] = []
+  for (const line of block.split(/\r?\n/)) {
+    if (line.startsWith('event:')) event = line.slice(6).trim()
+    if (line.startsWith('data:')) data.push(line.slice(5).trimStart())
+  }
+  return { event, data: data.join('\n') }
+}
+
+function isProgressEvent(value: unknown): value is DiyCloudProgressEvent {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  return (
+    record.type === 'progress' &&
+    typeof record.id === 'string' &&
+    STEP_ORDER.includes(record.step as StepId) &&
+    typeof record.title === 'string' &&
+    typeof record.detail === 'string'
+  )
+}
+
+function isSessionPayload(value: unknown): value is DiyCloudSession {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  return typeof record.sessionId === 'string' && typeof record.expiresAt === 'string'
+}
+
+function isDraftPayload(value: unknown): value is { draft: DiyCloudDraft } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const draft = (value as Record<string, unknown>).draft
+  return Boolean(draft && typeof draft === 'object' && !Array.isArray(draft))
+}
+
+function progressValue(completed: number, total: number, generating: boolean) {
+  if (total <= 0) return generating ? 12 : 0
+  const value = Math.round((completed / total) * 100)
+  return generating ? Math.max(12, Math.min(96, value)) : value
+}
+
+function formatJson(value: unknown) {
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
+
 export function DiyCloudPage() {
   const { t, i18n } = useTranslation()
-  const search = useSearch({ strict: false }) as { prompt?: string }
+  const search = useSearch({ strict: false }) as {
+    prompt?: string
+    session?: string
+    debug?: string
+  }
+  const searchParams = new URLSearchParams(window.location.search)
   const initialPrompt =
-    typeof search.prompt === 'string'
-      ? search.prompt
-      : new URLSearchParams(window.location.search).get('prompt') || ''
+    typeof search.prompt === 'string' ? search.prompt : searchParams.get('prompt') || ''
+  const initialSessionId =
+    typeof search.session === 'string' ? search.session : searchParams.get('session') || ''
+  const debugMode =
+    (typeof search.debug === 'string' ? search.debug : searchParams.get('debug')) === 'true'
   const autoStartedRef = useRef(false)
+  const generationAbortRef = useRef<AbortController | null>(null)
+  const sectionRefs = useRef<Partial<Record<StepId, HTMLElement | null>>>({})
   const [prompt, setPrompt] = useState(initialPrompt)
+  const [sessionId, setSessionId] = useState(initialSessionId)
   const [feedback, setFeedback] = useState('')
   const [draft, setDraft] = useState<DiyCloudDraft | null>(null)
   const [activeStep, setActiveStep] = useState<StepId | null>(null)
   const [selectedStep, setSelectedStep] = useState<StepId>('think')
   const [completedSteps, setCompletedSteps] = useState<Set<StepId>>(new Set())
-  const [typedStatus, setTypedStatus] = useState('')
+  const [generationEvents, setGenerationEvents] = useState<DiyCloudProgressEvent[]>([])
   const [generating, setGenerating] = useState(false)
   const [generationError, setGenerationError] = useState('')
   const [saveTemplate, setSaveTemplate] = useState(true)
@@ -295,7 +291,9 @@ export function DiyCloudPage() {
   const [deployError, setDeployError] = useState('')
   const [keyValues, setKeyValues] = useState<Record<string, string>>({})
   const [skippedKeys, setSkippedKeys] = useState<Set<string>>(new Set())
-  const [activeKey, setActiveKey] = useState<string | null>(null)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [deployGuideOpen, setDeployGuideOpen] = useState(false)
+  const [deployGuideIndex, setDeployGuideIndex] = useState(0)
   const [gate, setGate] = useState<{
     kind: 'membership' | 'wallet' | 'generic'
     title: string
@@ -320,80 +318,194 @@ export function DiyCloudPage() {
     [t],
   )
 
-  useEffect(() => {
-    if (!activeStep) {
-      setTypedStatus('')
-      return
-    }
-    const text = `${stepLabels[activeStep].title}\n${stepLabels[activeStep].detail}`
-    setTypedStatus('')
-    let index = 0
-    const timer = window.setInterval(() => {
-      index += 1
-      setTypedStatus(text.slice(0, index))
-      if (index >= text.length) window.clearInterval(timer)
-    }, 22)
-    return () => window.clearInterval(timer)
-  }, [activeStep, stepLabels])
-
   const completeStep = (id: StepId) => {
     setCompletedSteps((current) => new Set([...current, id]))
+  }
+
+  const scrollToStep = (id: StepId) => {
+    setSelectedStep(id)
+    sectionRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const applyProgressEvent = (event: DiyCloudProgressEvent) => {
+    setGenerationEvents((current) =>
+      current.some((item) => item.id === event.id) ? current : [...current, event].slice(-80),
+    )
+    setActiveStep(event.step)
+    setSelectedStep(event.step)
+    if (event.status === 'completed' || event.status === 'warning') {
+      completeStep(event.step)
+    }
+  }
+
+  const applySessionPayload = (session: DiyCloudSession) => {
+    setSessionId(session.sessionId)
+    if (session.input?.prompt) setPrompt(session.input.prompt)
+
+    const url = new URL(window.location.href)
+    url.searchParams.set('session', session.sessionId)
+    url.searchParams.delete('prompt')
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+  }
+
+  const applyDraft = (nextDraft: DiyCloudDraft) => {
+    setDraft(nextDraft)
+    setKeyValues({})
+    setSkippedKeys(new Set())
+    setActiveStep('review')
+    setSelectedStep('review')
+    setFeedback('')
+    setFeedbackOpen(false)
+  }
+
+  const consumeGenerationStream = async (response: Response) => {
+    if (!response.body) throw new Error(t('diyCloud.errors.generateFailed'))
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let receivedDraft = false
+    const processBlock = (block: string) => {
+      const message = parseSseBlock(block)
+      if (!message.data) return
+      const data = JSON.parse(message.data) as unknown
+      if (message.event === 'session' && isSessionPayload(data)) {
+        applySessionPayload(data)
+        return
+      }
+      if (message.event === 'progress' && isProgressEvent(data)) {
+        applyProgressEvent(data)
+        return
+      }
+      if (message.event === 'draft' && isDraftPayload(data)) {
+        receivedDraft = true
+        applyDraft(data.draft)
+        return
+      }
+      if (message.event === 'error') {
+        const errorPayload = data as { error?: string }
+        throw new Error(errorPayload.error || t('diyCloud.errors.generateFailed'))
+      }
+    }
+
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let boundary = buffer.indexOf('\n\n')
+      while (boundary >= 0) {
+        const block = buffer.slice(0, boundary).trim()
+        buffer = buffer.slice(boundary + 2)
+        if (block) processBlock(block)
+        boundary = buffer.indexOf('\n\n')
+      }
+    }
+    const tail = buffer.trim()
+    if (tail) processBlock(tail)
+    return receivedDraft
   }
 
   const runGeneration = async (nextPrompt = prompt, nextFeedback = '') => {
     const trimmed = nextPrompt.trim()
     if (!trimmed || generating) return
 
+    generationAbortRef.current?.abort()
+    const controller = new AbortController()
+    generationAbortRef.current = controller
+    const previousConfig = draft?.template
     setGenerating(true)
     setGenerationError('')
     setDeployError('')
     setGate(null)
     setDraft(null)
+    setSessionId('')
+    setGenerationEvents([])
     setCompletedSteps(new Set())
+    setDeployGuideIndex(0)
     try {
       setActiveStep('think')
       setSelectedStep('think')
 
-      const generated = await fetchApi<DiyCloudDraft>('/api/cloud-saas/diy/generate', {
+      const response = await fetchApiResponse('/api/cloud-saas/diy/generate/stream', {
         method: 'POST',
+        signal: controller.signal,
         body: JSON.stringify({
           prompt: trimmed,
           feedback: nextFeedback || undefined,
-          previousConfig: draft?.template,
+          previousConfig,
           locale: i18n.language,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       })
-      setDraft(generated)
-      setKeyValues({})
-      setSkippedKeys(new Set())
-      setActiveKey(generated.requiredKeys[0]?.key ?? null)
-      completeStep('think')
-      completeStep('search')
-      completeStep('generate')
-
-      setActiveStep('validate')
-      setSelectedStep('validate')
-      if (generated.validation.valid) {
-        completeStep('validate')
-      }
-
-      setActiveStep('review')
-      setSelectedStep('review')
-      setFeedback('')
+      const receivedDraft = await consumeGenerationStream(response)
+      if (!receivedDraft) throw new Error(t('diyCloud.errors.generateFailed'))
     } catch (err) {
-      setGenerationError(getApiErrorMessage(err, t, 'diyCloud.errors.generateFailed'))
-      setActiveStep(null)
+      if (!(err instanceof DOMException && err.name === 'AbortError')) {
+        setGenerationError(getApiErrorMessage(err, t, 'diyCloud.errors.generateFailed'))
+        setActiveStep(null)
+      }
     } finally {
       setGenerating(false)
+      if (generationAbortRef.current === controller) {
+        generationAbortRef.current = null
+      }
     }
   }
 
+  const resumeGeneration = async (nextSessionId = sessionId) => {
+    const trimmed = nextSessionId.trim()
+    if (!trimmed || generating) return
+
+    generationAbortRef.current?.abort()
+    const controller = new AbortController()
+    generationAbortRef.current = controller
+    setGenerating(true)
+    setGenerationError('')
+    setDeployError('')
+    setGate(null)
+    setDraft(null)
+    setSessionId(trimmed)
+    setGenerationEvents([])
+    setCompletedSteps(new Set())
+    setDeployGuideIndex(0)
+
+    try {
+      setActiveStep('think')
+      setSelectedStep('think')
+      const response = await fetchApiResponse(
+        `/api/cloud-saas/diy/sessions/${encodeURIComponent(trimmed)}/stream`,
+        { signal: controller.signal },
+      )
+      const receivedDraft = await consumeGenerationStream(response)
+      if (!receivedDraft) throw new Error(t('diyCloud.errors.generateFailed'))
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === 'AbortError')) {
+        setGenerationError(getApiErrorMessage(err, t, 'diyCloud.errors.generateFailed'))
+        setActiveStep(null)
+      }
+    } finally {
+      setGenerating(false)
+      if (generationAbortRef.current === controller) {
+        generationAbortRef.current = null
+      }
+    }
+  }
+
+  useEffect(() => () => generationAbortRef.current?.abort(), [])
+
   useEffect(() => {
-    if (autoStartedRef.current || !initialPrompt.trim()) return
+    if (autoStartedRef.current || !initialSessionId.trim()) return
+    autoStartedRef.current = true
+    void resumeGeneration(initialSessionId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSessionId])
+
+  useEffect(() => {
+    if (autoStartedRef.current || initialSessionId.trim() || !initialPrompt.trim()) return
     autoStartedRef.current = true
     void runGeneration(initialPrompt)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPrompt])
+  }, [initialPrompt, initialSessionId])
 
   const saveDraftTemplate = async (
     currentDraft: DiyCloudDraft,
@@ -524,9 +636,6 @@ export function DiyCloudPage() {
   const draftChannels = draft ? getTemplateChannels(draft.template) : []
   const draftBuddies = draft ? getTemplateBuddyNames(draft.template) : []
   const draftPlugins = draft ? getTemplatePlugins(draft.template) : []
-  const selectedGeneratedStep = draft?.steps.find((step) => step.id === selectedStep)
-  const activeRequiredKey =
-    draft?.requiredKeys.find((item) => item.key === activeKey) ?? draft?.requiredKeys[0] ?? null
   const preparedKeyCount = draft
     ? draft.requiredKeys.filter((key) => keyValues[key.key]?.trim() || skippedKeys.has(key.key))
         .length
@@ -547,143 +656,272 @@ export function DiyCloudPage() {
     { title: t('diyCloud.stage.buddiesTitle'), items: draftBuddies, Icon: MessageSquare },
     { title: t('diyCloud.stage.pluginsTitle'), items: draftPlugins, Icon: FileCode2 },
   ]
+  const progressByStep = useMemo(() => {
+    const map = new Map<StepId, DiyCloudProgressEvent>()
+    for (const event of generationEvents) map.set(event.step, event)
+    return map
+  }, [generationEvents])
+  const stepOutputsByStep = useMemo(() => {
+    const map = new Map<StepId, DiyCloudAgentStepOutput>()
+    for (const output of draft?.agentOutputs ?? []) map.set(output.step, output)
+    for (const event of generationEvents) {
+      if (event.output) map.set(event.step, event.output)
+    }
+    return map
+  }, [draft, generationEvents])
+  const latestProgress = generationEvents[generationEvents.length - 1] ?? null
+  const generationPercent = progressValue(completedSteps.size, STEP_ORDER.length, generating)
+  const reasoningByStep = useMemo(() => {
+    const map = new Map<StepId, DiyCloudDraft['agentReport']['reasoning'][number]>()
+    for (const item of draft?.agentReport.reasoning ?? []) map.set(item.step, item)
+    return map
+  }, [draft])
 
-  return (
-    <main className="flex h-full min-h-0 flex-col overflow-hidden rounded-[28px] border border-white/10 bg-bg-deep/80 backdrop-blur-xl">
-      <div className="min-h-0 flex-1 overflow-auto p-4 pb-28 md:p-6 md:pb-28">
-        <section className="mx-auto grid w-full max-w-5xl gap-4">
-          <div className="flex justify-center">
-            <Badge variant="primary" className="w-fit">
-              <WandSparkles size={13} />
-              {t('diyCloud.eyebrow')}
+  const renderLiveStepState = (id: StepId) => {
+    const event = progressByStep.get(id)
+    if (!event) return null
+    return (
+      <div className="mt-4 rounded-[18px] border border-white/10 bg-black/5 p-4">
+        <div className="text-xs font-black uppercase tracking-[0.16em] text-primary">
+          {t('diyCloud.realProgress')}
+        </div>
+        <p className="mt-2 text-base font-black leading-relaxed text-text-primary">{event.title}</p>
+        <p className="mt-2 text-sm font-bold leading-relaxed text-text-muted">{event.detail}</p>
+      </div>
+    )
+  }
+
+  const renderReasoningEvidence = (items: string[]) => {
+    if (items.length === 0) return null
+    return (
+      <div className="mt-4 grid gap-2 md:grid-cols-2">
+        {items.slice(0, 8).map((item, index) => (
+          <div
+            key={`${item}-${index}`}
+            className="rounded-[18px] border border-white/10 bg-black/10 px-4 py-3 text-xs font-bold leading-relaxed text-text-secondary"
+          >
+            {item}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  const renderStepJsonOutput = (id: StepId) => {
+    const output = stepOutputsByStep.get(id)
+    if (!output) return null
+
+    return (
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <div className="rounded-[18px] border border-white/10 bg-black/5 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-xs font-black uppercase tracking-[0.16em] text-primary">
+              {t('diyCloud.agentJsonOutput')}
+            </div>
+            <Badge variant={output.status === 'completed' ? 'success' : 'primary'}>
+              {output.confidence !== undefined
+                ? `${Math.round(output.confidence * 100)}%`
+                : output.status}
             </Badge>
           </div>
-          <form
-            className="rounded-[32px] border border-white/10 bg-white/[0.03] p-4 shadow-2xl shadow-black/20"
-            onSubmit={(event) => {
-              event.preventDefault()
-              void runGeneration(prompt)
-            }}
-          >
-            <label className="block">
-              <span className="mb-2 block text-xs font-black uppercase tracking-[0.18em] text-text-muted">
-                {t('diyCloud.promptLabel')}
-              </span>
-              <Textarea
-                value={prompt}
-                onChange={(event) => setPrompt(event.currentTarget.value)}
-                placeholder={t('diyCloud.promptPlaceholder')}
-                readOnly={Boolean(draft) || generating || deployBusy}
-                className="min-h-[116px] resize-none border-0 bg-black/20 text-lg font-black leading-relaxed"
-                aria-label={t('diyCloud.promptLabel')}
-              />
-            </label>
-
-            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-xs font-bold leading-relaxed text-text-muted">
-                {draft ? t('diyCloud.requestLocked') : t('diyCloud.requestHint')}
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-[18px] border border-white/10 bg-black/10 px-4 py-3">
+              <div className="text-[11px] font-black uppercase tracking-[0.14em] text-text-muted">
+                {t('diyCloud.agentLocale')}
               </div>
-              <Button
-                type="submit"
-                size="md"
-                loading={generating}
-                icon={Sparkles}
-                disabled={!prompt.trim() || generating || deployBusy || Boolean(draft)}
-              >
-                {t('diyCloud.generate')}
-              </Button>
+              <div className="mt-1 text-sm font-black text-text-primary">{output.locale}</div>
             </div>
-          </form>
-        </section>
-
-        <nav className="mx-auto mt-5 flex max-w-6xl gap-2 overflow-x-auto rounded-3xl border border-white/10 bg-white/[0.03] p-2">
-          {STEP_ORDER.map((id, index) => {
-            const complete = completedSteps.has(id)
-            const running = generating && activeStep === id
-            const active = selectedStep === id
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setSelectedStep(id)}
-                className={cn(
-                  'flex min-w-[210px] flex-1 gap-3 rounded-2xl border p-3 text-left transition',
-                  active
-                    ? 'border-primary/50 bg-primary/10'
-                    : complete
-                      ? 'border-success/30 bg-success/5'
-                      : 'border-white/10 bg-white/[0.03]',
-                )}
-              >
+            <div className="rounded-[18px] border border-white/10 bg-black/10 px-4 py-3">
+              <div className="text-[11px] font-black uppercase tracking-[0.14em] text-text-muted">
+                {t('diyCloud.agentTimezone')}
+              </div>
+              <div className="mt-1 text-sm font-black text-text-primary">{output.timezone}</div>
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="text-xs font-black uppercase tracking-[0.16em] text-text-muted">
+              {t('diyCloud.agentResult')}
+            </div>
+            <pre className="mt-3 max-h-[360px] overflow-auto rounded-[18px] border border-white/10 bg-black/25 p-4 text-xs font-bold leading-relaxed text-text-secondary">
+              {formatJson(output.result)}
+            </pre>
+          </div>
+          <div className="mt-4">
+            <div className="text-xs font-black uppercase tracking-[0.16em] text-text-muted">
+              {t('diyCloud.agentReasons')}
+            </div>
+            <div className="mt-3 space-y-2">
+              {output.reasons.map((reason, index) => (
                 <div
-                  className={cn(
-                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black',
-                    running
-                      ? 'bg-primary text-bg-deep'
-                      : complete
-                        ? 'bg-success text-bg-deep'
-                        : 'bg-white/10 text-text-muted',
-                  )}
+                  key={`${output.step}-${reason}-${index}`}
+                  className="rounded-[16px] border border-white/10 bg-white/[0.04] px-4 py-3 text-xs font-bold leading-relaxed text-text-secondary"
                 >
-                  {running ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : complete ? (
-                    <CheckCircle2 size={16} />
-                  ) : (
-                    index + 1
+                  {reason}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="rounded-[18px] border border-white/10 bg-black/5 p-4">
+          <div className="text-xs font-black uppercase tracking-[0.16em] text-primary">
+            {t('diyCloud.agentRawOutput')}
+          </div>
+          <pre className="mt-4 max-h-[620px] overflow-auto rounded-[18px] border border-white/10 bg-black/25 p-4 text-xs font-bold leading-relaxed text-text-secondary">
+            {formatJson(output.raw)}
+          </pre>
+        </div>
+      </div>
+    )
+  }
+
+  const renderStepPanel = ({
+    id,
+    index,
+    children,
+  }: {
+    id: StepId
+    index: number
+    children?: ReactNode
+  }) => {
+    const hasStepData =
+      completedSteps.has(id) ||
+      progressByStep.has(id) ||
+      stepOutputsByStep.has(id) ||
+      reasoningByStep.has(id)
+    const hasRunningContext = generating || Boolean(draft)
+    const shouldRenderStep = hasStepData || (hasRunningContext && activeStep === id)
+
+    if (!shouldRenderStep) return null
+
+    const reasoning = reasoningByStep.get(id)
+    return (
+      <section
+        id={`diy-step-${id}`}
+        ref={(node) => {
+          sectionRefs.current[id] = node
+        }}
+        className="scroll-mt-5 border-b border-white/10 pb-8 pt-2 last:border-b-0"
+      >
+        <StepHeading
+          index={index}
+          title={reasoning?.title ?? stepLabels[id].title}
+          detail={progressByStep.get(id)?.detail ?? reasoning?.detail ?? stepLabels[id].detail}
+        />
+        {children ?? renderLiveStepState(id)}
+        {debugMode && renderStepJsonOutput(id)}
+      </section>
+    )
+  }
+
+  return (
+    <main className="flex h-full min-h-0 gap-4 overflow-hidden">
+      <GlassPanel as="aside" className="hidden w-[300px] shrink-0 flex-col overflow-hidden md:flex">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <DiyStepDirectory
+            activeStep={activeStep}
+            completedSteps={completedSteps}
+            embedded
+            generating={generating}
+            progressByStep={progressByStep}
+            selectedStep={selectedStep}
+            stepLabels={stepLabels}
+            onSelectStep={scrollToStep}
+          />
+        </div>
+      </GlassPanel>
+
+      <GlassPanel className="flex min-w-0 flex-1 flex-col overflow-hidden p-0">
+        <GlassHeader className="gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Sparkles size={16} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="m-0 truncate text-[15px] font-black uppercase tracking-tight text-text-primary">
+              {t('diyCloud.title')}
+            </h1>
+          </div>
+          <Badge
+            variant={draft?.validation.valid ? 'success' : 'primary'}
+            className="hidden sm:flex"
+          >
+            {draft ? t('diyCloud.score', { score: draft.score }) : t('diyCloud.eyebrow')}
+          </Badge>
+        </GlassHeader>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+          <div className="mx-auto grid max-w-6xl gap-5">
+            <div className="rounded-[28px] border border-white/10 bg-black/15 p-5 md:p-6">
+              <form
+                className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void runGeneration(prompt)
+                }}
+              >
+                <label className="min-w-0">
+                  <span className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-text-muted">
+                    <WandSparkles size={14} className="text-primary" />
+                    {t('diyCloud.promptLabel')}
+                  </span>
+                  <Textarea
+                    value={prompt}
+                    onChange={(event) => setPrompt(event.currentTarget.value)}
+                    placeholder={t('diyCloud.promptPlaceholder')}
+                    readOnly={Boolean(draft) || generating || deployBusy}
+                    className="min-h-[168px] resize-none rounded-[26px] border-white/10 bg-black/15 text-base font-bold leading-relaxed md:text-xl"
+                    aria-label={t('diyCloud.promptLabel')}
+                  />
+                </label>
+                <div className="flex min-w-0 flex-col justify-between gap-5 rounded-[26px] border border-white/10 bg-white/[0.035] p-5">
+                  <div>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Badge variant="primary" className="w-fit">
+                        <Sparkles size={13} />
+                        {t('diyCloud.eyebrow')}
+                      </Badge>
+                    </div>
+                    <div className="mt-5">
+                      <div className="flex items-center justify-between gap-3 text-xs font-black uppercase tracking-[0.16em] text-text-muted">
+                        <span>{t('diyCloud.progressTitle')}</span>
+                        <span>{generationPercent}%</span>
+                      </div>
+                      <Progress value={generationPercent} className="mt-3" />
+                      <p className="mt-4 text-sm font-black leading-relaxed text-text-primary">
+                        {latestProgress?.title ?? t('diyCloud.progressIdle')}
+                      </p>
+                      {latestProgress?.detail && (
+                        <p className="mt-2 text-xs font-bold leading-relaxed text-text-muted">
+                          {latestProgress.detail}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {!draft && (
+                    <Button
+                      type="submit"
+                      size="md"
+                      loading={generating}
+                      icon={Sparkles}
+                      className="w-full"
+                      disabled={!prompt.trim() || generating || deployBusy}
+                    >
+                      {t('diyCloud.generate')}
+                    </Button>
                   )}
                 </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-black text-text-primary">{stepLabels[id].title}</div>
-                  <div className="mt-1 text-xs font-bold leading-relaxed text-text-muted">
-                    {stepLabels[id].detail}
-                  </div>
-                </div>
-              </button>
-            )
-          })}
-        </nav>
+              </form>
+            </div>
 
-        <section className="mx-auto min-w-0 max-w-6xl pt-5">
-          {generating && activeStep && (
-            <Card variant="glassPanel" className="mb-5 p-5">
-              <div className="flex items-start gap-3">
-                <Loader2 className="mt-1 shrink-0 animate-spin text-primary" size={20} />
-                <div>
-                  <div className="whitespace-pre-line text-base font-black leading-relaxed text-text-primary">
-                    {typedStatus}
-                  </div>
-                  <div className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-primary">
-                    {t('diyCloud.realProgress')}
-                  </div>
-                </div>
-              </div>
-            </Card>
-          )}
+            {generationError && (
+              <Alert variant="destructive">
+                <XCircle size={18} />
+                <AlertDescription>{generationError}</AlertDescription>
+              </Alert>
+            )}
 
-          {generationError && (
-            <Alert variant="destructive" className="mb-5">
-              <XCircle size={18} />
-              <AlertDescription>{generationError}</AlertDescription>
-            </Alert>
-          )}
-
-          {!draft ? (
-            <Card variant="glassPanel" className="mx-auto max-w-3xl p-7 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-                <MessageSquare size={24} />
-              </div>
-              <h2 className="mt-5 mb-0 text-xl font-black text-text-primary">
-                {t('diyCloud.emptyTitle')}
-              </h2>
-              <p className="mx-auto mt-3 max-w-2xl text-sm font-bold leading-relaxed text-text-muted">
-                {t('diyCloud.emptyBody')}
-              </p>
-            </Card>
-          ) : (
-            <div className="space-y-5">
-              <Card variant="glassPanel" className="overflow-hidden p-0">
-                <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_280px]">
+            {draft && (
+              <div className="overflow-hidden rounded-[28px] border border-white/10 bg-black/15">
+                <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_320px]">
                   <div className="p-6">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant={scoreVariant(draft.score)}>
@@ -702,10 +940,10 @@ export function DiyCloudPage() {
                         })}
                       </Badge>
                     </div>
-                    <h2 className="mt-5 mb-0 text-3xl font-black leading-tight text-text-primary">
+                    <h2 className="mt-5 mb-0 text-2xl font-black leading-tight text-text-primary md:text-3xl">
                       {draft.title}
                     </h2>
-                    <p className="mt-3 max-w-3xl text-base font-bold leading-relaxed text-text-muted">
+                    <p className="mt-3 max-w-3xl text-sm font-bold leading-relaxed text-text-muted md:text-base">
                       {draft.description}
                     </p>
                   </div>
@@ -713,471 +951,275 @@ export function DiyCloudPage() {
                     <div className="text-xs font-black uppercase tracking-[0.18em] text-text-muted">
                       {t('diyCloud.stage.spaceShapeTitle')}
                     </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <Badge variant="neutral">
-                        <Server size={13} />
-                        {draftChannels.length}
-                      </Badge>
-                      <Badge variant="neutral">
-                        <Bot size={13} />
-                        {draftBuddies.length}
-                      </Badge>
-                      <Badge variant="neutral">
-                        <Layers3 size={13} />
-                        {draftPlugins.length}
-                      </Badge>
+                    <div className="mt-4 grid grid-cols-3 gap-2">
+                      <div className="rounded-[18px] border border-white/10 bg-black/8 p-3 text-center">
+                        <Server size={16} className="mx-auto text-primary" />
+                        <div className="mt-2 text-lg font-black text-text-primary">
+                          {draftChannels.length}
+                        </div>
+                      </div>
+                      <div className="rounded-[18px] border border-white/10 bg-black/8 p-3 text-center">
+                        <Bot size={16} className="mx-auto text-primary" />
+                        <div className="mt-2 text-lg font-black text-text-primary">
+                          {draftBuddies.length}
+                        </div>
+                      </div>
+                      <div className="rounded-[18px] border border-white/10 bg-black/8 p-3 text-center">
+                        <Layers3 size={16} className="mx-auto text-primary" />
+                        <div className="mt-2 text-lg font-black text-text-primary">
+                          {draftPlugins.length}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </Card>
-
-              <div className="grid gap-5">
-                <Card variant="glassPanel" className="min-h-[560px] p-6">
-                  {selectedGeneratedStep && (
-                    <div className="mb-6 flex flex-col gap-4 rounded-3xl border border-primary/20 bg-primary/10 p-5 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <div className="text-xs font-black uppercase tracking-[0.18em] text-primary">
-                          {selectedGeneratedStep.title}
-                        </div>
-                        <p className="mt-2 max-w-3xl text-sm font-bold leading-relaxed text-text-secondary">
-                          {selectedGeneratedStep.detail}
-                        </p>
-                      </div>
-                      <Badge variant="primary">{t('diyCloud.stage.focus')}</Badge>
-                    </div>
-                  )}
-
-                  {selectedStep === 'think' && (
-                    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-                      <div className="rounded-3xl bg-white/[0.04] p-6">
-                        <div className="flex items-center gap-3 text-lg font-black text-text-primary">
-                          <Compass size={20} className="text-primary" />
-                          {t('diyCloud.stage.goalTitle')}
-                        </div>
-                        <p className="mt-4 text-xl font-black leading-relaxed text-text-primary">
-                          {draft.description}
-                        </p>
-                        <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                          {draft.suggestedSkills.slice(0, 3).map((skill, index) => (
-                            <div key={`${skill}-${index}`} className="rounded-2xl bg-black/10 p-4">
-                              <div className="text-xs font-black uppercase tracking-[0.16em] text-primary">
-                                {t('diyCloud.stage.outcome')} {index + 1}
-                              </div>
-                              <div className="mt-2 text-sm font-black text-text-primary">
-                                {skill}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="rounded-3xl bg-white/[0.04] p-6">
-                        <div className="text-sm font-black text-text-primary">
-                          {t('diyCloud.stage.spaceShapeTitle')}
-                        </div>
-                        <div className="mt-4 space-y-3">
-                          {[...draftChannels, ...draftBuddies].map((item, index) => (
-                            <div
-                              key={`${item}-${index}`}
-                              className="rounded-2xl border border-white/10 bg-black/10 px-4 py-3 text-sm font-bold text-text-secondary"
-                            >
-                              {item}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedStep === 'search' && (
-                    <div className="space-y-5">
-                      <div className="grid gap-3 md:grid-cols-2">
-                        {draft.toolTrace.slice(0, 4).map((trace, index) => (
-                          <div
-                            key={`${trace.tool}-${trace.query}-${index}`}
-                            className="rounded-2xl bg-white/[0.04] p-4"
-                          >
-                            <div className="text-xs font-black uppercase tracking-[0.16em] text-primary">
-                              {trace.tool === 'search_plugins'
-                                ? t('diyCloud.stage.toolPluginSearch')
-                                : t('diyCloud.stage.toolTemplateSearch')}
-                            </div>
-                            <div className="mt-2 text-sm font-black text-text-primary">
-                              {trace.query}
-                            </div>
-                            <p className="mt-2 text-xs font-bold text-text-muted">
-                              {trace.resultIds.slice(0, 4).join(' / ')}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
-                        <div>
-                          <div className="mb-3 flex items-center gap-2 text-sm font-black text-text-primary">
-                            <Layers3 size={17} className="text-primary" />
-                            {t('diyCloud.pluginsTitle')}
-                          </div>
-                          <div className="grid gap-3 md:grid-cols-2">
-                            {draft.matchedPlugins.map((plugin) => (
-                              <div key={plugin.id} className="rounded-2xl bg-white/[0.04] p-4">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <strong className="text-sm text-text-primary">
-                                    {plugin.name}
-                                  </strong>
-                                  <Badge variant="neutral">{plugin.id}</Badge>
-                                </div>
-                                <p className="mt-2 text-xs font-bold leading-relaxed text-text-muted">
-                                  {plugin.reason}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="rounded-2xl bg-white/[0.04] p-5">
-                          <div className="mb-3 flex items-center gap-2 text-sm font-black text-text-primary">
-                            <BookOpenCheck size={17} className="text-primary" />
-                            {t('diyCloud.referenceTemplatesTitle')}
-                          </div>
-                          <div className="space-y-3">
-                            {draft.referenceTemplates.slice(0, 3).map((template) => (
-                              <div key={template.slug} className="rounded-xl bg-black/10 p-3">
-                                <strong className="text-sm text-text-primary">
-                                  {template.title}
-                                </strong>
-                                <p className="mt-1 text-xs font-bold leading-relaxed text-text-muted">
-                                  {template.reason}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedStep === 'generate' && (
-                    <div className="space-y-5">
-                      <div className="grid gap-4 md:grid-cols-3">
-                        {outlineCards.map(({ title, items, Icon }) => (
-                          <div key={title} className="rounded-3xl bg-white/[0.04] p-5">
-                            <div className="flex items-center gap-2 text-sm font-black text-text-primary">
-                              <Icon size={17} className="text-primary" />
-                              {title}
-                            </div>
-                            <div className="mt-4 flex flex-wrap gap-2">
-                              {items.map((item, index) => (
-                                <Badge key={`${title}-${item}-${index}`} variant="neutral">
-                                  {item}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="rounded-3xl bg-black/10 p-5">
-                        <div className="flex items-center gap-2 text-sm font-black text-text-primary">
-                          <FileCode2 size={17} className="text-primary" />
-                          {t('diyCloud.stage.runtimeTitle')}
-                        </div>
-                        <p className="mt-3 text-sm font-bold leading-relaxed text-text-muted">
-                          {t('diyCloud.stage.runtimeBody')}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedStep === 'validate' && (
-                    <div className="grid gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
-                      <div className="rounded-3xl bg-white/[0.04] p-5">
-                        <Badge variant={scoreVariant(draft.score)}>
-                          <ShieldCheck size={13} />
-                          {t('diyCloud.score', { score: draft.score })}
-                        </Badge>
-                        <p className="mt-4 text-sm font-bold leading-relaxed text-text-muted">
-                          {draft.validation.valid
-                            ? t('diyCloud.validationPassed')
-                            : t('diyCloud.validationNeedsReview')}
-                        </p>
-                        <div className="mt-6 text-xs font-black uppercase tracking-[0.16em] text-text-muted">
-                          {t('diyCloud.keyProgress', {
-                            done: preparedKeyCount,
-                            total: draft.requiredKeys.length,
-                          })}
-                        </div>
-                      </div>
-                      <div className="rounded-3xl bg-white/[0.04] p-5">
-                        <div className="flex items-center gap-2 text-sm font-black text-text-primary">
-                          <ClipboardCheck size={17} className="text-primary" />
-                          {t('diyCloud.validationChecklistTitle')}
-                        </div>
-                        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                          <div className="rounded-2xl bg-black/10 p-4">
-                            <div className="text-xs font-black uppercase tracking-[0.16em] text-text-muted">
-                              {t('diyCloud.validationAgents')}
-                            </div>
-                            <div className="mt-2 text-2xl font-black text-text-primary">
-                              {draft.validation.agents}
-                            </div>
-                          </div>
-                          <div className="rounded-2xl bg-black/10 p-4">
-                            <div className="text-xs font-black uppercase tracking-[0.16em] text-text-muted">
-                              {t('diyCloud.validationConfigurations')}
-                            </div>
-                            <div className="mt-2 text-2xl font-black text-text-primary">
-                              {draft.validation.configurations}
-                            </div>
-                          </div>
-                          <div className="rounded-2xl bg-black/10 p-4">
-                            <div className="text-xs font-black uppercase tracking-[0.16em] text-text-muted">
-                              {t('diyCloud.validationSecrets')}
-                            </div>
-                            <div className="mt-2 text-2xl font-black text-text-primary">
-                              {draft.validation.templateRefs.secret}
-                            </div>
-                          </div>
-                          <div className="rounded-2xl bg-black/10 p-4">
-                            <div className="text-xs font-black uppercase tracking-[0.16em] text-text-muted">
-                              {t('diyCloud.validationIssues')}
-                            </div>
-                            <div className="mt-2 text-2xl font-black text-text-primary">
-                              {draft.validation.violations.length +
-                                draft.validation.extendsErrors.length}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedStep === 'review' && (
-                    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-                      <div className="space-y-5">
-                        <div className="rounded-3xl bg-white/[0.04] p-5">
-                          <div className="mb-4 flex items-center gap-2">
-                            <ClipboardCheck size={18} className="text-primary" />
-                            <h3 className="m-0 text-lg font-black text-text-primary">
-                              {t('diyCloud.guidebookTitle')}
-                            </h3>
-                          </div>
-                          <p className="text-base font-bold leading-relaxed text-text-secondary">
-                            {draft.guidebook.summary}
-                          </p>
-                          <div className="mt-5 space-y-3">
-                            {draft.guidebook.howToUse.slice(0, 4).map((item, index) => (
-                              <div
-                                key={`${item}-${index}`}
-                                className="rounded-2xl bg-black/10 p-4 text-sm font-bold leading-relaxed text-text-muted"
-                              >
-                                {item}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="rounded-3xl bg-white/[0.04] p-5">
-                          <h3 className="m-0 text-lg font-black text-text-primary">
-                            {t('diyCloud.feedbackTitle')}
-                          </h3>
-                          <p className="mt-2 text-sm font-bold text-text-muted">
-                            {t('diyCloud.feedbackBody')}
-                          </p>
-                          <Textarea
-                            value={feedback}
-                            onChange={(event) => setFeedback(event.currentTarget.value)}
-                            placeholder={t('diyCloud.feedbackPlaceholder')}
-                            className="mt-4 min-h-[96px]"
-                            aria-label={t('diyCloud.feedbackTitle')}
-                          />
-                          <Button
-                            type="button"
-                            variant="glass"
-                            className="mt-4"
-                            icon={RefreshCcw}
-                            loading={generating}
-                            disabled={!feedback.trim() || generating || deployBusy}
-                            onClick={() => void runGeneration(prompt, feedback)}
-                          >
-                            {t('diyCloud.applyFeedback')}
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="rounded-3xl bg-white/[0.04] p-5">
-                        {draft.requiredKeys.length > 0 && (
-                          <div className="rounded-2xl bg-black/10 p-4">
-                            <div className="mb-3 flex items-center gap-2 text-sm font-black text-text-primary">
-                              <KeyRound size={16} className="text-primary" />
-                              {t('diyCloud.keyChecklistTitle')}
-                            </div>
-                            <div className="space-y-2">
-                              {draft.requiredKeys.map((key) => {
-                                const skipped = skippedKeys.has(key.key)
-                                const filled = Boolean(keyValues[key.key]?.trim())
-                                return (
-                                  <button
-                                    key={key.key}
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveKey(key.key)
-                                    }}
-                                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-left"
-                                  >
-                                    <span className="min-w-0 text-xs font-black text-text-primary">
-                                      {key.label}
-                                    </span>
-                                    <Badge variant={filled || skipped ? 'success' : 'neutral'}>
-                                      {filled
-                                        ? t('diyCloud.keyFilled')
-                                        : skipped
-                                          ? t('diyCloud.keySkipped')
-                                          : t('diyCloud.stage.focus')}
-                                    </Badge>
-                                  </button>
-                                )
-                              })}
-                            </div>
-                            {activeRequiredKey && (
-                              <div className="mt-4 rounded-2xl bg-black/10 p-4">
-                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                  <div>
-                                    <h4 className="m-0 text-base font-black text-text-primary">
-                                      {activeRequiredKey.label}
-                                    </h4>
-                                    <p className="mt-1 text-xs font-bold leading-relaxed text-text-muted">
-                                      {activeRequiredKey.description}
-                                    </p>
-                                  </div>
-                                  <Badge variant="neutral">{activeRequiredKey.source}</Badge>
-                                </div>
-                                <ol className="mt-4 space-y-2 p-0">
-                                  {activeRequiredKey.setupSteps.map((step, index) => (
-                                    <li
-                                      key={`${activeRequiredKey.key}-${step}-${index}`}
-                                      className="flex gap-2 text-xs font-bold leading-relaxed text-text-secondary"
-                                    >
-                                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-black text-bg-deep">
-                                        {index + 1}
-                                      </span>
-                                      <span>{step}</span>
-                                    </li>
-                                  ))}
-                                </ol>
-                                <Textarea
-                                  value={keyValues[activeRequiredKey.key] ?? ''}
-                                  onChange={(event) => {
-                                    const value = event.currentTarget.value
-                                    setKeyValues((current) => ({
-                                      ...current,
-                                      [activeRequiredKey.key]: value,
-                                    }))
-                                    if (value.trim()) {
-                                      setSkippedKeys((current) => {
-                                        const next = new Set(current)
-                                        next.delete(activeRequiredKey.key)
-                                        return next
-                                      })
-                                    }
-                                  }}
-                                  placeholder={t('diyCloud.keyValuePlaceholder')}
-                                  className="mt-4 min-h-[86px]"
-                                  aria-label={activeRequiredKey.label}
-                                />
-                                <div className="mt-3 flex flex-wrap items-center gap-2">
-                                  <Button
-                                    type="button"
-                                    variant="glass"
-                                    size="sm"
-                                    icon={EyeOff}
-                                    onClick={() =>
-                                      setSkippedKeys((current) => {
-                                        const next = new Set(current)
-                                        next.add(activeRequiredKey.key)
-                                        return next
-                                      })
-                                    }
-                                  >
-                                    {t('diyCloud.skipKey')}
-                                  </Button>
-                                  {skippedKeys.has(activeRequiredKey.key) && (
-                                    <span className="text-xs font-bold leading-relaxed text-text-muted">
-                                      {activeRequiredKey.skipImpact}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {!requiredKeysReady && (
-                          <Alert variant="warning" className="mt-5">
-                            <KeyRound size={18} />
-                            <AlertDescription>
-                              {t('diyCloud.keysRequiredBeforeDeploy')}
-                            </AlertDescription>
-                          </Alert>
-                        )}
-
-                        {gate && (
-                          <Alert
-                            variant={gate.kind === 'wallet' ? 'warning' : 'info'}
-                            className="mt-5"
-                          >
-                            {gate.kind === 'wallet' ? (
-                              <Wallet size={18} />
-                            ) : (
-                              <ShieldCheck size={18} />
-                            )}
-                            <AlertDescription>
-                              <strong className="block text-sm">{gate.title}</strong>
-                              <span className="mt-1 block">{gate.body}</span>
-                              <div className="mt-4 flex flex-wrap gap-2">
-                                {gate.primaryHref && gate.primaryLabel && (
-                                  <Button
-                                    asChild
-                                    variant="primary"
-                                    size="sm"
-                                    className="normal-case tracking-normal"
-                                  >
-                                    <a href={gate.primaryHref}>{gate.primaryLabel}</a>
-                                  </Button>
-                                )}
-                                {gate.secondaryHref && gate.secondaryLabel && (
-                                  <Button asChild variant="glass" size="sm">
-                                    <a href={gate.secondaryHref}>{gate.secondaryLabel}</a>
-                                  </Button>
-                                )}
-                              </div>
-                            </AlertDescription>
-                          </Alert>
-                        )}
-
-                        {deployError && (
-                          <Alert variant="destructive" className="mt-5">
-                            <XCircle size={18} />
-                            <AlertDescription>{deployError}</AlertDescription>
-                          </Alert>
-                        )}
-
-                        {deployPhaseText && (
-                          <div className="mt-5 rounded-2xl bg-primary/10 p-4 text-sm font-black text-primary">
-                            {deployBusy && (
-                              <Loader2 className="mr-2 inline animate-spin" size={16} />
-                            )}
-                            {deployPhaseText}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </Card>
               </div>
-            </div>
-          )}
-        </section>
+            )}
 
+            {renderStepPanel({
+              id: 'think',
+              index: 1,
+              children: draft ? (
+                <>
+                  <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+                    <div className="rounded-3xl bg-white/[0.04] p-5">
+                      <div className="flex items-center gap-2 text-sm font-black text-text-primary">
+                        <Compass size={17} className="text-primary" />
+                        {t('diyCloud.stage.goalTitle')}
+                      </div>
+                      <p className="mt-3 text-lg font-black leading-relaxed text-text-primary">
+                        {draft.description}
+                      </p>
+                      <div className="mt-5 flex flex-wrap gap-2">
+                        {draft.suggestedSkills.slice(0, 5).map((skill, index) => (
+                          <Badge key={`${skill}-${index}`} variant="neutral">
+                            {skill}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-3xl bg-white/[0.04] p-5">
+                      <div className="text-sm font-black text-text-primary">
+                        {t('diyCloud.stage.spaceShapeTitle')}
+                      </div>
+                      <div className="mt-4 space-y-2">
+                        {[...draftChannels, ...draftBuddies].slice(0, 6).map((item, index) => (
+                          <div
+                            key={`${item}-${index}`}
+                            className="rounded-2xl border border-white/10 bg-black/10 px-4 py-3 text-sm font-bold text-text-secondary"
+                          >
+                            {item}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-[24px] border border-white/10 bg-black/10 p-5">
+                    <div className="text-sm font-black text-text-primary">
+                      {t('diyCloud.assumptionsTitle')}
+                    </div>
+                    {renderReasoningEvidence(draft.agentReport.assumptions)}
+                  </div>
+                </>
+              ) : undefined,
+            })}
+
+            {renderStepPanel({
+              id: 'search',
+              index: 2,
+              children: draft ? (
+                <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+                  <div className="space-y-3">
+                    {draft.agentReport.pluginDecisions.slice(0, 6).map((plugin) => (
+                      <div
+                        key={plugin.id}
+                        className="rounded-[22px] border border-white/10 bg-white/[0.04] p-4"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <strong className="text-sm text-text-primary">{plugin.name}</strong>
+                          <Badge variant="neutral">{plugin.id}</Badge>
+                        </div>
+                        <p className="mt-2 text-xs font-bold leading-relaxed text-text-muted">
+                          {plugin.reason}
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {plugin.capabilities.slice(0, 4).map((capability) => (
+                            <Badge key={`${plugin.id}-${capability}`} variant="neutral">
+                              {capability}
+                            </Badge>
+                          ))}
+                          {plugin.requiredKeys.map((key) => (
+                            <Badge key={`${plugin.id}-${key}`} variant="warning">
+                              {key}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                    <div className="flex items-center gap-2 text-sm font-black text-text-primary">
+                      <BookOpenCheck size={17} className="text-primary" />
+                      <span>{t('diyCloud.referenceTemplatesTitle')}</span>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {draft.agentReport.templateDecisions.slice(0, 4).map((template) => (
+                        <div key={template.slug} className="rounded-[18px] bg-black/10 p-3">
+                          <strong className="text-sm text-text-primary">{template.title}</strong>
+                          <p className="mt-1 text-xs font-bold leading-relaxed text-text-muted">
+                            {template.reason}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : undefined,
+            })}
+
+            {renderStepPanel({
+              id: 'generate',
+              index: 3,
+              children: draft ? (
+                <>
+                  <div className="mt-5 grid gap-4 md:grid-cols-3">
+                    {outlineCards.map(({ title, items, Icon }) => (
+                      <div key={title} className="rounded-3xl bg-white/[0.04] p-5">
+                        <div className="flex items-center gap-2 text-sm font-black text-text-primary">
+                          <Icon size={17} className="text-primary" />
+                          {title}
+                        </div>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {items.slice(0, 8).map((item, index) => (
+                            <Badge key={`${title}-${item}-${index}`} variant="neutral">
+                              {item}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 rounded-3xl bg-black/10 p-5">
+                    <div className="flex items-center gap-2 text-sm font-black text-text-primary">
+                      <FileCode2 size={17} className="text-primary" />
+                      {t('diyCloud.stage.runtimeTitle')}
+                    </div>
+                    <p className="mt-3 text-sm font-bold leading-relaxed text-text-muted">
+                      {t('diyCloud.stage.runtimeBody')}
+                    </p>
+                  </div>
+                </>
+              ) : undefined,
+            })}
+
+            {renderStepPanel({
+              id: 'validate',
+              index: 4,
+              children: draft ? (
+                <>
+                  <div className="mt-5 grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+                    <div className="rounded-3xl bg-white/[0.04] p-5">
+                      <Badge variant={scoreVariant(draft.score)}>
+                        <ShieldCheck size={13} />
+                        {t('diyCloud.score', { score: draft.score })}
+                      </Badge>
+                      <p className="mt-4 text-sm font-bold leading-relaxed text-text-muted">
+                        {draft.validation.valid
+                          ? t('diyCloud.validationPassed')
+                          : t('diyCloud.validationNeedsReview')}
+                      </p>
+                      <p className="mt-3 text-xs font-black uppercase tracking-[0.16em] text-text-muted">
+                        {t('diyCloud.keyProgress', {
+                          done: preparedKeyCount,
+                          total: draft.requiredKeys.length,
+                        })}
+                      </p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      {[
+                        [t('diyCloud.validationAgents'), draft.validation.agents],
+                        [t('diyCloud.validationConfigurations'), draft.validation.configurations],
+                        [t('diyCloud.validationSecrets'), draft.validation.templateRefs.secret],
+                        [
+                          t('diyCloud.validationIssues'),
+                          draft.validation.violations.length +
+                            draft.validation.extendsErrors.length,
+                        ],
+                      ].map(([label, value]) => (
+                        <div key={String(label)} className="rounded-2xl bg-white/[0.04] p-4">
+                          <div className="text-xs font-black uppercase tracking-[0.16em] text-text-muted">
+                            {label}
+                          </div>
+                          <div className="mt-2 text-2xl font-black text-text-primary">{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-3">
+                    {draft.agentReport.validationChecks.map((check) => (
+                      <div
+                        key={check.name}
+                        className="rounded-[20px] border border-white/10 bg-black/10 p-4"
+                      >
+                        <Badge variant={check.status === 'passed' ? 'success' : 'warning'}>
+                          {check.name}
+                        </Badge>
+                        <p className="mt-3 text-xs font-bold leading-relaxed text-text-muted">
+                          {check.detail}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : undefined,
+            })}
+
+            {renderStepPanel({
+              id: 'review',
+              index: 5,
+              children: draft ? (
+                <div className="mt-5 grid gap-4">
+                  <div className="rounded-3xl bg-white/[0.04] p-5">
+                    <div className="mb-4 flex items-center gap-2">
+                      <ClipboardCheck size={18} className="text-primary" />
+                      <h3 className="m-0 text-lg font-black text-text-primary">
+                        {t('diyCloud.guidebookTitle')}
+                      </h3>
+                    </div>
+                    <p className="text-base font-bold leading-relaxed text-text-secondary">
+                      {draft.guidebook.summary}
+                    </p>
+                    <div className="mt-5 grid gap-3 md:grid-cols-2">
+                      {draft.guidebook.howToUse.slice(0, 4).map((item, index) => (
+                        <div
+                          key={`${item}-${index}`}
+                          className="rounded-2xl bg-black/10 p-4 text-sm font-bold leading-relaxed text-text-muted"
+                        >
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {[...draft.guidebook.beforeDeploy, ...draft.guidebook.reviewNotes]
+                      .slice(0, 6)
+                      .map((item, index) => (
+                        <div
+                          key={`${item}-${index}`}
+                          className="rounded-[20px] border border-white/10 bg-white/[0.04] p-4 text-sm font-bold leading-relaxed text-text-muted"
+                        >
+                          {item}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              ) : undefined,
+            })}
+          </div>
+        </div>
         {draft && (
-          <div className="sticky bottom-0 z-20 mx-auto mt-6 max-w-6xl rounded-3xl border border-white/10 bg-bg-deep/95 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="shrink-0 border-t border-white/10 bg-bg-deep/35 p-4 backdrop-blur-xl">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={scoreVariant(draft.score)}>
@@ -1190,33 +1232,33 @@ export function DiyCloudPage() {
                       total: draft.requiredKeys.length,
                     })}
                   </Badge>
+                  {deployPhaseText && <Badge variant="primary">{deployPhaseText}</Badge>}
                 </div>
-                <p className="mt-2 text-xs font-bold text-text-muted">
+                <p className="mt-2 text-xs font-bold leading-relaxed text-text-muted">
                   {requiredKeysReady
                     ? t('diyCloud.deployReady')
                     : t('diyCloud.keysRequiredBeforeDeploy')}
                 </p>
               </div>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2">
-                  <Checkbox
-                    checked={saveTemplate}
-                    onCheckedChange={(value) => setSaveTemplate(value === true)}
-                  />
-                  <span className="text-xs font-black text-text-primary">
-                    {t('diyCloud.saveTemplate')}
-                  </span>
-                </label>
+              <div className="grid shrink-0 gap-3 sm:grid-cols-2">
                 <Button
                   type="button"
-                  size="lg"
+                  variant="glass"
+                  icon={RefreshCcw}
+                  disabled={generating || deployBusy}
+                  onClick={() => setFeedbackOpen(true)}
+                >
+                  {t('diyCloud.adjust')}
+                </Button>
+                <Button
+                  type="button"
                   icon={Rocket}
                   iconRight={ArrowRight}
-                  loading={deployBusy}
-                  disabled={
-                    !draft.validation.valid || !requiredKeysReady || deployBusy || generating
-                  }
-                  onClick={() => void deployDraft()}
+                  disabled={!draft.validation.valid || generating || deployBusy}
+                  onClick={() => {
+                    setDeployGuideIndex(0)
+                    setDeployGuideOpen(true)
+                  }}
                 >
                   {t('diyCloud.deploy')}
                 </Button>
@@ -1224,7 +1266,40 @@ export function DiyCloudPage() {
             </div>
           </div>
         )}
-      </div>
+      </GlassPanel>
+
+      <DiyFeedbackModal
+        deployBusy={deployBusy}
+        feedback={feedback}
+        generating={generating}
+        open={feedbackOpen}
+        setFeedback={setFeedback}
+        onApply={() => void runGeneration(prompt, feedback)}
+        onClose={() => setFeedbackOpen(false)}
+      />
+
+      <DiyDeployWizardModal
+        deployBusy={deployBusy}
+        deployError={deployError}
+        deployGuideIndex={deployGuideIndex}
+        deployGuideOpen={deployGuideOpen}
+        deployPhase={deployPhase}
+        deployPhaseText={deployPhaseText}
+        draft={draft}
+        gate={gate}
+        generating={generating}
+        keyValues={keyValues}
+        preparedKeyCount={preparedKeyCount}
+        requiredKeysReady={requiredKeysReady}
+        saveTemplate={saveTemplate}
+        setDeployGuideIndex={setDeployGuideIndex}
+        setKeyValues={setKeyValues}
+        setSaveTemplate={setSaveTemplate}
+        setSkippedKeys={setSkippedKeys}
+        skippedKeys={skippedKeys}
+        onClose={() => (deployBusy ? undefined : setDeployGuideOpen(false))}
+        onDeploy={() => void deployDraft()}
+      />
     </main>
   )
 }

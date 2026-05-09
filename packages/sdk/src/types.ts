@@ -959,6 +959,163 @@ export interface ShadowTransaction {
   createdAt: string
 }
 
+// ─── Cloud SaaS DIY Generation Types ───────────────────────────────────────
+
+export type ShadowDiyCloudStepId = 'think' | 'search' | 'generate' | 'validate' | 'review'
+
+export interface ShadowDiyCloudGenerateInput {
+  prompt: string
+  feedback?: string
+  previousConfig?: Record<string, unknown>
+  locale?: string
+  timezone?: string
+}
+
+export interface ShadowDiyCloudAgentStepOutput {
+  type: 'agent_step_output'
+  schemaVersion: 1
+  step: ShadowDiyCloudStepId
+  status: ShadowDiyCloudProgressStatus
+  title: string
+  locale: string
+  timezone: string
+  generatedAt: string
+  result: Record<string, unknown>
+  reasons: string[]
+  confidence?: number
+  raw: unknown
+}
+
+export interface ShadowDiyCloudDraft {
+  slug: string
+  title: string
+  description: string
+  score: number
+  steps: Array<{
+    id: ShadowDiyCloudStepId
+    title: string
+    detail: string
+  }>
+  matchedPlugins: Array<{
+    id: string
+    name: string
+    description: string
+    reason: string
+    capabilities: string[]
+    requiredKeys: string[]
+    docsExcerpt: string
+    matchedTerms: string[]
+  }>
+  referenceTemplates: Array<{
+    slug: string
+    title: string
+    description: string
+    category: string
+    plugins: string[]
+    channels: string[]
+    buddyNames: string[]
+    reason: string
+  }>
+  suggestedSkills: string[]
+  requiredKeys: Array<{
+    key: string
+    label: string
+    description: string
+    source: string
+    sourcePluginId: string
+    sensitive: boolean
+    setupSteps: string[]
+    skipImpact: string
+  }>
+  toolTrace: Array<{
+    tool: 'search_plugins' | 'search_templates'
+    query: string
+    resultIds: string[]
+  }>
+  agentOutputs: ShadowDiyCloudAgentStepOutput[]
+  agentReport: {
+    objective: string
+    assumptions: string[]
+    reasoning: Array<{
+      step: ShadowDiyCloudStepId
+      title: string
+      detail: string
+      evidence: string[]
+    }>
+    pluginDecisions: Array<{
+      id: string
+      name: string
+      reason: string
+      capabilities: string[]
+      matchedTerms: string[]
+      requiredKeys: string[]
+    }>
+    templateDecisions: Array<{
+      slug: string
+      title: string
+      reason: string
+      plugins: string[]
+      channels: string[]
+    }>
+    validationChecks: Array<{
+      name: string
+      status: 'passed' | 'warning' | 'failed'
+      detail: string
+    }>
+    repairNotes: string[]
+  }
+  guidebook: {
+    summary: string
+    beforeDeploy: string[]
+    howToUse: string[]
+    reviewNotes: string[]
+  }
+  template: Record<string, unknown>
+  validation: {
+    valid: boolean
+    agents: number
+    configurations: number
+    violations: Array<{ path: string; prefix: string }>
+    extendsErrors: string[]
+    templateRefs: { env: number; secret: number; file: number }
+  }
+}
+
+export type ShadowDiyCloudProgressStatus = 'running' | 'completed' | 'warning' | 'error'
+
+export type ShadowDiyCloudStreamEvent =
+  | {
+      type: 'progress'
+      id: string
+      step: ShadowDiyCloudStepId
+      status: ShadowDiyCloudProgressStatus
+      title: string
+      detail: string
+      timestamp: string
+      meta?: Record<string, unknown>
+      output?: ShadowDiyCloudAgentStepOutput
+    }
+  | {
+      type: 'draft'
+      id: string
+      timestamp: string
+      draft: ShadowDiyCloudDraft
+    }
+
+export type ShadowDiyCloudSessionStatus = 'running' | 'completed' | 'failed'
+
+export interface ShadowDiyCloudGenerationSession {
+  sessionId: string
+  input: ShadowDiyCloudGenerateInput
+  status: ShadowDiyCloudSessionStatus
+  createdAt: string
+  updatedAt: string
+  expiresAt: string
+  events: ShadowDiyCloudStreamEvent[]
+  draft?: ShadowDiyCloudDraft
+  error?: string
+}
+
 // ─── Cloud SaaS Provider Gateway Types ─────────────────────────────────────
 
 export interface ShadowCloudProviderCatalog {

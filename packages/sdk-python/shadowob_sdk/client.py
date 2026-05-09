@@ -6,8 +6,9 @@ has a Python equivalent with the same semantics.
 
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, is_dataclass
-from typing import Any
+from typing import Any, Iterator
 
 import httpx
 
@@ -1314,6 +1315,86 @@ class ShadowClient:
         if offset is not None:
             params["offset"] = offset
         return self._get("/api/wallet/transactions", params=params or None)
+
+    # ── Cloud SaaS DIY Generation ──────────────────────────────────────
+
+    def generate_diy_cloud_draft(
+        self,
+        *,
+        prompt: str,
+        feedback: str | None = None,
+        previous_config: dict[str, Any] | None = None,
+        locale: str | None = None,
+        timezone: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"prompt": prompt}
+        if feedback is not None:
+            payload["feedback"] = feedback
+        if previous_config is not None:
+            payload["previousConfig"] = previous_config
+        if locale is not None:
+            payload["locale"] = locale
+        if timezone is not None:
+            payload["timezone"] = timezone
+        return self._post("/api/cloud-saas/diy/generate", json=payload)
+
+    def _stream_sse(
+        self, method: str, path: str, **kwargs: Any
+    ) -> Iterator[dict[str, Any]]:
+        headers = {"Accept": "text/event-stream", **kwargs.pop("headers", {})}
+        with self._http.stream(method, path, headers=headers, **kwargs) as resp:
+            resp.raise_for_status()
+            event = "message"
+            data_lines: list[str] = []
+            for line in resp.iter_lines():
+                if line == "":
+                    if data_lines:
+                        data = "\n".join(data_lines)
+                        yield {"event": event, "data": json.loads(data)}
+                    event = "message"
+                    data_lines = []
+                    continue
+                if line.startswith("event:"):
+                    event = line[6:].strip()
+                elif line.startswith("data:"):
+                    data_lines.append(line[5:].lstrip())
+            if data_lines:
+                yield {"event": event, "data": json.loads("\n".join(data_lines))}
+
+    def stream_diy_cloud_draft(
+        self,
+        *,
+        prompt: str,
+        feedback: str | None = None,
+        previous_config: dict[str, Any] | None = None,
+        locale: str | None = None,
+        timezone: str | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        payload: dict[str, Any] = {"prompt": prompt}
+        if feedback is not None:
+            payload["feedback"] = feedback
+        if previous_config is not None:
+            payload["previousConfig"] = previous_config
+        if locale is not None:
+            payload["locale"] = locale
+        if timezone is not None:
+            payload["timezone"] = timezone
+
+        yield from self._stream_sse(
+            "POST",
+            "/api/cloud-saas/diy/generate/stream",
+            json=payload,
+        )
+
+    def get_diy_cloud_generation_session(self, session_id: str) -> dict[str, Any]:
+        return self._get(f"/api/cloud-saas/diy/sessions/{session_id}")
+
+    def stream_diy_cloud_generation_session(
+        self, session_id: str
+    ) -> Iterator[dict[str, Any]]:
+        yield from self._stream_sse(
+            "GET", f"/api/cloud-saas/diy/sessions/{session_id}/stream"
+        )
 
     # ── Cloud SaaS Provider Gateway ────────────────────────────────────
 
