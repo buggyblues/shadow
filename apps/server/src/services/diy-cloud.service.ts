@@ -9,9 +9,11 @@ import {
   summarizeCloudConfigValidation,
   type TemplateLibraryEntry,
   type TemplateLibrarySearchResult,
-  validateCloudSaasConfigSnapshot,
 } from '@shadowob/cloud'
-import { assertCloudTemplatePolicy } from './cloud-template-policy.service'
+import {
+  repairDiyCloudTemplateShape,
+  validateDiyCloudTemplateCandidate,
+} from './diy-cloud-template-maintenance.service'
 
 export type DiyCloudStepId = 'think' | 'search' | 'generate' | 'validate' | 'review'
 
@@ -20,6 +22,7 @@ export type DiyCloudGenerateInput = {
   feedback?: string
   previousConfig?: Record<string, unknown>
   locale?: string
+  timezone?: string
 }
 
 export type DiyCloudMatchedPlugin = {
@@ -50,6 +53,21 @@ export type DiyCloudTemplateReference = {
   reason: string
 }
 
+export type DiyCloudAgentStepOutput = {
+  type: 'agent_step_output'
+  schemaVersion: 1
+  step: DiyCloudStepId
+  status: DiyCloudProgressStatus
+  title: string
+  locale: string
+  timezone: string
+  generatedAt: string
+  result: Record<string, unknown>
+  reasons: string[]
+  confidence?: number
+  raw: unknown
+}
+
 export type DiyCloudDraft = {
   slug: string
   title: string
@@ -74,6 +92,38 @@ export type DiyCloudDraft = {
     skipImpact: string
   }>
   toolTrace: DiyCloudToolTrace[]
+  agentOutputs: DiyCloudAgentStepOutput[]
+  agentReport: {
+    objective: string
+    assumptions: string[]
+    reasoning: Array<{
+      step: DiyCloudStepId
+      title: string
+      detail: string
+      evidence: string[]
+    }>
+    pluginDecisions: Array<{
+      id: string
+      name: string
+      reason: string
+      capabilities: string[]
+      matchedTerms: string[]
+      requiredKeys: string[]
+    }>
+    templateDecisions: Array<{
+      slug: string
+      title: string
+      reason: string
+      plugins: string[]
+      channels: string[]
+    }>
+    validationChecks: Array<{
+      name: string
+      status: 'passed' | 'warning' | 'failed'
+      detail: string
+    }>
+    repairNotes: string[]
+  }
   guidebook: {
     summary: string
     beforeDeploy: string[]
@@ -82,6 +132,32 @@ export type DiyCloudDraft = {
   }
   template: Record<string, unknown>
   validation: ReturnType<typeof summarizeCloudConfigValidation>
+}
+
+export type DiyCloudProgressStatus = 'running' | 'completed' | 'warning' | 'error'
+
+export type DiyCloudProgressEvent =
+  | {
+      type: 'progress'
+      id: string
+      step: DiyCloudStepId
+      status: DiyCloudProgressStatus
+      title: string
+      detail: string
+      timestamp: string
+      meta?: Record<string, unknown>
+      output?: DiyCloudAgentStepOutput
+    }
+  | {
+      type: 'draft'
+      id: string
+      timestamp: string
+      draft: DiyCloudDraft
+    }
+
+export type DiyCloudGenerationOptions = {
+  signal?: AbortSignal
+  onProgress?: (event: DiyCloudProgressEvent) => void | Promise<void>
 }
 
 type LlmDraft = {
@@ -113,6 +189,12 @@ type LlmPlan = {
 type LlmPlanningResult = {
   plan: LlmPlan
   messages: Array<Record<string, unknown>>
+  raw: Record<string, unknown>
+}
+
+type LlmGenerationResult = {
+  draft: LlmDraft
+  raw: Record<string, unknown>
 }
 
 type NormalizedLlmDraft = {
@@ -176,6 +258,14 @@ function chatCompletionsUrl(baseUrl: string) {
 
 function isZh(locale?: string) {
   return locale?.toLowerCase().startsWith('zh')
+}
+
+function outputLocale(input: DiyCloudGenerateInput) {
+  return input.locale?.trim() || 'zh-CN'
+}
+
+function outputTimezone(input: DiyCloudGenerateInput) {
+  return input.timezone?.trim() || 'UTC'
 }
 
 export function estimateDiyCloudInputBudget(input: DiyCloudGenerateInput) {
@@ -247,6 +337,28 @@ function parseToolArgs(value: unknown): Record<string, unknown> {
     : {}
 }
 
+function isSensitiveKey(key: string) {
+  return /(?:token|secret|password|api[_-]?key|authorization|credential|private[_-]?key|refresh[_-]?token)/i.test(
+    key,
+  )
+}
+
+function redactRawJson(value: unknown, depth = 0): unknown {
+  if (depth > 10) return '[Max depth reached]'
+  if (Array.isArray(value)) return value.map((item) => redactRawJson(item, depth + 1))
+  if (!value || typeof value !== 'object') return value
+
+  const record = value as Record<string, unknown>
+  return Object.fromEntries(
+    Object.entries(record).map(([key, entry]) => [
+      key,
+      isSensitiveKey(key) && typeof entry === 'string'
+        ? '[REDACTED]'
+        : redactRawJson(entry, depth + 1),
+    ]),
+  )
+}
+
 function uniqueStrings(values: string[], maxItems: number) {
   const seen = new Set<string>()
   const result: string[] = []
@@ -258,6 +370,74 @@ function uniqueStrings(values: string[], maxItems: number) {
     if (result.length >= maxItems) break
   }
   return result
+}
+
+function buildStepOutput({
+  input,
+  step,
+  status,
+  title,
+  result,
+  reasons,
+  raw,
+  confidence,
+}: {
+  input: DiyCloudGenerateInput
+  step: DiyCloudStepId
+  status: DiyCloudProgressStatus
+  title: string
+  result: Record<string, unknown>
+  reasons: string[]
+  raw: unknown
+  confidence?: number
+}): DiyCloudAgentStepOutput {
+  return {
+    type: 'agent_step_output',
+    schemaVersion: 1,
+    step,
+    status,
+    title,
+    locale: outputLocale(input),
+    timezone: outputTimezone(input),
+    generatedAt: new Date().toISOString(),
+    result,
+    reasons: uniqueStrings(reasons, 12),
+    confidence,
+    raw: redactRawJson(raw),
+  }
+}
+
+function assertNotAborted(signal?: AbortSignal) {
+  if (!signal?.aborted) return
+  throw Object.assign(new Error('DIY Cloud generation aborted'), {
+    status: 499,
+    code: 'DIY_CLOUD_GENERATION_ABORTED',
+  })
+}
+
+async function emitProgress(
+  options: DiyCloudGenerationOptions,
+  event: Omit<Extract<DiyCloudProgressEvent, { type: 'progress' }>, 'type' | 'id' | 'timestamp'>,
+) {
+  assertNotAborted(options.signal)
+  await options.onProgress?.({
+    ...event,
+    type: 'progress',
+    id: `${event.step}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    timestamp: new Date().toISOString(),
+  })
+  assertNotAborted(options.signal)
+}
+
+async function emitDraft(options: DiyCloudGenerationOptions, draft: DiyCloudDraft) {
+  assertNotAborted(options.signal)
+  await options.onProgress?.({
+    type: 'draft',
+    id: `draft-${Date.now().toString(36)}`,
+    timestamp: new Date().toISOString(),
+    draft,
+  })
+  assertNotAborted(options.signal)
 }
 
 function promptMentionsAny(prompt: string, terms: string[]) {
@@ -333,7 +513,8 @@ function requiredKeysForPlugins(plugins: PluginLibraryEntry[], locale?: string) 
   const seen = new Set<string>()
   const keys: DiyCloudDraft['requiredKeys'] = []
   for (const plugin of plugins) {
-    for (const field of plugin.requiredFields) {
+    const authFields = pluginAuthFields(plugin)
+    for (const field of authFields) {
       if (seen.has(field.key)) continue
       seen.add(field.key)
       keys.push({
@@ -349,6 +530,19 @@ function requiredKeysForPlugins(plugins: PluginLibraryEntry[], locale?: string) 
     }
   }
   return keys
+}
+
+function pluginAuthFields(plugin: PluginLibraryEntry) {
+  return plugin.requiredFields.length > 0
+    ? plugin.requiredFields
+    : plugin.manifest.auth.fields
+        .filter((field) => field.sensitive || field.required)
+        .map((field) => ({
+          key: field.key,
+          label: field.label,
+          description: field.description,
+          sensitive: field.sensitive,
+        }))
 }
 
 function keySetupSteps(plugin: PluginLibraryEntry, key: string, locale?: string) {
@@ -399,7 +593,6 @@ function localPlan(input: DiyCloudGenerateInput): LlmPlan {
       'google 日历',
       'google drive',
       '谷歌',
-      '文档',
     ])
   ) {
     pluginQueries.push('google workspace drive docs gmail calendar')
@@ -499,6 +692,7 @@ async function callPlanningModel(input: DiyCloudGenerateInput): Promise<LlmPlann
     'Use tool calls to search plugins and templates. Do not ask for broad analytics, ads, or Baidu tools unless the user explicitly asked for them.',
     'After tool use, return JSON only with intent, pluginQueries, templateQueries, pluginIds, and excludePluginIds.',
     'Choose the smallest useful plugin set. model-provider and shadowob are included by default.',
+    'All planning labels and user-facing reasoning must follow the requested locale, and any date or schedule interpretation must use the requested timezone.',
   ].join('\n')
   const messages: Array<Record<string, unknown>> = [
     { role: 'system', content: system },
@@ -506,11 +700,13 @@ async function callPlanningModel(input: DiyCloudGenerateInput): Promise<LlmPlann
       role: 'user',
       content: JSON.stringify({
         locale: input.locale ?? 'zh-CN',
+        timezone: outputTimezone(input),
         request: input.prompt,
         feedback: input.feedback ?? '',
       }),
     },
   ]
+  const rawTurns: Array<Record<string, unknown>> = []
 
   const thinkResponse = await fetch(chatCompletionsUrl(baseUrl), {
     method: 'POST',
@@ -546,6 +742,12 @@ async function callPlanningModel(input: DiyCloudGenerateInput): Promise<LlmPlann
   } | null
   const thinkContent = thinkData?.choices?.[0]?.message?.content
   const thinkPlan = thinkContent ? (safeJsonObject(thinkContent) as LlmPlan | null) : null
+  rawTurns.push({
+    phase: 'initial_planning',
+    model: generatorModel(),
+    content: thinkContent ?? null,
+    parsed: thinkPlan,
+  })
   if (thinkContent) messages.push({ role: 'assistant', content: thinkContent })
   messages.push({
     role: 'user',
@@ -621,10 +823,26 @@ async function callPlanningModel(input: DiyCloudGenerateInput): Promise<LlmPlann
       const finalPlan = (safeJsonObject(message.content ?? '') as LlmPlan | null) ?? thinkPlan
       if (!finalPlan) return null
       if (message.content) messages.push({ role: 'assistant', content: message.content })
-      return { plan: finalPlan, messages }
+      rawTurns.push({
+        phase: 'final_planning',
+        model: generatorModel(),
+        content: message.content ?? null,
+        parsed: finalPlan,
+      })
+      return {
+        plan: finalPlan,
+        messages,
+        raw: {
+          model: generatorModel(),
+          locale: outputLocale(input),
+          timezone: outputTimezone(input),
+          turns: rawTurns,
+        },
+      }
     }
 
     messages.push({ role: 'assistant', content: message.content ?? '', tool_calls: toolCalls })
+    const rawToolCalls: Array<Record<string, unknown>> = []
     for (const call of toolCalls) {
       const name = call.function?.name
       const args = parseToolArgs(call.function?.arguments)
@@ -655,10 +873,36 @@ async function callPlanningModel(input: DiyCloudGenerateInput): Promise<LlmPlann
         tool_call_id: call.id ?? `${name}-${turn}`,
         content: JSON.stringify(result),
       })
+      rawToolCalls.push({
+        id: call.id,
+        name,
+        arguments: args,
+        query,
+        result,
+      })
     }
+    rawTurns.push({
+      phase: 'tool_turn',
+      turn,
+      model: generatorModel(),
+      assistantContent: message.content ?? null,
+      toolCalls: rawToolCalls,
+    })
   }
 
-  return thinkPlan ? { plan: thinkPlan, messages } : null
+  return thinkPlan
+    ? {
+        plan: thinkPlan,
+        messages,
+        raw: {
+          model: generatorModel(),
+          locale: outputLocale(input),
+          timezone: outputTimezone(input),
+          fallback: 'initial_planning_after_tool_turn_limit',
+          turns: rawTurns,
+        },
+      }
+    : null
 }
 
 async function callGeneratorModel(
@@ -666,7 +910,7 @@ async function callGeneratorModel(
   pluginMatches: PluginLibrarySearchResult[],
   templateReferences: TemplateLibrarySearchResult[],
   planningHistory: Array<Record<string, unknown>> = [],
-): Promise<LlmDraft | null> {
+): Promise<LlmGenerationResult | null> {
   const baseUrl = generatorBaseUrl()
   const apiKey = generatorApiKey()
   if (!baseUrl || !apiKey) return null
@@ -701,10 +945,12 @@ async function callGeneratorModel(
     'Use official template references for shape, channel planning, Buddy roles, and plugin combinations, but do not copy their namespace or slug.',
     'Never include real secrets or API keys. Only list required environment variable names.',
     'All user-facing fields must follow the requested locale. If locale starts with zh, write title, description, guidebook, channel names, and review notes in Simplified Chinese even when the user request is English.',
+    'If the user requests recurring work, reports, deadlines, calendar actions, or reminders, interpret all times using the requested timezone.',
     'Keep the result practical: 3 to 5 channels, 1 Buddy, concise guidebook.',
   ].join('\n')
   const user = JSON.stringify({
     locale: input.locale ?? 'zh-CN',
+    timezone: outputTimezone(input),
     request: input.prompt,
     feedback: input.feedback ?? '',
     previousConfig: input.previousConfig ?? null,
@@ -786,13 +1032,40 @@ async function callGeneratorModel(
     }),
   })
 
-  if (!refinedResponse.ok) return firstDraft
+  if (!refinedResponse.ok) {
+    return {
+      draft: firstDraft,
+      raw: {
+        model: generatorModel(),
+        locale: outputLocale(input),
+        timezone: outputTimezone(input),
+        firstDraftContent: content,
+        firstDraft,
+        refinedDraftContent: null,
+        refinedDraft: null,
+        usedRefinedDraft: false,
+        refinementError: `HTTP ${refinedResponse.status}`,
+      },
+    }
+  }
   const refinedData = (await refinedResponse.json().catch(() => null)) as {
     choices?: Array<{ message?: { content?: string } }>
   } | null
   const refinedContent = refinedData?.choices?.[0]?.message?.content
   const refinedDraft = refinedContent ? (safeJsonObject(refinedContent) as LlmDraft | null) : null
-  return refinedDraft ?? firstDraft
+  return {
+    draft: refinedDraft ?? firstDraft,
+    raw: {
+      model: generatorModel(),
+      locale: outputLocale(input),
+      timezone: outputTimezone(input),
+      firstDraftContent: content,
+      firstDraft,
+      refinedDraftContent: refinedContent ?? null,
+      refinedDraft,
+      usedRefinedDraft: Boolean(refinedDraft),
+    },
+  }
 }
 
 function fallbackDraft(input: DiyCloudGenerateInput): LlmDraft {
@@ -998,11 +1271,211 @@ function buildTemplate(input: {
   }
 }
 
+function ensureReliableTemplate(
+  candidate: Record<string, unknown>,
+  buildInput: Parameters<typeof buildTemplate>[0],
+) {
+  const repairNotes: string[] = []
+  try {
+    validateDiyCloudTemplateCandidate(candidate)
+    return {
+      template: candidate,
+      validation: summarizeCloudConfigValidation(candidate),
+      repairNotes,
+    }
+  } catch (err) {
+    repairNotes.push(err instanceof Error ? err.message : 'Initial template validation failed')
+  }
+
+  const repaired = repairDiyCloudTemplateShape(candidate, buildInput)
+  try {
+    validateDiyCloudTemplateCandidate(repaired)
+    return {
+      template: repaired,
+      validation: summarizeCloudConfigValidation(repaired),
+      repairNotes,
+    }
+  } catch (err) {
+    repairNotes.push(err instanceof Error ? err.message : 'Template repair validation failed')
+  }
+
+  const minimal = buildTemplate({
+    ...buildInput,
+    selectedPlugins: buildInput.selectedPlugins.filter((plugin) =>
+      ALWAYS_ON_PLUGINS.includes(plugin.id),
+    ),
+  })
+  validateDiyCloudTemplateCandidate(minimal)
+  return {
+    template: minimal,
+    validation: summarizeCloudConfigValidation(minimal),
+    repairNotes,
+  }
+}
+
 function templateReason(template: TemplateLibraryEntry, locale?: string) {
   if (isZh(locale)) {
     return `参考 ${template.title} 的频道结构、Buddy 角色和插件组合；生成时会使用新的命名空间和配置。`
   }
   return `References ${template.title} for channel shape, Buddy role, and plugin mix while generating a new namespace and config.`
+}
+
+function buildAgentReport({
+  input,
+  prompt,
+  normalized,
+  selectedPlugins,
+  matchedPlugins,
+  referenceTemplates,
+  validation,
+  reliable,
+  requiredKeys,
+}: {
+  input: DiyCloudGenerateInput
+  prompt: string
+  normalized: NormalizedLlmDraft
+  selectedPlugins: PluginLibraryEntry[]
+  matchedPlugins: DiyCloudDraft['matchedPlugins']
+  referenceTemplates: DiyCloudDraft['referenceTemplates']
+  validation: DiyCloudDraft['validation']
+  reliable: ReturnType<typeof ensureReliableTemplate>
+  requiredKeys: DiyCloudDraft['requiredKeys']
+}): DiyCloudDraft['agentReport'] {
+  const zh = isZh(input.locale)
+  const requiredKeyNames = new Set(requiredKeys.map((key) => key.key))
+  return {
+    objective: normalized.description || prompt,
+    assumptions: uniqueStrings(
+      [
+        zh
+          ? '默认使用官方模型代理，部署前不要求用户填写模型供应商密钥。'
+          : 'Use the official model proxy by default, so model-provider credentials are not required before deployment.',
+        requiredKeys.length > 0
+          ? zh
+            ? `需要用户在部署向导中逐项准备 ${requiredKeys.length} 个业务连接密钥。`
+            : `The deployment guide will collect ${requiredKeys.length} business integration credential(s) step by step.`
+          : zh
+            ? '当前方案没有额外业务连接密钥。'
+            : 'No extra business integration credentials are required for this draft.',
+        input.previousConfig
+          ? zh
+            ? '已参考上一版配置，只保留能通过策略校验的结构。'
+            : 'The previous config was used as context, but only policy-valid structure is kept.'
+          : '',
+      ],
+      6,
+    ),
+    reasoning: [
+      {
+        step: 'think',
+        title: zh ? '目标拆解' : 'Goal decomposition',
+        detail: zh
+          ? '把自然语言需求拆成空间目标、频道、Buddy 角色、工具能力和部署约束。'
+          : 'Break the natural-language request into space goals, channels, Buddy role, tool capabilities, and deploy constraints.',
+        evidence: uniqueStrings(
+          [normalized.description, ...normalized.channels, normalized.buddyName],
+          8,
+        ),
+      },
+      {
+        step: 'search',
+        title: zh ? '能力匹配' : 'Capability matching',
+        detail: zh
+          ? '优先选择官方插件，只有与目标直接相关的连接器会进入配置。'
+          : 'Prefer official plugins and include only connectors that directly support the target workflow.',
+        evidence: matchedPlugins.map((plugin) => `${plugin.name}: ${plugin.reason}`),
+      },
+      {
+        step: 'generate',
+        title: zh ? '配置生成' : 'Config generation',
+        detail: zh
+          ? '生成 Shadow 服务器、频道、Buddy 绑定、运行时资源和插件引用。'
+          : 'Generate Shadow server, channels, Buddy binding, runtime resources, and plugin references.',
+        evidence: uniqueStrings(
+          [
+            zh ? `${normalized.channels.length} 个频道` : `${normalized.channels.length} channels`,
+            zh ? `Buddy：${normalized.buddyName}` : `Buddy: ${normalized.buddyName}`,
+            ...selectedPlugins.map((plugin) => plugin.id),
+          ],
+          12,
+        ),
+      },
+      {
+        step: 'validate',
+        title: zh ? '可靠性校验' : 'Reliability checks',
+        detail: zh
+          ? '通过 Cloud schema、模板策略 allowlist、运行时边界和密钥引用检查。'
+          : 'Run Cloud schema, template policy allowlist, runtime boundary, and credential reference checks.',
+        evidence: [
+          zh ? `Buddy 数：${validation.agents}` : `Buddy count: ${validation.agents}`,
+          zh
+            ? `配置项：${validation.configurations}`
+            : `Config entries: ${validation.configurations}`,
+          zh
+            ? `结构修复：${reliable.repairNotes.length}`
+            : `Structural repairs: ${reliable.repairNotes.length}`,
+        ],
+      },
+      {
+        step: 'review',
+        title: zh ? '人工复核' : 'Human review',
+        detail: zh
+          ? '最终只保留两个决策：批注后重新调整，或进入逐步部署向导。'
+          : 'End with two decisions only: annotate and regenerate, or continue into the step-by-step deployment guide.',
+        evidence: requiredKeys.map((key) => `${key.source}: ${key.key}`),
+      },
+    ],
+    pluginDecisions: matchedPlugins.map((plugin) => ({
+      id: plugin.id,
+      name: plugin.name,
+      reason: plugin.reason,
+      capabilities: plugin.capabilities.slice(0, 6),
+      matchedTerms: plugin.matchedTerms,
+      requiredKeys: plugin.requiredKeys.filter((key) => requiredKeyNames.has(key)),
+    })),
+    templateDecisions: referenceTemplates.map((template) => ({
+      slug: template.slug,
+      title: template.title,
+      reason: template.reason,
+      plugins: template.plugins,
+      channels: template.channels,
+    })),
+    validationChecks: [
+      {
+        name: zh ? 'Cloud schema' : 'Cloud schema',
+        status: validation.extendsErrors.length === 0 ? 'passed' : 'warning',
+        detail:
+          validation.extendsErrors.length === 0
+            ? zh
+              ? '结构字段满足 Cloud 配置规范。'
+              : 'The generated structure satisfies the Cloud config schema.'
+            : validation.extendsErrors.join('; '),
+      },
+      {
+        name: zh ? '模板策略 allowlist' : 'Template policy allowlist',
+        status: validation.violations.length === 0 ? 'passed' : 'warning',
+        detail:
+          validation.violations.length === 0
+            ? zh
+              ? '插件引用和部署字段都在服务端策略边界内。'
+              : 'Plugin references and deployment fields stay inside server-side policy boundaries.'
+            : validation.violations.map((violation) => violation.path).join(', '),
+      },
+      {
+        name: zh ? '部署密钥准备' : 'Deployment credentials',
+        status: requiredKeys.length === 0 ? 'passed' : 'warning',
+        detail:
+          requiredKeys.length === 0
+            ? zh
+              ? '不需要额外业务密钥。'
+              : 'No additional business credentials are required.'
+            : zh
+              ? `部署前需要逐项填写：${requiredKeys.map((key) => key.label).join('、')}`
+              : `Fill these before deployment: ${requiredKeys.map((key) => key.label).join(', ')}`,
+      },
+    ],
+    repairNotes: reliable.repairNotes,
+  }
 }
 
 export function listDiyCloudPlugins() {
@@ -1017,7 +1490,10 @@ export function listDiyCloudTemplates() {
   return listTemplateLibrary().filter((template) => template.valid)
 }
 
-export async function generateDiyCloudDraft(input: DiyCloudGenerateInput): Promise<DiyCloudDraft> {
+export async function generateDiyCloudDraft(
+  input: DiyCloudGenerateInput,
+  options: DiyCloudGenerationOptions = {},
+): Promise<DiyCloudDraft> {
   const prompt = compactText(input.prompt, 2000)
   if (prompt.length < 4) {
     throw Object.assign(new Error('Prompt is too short'), {
@@ -1025,10 +1501,84 @@ export async function generateDiyCloudDraft(input: DiyCloudGenerateInput): Promi
       code: 'DIY_PROMPT_TOO_SHORT',
     })
   }
+  const agentOutputs: DiyCloudAgentStepOutput[] = []
+
+  await emitProgress(options, {
+    step: 'think',
+    status: 'running',
+    title: isZh(input.locale) ? '理解目标和约束' : 'Understanding the goal and constraints',
+    detail: isZh(input.locale)
+      ? '正在识别用户目标、反馈、可复用配置和需要避免的能力。'
+      : 'Reading the request, feedback, reusable config, and capability exclusions.',
+    meta: {
+      characters: prompt.length,
+      hasFeedback: Boolean(input.feedback?.trim()),
+      hasPreviousConfig: Boolean(input.previousConfig),
+    },
+  })
 
   const query = `${prompt}\n${input.feedback ?? ''}`
   const planningResult = await callPlanningModel({ ...input, prompt })
   const plan = planningResult?.plan ?? localPlan({ ...input, prompt })
+  const thinkOutput = buildStepOutput({
+    input,
+    step: 'think',
+    status: 'completed',
+    title: isZh(input.locale) ? '目标拆解 JSON Output' : 'Goal breakdown JSON output',
+    confidence: planningResult ? 0.86 : 0.68,
+    result: {
+      intent: plan.intent ?? prompt,
+      pluginQueries: plan.pluginQueries ?? [],
+      templateQueries: plan.templateQueries ?? [],
+      pluginIds: plan.pluginIds ?? [],
+      excludePluginIds: plan.excludePluginIds ?? [],
+      usedFallbackPlanner: !planningResult,
+    },
+    reasons: [
+      isZh(input.locale)
+        ? '先把自然语言需求转成可检索的插件能力和模板线索。'
+        : 'Convert the natural-language request into searchable plugin capabilities and template signals.',
+      isZh(input.locale)
+        ? `按 ${outputLocale(input)} 和 ${outputTimezone(input)} 组织后续输出。`
+        : `Shape later output for ${outputLocale(input)} and ${outputTimezone(input)}.`,
+      planningResult
+        ? isZh(input.locale)
+          ? '规划模型返回了结构化 JSON。'
+          : 'The planning model returned structured JSON.'
+        : isZh(input.locale)
+          ? '上游规划模型不可用，使用本地确定性规划兜底。'
+          : 'The upstream planner was unavailable, so deterministic local planning was used.',
+    ],
+    raw: planningResult?.raw ?? { fallbackPlanner: true, plan },
+  })
+  agentOutputs.push(thinkOutput)
+  await emitProgress(options, {
+    step: 'think',
+    status: 'completed',
+    title: isZh(input.locale) ? '目标拆解完成' : 'Goal breakdown complete',
+    detail: plan.intent || prompt,
+    meta: {
+      intent: plan.intent ?? prompt,
+      pluginQueries: plan.pluginQueries ?? [],
+      templateQueries: plan.templateQueries ?? [],
+      fallbackPlanner: !planningResult,
+    },
+    output: thinkOutput,
+  })
+
+  await emitProgress(options, {
+    step: 'search',
+    status: 'running',
+    title: isZh(input.locale) ? '检索官方能力库' : 'Searching official capability libraries',
+    detail: isZh(input.locale)
+      ? '正在匹配官方插件、官方模版和部署所需的密钥项。'
+      : 'Matching official plugins, official templates, and required deployment keys.',
+    meta: {
+      pluginQueryCount: plan.pluginQueries?.length ?? 0,
+      templateQueryCount: plan.templateQueries?.length ?? 0,
+    },
+  })
+
   const pluginSearch = searchPluginsForPlan(plan, query)
   const templateSearch = searchTemplatesForPlan(plan, query)
   const pluginMatches = pluginSearch.matches
@@ -1041,12 +1591,82 @@ export async function generateDiyCloudDraft(input: DiyCloudGenerateInput): Promi
           .filter((template) => template.valid)
           .slice(0, 5)
           .map((template) => ({ ...template, score: 1, matchedTerms: [] }))
-  const llmDraft = await callGeneratorModel(
+  const searchOutput = buildStepOutput({
+    input,
+    step: 'search',
+    status: 'completed',
+    title: isZh(input.locale) ? '能力检索 JSON Output' : 'Capability search JSON output',
+    confidence: 0.82,
+    result: {
+      pluginCandidates: pluginMatches.map((plugin) => ({
+        id: plugin.id,
+        name: plugin.name,
+        score: plugin.score,
+        matchedTerms: plugin.matchedTerms,
+        requiredKeys: plugin.requiredFields.map((field) => field.key),
+      })),
+      templateCandidates: referenceTemplates.map((template) => ({
+        slug: template.slug,
+        title: template.title,
+        score: 'score' in template ? template.score : undefined,
+        plugins: template.plugins,
+        channels: template.channels,
+      })),
+      toolTrace,
+    },
+    reasons: [
+      isZh(input.locale)
+        ? '优先检索官方插件和官方模板，减少不可部署配置。'
+        : 'Search official plugins and official templates first to reduce undeployable config.',
+      isZh(input.locale)
+        ? '始终保留 model-provider 和 shadowob 作为基础能力。'
+        : 'Always retain model-provider and shadowob as baseline capabilities.',
+      isZh(input.locale)
+        ? '只保留与用户目标直接相关的连接器。'
+        : 'Keep only connectors directly related to the user goal.',
+    ],
+    raw: {
+      pluginSearch,
+      templateSearch,
+      fallbackTemplateReferences: templateReferences.length === 0,
+    },
+  })
+  agentOutputs.push(searchOutput)
+  await emitProgress(options, {
+    step: 'search',
+    status: 'completed',
+    title: isZh(input.locale) ? '能力匹配完成' : 'Capability matching complete',
+    detail: isZh(input.locale)
+      ? `已筛出 ${pluginMatches.length} 个候选插件和 ${referenceTemplates.length} 个参考模版。`
+      : `Shortlisted ${pluginMatches.length} plugins and ${referenceTemplates.length} template references.`,
+    meta: {
+      plugins: pluginMatches.map((plugin) => plugin.id),
+      templates: referenceTemplates.map((template) => template.slug),
+      toolTrace,
+    },
+    output: searchOutput,
+  })
+
+  await emitProgress(options, {
+    step: 'generate',
+    status: 'running',
+    title: isZh(input.locale) ? '生成并复核草案' : 'Generating and reviewing the draft',
+    detail: isZh(input.locale)
+      ? '正在用候选能力生成频道、Buddy、运行时配置和指南书，并进行二次自检。'
+      : 'Generating channels, Buddy identity, runtime config, and guidebook with a second-pass review.',
+    meta: {
+      pluginCatalogSize: pluginMatches.length,
+      templateReferenceSize: referenceTemplates.length,
+    },
+  })
+
+  const generationResult = await callGeneratorModel(
     { ...input, prompt },
     pluginMatches,
     referenceTemplates,
     planningResult?.messages ?? [],
   )
+  const llmDraft = generationResult?.draft ?? null
   const normalized = normalizeLlmDraft({ ...input, prompt }, llmDraft)
   const selectedPlugins = pickPlugins(
     { ...input, prompt },
@@ -1058,7 +1678,7 @@ export async function generateDiyCloudDraft(input: DiyCloudGenerateInput): Promi
   const slug = `diy-${slugify(normalized.title || prompt)}`
   const title = normalized.title || (isZh(input.locale) ? 'DIY 空间' : 'DIY Space')
   const description = normalized.description || prompt
-  const template = buildTemplate({
+  const buildInput = {
     slug,
     title,
     description,
@@ -1068,11 +1688,78 @@ export async function generateDiyCloudDraft(input: DiyCloudGenerateInput): Promi
     selectedPlugins,
     suggestedSkills: normalized.suggestedSkills,
     locale: input.locale,
+  }
+  const templateCandidate = buildTemplate(buildInput)
+  const generateOutput = buildStepOutput({
+    input,
+    step: 'generate',
+    status: 'completed',
+    title: isZh(input.locale) ? '配置生成 JSON Output' : 'Config generation JSON output',
+    confidence: generationResult ? 0.84 : 0.7,
+    result: {
+      slug,
+      title,
+      description,
+      channels: normalized.channels,
+      buddyName: normalized.buddyName,
+      selectedPluginIds: selectedPlugins.map((plugin) => plugin.id),
+      suggestedSkills: normalized.suggestedSkills,
+      modelRequiredKeys: normalized.requiredKeys,
+      templateCandidateName: templateCandidate.name,
+    },
+    reasons: [
+      generationResult
+        ? isZh(input.locale)
+          ? '生成模型先产出草案，再做一次自检收敛。'
+          : 'The generation model produced an initial draft and then performed a second-pass refinement.'
+        : isZh(input.locale)
+          ? '生成模型不可用，使用本地确定性草案保证流程可完成。'
+          : 'The generator model was unavailable, so deterministic local drafting kept the flow complete.',
+      isZh(input.locale)
+        ? '频道、Buddy 和指南书使用用户语言生成。'
+        : 'Channels, Buddy identity, and guidebook are generated in the user language.',
+      isZh(input.locale)
+        ? '只把服务端 allowlist 允许的插件写入模板。'
+        : 'Only server allowlist-compatible plugins are written into the template.',
+    ],
+    raw: generationResult?.raw ?? {
+      fallbackGenerator: true,
+      fallbackDraft: fallbackDraft({ ...input, prompt }),
+      normalized,
+    },
+  })
+  agentOutputs.push(generateOutput)
+
+  await emitProgress(options, {
+    step: 'generate',
+    status: 'completed',
+    title: isZh(input.locale) ? '配置草案已生成' : 'Config draft generated',
+    detail: isZh(input.locale)
+      ? `已生成 ${normalized.channels.length} 个频道、1 个 Buddy 和 ${selectedPlugins.length} 个插件引用。`
+      : `Generated ${normalized.channels.length} channels, 1 Buddy, and ${selectedPlugins.length} plugin references.`,
+    meta: {
+      slug,
+      title,
+      channels: normalized.channels,
+      selectedPlugins: selectedPlugins.map((plugin) => plugin.id),
+    },
+    output: generateOutput,
   })
 
-  validateCloudSaasConfigSnapshot(template)
-  assertCloudTemplatePolicy(template)
-  const validation = summarizeCloudConfigValidation(template)
+  await emitProgress(options, {
+    step: 'validate',
+    status: 'running',
+    title: isZh(input.locale)
+      ? '执行结构、策略和部署边界校验'
+      : 'Running structure, policy, and deployment checks',
+    detail: isZh(input.locale)
+      ? '正在校验 Cloud schema、模版策略 allowlist、运行时密钥引用和部署边界。'
+      : 'Validating Cloud schema, template policy allowlist, runtime secret refs, and deployability.',
+  })
+
+  const reliable = ensureReliableTemplate(templateCandidate, buildInput)
+  const template = reliable.template
+  const validation = reliable.validation
   const requiredKeys = requiredKeysForPlugins(selectedPlugins, input.locale).filter(
     (key) =>
       ![
@@ -1081,6 +1768,77 @@ export async function generateDiyCloudDraft(input: DiyCloudGenerateInput): Promi
         'OPENAI_COMPATIBLE_MODEL_ID',
       ].includes(key.key),
   )
+  const validateOutput = buildStepOutput({
+    input,
+    step: 'validate',
+    status: validation.valid ? 'completed' : 'warning',
+    title: isZh(input.locale) ? '校验修复 JSON Output' : 'Validation and repair JSON output',
+    confidence: validation.valid ? 0.9 : 0.72,
+    result: {
+      valid: validation.valid,
+      agents: validation.agents,
+      configurations: validation.configurations,
+      secretRefs: validation.templateRefs.secret,
+      violations: validation.violations,
+      extendsErrors: validation.extendsErrors,
+      repairNotes: reliable.repairNotes,
+      requiredKeys: requiredKeys.map((key) => ({
+        key: key.key,
+        label: key.label,
+        source: key.source,
+        sourcePluginId: key.sourcePluginId,
+      })),
+    },
+    reasons: [
+      isZh(input.locale)
+        ? 'AI 生成的模板必须再次通过服务端策略校验。'
+        : 'AI-generated templates must pass server-side policy validation again.',
+      reliable.repairNotes.length > 0
+        ? isZh(input.locale)
+          ? '发现结构问题后已自动修复，并保留通过校验的版本。'
+          : 'Structural issues were repaired automatically and the validated version was kept.'
+        : isZh(input.locale)
+          ? '模板结构一次性通过校验。'
+          : 'The template structure passed validation without repair.',
+      isZh(input.locale)
+        ? '部署密钥只列出变量名和填写指南，不生成真实密钥。'
+        : 'Deployment credentials list variable names and setup guidance only; no real secrets are generated.',
+    ],
+    raw: {
+      templateCandidate,
+      finalTemplate: template,
+      validation,
+      repairNotes: reliable.repairNotes,
+    },
+  })
+  agentOutputs.push(validateOutput)
+  await emitProgress(options, {
+    step: 'validate',
+    status: validation.valid ? 'completed' : 'warning',
+    title: validation.valid
+      ? isZh(input.locale)
+        ? '校验通过'
+        : 'Validation passed'
+      : isZh(input.locale)
+        ? '校验完成，需要复核'
+        : 'Validation complete, review needed',
+    detail: validation.valid
+      ? isZh(input.locale)
+        ? '结构、策略和部署边界校验均已通过。'
+        : 'Structure, policy, and deployability checks passed.'
+      : isZh(input.locale)
+        ? '草案已生成，但部署前需要查看校验提示。'
+        : 'The draft is generated, but review the validation notes before deployment.',
+    meta: {
+      agents: validation.agents,
+      configurations: validation.configurations,
+      secretRefs: validation.templateRefs.secret,
+      violations: validation.violations.length,
+      extendsErrors: validation.extendsErrors.length,
+      repairCount: reliable.repairNotes.length,
+    },
+    output: validateOutput,
+  })
 
   const matchedPlugins = selectedPlugins.map((plugin) => ({
     id: plugin.id,
@@ -1088,7 +1846,7 @@ export async function generateDiyCloudDraft(input: DiyCloudGenerateInput): Promi
     description: plugin.description,
     reason: pluginReason(plugin, input.locale),
     capabilities: plugin.capabilities,
-    requiredKeys: plugin.requiredFields.map((field) => field.key),
+    requiredKeys: pluginAuthFields(plugin).map((field) => field.key),
     docsExcerpt: plugin.readme.excerpt,
     matchedTerms: Array.isArray((plugin as Partial<PluginLibrarySearchResult>).matchedTerms)
       ? ((plugin as Partial<PluginLibrarySearchResult>).matchedTerms ?? [])
@@ -1098,8 +1856,98 @@ export async function generateDiyCloudDraft(input: DiyCloudGenerateInput): Promi
   const scorePenalty = validation.valid ? 0 : 14
   const missingKeyPenalty = Math.min(requiredKeys.length * 3, 12)
   const score = Math.max(45, Math.min(98, normalized.score - scorePenalty - missingKeyPenalty))
+  const guidebook =
+    reliable.repairNotes.length > 0
+      ? {
+          ...normalized.guidebook,
+          reviewNotes: uniqueStrings(
+            [
+              ...normalized.guidebook.reviewNotes,
+              isZh(input.locale)
+                ? '生成 Agent 已自动修复配置结构，并保留最终通过策略校验的版本。'
+                : 'The generation agent repaired the config structure and kept the policy-validated version.',
+            ],
+            8,
+          ),
+        }
+      : normalized.guidebook
 
-  return {
+  await emitProgress(options, {
+    step: 'review',
+    status: 'running',
+    title: isZh(input.locale) ? '整理 Review 报告' : 'Preparing the review report',
+    detail: isZh(input.locale)
+      ? '正在整理最终方案、指南书、密钥准备清单和部署摘要。'
+      : 'Preparing the final plan, guidebook, key checklist, and deployment summary.',
+    meta: {
+      score,
+      requiredKeys: requiredKeys.length,
+    },
+  })
+
+  const referenceTemplateSummaries = referenceTemplates.map((template) => ({
+    slug: template.slug,
+    title: template.title,
+    description: template.description,
+    category: template.category,
+    plugins: template.plugins,
+    channels: template.channels,
+    buddyNames: template.buddyNames,
+    reason: templateReason(template, input.locale),
+  }))
+
+  const agentReport = buildAgentReport({
+    input,
+    prompt,
+    normalized,
+    selectedPlugins,
+    matchedPlugins,
+    referenceTemplates: referenceTemplateSummaries,
+    validation,
+    reliable,
+    requiredKeys,
+  })
+  const reviewOutput = buildStepOutput({
+    input,
+    step: 'review',
+    status: 'completed',
+    title: isZh(input.locale) ? '最终 Review JSON Output' : 'Final review JSON output',
+    confidence: validation.valid ? 0.88 : 0.7,
+    result: {
+      score,
+      title,
+      description,
+      guidebookSummary: guidebook.summary,
+      beforeDeploy: guidebook.beforeDeploy,
+      howToUse: guidebook.howToUse,
+      reviewNotes: guidebook.reviewNotes,
+      requiredKeys: requiredKeys.map((key) => key.key),
+      nextActions: ['adjust', 'deploy'],
+    },
+    reasons: [
+      isZh(input.locale)
+        ? '最终报告只保留用户需要复核的方案、指南和部署准备项。'
+        : 'The final report keeps the plan, guide, and deployment prep items needed for human review.',
+      isZh(input.locale)
+        ? '用户可以批注后重新生成，或进入逐项部署向导。'
+        : 'The user can annotate and regenerate, or continue into the step-by-step deployment guide.',
+      isZh(input.locale)
+        ? `评分综合了结构校验、密钥准备成本和模板完整度。`
+        : 'The score combines structure validation, credential prep cost, and template completeness.',
+    ],
+    raw: {
+      agentReport,
+      guidebook,
+      score,
+      matchedPlugins,
+      referenceTemplates: referenceTemplateSummaries,
+      template,
+      validation,
+    },
+  })
+  agentOutputs.push(reviewOutput)
+
+  const draft: DiyCloudDraft = {
     slug,
     title,
     description,
@@ -1146,21 +1994,30 @@ export async function generateDiyCloudDraft(input: DiyCloudGenerateInput): Promi
       },
     ],
     matchedPlugins,
-    referenceTemplates: referenceTemplates.map((template) => ({
-      slug: template.slug,
-      title: template.title,
-      description: template.description,
-      category: template.category,
-      plugins: template.plugins,
-      channels: template.channels,
-      buddyNames: template.buddyNames,
-      reason: templateReason(template, input.locale),
-    })),
+    referenceTemplates: referenceTemplateSummaries,
     suggestedSkills: normalized.suggestedSkills,
     requiredKeys,
     toolTrace,
-    guidebook: normalized.guidebook,
+    agentOutputs,
+    agentReport,
+    guidebook,
     template,
     validation,
   }
+  await emitProgress(options, {
+    step: 'review',
+    status: 'completed',
+    title: isZh(input.locale) ? '方案可供 Review' : 'Plan ready for review',
+    detail: isZh(input.locale)
+      ? '你可以查看报告，选择重新调整，或进入部署配置向导。'
+      : 'Review the report, adjust it, or continue into the deployment setup guide.',
+    meta: {
+      score,
+      valid: validation.valid,
+      requiredKeys: requiredKeys.map((key) => key.key),
+    },
+    output: reviewOutput,
+  })
+  await emitDraft(options, draft)
+  return draft
 }

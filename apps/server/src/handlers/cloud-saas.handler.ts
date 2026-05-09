@@ -48,6 +48,15 @@ import {
   searchDiyCloudPlugins,
 } from '../services/diy-cloud.service'
 import {
+  createDiyCloudAcceptedEvent,
+  runDiyCloudAgentSession,
+} from '../services/diy-cloud-agent.service'
+import {
+  appendDiyCloudSessionEvent,
+  createDiyCloudSession,
+  getDiyCloudSession,
+} from '../services/diy-cloud-session.service'
+import {
   type LlmProviderApiFormat,
   normalizeLlmProviderConfig,
   normalizeLlmProviderModels,
@@ -152,6 +161,7 @@ const diyCloudGenerateSchema = z
     feedback: z.string().max(2000).optional(),
     previousConfig: z.record(z.unknown()).optional(),
     locale: z.string().max(16).optional(),
+    timezone: z.string().max(64).optional(),
   })
   .superRefine((value, ctx) => {
     if (!value.previousConfig) return
@@ -1161,6 +1171,60 @@ export function createCloudSaasHandler(container: AppContainer) {
 
   h.use('*', authMiddleware)
 
+  async function authorizeDiyGeneration(
+    userId: string,
+    input: z.infer<typeof diyCloudGenerateSchema>,
+  ) {
+    await container.resolve('membershipService').requireMember(userId, 'cloud:diy_generate')
+    const payloadLimits = validateJsonLimits(input, {
+      maxBytes: 80 * 1024,
+      maxDepth: 9,
+      maxObjectKeys: 560,
+      maxArrayItems: 160,
+    })
+    if (!payloadLimits.ok) {
+      throw Object.assign(new Error(payloadLimits.error), {
+        status: 413,
+        code: 'DIY_CLOUD_PAYLOAD_LIMIT_EXCEEDED',
+      })
+    }
+    const budget = estimateDiyCloudInputBudget(input)
+    if (budget.estimatedTokens > DIY_CLOUD_MAX_ESTIMATED_TOKENS) {
+      throw Object.assign(new Error('DIY Cloud prompt is too large'), {
+        status: 413,
+        code: 'DIY_CLOUD_TOKEN_BUDGET_EXCEEDED',
+        params: {
+          estimatedTokens: budget.estimatedTokens,
+          maxEstimatedTokens: DIY_CLOUD_MAX_ESTIMATED_TOKENS,
+        },
+      })
+    }
+    const activityDao = container.resolve('cloudActivityDao')
+    const limit = diyCloudDailyLimit()
+    const usedToday = await activityDao.countByUserTypeSince(
+      userId,
+      'diy_generate',
+      new Date(Date.now() - 24 * 60 * 60 * 1000),
+    )
+    if (usedToday >= limit) {
+      throw Object.assign(new Error('DIY Cloud daily generation quota exceeded'), {
+        status: 429,
+        code: 'DIY_CLOUD_DAILY_QUOTA_EXCEEDED',
+        params: { limit },
+      })
+    }
+    await activityDao.log({
+      userId,
+      type: 'diy_generate',
+      meta: {
+        estimatedTokens: budget.estimatedTokens,
+        characters: budget.characters,
+        hasPreviousConfig: Boolean(input.previousConfig),
+      },
+    })
+    return budget
+  }
+
   async function loadGroupNameLookup(userId: string): Promise<Map<string, string>> {
     const envDao = container.resolve('cloudEnvVarDao')
     const groups = await envDao.listGroupsByUser(userId)
@@ -1531,57 +1595,199 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.post('/diy/generate', diyRateLimit, zValidator('json', diyCloudGenerateSchema), async (c) => {
     const user = c.get('user') as { userId: string }
     const input = c.req.valid('json')
-    await container.resolve('membershipService').requireMember(user.userId, 'cloud:diy_generate')
-    const payloadLimits = validateJsonLimits(input, {
-      maxBytes: 80 * 1024,
-      maxDepth: 9,
-      maxObjectKeys: 560,
-      maxArrayItems: 160,
-    })
-    if (!payloadLimits.ok) {
-      return c.json({ ok: false, error: payloadLimits.error }, 413)
-    }
-    const budget = estimateDiyCloudInputBudget(input)
-    if (budget.estimatedTokens > DIY_CLOUD_MAX_ESTIMATED_TOKENS) {
-      return c.json(
+    await authorizeDiyGeneration(user.userId, input)
+    return c.json(await generateDiyCloudDraft(input))
+  })
+
+  h.post(
+    '/diy/generate/stream',
+    diyRateLimit,
+    zValidator('json', diyCloudGenerateSchema),
+    async (c) => {
+      const user = c.get('user') as { userId: string }
+      const input = c.req.valid('json')
+      await authorizeDiyGeneration(user.userId, input)
+      const session = await createDiyCloudSession(user.userId, input)
+
+      return c.body(
+        new ReadableStream({
+          async start(controller) {
+            const encoder = new TextEncoder()
+            let closed = false
+            const send = (event: string, data: unknown) => {
+              if (closed || c.req.raw.signal.aborted) return
+              controller.enqueue(
+                encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+              )
+            }
+            c.req.raw.signal.addEventListener(
+              'abort',
+              () => {
+                closed = true
+                try {
+                  controller.close()
+                } catch {
+                  /* already closed */
+                }
+              },
+              { once: true },
+            )
+
+            try {
+              send('session', {
+                sessionId: session.sessionId,
+                status: session.status,
+                createdAt: session.createdAt,
+                expiresAt: session.expiresAt,
+                input: session.input,
+              })
+
+              const acceptedEvent = createDiyCloudAcceptedEvent(input)
+              await appendDiyCloudSessionEvent(user.userId, session.sessionId, acceptedEvent)
+              send('progress', acceptedEvent)
+
+              await runDiyCloudAgentSession({
+                userId: user.userId,
+                sessionId: session.sessionId,
+                input,
+                onEvent: (event) => send(event.type === 'draft' ? 'draft' : 'progress', event),
+              })
+              send('done', { ok: true })
+            } catch (err) {
+              send('error', {
+                ok: false,
+                error: err instanceof Error ? err.message : 'Failed to generate DIY Cloud draft',
+                code:
+                  err && typeof err === 'object' && 'code' in err
+                    ? String((err as { code?: unknown }).code)
+                    : undefined,
+              })
+            } finally {
+              closed = true
+              try {
+                controller.close()
+              } catch {
+                /* already closed */
+              }
+            }
+          },
+        }),
+        200,
         {
-          ok: false,
-          error: 'DIY Cloud prompt is too large',
-          code: 'DIY_CLOUD_TOKEN_BUDGET_EXCEEDED',
-          estimatedTokens: budget.estimatedTokens,
-          maxEstimatedTokens: DIY_CLOUD_MAX_ESTIMATED_TOKENS,
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache, no-transform',
+          Connection: 'keep-alive',
+          'X-Accel-Buffering': 'no',
         },
-        413,
       )
-    }
-    const activityDao = container.resolve('cloudActivityDao')
-    const limit = diyCloudDailyLimit()
-    const usedToday = await activityDao.countByUserTypeSince(
-      user.userId,
-      'diy_generate',
-      new Date(Date.now() - 24 * 60 * 60 * 1000),
-    )
-    if (usedToday >= limit) {
-      return c.json(
-        {
-          ok: false,
-          error: 'DIY Cloud daily generation quota exceeded',
-          code: 'DIY_CLOUD_DAILY_QUOTA_EXCEEDED',
-          limit,
-        },
-        429,
-      )
-    }
-    await activityDao.log({
-      userId: user.userId,
-      type: 'diy_generate',
-      meta: {
-        estimatedTokens: budget.estimatedTokens,
-        characters: budget.characters,
-        hasPreviousConfig: Boolean(input.previousConfig),
+    },
+  )
+
+  h.get('/diy/sessions/:sessionId', diyRateLimit, async (c) => {
+    const user = c.get('user') as { userId: string }
+    const sessionId = c.req.param('sessionId')
+    if (!sessionId) return c.json({ error: 'DIY Cloud generation session not found' }, 404)
+    const session = await getDiyCloudSession(user.userId, sessionId)
+    if (!session) return c.json({ error: 'DIY Cloud generation session not found' }, 404)
+    return c.json({
+      session: {
+        sessionId: session.sessionId,
+        input: session.input,
+        status: session.status,
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+        expiresAt: session.expiresAt,
+        events: session.events,
+        draft: session.draft,
+        error: session.error,
       },
     })
-    return c.json(await generateDiyCloudDraft(input))
+  })
+
+  h.get('/diy/sessions/:sessionId/stream', diyRateLimit, async (c) => {
+    const user = c.get('user') as { userId: string }
+    const sessionId = c.req.param('sessionId')
+    if (!sessionId) return c.json({ error: 'DIY Cloud generation session not found' }, 404)
+    const initialSession = await getDiyCloudSession(user.userId, sessionId)
+    if (!initialSession) return c.json({ error: 'DIY Cloud generation session not found' }, 404)
+
+    return c.body(
+      new ReadableStream({
+        async start(controller) {
+          const encoder = new TextEncoder()
+          let closed = false
+          let sentCount = 0
+          const send = (event: string, data: unknown) => {
+            if (closed || c.req.raw.signal.aborted) return
+            controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
+          }
+          c.req.raw.signal.addEventListener(
+            'abort',
+            () => {
+              closed = true
+              try {
+                controller.close()
+              } catch {
+                /* already closed */
+              }
+            },
+            { once: true },
+          )
+
+          try {
+            send('session', {
+              sessionId: initialSession.sessionId,
+              status: initialSession.status,
+              createdAt: initialSession.createdAt,
+              expiresAt: initialSession.expiresAt,
+              input: initialSession.input,
+            })
+
+            while (!closed && !c.req.raw.signal.aborted) {
+              const session = await getDiyCloudSession(user.userId, sessionId)
+              if (!session) {
+                send('error', { ok: false, error: 'DIY Cloud generation session not found' })
+                break
+              }
+
+              const nextEvents = session.events.slice(sentCount)
+              for (const event of nextEvents) {
+                send(event.type === 'draft' ? 'draft' : 'progress', event)
+              }
+              sentCount = session.events.length
+
+              if (session.status === 'completed') {
+                send('done', { ok: true })
+                break
+              }
+              if (session.status === 'failed') {
+                send('error', {
+                  ok: false,
+                  error: session.error ?? 'Failed to generate DIY Cloud draft',
+                })
+                break
+              }
+
+              await delay(1000)
+            }
+          } finally {
+            closed = true
+            try {
+              controller.close()
+            } catch {
+              /* already closed */
+            }
+          }
+        },
+      }),
+      200,
+      {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      },
+    )
   })
 
   h.post('/validate', async (c) => {

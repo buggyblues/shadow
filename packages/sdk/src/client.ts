@@ -16,6 +16,9 @@ import type {
   ShadowCommerceProductCard,
   ShadowCommerceProductPickerResponse,
   ShadowContract,
+  ShadowDiyCloudDraft,
+  ShadowDiyCloudGenerateInput,
+  ShadowDiyCloudGenerationSession,
   ShadowDmChannel,
   ShadowEntitlement,
   ShadowEntitlementProvisioning,
@@ -2176,6 +2179,40 @@ export class ShadowClient {
     if (params?.offset != null) qs.set('offset', String(params.offset))
     const suffix = qs.toString() ? `?${qs}` : ''
     return this.request(`/api/wallet/transactions${suffix}`)
+  }
+
+  // ── Cloud SaaS DIY Generation ───────────────────────────────────────
+
+  async generateDiyCloudDraft(data: ShadowDiyCloudGenerateInput): Promise<ShadowDiyCloudDraft> {
+    return this.request('/api/cloud-saas/diy/generate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async generateDiyCloudDraftStream(data: ShadowDiyCloudGenerateInput): Promise<Response> {
+    return this.requestRaw('/api/cloud-saas/diy/generate/stream', {
+      method: 'POST',
+      headers: {
+        Accept: 'text/event-stream',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    })
+  }
+
+  async getDiyCloudGenerationSession(
+    sessionId: string,
+  ): Promise<{ session: ShadowDiyCloudGenerationSession }> {
+    return this.request(`/api/cloud-saas/diy/sessions/${encodeURIComponent(sessionId)}`)
+  }
+
+  async streamDiyCloudGenerationSession(sessionId: string): Promise<Response> {
+    return this.requestRaw(`/api/cloud-saas/diy/sessions/${encodeURIComponent(sessionId)}/stream`, {
+      headers: {
+        Accept: 'text/event-stream',
+      },
+    })
   }
 
   // ── Cloud SaaS Provider Gateway ─────────────────────────────────────
