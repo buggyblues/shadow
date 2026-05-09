@@ -80,11 +80,17 @@ export class ChannelService {
     )
     if (allChannels.length === 0) return []
     try {
+      const serverMember = await this.deps.serverDao.getMember(serverId, userId)
+      const canManage = serverMember?.role === 'owner' || serverMember?.role === 'admin'
       const channelIds = allChannels.map((ch) => ch.id)
       const memberChannelIds = await this.deps.channelMemberDao.getUserChannelIds(
         userId,
         channelIds,
       )
+      if (canManage) {
+        const memberSet = new Set(memberChannelIds)
+        return allChannels.map((ch) => ({ ...ch, isMember: memberSet.has(ch.id) || ch.isPrivate }))
+      }
       // Legacy fallback: if memberships are empty, only expose public channels
       if (memberChannelIds.length === 0) {
         return allChannels.filter((ch) => !ch.isPrivate).map((ch) => ({ ...ch, isMember: false }))

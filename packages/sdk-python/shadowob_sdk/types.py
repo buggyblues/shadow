@@ -137,6 +137,17 @@ class ShadowChannelAccess:
 
 
 @dataclass
+class ShadowServerAccess:
+    server: ShadowServer
+    is_member: bool
+    can_manage: bool
+    can_access: bool
+    requires_approval: bool
+    join_request_status: str | None = None
+    join_request_id: str | None = None
+
+
+@dataclass
 class ShadowAttachment:
     id: str
     filename: str

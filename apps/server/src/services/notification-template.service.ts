@@ -6,6 +6,9 @@ export type NotificationKind =
   | 'channel.access_approved'
   | 'channel.access_rejected'
   | 'channel.member_added'
+  | 'server.access_requested'
+  | 'server.access_approved'
+  | 'server.access_rejected'
   | 'server.member_joined'
   | 'server.invite'
   | 'friendship.request'
@@ -71,6 +74,15 @@ export class NotificationTemplateService {
         return { title: `Access declined for #${channelName}`, body: input.fallbackBody }
       case 'channel.member_added':
         return { title: `You have been added to #${channelName}`, body: input.fallbackBody }
+      case 'server.access_requested':
+        return {
+          title: `${actorName} requested access to ${serverName}`,
+          body: input.fallbackBody ?? 'Review the private server access request.',
+        }
+      case 'server.access_approved':
+        return { title: `Access approved for ${serverName}`, body: input.fallbackBody }
+      case 'server.access_rejected':
+        return { title: `Access declined for ${serverName}`, body: input.fallbackBody }
       case 'server.member_joined':
         return {
           title:

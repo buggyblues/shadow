@@ -75,6 +75,15 @@ function getNotificationDisplay(
         title: t('notification.channelMemberAdded', { channelName }),
         body: serverName ? t('notification.inServer', { serverName }) : (n.body ?? ''),
       }
+    case 'server.access_requested':
+      return {
+        title: t('notification.serverAccessRequested', { actorName, serverName }),
+        body: t('notification.serverAccessRequestedBody'),
+      }
+    case 'server.access_approved':
+      return { title: t('notification.serverAccessApproved', { serverName }), body: n.body ?? '' }
+    case 'server.access_rejected':
+      return { title: t('notification.serverAccessRejected', { serverName }), body: n.body ?? '' }
     case 'server.member_joined':
       return {
         title:
@@ -220,6 +229,20 @@ export function NotificationBell() {
     },
   })
 
+  const reviewServerJoinRequest = useMutation({
+    mutationFn: (input: { requestId: string; status: 'approved' | 'rejected' }) =>
+      fetchApi(`/api/servers/join-requests/${input.requestId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: input.status }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['servers'] })
+      queryClient.invalidateQueries({ queryKey: ['server-access'] })
+    },
+  })
+
   const unreadCount = unreadData?.count ?? 0
 
   return (
@@ -332,6 +355,40 @@ export function NotificationBell() {
                               >
                                 <X size={13} />
                                 <span>{t('channel.rejectAccess')}</span>
+                              </button>
+                            </div>
+                          )}
+                          {n.referenceType === 'server_join_request' && n.referenceId && (
+                            <div className="mt-2 flex gap-2">
+                              <button
+                                type="button"
+                                className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-success/15 px-2 text-xs font-bold text-success transition hover:bg-success/25"
+                                disabled={reviewServerJoinRequest.isPending}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  reviewServerJoinRequest.mutate({
+                                    requestId: n.referenceId!,
+                                    status: 'approved',
+                                  })
+                                }}
+                              >
+                                <Check size={13} />
+                                <span>{t('server.approveAccess')}</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-danger/15 px-2 text-xs font-bold text-danger transition hover:bg-danger/25"
+                                disabled={reviewServerJoinRequest.isPending}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  reviewServerJoinRequest.mutate({
+                                    requestId: n.referenceId!,
+                                    status: 'rejected',
+                                  })
+                                }}
+                              >
+                                <X size={13} />
+                                <span>{t('server.rejectAccess')}</span>
                               </button>
                             </div>
                           )}

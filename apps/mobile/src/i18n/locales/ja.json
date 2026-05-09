@@ -284,6 +284,11 @@
     "publicStatus": "公開状態",
     "publicServer": "公開サーバー",
     "publicServerDesc": "誰でも検索して参加できます",
+    "privateServerGateDesc": "これは非公開サーバーです。参加にはサーバー管理者の承認が必要です。",
+    "requestAccess": "参加を申請",
+    "requestPending": "申請中",
+    "approveAccess": "承認",
+    "rejectAccess": "拒否",
     "shop": "ショップ",
     "workspace": "ワークスペース",
     "membersOnline": "人がオンライン",
@@ -352,7 +357,9 @@
     "requestAccess": "参加を申請",
     "requestPending": "申請中",
     "approveAccess": "承認",
-    "rejectAccess": "拒否"
+    "rejectAccess": "拒否",
+    "setPublic": "公開にする",
+    "setPrivate": "非公開にする"
   },
   "chat": {
     "selectChannel": "チャンネルを選んでチャットを始めましょう",
@@ -878,6 +885,10 @@
     "channelAccessApproved": "#{{channelName}} への参加が承認されました",
     "channelAccessRejected": "#{{channelName}} への参加が拒否されました",
     "channelMemberAdded": "#{{channelName}} に追加されました",
+    "serverAccessRequested": "{{actorName}} さんが {{serverName}} への参加を申請しました",
+    "serverAccessRequestedBody": "非公開サーバーの参加申請を確認してください。",
+    "serverAccessApproved": "{{serverName}} への参加が承認されました",
+    "serverAccessRejected": "{{serverName}} への参加が拒否されました",
     "inServer": "{{serverName}} 内",
     "serverMemberJoined": "{{actorName}} さんが {{serverName}} に参加しました",
     "serverMemberJoinedCount": "{{count}} 人が {{serverName}} に参加しました",

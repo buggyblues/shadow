@@ -544,6 +544,37 @@ def test_channel_access_request_and_review(monkeypatch):
     client.close()
 
 
+def test_server_access_fetch_request_and_review(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    captured = []
+
+    def fake_get(path):
+        captured.append(("get", path, None))
+        return {"canAccess": False, "requiresApproval": True}
+
+    def fake_post(path, json=None):
+        captured.append(("post", path, json))
+        return {"ok": True, "status": "pending", "requestId": "req-1"}
+
+    def fake_patch(path, json=None):
+        captured.append(("patch", path, json))
+        return {"ok": True}
+
+    monkeypatch.setattr(client, "_get", fake_get)
+    monkeypatch.setattr(client, "_post", fake_post)
+    monkeypatch.setattr(client, "_patch", fake_patch)
+
+    assert client.get_server_access("private")["requiresApproval"] is True
+    assert client.request_server_access("private")["status"] == "pending"
+    assert client.review_server_join_request("req-1", "approved") == {"ok": True}
+    assert captured == [
+        ("get", "/api/servers/private/access", None),
+        ("post", "/api/servers/private/join-requests", None),
+        ("patch", "/api/servers/join-requests/req-1", {"status": "approved"}),
+    ]
+    client.close()
+
+
 def test_notifications_mark_scope_read_supports_dm_channel_id(monkeypatch):
     client = ShadowClient("https://example.com", "test-token")
     captured = {}

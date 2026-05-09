@@ -389,6 +389,9 @@ class ShadowClient:
     def get_server(self, server_id_or_slug: str) -> dict[str, Any]:
         return self._get(f"/api/servers/{server_id_or_slug}")
 
+    def get_server_access(self, server_id_or_slug: str) -> dict[str, Any]:
+        return self._get(f"/api/servers/{server_id_or_slug}/access")
+
     def update_server(self, server_id: str, **kwargs: Any) -> dict[str, Any]:
         return self._patch(f"/api/servers/{server_id}", json=kwargs)
 
@@ -400,6 +403,16 @@ class ShadowClient:
     ) -> dict[str, Any]:
         payload = {"inviteCode": invite_code} if invite_code else {}
         return self._post(f"/api/servers/{server_id}/join", json=payload)
+
+    def request_server_access(self, server_id_or_slug: str) -> dict[str, Any]:
+        return self._post(f"/api/servers/{server_id_or_slug}/join-requests")
+
+    def review_server_join_request(
+        self, request_id: str, status: str
+    ) -> dict[str, Any]:
+        return self._patch(
+            f"/api/servers/join-requests/{request_id}", json={"status": status}
+        )
 
     def leave_server(self, server_id: str) -> dict[str, Any]:
         return self._post(f"/api/servers/{server_id}/leave")

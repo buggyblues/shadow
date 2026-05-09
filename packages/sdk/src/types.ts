@@ -209,6 +209,24 @@ export interface ShadowChannelJoinRequestResult {
   requestId?: string
 }
 
+export type ShadowServerJoinRequestStatus = 'pending' | 'approved' | 'rejected'
+
+export interface ShadowServerAccess {
+  server: ShadowServer
+  isMember: boolean
+  canManage: boolean
+  canAccess: boolean
+  requiresApproval: boolean
+  joinRequestStatus: ShadowServerJoinRequestStatus | null
+  joinRequestId: string | null
+}
+
+export interface ShadowServerJoinRequestResult {
+  ok: boolean
+  status: ShadowServerJoinRequestStatus
+  requestId?: string
+}
+
 export interface ShadowDmChannel {
   id: string
   user1Id: string

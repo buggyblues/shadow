@@ -429,6 +429,127 @@ describe('Socket.IO Real-time (mobile pattern)', () => {
     expect(sendRes.status).toBe(201)
   })
 
+  it('gates private server entry through an owner approval request', async () => {
+    const serverDao = container.resolve('serverDao')
+    const channelDao = container.resolve('channelDao')
+    const channelMemberDao = container.resolve('channelMemberDao')
+    const privateServer = (await serverDao.create({
+      name: `rtm-private-server-${Date.now()}`,
+      ownerId: userId,
+      isPublic: false,
+    }))!
+    await serverDao.addMember(privateServer.id, userId, 'owner')
+    const publicChannel = (await channelDao.create({
+      name: 'general',
+      serverId: privateServer.id,
+      type: 'text',
+    }))!
+    await channelMemberDao.add(publicChannel.id, userId)
+
+    const deniedServer = await fetch(`${baseUrl}/api/servers/${privateServer.id}`, {
+      headers: { Authorization: `Bearer ${user2Token}` },
+    })
+    expect(deniedServer.status).toBe(403)
+
+    const accessBefore = await fetch(`${baseUrl}/api/servers/${privateServer.id}/access`, {
+      headers: { Authorization: `Bearer ${user2Token}` },
+    })
+    expect(accessBefore.status).toBe(200)
+    expect(await accessBefore.json()).toEqual(
+      expect.objectContaining({
+        canAccess: false,
+        requiresApproval: true,
+        joinRequestStatus: null,
+      }),
+    )
+
+    const reviewerNotification = waitForRawEventMatching<{
+      kind: string
+      userId: string
+      referenceId: string
+      scopeServerId: string
+      metadata?: { requestId?: string; serverName?: string }
+    }>(
+      ws1,
+      'notification:new',
+      (notification) =>
+        notification.kind === 'server.access_requested' &&
+        notification.userId === userId &&
+        notification.scopeServerId === privateServer.id,
+    )
+    const requestRes = await fetch(`${baseUrl}/api/servers/${privateServer.id}/join-requests`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${user2Token}` },
+    })
+    expect(requestRes.status).toBe(202)
+    const requestBody = (await requestRes.json()) as { requestId: string; status: string }
+    expect(requestBody.status).toBe('pending')
+    expect(requestBody.requestId).toBeTruthy()
+    await expect(reviewerNotification).resolves.toEqual(
+      expect.objectContaining({
+        kind: 'server.access_requested',
+        referenceId: requestBody.requestId,
+        scopeServerId: privateServer.id,
+        metadata: expect.objectContaining({
+          requestId: requestBody.requestId,
+          serverName: privateServer.name,
+        }),
+      }),
+    )
+
+    const requesterNotification = waitForRawEventMatching<{
+      kind: string
+      userId: string
+      referenceId: string
+      scopeServerId: string
+      metadata?: { approved?: boolean }
+    }>(
+      ws2,
+      'notification:new',
+      (notification) =>
+        notification.kind === 'server.access_approved' &&
+        notification.userId === user2Id &&
+        notification.scopeServerId === privateServer.id,
+    )
+    const reviewRes = await fetch(`${baseUrl}/api/servers/join-requests/${requestBody.requestId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${userToken}`,
+      },
+      body: JSON.stringify({ status: 'approved' }),
+    })
+    expect(reviewRes.status).toBe(200)
+    await expect(requesterNotification).resolves.toEqual(
+      expect.objectContaining({
+        kind: 'server.access_approved',
+        referenceId: privateServer.id,
+        scopeServerId: privateServer.id,
+        metadata: expect.objectContaining({ approved: true }),
+      }),
+    )
+
+    const accessAfter = await fetch(`${baseUrl}/api/servers/${privateServer.id}/access`, {
+      headers: { Authorization: `Bearer ${user2Token}` },
+    })
+    expect(await accessAfter.json()).toEqual(
+      expect.objectContaining({ canAccess: true, isMember: true }),
+    )
+
+    const approvedServer = await fetch(`${baseUrl}/api/servers/${privateServer.id}`, {
+      headers: { Authorization: `Bearer ${user2Token}` },
+    })
+    expect(approvedServer.status).toBe(200)
+
+    const approvedChannels = await fetch(`${baseUrl}/api/servers/${privateServer.id}/channels`, {
+      headers: { Authorization: `Bearer ${user2Token}` },
+    })
+    expect(approvedChannels.status).toBe(200)
+    expect(await approvedChannels.json()).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: publicChannel.id, isMember: true })]),
+    )
+  })
+
   it('user2 receives message:new when user1 sends via message:send', async () => {
     const received = waitForRawEventMatching<{ content: string; channelId: string }>(
       ws2,

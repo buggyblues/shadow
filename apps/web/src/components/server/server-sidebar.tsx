@@ -242,6 +242,10 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
     queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
   })
 
+  useSocketEvent('server:joined', () => {
+    queryClient.invalidateQueries({ queryKey: ['servers'] })
+  })
+
   const joinServer = useMutation({
     mutationFn: (inviteCode: string) =>
       fetchApi<{ id: string; slug: string | null }>('/api/servers/_/join', {
@@ -671,8 +675,8 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                     label: (notificationPreference?.mutedServerIds ?? []).includes(
                       contextMenu.server.server.id,
                     )
-                      ? '取消静音服务器'
-                      : '静音服务器通知',
+                      ? t('server.unmuteNotifications')
+                      : t('server.muteNotifications'),
                     onClick: () => {
                       const targetId = contextMenu.server.server.id
                       const current = notificationPreference?.mutedServerIds ?? []

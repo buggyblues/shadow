@@ -440,11 +440,19 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
                   data-channel-item
                   onClick={async () => {
                     if (ch.isMember === false) {
-                      await fetchApi(`/api/channels/${ch.id}/members`, {
+                      const result = await fetchApi<{
+                        status: 'approved' | 'pending' | 'rejected'
+                      }>(`/api/channels/${ch.id}/join-requests`, {
                         method: 'POST',
-                        body: JSON.stringify({}),
                       })
-                      queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+                      await queryClient.invalidateQueries({ queryKey: ['channels', serverSlug] })
+                      await queryClient.invalidateQueries({ queryKey: ['channel-access', ch.id] })
+                      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+                      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+                      if (result.status !== 'approved') {
+                        handleSelectChannel(ch.id)
+                        return
+                      }
                     }
                     handleSelectChannel(ch.id)
                   }}
@@ -474,7 +482,7 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
                   {ch.isPrivate && <Lock size={12} className="text-text-muted/60 shrink-0" />}
                   {ch.isMember === false && (
                     <Badge variant="primary" size="xs" className="shrink-0">
-                      加入
+                      {t('channel.joinButton')}
                     </Badge>
                   )}
                   {isUnread && (
@@ -640,7 +648,7 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
               ))}
             </div>
             <label className="flex items-center justify-between bg-bg-tertiary/50 rounded-xl px-4 py-3 border border-border-subtle">
-              <span className="text-sm text-foreground">私有频道（仅受邀加入）</span>
+              <span className="text-sm text-foreground">{t('channel.privateChannelToggle')}</span>
               <Switch checked={newIsPrivate} onCheckedChange={(val) => setNewIsPrivate(val)} />
             </label>
           </ModalBody>
@@ -718,8 +726,8 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
                   label: (notificationPreference?.mutedChannelIds ?? []).includes(
                     contextMenu.channel.id,
                   )
-                    ? '取消静音频道'
-                    : '静音频道通知',
+                    ? t('channel.unmuteChannel')
+                    : t('channel.muteChannel'),
                   onClick: () => {
                     const current = notificationPreference?.mutedChannelIds ?? []
                     const isMuted = current.includes(contextMenu.channel.id)
@@ -743,7 +751,9 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
                 },
                 {
                   icon: Lock,
-                  label: contextMenu.channel.isPrivate ? '设为公开频道' : '设为私有频道',
+                  label: contextMenu.channel.isPrivate
+                    ? t('channel.setPublic')
+                    : t('channel.setPrivate'),
                   onClick: () => {
                     updateChannel.mutate({
                       channelId: contextMenu.channel.id,
@@ -853,8 +863,8 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
                 {
                   icon: Volume2,
                   label: (notificationPreference?.mutedServerIds ?? []).includes(server?.id ?? '')
-                    ? '取消静音服务器'
-                    : '静音服务器通知',
+                    ? t('server.unmuteNotifications')
+                    : t('server.muteNotifications'),
                   onClick: () => {
                     if (!server?.id) return
                     const current = notificationPreference?.mutedServerIds ?? []

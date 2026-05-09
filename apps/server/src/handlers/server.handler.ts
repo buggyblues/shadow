@@ -1,5 +1,6 @@
 import { zValidator } from '@hono/zod-validator'
 import { Hono } from 'hono'
+import { z } from 'zod'
 import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
 import {
@@ -8,6 +9,10 @@ import {
   updateMemberSchema,
   updateServerSchema,
 } from '../validators/server.schema'
+
+const reviewJoinRequestSchema = z.object({
+  status: z.enum(['approved', 'rejected']),
+})
 
 export function createServerHandler(container: AppContainer) {
   const serverHandler = new Hono()
@@ -18,6 +23,100 @@ export function createServerHandler(container: AppContainer) {
     if (isUuid) return idOrSlug
     const bySlug = await serverService.getBySlug(idOrSlug)
     return bySlug.id
+  }
+
+  async function addUserToPublicChannels(serverId: string, userId: string) {
+    const channelDao = container.resolve('channelDao')
+    const channelMemberDao = container.resolve('channelMemberDao')
+    const channels = await channelDao.findByServerId(serverId)
+    const publicChannelIds = channels
+      .filter((channel) => !channel.isPrivate)
+      .map((channel) => channel.id)
+    await channelMemberDao.addBulk(publicChannelIds, userId)
+  }
+
+  async function getServerAccessStatus(idOrSlug: string, userId: string) {
+    const serverDao = container.resolve('serverDao')
+    const serverJoinRequestDao = container.resolve('serverJoinRequestDao')
+    const serverId = await resolveServerId(idOrSlug)
+    const server = await serverDao.findById(serverId)
+    if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
+    const member = await serverDao.getMember(server.id, userId)
+    const canManage = member?.role === 'owner' || member?.role === 'admin'
+    const joinRequest =
+      !member && !server.isPublic
+        ? await serverJoinRequestDao.findByServerAndUser(server.id, userId)
+        : null
+
+    return {
+      server: {
+        id: server.id,
+        name: server.name,
+        slug: server.slug,
+        iconUrl: server.iconUrl,
+        bannerUrl: server.bannerUrl,
+        description: server.description,
+        isPublic: server.isPublic,
+        ownerId: server.ownerId,
+      },
+      isMember: Boolean(member),
+      canManage,
+      canAccess: Boolean(member || server.isPublic),
+      requiresApproval: Boolean(!member && !server.isPublic),
+      joinRequestStatus: joinRequest?.status ?? null,
+      joinRequestId: joinRequest?.id ?? null,
+    }
+  }
+
+  async function notifyServerJoinRequestReviewers(input: {
+    serverId: string
+    serverName: string
+    requestId: string
+    requesterId: string
+  }) {
+    const serverDao = container.resolve('serverDao')
+    const userDao = container.resolve('userDao')
+    const notificationTriggerService = container.resolve('notificationTriggerService')
+    const requester = await userDao.findById(input.requesterId)
+    const requesterName = requester?.displayName ?? requester?.username ?? 'Someone'
+    const members = await serverDao.getMembers(input.serverId)
+    const reviewerIds = members
+      .filter((member) => member.role === 'owner' || member.role === 'admin')
+      .map((member) => member.userId)
+
+    await notificationTriggerService.triggerServerAccessRequest({
+      reviewerIds,
+      requesterId: input.requesterId,
+      requesterName,
+      requestId: input.requestId,
+      serverId: input.serverId,
+      serverName: input.serverName,
+    })
+  }
+
+  async function notifyServerJoinRequestDecision(input: {
+    serverId: string
+    serverName: string
+    userId: string
+    reviewerId: string
+    approved: boolean
+  }) {
+    const notificationTriggerService = container.resolve('notificationTriggerService')
+    await notificationTriggerService.triggerServerAccessDecision({
+      userId: input.userId,
+      reviewerId: input.reviewerId,
+      approved: input.approved,
+      serverId: input.serverId,
+      serverName: input.serverName,
+    })
+    try {
+      const io = container.resolve('io')
+      if (input.approved) {
+        io.to(`user:${input.userId}`).emit('server:joined', { serverId: input.serverId })
+      }
+    } catch {
+      /* non-critical */
+    }
   }
 
   // Public endpoint: GET /api/servers/discover - browse public servers
@@ -65,6 +164,14 @@ export function createServerHandler(container: AppContainer) {
     const user = c.get('user')
     const servers = await serverService.getUserServers(user.userId)
     return c.json(servers)
+  })
+
+  // GET /api/servers/:id/access — server visibility gate status for private server links
+  serverHandler.get('/:id/access', async (c) => {
+    const id = c.req.param('id')
+    const user = c.get('user')
+    const access = await getServerAccessStatus(id, user.userId)
+    return c.json(access)
   })
 
   // GET /api/servers/:id
@@ -178,6 +285,81 @@ export function createServerHandler(container: AppContainer) {
       throw error
     }
   })
+
+  // POST /api/servers/:id/join-requests — request approval to enter a private server
+  serverHandler.post('/:id/join-requests', async (c) => {
+    const id = c.req.param('id')
+    const user = c.get('user')
+    const serverDao = container.resolve('serverDao')
+    const serverJoinRequestDao = container.resolve('serverJoinRequestDao')
+    const access = await getServerAccessStatus(id, user.userId)
+
+    if (access.isMember) return c.json({ ok: true, status: 'approved' })
+
+    if (access.server.isPublic) {
+      await serverDao.addMember(access.server.id, user.userId, 'member')
+      await addUserToPublicChannels(access.server.id, user.userId)
+      return c.json({ ok: true, status: 'approved' }, 201)
+    }
+
+    const existing =
+      access.joinRequestStatus === 'pending'
+        ? await serverJoinRequestDao.findByServerAndUser(access.server.id, user.userId)
+        : null
+    const request = existing ?? (await serverJoinRequestDao.request(access.server.id, user.userId))
+    if (!existing) {
+      await notifyServerJoinRequestReviewers({
+        serverId: access.server.id,
+        serverName: access.server.name,
+        requestId: request.id,
+        requesterId: user.userId,
+      })
+    }
+
+    return c.json({ ok: true, status: request.status, requestId: request.id }, 202)
+  })
+
+  // PATCH /api/servers/join-requests/:requestId — approve/reject a private-server request
+  serverHandler.patch(
+    '/join-requests/:requestId',
+    zValidator('json', reviewJoinRequestSchema),
+    async (c) => {
+      const serverDao = container.resolve('serverDao')
+      const serverJoinRequestDao = container.resolve('serverJoinRequestDao')
+      const requestId = c.req.param('requestId')
+      const reviewerId = c.get('user').userId
+      const { status } = c.req.valid('json')
+      const request = await serverJoinRequestDao.findById(requestId)
+      if (!request) return c.json({ ok: false, error: 'Join request not found' }, 404)
+
+      const server = await serverDao.findById(request.serverId)
+      if (!server) return c.json({ ok: false, error: 'Server not found' }, 404)
+
+      const policyService = container.resolve('policyService')
+      await policyService.requireServerRole(c.get('actor'), server.id, 'admin')
+
+      const reviewed = await serverJoinRequestDao.review(requestId, status, reviewerId)
+      if (!reviewed) return c.json({ ok: false, error: 'Join request not found' }, 404)
+
+      if (status === 'approved') {
+        const existingMember = await serverDao.getMember(server.id, request.userId)
+        if (!existingMember) {
+          await serverDao.addMember(server.id, request.userId, 'member')
+        }
+        await addUserToPublicChannels(server.id, request.userId)
+      }
+
+      await notifyServerJoinRequestDecision({
+        serverId: server.id,
+        serverName: server.name,
+        userId: request.userId,
+        reviewerId,
+        approved: status === 'approved',
+      })
+
+      return c.json({ ok: true, request: reviewed })
+    },
+  )
 
   // POST /api/servers/:id/leave
   serverHandler.post('/:id/leave', async (c) => {
