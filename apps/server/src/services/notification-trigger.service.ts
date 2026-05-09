@@ -277,6 +277,60 @@ export class NotificationTriggerService {
     })
   }
 
+  async triggerServerAccessRequest(input: {
+    reviewerIds: string[]
+    requesterId: string
+    requesterName: string
+    requestId: string
+    serverId: string
+    serverName: string
+  }) {
+    return this.dispatchMany(
+      input.reviewerIds
+        .filter((reviewerId) => reviewerId !== input.requesterId)
+        .map((reviewerId) => ({
+          userId: reviewerId,
+          type: 'system' as const,
+          kind: 'server.access_requested',
+          referenceId: input.requestId,
+          referenceType: 'server_join_request',
+          senderId: input.requesterId,
+          scopeServerId: input.serverId,
+          aggregate: false,
+          bypassPreferences: true,
+          metadata: {
+            actorName: input.requesterName,
+            serverName: input.serverName,
+            requestId: input.requestId,
+          },
+        })),
+    )
+  }
+
+  async triggerServerAccessDecision(input: {
+    userId: string
+    reviewerId: string
+    approved: boolean
+    serverId: string
+    serverName: string
+  }) {
+    return this.dispatch({
+      userId: input.userId,
+      type: 'system',
+      kind: input.approved ? 'server.access_approved' : 'server.access_rejected',
+      referenceId: input.serverId,
+      referenceType: 'server_join',
+      senderId: input.reviewerId,
+      scopeServerId: input.serverId,
+      aggregate: false,
+      bypassPreferences: true,
+      metadata: {
+        serverName: input.serverName,
+        approved: input.approved,
+      },
+    })
+  }
+
   async triggerChannelMemberAdded(input: {
     userId: string
     actorId: string

@@ -283,6 +283,11 @@
     "publicStatus": "公开状态",
     "publicServer": "公开服务器",
     "publicServerDesc": "任何人都可以搜索并加入",
+    "privateServerGateDesc": "这是一个私有服务器，加入需要服务器管理员同意。",
+    "requestAccess": "申请加入",
+    "requestPending": "申请等待中",
+    "approveAccess": "同意",
+    "rejectAccess": "拒绝",
     "shop": "店铺",
     "workspace": "工作区",
     "membersOnline": "位成员在线",
@@ -351,7 +356,9 @@
     "requestAccess": "申请加入",
     "requestPending": "申请等待中",
     "approveAccess": "同意",
-    "rejectAccess": "拒绝"
+    "rejectAccess": "拒绝",
+    "setPublic": "设为公开",
+    "setPrivate": "设为私有"
   },
   "chat": {
     "selectChannel": "选择一个频道开始聊天",
@@ -877,6 +884,10 @@
     "channelAccessApproved": "#{{channelName}} 的加入申请已通过",
     "channelAccessRejected": "#{{channelName}} 的加入申请已拒绝",
     "channelMemberAdded": "你已被加入 #{{channelName}}",
+    "serverAccessRequested": "{{actorName}} 申请加入 {{serverName}}",
+    "serverAccessRequestedBody": "请处理这个私有服务器加入申请。",
+    "serverAccessApproved": "{{serverName}} 的加入申请已通过",
+    "serverAccessRejected": "{{serverName}} 的加入申请已拒绝",
     "inServer": "位于 {{serverName}}",
     "serverMemberJoined": "{{actorName}} 加入了 {{serverName}}",
     "serverMemberJoinedCount": "{{count}} 人加入了 {{serverName}}",

@@ -211,11 +211,13 @@ export function createChannelHandler(container: AppContainer) {
     if (!access.isServerMember) {
       return c.json({ ok: false, error: 'Join the server before requesting this channel' }, 403)
     }
-    if (access.canAccess) return c.json({ ok: true, status: 'approved' })
     if (!access.channel.isPrivate) {
-      await channelService.addMember(id, userId)
-      return c.json({ ok: true, status: 'approved' }, 201)
+      if (!access.isChannelMember) {
+        await channelService.addMember(id, userId)
+      }
+      return c.json({ ok: true, status: 'approved' }, access.isChannelMember ? 200 : 201)
     }
+    if (access.canAccess) return c.json({ ok: true, status: 'approved' })
 
     const existing =
       access.joinRequestStatus === 'pending'

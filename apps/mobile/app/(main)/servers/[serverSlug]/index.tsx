@@ -20,6 +20,7 @@ import {
   MessageSquare,
   Plus,
   Search,
+  Send,
   Settings,
   Trash2,
   UserPlus,
@@ -29,6 +30,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   Modal,
@@ -143,10 +145,39 @@ export default function ServerHomeScreen() {
 
   // ── Queries ─────────────────────────────────────
 
+  const {
+    data: serverAccess,
+    isLoading: isServerAccessLoading,
+    isError: isServerAccessError,
+  } = useQuery({
+    queryKey: ['server-access', serverSlug],
+    queryFn: () =>
+      fetchApi<{
+        server: Server
+        canAccess: boolean
+        joinRequestStatus: 'pending' | 'approved' | 'rejected' | null
+      }>(`/api/servers/${serverSlug}/access`),
+    enabled: !!serverSlug,
+    retry: false,
+  })
+  const canAccessServer = serverAccess?.canAccess === true
+
   const { data: server, isLoading: isServerLoading } = useQuery({
     queryKey: ['server', serverSlug],
     queryFn: () => fetchApi<Server>(`/api/servers/${serverSlug}`),
-    enabled: !!serverSlug,
+    enabled: !!serverSlug && canAccessServer,
+  })
+
+  const requestServerAccessMutation = useMutation({
+    mutationFn: () =>
+      fetchApi(`/api/servers/${serverSlug}/join-requests`, {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['server-access', serverSlug] })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+    },
   })
 
   // Channel sort
@@ -291,7 +322,60 @@ export default function ServerHomeScreen() {
     }
   }
 
-  if (isServerLoading || isLoading || !server) return <LoadingScreen />
+  if (isServerAccessLoading || (canAccessServer && (isServerLoading || isLoading))) {
+    return <LoadingScreen />
+  }
+
+  if (serverAccess && !serverAccess.canAccess) {
+    const isPending =
+      serverAccess.joinRequestStatus === 'pending' || requestServerAccessMutation.isSuccess
+    return (
+      <DottedBackground>
+        <View style={[styles.accessGateContainer, { paddingTop: insets.top }]}>
+          <View style={[styles.accessGateCard, { backgroundColor: colors.surface }]}>
+            <View style={[styles.accessGateIcon, { backgroundColor: `${colors.primary}18` }]}>
+              {isPending ? (
+                <Clock size={32} color={colors.primary} />
+              ) : (
+                <Lock size={32} color={colors.primary} />
+              )}
+            </View>
+            <Text style={[styles.accessGateTitle, { color: colors.text }]}>
+              {serverAccess.server.name}
+            </Text>
+            <Text style={[styles.accessGateDesc, { color: colors.textMuted }]}>
+              {t('server.privateServerGateDesc')}
+            </Text>
+            <Pressable
+              disabled={isPending || requestServerAccessMutation.isPending}
+              onPress={() => requestServerAccessMutation.mutate()}
+              style={({ pressed }) => [
+                styles.accessGateButton,
+                {
+                  backgroundColor: colors.primary,
+                  opacity:
+                    isPending || requestServerAccessMutation.isPending ? 0.58 : pressed ? 0.82 : 1,
+                },
+              ]}
+            >
+              {requestServerAccessMutation.isPending ? (
+                <ActivityIndicator color="#050508" />
+              ) : isPending ? (
+                <Clock size={16} color="#050508" />
+              ) : (
+                <Send size={16} color="#050508" />
+              )}
+              <Text style={styles.accessGateButtonText}>
+                {isPending ? t('server.requestPending') : t('server.requestAccess')}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </DottedBackground>
+    )
+  }
+
+  if (isServerAccessError || !server) return <LoadingScreen />
 
   // Derived styling helpers
   const glassCardStyle = {
@@ -1247,6 +1331,53 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderRadius: 10,
+  },
+
+  accessGateContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  accessGateCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 28,
+    padding: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  accessGateIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accessGateTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  accessGateDesc: {
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  accessGateButton: {
+    width: '100%',
+    minHeight: 52,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  accessGateButtonText: {
+    color: '#050508',
+    fontSize: 15,
+    fontWeight: '900',
   },
 
   // Sort modal - Bottom Sheet

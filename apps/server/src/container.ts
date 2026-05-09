@@ -33,6 +33,7 @@ import { RechargeDao } from './dao/recharge.dao'
 import { RentalContractDao, RentalUsageDao, RentalViolationDao } from './dao/rental-contract.dao'
 import { ReviewDao } from './dao/review.dao'
 import { ServerDao } from './dao/server.dao'
+import { ServerJoinRequestDao } from './dao/server-join-request.dao'
 import { ShopDao } from './dao/shop.dao'
 import { TaskCenterDao } from './dao/task-center.dao'
 // DAO classes
@@ -105,6 +106,7 @@ export interface Cradle {
   // DAOs
   userDao: UserDao
   serverDao: ServerDao
+  serverJoinRequestDao: ServerJoinRequestDao
   apiTokenDao: ApiTokenDao
   channelDao: ChannelDao
   channelJoinRequestDao: ChannelJoinRequestDao
@@ -235,6 +237,7 @@ export function createAppContainer(db: Database): AppContainer {
     // DAOs
     userDao: asClass(UserDao).singleton(),
     serverDao: asClass(ServerDao).singleton(),
+    serverJoinRequestDao: asClass(ServerJoinRequestDao).singleton(),
     apiTokenDao: asClass(ApiTokenDao).singleton(),
     channelDao: asClass(ChannelDao).singleton(),
     channelJoinRequestDao: asClass(ChannelJoinRequestDao).singleton(),

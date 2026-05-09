@@ -158,9 +158,12 @@ It returns an OpenAI-compatible completion with `shadow.type = "wallet_recharge_
 | GET    | `/api/servers`                    | List user's servers      |
 | POST   | `/api/servers`                    | Create a server          |
 | GET    | `/api/servers/:id`                | Get server details       |
+| GET    | `/api/servers/:id/access`         | Get the current user's server access status, including whether a private-server approval request is required or pending. |
 | PUT    | `/api/servers/:id`                | Update server            |
 | DELETE | `/api/servers/:id`                | Delete server            |
 | POST   | `/api/servers/:id/join`           | Join a server            |
+| POST   | `/api/servers/:id/join-requests`  | Request access to a private server. Approval by a server owner/admin adds the requester to the server and its public channels. |
+| PATCH  | `/api/servers/join-requests/:requestId` | Approve or reject a private-server access request with `{ "status": "approved" \| "rejected" }`. |
 | POST   | `/api/servers/:id/leave`          | Leave a server           |
 | GET    | `/api/servers/:id/members`        | List server members      |
 
@@ -312,7 +315,7 @@ Notification creation is centralized behind server-side trigger services. Client
 | POST   | `/api/notifications/web-push-subscriptions` | Register a browser Web Push subscription. |
 | DELETE | `/api/notifications/web-push-subscriptions/:idOrEndpoint` | Deactivate a Web Push subscription. |
 
-Common notification kinds include `message.mention`, `message.reply`, `dm.message`, `channel.access_requested`, `channel.access_approved`, `channel.access_rejected`, `channel.member_added`, `server.member_joined`, `server.invite`, `friendship.request`, `recharge.succeeded`, `commerce.purchase_completed`, `commerce.renewal_failed`, and `commerce.subscription_cancelled`. User-facing copy should be rendered from i18n keys using `kind` and `metadata`; stored `title` and `body` are fallback text for older clients.
+Common notification kinds include `message.mention`, `message.reply`, `dm.message`, `channel.access_requested`, `channel.access_approved`, `channel.access_rejected`, `channel.member_added`, `server.access_requested`, `server.access_approved`, `server.access_rejected`, `server.member_joined`, `server.invite`, `friendship.request`, `recharge.succeeded`, `commerce.purchase_completed`, `commerce.renewal_failed`, and `commerce.subscription_cancelled`. User-facing copy should be rendered from i18n keys using `kind` and `metadata`; stored `title` and `body` are fallback text for older clients.
 
 ## WebSocket Events
 

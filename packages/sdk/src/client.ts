@@ -54,6 +54,9 @@ import type {
   ShadowReview,
   ShadowScopedUnread,
   ShadowServer,
+  ShadowServerAccess,
+  ShadowServerJoinRequestResult,
+  ShadowServerJoinRequestStatus,
   ShadowShop,
   ShadowSignedMediaUrl,
   ShadowSlashCommand,
@@ -547,6 +550,10 @@ export class ShadowClient {
     return this.request(`/api/servers/${serverIdOrSlug}`)
   }
 
+  async getServerAccess(serverIdOrSlug: string): Promise<ShadowServerAccess> {
+    return this.request<ShadowServerAccess>(`/api/servers/${serverIdOrSlug}/access`)
+  }
+
   async updateServer(
     serverIdOrSlug: string,
     data: {
@@ -578,6 +585,25 @@ export class ShadowClient {
     return this.request(`/api/servers/${serverId}/join`, {
       method: 'POST',
       body: JSON.stringify(inviteCode ? { inviteCode } : {}),
+    })
+  }
+
+  async requestServerAccess(serverIdOrSlug: string): Promise<ShadowServerJoinRequestResult> {
+    return this.request<ShadowServerJoinRequestResult>(
+      `/api/servers/${serverIdOrSlug}/join-requests`,
+      {
+        method: 'POST',
+      },
+    )
+  }
+
+  async reviewServerJoinRequest(
+    requestId: string,
+    status: Exclude<ShadowServerJoinRequestStatus, 'pending'>,
+  ): Promise<{ ok: boolean }> {
+    return this.request(`/api/servers/join-requests/${requestId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
     })
   }
 

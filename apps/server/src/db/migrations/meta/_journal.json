@@ -400,6 +400,13 @@
       "when": 1778418000000,
       "tag": "0056_cloud_hourly_billing",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1778504400000,
+      "tag": "0057_private_server_join_requests",
+      "breakpoints": true
     }
   ]
 }

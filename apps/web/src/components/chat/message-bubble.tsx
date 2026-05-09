@@ -44,6 +44,10 @@ import { formatFileSize } from '../workspace/workspace-utils'
 import { FileCard } from './file-card'
 import { ImageContextMenu } from './image-context-menu'
 
+function lowerText(value: unknown) {
+  return typeof value === 'string' ? value.toLocaleLowerCase() : ''
+}
+
 interface Author {
   id: string
   username: string
@@ -1433,21 +1437,21 @@ function MessageBubbleInner({
         })
         const servers = serverRows.flatMap(([, data]) => (Array.isArray(data) ? data : []))
         const server = servers.find((candidate) => {
-          return (
-            candidate.slug?.toLocaleLowerCase() === key ||
-            candidate.name.toLocaleLowerCase() === key
-          )
+          const slug = lowerText(candidate.slug)
+          const name = lowerText(candidate.name)
+          return slug === key || name === key
         })
         if (!server) return null
+        const serverName = typeof server.name === 'string' && server.name.trim() ? server.name : key
         return {
           kind: 'server',
           targetId: server.id,
           token,
           sourceToken: token,
-          label: `@${server.name}`,
+          label: `@${serverName}`,
           serverId: server.id,
           serverSlug: server.slug,
-          serverName: server.name,
+          serverName,
         }
       }
 
@@ -1456,17 +1460,19 @@ function MessageBubbleInner({
         queryKey: ['channels'],
       })
       const channels = channelRows.flatMap(([, data]) => (Array.isArray(data) ? data : []))
-      const channel = channels.find((candidate) => candidate.name.toLocaleLowerCase() === key)
+      const channel = channels.find((candidate) => lowerText(candidate.name) === key)
       if (!channel || !serverId) return null
+      const channelName =
+        typeof channel.name === 'string' && channel.name.trim() ? channel.name : key
 
       return {
         kind: 'channel',
         targetId: channel.id,
         token,
         sourceToken: token,
-        label: `#${channel.name}`,
+        label: `#${channelName}`,
         channelId: channel.id,
-        channelName: channel.name,
+        channelName,
         serverId,
         isPrivate: channel.isPrivate,
       }
@@ -2713,13 +2719,13 @@ interface BuddyAgentEntry {
 
 interface LegacyChannelEntry {
   id: string
-  name: string
+  name?: string | null
   isPrivate?: boolean
 }
 
 interface LegacyServerEntry {
   id: string
-  name: string
+  name?: string | null
   slug?: string | null
 }
 

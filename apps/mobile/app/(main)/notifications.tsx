@@ -115,6 +115,15 @@ function getNotificationDisplay(
         title: t('notification.channelMemberAdded', { channelName }),
         body: serverName ? t('notification.inServer', { serverName }) : (n.body ?? ''),
       }
+    case 'server.access_requested':
+      return {
+        title: t('notification.serverAccessRequested', { actorName, serverName }),
+        body: t('notification.serverAccessRequestedBody'),
+      }
+    case 'server.access_approved':
+      return { title: t('notification.serverAccessApproved', { serverName }), body: n.body ?? '' }
+    case 'server.access_rejected':
+      return { title: t('notification.serverAccessRejected', { serverName }), body: n.body ?? '' }
     case 'server.member_joined':
       return {
         title:
@@ -183,6 +192,19 @@ export default function NotificationsScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+    },
+  })
+
+  const reviewServerJoinRequest = useMutation({
+    mutationFn: (input: { requestId: string; status: 'approved' | 'rejected' }) =>
+      fetchApi(`/api/servers/join-requests/${input.requestId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: input.status }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['servers'] })
     },
   })
 
@@ -369,6 +391,43 @@ export default function NotificationsScreen() {
                             <X size={14} color={colors.error} />
                             <Text style={[styles.requestActionText, { color: colors.error }]}>
                               {t('channel.rejectAccess', '拒绝')}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      )}
+                      {item.referenceType === 'server_join_request' && item.referenceId && (
+                        <View style={styles.requestActions}>
+                          <Pressable
+                            disabled={reviewServerJoinRequest.isPending}
+                            style={[
+                              styles.requestAction,
+                              { backgroundColor: `${colors.success}20` },
+                            ]}
+                            onPress={() =>
+                              reviewServerJoinRequest.mutate({
+                                requestId: item.referenceId!,
+                                status: 'approved',
+                              })
+                            }
+                          >
+                            <Check size={14} color={colors.success} />
+                            <Text style={[styles.requestActionText, { color: colors.success }]}>
+                              {t('server.approveAccess', '同意')}
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            disabled={reviewServerJoinRequest.isPending}
+                            style={[styles.requestAction, { backgroundColor: `${colors.error}20` }]}
+                            onPress={() =>
+                              reviewServerJoinRequest.mutate({
+                                requestId: item.referenceId!,
+                                status: 'rejected',
+                              })
+                            }
+                          >
+                            <X size={14} color={colors.error} />
+                            <Text style={[styles.requestActionText, { color: colors.error }]}>
+                              {t('server.rejectAccess', '拒绝')}
                             </Text>
                           </Pressable>
                         </View>

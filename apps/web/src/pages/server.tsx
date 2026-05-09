@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Outlet, useNavigate, useParams } from '@tanstack/react-router'
-import { Loader2 } from 'lucide-react'
+import { Clock, Loader2, Lock, Send } from 'lucide-react'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChannelSidebar } from '../components/channel/channel-sidebar'
@@ -15,6 +15,11 @@ interface ServerMeta {
   id: string
   name: string
   slug: string | null
+  iconUrl?: string | null
+  bannerUrl?: string | null
+  description?: string | null
+  isPublic?: boolean
+  ownerId?: string
 }
 
 interface ChannelMeta {
@@ -28,6 +33,16 @@ interface ChannelAccessMeta {
   channel: ChannelMeta
 }
 
+interface ServerAccessMeta {
+  server: ServerMeta
+  isMember: boolean
+  canManage: boolean
+  canAccess: boolean
+  requiresApproval: boolean
+  joinRequestStatus: 'pending' | 'approved' | 'rejected' | null
+  joinRequestId: string | null
+}
+
 /**
  * Server layout route — wraps all server child routes with the channel sidebar.
  *
@@ -37,6 +52,7 @@ interface ChannelAccessMeta {
 export function ServerLayout() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { serverSlug, channelId } = useParams({ strict: false }) as {
     serverSlug: string
     channelId?: string
@@ -44,10 +60,35 @@ export function ServerLayout() {
   const { activeServerId, activeChannelId, setActiveServer } = useChatStore()
   const { mobileView } = useUIStore()
 
+  const {
+    data: serverAccess,
+    isLoading: isServerAccessLoading,
+    isError: isServerAccessError,
+  } = useQuery({
+    queryKey: ['server-access', serverSlug],
+    queryFn: () => fetchApi<ServerAccessMeta>(`/api/servers/${serverSlug}/access`),
+    enabled: !!serverSlug,
+    retry: false,
+  })
+  const canAccessServer = serverAccess?.canAccess === true
+
   const { data: server, isLoading: isServerLoading } = useQuery({
     queryKey: ['server', serverSlug],
     queryFn: () => fetchApi<ServerMeta>(`/api/servers/${serverSlug}`),
-    enabled: !!serverSlug,
+    enabled: !!serverSlug && canAccessServer,
+  })
+  const serverMeta = server ?? serverAccess?.server
+
+  const requestServerAccess = useMutation({
+    mutationFn: () =>
+      fetchApi(`/api/servers/${serverSlug}/join-requests`, {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['server-access', serverSlug] })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+    },
   })
 
   const {
@@ -57,21 +98,23 @@ export function ServerLayout() {
   } = useQuery({
     queryKey: ['channel-access', channelId],
     queryFn: () => fetchApi<ChannelAccessMeta>(`/api/channels/${channelId}/access`),
-    enabled: !!channelId,
+    enabled: !!channelId && canAccessServer,
     retry: false,
   })
   const routeChannel = routeChannelAccess?.channel
 
   // Redirect UUID URL → slug URL
   useEffect(() => {
-    if (server?.slug && serverSlug !== server.slug) {
+    if (serverMeta?.slug && serverSlug !== serverMeta.slug) {
       navigate({
         to: channelId ? '/servers/$serverSlug/channels/$channelId' : '/servers/$serverSlug',
-        params: channelId ? { serverSlug: server.slug, channelId } : { serverSlug: server.slug },
+        params: channelId
+          ? { serverSlug: serverMeta.slug, channelId }
+          : { serverSlug: serverMeta.slug },
         replace: true,
       })
     }
-  }, [server?.slug, serverSlug, channelId, navigate])
+  }, [serverMeta?.slug, serverSlug, channelId, navigate])
 
   // Sync server to store
   useEffect(() => {
@@ -101,13 +144,14 @@ export function ServerLayout() {
   const { data: channel } = useQuery({
     queryKey: ['channel', activeChannelId],
     queryFn: () => fetchApi<ChannelMeta>(`/api/channels/${activeChannelId}`),
-    enabled: !!activeChannelId,
+    enabled: !!activeChannelId && (!channelId || routeChannelAccess?.canAccess === true),
   })
 
   const unreadCount = useUnreadCount()
-  const title = channel?.name
-    ? `#${channel.name} · ${server?.name ?? t('server.home')}`
-    : (server?.name ?? t('common.selectServerToChat'))
+  const title =
+    (channel?.name ?? routeChannel?.name)
+      ? `#${channel?.name ?? routeChannel?.name} · ${serverMeta?.name ?? t('server.home')}`
+      : (serverMeta?.name ?? t('common.selectServerToChat'))
 
   useAppStatus({
     title,
@@ -118,10 +162,50 @@ export function ServerLayout() {
 
   if (!serverSlug) return null
 
-  if (isServerLoading) {
+  if (isServerAccessLoading || (canAccessServer && isServerLoading)) {
     return (
       <div className="flex-1 flex items-center justify-center text-text-muted bg-bg-primary">
         <Loader2 size={20} className="animate-spin opacity-60" />
+      </div>
+    )
+  }
+
+  if (serverAccess && !serverAccess.canAccess) {
+    const isPending = serverAccess.joinRequestStatus === 'pending' || requestServerAccess.isSuccess
+    return (
+      <div className="flex flex-1 items-center justify-center bg-bg-primary/70 px-6 backdrop-blur-xl">
+        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-bg-primary/80 p-6 text-center shadow-[0_18px_64px_rgba(0,0,0,0.32)]">
+          <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-primary/15 text-primary">
+            {isPending ? <Clock size={28} /> : <Lock size={28} />}
+          </div>
+          <h2 className="text-xl font-black text-text-primary">{serverAccess.server.name}</h2>
+          <p className="mt-2 text-sm leading-6 text-text-muted">
+            {t('server.privateServerGateDesc')}
+          </p>
+          <button
+            type="button"
+            className="mt-5 inline-flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-black text-black shadow-[0_0_24px_rgba(0,243,255,0.35)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isPending || requestServerAccess.isPending}
+            onClick={() => requestServerAccess.mutate()}
+          >
+            {requestServerAccess.isPending ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : isPending ? (
+              <Clock size={16} />
+            ) : (
+              <Send size={16} />
+            )}
+            <span>{isPending ? t('server.requestPending') : t('server.requestAccess')}</span>
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (isServerAccessError || !serverMeta) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-text-muted bg-bg-primary">
+        {t('server.accessUnavailable')}
       </div>
     )
   }

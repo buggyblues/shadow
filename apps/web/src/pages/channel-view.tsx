@@ -1,7 +1,7 @@
 import { Button, GlassPanel } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
-import { Clock, Lock, Send } from 'lucide-react'
+import { Clock, Loader2, Lock, Send } from 'lucide-react'
 import { useEffect, useLayoutEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChatArea } from '../components/chat/chat-area'
@@ -18,15 +18,11 @@ export function ChannelView() {
   const activeServerId = useChatStore((s) => s.activeServerId)
   const setMobileView = useUIStore((s) => s.setMobileView)
   const queryClient = useQueryClient()
-  const { data: channel } = useQuery({
-    queryKey: ['channel', channelId],
-    queryFn: () =>
-      fetchApi<{ id: string; name: string; serverId: string; isPrivate: boolean }>(
-        `/api/channels/${channelId}`,
-      ),
-    enabled: !!channelId,
-  })
-  const { data: access } = useQuery({
+  const {
+    data: access,
+    isLoading: isAccessLoading,
+    isError: isAccessError,
+  } = useQuery({
     queryKey: ['channel-access', channelId],
     queryFn: () =>
       fetchApi<{
@@ -36,6 +32,17 @@ export function ChannelView() {
         channel: { id: string; name: string; serverId: string; isPrivate: boolean }
       }>(`/api/channels/${channelId}/access`),
     enabled: !!channelId,
+    retry: false,
+  })
+  const canAccessChannel = access?.canAccess === true
+
+  const { data: channel } = useQuery({
+    queryKey: ['channel', channelId],
+    queryFn: () =>
+      fetchApi<{ id: string; name: string; serverId: string; isPrivate: boolean }>(
+        `/api/channels/${channelId}`,
+      ),
+    enabled: !!channelId && canAccessChannel,
   })
 
   const requestAccess = useMutation({
@@ -45,12 +52,11 @@ export function ChannelView() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['channel-access', channelId] })
+      queryClient.invalidateQueries({ queryKey: ['channels'] })
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
     },
   })
-
-  const canAccessChannel = access?.canAccess ?? false
 
   // Sync channel ID from URL → store before paint
   useLayoutEffect(() => {
@@ -73,7 +79,23 @@ export function ChannelView() {
     }
   }, [activeServerId, channel?.serverId, channelId])
 
-  if (access && !access.canAccess) {
+  if (isAccessLoading || (!access && !isAccessError)) {
+    return (
+      <div className="flex flex-1 items-center justify-center bg-bg-primary/70 text-text-muted backdrop-blur-xl">
+        <Loader2 size={18} className="animate-spin opacity-60" />
+      </div>
+    )
+  }
+
+  if (isAccessError || !access) {
+    return (
+      <div className="flex flex-1 items-center justify-center bg-bg-primary/70 px-6 text-center text-sm font-bold text-text-muted backdrop-blur-xl">
+        {t('channel.accessUnavailable', '无法查看此频道')}
+      </div>
+    )
+  }
+
+  if (!access.canAccess) {
     const isPending = access.joinRequestStatus === 'pending' || requestAccess.isSuccess
     const wallChannel = access.channel ?? channel
 

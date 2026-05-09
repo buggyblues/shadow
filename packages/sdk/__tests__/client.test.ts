@@ -829,6 +829,70 @@ describe('ShadowClient', () => {
     })
   })
 
+  describe('server access methods', () => {
+    beforeEach(() => {
+      globalThis.fetch = vi.fn() as typeof fetch
+    })
+
+    afterEach(() => {
+      restoreStubbedGlobals()
+    })
+
+    it('should fetch, request, and review private server access', async () => {
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              server: { id: 'srv-1', name: 'Private', slug: 'private' },
+              isMember: false,
+              canManage: false,
+              canAccess: false,
+              requiresApproval: true,
+              joinRequestStatus: null,
+              joinRequestId: null,
+            }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, status: 'pending', requestId: 'req-1' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ ok: true }),
+        })
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.getServerAccess('private')
+      await client.requestServerAccess('private')
+      await client.reviewServerJoinRequest('req-1', 'approved')
+
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'https://api.example.com/api/servers/private/access',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-token-123',
+          }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'https://api.example.com/api/servers/private/join-requests',
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        3,
+        'https://api.example.com/api/servers/join-requests/req-1',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'approved' }),
+        }),
+      )
+    })
+  })
+
   describe('notification methods', () => {
     beforeEach(() => {
       globalThis.fetch = vi.fn() as typeof fetch

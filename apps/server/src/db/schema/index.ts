@@ -81,6 +81,7 @@ export {
   rentalUsageRecords,
   rentalViolations,
 } from './rentals'
+export { serverJoinRequests } from './server-join-requests'
 export { servers } from './servers'
 export {
   cartItems,
