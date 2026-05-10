@@ -332,9 +332,14 @@ function getPaginationWindow(page: number, totalPages: number, maxWindow = 5): n
   return Array.from({ length: end - start + 1 }, (_, i) => start + i)
 }
 
-function formatTooltipValue(value?: number) {
+function formatTooltipValue(value?: unknown) {
   if (value === undefined || value === null) return '0'
-  return value.toLocaleString()
+
+  const normalized =
+    typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
+
+  if (!Number.isFinite(normalized)) return String(value)
+  return normalized.toLocaleString()
 }
 
 function formatPercent(value: number | null | undefined): string {
@@ -1225,8 +1230,8 @@ function DashboardContent() {
                               />
                               <YAxis stroke="var(--color-text-secondary)" />
                               <Tooltip
-                                formatter={(value: number) => formatTooltipValue(value)}
-                                labelFormatter={(value: string) => value}
+                                formatter={(value: unknown) => formatTooltipValue(value)}
+                                labelFormatter={(value: unknown) => formatTooltipValue(value)}
                                 contentStyle={{
                                   backgroundColor: 'var(--color-bg-tertiary)',
                                   borderColor: 'var(--color-border-subtle)',
@@ -1276,8 +1281,8 @@ function DashboardContent() {
                                 stroke="var(--color-text-secondary)"
                               />
                               <Tooltip
-                                formatter={(value: number) => formatTooltipValue(value)}
-                                labelFormatter={(value: string) => value}
+                                formatter={(value: unknown) => formatTooltipValue(value)}
+                                labelFormatter={(value: unknown) => formatTooltipValue(value)}
                                 contentStyle={{
                                   backgroundColor: 'var(--color-bg-tertiary)',
                                   borderColor: 'var(--color-border-subtle)',
