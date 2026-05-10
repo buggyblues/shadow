@@ -30,7 +30,8 @@
     "bot": "Buddy",
     "shrimpCoin": "虾币",
     "done": "完成",
-    "unknown": "未知"
+    "unknown": "未知",
+    "buddy": "Buddy"
   },
   "nav": {
     "features": "特色功能",
@@ -2448,6 +2449,5 @@
       "consume": "确认现在使用这份资产吗？可用数量会减少。",
       "revoke": "确认撤销这份资产吗？该操作不可恢复。"
     }
-  },
-  "buddy": "Buddy"
+  }
 }

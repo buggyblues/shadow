@@ -30,7 +30,8 @@
     "bot": "Buddy",
     "shrimpCoin": "シュリンプコイン",
     "done": "完了",
-    "unknown": "不明"
+    "unknown": "不明",
+    "buddy": "Buddy"
   },
   "nav": {
     "features": "機能紹介",
@@ -2448,6 +2449,5 @@
       "consume": "この資産を今使いますか？残数が減る場合があります。",
       "revoke": "この資産を取り消しますか？この操作は元に戻せません。"
     }
-  },
-  "buddy": "Buddy"
+  }
 }

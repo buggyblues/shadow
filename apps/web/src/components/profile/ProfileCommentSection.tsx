@@ -311,7 +311,7 @@ function CommentItem({
               </span>
               {comment.author.isBot && (
                 <Badge variant="info" size="xs">
-                  {t('buddy')}
+                  {t('common.buddy')}
                 </Badge>
               )}
               <span className="text-xs text-text-muted">
@@ -539,7 +539,7 @@ function ReplyItem({ reply, currentUserId, onToggleReaction, onDelete }: ReplyIt
             </span>
             {reply.author.isBot && (
               <Badge variant="info" size="xs">
-                {t('buddy')}
+                {t('common.buddy')}
               </Badge>
             )}
             <span className="text-xs text-text-muted">

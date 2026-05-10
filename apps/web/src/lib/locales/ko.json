@@ -30,7 +30,8 @@
     "bot": "Buddy",
     "shrimpCoin": "쉬림프 코인",
     "done": "완료",
-    "unknown": "알 수 없음"
+    "unknown": "알 수 없음",
+    "buddy": "Buddy"
   },
   "nav": {
     "features": "기능 소개",
@@ -2448,6 +2449,5 @@
       "consume": "이 자산을 지금 사용하시겠습니까? 남은 수량이 줄어들 수 있습니다.",
       "revoke": "이 자산을 회수하시겠습니까? 이 작업은 되돌릴 수 없습니다."
     }
-  },
-  "buddy": "Buddy"
+  }
 }
