@@ -105,6 +105,16 @@ async function json<T = unknown>(res: Response): Promise<T> {
   return res.json() as Promise<T>
 }
 
+function orderBody(input: {
+  items: Array<{ productId: string; skuId?: string; quantity: number }>
+  buyerNote?: string
+}) {
+  return {
+    idempotencyKey: `shop-multiuser-e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    ...input,
+  }
+}
+
 /* ── Setup & Teardown ── */
 
 beforeAll(async () => {
@@ -750,13 +760,13 @@ describe('7. Order creation — multi-user purchases', () => {
 
     const res = await req('POST', `/api/servers/${serverId}/shop/orders`, {
       token: buyerAToken,
-      body: {
+      body: orderBody({
         items: [
           { productId: prodPhoneId, skuId: phoneSku128Id, quantity: 1 },
           { productId: prodBundleId, skuId: bundleSkuId, quantity: 1 },
         ],
         buyerNote: '请包装好，容易碎',
-      },
+      }),
     })
     expect(res.status).toBe(201)
     const order = await json<{
@@ -793,13 +803,13 @@ describe('7. Order creation — multi-user purchases', () => {
 
     const res = await req('POST', `/api/servers/${serverId}/shop/orders`, {
       token: buyerBToken,
-      body: {
+      body: orderBody({
         items: [
           { productId: prodPhoneId, skuId: phoneSku256Id, quantity: 1 },
           { productId: prodCaseId, skuId: caseSku, quantity: 2 },
         ],
         buyerNote: '急用',
-      },
+      }),
     })
     expect(res.status).toBe(201)
     const order = await json<{ id: string; totalAmount: number; status: string }>(res)
@@ -822,7 +832,7 @@ describe('7. Order creation — multi-user purchases', () => {
   it('buyer A places entitlement order (VIP)', async () => {
     const res = await req('POST', `/api/servers/${serverId}/shop/orders`, {
       token: buyerAToken,
-      body: { items: [{ productId: prodVipId, skuId: vipSkuId, quantity: 1 }] },
+      body: orderBody({ items: [{ productId: prodVipId, skuId: vipSkuId, quantity: 1 }] }),
     })
     expect(res.status).toBe(201)
     const order = await json<{ id: string; totalAmount: number; status: string }>(res)
@@ -862,7 +872,7 @@ describe('7. Order creation — multi-user purchases', () => {
   it('buyer A fails to buy more limited cases than stock', async () => {
     const res = await req('POST', `/api/servers/${serverId}/shop/orders`, {
       token: buyerAToken,
-      body: { items: [{ productId: prodCaseId, skuId: caseSku, quantity: 2 }] },
+      body: orderBody({ items: [{ productId: prodCaseId, skuId: caseSku, quantity: 2 }] }),
     })
     expect(res.status).toBe(400) // Only 1 left in stock
   })
@@ -870,7 +880,7 @@ describe('7. Order creation — multi-user purchases', () => {
   it('buyer A can still buy 1 remaining case', async () => {
     const res = await req('POST', `/api/servers/${serverId}/shop/orders`, {
       token: buyerAToken,
-      body: { items: [{ productId: prodCaseId, skuId: caseSku, quantity: 1 }] },
+      body: orderBody({ items: [{ productId: prodCaseId, skuId: caseSku, quantity: 1 }] }),
     })
     expect(res.status).toBe(201)
     const order = await json<{ totalAmount: number }>(res)
@@ -887,7 +897,7 @@ describe('7. Order creation — multi-user purchases', () => {
 
     const res = await req('POST', `/api/servers/${serverId}/shop/orders`, {
       token: buyerBToken,
-      body: { items: [{ productId: expProduct.id, quantity: 1 }] },
+      body: orderBody({ items: [{ productId: expProduct.id, quantity: 1 }] }),
     })
     expect(res.status).toBe(402)
 
@@ -1160,7 +1170,7 @@ describe('11. Order cancellation & refund', () => {
 
     const res = await req('POST', `/api/servers/${serverId}/shop/orders`, {
       token: buyerBToken,
-      body: { items: [{ productId: prodBundleId, skuId: bundleSkuId, quantity: 1 }] },
+      body: orderBody({ items: [{ productId: prodBundleId, skuId: bundleSkuId, quantity: 1 }] }),
     })
     expect(res.status).toBe(201)
     const order = await json<{ id: string; status: string; totalAmount: number }>(res)
@@ -1397,7 +1407,7 @@ describe('15. Edge cases & validation', () => {
   it('empty order rejected', async () => {
     const res = await req('POST', `/api/servers/${serverId}/shop/orders`, {
       token: buyerAToken,
-      body: { items: [] },
+      body: orderBody({ items: [] }),
     })
     expect(res.status).toBe(400)
   })
@@ -1405,7 +1415,9 @@ describe('15. Edge cases & validation', () => {
   it('order with non-existent product fails', async () => {
     const res = await req('POST', `/api/servers/${serverId}/shop/orders`, {
       token: buyerAToken,
-      body: { items: [{ productId: '00000000-0000-0000-0000-000000000000', quantity: 1 }] },
+      body: orderBody({
+        items: [{ productId: '00000000-0000-0000-0000-000000000000', quantity: 1 }],
+      }),
     })
     expect(res.status).toBeGreaterThanOrEqual(400)
   })

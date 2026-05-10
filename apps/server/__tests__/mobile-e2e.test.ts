@@ -89,6 +89,15 @@ async function json<T = unknown>(res: Response): Promise<T> {
   return res.json() as Promise<T>
 }
 
+function orderBody(input: {
+  items: Array<{ productId: string; skuId?: string; quantity: number }>
+}) {
+  return {
+    idempotencyKey: `mobile-e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    ...input,
+  }
+}
+
 /* ── Setup & Teardown ── */
 
 beforeAll(async () => {
@@ -365,9 +374,9 @@ describe('Shop order lifecycle (mobile)', () => {
   it('create order from cart', async () => {
     const res = await req('POST', `/api/servers/${serverId}/shop/orders`, {
       token: memberToken,
-      body: {
+      body: orderBody({
         items: [{ productId, skuId, quantity: 1 }],
-      },
+      }),
     })
     expect(res.status).toBe(201)
     const order = await json<{ id: string; status: string; totalAmount: number }>(res)
