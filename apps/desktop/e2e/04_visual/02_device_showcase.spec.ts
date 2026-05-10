@@ -3,8 +3,8 @@ import path from 'node:path'
 import { test } from '@playwright/test'
 
 const repoRoot = path.resolve(__dirname, '../../../..')
-const screenshotDir = path.join(repoRoot, 'docs/e2e/screenshots')
-const outputDir = path.join(repoRoot, 'docs/readme/showcase')
+const screenshotDir = path.join(repoRoot, 'website/docs/public/screenshots')
+const outputDir = path.join(repoRoot, 'website/docs/public/readme/showcase')
 
 const items = [
   { src: '04-team-general-channel.png', out: 'channel.png', title: 'Shadow' },

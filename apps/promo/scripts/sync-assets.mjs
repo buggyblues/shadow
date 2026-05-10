@@ -32,10 +32,10 @@ await copyIfExists(
 )
 
 const productSources = [
-  ['docs/readme/hero-en.png', 'hero-en.png'],
-  ['docs/readme/hero-zh.png', 'hero-zh.png'],
-  ['docs/e2e/screenshots/04-team-general-channel.png', 'channel.png'],
-  ['docs/e2e/screenshots/08-buddy-marketplace.png', 'buddy-marketplace.png'],
+  ['website/docs/public/readme/hero-en.png', 'hero-en.png'],
+  ['website/docs/public/readme/hero-zh.png', 'hero-zh.png'],
+  ['website/docs/public/screenshots/04-team-general-channel.png', 'channel.png'],
+  ['website/docs/public/screenshots/08-buddy-marketplace.png', 'buddy-marketplace.png'],
 ]
 
 for (const [source, target] of productSources) {

@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
 
-const outputDir = path.resolve(__dirname, '../../../../docs/readme')
+const outputDir = path.resolve(__dirname, '../../../../website/docs/public/readme')
 const baseUrl = process.env.README_CAPTURE_BASE_URL ?? 'http://127.0.0.1:4173'
 
 async function preparePage(page: import('@playwright/test').Page, url: string) {
