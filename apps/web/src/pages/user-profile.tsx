@@ -216,7 +216,7 @@ export function UserProfilePage() {
                     </h1>
                     {profile.isBot && (
                       <Badge variant="info" size="xs">
-                        {t('buddy')}
+                        {t('common.buddy')}
                       </Badge>
                     )}
                   </div>
@@ -324,7 +324,7 @@ export function UserProfilePage() {
                           <UserAvatar
                             userId={agent.userId}
                             avatarUrl={agent.botUser?.avatarUrl ?? null}
-                            displayName={agent.botUser?.displayName ?? t('buddy')}
+                            displayName={agent.botUser?.displayName ?? t('common.buddy')}
                             size="sm"
                             className="rounded-xl group-hover:scale-105 transition-transform"
                           />
@@ -334,7 +334,9 @@ export function UserProfilePage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <span className="text-sm font-black text-text-primary truncate group-hover:text-primary transition-colors block">
-                            {agent.botUser?.displayName ?? agent.botUser?.username ?? t('buddy')}
+                            {agent.botUser?.displayName ??
+                              agent.botUser?.username ??
+                              t('common.buddy')}
                           </span>
                           {agent.totalOnlineSeconds > 0 && (
                             <span className="text-[9px] font-black text-text-muted uppercase tracking-tighter">

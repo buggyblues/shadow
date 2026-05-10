@@ -30,7 +30,8 @@
     "bot": "Buddy",
     "shrimpCoin": "Shrimp Coins",
     "done": "Done",
-    "unknown": "Unknown"
+    "unknown": "Unknown",
+    "buddy": "Buddy"
   },
   "nav": {
     "features": "Features",
@@ -2448,6 +2449,5 @@
       "consume": "Use this asset now? This may reduce the remaining quantity.",
       "revoke": "Revoke this asset? This action cannot be undone."
     }
-  },
-  "buddy": "Buddy"
+  }
 }
