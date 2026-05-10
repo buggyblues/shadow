@@ -20,7 +20,6 @@ type ShadowOutboundDeliveryResult = {
   channel: string
   messageId: string
   channelId?: string
-  dmChannelId?: string
   conversationId?: string
   meta?: Record<string, unknown>
 }
@@ -70,17 +69,13 @@ export function chunkText(text: string, maxLen: number = CHUNK_SIZE): string[] {
   return chunks
 }
 
-/** Parse a Shadow target string like "shadowob:channel:<channelId>" or "shadowob:dm:<dmId>" */
+/** Parse a Shadow target string like "shadowob:channel:<channelId>" */
 export function parseTarget(to: string): {
   channelId?: string
   threadId?: string
-  dmChannelId?: string
 } {
   const parts = to.split(':')
   const prefix = parts[0]
-  if ((prefix === 'shadowob' || prefix === 'openclaw-shadowob') && parts[1] === 'dm' && parts[2]) {
-    return { dmChannelId: parts[2] }
-  }
   if (
     (prefix === 'shadowob' || prefix === 'openclaw-shadowob') &&
     parts[1] === 'channel' &&
@@ -121,9 +116,8 @@ async function sendTextChunks(params: {
   message: ShadowMessage
   channelId?: string
   threadId?: string
-  dmChannelId?: string
 }> {
-  const { channelId, threadId: parsedThreadId, dmChannelId } = parseTarget(params.to)
+  const { channelId, threadId: parsedThreadId } = parseTarget(params.to)
   const threadId =
     params.threadId !== undefined && params.threadId !== null
       ? String(params.threadId)
@@ -146,10 +140,6 @@ async function sendTextChunks(params: {
         replyToId: replyTo,
         ...(mentions ? { mentions } : {}),
       })
-    } else if (dmChannelId) {
-      lastMessage = await params.client.sendDmMessage(dmChannelId, chunk, {
-        replyToId: replyTo,
-      })
     } else if (threadId) {
       lastMessage = replyTo
         ? await params.client.sendToThread(threadId, chunk, { replyToId: replyTo })
@@ -165,34 +155,30 @@ async function sendTextChunks(params: {
         ...(mentions ? { mentions } : {}),
       })
     } else {
-      throw new Error('Could not resolve target channel, thread, or DM')
+      throw new Error('Could not resolve target channel or thread')
     }
   }
 
   if (!lastMessage) {
     throw new Error('No message was sent')
   }
-  return { message: lastMessage, channelId, threadId, dmChannelId }
+  return { message: lastMessage, channelId, threadId }
 }
 
 function toDeliveryResult(params: {
   message: ShadowMessage
   channelId?: string
   threadId?: string
-  dmChannelId?: string
 }): ShadowOutboundDeliveryResult {
   return {
     channel: 'shadowob',
     messageId: params.message.id,
     channelId: params.channelId ?? params.message.channelId,
-    dmChannelId: params.dmChannelId,
-    conversationId:
-      params.dmChannelId ?? params.threadId ?? params.channelId ?? params.message.channelId,
-    ...(params.threadId || params.dmChannelId
+    conversationId: params.threadId ?? params.channelId ?? params.message.channelId,
+    ...(params.threadId
       ? {
           meta: {
-            ...(params.threadId ? { threadId: params.threadId } : {}),
-            ...(params.dmChannelId ? { dmChannelId: params.dmChannelId } : {}),
+            threadId: params.threadId,
           },
         }
       : {}),
@@ -229,10 +215,7 @@ async function sendMediaToShadow(params: {
 
   for (const mediaUrl of mediaUrls) {
     try {
-      await params.client.uploadMediaFromUrl(
-        mediaUrl,
-        sent.dmChannelId ? { dmMessageId: sent.message.id } : sent.message.id,
-      )
+      await params.client.uploadMediaFromUrl(mediaUrl, sent.message.id)
     } catch (err) {
       const fallback = await sendTextChunks({
         client: params.client,

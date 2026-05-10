@@ -52,6 +52,7 @@ import { AppService } from './services/app.service'
 import { AuthService } from './services/auth.service'
 import { CartService } from './services/cart.service'
 import { ChannelService } from './services/channel.service'
+import { ChannelAccessService } from './services/channel-access.service'
 import { CloudService } from './services/cloud.service'
 import { CloudUsageService } from './services/cloud-usage.service'
 import { CommerceCardService } from './services/commerce-card.service'
@@ -60,7 +61,6 @@ import { CommerceFulfillmentService } from './services/commerce-fulfillment.serv
 import { CommerceOfferService } from './services/commerce-offer.service'
 import { CommunityAssetService } from './services/community-asset.service'
 import { DiyCloudRunService } from './services/diy-cloud-run.service'
-import { DmService } from './services/dm.service'
 import { EconomyAuditService } from './services/economy-audit.service'
 import { EconomyIdempotencyService } from './services/economy-idempotency.service'
 import { EconomyPolicyService } from './services/economy-policy.service'
@@ -183,6 +183,7 @@ export interface Cradle {
   externalOAuthService: ExternalOAuthService
   serverService: ServerService
   channelService: ChannelService
+  channelAccessService: ChannelAccessService
   messageService: MessageService
   searchService: SearchService
   mentionService: MentionService
@@ -204,7 +205,6 @@ export interface Cradle {
   tipService: TipService
   permissionService: PermissionService
   policyService: PolicyService
-  dmService: DmService
   friendshipService: FriendshipService
   mediaService: MediaService
   agentService: AgentService
@@ -318,6 +318,7 @@ export function createAppContainer(db: Database): AppContainer {
     externalOAuthService: asClass(ExternalOAuthService).singleton(),
     serverService: asClass(ServerService).singleton(),
     channelService: asClass(ChannelService).singleton(),
+    channelAccessService: asClass(ChannelAccessService).singleton(),
     messageService: asClass(MessageService).singleton(),
     searchService: asClass(SearchService).singleton(),
     mentionService: asClass(MentionService).singleton(),
@@ -339,7 +340,6 @@ export function createAppContainer(db: Database): AppContainer {
     tipService: asClass(TipService).singleton(),
     permissionService: asClass(PermissionService).singleton(),
     policyService: asClass(PolicyService).singleton(),
-    dmService: asClass(DmService).singleton(),
     friendshipService: asClass(FriendshipService).singleton(),
     mediaService: asClass(MediaService).singleton(),
     agentService: asClass(AgentService).singleton(),

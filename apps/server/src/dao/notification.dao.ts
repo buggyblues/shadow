@@ -35,7 +35,6 @@ export interface CreateNotificationRecord {
   senderId?: string | null
   scopeServerId?: string | null
   scopeChannelId?: string | null
-  scopeDmChannelId?: string | null
   aggregationKey?: string | null
   metadata?: Record<string, unknown> | null
   expiresAt?: Date | null
@@ -103,7 +102,6 @@ export class NotificationDao {
         senderId: data.senderId,
         scopeServerId: data.scopeServerId,
         scopeChannelId: data.scopeChannelId,
-        scopeDmChannelId: data.scopeDmChannelId,
         aggregationKey: data.aggregationKey,
         metadata: data.metadata,
         expiresAt: data.expiresAt,
@@ -138,7 +136,6 @@ export class NotificationDao {
           senderId: data.senderId,
           scopeServerId: data.scopeServerId,
           scopeChannelId: data.scopeChannelId,
-          scopeDmChannelId: data.scopeDmChannelId,
           metadata: data.metadata,
           aggregatedCount: sql`${notifications.aggregatedCount} + 1`,
           lastAggregatedAt: new Date(),

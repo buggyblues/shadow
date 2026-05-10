@@ -9,7 +9,7 @@ export { appSourceEnum, appStatusEnum, apps } from './apps'
 export { attachments } from './attachments'
 export { channelJoinRequests } from './channel-join-requests'
 export { channelMembers } from './channel-members'
-export { channels, channelTypeEnum } from './channels'
+export { channelKindEnum, channels, channelTypeEnum } from './channels'
 export {
   cloudActivities,
   cloudActivityTypeEnum,
@@ -31,10 +31,6 @@ export {
   configValues,
   featureFlags,
 } from './config-management'
-export { dmAttachments } from './dm-attachments'
-export { dmChannels } from './dm-channels'
-export { dmMessages } from './dm-messages'
-export { dmReactions } from './dm-reactions'
 export {
   commerceFulfillmentRecordStatusEnum,
   commerceFulfillmentRecords,

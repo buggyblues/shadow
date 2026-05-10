@@ -79,16 +79,16 @@ afterEach(() => {
 })
 
 describe.sequential('web socket room rejoin', () => {
-  it('replays channel, DM, and app joins after the socket connects', async () => {
+  it('replays channel and app joins after the socket connects', async () => {
     const fakeSocket = createFakeSocket()
     socketMockState.current = fakeSocket
 
-    const { connectSocket, disconnectSocket, joinApp, joinChannel, joinDm } = await import(
+    const { connectSocket, disconnectSocket, joinApp, joinChannel } = await import(
       '../src/lib/socket'
     )
 
     joinChannel('channel-1')
-    joinDm('dm-1')
+    joinChannel('channel-2')
     joinApp('app-1')
 
     expect(fakeSocket.emits).toEqual([])
@@ -97,7 +97,7 @@ describe.sequential('web socket room rejoin', () => {
 
     expect(fakeSocket.emits).toEqual([
       { event: 'channel:join', args: [{ channelId: 'channel-1' }] },
-      { event: 'dm:join', args: [{ dmChannelId: 'dm-1' }] },
+      { event: 'channel:join', args: [{ channelId: 'channel-2' }] },
       { event: 'app:join', args: [{ appId: 'app-1' }] },
     ])
 

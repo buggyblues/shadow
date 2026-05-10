@@ -136,7 +136,7 @@ export function ContractDetailPage() {
   // Start chat with rented claw
   const startChatMutation = useMutation({
     mutationFn: (agentUserId: string) =>
-      fetchApi<{ id: string }>('/api/dm/channels', {
+      fetchApi<{ id: string }>('/api/channels/dm', {
         method: 'POST',
         body: JSON.stringify({ userId: agentUserId }),
       }),

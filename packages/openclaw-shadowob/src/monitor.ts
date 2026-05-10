@@ -24,7 +24,6 @@ import type {
 import { ShadowClient, ShadowSocket } from '@shadowob/sdk'
 import type { PluginRuntime } from 'openclaw/plugin-sdk/core'
 import { processShadowMessage } from './monitor/channel-message.js'
-import { processShadowDmMessage, type ShadowDmMessage } from './monitor/dm-message.js'
 import {
   formatSlashCommandPrompt,
   loadLocalSlashCommands,
@@ -254,6 +253,7 @@ export async function monitorShadowProvider(
   }
 
   const rememberChannelContext = (channel: ShadowChannel, server?: ShadowServer | null) => {
+    if (channel.kind === 'dm' || !channel.serverId) return
     channelServerMap.set(channel.id, {
       serverId: channel.serverId,
       serverSlug: server?.slug ?? channel.serverId,
@@ -270,11 +270,16 @@ export async function monitorShadowProvider(
         () => client.getChannel(channelId),
         { runtime, abortSignal },
       )
+      if (channel.kind === 'dm' || !channel.serverId) {
+        runtime.log?.(`[config] Resolved direct channel context: ${channelId}`)
+        return true
+      }
+      const serverId = channel.serverId
       let server: ShadowServer | null = null
       try {
         server = await runShadowApiOperation(
           `fetch server context for channel ${channelId}`,
-          () => client.getServer(channel.serverId),
+          () => client.getServer(serverId),
           { runtime, abortSignal },
         )
       } catch (err) {
@@ -350,6 +355,28 @@ export async function monitorShadowProvider(
         runtime.log?.('[config] No cached session — falling back to monitoring no channels')
       }
     }
+  }
+
+  try {
+    const directChannels = await runShadowApiOperation(
+      'fetch direct channels',
+      () => client.listDirectChannels(),
+      { runtime, abortSignal },
+    )
+    for (const ch of directChannels) {
+      if (!allChannelIds.includes(ch.id)) allChannelIds.push(ch.id)
+      if (!channelPolicies.has(ch.id)) {
+        channelPolicies.set(ch.id, {
+          listen: true,
+          reply: true,
+          mentionOnly: false,
+          config: {},
+        })
+      }
+    }
+    runtime.log?.(`[config] Monitoring ${directChannels.length} direct channel(s)`)
+  } catch (err) {
+    runtime.error?.(`[config] Failed to fetch direct channels: ${String(err)}`)
   }
 
   let heartbeatInterval: ReturnType<typeof setInterval> | null = null
@@ -477,19 +504,6 @@ export async function monitorShadowProvider(
     runtime.log?.(
       `[ws] Emitted channel:join for ${allChannelIds.length} channel(s), listening for messages`,
     )
-
-    ;(async () => {
-      try {
-        const dmChannels = await client.listDmChannels()
-        for (const ch of dmChannels) {
-          socket.joinDmChannel(ch.id)
-          runtime.log?.(`[ws] Joined DM room dm:${ch.id}`)
-        }
-        runtime.log?.(`[ws] Joined ${dmChannels.length} DM channel room(s)`)
-      } catch (err) {
-        runtime.error?.(`[ws] Failed to join DM rooms: ${String(err)}`)
-      }
-    })()
   })
 
   socket.onConnectError((err) => {
@@ -674,58 +688,6 @@ export async function monitorShadowProvider(
     if (idx !== -1) allChannelIds.splice(idx, 1)
     socket.leaveChannel(data.channelId)
     runtime.log?.(`[ws] Left channel room ${data.channelId} after member-removed`)
-  })
-
-  const processedDmIds = new Set<string>()
-  socket.on('dm:message:new', (dmMessage: ShadowDmMessage) => {
-    if (processedDmIds.has(dmMessage.id)) {
-      runtime.log?.(`[ws] Skipping duplicate dm:message:new ${dmMessage.id}`)
-      return
-    }
-    processedDmIds.add(dmMessage.id)
-    if (processedDmIds.size > 500) {
-      const first = processedDmIds.values().next().value
-      if (first) processedDmIds.delete(first)
-    }
-
-    const senderLabel = dmMessage.author?.username ?? dmMessage.senderId
-    runtime.log?.(
-      `[ws] ← dm:message:new from ${senderLabel} in DM ${dmMessage.dmChannelId}: "${dmMessage.content?.slice(0, 60)}" (${dmMessage.id})`,
-    )
-
-    if (stopped) {
-      runtime.log?.('[ws] Monitor stopped, ignoring DM message')
-      return
-    }
-
-    const processWithRetry = async (attempt = 0) => {
-      try {
-        await processShadowDmMessage({
-          dmMessage,
-          account,
-          accountId,
-          config,
-          runtime,
-          core,
-          botUserId,
-          botUsername: me.username,
-          shadowAgentId: agentId,
-          slashCommands,
-          socket,
-        })
-      } catch (err) {
-        const MAX_RETRIES = 2
-        runtime.error?.(`[ws] DM processing failed (attempt ${attempt + 1}): ${String(err)}`)
-        if (attempt < MAX_RETRIES) {
-          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
-          return processWithRetry(attempt + 1)
-        }
-        runtime.error?.(
-          `[ws] DM permanently failed after ${MAX_RETRIES + 1} attempts: ${dmMessage.id}`,
-        )
-      }
-    }
-    void processWithRetry()
   })
 
   socket.on('message:new', (message: ShadowMessage) => {

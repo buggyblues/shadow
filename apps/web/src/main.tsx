@@ -24,7 +24,7 @@ import { CreateListingPage } from './pages/create-listing'
 import { DevelopersCloudPage } from './pages/developers-cloud'
 import { DiscoverPage } from './pages/discover'
 import { DiyCloudPage } from './pages/diy-cloud'
-import { DmChatPage } from './pages/dm-chat'
+import { DirectChatPage } from './pages/dm-chat'
 import { InvitePage } from './pages/invite'
 import { LoginPage } from './pages/login'
 import { MarketplaceDetailPage } from './pages/marketplace-detail'
@@ -279,7 +279,7 @@ const userProfileRoute = createRoute({
 const dmChatRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/dm/$dmChannelId',
-  component: DmChatPage,
+  component: DirectChatPage,
 })
 
 const personalShopRoute = createRoute({

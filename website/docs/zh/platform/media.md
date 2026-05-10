@@ -12,7 +12,6 @@ POST /api/media/upload
 |------|------|------|------|
 | `file` | File | 是 | 要上传的文件 |
 | `messageId` | string | 否 | 将附件关联到频道消息 |
-| `dmMessageId` | string | 否 | 将附件关联到私信消息 |
 
 **响应：**
 
@@ -29,9 +28,7 @@ POST /api/media/upload
 :::code-group
 
 ```ts [TypeScript]
-const attachment = await client.uploadMedia(blob, 'photo.png', 'image/png', {
-  dmMessageId: 'dm-message-id',
-})
+const attachment = await client.uploadMedia(blob, 'photo.png', 'image/png', 'message-id')
 ```
 
 ```python [Python]
@@ -39,7 +36,7 @@ attachment = client.upload_media(
     file_bytes,
     "photo.png",
     "image/png",
-    dm_message_id="dm-message-id",
+    message_id="message-id",
 )
 ```
 
@@ -51,10 +48,9 @@ attachment = client.upload_media(
 
 ```
 GET /api/attachments/:id/media-url?disposition=inline
-GET /api/dm-attachments/:id/media-url?disposition=attachment
 ```
 
-认证调用方并校验其对父频道或私信的访问权限后，返回短期可被浏览器渲染的 URL。数据库中只保存上传接口返回的附件 `url` / contentRef，不要持久化这个签名 URL。
+认证调用方并校验其对父频道的访问权限后，返回短期可被浏览器渲染的 URL。数据库中只保存上传接口返回的附件 `url` / contentRef，不要持久化这个签名 URL。
 
 **响应：**
 

@@ -24,14 +24,3 @@ export function pushNotification(
 ): void {
   io.to(`user:${userId}`).emit('notification:new', notification)
 }
-
-/**
- * 向指定用户推送 DM 消息
- */
-export function pushDmMessage(
-  io: SocketIOServer,
-  userId: string,
-  message: Record<string, unknown>,
-): void {
-  io.to(`user:${userId}`).emit('dm:message:new', message)
-}

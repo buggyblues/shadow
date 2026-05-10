@@ -99,26 +99,8 @@ function formatInteractiveEcho(
 }
 
 async function getChannelAccess(container: AppContainer, channelId: string, userId: string) {
-  const channelService = container.resolve('channelService')
-  const serverDao = container.resolve('serverDao')
-  const channelMemberDao = container.resolve('channelMemberDao')
-  const channel = await channelService.getById(channelId)
-  const serverMember = await serverDao.getMember(channel.serverId, userId)
-  if (!serverMember) {
-    return { ok: false as const, status: 403 as const, error: 'Not a member of this server' }
-  }
-
-  const channelMember = await channelMemberDao.get(channelId, userId)
-  const canManage = serverMember.role === 'owner' || serverMember.role === 'admin'
-  if (channel.isPrivate && !channelMember && !canManage) {
-    return { ok: false as const, status: 403 as const, error: 'Not a member of this channel' }
-  }
-
-  if (!channel.isPrivate && !channelMember) {
-    await channelMemberDao.add(channelId, userId).catch(() => null)
-  }
-
-  return { ok: true as const, channel }
+  const channelAccessService = container.resolve('channelAccessService')
+  return channelAccessService.getAccess(channelId, userId)
 }
 
 async function getMessageAccess(
@@ -134,7 +116,13 @@ async function getMessageAccess(
   }
 
   const access = await getChannelAccess(container, message.channelId, userId)
-  if (!access.ok) return access
+  if (!access.ok) {
+    return {
+      ok: false as const,
+      status: access.status ?? 403,
+      error: access.error ?? 'Channel access denied',
+    }
+  }
   return { ok: true as const, message }
 }
 
@@ -225,6 +213,28 @@ export function createMessageHandler(container: AppContainer) {
       }
 
       try {
+        if (access.channel?.kind === 'dm') {
+          const channelService = container.resolve('channelService')
+          const peer = await channelService.findDirectPeer(channelId, user.userId)
+          if (peer) {
+            const notificationTriggerService = container.resolve('notificationTriggerService')
+            const senderName = message.author?.displayName ?? message.author?.username ?? 'Someone'
+            await notificationTriggerService.triggerDirectMessage({
+              userId: peer.id,
+              actorId: user.userId,
+              actorName: senderName,
+              channelId,
+              preview: message.content.substring(0, 200),
+            })
+            const rentalService = container.resolve('rentalService')
+            await rentalService.recordRentalMessage(user.userId, peer.id).catch(() => null)
+          }
+        }
+      } catch {
+        /* direct channel side effects are non-critical */
+      }
+
+      try {
         if (input.replyToId) {
           const notificationTriggerService = container.resolve('notificationTriggerService')
           const originalMessage = await messageService.getById(input.replyToId)
@@ -235,8 +245,8 @@ export function createMessageHandler(container: AppContainer) {
               actorName: message.author?.displayName ?? message.author?.username ?? 'Someone',
               messageId: message.id,
               channelId,
-              serverId: access.channel.serverId,
-              channelName: access.channel.name,
+              serverId: access.channel?.serverId ?? null,
+              channelName: access.channel?.name,
               preview: message.content.substring(0, 200),
             })
           }
@@ -585,8 +595,8 @@ export function createMessageHandler(container: AppContainer) {
             actorName: message.author?.displayName ?? message.author?.username ?? 'Someone',
             messageId,
             channelId: thread.channelId,
-            serverId: access.channel.serverId,
-            channelName: access.channel.name,
+            serverId: access.channel?.serverId ?? null,
+            channelName: access.channel?.name,
             preview: messageContent.substring(0, 200),
           })
         }

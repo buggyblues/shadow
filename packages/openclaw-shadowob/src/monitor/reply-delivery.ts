@@ -53,15 +53,6 @@ async function findDeliveredChannelMessage(params: {
   return messages.find((message) => messageDeliveryId(message) === params.deliveryId) ?? null
 }
 
-async function findDeliveredDmMessage(params: {
-  client: ShadowClient
-  dmChannelId: string
-  deliveryId: string
-}): Promise<ShadowMessage | null> {
-  const messages = await params.client.getDmMessages(params.dmChannelId, 20)
-  return messages.find((message) => messageDeliveryId(message) === params.deliveryId) ?? null
-}
-
 async function withDeliveryRetry<T>(params: {
   label: string
   runtime: ShadowRuntimeLogger
@@ -209,109 +200,6 @@ export async function deliverShadowReply(params: {
     runtime.log?.('[reply] Reply delivered successfully')
   } catch (err) {
     runtime.error?.(`[reply] Failed to send reply: ${String(err)}`)
-    throw err
-  }
-}
-
-export async function deliverShadowDmReply(params: {
-  payload: ReplyPayload
-  dmChannelId: string
-  replyToId?: string
-  client: ShadowClient
-  runtime: ShadowRuntimeLogger
-  agentChain?: AgentChainMetadata
-  agentId: string | null
-  botUserId: string
-}): Promise<void> {
-  const { payload, dmChannelId, replyToId, client, runtime, agentChain, agentId, botUserId } =
-    params
-
-  try {
-    if (!payload.text && !(payload.mediaUrl || payload.mediaUrls?.length)) {
-      runtime.error?.('[dm-reply] No text or media in DM reply payload')
-      return
-    }
-
-    const text = payload.text ?? ''
-    runtime.log?.(`[dm-reply] Sending DM reply to channel ${dmChannelId}: "${text.slice(0, 80)}"`)
-
-    const mediaUrls = [payload.mediaUrl, ...(payload.mediaUrls ?? [])].filter(Boolean) as string[]
-    const newAgentChain: AgentChainMetadata | undefined = agentId
-      ? {
-          agentId,
-          depth: (agentChain?.depth ?? 0) + 1,
-          participants: [...(agentChain?.participants ?? []), botUserId].filter(
-            Boolean,
-          ) as string[],
-          startedAt: agentChain?.startedAt ?? Date.now(),
-          rootMessageId: agentChain?.rootMessageId ?? replyToId,
-        }
-      : undefined
-
-    let sentMessage: ShadowMessage | null = null
-    if (text || mediaUrls.length > 0) {
-      const contentToSend = text || '\u200B'
-      const deliveryId = randomUUID()
-      const metadata = replyMetadata({
-        deliveryId,
-        agentChain: newAgentChain,
-        replyToId,
-      })
-      sentMessage = await withDeliveryRetry({
-        label: 'dm-reply',
-        runtime,
-        operation: () => client.sendDmMessage(dmChannelId, contentToSend, { replyToId, metadata }),
-        recover: () => findDeliveredDmMessage({ client, dmChannelId, deliveryId }),
-      })
-      runtime.log?.(
-        `[dm-reply] DM message created (${sentMessage.id})${text ? '' : ' [media-only placeholder]'}${newAgentChain ? ` [chain depth: ${newAgentChain.depth}]` : ''}`,
-      )
-    }
-
-    if (mediaUrls.length > 0) {
-      const messageId = sentMessage?.id
-      let fallbackReplyToId = sentMessage?.id ?? replyToId
-      for (const mediaUrl of mediaUrls) {
-        runtime.log?.(`[dm-reply] Uploading media: ${mediaUrl}`)
-        try {
-          await withDeliveryRetry({
-            label: 'dm-reply-media',
-            runtime,
-            operation: () =>
-              client.uploadMediaFromUrl(
-                mediaUrl,
-                messageId ? { dmMessageId: messageId } : undefined,
-              ),
-          })
-          runtime.log?.('[dm-reply] Media uploaded successfully')
-        } catch (err) {
-          runtime.error?.(
-            `[dm-reply] Media upload failed for ${mediaUrl}; sending URL fallback: ${String(err)}`,
-          )
-          const deliveryId = randomUUID()
-          const metadata = replyMetadata({
-            deliveryId,
-            agentChain: newAgentChain,
-            replyToId: fallbackReplyToId,
-          })
-          const fallbackMessage = await withDeliveryRetry({
-            label: 'dm-reply-media-fallback',
-            runtime,
-            operation: () =>
-              client.sendDmMessage(dmChannelId, mediaUrl, {
-                replyToId: fallbackReplyToId,
-                metadata,
-              }),
-            recover: () => findDeliveredDmMessage({ client, dmChannelId, deliveryId }),
-          })
-          fallbackReplyToId = fallbackMessage.id
-        }
-      }
-    }
-
-    runtime.log?.('[dm-reply] DM reply delivered successfully')
-  } catch (err) {
-    runtime.error?.(`[dm-reply] Failed to send DM reply: ${String(err)}`)
     throw err
   }
 }

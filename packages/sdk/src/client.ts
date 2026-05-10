@@ -23,7 +23,6 @@ import type {
   ShadowDiyCloudRun,
   ShadowDiyCloudRunEvent,
   ShadowDiyCloudRunStatus,
-  ShadowDmChannel,
   ShadowEconomyGift,
   ShadowEconomyTip,
   ShadowEntitlement,
@@ -954,43 +953,17 @@ export class ShadowClient {
     })
   }
 
-  // ── DMs ───────────────────────────────────────────────────────────────
+  // ── Direct channels ──────────────────────────────────────────────────
 
-  async createDmChannel(userId: string): Promise<ShadowDmChannel> {
-    return this.request('/api/dm/channels', {
+  async createDirectChannel(userId: string): Promise<ShadowChannel> {
+    return this.request('/api/channels/dm', {
       method: 'POST',
       body: JSON.stringify({ userId }),
     })
   }
 
-  async listDmChannels(): Promise<ShadowDmChannel[]> {
-    return this.request('/api/dm/channels')
-  }
-
-  async getDmMessages(channelId: string, limit = 50, cursor?: string): Promise<ShadowMessage[]> {
-    const params = new URLSearchParams({ limit: String(limit) })
-    if (cursor) params.set('cursor', cursor)
-    return this.request(`/api/dm/channels/${channelId}/messages?${params}`)
-  }
-
-  async sendDmMessage(
-    channelId: string,
-    content: string,
-    options?: {
-      replyToId?: string
-      metadata?: Record<string, unknown>
-      attachments?: { filename: string; url: string; contentType: string; size: number }[]
-    },
-  ): Promise<ShadowMessage> {
-    return this.request(`/api/dm/channels/${channelId}/messages`, {
-      method: 'POST',
-      body: JSON.stringify({
-        content,
-        replyToId: options?.replyToId,
-        ...(options?.metadata ? { metadata: options.metadata } : {}),
-        ...(options?.attachments ? { attachments: options.attachments } : {}),
-      }),
-    })
+  async listDirectChannels(): Promise<ShadowChannel[]> {
+    return this.request('/api/channels/dm')
   }
 
   // ── Notifications ─────────────────────────────────────────────────────
@@ -1064,7 +1037,7 @@ export class ShadowClient {
     file: Blob | ArrayBuffer,
     filename: string,
     contentType: string,
-    messageId?: string | { messageId?: string; dmMessageId?: string },
+    messageId?: string | { messageId?: string },
   ): Promise<{ url: string; key: string; size: number }> {
     const formData = new FormData()
     const blob = file instanceof Blob ? file : new Blob([file], { type: contentType })
@@ -1073,7 +1046,6 @@ export class ShadowClient {
       formData.append('messageId', messageId)
     } else if (messageId) {
       if (messageId.messageId) formData.append('messageId', messageId.messageId)
-      if (messageId.dmMessageId) formData.append('dmMessageId', messageId.dmMessageId)
     }
 
     const url = `${this.baseUrl}/api/media/upload`
@@ -1093,13 +1065,12 @@ export class ShadowClient {
 
   async resolveAttachmentMediaUrl(
     attachmentId: string,
-    options?: { disposition?: 'inline' | 'attachment'; dm?: boolean },
+    options?: { disposition?: 'inline' | 'attachment' },
   ): Promise<ShadowSignedMediaUrl> {
     const disposition = options?.disposition ?? 'inline'
-    const path = options?.dm
-      ? `/api/dm-attachments/${attachmentId}/media-url?disposition=${disposition}`
-      : `/api/attachments/${attachmentId}/media-url?disposition=${disposition}`
-    return this.request<ShadowSignedMediaUrl>(path)
+    return this.request<ShadowSignedMediaUrl>(
+      `/api/attachments/${attachmentId}/media-url?disposition=${disposition}`,
+    )
   }
 
   /**
@@ -1108,7 +1079,7 @@ export class ShadowClient {
    */
   async uploadMediaFromUrl(
     mediaUrl: string,
-    messageId?: string | { messageId?: string; dmMessageId?: string },
+    messageId?: string | { messageId?: string },
   ): Promise<{ url: string; key: string; size: number }> {
     // Dynamic imports for Node.js fs/path/os
     // @ts-expect-error - Dynamic import types may not resolve in Alpine Docker builds
@@ -1501,7 +1472,6 @@ export class ShadowClient {
   async markScopeRead(scope: {
     serverId?: string
     channelId?: string
-    dmChannelId?: string
   }): Promise<{ updated: number }> {
     return this.request('/api/notifications/read-scope', {
       method: 'POST',
@@ -1961,28 +1931,15 @@ export class ShadowClient {
     })
   }
 
-  async purchaseDmMessageCommerceCard(
-    messageId: string,
-    cardId: string,
-    data: { idempotencyKey: string; skuId?: string },
-  ): Promise<ShadowEntitlementPurchaseResult> {
-    return this.request(`/api/dm/messages/${messageId}/commerce-cards/${cardId}/purchase`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
-  }
-
   async listCommerceProductCards(params: {
-    target: 'channel' | 'dm'
-    channelId?: string
-    dmChannelId?: string
+    target: 'channel'
+    channelId: string
     keyword?: string
     limit?: number
   }): Promise<ShadowCommerceProductPickerResponse> {
     const qs = new URLSearchParams()
     qs.set('target', params.target)
-    if (params.channelId) qs.set('channelId', params.channelId)
-    if (params.dmChannelId) qs.set('dmChannelId', params.dmChannelId)
+    qs.set('channelId', params.channelId)
     if (params.keyword) qs.set('keyword', params.keyword)
     if (params.limit) qs.set('limit', String(params.limit))
     return this.request(`/api/commerce/product-picker?${qs}`)

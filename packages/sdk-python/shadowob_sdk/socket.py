@@ -97,12 +97,6 @@ class ShadowSocket:
     def leave_channel(self, channel_id: str) -> None:
         self._sio.emit("channel:leave", {"channelId": channel_id})
 
-    def join_dm_channel(self, dm_channel_id: str) -> None:
-        self._sio.emit("dm:join", {"dmChannelId": dm_channel_id})
-
-    def leave_dm_channel(self, dm_channel_id: str) -> None:
-        self._sio.emit("dm:leave", {"dmChannelId": dm_channel_id})
-
     # ── Client actions ───────────────────────────────────────────────────
 
     def send_message(
@@ -140,9 +134,3 @@ class ShadowSocket:
         self._sio.emit(
             "presence:activity", {"channelId": channel_id, "activity": activity}
         )
-
-    def send_dm_message(self, dm_channel_id: str, content: str) -> None:
-        self._sio.emit("dm:send", {"dmChannelId": dm_channel_id, "content": content})
-
-    def send_dm_typing(self, dm_channel_id: str) -> None:
-        self._sio.emit("dm:typing", {"dmChannelId": dm_channel_id})

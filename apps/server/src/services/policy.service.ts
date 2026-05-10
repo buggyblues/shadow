@@ -52,6 +52,15 @@ export class PolicyService {
     const channel = await this.deps.channelDao.findById(channelId)
     if (!channel) throw Object.assign(new Error('Channel not found'), { status: 404 })
 
+    if (channel.kind === 'dm') {
+      const channelMember = await this.deps.channelMemberDao.get(channelId, userId)
+      if (!channelMember) {
+        throw Object.assign(new Error('Not a participant of this direct channel'), { status: 403 })
+      }
+      return { channel, serverMember: null, channelMember }
+    }
+
+    if (!channel.serverId) throw Object.assign(new Error('Channel not found'), { status: 404 })
     const serverMember = await this.deps.serverDao.getMember(channel.serverId, userId)
     if (!serverMember) {
       throw Object.assign(new Error('Not a member of this server'), { status: 403 })
@@ -70,6 +79,11 @@ export class PolicyService {
   async requireChannelManage(actor: ActorInput, channelId: string) {
     const channel = await this.deps.channelDao.findById(channelId)
     if (!channel) throw Object.assign(new Error('Channel not found'), { status: 404 })
+    if (channel.kind !== 'server' || !channel.serverId) {
+      throw Object.assign(new Error('Direct channels cannot be managed through server policy'), {
+        status: 403,
+      })
+    }
     await this.requireServerRole(actor, channel.serverId, 'admin')
     return channel
   }
@@ -106,6 +120,14 @@ export class PolicyService {
       const privateIds = privateChannels.map((channel) => channel.id)
       const joined = await this.deps.channelMemberDao.getUserChannelIds(userId, privateIds)
       for (const channelId of joined) channelIds.add(channelId)
+    }
+
+    if (!serverId) {
+      const directChannelIds = await this.deps.channelMemberDao.getAllChannelIds(userId)
+      for (const channelId of directChannelIds) {
+        const channel = await this.deps.channelDao.findById(channelId)
+        if (channel?.kind === 'dm') channelIds.add(channelId)
+      }
     }
 
     return [...channelIds]

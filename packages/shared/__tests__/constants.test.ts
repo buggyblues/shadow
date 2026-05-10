@@ -29,11 +29,10 @@ describe('SERVER_EVENTS', () => {
     expect(SERVER_EVENTS.REACTION_ADD).toBe('reaction:add')
     expect(SERVER_EVENTS.REACTION_REMOVE).toBe('reaction:remove')
     expect(SERVER_EVENTS.NOTIFICATION_NEW).toBe('notification:new')
-    expect(SERVER_EVENTS.DM_MESSAGE_NEW).toBe('dm:message:new')
   })
 
-  it('should have 11 server events', () => {
-    expect(Object.keys(SERVER_EVENTS)).toHaveLength(11)
+  it('should have 10 server events', () => {
+    expect(Object.keys(SERVER_EVENTS)).toHaveLength(10)
   })
 })
 

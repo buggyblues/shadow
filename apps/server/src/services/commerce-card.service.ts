@@ -3,12 +3,9 @@ import type { ChannelDao } from '../dao/channel.dao'
 import type { ServerDao } from '../dao/server.dao'
 import { apiError } from '../lib/api-error'
 import type { CommerceOfferService } from './commerce-offer.service'
-import type { DmService } from './dm.service'
 import { resolveProductEntitlementResource } from './entitlement-resource'
 
-export type CommerceCardTarget =
-  | { kind: 'channel'; channelId: string }
-  | { kind: 'dm'; dmChannelId: string }
+export type CommerceCardTarget = { kind: 'channel'; channelId: string }
 
 export interface CommerceCard {
   id: string
@@ -67,7 +64,6 @@ export class CommerceCardService {
     private deps: {
       channelDao: ChannelDao
       serverDao: ServerDao
-      dmService: DmService
       commerceOfferService: CommerceOfferService
     },
   ) {}
@@ -78,40 +74,40 @@ export class CommerceCardService {
     sellerUserId?: string | null
     sellerBuddyUserId?: string | null
   }) {
-    if (input.target.kind === 'channel') {
-      const channel = await this.deps.channelDao.findById(input.target.channelId)
-      if (!channel) throw apiError('CHANNEL_NOT_FOUND', 404)
-      if (input.shop.scopeKind === 'server') {
-        if (!input.shop.serverId || channel.serverId !== input.shop.serverId) {
-          throw apiError('SERVER_SHOP_PRODUCT_CHANNEL_SCOPE_MISMATCH', 403)
-        }
-        return
-      }
+    const channel = await this.deps.channelDao.findById(input.target.channelId)
+    if (!channel) throw apiError('CHANNEL_NOT_FOUND', 404)
+    if (channel.kind === 'dm') {
       const sellerIds = [
         input.shop.ownerUserId,
         input.sellerUserId,
         input.sellerBuddyUserId,
       ].filter((id): id is string => Boolean(id))
-      const hasSellerInServer = await Promise.all(
-        sellerIds.map((sellerId) => this.deps.serverDao.getMember(channel.serverId, sellerId)),
-      )
-      if (!hasSellerInServer.some(Boolean)) {
-        throw apiError('USER_SHOP_PRODUCT_CHANNEL_SCOPE_MISMATCH', 403)
+      const participants = new Set([channel.dmUserAId, channel.dmUserBId].filter(Boolean))
+      if (
+        input.shop.scopeKind !== 'user' ||
+        !sellerIds.some((sellerId) => participants.has(sellerId))
+      ) {
+        throw apiError('DM_PRODUCT_CARD_REQUIRES_PERSONAL_SHOP', 403)
       }
       return
     }
 
-    const dmChannel = await this.deps.dmService.getChannelById(input.target.dmChannelId)
-    if (!dmChannel) throw apiError('DM_CHANNEL_NOT_FOUND', 404)
-    const participants = new Set([dmChannel.userAId, dmChannel.userBId])
+    const serverId = channel.serverId
+    if (!serverId) throw apiError('CHANNEL_NOT_FOUND', 404)
+    if (input.shop.scopeKind === 'server') {
+      if (!input.shop.serverId || serverId !== input.shop.serverId) {
+        throw apiError('SERVER_SHOP_PRODUCT_CHANNEL_SCOPE_MISMATCH', 403)
+      }
+      return
+    }
     const sellerIds = [input.shop.ownerUserId, input.sellerUserId, input.sellerBuddyUserId].filter(
       (id): id is string => Boolean(id),
     )
-    if (
-      input.shop.scopeKind !== 'user' ||
-      !sellerIds.some((sellerId) => participants.has(sellerId))
-    ) {
-      throw apiError('DM_PRODUCT_CARD_REQUIRES_PERSONAL_SHOP', 403)
+    const hasSellerInServer = await Promise.all(
+      sellerIds.map((sellerId) => this.deps.serverDao.getMember(serverId, sellerId)),
+    )
+    if (!hasSellerInServer.some(Boolean)) {
+      throw apiError('USER_SHOP_PRODUCT_CHANNEL_SCOPE_MISMATCH', 403)
     }
   }
 

@@ -89,7 +89,7 @@ The public action list should only include actions the adapter can actually hand
 
 Use the same target discipline across all actions:
 
-- Accept explicit `shadowob:channel:<id>`, `shadowob:thread:<id>`, and `shadowob:dm:<id>`.
+- Accept explicit `shadowob:channel:<id>` and `shadowob:thread:<id>`; direct channels also use `shadowob:channel:<id>`.
 - Fall back to OpenClaw's current channel context only when the current provider is Shadowob.
 - Refuse broad cross-server reads unless the action is explicitly scoped.
 - Preserve thread-aware routing for replies and reads.

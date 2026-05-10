@@ -21,7 +21,7 @@ import { fetchApi } from '../../lib/api'
 import { useAuthStore } from '../../stores/auth.store'
 import { BuddyManagementContent } from '../buddy-management'
 import { PersonalShopPage } from '../commerce'
-import { DmChatView } from '../dm-chat'
+import { DirectChatView } from '../dm-chat'
 import { UnifiedContactSidebar } from '../friends'
 import { SettingsModal } from './settings-modal'
 import { TaskSettings } from './tasks'
@@ -113,7 +113,9 @@ export function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>(
     initialModalTab ? 'dm' : normalizedLocation.tab,
   )
-  const [activeDmChannelId, setActiveDmChannelId] = useState<string | null>(searchParams.dm || null)
+  const [activeDirectChannelId, setActiveDirectChannelId] = useState<string | null>(
+    searchParams.dm || null,
+  )
   const [settingsModalOpen, setSettingsModalOpen] = useState(!!initialModalTab)
 
   // Fetch wallet balance for nav display
@@ -135,7 +137,7 @@ export function SettingsPage() {
       }
     }
     if (searchParams.dm !== undefined) {
-      setActiveDmChannelId(searchParams.dm || null)
+      setActiveDirectChannelId(searchParams.dm || null)
     }
   }, [searchParams.tab, searchParams.section, searchParams.dm, isModalTab])
 
@@ -143,7 +145,10 @@ export function SettingsPage() {
     setActiveTab(tab)
     navigate({
       to: '/settings',
-      search: { tab, ...(tab === 'dm' && activeDmChannelId ? { dm: activeDmChannelId } : {}) },
+      search: {
+        tab,
+        ...(tab === 'dm' && activeDirectChannelId ? { dm: activeDirectChannelId } : {}),
+      },
       replace: true,
     })
   }
@@ -332,21 +337,21 @@ export function SettingsPage() {
             <GlassPanel
               className={cn(
                 'chat-panel h-full w-full shrink-0 flex-col overflow-hidden md:w-72 lg:w-80',
-                activeDmChannelId ? 'hidden md:flex' : 'flex',
+                activeDirectChannelId ? 'hidden md:flex' : 'flex',
               )}
             >
               <UnifiedContactSidebar
-                activeDmChannelId={activeDmChannelId}
+                activeDirectChannelId={activeDirectChannelId}
                 onSelectChannel={(id) => {
-                  setActiveDmChannelId(id)
+                  setActiveDirectChannelId(id)
                   navigate({ to: '/settings', search: { tab: 'dm', dm: id }, replace: true })
                 }}
                 onStartChatWithUser={async (userId) => {
-                  const data = await fetchApi<{ id: string }>('/api/dm/channels', {
+                  const data = await fetchApi<{ id: string }>('/api/channels/dm', {
                     method: 'POST',
                     body: JSON.stringify({ userId }),
                   })
-                  setActiveDmChannelId(data.id)
+                  setActiveDirectChannelId(data.id)
                   navigate({
                     to: '/settings',
                     search: { tab: 'dm', dm: data.id },
@@ -360,13 +365,13 @@ export function SettingsPage() {
             <div
               className={cn(
                 'min-w-0 h-full flex-1 flex-col',
-                activeDmChannelId ? 'flex' : 'hidden md:flex',
+                activeDirectChannelId ? 'flex' : 'hidden md:flex',
               )}
             >
-              {activeDmChannelId ? (
-                <DmChatView
-                  dmChannelId={activeDmChannelId}
-                  onBack={() => setActiveDmChannelId(null)}
+              {activeDirectChannelId ? (
+                <DirectChatView
+                  channelId={activeDirectChannelId}
+                  onBack={() => setActiveDirectChannelId(null)}
                 />
               ) : (
                 <GlassPanel className="chat-panel h-full flex-1 overflow-hidden">

@@ -917,20 +917,20 @@ describe('ShadowClient', () => {
       )
     })
 
-    it('should include dmChannelId when marking a notification scope read', async () => {
+    it('should include channelId when marking a notification scope read', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({ updated: 1 }),
       })
       globalThis.fetch = mockFetch as typeof fetch
 
-      await client.markScopeRead({ dmChannelId: 'dm-1' })
+      await client.markScopeRead({ channelId: 'channel-1' })
 
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.example.com/api/notifications/read-scope',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ dmChannelId: 'dm-1' }),
+          body: JSON.stringify({ channelId: 'channel-1' }),
         }),
       )
     })
@@ -996,7 +996,7 @@ describe('ShadowClient', () => {
       })
       globalThis.fetch = mockFetch as typeof fetch
 
-      await client.listCommerceProductCards({ target: 'dm', dmChannelId: 'dm-1', limit: 3 })
+      await client.listCommerceProductCards({ target: 'channel', channelId: 'channel-1', limit: 3 })
       await client.getCommerceOfferCheckoutPreview('offer-1', {
         skuId: 'sku-1',
         viewerUserId: 'user-2',
@@ -1018,7 +1018,7 @@ describe('ShadowClient', () => {
 
       expect(mockFetch).toHaveBeenNthCalledWith(
         1,
-        'https://api.example.com/api/commerce/product-picker?target=dm&dmChannelId=dm-1&limit=3',
+        'https://api.example.com/api/commerce/product-picker?target=channel&channelId=channel-1&limit=3',
         expect.any(Object),
       )
       expect(mockFetch).toHaveBeenNthCalledWith(

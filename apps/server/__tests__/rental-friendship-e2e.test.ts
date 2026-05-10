@@ -6,11 +6,12 @@
  *   2. Rented claws are tagged with source='rented_claw' and rentalExpiresAt
  *   3. After contract termination, rented claw disappears from friend list
  *   4. Contract APIs return agentUserId when listing has an agentId
- *   5. DM channel can be created with the rented claw's bot user (the "use" flow)
+ *   5. Direct channel can be created with the rented claw's bot user (the "use" flow)
  *
  * Requires: docker compose postgres running on localhost:5432
  */
 
+import { and, eq, or } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import { Hono } from 'hono'
 import postgres from 'postgres'
@@ -18,7 +19,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { type AppContainer, createAppContainer } from '../src/container'
 import type { Database } from '../src/db'
 import * as schema from '../src/db/schema'
-import { createDmHandler } from '../src/handlers/dm.handler'
+import { createChannelHandler } from '../src/handlers/channel.handler'
 import { createFriendshipHandler } from '../src/handlers/friendship.handler'
 import { createRentalHandler } from '../src/handlers/rental.handler'
 import { signAccessToken } from '../src/lib/jwt'
@@ -92,7 +93,7 @@ beforeAll(async () => {
   })
   app.route('/api', createRentalHandler(container))
   app.route('/api/friends', createFriendshipHandler(container))
-  app.route('/api/dm', createDmHandler(container))
+  app.route('/api/channels', createChannelHandler(container))
 
   // Create test users
   const userDao = container.resolve('userDao')
@@ -163,17 +164,24 @@ afterAll(async () => {
       await db.delete(clawListings).where(eq(clawListings.ownerId, ownerUserId))
     }
 
-    // Clean DM data
-    const { dmMessages, dmChannels } = schema
+    // Clean direct channel data
+    const { channels, messages } = schema
     if (tenantUserId && botUserId) {
-      // Delete DM channels involving tenant ↔ bot
-      const channels = await db
+      const directChannels = await db
         .select()
-        .from(dmChannels)
-        .where(eq(dmChannels.userAId, tenantUserId < botUserId ? tenantUserId : botUserId))
-      for (const ch of channels) {
-        await db.delete(dmMessages).where(eq(dmMessages.dmChannelId, ch.id))
-        await db.delete(dmChannels).where(eq(dmChannels.id, ch.id))
+        .from(channels)
+        .where(
+          and(
+            eq(channels.kind, 'dm'),
+            or(
+              and(eq(channels.dmUserAId, tenantUserId), eq(channels.dmUserBId, botUserId)),
+              and(eq(channels.dmUserAId, botUserId), eq(channels.dmUserBId, tenantUserId)),
+            ),
+          ),
+        )
+      for (const ch of directChannels) {
+        await db.delete(messages).where(eq(messages.channelId, ch.id))
+        await db.delete(channels).where(eq(channels.id, ch.id))
       }
     }
 
@@ -321,31 +329,38 @@ describe('Rental ↔ Friendship Integration E2E', () => {
     expect(data.agentUserId).toBe(botUserId)
   })
 
-  /* ─────── 6. "Use claw" flow: create DM channel with bot ─────── */
+  /* ─────── 6. "Use claw" flow: create direct channel with bot ─────── */
 
-  it('should create a DM channel with the rented claw bot user', async () => {
-    const res = await req('POST', '/api/dm/channels', {
+  it('should create a direct channel with the rented claw bot user', async () => {
+    const res = await req('POST', '/api/channels/dm', {
       token: tenantToken,
       body: { userId: botUserId },
     })
     expect(res.status).toBe(201)
 
-    const data = await json<{ id: string; userAId: string; userBId: string }>(res)
+    const data = await json<{
+      id: string
+      kind: string
+      serverId: string | null
+      dmUserAId: string
+      dmUserBId: string
+    }>(res)
     expect(data.id).toBeDefined()
-    // The DM channel should involve both the tenant and the bot user
-    const participants = [data.userAId, data.userBId]
+    expect(data.kind).toBe('dm')
+    expect(data.serverId).toBeNull()
+    const participants = [data.dmUserAId, data.dmUserBId]
     expect(participants).toContain(tenantUserId)
     expect(participants).toContain(botUserId)
   })
 
-  it('should return the same DM channel on repeated creation', async () => {
-    const res1 = await req('POST', '/api/dm/channels', {
+  it('should return the same direct channel on repeated creation', async () => {
+    const res1 = await req('POST', '/api/channels/dm', {
       token: tenantToken,
       body: { userId: botUserId },
     })
     const data1 = await json<{ id: string }>(res1)
 
-    const res2 = await req('POST', '/api/dm/channels', {
+    const res2 = await req('POST', '/api/channels/dm', {
       token: tenantToken,
       body: { userId: botUserId },
     })

@@ -64,7 +64,6 @@ export const notifications = pgTable(
     senderId: uuid('sender_id').references(() => users.id, { onDelete: 'set null' }),
     scopeServerId: uuid('scope_server_id'),
     scopeChannelId: uuid('scope_channel_id'),
-    scopeDmChannelId: uuid('scope_dm_channel_id'),
     aggregationKey: varchar('aggregation_key', { length: 240 }),
     aggregatedCount: integer('aggregated_count').default(1).notNull(),
     lastAggregatedAt: timestamp('last_aggregated_at', { withTimezone: true }),
@@ -85,9 +84,6 @@ export const notifications = pgTable(
     ),
     notificationsScopeChannelIdx: index('notifications_scope_channel_idx').on(t.scopeChannelId),
     notificationsScopeServerIdx: index('notifications_scope_server_idx').on(t.scopeServerId),
-    notificationsScopeDmChannelIdx: index('notifications_scope_dm_channel_idx').on(
-      t.scopeDmChannelId,
-    ),
     notificationsAggregationIdx: index('notifications_aggregation_idx').on(
       t.userId,
       t.aggregationKey,

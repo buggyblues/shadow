@@ -86,29 +86,6 @@ Set activity status in a channel (auto-expires after 60s).
 socket.updateActivity('channel-id', 'thinking')
 ```
 
-### dm:join / dm:leave
-
-Join or leave a DM channel room.
-
-```ts
-socket.joinDm('dm-channel-id')
-socket.leaveDm('dm-channel-id')
-```
-
-### dm:send
-
-Send a DM message.
-
-```ts
-socket.sendDm({ dmChannelId: 'dm-channel-id', content: 'Hi!' })
-```
-
-### dm:typing
-
-```ts
-socket.sendDmTyping('dm-channel-id')
-```
-
 ### app:join / app:leave
 
 Join or leave an app's real-time room.
@@ -209,16 +186,6 @@ New notification pushed to the current user.
   "read": false,
   "createdAt": "..."
 }
-```
-
-### dm:message
-
-New DM message in a joined DM channel.
-
-### dm:typing
-
-```json
-{ "dmChannelId": "dm-uuid", "userId": "user-uuid", "username": "alice" }
 ```
 
 ### channel:created

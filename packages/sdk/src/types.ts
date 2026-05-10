@@ -183,11 +183,13 @@ export interface ShadowChannel {
   id: string
   name: string
   type: string
-  serverId: string
+  kind: 'server' | 'dm'
+  serverId: string | null
   description?: string | null
   position?: number
   isPrivate?: boolean
   isMember?: boolean
+  otherUser?: ShadowUser | null
 }
 
 export type ShadowChannelJoinRequestStatus = 'pending' | 'approved' | 'rejected'
@@ -225,13 +227,6 @@ export interface ShadowServerJoinRequestResult {
   ok: boolean
   status: ShadowServerJoinRequestStatus
   requestId?: string
-}
-
-export interface ShadowDmChannel {
-  id: string
-  user1Id: string
-  user2Id: string
-  createdAt: string
 }
 
 export interface ShadowThread {
@@ -438,7 +433,6 @@ export interface ShadowNotification {
   senderAvatarUrl?: string | null
   scopeServerId?: string | null
   scopeChannelId?: string | null
-  scopeDmChannelId?: string | null
   aggregationKey?: string | null
   aggregatedCount?: number | null
   lastAggregatedAt?: string | null
@@ -606,27 +600,6 @@ export interface PolicyChangedPayload {
   agentId: string
   serverId: string
   channelId?: string | null
-}
-
-export interface DmMessage {
-  id: string
-  content: string
-  senderId: string
-  receiverId: string
-  dmChannelId: string
-  channelId: string
-  authorId: string
-  author?: {
-    id: string
-    username: string
-    displayName?: string
-    avatarUrl?: string
-    isBot?: boolean
-  }
-  replyToId?: string | null
-  attachments?: ShadowAttachment[]
-  metadata?: ShadowMessageMetadata | null
-  createdAt: string
 }
 
 // ─── Friendship Types ───────────────────────────────────────────────────────
@@ -1440,7 +1413,6 @@ export interface ServerEventMap {
   'reaction:add': (payload: ReactionPayload) => void
   'reaction:remove': (payload: ReactionPayload) => void
   'notification:new': (notification: ShadowNotification) => void
-  'dm:message:new': (message: DmMessage) => void
   'channel:created': (payload: ChannelCreatedPayload) => void
   'channel:member-added': (payload: ChannelMemberAddedPayload) => void
   'channel:member-removed': (payload: ChannelMemberRemovedPayload) => void

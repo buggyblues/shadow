@@ -126,10 +126,12 @@ export interface Channel {
   id: string
   name: string
   type: string
+  kind?: 'server' | 'dm'
   topic?: string | null
-  serverId: string
+  serverId: string | null
   position?: number
   isPrivate?: boolean
+  otherUser?: Author | null
 }
 
 export interface MemberEvent {

@@ -45,9 +45,8 @@ const readScopeSchema = z
   .object({
     serverId: z.string().uuid().optional(),
     channelId: z.string().uuid().optional(),
-    dmChannelId: z.string().uuid().optional(),
   })
-  .refine((v) => !!v.serverId || !!v.channelId || !!v.dmChannelId)
+  .refine((v) => !!v.serverId || !!v.channelId)
 
 export function createNotificationHandler(container: AppContainer) {
   const notificationHandler = new Hono()

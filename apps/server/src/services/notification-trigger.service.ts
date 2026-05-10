@@ -15,7 +15,6 @@ interface DispatchInput {
   senderId?: string | null
   scopeServerId?: string | null
   scopeChannelId?: string | null
-  scopeDmChannelId?: string | null
   aggregationKey?: string | null
   aggregate?: boolean
   bypassPreferences?: boolean
@@ -49,7 +48,6 @@ export class NotificationTriggerService {
       senderId: input.senderId,
       scopeServerId: input.scopeServerId,
       scopeChannelId: input.scopeChannelId,
-      scopeDmChannelId: input.scopeDmChannelId,
       aggregationKey: input.aggregationKey,
       metadata: input.metadata,
       delivery: {
@@ -170,7 +168,7 @@ export class NotificationTriggerService {
     actorName: string
     messageId: string
     channelId: string
-    serverId: string
+    serverId?: string | null
     channelName?: string | null
     preview: string
   }) {
@@ -192,22 +190,22 @@ export class NotificationTriggerService {
     })
   }
 
-  async triggerDm(input: {
+  async triggerDirectMessage(input: {
     userId: string
     actorId: string
     actorName: string
-    dmChannelId: string
+    channelId: string
     preview: string
   }) {
     return this.dispatch({
       userId: input.userId,
       type: 'dm',
       kind: 'dm.message',
-      referenceId: input.dmChannelId,
-      referenceType: 'dm_channel',
+      referenceId: input.channelId,
+      referenceType: 'channel',
       senderId: input.actorId,
-      scopeDmChannelId: input.dmChannelId,
-      aggregationKey: `dm:${input.userId}:${input.dmChannelId}`,
+      scopeChannelId: input.channelId,
+      aggregationKey: `direct:${input.userId}:${input.channelId}`,
       metadata: {
         actorName: input.actorName,
         preview: input.preview,

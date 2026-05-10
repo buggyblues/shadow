@@ -21,7 +21,6 @@ export const SERVER_EVENTS = {
   REACTION_ADD: 'reaction:add',
   REACTION_REMOVE: 'reaction:remove',
   NOTIFICATION_NEW: 'notification:new',
-  DM_MESSAGE_NEW: 'dm:message:new',
 } as const
 
 export type ClientEvent = (typeof CLIENT_EVENTS)[keyof typeof CLIENT_EVENTS]

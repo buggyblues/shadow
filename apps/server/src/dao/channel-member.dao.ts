@@ -1,6 +1,6 @@
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import type { Database } from '../db'
-import { channelMembers } from '../db/schema'
+import { agents, channelMembers, users } from '../db/schema'
 
 export class ChannelMemberDao {
   constructor(private deps: { db: Database }) {}
@@ -56,9 +56,48 @@ export class ChannelMemberDao {
   /** Get all user IDs in a channel. */
   async getMembers(channelId: string) {
     return this.db
-      .select({ userId: channelMembers.userId, joinedAt: channelMembers.joinedAt })
+      .select({
+        id: channelMembers.id,
+        channelId: channelMembers.channelId,
+        userId: channelMembers.userId,
+        joinedAt: channelMembers.joinedAt,
+      })
       .from(channelMembers)
       .where(eq(channelMembers.channelId, channelId))
+  }
+
+  /** Get channel members with profile data, used by both server and direct channels. */
+  async getMembersWithUsers(channelId: string) {
+    const rows = await this.db
+      .select({
+        member: channelMembers,
+        user: {
+          id: users.id,
+          username: users.username,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+          status: sql<'online' | 'idle' | 'dnd' | 'offline'>`
+            CASE
+              WHEN ${users.isBot} THEN
+                CASE
+                  WHEN ${agents.status} = 'running'
+                    AND ${agents.lastHeartbeat} IS NOT NULL
+                    AND EXTRACT(EPOCH FROM (NOW() - ${agents.lastHeartbeat})) <= 90
+                  THEN 'online'::user_status
+                  ELSE 'offline'::user_status
+                END
+              ELSE ${users.status}
+            END
+          `.as('status'),
+          isBot: users.isBot,
+        },
+      })
+      .from(channelMembers)
+      .leftJoin(users, eq(channelMembers.userId, users.id))
+      .leftJoin(agents, eq(agents.userId, users.id))
+      .where(eq(channelMembers.channelId, channelId))
+
+    return rows.map((r) => ({ ...r.member, role: 'member' as const, user: r.user }))
   }
 
   /** Get all channel IDs a user belongs to. */

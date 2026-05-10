@@ -26,7 +26,7 @@ interface FriendEntry {
   createdAt: string
 }
 
-interface DmChannelEntry {
+interface DirectChannelEntry {
   id: string
   userAId: string
   userBId: string
@@ -50,16 +50,16 @@ const statusColor: Record<string, string> = {
 }
 
 /* ──────────────── Unified Contact Sidebar ──────────────── */
-/* Merges DM conversations + friends into a single list.     */
+/* Merges direct conversations + friends into a single list. */
 /* Search filters both. "Add friend" is a small icon action. */
 /* Friend requests are a notification badge → popover.       */
 
 export function UnifiedContactSidebar({
-  activeDmChannelId,
+  activeDirectChannelId,
   onSelectChannel,
   onStartChatWithUser,
 }: {
-  activeDmChannelId: string | null
+  activeDirectChannelId: string | null
   onSelectChannel: (id: string) => void
   onStartChatWithUser: (userId: string) => void
 }) {
@@ -70,9 +70,9 @@ export function UnifiedContactSidebar({
   const [addUsername, setAddUsername] = useState('')
 
   /* ── Data ── */
-  const { data: dmChannels = [] } = useQuery({
-    queryKey: ['dm-channels'],
-    queryFn: () => fetchApi<DmChannelEntry[]>('/api/dm/channels'),
+  const { data: directChannels = [] } = useQuery({
+    queryKey: ['direct-channels'],
+    queryFn: () => fetchApi<DirectChannelEntry[]>('/api/channels/dm'),
   })
 
   const { data: friends = [], isLoading: friendsLoading } = useQuery({
@@ -87,7 +87,7 @@ export function UnifiedContactSidebar({
 
   useSocketEvent('friend:accepted', () => {
     queryClient.invalidateQueries({ queryKey: ['friends'] })
-    queryClient.invalidateQueries({ queryKey: ['dm-channels'] })
+    queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
   })
   useSocketEvent('friend:request', () => {
     queryClient.invalidateQueries({ queryKey: ['friends-pending'] })
@@ -112,8 +112,8 @@ export function UnifiedContactSidebar({
   /* ── Filter logic ── */
   const q = searchQuery.toLowerCase()
 
-  // DM channels sorted by last message
-  const sortedDms = [...dmChannels]
+  // Direct channels sorted by last message.
+  const sortedDirectChannels = [...directChannels]
     .filter((ch) => ch.otherUser)
     .sort((a, b) => {
       const aT = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0
@@ -121,7 +121,7 @@ export function UnifiedContactSidebar({
       return bT - aT
     })
 
-  const filteredDms = sortedDms.filter((ch) => {
+  const filteredDirectChannels = sortedDirectChannels.filter((ch) => {
     if (!q) return true
     return (
       (ch.otherUser?.username ?? '').toLowerCase().includes(q) ||
@@ -129,11 +129,11 @@ export function UnifiedContactSidebar({
     )
   })
 
-  // Friends who do NOT have an existing DM channel (to avoid duplicates)
-  const dmUserIds = new Set(sortedDms.map((ch) => ch.otherUser?.id).filter(Boolean))
-  const friendsWithoutDm = friends.filter((f) => !dmUserIds.has(f.user.id))
+  // Friends who do not have an existing direct channel, to avoid duplicates.
+  const directUserIds = new Set(sortedDirectChannels.map((ch) => ch.otherUser?.id).filter(Boolean))
+  const friendsWithoutDirectChannel = friends.filter((f) => !directUserIds.has(f.user.id))
 
-  const filteredFriends = friendsWithoutDm.filter((f) => {
+  const filteredFriends = friendsWithoutDirectChannel.filter((f) => {
     if (!q) return true
     return (
       f.user.username.toLowerCase().includes(q) ||
@@ -149,7 +149,7 @@ export function UnifiedContactSidebar({
   )
 
   // When searching and no local results, offer "add by username"
-  const hasAnyResults = filteredDms.length > 0 || filteredFriends.length > 0
+  const hasAnyResults = filteredDirectChannels.length > 0 || filteredFriends.length > 0
   const showAddSuggestion = q && !hasAnyResults
 
   const pendingCount = pendingReceived.length
@@ -239,19 +239,19 @@ export function UnifiedContactSidebar({
         ) : (
           <div className="space-y-0.5">
             {/* Recent conversations */}
-            {filteredDms.length > 0 && (
+            {filteredDirectChannels.length > 0 && (
               <>
                 <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 px-2.5 pt-2 pb-1.5">
-                  {t('dm.recentContacts', '最近联系')} · {filteredDms.length}
+                  {t('dm.recentContacts', '最近联系')} · {filteredDirectChannels.length}
                 </div>
-                {filteredDms.map((ch) => (
+                {filteredDirectChannels.map((ch) => (
                   <button
                     key={ch.id}
                     type="button"
                     onClick={() => onSelectChannel(ch.id)}
                     className={cn(
                       'flex items-center gap-3 w-full px-2.5 py-2 rounded-xl transition-all text-left',
-                      activeDmChannelId === ch.id
+                      activeDirectChannelId === ch.id
                         ? 'bg-primary/10 ring-1 ring-primary/30'
                         : 'hover:bg-bg-tertiary/50',
                     )}
@@ -275,7 +275,7 @@ export function UnifiedContactSidebar({
                         <span
                           className={cn(
                             'font-bold text-sm truncate',
-                            activeDmChannelId === ch.id ? 'text-primary' : 'text-text-primary',
+                            activeDirectChannelId === ch.id ? 'text-primary' : 'text-text-primary',
                           )}
                         >
                           {ch.otherUser?.displayName ?? ch.otherUser?.username}
@@ -297,7 +297,7 @@ export function UnifiedContactSidebar({
               </>
             )}
 
-            {/* Friends without DM (online) */}
+            {/* Friends without a direct channel (online) */}
             {onlineFriends.length > 0 && (
               <>
                 <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 px-2.5 pt-3 pb-1.5">
@@ -313,7 +313,7 @@ export function UnifiedContactSidebar({
               </>
             )}
 
-            {/* Friends without DM (offline) */}
+            {/* Friends without a direct channel (offline) */}
             {offlineFriends.length > 0 && (
               <>
                 <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 px-2.5 pt-3 pb-1.5">
@@ -349,15 +349,17 @@ export function UnifiedContactSidebar({
               </div>
             )}
 
-            {/* Truly empty: no DMs, no friends, no search */}
-            {!q && filteredDms.length === 0 && friendsWithoutDm.length === 0 && (
-              <div className="px-3 py-8 text-center">
-                <MessageCircle size={36} className="mx-auto text-text-muted/20 mb-3" />
-                <p className="text-text-muted text-sm">
-                  {t('dm.emptyContacts', '搜索用户名或点击 + 添加联系人')}
-                </p>
-              </div>
-            )}
+            {/* Truly empty: no direct channels, no friends, no search */}
+            {!q &&
+              filteredDirectChannels.length === 0 &&
+              friendsWithoutDirectChannel.length === 0 && (
+                <div className="px-3 py-8 text-center">
+                  <MessageCircle size={36} className="mx-auto text-text-muted/20 mb-3" />
+                  <p className="text-text-muted text-sm">
+                    {t('dm.emptyContacts', '搜索用户名或点击 + 添加联系人')}
+                  </p>
+                </div>
+              )}
           </div>
         )}
       </div>
@@ -365,7 +367,7 @@ export function UnifiedContactSidebar({
   )
 }
 
-/* ── Friend item in sidebar (no DM yet — click to start chat) ── */
+/* ── Friend item in sidebar (no direct channel yet — click to start chat) ── */
 
 function FriendContactItem({
   friend,
@@ -435,7 +437,7 @@ function FriendRequestBadge({ count }: { count: number }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['friends'] })
       queryClient.invalidateQueries({ queryKey: ['friends-pending'] })
-      queryClient.invalidateQueries({ queryKey: ['dm-channels'] })
+      queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
       showToast(t('friends.accepted', '已接受好友请求'), 'success')
     },
   })

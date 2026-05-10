@@ -316,7 +316,7 @@ Shared types, constants, and utilities consumed by all apps and packages.
 
 | Export | Contents |
 |--------|----------|
-| **Types** | `User`, `UserProfile`, `Message`, `Attachment`, `Channel`, `Server`, `Thread`, `DmChannel`, `Notification`, etc. |
+| **Types** | `User`, `UserProfile`, `Message`, `Attachment`, `Channel`, `Server`, `Thread`, `Notification`, etc. |
 | **Constants** | `LIMITS` (message length, username bounds, file size caps), `CLIENT_EVENTS`, `SERVER_EVENTS` |
 | **Utils** | `generateInviteCode()`, `formatDate()`, `isValidEmail()`, `slugify()` |
 
@@ -376,7 +376,6 @@ users ─────┬────── servers ──────── chan
            │
            ├────── wallets ──── wallet_transactions
            ├────── agents ──── agent_policies
-           ├────── dm_channels
            ├────── notifications ──── notification_preferences
            ├────── oauth_apps ──── oauth_authorization_codes
            │                  ──── oauth_access_tokens
@@ -396,7 +395,7 @@ users ─────┬────── servers ──────── chan
 |-------|------------|-------------|
 | **users** | `id`, `email` (unique), `username` (unique), `displayName`, `avatarUrl`, `passwordHash`, `status` (online/idle/dnd/offline), `isBot`, `isAdmin` | User accounts and profiles |
 | **servers** | `id`, `name`, `ownerId` → users, `inviteCode` (unique), `isPublic`, `slug`, `iconUrl`, `bannerUrl` | Community workspaces |
-| **channels** | `id`, `serverId` → servers, `name`, `type` (text/voice/announcement), `position`, `isPrivate`, `topic` | Communication channels within servers |
+| **channels** | `id`, `kind` (server/dm), `serverId` → servers, `name`, `type` (text/voice/announcement), `position`, `isPrivate`, `topic`, `dmUserAId`, `dmUserBId`, `dmPairKey` | Communication channels within servers and direct conversations |
 | **channel_members** | `id`, `channelId` → channels, `userId` → users | Per-channel access control |
 | **members** | `id`, `serverId` → servers, `userId` → users, `role` (owner/admin/member), `nickname` | Server membership and roles |
 | **messages** | `id`, `channelId` → channels, `authorId` → users, `content`, `threadId`, `replyToId`, `isEdited`, `isPinned` | Chat messages |
@@ -404,7 +403,6 @@ users ─────┬────── servers ──────── chan
 | **threads** | `id`, `channelId`, `parentMessageId`, `creatorId`, `name`, `isArchived` | Message threads |
 | **attachments** | `id`, `messageId` → messages, `workspaceNodeId` → workspace_nodes, `filename`, `url`, `contentType`, `size`, `width`, `height` | File uploads, auto-linked into the server workspace |
 | **reactions** | `id`, `messageId` → messages, `userId` → users, `emoji` | Emoji reactions (unique per user+message+emoji) |
-| **dm_channels** | `id`, `userAId` → users, `userBId` → users, `lastMessageAt` | Direct message channels |
 
 ### Agent Tables
 
@@ -479,7 +477,7 @@ users ─────┬────── servers ──────── chan
 
 | Table | Key Columns | Description |
 |-------|------------|-------------|
-| **notifications** | `id`, `userId`, `type` (mention/reply/dm/system), `kind`, `title`, `body`, `referenceId`, `referenceType`, `scopeServerId`, `scopeChannelId`, `scopeDmChannelId`, `aggregationKey`, `aggregatedCount`, `metadata`, `isRead` | Event-style in-app and real-time notifications with server/channel/DM scope and aggregation |
+| **notifications** | `id`, `userId`, `type` (mention/reply/dm/system), `kind`, `title`, `body`, `referenceId`, `referenceType`, `scopeServerId`, `scopeChannelId`, `aggregationKey`, `aggregatedCount`, `metadata`, `isRead` | Event-style in-app and real-time notifications with server/channel scope and aggregation |
 | **notification_preferences** | `userId` (PK), `strategy` (all/mention_only/none), `mutedServerIds`, `mutedChannelIds` | Per-user notification settings |
 
 ### Miscellaneous Tables

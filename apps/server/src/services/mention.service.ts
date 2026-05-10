@@ -157,6 +157,8 @@ export class MentionService {
     authorId: string,
     input: T,
   ): Promise<T> {
+    const channel = await this.deps.channelDao.findById(channelId)
+    if (channel?.kind === 'dm') return input
     const mentions = await this.resolveMentions({
       channelId,
       authorId,
@@ -240,6 +242,7 @@ export class MentionService {
     )
     const channel = await this.deps.channelDao.findById(input.channelId)
     if (!channel) return []
+    if (channel.kind === 'dm' || !channel.serverId) return []
     const server = await this.deps.serverDao.findById(channel.serverId)
     const notifications = []
 
@@ -728,6 +731,16 @@ export class MentionService {
   private async assertCanAccessChannel(channelId: string, userId: string): Promise<ChannelScope> {
     const channel = await this.deps.channelDao.findById(channelId)
     if (!channel) throw Object.assign(new Error('Channel not found'), { status: 404 })
+    if (channel.kind === 'dm') {
+      const channelMember = await this.deps.channelMemberDao.get(channel.id, userId)
+      if (!channelMember) {
+        throw Object.assign(new Error('Not a participant of this direct channel'), { status: 403 })
+      }
+      throw Object.assign(new Error('Mentions are not available in direct messages'), {
+        status: 400,
+      })
+    }
+    if (!channel.serverId) throw Object.assign(new Error('Channel not found'), { status: 404 })
 
     const [server, member, channelMember] = await Promise.all([
       this.deps.serverDao.findById(channel.serverId),
@@ -767,6 +780,7 @@ export class MentionService {
   private async getVisibleMembersForChannel(channelId: string) {
     const channel = await this.deps.channelDao.findById(channelId)
     if (!channel) return []
+    if (channel.kind === 'dm' || !channel.serverId) return []
     const channelMembers = await this.deps.channelMemberDao.getMembers(channelId)
     const serverMembers = await this.deps.serverDao.getMembers(channel.serverId)
     if (channelMembers.length === 0) return serverMembers

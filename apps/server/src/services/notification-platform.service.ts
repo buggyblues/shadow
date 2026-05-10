@@ -38,7 +38,6 @@ function payloadFor(
     referenceType: notification.referenceType,
     scopeServerId: notification.scopeServerId,
     scopeChannelId: notification.scopeChannelId,
-    scopeDmChannelId: notification.scopeDmChannelId,
     metadata: notification.metadata ?? {},
   }
 }

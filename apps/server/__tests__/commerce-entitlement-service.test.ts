@@ -26,7 +26,7 @@ const offerId = '55555555-5555-4555-8555-555555555555'
 const buyerId = '66666666-6666-4666-8666-666666666666'
 const ownerId = '77777777-7777-4777-8777-777777777777'
 const buddyId = '88888888-8888-4888-8888-888888888888'
-const dmChannelId = 'dm-1'
+const directChannelId = '22222222-3333-4222-8222-222222222222'
 const fileId = '99999999-9999-4999-8999-999999999999'
 const entitlementId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const deliverableId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -99,7 +99,6 @@ function createCommerceCardService(input?: {
   shop?: Record<string, unknown>
   offer?: Record<string, unknown>
   channel?: Record<string, unknown> | null
-  dmChannel?: Record<string, unknown> | null
   getMember?: (serverId: string, userId: string) => Promise<unknown>
 }) {
   const product = createProduct(input?.product)
@@ -108,7 +107,16 @@ function createCommerceCardService(input?: {
 
   return new CommerceCardService({
     channelDao: {
-      findById: vi.fn(async () => input?.channel ?? { id: channelId, serverId }),
+      findById: vi.fn(
+        async () =>
+          input?.channel ?? {
+            id: channelId,
+            kind: 'server',
+            serverId,
+            dmUserAId: null,
+            dmUserBId: null,
+          },
+      ),
     } as any,
     serverDao: {
       getMember:
@@ -116,11 +124,6 @@ function createCommerceCardService(input?: {
         vi.fn(async (_serverId: string, userId: string) =>
           userId === ownerId || userId === buddyId ? { userId } : null,
         ),
-    } as any,
-    dmService: {
-      getChannelById: vi.fn(
-        async () => input?.dmChannel ?? { id: dmChannelId, userAId: buyerId, userBId: buddyId },
-      ),
     } as any,
     commerceOfferService: {
       ensureDefaultOfferForProduct: vi.fn(async () => offer),
@@ -130,8 +133,15 @@ function createCommerceCardService(input?: {
 }
 
 describe('CommerceCardService', () => {
-  it('rejects server shop offer cards in DM metadata', async () => {
+  it('rejects server shop offer cards in direct channel metadata', async () => {
     const service = createCommerceCardService({
+      channel: {
+        id: directChannelId,
+        kind: 'dm',
+        serverId: null,
+        dmUserAId: buyerId,
+        dmUserBId: buddyId,
+      },
       shop: {
         scopeKind: 'server',
         serverId,
@@ -148,7 +158,7 @@ describe('CommerceCardService', () => {
     await expect(
       service.normalizeMessageMetadata(
         { commerceCards: [{ kind: 'offer', offerId }] },
-        { kind: 'dm', dmChannelId },
+        { kind: 'channel', channelId: directChannelId },
       ),
     ).rejects.toMatchObject({ code: 'DM_PRODUCT_CARD_REQUIRES_PERSONAL_SHOP' })
   })
@@ -194,8 +204,15 @@ describe('CommerceCardService', () => {
     })
   })
 
-  it('allows a Buddy personal shop offer card in DM when the Buddy participates', async () => {
+  it('allows a Buddy personal shop offer card in direct channel when the Buddy participates', async () => {
     const service = createCommerceCardService({
+      channel: {
+        id: directChannelId,
+        kind: 'dm',
+        serverId: null,
+        dmUserAId: buyerId,
+        dmUserBId: buddyId,
+      },
       shop: {
         scopeKind: 'user',
         ownerUserId: buddyId,
@@ -208,7 +225,7 @@ describe('CommerceCardService', () => {
 
     const metadata = await service.normalizeMessageMetadata(
       { commerceCards: [{ kind: 'offer', offerId }] },
-      { kind: 'dm', dmChannelId },
+      { kind: 'channel', channelId: directChannelId },
     )
 
     expect(metadata.commerceCards).toEqual([
@@ -487,7 +504,7 @@ describe('EntitlementPurchaseService', () => {
       buyerId,
       offerId,
       idempotencyKey: 'purchase-key-1',
-      destination: { kind: 'dm', id: dmChannelId },
+      destination: { kind: 'channel', id: directChannelId },
     })
 
     expect(ledgerService.debit).toHaveBeenCalledWith(
@@ -524,8 +541,8 @@ describe('EntitlementPurchaseService', () => {
         entitlementId,
         deliverableId,
         buyerId,
-        destinationKind: 'dm',
-        destinationId: dmChannelId,
+        destinationKind: 'channel',
+        destinationId: directChannelId,
         senderBuddyUserId: buddyId,
       },
     )
