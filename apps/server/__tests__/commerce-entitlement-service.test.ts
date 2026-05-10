@@ -124,7 +124,6 @@ function createCommerceCardService(input?: {
     commerceOfferService: {
       ensureDefaultOfferForProduct: vi.fn(async () => offer),
       requireActiveOfferForSurface: vi.fn(async () => ({ offer, product, shop })),
-      listActiveOfferBundlesForSeller: vi.fn(async () => [{ offer, product, shop }]),
     } as any,
   })
 }
@@ -251,7 +250,7 @@ describe('CommerceCardService', () => {
     ])
   })
 
-  it('infers a Buddy personal shop offer card from natural sales copy', async () => {
+  it('does not attach offer cards from natural sales copy without explicit commerce metadata', async () => {
     const service = createCommerceCardService({
       product: {
         name: '一盒会发光的火柴',
@@ -274,18 +273,7 @@ describe('CommerceCardService', () => {
       content: '请看——这就是我说的那盒会发光的火柴。你要把它带回家吗？',
     })
 
-    expect(metadata.commerceCards).toEqual([
-      expect.objectContaining({
-        kind: 'offer',
-        offerId,
-        shopScope: { kind: 'user', id: buddyId },
-        snapshot: expect.objectContaining({
-          name: '一盒会发光的火柴',
-          resourceType: 'workspace_file',
-          resourceId: fileId,
-        }),
-      }),
-    ])
+    expect(metadata.commerceCards).toBeUndefined()
   })
 })
 

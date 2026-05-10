@@ -51,6 +51,8 @@ services:
     environment:
       DATABASE_URL: postgresql://shadow:shadow@postgres:5432/shadow
       REDIS_URL: redis://redis:6379
+      SHADOW_DISABLE_RATE_LIMITS: ${SHADOW_DISABLE_RATE_LIMITS:-false}
+      SHADOW_DIY_CLOUD_DAILY_LIMIT: ${SHADOW_DIY_CLOUD_DAILY_LIMIT:-24}
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
       MINIO_USE_SSL: false

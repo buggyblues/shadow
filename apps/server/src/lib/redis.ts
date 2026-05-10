@@ -1,20 +1,19 @@
 import { createClient, type RedisClientType } from 'redis'
 import { logger } from './logger'
 
-const REDIS_URL = process.env.REDIS_URL
-
 // Use unknown to work around dual @redis/client package resolution
 let client: unknown = null
 
 export async function getRedisClient(): Promise<RedisClientType | null> {
   if (client) return client as RedisClientType
 
-  if (!REDIS_URL) {
+  const redisUrl = process.env.REDIS_URL?.trim()
+  if (!redisUrl) {
     logger.warn('REDIS_URL not set — Redis features disabled')
     return null
   }
 
-  client = createClient({ url: REDIS_URL })
+  client = createClient({ url: redisUrl })
 
   ;(client as ReturnType<typeof createClient>).on('error', (err) =>
     logger.error({ err }, 'Redis client error'),

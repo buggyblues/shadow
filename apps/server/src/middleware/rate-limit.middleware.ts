@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { Context, Next } from 'hono'
 import { getRedisClient } from '../lib/redis'
 
@@ -14,6 +17,52 @@ type RateLimitOptions = {
 }
 
 const fallbackBuckets = new Map<string, RateLimitBucket>()
+let cachedDisableRateLimits: boolean | null = null
+
+function envFlagEnabled(value: string | undefined) {
+  if (!value) return false
+  return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase())
+}
+
+function readEnvFileFlag(filePath: string, key: string) {
+  if (!existsSync(filePath)) return undefined
+  const lines = readFileSync(filePath, 'utf8').split(/\r?\n/)
+  for (const raw of lines) {
+    const line = raw.trim()
+    if (!line || line.startsWith('#')) continue
+    const index = line.indexOf('=')
+    if (index < 0 || line.slice(0, index).trim() !== key) continue
+    return line
+      .slice(index + 1)
+      .trim()
+      .replace(/^['"]|['"]$/g, '')
+  }
+  return undefined
+}
+
+function readDisableRateLimitsFromEnvFiles() {
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url))
+  const candidates = [
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(process.cwd(), '../.env'),
+    path.resolve(process.cwd(), '../../.env'),
+    path.resolve(moduleDir, '../../.env'),
+    path.resolve(moduleDir, '../../../../.env'),
+  ]
+  for (const filePath of [...new Set(candidates)]) {
+    const value = readEnvFileFlag(filePath, 'SHADOW_DISABLE_RATE_LIMITS')
+    if (value !== undefined) return envFlagEnabled(value)
+  }
+  return false
+}
+
+export function areRateLimitsDisabled() {
+  if (process.env.SHADOW_DISABLE_RATE_LIMITS !== undefined) {
+    return envFlagEnabled(process.env.SHADOW_DISABLE_RATE_LIMITS)
+  }
+  cachedDisableRateLimits ??= readDisableRateLimitsFromEnvFiles()
+  return cachedDisableRateLimits
+}
 
 function getClientIp(c: Context) {
   return (
@@ -57,6 +106,11 @@ async function incrementRateLimit(key: string, windowMs: number) {
 
 export function createRateLimitMiddleware(options: RateLimitOptions) {
   return async (c: Context, next: Next): Promise<Response | undefined> => {
+    if (areRateLimitsDisabled()) {
+      await next()
+      return
+    }
+
     const identity = options.keyGenerator?.(c) ?? getClientIp(c)
     const key = `rate:${options.namespace}:${identity}`
     const bucket = await incrementRateLimit(key, options.windowMs)

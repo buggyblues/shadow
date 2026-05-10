@@ -58,6 +58,7 @@ import { CommerceCardService } from './services/commerce-card.service'
 import { CommerceCheckoutService } from './services/commerce-checkout.service'
 import { CommerceFulfillmentService } from './services/commerce-fulfillment.service'
 import { CommerceOfferService } from './services/commerce-offer.service'
+import { DiyCloudRunService } from './services/diy-cloud-run.service'
 import { DmService } from './services/dm.service'
 import { EntitlementService } from './services/entitlement.service'
 import { EntitlementAccessService } from './services/entitlement-access.service'
@@ -155,10 +156,10 @@ export interface Cradle {
   cloudClusterDao: CloudClusterDao
   cloudActivityDao: CloudActivityDao
   cloudUsageDao: CloudUsageDao
-
   // Cloud Service
   cloudService: CloudService
   cloudUsageService: CloudUsageService
+  diyCloudRunService: DiyCloudRunService
 
   // Profile Comment DAOs
   profileCommentDao: ProfileCommentDao
@@ -288,7 +289,6 @@ export function createAppContainer(db: Database): AppContainer {
     cloudClusterDao: asClass(CloudClusterDao).singleton(),
     cloudActivityDao: asClass(CloudActivityDao).singleton(),
     cloudUsageDao: asClass(CloudUsageDao).singleton(),
-
     // Profile Comment DAOs
     profileCommentDao: asClass(ProfileCommentDao).singleton(),
 
@@ -347,6 +347,7 @@ export function createAppContainer(db: Database): AppContainer {
     agentDashboardService: asClass(AgentDashboardService).singleton(),
     cloudService: asClass(CloudService).singleton(),
     cloudUsageService: asClass(CloudUsageService).singleton(),
+    diyCloudRunService: asClass(DiyCloudRunService).singleton(),
     membershipService: asClass(MembershipService).singleton(),
     playLaunchService: asClass(PlayLaunchService).singleton(),
     modelProxyService: asClass(ModelProxyService).singleton(),

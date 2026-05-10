@@ -983,7 +983,6 @@ export interface ShadowDiyCloudAgentStepOutput {
   result: Record<string, unknown>
   reasons: string[]
   confidence?: number
-  raw: unknown
 }
 
 export interface ShadowDiyCloudDraft {
@@ -1003,7 +1002,6 @@ export interface ShadowDiyCloudDraft {
     reason: string
     capabilities: string[]
     requiredKeys: string[]
-    docsExcerpt: string
     matchedTerms: string[]
   }>
   referenceTemplates: Array<{
@@ -1028,8 +1026,15 @@ export interface ShadowDiyCloudDraft {
     skipImpact: string
   }>
   toolTrace: Array<{
-    tool: 'search_plugins' | 'search_templates'
-    query: string
+    tool:
+      | 'search_plugins'
+      | 'inspect_plugin'
+      | 'search_templates'
+      | 'inspect_template'
+      | 'compile_template_dsl'
+      | 'validate_template_dsl'
+      | 'collect_required_keys'
+    query?: string
     resultIds: string[]
   }>
   agentOutputs: ShadowDiyCloudAgentStepOutput[]
@@ -1083,38 +1088,123 @@ export interface ShadowDiyCloudDraft {
 
 export type ShadowDiyCloudProgressStatus = 'running' | 'completed' | 'warning' | 'error'
 
-export type ShadowDiyCloudStreamEvent =
-  | {
-      type: 'progress'
-      id: string
-      step: ShadowDiyCloudStepId
-      status: ShadowDiyCloudProgressStatus
-      title: string
-      detail: string
-      timestamp: string
-      meta?: Record<string, unknown>
-      output?: ShadowDiyCloudAgentStepOutput
-    }
-  | {
-      type: 'draft'
-      id: string
-      timestamp: string
-      draft: ShadowDiyCloudDraft
-    }
+export type ShadowDiyCloudRunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
-export type ShadowDiyCloudSessionStatus = 'running' | 'completed' | 'failed'
-
-export interface ShadowDiyCloudGenerationSession {
-  sessionId: string
+export interface ShadowDiyCloudRun {
+  runId: string
   input: ShadowDiyCloudGenerateInput
-  status: ShadowDiyCloudSessionStatus
+  status: ShadowDiyCloudRunStatus
   createdAt: string
   updatedAt: string
   expiresAt: string
-  events: ShadowDiyCloudStreamEvent[]
   draft?: ShadowDiyCloudDraft
   error?: string
 }
+
+export type ShadowDiyCloudRunEvent =
+  | {
+      schemaVersion: 2
+      seq: number
+      runId: string
+      eventId: string
+      timestamp: string
+      type: 'run.created' | 'run.started' | 'run.cancelled'
+      status?: ShadowDiyCloudRunStatus
+      input?: ShadowDiyCloudGenerateInput
+      expiresAt?: string
+    }
+  | {
+      schemaVersion: 2
+      seq: number
+      runId: string
+      eventId: string
+      timestamp: string
+      type: 'step.created'
+      stepId: ShadowDiyCloudStepId
+      title: string
+      intent: string
+      order: number
+      iconHint?: string
+    }
+  | {
+      schemaVersion: 2
+      seq: number
+      runId: string
+      eventId: string
+      timestamp: string
+      type: 'step.delta'
+      stepId: ShadowDiyCloudStepId
+      channel: 'summary' | 'rationale' | 'status'
+      delta: string
+      status?: ShadowDiyCloudProgressStatus
+      title?: string
+      meta?: Record<string, unknown>
+    }
+  | {
+      schemaVersion: 2
+      seq: number
+      runId: string
+      eventId: string
+      timestamp: string
+      type: 'decision'
+      stepId: ShadowDiyCloudStepId
+      decisionId: string
+      title: string
+      selected: string
+      basis: {
+        observations: string[]
+        constraints: string[]
+        evidence: Array<{ source: string; ref: string; summary: string }>
+        rejectedOptions: Array<{ option: string; reason: string }>
+        confidence?: number | null
+        needsUserReview: boolean
+      }
+      output?: ShadowDiyCloudAgentStepOutput
+    }
+  | {
+      schemaVersion: 2
+      seq: number
+      runId: string
+      eventId: string
+      timestamp: string
+      type: 'artifact.patch'
+      stepId: ShadowDiyCloudStepId
+      artifact: 'templateDsl' | 'cloudConfig' | 'guidebook' | 'requiredKeys'
+      patch: unknown
+    }
+  | {
+      schemaVersion: 2
+      seq: number
+      runId: string
+      eventId: string
+      timestamp: string
+      type: 'guardrail.result'
+      stepId: ShadowDiyCloudStepId
+      name: string
+      status: 'passed' | 'warning' | 'failed' | 'error'
+      detail: string
+      blocksRun: boolean
+    }
+  | {
+      schemaVersion: 2
+      seq: number
+      runId: string
+      eventId: string
+      timestamp: string
+      type: 'draft.completed'
+      draft: ShadowDiyCloudDraft
+    }
+  | {
+      schemaVersion: 2
+      seq: number
+      runId: string
+      eventId: string
+      timestamp: string
+      type: 'run.failed'
+      error: string
+      code?: string
+      retryable: boolean
+    }
 
 // ─── Cloud SaaS Provider Gateway Types ─────────────────────────────────────
 

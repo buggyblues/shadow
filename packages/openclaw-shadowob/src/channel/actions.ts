@@ -9,7 +9,7 @@ import {
   validateApprovalMessageContent,
 } from './interactive.js'
 import { sendShadowMessage } from './send.js'
-import { shadowMessageToolSchemaProperties } from './typebox-schema.js'
+import { buildShadowMessageToolSchemaProperties } from './typebox-schema.js'
 
 const SHADOW_DISCOVERED_ACTIONS = ['send', 'upload-file', 'react', 'edit', 'delete'] as const
 
@@ -19,6 +19,12 @@ type ShadowActionResult = {
   content: Array<{ type: 'text'; text: string }>
   details: Record<string, unknown>
 }
+
+type DescribeMessageTool = NonNullable<
+  NonNullable<import('openclaw/plugin-sdk').ChannelPlugin['actions']>['describeMessageTool']
+>
+type DescribeMessageToolContext = Parameters<DescribeMessageTool>[0]
+type DescribeMessageToolResult = ReturnType<DescribeMessageTool>
 
 function textResult(value: Record<string, unknown>): ShadowActionResult {
   return {
@@ -108,13 +114,19 @@ async function uploadShadowAttachment(params: {
 }
 
 export const shadowMessageActions = {
-  describeMessageTool: () =>
-    ({
+  describeMessageTool: ({
+    cfg,
+    accountId,
+  }: DescribeMessageToolContext): DescribeMessageToolResult => {
+    const account = getAccountConfig(cfg, accountId ?? DEFAULT_ACCOUNT_ID)
+    return {
       actions: [...SHADOW_DISCOVERED_ACTIONS],
       capabilities: ['interactive'],
       schema: {
         visibility: 'current-channel',
-        properties: shadowMessageToolSchemaProperties,
+        properties: buildShadowMessageToolSchemaProperties({
+          commerceOffers: account?.commerceOffers,
+        }),
       },
       mediaSourceParams: {
         'upload-file': [
@@ -128,9 +140,8 @@ export const shadowMessageActions = {
           'buffer',
         ],
       },
-    }) as unknown as ReturnType<
-      NonNullable<import('openclaw/plugin-sdk').ChannelPlugin['actions']>['describeMessageTool']
-    >,
+    } as unknown as DescribeMessageToolResult
+  },
 
   messageActionTargetAliases: {
     'upload-file': { aliases: ['recipient', 'to', 'channelId'] },

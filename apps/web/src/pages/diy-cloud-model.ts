@@ -2,6 +2,14 @@ export type StepId = 'think' | 'search' | 'generate' | 'validate' | 'review'
 
 export const STEP_ORDER: StepId[] = ['think', 'search', 'generate', 'validate', 'review']
 
+export type DiyCloudGenerateInput = {
+  prompt: string
+  feedback?: string
+  previousConfig?: Record<string, unknown>
+  locale?: string
+  timezone?: string
+}
+
 export type DiyCloudAgentStepOutput = {
   type: 'agent_step_output'
   schemaVersion: 1
@@ -14,7 +22,6 @@ export type DiyCloudAgentStepOutput = {
   result: Record<string, unknown>
   reasons: string[]
   confidence?: number
-  raw: unknown
 }
 
 export type DiyCloudDraft = {
@@ -34,7 +41,6 @@ export type DiyCloudDraft = {
     reason: string
     capabilities: string[]
     requiredKeys: string[]
-    docsExcerpt: string
     matchedTerms: string[]
   }>
   referenceTemplates: Array<{
@@ -59,8 +65,15 @@ export type DiyCloudDraft = {
     skipImpact: string
   }>
   toolTrace: Array<{
-    tool: 'search_plugins' | 'search_templates'
-    query: string
+    tool:
+      | 'search_plugins'
+      | 'inspect_plugin'
+      | 'search_templates'
+      | 'inspect_template'
+      | 'compile_template_dsl'
+      | 'validate_template_dsl'
+      | 'collect_required_keys'
+    query?: string
     resultIds: string[]
   }>
   agentOutputs: DiyCloudAgentStepOutput[]
@@ -89,7 +102,7 @@ export type DiyCloudDraft = {
       channels: string[]
     }>
     validationChecks: Array<{
-      name: string
+      key: 'structure' | 'policy' | 'credentials'
       status: 'passed' | 'warning' | 'failed'
       detail: string
     }>
@@ -122,15 +135,16 @@ export type DiyCloudProgressEvent = {
   title: string
   detail: string
   timestamp: string
+  channel?: 'summary' | 'rationale' | 'status'
   meta?: Record<string, unknown>
   output?: DiyCloudAgentStepOutput
 }
 
-export type DiyCloudSessionStatus = 'running' | 'completed' | 'failed'
+export type DiyCloudRunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
-export type DiyCloudSession = {
-  sessionId: string
-  status: DiyCloudSessionStatus
+export type DiyCloudRun = {
+  runId: string
+  status: DiyCloudRunStatus
   createdAt: string
   updatedAt?: string
   expiresAt: string
@@ -146,6 +160,71 @@ export type DiyCloudSession = {
   draft?: DiyCloudDraft
   error?: string
 }
+
+type DiyCloudRunEventBase = {
+  schemaVersion: 2
+  seq: number
+  runId: string
+  eventId: string
+  timestamp: string
+}
+
+export type DiyCloudRunEvent =
+  | (DiyCloudRunEventBase & {
+      type: 'run.created' | 'run.started' | 'run.cancelled'
+      status?: DiyCloudRunStatus
+      input?: DiyCloudGenerateInput
+      expiresAt?: string
+    })
+  | (DiyCloudRunEventBase & {
+      type: 'step.created'
+      stepId: StepId
+      title: string
+      intent: string
+      order: number
+      iconHint?: string
+    })
+  | (DiyCloudRunEventBase & {
+      type: 'step.delta'
+      stepId: StepId
+      channel: 'summary' | 'rationale' | 'status'
+      delta: string
+      status?: DiyCloudProgressStatus
+      title?: string
+      meta?: Record<string, unknown>
+    })
+  | (DiyCloudRunEventBase & {
+      type: 'decision'
+      stepId: StepId
+      decisionId: string
+      title: string
+      selected: string
+      basis: {
+        observations: string[]
+        constraints: string[]
+        evidence: Array<{ source: string; ref: string; summary: string }>
+        rejectedOptions: Array<{ option: string; reason: string }>
+        confidence?: number | null
+        needsUserReview: boolean
+      }
+      output?: DiyCloudAgentStepOutput
+    })
+  | (DiyCloudRunEventBase & {
+      type: 'artifact.patch'
+      stepId: StepId
+      artifact: 'templateDsl' | 'cloudConfig' | 'guidebook' | 'requiredKeys'
+      patch: unknown
+    })
+  | (DiyCloudRunEventBase & {
+      type: 'draft.completed'
+      draft: DiyCloudDraft
+    })
+  | (DiyCloudRunEventBase & {
+      type: 'run.failed'
+      error: string
+      code?: string
+      retryable: boolean
+    })
 
 export type CloudTemplateRecord = {
   slug: string

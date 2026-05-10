@@ -145,3 +145,36 @@ export const shadowMessageToolSchemaProperties = {
   ),
   offerId: optionalSchema(stringSchema('Alias for commerceOfferId.')),
 } satisfies Record<string, TypeBoxCompatibleSchema>
+
+export function buildShadowMessageToolSchemaProperties(input?: {
+  commerceOffers?: Array<{
+    offerId: string
+    name?: string
+    summary?: string
+    seedId?: string
+  }>
+}): Record<string, TypeBoxCompatibleSchema> {
+  const offers = (input?.commerceOffers ?? [])
+    .filter((offer) => offer.offerId?.trim() && !offer.offerId.includes('${env:'))
+    .slice(0, 12)
+
+  if (offers.length === 0) return shadowMessageToolSchemaProperties
+
+  const offerHints = offers
+    .map((offer) => {
+      const label = offer.name ?? offer.seedId ?? offer.offerId
+      const summary = offer.summary ? ` - ${offer.summary}` : ''
+      return `${label}: ${offer.offerId}${summary}`
+    })
+    .join('; ')
+
+  return {
+    ...shadowMessageToolSchemaProperties,
+    commerceOfferId: optionalSchema(
+      stringSchema(
+        `Attach one of the available Shadow commerce offers as a purchasable product card. Available CommerceOfferIds: ${offerHints}. Use only when the user wants to buy, view pricing, or receive a product card.`,
+      ),
+    ),
+    offerId: optionalSchema(stringSchema('Alias for commerceOfferId.')),
+  }
+}

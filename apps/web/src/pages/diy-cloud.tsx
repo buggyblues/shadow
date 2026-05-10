@@ -46,7 +46,8 @@ import {
   type DiyCloudAgentStepOutput,
   type DiyCloudDraft,
   type DiyCloudProgressEvent,
-  type DiyCloudSession,
+  type DiyCloudRun,
+  type DiyCloudRunEvent,
   type ServerMeta,
   STEP_ORDER,
   type StepId,
@@ -233,16 +234,47 @@ function isProgressEvent(value: unknown): value is DiyCloudProgressEvent {
   )
 }
 
-function isSessionPayload(value: unknown): value is DiyCloudSession {
+function isRunPayload(value: unknown): value is DiyCloudRun {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const record = value as Record<string, unknown>
-  return typeof record.sessionId === 'string' && typeof record.expiresAt === 'string'
+  return typeof record.runId === 'string' && typeof record.expiresAt === 'string'
 }
 
-function isDraftPayload(value: unknown): value is { draft: DiyCloudDraft } {
+function isRunEvent(value: unknown): value is DiyCloudRunEvent {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  const draft = (value as Record<string, unknown>).draft
-  return Boolean(draft && typeof draft === 'object' && !Array.isArray(draft))
+  const record = value as Record<string, unknown>
+  return record.schemaVersion === 2 && typeof record.type === 'string'
+}
+
+function progressFromRunEvent(event: DiyCloudRunEvent): DiyCloudProgressEvent | null {
+  if (event.type === 'step.delta') {
+    return {
+      type: 'progress',
+      id: event.eventId,
+      step: event.stepId,
+      status: event.status ?? (event.channel === 'status' ? 'running' : 'completed'),
+      title: event.title ?? event.stepId,
+      detail: event.delta,
+      timestamp: event.timestamp,
+      channel: event.channel,
+      meta: event.meta,
+    }
+  }
+  if (event.type === 'decision') {
+    return {
+      type: 'progress',
+      id: event.eventId,
+      step: event.stepId,
+      status: 'completed',
+      title: event.title,
+      detail: event.selected,
+      timestamp: event.timestamp,
+      channel: 'summary',
+      meta: { basis: event.basis },
+      output: event.output,
+    }
+  }
+  return null
 }
 
 function progressValue(completed: number, total: number, generating: boolean) {
@@ -259,25 +291,186 @@ function formatJson(value: unknown) {
   }
 }
 
+function stringList(value: unknown, limit = 4) {
+  return Array.isArray(value)
+    ? value
+        .map((item) => (typeof item === 'string' ? item : ''))
+        .filter(Boolean)
+        .slice(0, limit)
+    : []
+}
+
+function recordList(value: unknown, key: string, limit = 4) {
+  return Array.isArray(value)
+    ? value
+        .map((item) => {
+          if (!item || typeof item !== 'object' || Array.isArray(item)) return ''
+          const child = (item as Record<string, unknown>)[key]
+          return typeof child === 'string' ? child : ''
+        })
+        .filter(Boolean)
+        .slice(0, limit)
+    : []
+}
+
+function progressMeta(event: DiyCloudProgressEvent) {
+  return event.meta && typeof event.meta === 'object' && !Array.isArray(event.meta)
+    ? event.meta
+    : {}
+}
+
+function progressTool(event: DiyCloudProgressEvent) {
+  const tool = progressMeta(event).tool
+  return typeof tool === 'string' ? tool : ''
+}
+
+function isPublicProgressEvent(event: DiyCloudProgressEvent) {
+  return !progressTool(event)
+}
+
+function progressBasis(event: DiyCloudProgressEvent) {
+  const basis = progressMeta(event).basis
+  return Array.isArray(basis)
+    ? basis.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : []
+}
+
+function progressToolArgs(event: DiyCloudProgressEvent) {
+  const args = progressMeta(event).args
+  return args && typeof args === 'object' && !Array.isArray(args)
+    ? (args as Record<string, unknown>)
+    : {}
+}
+
+function progressToolResult(event: DiyCloudProgressEvent) {
+  return progressMeta(event).result
+}
+
+function progressQuery(event: DiyCloudProgressEvent) {
+  const args = progressToolArgs(event)
+  for (const key of ['query', 'pluginId', 'slug']) {
+    const value = args[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  const result = progressToolResult(event)
+  if (result && typeof result === 'object' && !Array.isArray(result)) {
+    const query = (result as Record<string, unknown>).query
+    if (typeof query === 'string' && query.trim()) return query.trim()
+  }
+  for (const key of ['selectedPluginIds', 'pluginIds']) {
+    const value = args[key]
+    if (Array.isArray(value)) {
+      return value.filter((item) => typeof item === 'string').join(', ')
+    }
+  }
+  return event.detail
+}
+
+function resultItemsFromProgress(event: DiyCloudProgressEvent) {
+  const result = progressToolResult(event)
+  if (Array.isArray(result)) return result
+  if (result && typeof result === 'object' && !Array.isArray(result)) {
+    const record = result as Record<string, unknown>
+    if (itemName(record)) return [record]
+    for (const key of ['plugins', 'templates', 'requiredKeys', 'items']) {
+      const value = record[key]
+      if (Array.isArray(value)) return value
+    }
+  }
+  return []
+}
+
+function itemName(item: unknown) {
+  if (typeof item === 'string') return item.trim()
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return ''
+  const record = item as Record<string, unknown>
+  for (const key of ['name', 'title', 'id', 'slug', 'key', 'compiledName']) {
+    const value = record[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return ''
+}
+
+function compactProgressText(value: string, max = 84) {
+  const text = value.replace(/\s+/g, ' ').trim()
+  return text.length > max ? `${text.slice(0, Math.max(0, max - 3))}...` : text
+}
+
+function progressIdentityText(value: unknown) {
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  if (Array.isArray(value)) {
+    const items = value.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean)
+    return items.join(', ')
+  }
+  return ''
+}
+
+function progressToolIdentity(event: DiyCloudProgressEvent) {
+  const tool = progressTool(event)
+  if (!tool) return ''
+  const args = progressToolArgs(event)
+  const argIdentity = ['query', 'pluginId', 'slug']
+    .map((key) => progressIdentityText(args[key]))
+    .find(Boolean)
+  const arrayIdentity = ['selectedPluginIds', 'pluginIds']
+    .map((key) => progressIdentityText(args[key]))
+    .find(Boolean)
+
+  const result = progressToolResult(event)
+  const resultIdentity =
+    result && typeof result === 'object' && !Array.isArray(result)
+      ? ['query', 'pluginId', 'slug', 'id', 'key', 'compiledName', 'name', 'title']
+          .map((key) => progressIdentityText((result as Record<string, unknown>)[key]))
+          .find(Boolean)
+      : ''
+
+  return `${event.step}:${tool}:${argIdentity || arrayIdentity || resultIdentity || 'default'}`
+}
+
+function progressEventIdentity(event: DiyCloudProgressEvent) {
+  const toolIdentity = progressToolIdentity(event)
+  if (toolIdentity) return toolIdentity
+  return [
+    event.step,
+    event.channel ?? 'status',
+    compactProgressText(event.title, 160),
+    compactProgressText(event.detail, 240),
+  ].join(':')
+}
+
+function mergeProgressEvents(events: DiyCloudProgressEvent[]) {
+  const merged = new Map<string, { event: DiyCloudProgressEvent; index: number }>()
+  events.forEach((event, index) => {
+    merged.set(progressEventIdentity(event), { event, index })
+  })
+  return [...merged.values()].sort((a, b) => a.index - b.index).map((item) => item.event)
+}
+
+function progressDisplay(event: DiyCloudProgressEvent) {
+  return {
+    title: compactProgressText(event.title, 120),
+    detail: compactProgressText(event.detail, 360),
+  }
+}
+
 export function DiyCloudPage() {
   const { t, i18n } = useTranslation()
   const search = useSearch({ strict: false }) as {
     prompt?: string
-    session?: string
+    run?: string
     debug?: string
   }
   const searchParams = new URLSearchParams(window.location.search)
   const initialPrompt =
     typeof search.prompt === 'string' ? search.prompt : searchParams.get('prompt') || ''
-  const initialSessionId =
-    typeof search.session === 'string' ? search.session : searchParams.get('session') || ''
+  const initialRunId = typeof search.run === 'string' ? search.run : searchParams.get('run') || ''
   const debugMode =
     (typeof search.debug === 'string' ? search.debug : searchParams.get('debug')) === 'true'
   const autoStartedRef = useRef(false)
   const generationAbortRef = useRef<AbortController | null>(null)
   const sectionRefs = useRef<Partial<Record<StepId, HTMLElement | null>>>({})
   const [prompt, setPrompt] = useState(initialPrompt)
-  const [sessionId, setSessionId] = useState(initialSessionId)
+  const [runId, setRunId] = useState(initialRunId)
   const [feedback, setFeedback] = useState('')
   const [draft, setDraft] = useState<DiyCloudDraft | null>(null)
   const [activeStep, setActiveStep] = useState<StepId | null>(null)
@@ -333,17 +526,17 @@ export function DiyCloudPage() {
     )
     setActiveStep(event.step)
     setSelectedStep(event.step)
-    if (event.status === 'completed' || event.status === 'warning') {
+    if ((event.status === 'completed' || event.status === 'warning') && event.output) {
       completeStep(event.step)
     }
   }
 
-  const applySessionPayload = (session: DiyCloudSession) => {
-    setSessionId(session.sessionId)
-    if (session.input?.prompt) setPrompt(session.input.prompt)
+  const applyRunPayload = (run: DiyCloudRun) => {
+    setRunId(run.runId)
+    if (run.input?.prompt) setPrompt(run.input.prompt)
 
     const url = new URL(window.location.href)
-    url.searchParams.set('session', session.sessionId)
+    url.searchParams.set('run', run.runId)
     url.searchParams.delete('prompt')
     window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
   }
@@ -369,20 +562,32 @@ export function DiyCloudPage() {
       const message = parseSseBlock(block)
       if (!message.data) return
       const data = JSON.parse(message.data) as unknown
-      if (message.event === 'session' && isSessionPayload(data)) {
-        applySessionPayload(data)
+      if (message.event === 'run' && isRunPayload(data)) {
+        applyRunPayload(data)
         return
       }
-      if (message.event === 'progress' && isProgressEvent(data)) {
-        applyProgressEvent(data)
+      if (isRunEvent(data)) {
+        const progress = progressFromRunEvent(data)
+        if (progress) applyProgressEvent(progress)
+        if (data.type === 'draft.completed') {
+          receivedDraft = true
+          applyDraft(data.draft)
+        }
+        if (data.type === 'run.created') {
+          applyRunPayload({
+            runId: data.runId,
+            status: (data.status as DiyCloudRun['status']) ?? 'pending',
+            createdAt: data.timestamp,
+            expiresAt: data.expiresAt ?? data.timestamp,
+            input: data.input,
+          })
+        }
+        if (data.type === 'run.failed') {
+          throw new Error(data.error || t('diyCloud.errors.generateFailed'))
+        }
         return
       }
-      if (message.event === 'draft' && isDraftPayload(data)) {
-        receivedDraft = true
-        applyDraft(data.draft)
-        return
-      }
-      if (message.event === 'error') {
+      if (message.event === 'error' || message.event === 'run.failed') {
         const errorPayload = data as { error?: string }
         throw new Error(errorPayload.error || t('diyCloud.errors.generateFailed'))
       }
@@ -418,7 +623,7 @@ export function DiyCloudPage() {
     setDeployError('')
     setGate(null)
     setDraft(null)
-    setSessionId('')
+    setRunId('')
     setGenerationEvents([])
     setCompletedSteps(new Set())
     setDeployGuideIndex(0)
@@ -426,9 +631,13 @@ export function DiyCloudPage() {
       setActiveStep('think')
       setSelectedStep('think')
 
-      const response = await fetchApiResponse('/api/cloud-saas/diy/generate/stream', {
+      const run = await fetchApi<{
+        runId: string
+        status: DiyCloudRun['status']
+        createdAt: string
+        expiresAt: string
+      }>('/api/cloud-saas/diy/runs', {
         method: 'POST',
-        signal: controller.signal,
         body: JSON.stringify({
           prompt: trimmed,
           feedback: nextFeedback || undefined,
@@ -437,6 +646,11 @@ export function DiyCloudPage() {
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       })
+      applyRunPayload(run)
+      const response = await fetchApiResponse(
+        `/api/cloud-saas/diy/runs/${encodeURIComponent(run.runId)}/stream`,
+        { signal: controller.signal },
+      )
       const receivedDraft = await consumeGenerationStream(response)
       if (!receivedDraft) throw new Error(t('diyCloud.errors.generateFailed'))
     } catch (err) {
@@ -452,8 +666,8 @@ export function DiyCloudPage() {
     }
   }
 
-  const resumeGeneration = async (nextSessionId = sessionId) => {
-    const trimmed = nextSessionId.trim()
+  const resumeGeneration = async (nextRunId = runId) => {
+    const trimmed = nextRunId.trim()
     if (!trimmed || generating) return
 
     generationAbortRef.current?.abort()
@@ -464,7 +678,7 @@ export function DiyCloudPage() {
     setDeployError('')
     setGate(null)
     setDraft(null)
-    setSessionId(trimmed)
+    setRunId(trimmed)
     setGenerationEvents([])
     setCompletedSteps(new Set())
     setDeployGuideIndex(0)
@@ -473,7 +687,7 @@ export function DiyCloudPage() {
       setActiveStep('think')
       setSelectedStep('think')
       const response = await fetchApiResponse(
-        `/api/cloud-saas/diy/sessions/${encodeURIComponent(trimmed)}/stream`,
+        `/api/cloud-saas/diy/runs/${encodeURIComponent(trimmed)}/stream`,
         { signal: controller.signal },
       )
       const receivedDraft = await consumeGenerationStream(response)
@@ -494,18 +708,18 @@ export function DiyCloudPage() {
   useEffect(() => () => generationAbortRef.current?.abort(), [])
 
   useEffect(() => {
-    if (autoStartedRef.current || !initialSessionId.trim()) return
+    if (autoStartedRef.current || !initialRunId.trim()) return
     autoStartedRef.current = true
-    void resumeGeneration(initialSessionId)
+    void resumeGeneration(initialRunId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialSessionId])
+  }, [initialRunId])
 
   useEffect(() => {
-    if (autoStartedRef.current || initialSessionId.trim() || !initialPrompt.trim()) return
+    if (autoStartedRef.current || initialRunId.trim() || !initialPrompt.trim()) return
     autoStartedRef.current = true
     void runGeneration(initialPrompt)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPrompt, initialSessionId])
+  }, [initialPrompt, initialRunId])
 
   const saveDraftTemplate = async (
     currentDraft: DiyCloudDraft,
@@ -656,11 +870,15 @@ export function DiyCloudPage() {
     { title: t('diyCloud.stage.buddiesTitle'), items: draftBuddies, Icon: MessageSquare },
     { title: t('diyCloud.stage.pluginsTitle'), items: draftPlugins, Icon: FileCode2 },
   ]
+  const publicGenerationEvents = useMemo(
+    () => (debugMode ? generationEvents : generationEvents.filter(isPublicProgressEvent)),
+    [debugMode, generationEvents],
+  )
   const progressByStep = useMemo(() => {
     const map = new Map<StepId, DiyCloudProgressEvent>()
-    for (const event of generationEvents) map.set(event.step, event)
+    for (const event of publicGenerationEvents) map.set(event.step, event)
     return map
-  }, [generationEvents])
+  }, [publicGenerationEvents])
   const stepOutputsByStep = useMemo(() => {
     const map = new Map<StepId, DiyCloudAgentStepOutput>()
     for (const output of draft?.agentOutputs ?? []) map.set(output.step, output)
@@ -669,24 +887,204 @@ export function DiyCloudPage() {
     }
     return map
   }, [draft, generationEvents])
-  const latestProgress = generationEvents[generationEvents.length - 1] ?? null
+  const latestProgress = publicGenerationEvents[publicGenerationEvents.length - 1] ?? null
   const generationPercent = progressValue(completedSteps.size, STEP_ORDER.length, generating)
+  const recentSearchEvents = useMemo(() => {
+    if (!debugMode) return []
+    const searchEvents = generationEvents.filter((event) => {
+      const tool = progressTool(event)
+      return tool === 'search_plugins' || tool === 'search_templates'
+    })
+    return mergeProgressEvents(searchEvents)
+      .filter((event) => {
+        const hasResult = progressToolResult(event) !== undefined || event.status === 'completed'
+        return hasResult || (generating && activeStep === 'search')
+      })
+      .slice(-4)
+  }, [activeStep, debugMode, generationEvents, generating])
   const reasoningByStep = useMemo(() => {
     const map = new Map<StepId, DiyCloudDraft['agentReport']['reasoning'][number]>()
     for (const item of draft?.agentReport.reasoning ?? []) map.set(item.step, item)
     return map
   }, [draft])
+  const latestProgressDisplay = latestProgress ? progressDisplay(latestProgress) : null
+  const publicProgressByStep = useMemo(() => {
+    const map = new Map<StepId, DiyCloudProgressEvent>()
+    for (const [step, event] of progressByStep) {
+      const display = progressDisplay(event)
+      map.set(step, { ...event, title: display.title, detail: display.detail })
+    }
+    return map
+  }, [progressByStep])
 
   const renderLiveStepState = (id: StepId) => {
-    const event = progressByStep.get(id)
-    if (!event) return null
+    const latestEvent = progressByStep.get(id)
+    if (!latestEvent) return null
+    const uniqueStepEvents = mergeProgressEvents(
+      publicGenerationEvents.filter((item) => item.step === id),
+    )
+    const event = uniqueStepEvents[uniqueStepEvents.length - 1] ?? latestEvent
+    const historyEvents = (
+      debugMode
+        ? uniqueStepEvents.slice(-6, -1)
+        : uniqueStepEvents.filter((item) => item.channel === 'rationale').slice(-2)
+    ).filter((item) => item.id !== event.id)
+    const currentProgress = progressDisplay(event)
+    const output = event.output
+    const basisItems = output?.reasons?.length ? output.reasons : progressBasis(event)
+    const result = output?.result ?? {}
+    const summaryItems: Array<[string, unknown]> =
+      output?.step === 'think'
+        ? [
+            [t('diyCloud.resultFields.intent'), result.intent],
+            [
+              t('diyCloud.resultFields.requestedPlugins'),
+              stringList(result.selectedPluginIds).join(', '),
+            ],
+          ]
+        : output?.step === 'search'
+          ? [
+              [
+                t('diyCloud.resultFields.candidatePlugins'),
+                recordList(result.selectedPlugins, 'id').join(', '),
+              ],
+              [
+                t('diyCloud.resultFields.referenceTemplates'),
+                recordList(result.referenceTemplates, 'title').join(', '),
+              ],
+            ]
+          : output?.step === 'generate'
+            ? [
+                [t('diyCloud.resultFields.channels'), stringList(result.channels).join(', ')],
+                [
+                  t('diyCloud.resultFields.selectedPlugins'),
+                  stringList(result.selectedPluginIds).join(', '),
+                ],
+              ]
+            : output?.step === 'validate'
+              ? [
+                  [
+                    t('diyCloud.resultFields.validation'),
+                    result.valid
+                      ? t('diyCloud.resultFields.validationOk')
+                      : t('diyCloud.resultFields.validationReview'),
+                  ],
+                  [
+                    t('diyCloud.resultFields.requiredKeys'),
+                    recordList(result.requiredKeys, 'key').join(', '),
+                  ],
+                ]
+              : output?.step === 'review'
+                ? [
+                    [t('diyCloud.resultFields.score'), result.score],
+                    [
+                      t('diyCloud.resultFields.nextActions'),
+                      stringList(result.nextActions).join(', '),
+                    ],
+                  ]
+                : []
+    const visibleSummary = debugMode
+      ? summaryItems.filter(([, value]) => value !== undefined && value !== '')
+      : []
+    const progressBadgeLabel = (item: DiyCloudProgressEvent) => {
+      const tool = progressTool(item)
+      if (tool) {
+        const done = progressToolResult(item) !== undefined || item.status === 'completed'
+        if (done) {
+          return tool === 'search_plugins' || tool === 'search_templates'
+            ? t('diyCloud.toolEvents.searchTraceDone')
+            : t('diyCloud.toolEvents.toolDone')
+        }
+        return tool === 'search_plugins' || tool === 'search_templates'
+          ? t('diyCloud.toolEvents.searchTraceRunning')
+          : t('diyCloud.progressChannels.status')
+      }
+      return t(`diyCloud.progressChannels.${item.channel ?? 'status'}`)
+    }
     return (
       <div className="mt-4 rounded-[18px] border border-white/10 bg-black/5 p-4">
         <div className="text-xs font-black uppercase tracking-[0.16em] text-primary">
           {t('diyCloud.realProgress')}
         </div>
-        <p className="mt-2 text-base font-black leading-relaxed text-text-primary">{event.title}</p>
-        <p className="mt-2 text-sm font-bold leading-relaxed text-text-muted">{event.detail}</p>
+        <p className="mt-2 text-base font-black leading-relaxed text-text-primary">
+          {currentProgress.title}
+        </p>
+        {currentProgress.detail !== currentProgress.title && (
+          <p className="mt-2 text-sm font-bold leading-relaxed text-text-muted">
+            {currentProgress.detail}
+          </p>
+        )}
+        {historyEvents.length > 0 && (
+          <div className="mt-4 space-y-2">
+            {historyEvents.map((item) => {
+              const itemProgress = progressDisplay(item)
+              return (
+                <div
+                  key={item.id}
+                  className="rounded-[14px] border border-white/10 bg-white/[0.035] px-3 py-2"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge
+                      variant={
+                        item.channel === 'rationale'
+                          ? 'primary'
+                          : item.status === 'warning'
+                            ? 'warning'
+                            : item.status === 'completed'
+                              ? 'success'
+                              : 'neutral'
+                      }
+                    >
+                      {progressBadgeLabel(item)}
+                    </Badge>
+                    <span className="text-xs font-black text-text-primary">
+                      {itemProgress.title}
+                    </span>
+                  </div>
+                  {itemProgress.detail !== itemProgress.title && (
+                    <p className="mt-1 text-xs font-bold leading-relaxed text-text-muted">
+                      {itemProgress.detail}
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+        {visibleSummary.length > 0 && (
+          <div className="mt-4 grid gap-2 md:grid-cols-2">
+            {visibleSummary.map(([label, value]) => (
+              <div
+                key={`${label}-${String(value)}`}
+                className="rounded-[14px] border border-white/10 bg-white/[0.04] px-3 py-2"
+              >
+                <div className="text-[10px] font-black uppercase tracking-[0.14em] text-text-muted">
+                  {label}
+                </div>
+                <div className="mt-1 text-xs font-bold leading-relaxed text-text-secondary">
+                  {String(value)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {basisItems.length > 0 && (
+          <div className="mt-4 rounded-[14px] border border-primary/15 bg-primary/5 px-3 py-3">
+            <div className="text-[10px] font-black uppercase tracking-[0.16em] text-primary">
+              {t('diyCloud.agentReasons')}
+            </div>
+            <div className="mt-2 space-y-1.5">
+              {basisItems.slice(0, debugMode ? 5 : 2).map((reason, index) => (
+                <p
+                  key={`${event.id}-reason-${index}`}
+                  className="text-xs font-bold leading-relaxed text-text-secondary"
+                >
+                  {reason}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -762,14 +1160,6 @@ export function DiyCloudPage() {
             </div>
           </div>
         </div>
-        <div className="rounded-[18px] border border-white/10 bg-black/5 p-4">
-          <div className="text-xs font-black uppercase tracking-[0.16em] text-primary">
-            {t('diyCloud.agentRawOutput')}
-          </div>
-          <pre className="mt-4 max-h-[620px] overflow-auto rounded-[18px] border border-white/10 bg-black/25 p-4 text-xs font-bold leading-relaxed text-text-secondary">
-            {formatJson(output.raw)}
-          </pre>
-        </div>
       </div>
     )
   }
@@ -794,6 +1184,13 @@ export function DiyCloudPage() {
     if (!shouldRenderStep) return null
 
     const reasoning = reasoningByStep.get(id)
+    const progress = publicProgressByStep.get(id)
+    const headingDetail =
+      reasoning?.detail ??
+      (progress?.channel === 'rationale' || (progress && progressTool(progress))
+        ? undefined
+        : progress?.detail) ??
+      stepLabels[id].detail
     return (
       <section
         id={`diy-step-${id}`}
@@ -805,7 +1202,7 @@ export function DiyCloudPage() {
         <StepHeading
           index={index}
           title={reasoning?.title ?? stepLabels[id].title}
-          detail={progressByStep.get(id)?.detail ?? reasoning?.detail ?? stepLabels[id].detail}
+          detail={headingDetail}
         />
         {children ?? renderLiveStepState(id)}
         {debugMode && renderStepJsonOutput(id)}
@@ -822,7 +1219,7 @@ export function DiyCloudPage() {
             completedSteps={completedSteps}
             embedded
             generating={generating}
-            progressByStep={progressByStep}
+            progressByStep={publicProgressByStep}
             selectedStep={selectedStep}
             stepLabels={stepLabels}
             onSelectStep={scrollToStep}
@@ -887,12 +1284,56 @@ export function DiyCloudPage() {
                       </div>
                       <Progress value={generationPercent} className="mt-3" />
                       <p className="mt-4 text-sm font-black leading-relaxed text-text-primary">
-                        {latestProgress?.title ?? t('diyCloud.progressIdle')}
+                        {latestProgressDisplay?.title ?? t('diyCloud.progressIdle')}
                       </p>
-                      {latestProgress?.detail && (
+                      {latestProgressDisplay?.detail && (
                         <p className="mt-2 text-xs font-bold leading-relaxed text-text-muted">
-                          {latestProgress.detail}
+                          {latestProgressDisplay.detail}
                         </p>
+                      )}
+                      {debugMode && recentSearchEvents.length > 1 && (
+                        <div className="mt-4 space-y-2">
+                          <div className="text-[10px] font-black uppercase tracking-[0.16em] text-text-muted">
+                            {t('diyCloud.toolEvents.searchTraceTitle')}
+                          </div>
+                          {recentSearchEvents.map((event) => {
+                            const tool = progressTool(event)
+                            const result = progressToolResult(event)
+                            const items = resultItemsFromProgress(event)
+                            const names = items.map(itemName).filter(Boolean).slice(0, 3).join(', ')
+                            return (
+                              <div
+                                key={event.id}
+                                className="rounded-[14px] border border-white/10 bg-black/10 px-3 py-2"
+                              >
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge variant={result === undefined ? 'neutral' : 'primary'}>
+                                    {result === undefined
+                                      ? t('diyCloud.toolEvents.searchTraceRunning')
+                                      : t('diyCloud.toolEvents.searchTraceDone')}
+                                  </Badge>
+                                  <span className="min-w-0 text-xs font-black leading-relaxed text-text-primary">
+                                    {tool === 'search_templates'
+                                      ? t('diyCloud.toolEvents.searchTemplatesRunning')
+                                      : t('diyCloud.toolEvents.searchPluginsRunning')}
+                                  </span>
+                                </div>
+                                <p className="mt-1 text-xs font-bold leading-relaxed text-text-muted">
+                                  {t('diyCloud.toolEvents.searchDirection', {
+                                    query: compactProgressText(progressQuery(event), 96),
+                                  })}
+                                </p>
+                                {names && (
+                                  <p className="mt-1 text-xs font-bold leading-relaxed text-text-muted">
+                                    {t('diyCloud.toolEvents.searchTraceCandidates', {
+                                      items: names,
+                                    })}
+                                  </p>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1156,19 +1597,26 @@ export function DiyCloudPage() {
                     </div>
                   </div>
                   <div className="mt-4 grid gap-3 md:grid-cols-3">
-                    {draft.agentReport.validationChecks.map((check) => (
-                      <div
-                        key={check.name}
-                        className="rounded-[20px] border border-white/10 bg-black/10 p-4"
-                      >
-                        <Badge variant={check.status === 'passed' ? 'success' : 'warning'}>
-                          {check.name}
-                        </Badge>
-                        <p className="mt-3 text-xs font-bold leading-relaxed text-text-muted">
-                          {check.detail}
-                        </p>
-                      </div>
-                    ))}
+                    {draft.agentReport.validationChecks.map((check) => {
+                      const label = t(`diyCloud.validationChecks.${check.key}`)
+                      const detail =
+                        check.status === 'passed'
+                          ? t(`diyCloud.validationChecks.${check.key}Passed`)
+                          : check.detail
+                      return (
+                        <div
+                          key={check.key}
+                          className="rounded-[20px] border border-white/10 bg-black/10 p-4"
+                        >
+                          <Badge variant={check.status === 'passed' ? 'success' : 'warning'}>
+                            {label}
+                          </Badge>
+                          <p className="mt-3 text-xs font-bold leading-relaxed text-text-muted">
+                            {detail}
+                          </p>
+                        </div>
+                      )
+                    })}
                   </div>
                 </>
               ) : undefined,

@@ -1,10 +1,10 @@
 import { randomBytes } from 'node:crypto'
 import { zValidator } from '@hono/zod-validator'
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, gte, isNotNull, lt, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
-import { channels, cloudTemplates, messages } from '../db/schema'
+import { channels, cloudTemplates, inviteCodes, messages, users } from '../db/schema'
 import { resolveCloudTemplatesDir } from '../lib/cloud-templates'
 import { authMiddleware } from '../middleware/auth.middleware'
 import { updateServerSchema } from '../validators/server.schema'
@@ -21,6 +21,8 @@ function generateCode(length = 8): string {
 
 export function createAdminHandler(container: AppContainer) {
   const adminHandler = new Hono()
+  const isDevTopupEnabled = () =>
+    ['1', 'true', 'yes', 'on'].includes((process.env.ENABLE_DEV_TOPUP ?? '').toLowerCase())
 
   adminHandler.use('*', authMiddleware)
 
@@ -52,7 +54,7 @@ export function createAdminHandler(container: AppContainer) {
       }),
     ),
     async (c) => {
-      if (process.env.ENABLE_DEV_TOPUP !== '1') {
+      if (!isDevTopupEnabled()) {
         return c.json(
           {
             ok: false,
@@ -82,6 +84,17 @@ export function createAdminHandler(container: AppContainer) {
     const inviteCodeDao = container.resolve('inviteCodeDao')
     const db = container.resolve('db')
 
+    const now = new Date()
+    const daysQuery = Number.parseInt(c.req.query('days') ?? '14', 10)
+    const trendWindowDays = Number.isFinite(daysQuery) ? Math.max(7, Math.min(60, daysQuery)) : 14
+    const endExclusive = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
+    )
+    const startInclusive = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - trendWindowDays + 1),
+    )
+    const toDate = (value: Date) => value.toISOString().slice(0, 10)
+
     const [allUsers, allServers, totalCodes, usedCodes, msgCountResult, chCountResult] =
       await Promise.all([
         userDao.findAll(9999, 0),
@@ -92,7 +105,89 @@ export function createAdminHandler(container: AppContainer) {
         db.select({ count: sql<number>`count(*)` }).from(channels),
       ])
 
+    const [userGrowthRows, messageActivityRows, inviteUsedRows] = await Promise.all([
+      db
+        .select({
+          date: sql<string>`${users.createdAt}::date`.as('date'),
+          newUsers: sql<number>`count(*)::int`,
+        })
+        .from(users)
+        .where(and(gte(users.createdAt, startInclusive), lt(users.createdAt, endExclusive)))
+        .groupBy(sql`${users.createdAt}::date`)
+        .orderBy(sql`${users.createdAt}::date`),
+      db
+        .select({
+          date: sql<string>`${messages.createdAt}::date`.as('date'),
+          messageCount: sql<number>`count(*)::int`,
+          activeUsers: sql<number>`count(distinct ${messages.authorId})::int`,
+        })
+        .from(messages)
+        .where(and(gte(messages.createdAt, startInclusive), lt(messages.createdAt, endExclusive)))
+        .groupBy(sql`${messages.createdAt}::date`)
+        .orderBy(sql`${messages.createdAt}::date`),
+      db
+        .select({
+          date: sql<string>`${inviteCodes.usedAt}::date`.as('date'),
+          usedInviteCodes: sql<number>`count(*)::int`,
+        })
+        .from(inviteCodes)
+        .where(
+          and(
+            isNotNull(inviteCodes.usedAt),
+            gte(inviteCodes.usedAt, startInclusive),
+            lt(inviteCodes.usedAt, endExclusive),
+          ),
+        )
+        .groupBy(sql`${inviteCodes.usedAt}::date`)
+        .orderBy(sql`${inviteCodes.usedAt}::date`),
+    ])
+
     const onlineUsers = allUsers.filter((u: { status?: string }) => u.status === 'online').length
+    const trendMap = new Map<
+      string,
+      {
+        date: string
+        newUsers: number
+        messages: number
+        activeUsers: number
+        usedInviteCodes: number
+      }
+    >()
+
+    for (let i = 0; i < trendWindowDays; i++) {
+      const pointDate = new Date(startInclusive)
+      pointDate.setUTCDate(pointDate.getUTCDate() + i)
+      trendMap.set(toDate(pointDate), {
+        date: toDate(pointDate),
+        newUsers: 0,
+        messages: 0,
+        activeUsers: 0,
+        usedInviteCodes: 0,
+      })
+    }
+
+    for (const row of userGrowthRows) {
+      const key = row.date
+      const item = trendMap.get(key)
+      if (item) item.newUsers = Number(row.newUsers ?? 0)
+    }
+
+    for (const row of messageActivityRows) {
+      const key = row.date
+      const item = trendMap.get(key)
+      if (item) {
+        item.messages = Number(row.messageCount ?? 0)
+        item.activeUsers = Number(row.activeUsers ?? 0)
+      }
+    }
+
+    for (const row of inviteUsedRows) {
+      const key = row.date
+      const item = trendMap.get(key)
+      if (item) item.usedInviteCodes = Number(row.usedInviteCodes ?? 0)
+    }
+
+    const trend = [...trendMap.values()].sort((a, b) => a.date.localeCompare(b.date))
 
     return c.json({
       totalUsers: allUsers.length,
@@ -102,6 +197,10 @@ export function createAdminHandler(container: AppContainer) {
       totalChannels: Number(chCountResult[0]?.count ?? 0),
       totalInviteCodes: totalCodes,
       usedInviteCodes: usedCodes,
+      trends: {
+        periodDays: trendWindowDays,
+        points: trend,
+      },
     })
   })
 

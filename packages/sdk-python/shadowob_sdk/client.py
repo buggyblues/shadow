@@ -1318,7 +1318,7 @@ class ShadowClient:
 
     # ── Cloud SaaS DIY Generation ──────────────────────────────────────
 
-    def generate_diy_cloud_draft(
+    def create_diy_cloud_run(
         self,
         *,
         prompt: str,
@@ -1336,7 +1336,7 @@ class ShadowClient:
             payload["locale"] = locale
         if timezone is not None:
             payload["timezone"] = timezone
-        return self._post("/api/cloud-saas/diy/generate", json=payload)
+        return self._post("/api/cloud-saas/diy/runs", json=payload)
 
     def _stream_sse(
         self, method: str, path: str, **kwargs: Any
@@ -1361,40 +1361,37 @@ class ShadowClient:
             if data_lines:
                 yield {"event": event, "data": json.loads("\n".join(data_lines))}
 
-    def stream_diy_cloud_draft(
+    def get_diy_cloud_run(self, run_id: str) -> dict[str, Any]:
+        return self._get(f"/api/cloud-saas/diy/runs/{run_id}")
+
+    def create_diy_cloud_feedback_run(
         self,
+        run_id: str,
+        feedback: str,
         *,
-        prompt: str,
-        feedback: str | None = None,
-        previous_config: dict[str, Any] | None = None,
+        prompt: str | None = None,
         locale: str | None = None,
         timezone: str | None = None,
-    ) -> Iterator[dict[str, Any]]:
-        payload: dict[str, Any] = {"prompt": prompt}
-        if feedback is not None:
-            payload["feedback"] = feedback
-        if previous_config is not None:
-            payload["previousConfig"] = previous_config
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"feedback": feedback}
+        if prompt is not None:
+            payload["prompt"] = prompt
         if locale is not None:
             payload["locale"] = locale
         if timezone is not None:
             payload["timezone"] = timezone
+        return self._post(f"/api/cloud-saas/diy/runs/{run_id}/feedback", json=payload)
 
-        yield from self._stream_sse(
-            "POST",
-            "/api/cloud-saas/diy/generate/stream",
-            json=payload,
-        )
-
-    def get_diy_cloud_generation_session(self, session_id: str) -> dict[str, Any]:
-        return self._get(f"/api/cloud-saas/diy/sessions/{session_id}")
-
-    def stream_diy_cloud_generation_session(
-        self, session_id: str
+    def stream_diy_cloud_run(
+        self, run_id: str, after_seq: int | None = None
     ) -> Iterator[dict[str, Any]]:
+        params = {"afterSeq": after_seq} if after_seq is not None else None
         yield from self._stream_sse(
-            "GET", f"/api/cloud-saas/diy/sessions/{session_id}/stream"
+            "GET", f"/api/cloud-saas/diy/runs/{run_id}/stream", params=params
         )
+
+    def cancel_diy_cloud_run(self, run_id: str) -> dict[str, Any]:
+        return self._post(f"/api/cloud-saas/diy/runs/{run_id}/cancel")
 
     # ── Cloud SaaS Provider Gateway ────────────────────────────────────
 
