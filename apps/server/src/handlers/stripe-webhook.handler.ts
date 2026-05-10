@@ -40,6 +40,7 @@ export function createStripeWebhookHandler(container: AppContainer) {
       const rechargeService = container.resolve('rechargeService')
       await rechargeService.handleWebhookEvent(
         event as unknown as {
+          id?: string
           type: string
           data: { object: Record<string, unknown> }
         },

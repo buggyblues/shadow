@@ -81,6 +81,9 @@ export const commerceOfferStatusEnum = pgEnum('commerce_offer_status', [
 ])
 
 export const commerceDeliverableKindEnum = pgEnum('commerce_deliverable_kind', [
+  'entitlement',
+  'community_asset',
+  'currency',
   'paid_file',
   'message',
   'external',
@@ -620,8 +623,8 @@ export const commerceFulfillmentJobs = pgTable(
     buyerId: uuid('buyer_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    destinationKind: commerceFulfillmentDestinationKindEnum('destination_kind').notNull(),
-    destinationId: text('destination_id').notNull(),
+    destinationKind: commerceFulfillmentDestinationKindEnum('destination_kind'),
+    destinationId: text('destination_id'),
     senderBuddyUserId: uuid('sender_buddy_user_id').references(() => users.id, {
       onDelete: 'set null',
     }),

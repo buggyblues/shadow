@@ -23,6 +23,10 @@ import { OrderConfirm } from './order-confirm'
 import type { Product, ProductMediaItem, SkuItem } from './shop-page'
 import { PriceDisplay } from './ui/currency'
 
+function createIdempotencyKey(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 interface ProductDetailProps {
   serverId: string
   productId: string
@@ -190,6 +194,7 @@ export function ProductDetail({
         await fetchApi<{ id: string }>(`/api/servers/${serverId}/shop/orders`, {
           method: 'POST',
           body: JSON.stringify({
+            idempotencyKey: createIdempotencyKey('shop-order'),
             items: [{ productId: product.id, skuId: selectedSkuId ?? undefined, quantity }],
           }),
         })

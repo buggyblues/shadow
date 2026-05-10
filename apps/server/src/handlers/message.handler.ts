@@ -544,11 +544,18 @@ export function createMessageHandler(container: AppContainer) {
       user.userId,
       input,
     )
+    const commerceCardService = container.resolve('commerceCardService')
+    const normalizedMetadata = await commerceCardService.inferMessageMetadata({
+      metadata: preparedInput.metadata as Record<string, unknown> | undefined,
+      target: { kind: 'channel', channelId: thread.channelId },
+      authorId: user.userId,
+      content: preparedInput.content,
+    })
     const message = await messageService.sendToThread(id, user.userId, {
       content: preparedInput.content,
       replyToId: preparedInput.replyToId,
       mentions: preparedInput.mentions,
-      metadata: preparedInput.metadata,
+      metadata: normalizedMetadata,
     })
     const messageId = message.id
     const messageContent = message.content ?? preparedInput.content

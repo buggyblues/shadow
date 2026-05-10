@@ -44,46 +44,6 @@ export class WalletDao {
     return wallet!
   }
 
-  async updateBalance(id: string, balance: number) {
-    const r = await this.db
-      .update(wallets)
-      .set({ balance, updatedAt: new Date() })
-      .where(eq(wallets.id, id))
-      .returning()
-    return r[0] ?? null
-  }
-
-  async debit(id: string, amount: number) {
-    const r = await this.db
-      .update(wallets)
-      .set({ balance: sql`${wallets.balance} - ${amount}`, updatedAt: new Date() })
-      .where(and(eq(wallets.id, id), sql`${wallets.balance} >= ${amount}`))
-      .returning()
-    return r[0] ?? null
-  }
-
-  async credit(id: string, amount: number) {
-    const r = await this.db
-      .update(wallets)
-      .set({ balance: sql`${wallets.balance} + ${amount}`, updatedAt: new Date() })
-      .where(eq(wallets.id, id))
-      .returning()
-    return r[0] ?? null
-  }
-
-  async addTransaction(data: {
-    walletId: string
-    type: 'topup' | 'purchase' | 'refund' | 'reward' | 'transfer' | 'adjustment' | 'settlement'
-    amount: number
-    balanceAfter: number
-    referenceId?: string
-    referenceType?: string
-    note?: string
-  }) {
-    const r = await this.db.insert(walletTransactions).values(data).returning()
-    return r[0] ?? null
-  }
-
   async getTransactions(
     walletId: string,
     limit = 50,

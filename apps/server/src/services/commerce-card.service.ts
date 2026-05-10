@@ -40,7 +40,26 @@ function normalizeMetadata(metadata?: Record<string, unknown>) {
   if (json.length > 24_000) {
     throw apiError('MESSAGE_METADATA_TOO_LARGE', 400, { maxBytes: 24_000 })
   }
-  return metadata
+  const allowedKeys = new Set([
+    'agentChain',
+    'interactive',
+    'interactiveResponse',
+    'mentions',
+    'commerceOfferId',
+    'commerceCards',
+    'paidFileCards',
+    'custom',
+  ])
+  const normalized: Record<string, unknown> = {}
+  const custom: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(metadata)) {
+    if (allowedKeys.has(key)) normalized[key] = value
+    else custom[key] = value
+  }
+  if (Object.keys(custom).length > 0) {
+    normalized.custom = { ...((normalized.custom as Record<string, unknown>) ?? {}), ...custom }
+  }
+  return normalized
 }
 
 export class CommerceCardService {

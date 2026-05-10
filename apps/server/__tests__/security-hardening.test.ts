@@ -8,6 +8,7 @@ import {
   DIY_CLOUD_MAX_ESTIMATED_TOKENS,
   estimateDiyCloudInputBudget,
 } from '../src/services/diy-cloud.service'
+import { EconomyPolicyService } from '../src/services/economy-policy.service'
 import { PolicyService } from '../src/services/policy.service'
 import { RentalService } from '../src/services/rental.service'
 import { ReviewService } from '../src/services/review.service'
@@ -270,6 +271,79 @@ describe('Actor and PolicyService', () => {
     await expect(policy.requireChannelRead('user-1', 'channel-1')).resolves.toMatchObject({
       channel: { id: 'channel-1' },
     })
+  })
+})
+
+describe('EconomyPolicyService', () => {
+  function createPolicy(user: { economyStatus: string; isAdmin: boolean }) {
+    return new EconomyPolicyService({
+      db: {
+        select: () => ({
+          from() {
+            return this
+          },
+          where() {
+            return this
+          },
+          limit() {
+            return Promise.resolve([user])
+          },
+        }),
+      } as any,
+    })
+  }
+
+  it('requires explicit economy scopes for PAT write operations', async () => {
+    const policy = createPolicy({ economyStatus: 'normal', isAdmin: false })
+
+    await expect(
+      policy.authorize({
+        actor: { kind: 'pat', userId: 'user-1', tokenId: 'pat-1', scopes: ['user:write'] },
+        action: 'order.purchase',
+        resource: { kind: 'order' },
+        dataClass: 'financial',
+      }),
+    ).rejects.toMatchObject({ code: 'ECONOMY_SCOPE_REQUIRED' })
+
+    await expect(
+      policy.authorize({
+        actor: {
+          kind: 'pat',
+          userId: 'user-1',
+          tokenId: 'pat-1',
+          scopes: ['economy:orders:write'],
+        },
+        action: 'order.purchase',
+        resource: { kind: 'order' },
+        dataClass: 'financial',
+      }),
+    ).resolves.toMatchObject({ ok: true })
+  })
+
+  it('requires explicit economy scopes for agent write operations', async () => {
+    const policy = createPolicy({ economyStatus: 'normal', isAdmin: false })
+
+    await expect(
+      policy.authorize({
+        actor: { kind: 'agent', userId: 'user-1', agentId: 'agent-1', scopes: [] },
+        action: 'offer.purchase',
+        resource: { kind: 'offer', id: 'offer-1' },
+        dataClass: 'financial',
+      }),
+    ).rejects.toMatchObject({ code: 'ECONOMY_SCOPE_REQUIRED' })
+  })
+
+  it('blocks wallet outflows for economy restricted users', async () => {
+    const policy = createPolicy({ economyStatus: 'economy_restricted', isAdmin: false })
+
+    await expect(
+      policy.authorize({
+        actor: { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] },
+        action: 'offer.purchase',
+        resource: { kind: 'offer', id: 'offer-1' },
+        dataClass: 'financial',
+      }),
+    ).rejects.toMatchObject({ code: 'ECONOMY_USER_RESTRICTED' })
   })
 })
 

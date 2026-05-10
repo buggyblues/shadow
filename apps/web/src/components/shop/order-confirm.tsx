@@ -10,6 +10,10 @@ import { useShopStore } from '../../stores/shop.store'
 import type { Product, ProductMediaItem, SkuItem } from './shop-page'
 import { PriceDisplay } from './ui/currency'
 
+function createIdempotencyKey(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 interface OrderConfirmProps {
   serverId: string
   productId: string
@@ -42,7 +46,7 @@ export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: O
     mutationFn: (data: { items: Array<{ productId: string; skuId?: string; quantity: number }> }) =>
       fetchApi<{ id: string }>(`/api/servers/${serverId}/shop/orders`, {
         method: 'POST',
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, idempotencyKey: createIdempotencyKey('shop-order') }),
       }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['shop-orders', serverId] })

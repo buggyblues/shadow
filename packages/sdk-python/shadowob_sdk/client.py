@@ -1113,6 +1113,19 @@ class ShadowClient:
             f"/api/shops/{shop_id}/offers/{offer_id}/deliverables", json=kwargs
         )
 
+    def list_shop_asset_definitions(self, shop_id: str) -> dict[str, Any]:
+        return self._get(f"/api/shops/{shop_id}/assets")
+
+    def create_shop_asset_definition(self, shop_id: str, **kwargs: Any) -> dict[str, Any]:
+        return self._post(f"/api/shops/{shop_id}/assets", json=kwargs)
+
+    def update_shop_asset_definition(
+        self, shop_id: str, asset_definition_id: str, **kwargs: Any
+    ) -> dict[str, Any]:
+        return self._patch(
+            f"/api/shops/{shop_id}/assets/{asset_definition_id}", json=kwargs
+        )
+
     def purchase_message_commerce_card(
         self,
         message_id: str,
@@ -1242,9 +1255,17 @@ class ShadowClient:
         return self._delete(f"/api/servers/{server_id}/shop/cart/{item_id}")
 
     def create_order(
-        self, server_id: str, **kwargs: Any
+        self,
+        server_id: str,
+        *,
+        idempotency_key: str,
+        items: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
     ) -> dict[str, Any]:
-        return self._post(f"/api/servers/{server_id}/shop/orders", json=kwargs)
+        payload = {"idempotencyKey": idempotency_key, **kwargs}
+        if items is not None:
+            payload["items"] = items
+        return self._post(f"/api/servers/{server_id}/shop/orders", json=payload)
 
     def list_orders(self, server_id: str) -> list[dict[str, Any]]:
         return self._get(f"/api/servers/{server_id}/shop/orders")
@@ -1315,6 +1336,100 @@ class ShadowClient:
         if offset is not None:
             params["offset"] = offset
         return self._get("/api/wallet/transactions", params=params or None)
+
+    # ── Community Economy ──────────────────────────────────────────────
+
+    def list_community_assets(self) -> dict[str, Any]:
+        return self._get("/api/economy/assets")
+
+    def get_community_asset(self, grant_id: str) -> dict[str, Any]:
+        return self._get(f"/api/economy/assets/{grant_id}")
+
+    def consume_community_asset(self, grant_id: str, *, idempotency_key: str) -> dict[str, Any]:
+        return self._post(
+            f"/api/economy/assets/{grant_id}/consume",
+            json={"idempotencyKey": idempotency_key},
+        )
+
+    def lock_community_asset(self, grant_id: str, *, idempotency_key: str) -> dict[str, Any]:
+        return self._post(
+            f"/api/economy/assets/{grant_id}/lock",
+            json={"idempotencyKey": idempotency_key},
+        )
+
+    def unlock_community_asset(self, grant_id: str, *, idempotency_key: str) -> dict[str, Any]:
+        return self._post(
+            f"/api/economy/assets/{grant_id}/unlock",
+            json={"idempotencyKey": idempotency_key},
+        )
+
+    def revoke_community_asset(
+        self, grant_id: str, *, idempotency_key: str, reason: str | None = None
+    ) -> dict[str, Any]:
+        payload = {"idempotencyKey": idempotency_key}
+        if reason is not None:
+            payload["reason"] = reason
+        return self._post(f"/api/economy/assets/{grant_id}/revoke", json=payload)
+
+    def send_tip(
+        self,
+        *,
+        recipient_user_id: str,
+        amount: int,
+        idempotency_key: str,
+        message: str | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "recipientUserId": recipient_user_id,
+            "amount": amount,
+            "idempotencyKey": idempotency_key,
+        }
+        if message is not None:
+            payload["message"] = message
+        if context is not None:
+            payload["context"] = context
+        return self._post("/api/economy/tips", json=payload)
+
+    def list_tips(self) -> dict[str, Any]:
+        return self._get("/api/economy/tips")
+
+    def send_gift(
+        self,
+        *,
+        recipient_user_id: str,
+        idempotency_key: str,
+        assets: list[dict[str, Any]] | None = None,
+        currencies: list[dict[str, Any]] | None = None,
+        message: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "recipientUserId": recipient_user_id,
+            "idempotencyKey": idempotency_key,
+        }
+        if assets is not None:
+            payload["assets"] = assets
+        if currencies is not None:
+            payload["currencies"] = currencies
+        if message is not None:
+            payload["message"] = message
+        return self._post("/api/economy/gifts", json=payload)
+
+    def list_gifts(self) -> dict[str, Any]:
+        return self._get("/api/economy/gifts")
+
+    def list_settlements(
+        self, *, limit: int | None = None, offset: int | None = None
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        if limit is not None:
+            params["limit"] = limit
+        if offset is not None:
+            params["offset"] = offset
+        return self._get("/api/economy/settlements", params=params or None)
+
+    def settle_available_settlements(self) -> dict[str, Any]:
+        return self._post("/api/economy/settlements/settle")
 
     # ── Cloud SaaS DIY Generation ──────────────────────────────────────
 

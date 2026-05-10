@@ -2,6 +2,8 @@ import { and, desc, eq, inArray, lte, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import { commerceOffers, entitlements, products, shops, users, workspaceNodes } from '../db/schema'
 
+type DbLike = Database | Parameters<Parameters<Database['transaction']>[0]>[0]
+
 export class EntitlementDao {
   constructor(private deps: { db: Database }) {}
   private get db() {
@@ -278,8 +280,9 @@ export class EntitlementDao {
       revocationReason: string | null
       metadata: Record<string, unknown>
     }>,
+    db: DbLike = this.db,
   ) {
-    const r = await this.db
+    const r = await db
       .update(entitlements)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(entitlements.id, id))

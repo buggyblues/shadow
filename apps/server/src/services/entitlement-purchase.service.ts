@@ -12,13 +12,17 @@ import {
   skus,
 } from '../db/schema'
 import { apiError } from '../lib/api-error'
+import { type Actor, actorFromUserId } from '../security/actor'
 import type { CommerceFulfillmentService } from './commerce-fulfillment.service'
 import type { CommerceOfferService } from './commerce-offer.service'
+import type { EconomyAuditService } from './economy-audit.service'
+import type { EconomyPolicyService } from './economy-policy.service'
 import type { EntitlementProvisionerService } from './entitlement-provisioner.service'
 import { resolveProductEntitlementResource } from './entitlement-resource'
 import type { LedgerService } from './ledger.service'
 import type { NotificationTriggerService } from './notification-trigger.service'
 import type { ProductService } from './product.service'
+import type { SettlementService } from './settlement.service'
 
 function addSeconds(seconds?: number | null) {
   return seconds ? new Date(Date.now() + seconds * 1000) : null
@@ -34,6 +38,9 @@ export class EntitlementPurchaseService {
       entitlementProvisionerService: EntitlementProvisionerService
       commerceOfferService: CommerceOfferService
       commerceFulfillmentService: CommerceFulfillmentService
+      economyPolicyService: EconomyPolicyService
+      economyAuditService: EconomyAuditService
+      settlementService: SettlementService
     },
   ) {}
 
@@ -43,6 +50,7 @@ export class EntitlementPurchaseService {
     productId: string
     skuId?: string
     idempotencyKey: string
+    actor?: Actor
   }) {
     const product = await this.deps.productService.getProductById(input.productId)
     if (product.shopId !== input.shopId) {
@@ -56,6 +64,7 @@ export class EntitlementPurchaseService {
       offerId: offer.id,
       skuId: input.skuId,
       idempotencyKey: input.idempotencyKey,
+      actor: input.actor,
     })
   }
 
@@ -65,10 +74,23 @@ export class EntitlementPurchaseService {
     skuId?: string
     idempotencyKey: string
     destination?: { kind: 'channel' | 'dm'; id: string }
+    actor?: Actor
   }) {
     if (!input.idempotencyKey || input.idempotencyKey.length > 200) {
       throw apiError('IDEMPOTENCY_KEY_REQUIRED', 400, { maxLength: 200 })
     }
+
+    const actor = input.actor ?? actorFromUserId(input.buyerId)
+    await this.deps.economyPolicyService.authorize({
+      actor,
+      action: 'offer.purchase',
+      resource: { kind: 'offer', id: input.offerId },
+      scope: input.destination
+        ? { kind: input.destination.kind, id: input.destination.id }
+        : { kind: 'offer', id: input.offerId },
+      dataClass: 'financial',
+      targetUserId: input.buyerId,
+    })
 
     const existing = await this.deps.db
       .select()
@@ -179,18 +201,35 @@ export class EntitlementPurchaseService {
         tx,
       )
       if (settlementUserId) {
-        await this.deps.ledgerService.credit(
+        await this.deps.settlementService.createLine(
           {
-            userId: settlementUserId,
-            amount: price,
-            type: 'settlement',
-            referenceId: order.id,
-            referenceType: 'order',
-            note: `虚拟服务收入 - 订单 ${orderNo}`,
+            sellerUserId: settlementUserId,
+            shopId: shop.id,
+            sourceType: 'order',
+            sourceId: order.id,
+            grossAmount: price,
           },
           tx,
         )
       }
+
+      await this.deps.economyAuditService.record(
+        {
+          actor,
+          action: 'commerce.offer.purchase',
+          resource: { kind: 'order', id: order.id },
+          scope: { kind: 'offer', id: offer.id },
+          idempotencyKey: input.idempotencyKey,
+          request: {
+            offerId: input.offerId,
+            skuId: input.skuId,
+            destination: input.destination,
+          },
+          result: 'succeeded',
+          metadata: { price, productId: product.id, shopId: shop.id },
+        },
+        tx,
+      )
 
       await tx.insert(orderItems).values({
         orderId: order.id,
@@ -229,22 +268,23 @@ export class EntitlementPurchaseService {
       if (!entitlement) throw apiError('ENTITLEMENT_CREATE_FAILED', 500)
 
       const fulfillmentJobs = []
-      if (input.destination) {
-        for (const deliverable of deliverables) {
-          const [job] = await tx
-            .insert(commerceFulfillmentJobs)
-            .values({
-              orderId: order.id,
-              entitlementId: entitlement.id,
-              deliverableId: deliverable.id,
-              buyerId: input.buyerId,
-              destinationKind: input.destination.kind,
-              destinationId: input.destination.id,
-              senderBuddyUserId: deliverable.senderBuddyUserId ?? offer.sellerBuddyUserId,
-            })
-            .returning()
-          if (job) fulfillmentJobs.push(job)
-        }
+      for (const deliverable of deliverables) {
+        const requiresDestination = ['paid_file', 'message', 'external'].includes(deliverable.kind)
+        if (requiresDestination && !input.destination) continue
+
+        const [job] = await tx
+          .insert(commerceFulfillmentJobs)
+          .values({
+            orderId: order.id,
+            entitlementId: entitlement.id,
+            deliverableId: deliverable.id,
+            buyerId: input.buyerId,
+            destinationKind: input.destination?.kind,
+            destinationId: input.destination?.id,
+            senderBuddyUserId: deliverable.senderBuddyUserId ?? offer.sellerBuddyUserId,
+          })
+          .returning()
+        if (job) fulfillmentJobs.push(job)
       }
 
       await tx

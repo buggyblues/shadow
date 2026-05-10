@@ -1,5 +1,8 @@
 import type { EntitlementDao } from '../dao/entitlement.dao'
+import type { Database } from '../db'
 import { apiError } from '../lib/api-error'
+
+type DbLike = Database | Parameters<Parameters<Database['transaction']>[0]>[0]
 
 /**
  * EntitlementService — manages purchased resource capabilities.
@@ -80,14 +83,18 @@ export class EntitlementService {
     })
   }
 
-  async extendEntitlement(id: string, expiresAt: Date, renewalOrderId?: string) {
-    return this.deps.entitlementDao.update(id, {
-      status: 'active',
-      isActive: true,
-      expiresAt,
-      nextRenewalAt: expiresAt,
-      renewalOrderId: renewalOrderId ?? null,
-    })
+  async extendEntitlement(id: string, expiresAt: Date, renewalOrderId?: string, db?: DbLike) {
+    return this.deps.entitlementDao.update(
+      id,
+      {
+        status: 'active',
+        isActive: true,
+        expiresAt,
+        nextRenewalAt: expiresAt,
+        renewalOrderId: renewalOrderId ?? null,
+      },
+      db,
+    )
   }
 
   async getDueRenewals(now = new Date(), limit = 100) {

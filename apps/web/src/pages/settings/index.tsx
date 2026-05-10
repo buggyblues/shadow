@@ -25,10 +25,16 @@ import { DmChatView } from '../dm-chat'
 import { UnifiedContactSidebar } from '../friends'
 import { SettingsModal } from './settings-modal'
 import { TaskSettings } from './tasks'
-import { WalletSettings } from './wallet'
+import { WalletSettings, type WalletSettingsSection } from './wallet'
 
 type SettingsTab = 'dm' | 'buddy' | 'tasks' | 'wallet' | 'shop'
-type MergedSettingsSection = 'invite' | 'entitlements' | 'orders'
+type MergedSettingsSection =
+  | 'invite'
+  | 'entitlements'
+  | 'assets'
+  | 'settlements'
+  | 'actions'
+  | 'orders'
 
 interface NavItem {
   id: SettingsTab
@@ -53,12 +59,23 @@ function normalizeSettingsLocation(
   if (tab === 'entitlements') {
     return { tab: 'wallet' as const, section: 'entitlements' as const }
   }
+  if (tab === 'community-assets') return { tab: 'wallet' as const, section: 'assets' as const }
+  if (tab === 'community-settlements') {
+    return { tab: 'wallet' as const, section: 'settlements' as const }
+  }
+  if (tab === 'community-actions') return { tab: 'wallet' as const, section: 'actions' as const }
   if (tab === 'commerce-orders') return { tab: 'shop' as const, section: 'orders' as const }
   if (tab === 'tasks' && section === 'invite') {
     return { tab: 'tasks' as const, section: 'invite' as const }
   }
   if (tab === 'wallet' && section === 'entitlements') {
     return { tab: 'wallet' as const, section: 'entitlements' as const }
+  }
+  if (
+    tab === 'wallet' &&
+    (section === 'assets' || section === 'settlements' || section === 'actions')
+  ) {
+    return { tab: 'wallet' as const, section }
   }
   if (tab === 'shop' && section === 'orders') {
     return { tab: 'shop' as const, section: 'orders' as const }
@@ -288,9 +305,7 @@ export function SettingsPage() {
                 )}
                 {activeTab === 'wallet' && (
                   <WalletSettings
-                    initialSection={
-                      activeSection === 'entitlements' ? 'entitlements' : 'transactions'
-                    }
+                    initialSection={(activeSection as WalletSettingsSection) ?? 'transactions'}
                   />
                 )}
                 {activeTab === 'shop' && (

@@ -10,6 +10,14 @@ export const stripe = process.env.STRIPE_SECRET_KEY
 
 export const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET ?? ''
 
+if (
+  process.env.NODE_ENV === 'production' &&
+  process.env.STRIPE_SECRET_KEY &&
+  !STRIPE_WEBHOOK_SECRET
+) {
+  throw new Error('STRIPE_WEBHOOK_SECRET must be set in production when Stripe is enabled')
+}
+
 /**
  * Recharge tier definitions.
  * Exchange rate: 1 USD = 100 shrimp coins.

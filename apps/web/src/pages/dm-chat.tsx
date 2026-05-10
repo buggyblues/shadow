@@ -6,6 +6,8 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   ArrowLeft,
   FileText,
+  Gift,
+  HandCoins,
   Image as ImageIcon,
   Loader2,
   Paperclip,
@@ -32,6 +34,7 @@ import { FilePreviewPanel } from '../components/chat/file-preview-panel'
 import { type Message, MessageBubble, type ReactionGroup } from '../components/chat/message-bubble'
 import { UserAvatar } from '../components/common/avatar'
 import { EmojiPicker } from '../components/common/emoji-picker'
+import { CommunityEconomySendModal } from '../components/community-economy/community-economy-send-modal'
 import { useSocketEvent } from '../hooks/use-socket'
 import { fetchApi } from '../lib/api'
 import { addDmReaction, joinDm, leaveDm, sendDmMessage, sendDmTyping } from '../lib/socket'
@@ -104,7 +107,7 @@ function getCommerceCardPrice(
   t?: (key: string, options?: Record<string, unknown>) => string,
 ): string {
   if (card.snapshot.currency === 'shrimp_coin') {
-    const unit = t?.('common.shrimpCoin', { defaultValue: '虾币' }) ?? 'shrimp_coin'
+    const unit = t?.('common.shrimpCoin') ?? 'shrimp_coin'
     return `${card.snapshot.price.toLocaleString()} ${unit}`
   }
   return new Intl.NumberFormat(undefined, {
@@ -142,6 +145,7 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
   const [typingUsers, setTypingUsers] = useState<string[]>([])
   const [showEmoji, setShowEmoji] = useState(false)
   const [showProductPicker, setShowProductPicker] = useState(false)
+  const [economyModal, setEconomyModal] = useState<'tip' | 'gift' | null>(null)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
   const [productQuery, setProductQuery] = useState('')
   const [selectedCommerceCards, setSelectedCommerceCards] = useState<CommerceProductCard[]>([])
@@ -653,7 +657,7 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-black text-text-primary text-sm truncate">
-              {otherUser?.displayName ?? otherUser?.username ?? t('friends.chat', '聊天')}
+              {otherUser?.displayName ?? otherUser?.username ?? t('friends.chat')}
             </h3>
             {otherUser?.isBot && (
               <span className="text-[11px] font-black text-primary bg-primary/10 rounded-full px-1.5 py-0.5">
@@ -661,6 +665,48 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
               </span>
             )}
           </div>
+          {otherUser?.id && (
+            <div className="flex items-center gap-1.5 sm:hidden">
+              <Button
+                variant="ghost"
+                size="icon"
+                type="button"
+                icon={HandCoins}
+                aria-label={t('communityEconomy.sendTip')}
+                onClick={() => setEconomyModal('tip')}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                type="button"
+                icon={Gift}
+                aria-label={t('communityEconomy.sendGift')}
+                onClick={() => setEconomyModal('gift')}
+              />
+            </div>
+          )}
+          {otherUser?.id && (
+            <div className="hidden items-center gap-2 sm:flex">
+              <Button
+                variant="ghost"
+                size="sm"
+                type="button"
+                icon={HandCoins}
+                onClick={() => setEconomyModal('tip')}
+              >
+                {t('communityEconomy.sendTip')}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                type="button"
+                icon={Gift}
+                onClick={() => setEconomyModal('gift')}
+              >
+                {t('communityEconomy.sendGift')}
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Messages Area — virtual list */}
@@ -680,9 +726,7 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
               <div className="w-12 h-12 rounded-2xl bg-bg-tertiary/60 flex items-center justify-center mb-3">
                 <Send size={20} className="text-text-muted/60" />
               </div>
-              <p className="text-sm">
-                {t('dm.noMessages', '还没有消息，发送第一条消息开始聊天吧！')}
-              </p>
+              <p className="text-sm">{t('dm.noMessages')}</p>
             </div>
           ) : shouldVirtualize ? (
             <div
@@ -725,7 +769,7 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
         {typingUsers.length > 0 && (
           <div className="px-4 py-1 text-[12px] text-text-muted">
             <span className="font-medium text-primary">{typingUsers.join(', ')}</span>{' '}
-            {t('chat.typing', '正在输入...')}
+            {t('chat.typing')}
           </div>
         )}
 
@@ -739,16 +783,12 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
             return (
               <div className="mx-4 mb-1 flex items-center justify-between gap-2 px-3 py-2 bg-warning/5 border border-warning/40 rounded-lg text-xs text-warning">
                 <span>
-                  {t(
-                    'dm.rentalCostTip',
-                    '🦐 今日费用警：基础日费 {{baseDailyRate}}🦐 + 消息费 {{messageFee}}🦐/条，累计花费 {{totalCost}}🦐，已发送 {{messageCount}} 条消息',
-                    {
-                      baseDailyRate: rental.baseDailyRate,
-                      messageFee: rental.messageFee,
-                      totalCost: rental.totalCost,
-                      messageCount: rental.messageCount,
-                    },
-                  )}
+                  {t('dm.rentalCostTip', {
+                    baseDailyRate: rental.baseDailyRate,
+                    messageFee: rental.messageFee,
+                    totalCost: rental.totalCost,
+                    messageCount: rental.messageCount,
+                  })}
                 </span>
                 <button
                   type="button"
@@ -772,10 +812,10 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
             <div className="flex items-center justify-center gap-2 px-4 py-3 bg-bg-tertiary/50 backdrop-blur-md rounded-xl border border-border-subtle text-text-muted text-sm">
               <span>
                 {agentChatStatus?.reason === 'rented_out'
-                  ? t('dm.chatDisabledRentedOut', '该 Buddy 已出租给其他用户，暂时无法聊天')
+                  ? t('dm.chatDisabledRentedOut')
                   : agentChatStatus?.reason === 'expired'
-                    ? t('dm.chatDisabledExpired', '使用权已到期，请续租后再使用')
-                    : t('dm.chatDisabledListed', '该 Buddy 已在集市挂单中，暂时无法聊天')}
+                    ? t('dm.chatDisabledExpired')
+                    : t('dm.chatDisabledListed')}
               </span>
             </div>
           ) : (
@@ -787,7 +827,7 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
                   return (
                     <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-primary/5 border-l-2 border-primary rounded-lg text-xs">
                       <Reply size={14} className="text-primary shrink-0" />
-                      <span className="text-text-muted">{t('chat.replyingTo', '回复')}</span>
+                      <span className="text-text-muted">{t('chat.replyingTo')}</span>
                       <span className="font-medium text-text-primary truncate">
                         {replyMsg?.author?.displayName ??
                           replyMsg?.author?.username ??
@@ -995,11 +1035,10 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
                   }}
                   placeholder={
                     otherUser
-                      ? t(
-                          'dm.inputPlaceholder',
-                          `给 @${otherUser.displayName ?? otherUser.username} 发送消息`,
-                        )
-                      : t('dm.inputPlaceholderDefault', '发送消息')
+                      ? t('dm.inputPlaceholderToUser', {
+                          name: otherUser.displayName ?? otherUser.username,
+                        })
+                      : t('dm.inputPlaceholderDefault')
                   }
                   rows={1}
                   className="flex-1 bg-transparent text-text-primary text-sm px-4 py-3 outline-none resize-none max-h-[160px]"
@@ -1142,6 +1181,21 @@ export function DmChatView({ dmChannelId, onBack }: { dmChannelId: string; onBac
       {previewFile && (
         <FilePreviewPanel attachment={previewFile} onClose={() => setPreviewFile(null)} />
       )}
+      <CommunityEconomySendModal
+        open={economyModal !== null}
+        mode={economyModal ?? 'tip'}
+        recipient={
+          otherUser
+            ? {
+                id: otherUser.id,
+                username: otherUser.username,
+                displayName: otherUser.displayName,
+                avatarUrl: otherUser.avatarUrl,
+              }
+            : undefined
+        }
+        onClose={() => setEconomyModal(null)}
+      />
     </div>
   )
 }

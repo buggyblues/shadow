@@ -709,6 +709,94 @@ export interface ShadowShop {
   isEnabled: boolean
 }
 
+export type ShadowCommunityAssetType =
+  | 'badge'
+  | 'gift'
+  | 'coupon'
+  | 'service_ticket'
+  | 'collectible'
+  | 'content_pass'
+  | 'reward'
+
+export interface ShadowCommunityAssetDefinition {
+  id: string
+  issuerKind: 'platform' | 'server' | 'user' | 'shop'
+  issuerId?: string | null
+  shopId?: string | null
+  assetType: ShadowCommunityAssetType
+  name: string
+  description?: string | null
+  imageUrl?: string | null
+  giftable: boolean
+  transferable: boolean
+  consumable: boolean
+  revocable: boolean
+  expiresAfterDays?: number | null
+  status: 'draft' | 'active' | 'paused' | 'archived'
+  metadata?: Record<string, unknown> | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface ShadowCommunityAssetGrant {
+  id: string
+  definitionId: string
+  ownerUserId: string
+  sourceKind: string
+  sourceId?: string | null
+  quantity: number
+  remainingQuantity: number
+  status: 'active' | 'locked' | 'consumed' | 'revoked' | 'expired'
+  expiresAt?: string | null
+  metadata?: Record<string, unknown> | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface ShadowCommunityAsset {
+  grant: ShadowCommunityAssetGrant
+  definition: ShadowCommunityAssetDefinition
+}
+
+export interface ShadowEconomyTip {
+  id: string
+  senderUserId: string
+  recipientUserId: string
+  amount: number
+  sellerNet: number
+  status: 'succeeded' | 'failed' | 'reversed' | 'held'
+  contextKind?: string | null
+  contextId?: string | null
+  message?: string | null
+  createdAt?: string
+}
+
+export interface ShadowEconomyGift {
+  id: string
+  senderUserId: string
+  recipientUserId: string
+  status: 'succeeded' | 'failed' | 'reversed' | 'held'
+  message?: string | null
+  metadata?: Record<string, unknown> | null
+  createdAt?: string
+}
+
+export interface ShadowSettlementLine {
+  id: string
+  sellerUserId: string
+  shopId?: string | null
+  sourceType: 'order' | 'tip' | 'gift' | 'adjustment'
+  sourceId: string
+  grossAmount: number
+  platformFee: number
+  netAmount: number
+  status: 'pending' | 'available' | 'settled' | 'failed' | 'held' | 'reversed'
+  availableAt?: string | null
+  settledAt?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
 export interface ShadowCommerceProductCard {
   id: string
   kind: 'offer' | 'product'
@@ -920,7 +1008,7 @@ export interface ShadowOrder {
   status: string
   totalAmount: number
   currency: string
-  items: { productId: string; quantity: number; price: number }[]
+  items: { productId: string; skuId?: string | null; quantity: number; price: number }[]
   createdAt: string
 }
 

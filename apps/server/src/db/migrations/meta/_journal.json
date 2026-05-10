@@ -407,6 +407,20 @@
       "when": 1778504400000,
       "tag": "0057_private_server_join_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1778590800000,
+      "tag": "0058_community_economy_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1778677200000,
+      "tag": "0059_community_assets_and_settlement",
+      "breakpoints": true
     }
   ]
 }

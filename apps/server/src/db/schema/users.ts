@@ -1,6 +1,12 @@
 import { boolean, pgEnum, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 
 export const userStatusEnum = pgEnum('user_status', ['online', 'idle', 'dnd', 'offline'])
+export const userEconomyStatusEnum = pgEnum('user_economy_status', [
+  'normal',
+  'economy_restricted',
+  'frozen',
+  'banned',
+])
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -10,6 +16,7 @@ export const users = pgTable('users', {
   avatarUrl: text('avatar_url'),
   passwordHash: text('password_hash').notNull(),
   status: userStatusEnum('status').default('offline').notNull(),
+  economyStatus: userEconomyStatusEnum('economy_status').default('normal').notNull(),
   isBot: boolean('is_bot').default(false).notNull(),
   isAdmin: boolean('is_admin').default(false).notNull(),
   oauthAppId: uuid('oauth_app_id'),

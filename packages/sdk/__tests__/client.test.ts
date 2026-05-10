@@ -1002,6 +1002,19 @@ describe('ShadowClient', () => {
         viewerUserId: 'user-2',
       })
       await client.purchaseShopProduct('shop-1', 'prod-1', { idempotencyKey: 'idem-1' })
+      await client.createShopAssetDefinition('shop-1', {
+        assetType: 'badge',
+        name: 'Founder',
+        status: 'active',
+      })
+      await client.updateShopAssetDefinition('shop-1', 'asset-def-1', {
+        status: 'paused',
+      })
+      await client.createCommerceDeliverable('shop-1', 'offer-1', {
+        kind: 'community_asset',
+        resourceType: 'community_asset_definition',
+        resourceId: 'asset-def-1',
+      })
 
       expect(mockFetch).toHaveBeenNthCalledWith(
         1,
@@ -1019,6 +1032,183 @@ describe('ShadowClient', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ idempotencyKey: 'idem-1' }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        4,
+        'https://api.example.com/api/shops/shop-1/assets',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ assetType: 'badge', name: 'Founder', status: 'active' }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        5,
+        'https://api.example.com/api/shops/shop-1/assets/asset-def-1',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'paused' }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        6,
+        'https://api.example.com/api/shops/shop-1/offers/offer-1/deliverables',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            kind: 'community_asset',
+            resourceType: 'community_asset_definition',
+            resourceId: 'asset-def-1',
+          }),
+        }),
+      )
+    })
+
+    it('should call community economy endpoints with idempotency keys', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ ok: true }),
+      })
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.listCommunityAssets()
+      await client.consumeCommunityAsset('grant-1', { idempotencyKey: 'consume-idem-1' })
+      await client.lockCommunityAsset('grant-1', { idempotencyKey: 'lock-idem-1' })
+      await client.unlockCommunityAsset('grant-1', { idempotencyKey: 'unlock-idem-1' })
+      await client.revokeCommunityAsset('grant-1', {
+        idempotencyKey: 'revoke-idem-1',
+        reason: 'cleanup',
+      })
+      await client.sendTip({
+        recipientUserId: 'user-2',
+        amount: 10,
+        idempotencyKey: 'tip-idem-1',
+      })
+      await client.sendGift({
+        recipientUserId: 'user-2',
+        currencies: [{ currencyCode: 'shrimp_coin', amount: 5 }],
+        idempotencyKey: 'gift-idem-1',
+      })
+      await client.listSettlements({ limit: 20, offset: 40 })
+      await client.settleAvailableSettlements()
+
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'https://api.example.com/api/economy/assets',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'https://api.example.com/api/economy/assets/grant-1/consume',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ idempotencyKey: 'consume-idem-1' }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        3,
+        'https://api.example.com/api/economy/assets/grant-1/lock',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ idempotencyKey: 'lock-idem-1' }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        4,
+        'https://api.example.com/api/economy/assets/grant-1/unlock',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ idempotencyKey: 'unlock-idem-1' }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        5,
+        'https://api.example.com/api/economy/assets/grant-1/revoke',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ idempotencyKey: 'revoke-idem-1', reason: 'cleanup' }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        6,
+        'https://api.example.com/api/economy/tips',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            recipientUserId: 'user-2',
+            amount: 10,
+            idempotencyKey: 'tip-idem-1',
+          }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        7,
+        'https://api.example.com/api/economy/gifts',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            recipientUserId: 'user-2',
+            currencies: [{ currencyCode: 'shrimp_coin', amount: 5 }],
+            idempotencyKey: 'gift-idem-1',
+          }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        8,
+        'https://api.example.com/api/economy/settlements?limit=20&offset=40',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        9,
+        'https://api.example.com/api/economy/settlements/settle',
+        expect.objectContaining({ method: 'POST' }),
+      )
+    })
+
+    it('should create server shop orders with idempotency', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ id: 'order-1' }),
+      })
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.createOrder('server-1', {
+        idempotencyKey: 'order-idem-1',
+        items: [{ productId: 'prod-1', skuId: 'sku-1', quantity: 2 }],
+      })
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/servers/server-1/shop/orders',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            idempotencyKey: 'order-idem-1',
+            items: [{ productId: 'prod-1', skuId: 'sku-1', quantity: 2 }],
+          }),
+        }),
+      )
+    })
+
+    it('should create recharge intents with idempotency', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            clientSecret: 'secret',
+            paymentIntentId: 'pi_1',
+            orderNo: 'RC-1',
+            amount: { shrimpCoins: 1000, usdCents: 1000 },
+          }),
+      })
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.createRechargeIntent({ tier: '1000', idempotencyKey: 'recharge-idem-1' })
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/v1/recharge/create-intent',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ tier: '1000', idempotencyKey: 'recharge-idem-1' }),
         }),
       )
     })

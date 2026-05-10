@@ -724,7 +724,7 @@ function MessageBubbleInner({
           })}
 
           {message.metadata?.commerceCards?.map((card) => (
-            <CommerceCardView key={card.id} card={card} messageId={message.id} />
+            <CommerceCardView key={card.id} card={card} messageId={message.id} variant={variant} />
           ))}
 
           {/* Phase 2 — interactive block (buttons / select) */}
@@ -899,7 +899,15 @@ function MessageBubbleInner({
   )
 }
 
-function CommerceCardView({ card, messageId }: { card: CommerceProductCard; messageId: string }) {
+function CommerceCardView({
+  card,
+  messageId,
+  variant,
+}: {
+  card: CommerceProductCard
+  messageId: string
+  variant: 'channel' | 'dm'
+}) {
   const { t } = useTranslation()
   const colors = useColors()
   const [isBuying, setIsBuying] = useState(false)
@@ -910,7 +918,11 @@ function CommerceCardView({ card, messageId }: { card: CommerceProductCard; mess
   const buy = async () => {
     setIsBuying(true)
     try {
-      await fetchApi(`/api/messages/${messageId}/commerce-cards/${card.id}/purchase`, {
+      const path =
+        variant === 'dm'
+          ? `/api/dm/messages/${messageId}/commerce-cards/${card.id}/purchase`
+          : `/api/messages/${messageId}/commerce-cards/${card.id}/purchase`
+      await fetchApi(path, {
         method: 'POST',
         body: JSON.stringify({
           skuId: card.skuId,

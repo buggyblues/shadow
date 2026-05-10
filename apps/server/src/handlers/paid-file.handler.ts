@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { getCookie, setCookie } from 'hono/cookie'
 import { lookup } from 'mime-types'
 import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
@@ -19,7 +20,18 @@ export function createPaidFileHandler(container: AppContainer) {
     const fileId = c.req.param('fileId')
     if (!fileId) return c.json({ ok: false, error: 'PAID_FILE_NOT_FOUND' }, 404)
     const paidFileService = container.resolve('paidFileService')
-    return c.json(await paidFileService.openPaidFile(user.userId, fileId), 201)
+    const opened = await paidFileService.openPaidFile(user.userId, fileId)
+    setCookie(c, paidFileGrantCookie(opened.grant.id), opened.grantToken, {
+      httpOnly: true,
+      sameSite: 'Lax',
+      secure: c.req.url.startsWith('https://'),
+      path: `/api/paid-files/${fileId}/view/${opened.grant.id}`,
+      maxAge: Math.max(
+        1,
+        Math.floor((new Date(opened.grant.expiresAt).getTime() - Date.now()) / 1000),
+      ),
+    })
+    return c.json(opened, 201)
   })
 
   h.get('/paid-files/:fileId/view/:grantId', async (c) => {
@@ -30,7 +42,10 @@ export function createPaidFileHandler(container: AppContainer) {
     const result = await paidFileService.readGrantFile({
       fileId,
       grantId,
-      token: c.req.query('token'),
+      token:
+        c.req.header('x-paid-file-grant-token') ??
+        getCookie(c, paidFileGrantCookie(grantId)) ??
+        c.req.query('token'),
     })
     const contentType = result.file.mime || lookup(result.file.name) || 'application/octet-stream'
     const headers: Record<string, string> = {
@@ -55,4 +70,8 @@ export function createPaidFileHandler(container: AppContainer) {
   })
 
   return h
+}
+
+function paidFileGrantCookie(grantId: string) {
+  return `shadow_paid_file_grant_${grantId.replaceAll('-', '_')}`
 }

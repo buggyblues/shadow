@@ -15,12 +15,17 @@ import type {
   ShadowCommerceCheckoutPreview,
   ShadowCommerceProductCard,
   ShadowCommerceProductPickerResponse,
+  ShadowCommunityAsset,
+  ShadowCommunityAssetDefinition,
+  ShadowCommunityAssetGrant,
   ShadowContract,
   ShadowDiyCloudGenerateInput,
   ShadowDiyCloudRun,
   ShadowDiyCloudRunEvent,
   ShadowDiyCloudRunStatus,
   ShadowDmChannel,
+  ShadowEconomyGift,
+  ShadowEconomyTip,
   ShadowEntitlement,
   ShadowEntitlementProvisioning,
   ShadowEntitlementPurchaseResult,
@@ -61,6 +66,7 @@ import type {
   ShadowServerAccess,
   ShadowServerJoinRequestResult,
   ShadowServerJoinRequestStatus,
+  ShadowSettlementLine,
   ShadowShop,
   ShadowSignedMediaUrl,
   ShadowSlashCommand,
@@ -1900,7 +1906,7 @@ export class ShadowClient {
     shopId: string,
     offerId: string,
     data: {
-      kind?: 'paid_file' | 'message' | 'external'
+      kind?: 'paid_file' | 'message' | 'external' | 'entitlement' | 'community_asset' | 'currency'
       resourceType?: string
       resourceId: string
       senderBuddyUserId?: string | null
@@ -1910,6 +1916,36 @@ export class ShadowClient {
   ): Promise<Record<string, unknown>> {
     return this.request(`/api/shops/${shopId}/offers/${offerId}/deliverables`, {
       method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async listShopAssetDefinitions(
+    shopId: string,
+  ): Promise<{ assets: ShadowCommunityAssetDefinition[] }> {
+    return this.request(`/api/shops/${shopId}/assets`)
+  }
+
+  async createShopAssetDefinition(
+    shopId: string,
+    data: Partial<ShadowCommunityAssetDefinition> & {
+      assetType: ShadowCommunityAssetDefinition['assetType']
+      name: string
+    },
+  ): Promise<ShadowCommunityAssetDefinition> {
+    return this.request(`/api/shops/${shopId}/assets`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateShopAssetDefinition(
+    shopId: string,
+    assetDefinitionId: string,
+    data: Partial<Omit<ShadowCommunityAssetDefinition, 'id' | 'assetType'>>,
+  ): Promise<ShadowCommunityAssetDefinition> {
+    return this.request(`/api/shops/${shopId}/assets/${assetDefinitionId}`, {
+      method: 'PATCH',
       body: JSON.stringify(data),
     })
   }
@@ -2102,11 +2138,14 @@ export class ShadowClient {
 
   async createOrder(
     serverId: string,
-    data?: { items?: { productId: string; quantity: number }[] },
+    data: {
+      idempotencyKey: string
+      items?: { productId: string; skuId?: string; quantity: number }[]
+    },
   ): Promise<ShadowOrder> {
     return this.request(`/api/servers/${serverId}/shop/orders`, {
       method: 'POST',
-      body: JSON.stringify(data ?? {}),
+      body: JSON.stringify(data),
     })
   }
 
@@ -2180,6 +2219,105 @@ export class ShadowClient {
     if (params?.offset != null) qs.set('offset', String(params.offset))
     const suffix = qs.toString() ? `?${qs}` : ''
     return this.request(`/api/wallet/transactions${suffix}`)
+  }
+
+  // ── Community Economy ────────────────────────────────────────────────
+
+  async listCommunityAssets(): Promise<{ assets: ShadowCommunityAsset[] }> {
+    return this.request('/api/economy/assets')
+  }
+
+  async getCommunityAsset(grantId: string): Promise<ShadowCommunityAsset> {
+    return this.request(`/api/economy/assets/${grantId}`)
+  }
+
+  async consumeCommunityAsset(
+    grantId: string,
+    data: { idempotencyKey: string },
+  ): Promise<{ grant: ShadowCommunityAssetGrant }> {
+    return this.request(`/api/economy/assets/${grantId}/consume`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async lockCommunityAsset(
+    grantId: string,
+    data: { idempotencyKey: string },
+  ): Promise<{ grant: ShadowCommunityAssetGrant }> {
+    return this.request(`/api/economy/assets/${grantId}/lock`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async unlockCommunityAsset(
+    grantId: string,
+    data: { idempotencyKey: string },
+  ): Promise<{ grant: ShadowCommunityAssetGrant }> {
+    return this.request(`/api/economy/assets/${grantId}/unlock`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async revokeCommunityAsset(
+    grantId: string,
+    data: { idempotencyKey: string; reason?: string },
+  ): Promise<{ grant: ShadowCommunityAssetGrant }> {
+    return this.request(`/api/economy/assets/${grantId}/revoke`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async sendTip(data: {
+    recipientUserId: string
+    amount: number
+    message?: string
+    context?: { kind: string; id: string }
+    idempotencyKey: string
+  }): Promise<{ tip: ShadowEconomyTip }> {
+    return this.request('/api/economy/tips', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async listTips(): Promise<{ tips: ShadowEconomyTip[] }> {
+    return this.request('/api/economy/tips')
+  }
+
+  async sendGift(data: {
+    recipientUserId: string
+    assets?: Array<{ assetGrantId: string; quantity?: number }>
+    currencies?: Array<{ currencyCode: 'shrimp_coin'; amount: number }>
+    message?: string
+    idempotencyKey: string
+  }): Promise<{ gift: ShadowEconomyGift }> {
+    return this.request('/api/economy/gifts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async listGifts(): Promise<{ gifts: ShadowEconomyGift[] }> {
+    return this.request('/api/economy/gifts')
+  }
+
+  async listSettlements(params?: {
+    limit?: number
+    offset?: number
+  }): Promise<{ settlements: ShadowSettlementLine[] }> {
+    const qs = new URLSearchParams()
+    if (params?.limit != null) qs.set('limit', String(params.limit))
+    if (params?.offset != null) qs.set('offset', String(params.offset))
+    const suffix = qs.toString() ? `?${qs}` : ''
+    return this.request(`/api/economy/settlements${suffix}`)
+  }
+
+  async settleAvailableSettlements(): Promise<{ settlements: ShadowSettlementLine[] }> {
+    return this.request('/api/economy/settlements/settle', { method: 'POST' })
   }
 
   // ── Cloud SaaS DIY Generation ───────────────────────────────────────
@@ -2304,6 +2442,7 @@ export class ShadowClient {
 
   async createRechargeIntent(params: {
     tier: '1000' | '3000' | '5000' | 'custom'
+    idempotencyKey: string
     customAmount?: number
     currency?: string
   }): Promise<ShadowRechargeIntent> {

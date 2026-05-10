@@ -1,13 +1,15 @@
-import { Button, GlassPanel, Input } from '@shadowob/ui'
+import { Button, cn, GlassPanel, Input } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
 import {
+  Award,
   CalendarClock,
   CheckCircle2,
   ChevronRight,
   Clock3,
   ExternalLink,
   FileText,
+  Gem,
   Loader2,
   Package,
   ReceiptText,
@@ -16,6 +18,7 @@ import {
   ShieldCheck,
   ShoppingBag,
   Store,
+  Ticket,
   Trash2,
   UserRound,
   WalletCards,
@@ -111,6 +114,15 @@ type Provisioning = {
   capability?: string | null
 }
 
+type FulfillmentJob = {
+  id: string
+  deliverableId?: string | null
+  status: string
+  resultMessageId?: string | null
+  lastErrorCode?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
 type ProductEntitlementConfig = {
   resourceType?: string
   resourceId?: string
@@ -122,9 +134,39 @@ type ProductEntitlementConfig = {
 
 type EntitlementFilter = 'all' | 'openable' | 'expiring' | 'history'
 type ShopSettingsSection = 'shop' | 'orders'
+type DeliveryPreset = 'service' | 'badge' | 'gift' | 'service_ticket'
+type CommunityAssetType =
+  | 'badge'
+  | 'gift'
+  | 'coupon'
+  | 'service_ticket'
+  | 'collectible'
+  | 'content_pass'
+  | 'reward'
+
+interface ShopAssetDefinition {
+  id: string
+  assetType: CommunityAssetType
+  name: string
+  description?: string | null
+  imageUrl?: string | null
+  giftable: boolean
+  consumable: boolean
+  status: string
+}
 
 const BILLING_MODES: BillingMode[] = ['one_time', 'fixed_duration', 'subscription']
 const RESOURCE_CAPABILITIES: ResourceCapability[] = ['use', 'view', 'download', 'redeem', 'manage']
+const DELIVERY_PRESETS: Array<{
+  value: DeliveryPreset
+  icon: typeof ShieldCheck
+  assetType?: CommunityAssetType
+}> = [
+  { value: 'service', icon: ShieldCheck },
+  { value: 'badge', icon: Award, assetType: 'badge' },
+  { value: 'gift', icon: Gem, assetType: 'gift' },
+  { value: 'service_ticket', icon: Ticket, assetType: 'service_ticket' },
+]
 
 const selectClassName =
   'h-11 rounded-xl border border-border-subtle bg-bg-secondary px-3 text-sm font-bold text-text-primary outline-none transition focus:border-primary/60'
@@ -231,13 +273,19 @@ function ProductMeta({ product }: { product: Product }) {
   const config = firstEntitlementConfig(product)
   const durationSeconds = config?.durationSeconds ?? config?.renewalPeriodSeconds ?? null
   const durationDays = durationSeconds ? Math.ceil(durationSeconds / 86400) : null
+  const isCommunityAsset = config?.resourceType === 'community_asset'
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-text-muted">
-      <CommercePill tone="primary" icon={<ShieldCheck size={13} />}>
-        {t(`commerce.resourceTypes.${config?.resourceType ?? 'service'}`, {
-          defaultValue: config?.resourceType ?? t('commerce.resourceEntitlement'),
-        })}
+      <CommercePill
+        tone="primary"
+        icon={isCommunityAsset ? <Package size={13} /> : <ShieldCheck size={13} />}
+      >
+        {isCommunityAsset
+          ? t('communityEconomy.assetDelivery')
+          : t(`commerce.resourceTypes.${config?.resourceType ?? 'service'}`, {
+              defaultValue: t('commerce.resourceEntitlement'),
+            })}
       </CommercePill>
       <CommercePill icon={<Clock3 size={13} />}>
         {t(`commerce.billingModes.${product.billingMode ?? 'one_time'}`)}
@@ -245,6 +293,52 @@ function ProductMeta({ product }: { product: Product }) {
       <CommercePill icon={<CalendarClock size={13} />}>
         {durationDays ? t('commerce.validDays', { count: durationDays }) : t('commerce.permanent')}
       </CommercePill>
+    </div>
+  )
+}
+
+function ProductDeliverySummary({
+  product,
+  compact = false,
+}: {
+  product: Product
+  compact?: boolean
+}) {
+  const { t } = useTranslation()
+  const config = firstEntitlementConfig(product)
+  const isCommunityAsset = config?.resourceType === 'community_asset'
+  const title = isCommunityAsset
+    ? t('communityEconomy.assetDelivery')
+    : t(`commerce.resourceTypes.${config?.resourceType ?? 'service'}`, {
+        defaultValue: t('commerce.resourceEntitlement'),
+      })
+  const description =
+    config?.privilegeDescription ||
+    product.summary ||
+    (isCommunityAsset ? t('communityEconomy.assetDeliveryHint') : t('commerce.serviceDeliveryHint'))
+  const Icon = isCommunityAsset ? Package : ShieldCheck
+
+  if (compact) {
+    return (
+      <div className="mt-2 flex items-start gap-2 rounded-xl bg-bg-secondary/60 px-3 py-2 text-xs leading-5 text-text-secondary">
+        <Icon size={15} className="mt-0.5 shrink-0 text-primary" />
+        <span className="min-w-0">
+          <span className="font-black text-text-primary">{title}</span>
+          <span className="mx-1 text-text-muted">·</span>
+          <span>{description}</span>
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-xl border border-border-subtle bg-bg-secondary/60 p-3">
+      <div className="flex items-center gap-2 text-xs font-bold text-text-muted">
+        <Icon size={15} className="text-primary" />
+        {t('communityEconomy.deliveryType')}
+      </div>
+      <div className="mt-2 text-sm font-black text-text-primary">{title}</div>
+      <p className="mt-1 text-sm leading-6 text-text-secondary">{description}</p>
     </div>
   )
 }
@@ -263,6 +357,58 @@ function ProvisioningPill({ provisioning }: { provisioning?: Provisioning | null
         defaultValue: provisioning.status,
       })}
     </CommercePill>
+  )
+}
+
+function PurchaseDeliveryStatus({
+  provisioning,
+  fulfillmentJobs,
+}: {
+  provisioning?: Provisioning | null
+  fulfillmentJobs: FulfillmentJob[]
+}) {
+  const { t } = useTranslation()
+  const primaryJob = fulfillmentJobs[0]
+  const status = primaryJob?.status ?? provisioning?.status ?? 'provisioned'
+  const isCommunityAsset = provisioning?.resourceType === 'community_asset'
+  const resourceType = isCommunityAsset
+    ? t('communityEconomy.assetDelivery')
+    : t(`commerce.resourceTypes.${provisioning?.resourceType ?? 'service'}`, {
+        defaultValue: t('commerce.resourceEntitlement'),
+      })
+  const resourceId = provisioning?.resourceId
+  const deliveryTarget = isCommunityAsset
+    ? t('communityEconomy.assets')
+    : (resourceId ?? primaryJob?.resultMessageId ?? primaryJob?.id ?? t('common.unknown'))
+
+  return (
+    <div className="rounded-xl border border-success/20 bg-success/5 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-success/80">
+            {t('communityEconomy.purchaseDeliveryStatus')}
+          </p>
+          <p className="mt-1 text-sm font-bold text-text-primary">
+            {t(`communityEconomy.status.${status}`, status)}
+          </p>
+        </div>
+        <ProvisioningPill provisioning={provisioning} />
+      </div>
+      <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+        <div className="rounded-lg bg-bg-secondary/60 px-3 py-2">
+          <p className="font-black uppercase tracking-[0.12em] text-text-muted/60">
+            {t('communityEconomy.type')}
+          </p>
+          <p className="mt-1 truncate font-bold text-text-primary">{resourceType}</p>
+        </div>
+        <div className="rounded-lg bg-bg-secondary/60 px-3 py-2">
+          <p className="font-black uppercase tracking-[0.12em] text-text-muted/60">
+            {t('communityEconomy.deliveryTarget')}
+          </p>
+          <p className="mt-1 truncate font-bold text-text-primary">{deliveryTarget}</p>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -296,6 +442,9 @@ export function PersonalShopPage({
   const [durationDays, setDurationDays] = useState('30')
   const [billingMode, setBillingMode] = useState<BillingMode>('fixed_duration')
   const [privilegeDescription, setPrivilegeDescription] = useState('')
+  const [deliveryPreset, setDeliveryPreset] = useState<DeliveryPreset>('service')
+  const [assetName, setAssetName] = useState('')
+  const [assetDescription, setAssetDescription] = useState('')
   const [activeSection, setActiveSection] = useState<ShopSettingsSection>(initialSection)
   const [shopSheet, setShopSheet] = useState<'store' | 'product' | null>(null)
   const numericPrice = Number(price)
@@ -339,6 +488,16 @@ export function PersonalShopPage({
     setActiveSection(initialSection)
   }, [initialSection])
 
+  useEffect(() => {
+    if (deliveryPreset === 'service') {
+      setResourceType('service')
+      setCapability('use')
+      return
+    }
+    setResourceType('community_asset')
+    setCapability('redeem')
+  }, [deliveryPreset])
+
   const { data: productsData, isFetching: isFetchingProducts } = useQuery({
     queryKey: ['personal-shop-products', shop?.id, keyword],
     queryFn: () =>
@@ -348,6 +507,13 @@ export function PersonalShopPage({
     enabled: Boolean(shop?.id),
   })
   const products = productsData?.products ?? []
+
+  const { data: shopAssetsData } = useQuery({
+    queryKey: ['shop-community-assets', shop?.id],
+    queryFn: () => fetchApi<{ assets: ShopAssetDefinition[] }>(`/api/shops/${shop!.id}/assets`),
+    enabled: Boolean(canManage && shop?.id),
+  })
+  const shopAssets = shopAssetsData?.assets ?? []
 
   const saveShop = useMutation({
     mutationFn: () => {
@@ -372,9 +538,30 @@ export function PersonalShopPage({
   })
 
   const createProduct = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const durationSeconds = numericDurationDays > 0 ? numericDurationDays * 24 * 60 * 60 : null
-      return fetchApi<Product>(`/api/shops/${shop!.id}/products`, {
+      const selectedPreset = DELIVERY_PRESETS.find((preset) => preset.value === deliveryPreset)
+      let assetDefinition: ShopAssetDefinition | null = null
+      if (selectedPreset?.assetType) {
+        assetDefinition = await fetchApi<ShopAssetDefinition>(`/api/shops/${shop!.id}/assets`, {
+          method: 'POST',
+          body: JSON.stringify({
+            assetType: selectedPreset.assetType,
+            name: assetName.trim() || name.trim(),
+            description: assetDescription.trim() || summary.trim() || null,
+            giftable: true,
+            transferable: true,
+            consumable: selectedPreset.assetType === 'service_ticket',
+            revocable: true,
+            expiresAfterDays:
+              billingMode === 'one_time' || !numericDurationDays ? null : numericDurationDays,
+            status: 'active',
+            metadata: { createdFrom: 'creator_product', deliveryPreset },
+          }),
+        })
+      }
+
+      const product = await fetchApi<Product>(`/api/shops/${shop!.id}/products`, {
         method: 'POST',
         body: JSON.stringify({
           name: name.trim(),
@@ -385,23 +572,48 @@ export function PersonalShopPage({
           summary: summary.trim() || undefined,
           basePrice: Math.round(numericPrice),
           entitlementConfig: {
-            resourceType: resourceType.trim() || 'service',
-            resourceId: resourceId.trim() || undefined,
-            capability,
+            resourceType: assetDefinition ? 'community_asset' : resourceType.trim() || 'service',
+            resourceId: assetDefinition?.id ?? (resourceId.trim() || undefined),
+            capability: assetDefinition ? 'redeem' : capability,
             durationSeconds: billingMode === 'one_time' ? null : durationSeconds,
             renewalPeriodSeconds: billingMode === 'subscription' ? durationSeconds : undefined,
-            privilegeDescription: privilegeDescription.trim() || undefined,
+            privilegeDescription:
+              privilegeDescription.trim() ||
+              assetDescription.trim() ||
+              (assetDefinition ? assetDefinition.description : undefined),
           },
         }),
       })
+      if (assetDefinition) {
+        const offers = await fetchApi<{ offers: Array<{ id: string; productId: string }> }>(
+          `/api/shops/${shop!.id}/offers?keyword=${encodeURIComponent(name.trim())}`,
+        )
+        const offer = offers.offers.find((item) => item.productId === product.id)
+        if (offer) {
+          await fetchApi(`/api/shops/${shop!.id}/offers/${offer.id}/deliverables`, {
+            method: 'POST',
+            body: JSON.stringify({
+              kind: 'community_asset',
+              resourceType: 'community_asset',
+              resourceId: assetDefinition.id,
+              metadata: { deliveryPreset, productId: product.id },
+            }),
+          })
+        }
+      }
+      return product
     },
     onSuccess: async () => {
       setName('')
       setSummary('')
       setResourceId('')
       setPrivilegeDescription('')
+      setAssetName('')
+      setAssetDescription('')
+      setDeliveryPreset('service')
       setShopSheet(null)
       await queryClient.invalidateQueries({ queryKey: ['personal-shop-products', shop?.id] })
+      await queryClient.invalidateQueries({ queryKey: ['shop-community-assets', shop?.id] })
       showToast(t('commerce.productCreated'), 'success')
     },
     onError: (err) =>
@@ -440,6 +652,13 @@ export function PersonalShopPage({
       icon: <ReceiptText size={13} />,
     },
   ]
+  const selectedDeliveryPreset = DELIVERY_PRESETS.find((preset) => preset.value === deliveryPreset)
+  const PreviewDeliveryIcon = selectedDeliveryPreset?.icon ?? ShieldCheck
+  const selectedDeliveryLabel = t(`communityEconomy.deliveryPreset.${deliveryPreset}`)
+  const selectedDeliveryHint = t(`communityEconomy.deliveryPresetHint.${deliveryPreset}`)
+  const buyerPreviewName = name.trim() || t('commerce.productName')
+  const buyerPreviewSummary =
+    summary.trim() || privilegeDescription.trim() || assetDescription.trim() || selectedDeliveryHint
 
   if (isLoading) {
     return (
@@ -475,6 +694,9 @@ export function PersonalShopPage({
                 <span>
                   <span className="text-text-primary tabular-nums">{products.length}</span>{' '}
                   {t('commerce.activeProducts')}
+                </span>
+                <span>
+                  {t('communityEconomy.assetDefinitionsCount', { count: shopAssets.length })}
                 </span>
                 <span>
                   {t('commerce.currentSection')}{' '}
@@ -596,7 +818,9 @@ export function PersonalShopPage({
                           )}
                         </>
                       }
-                    />
+                    >
+                      <ProductDeliverySummary product={product} compact />
+                    </CommerceListItem>
                   )
                 })
               )}
@@ -668,11 +892,39 @@ export function PersonalShopPage({
                 onChange={(e) => setSummary(e.target.value)}
                 placeholder={t('commerce.productSummary')}
               />
-              <Input
-                value={resourceType}
-                onChange={(e) => setResourceType(e.target.value)}
-                placeholder={t('commerce.resourceType')}
-              />
+              <div className="grid gap-2">
+                <span className="text-xs font-black uppercase tracking-[0.12em] text-text-muted">
+                  {t('communityEconomy.deliveryType')}
+                </span>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {DELIVERY_PRESETS.map((preset) => {
+                    const Icon = preset.icon
+                    return (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        onClick={() => setDeliveryPreset(preset.value)}
+                        className={cn(
+                          'rounded-2xl border p-3 text-left transition',
+                          deliveryPreset === preset.value
+                            ? 'border-primary/50 bg-primary/10 text-primary'
+                            : 'border-border-subtle bg-bg-secondary/50 text-text-secondary hover:border-primary/30',
+                        )}
+                      >
+                        <span className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-bg-primary/70">
+                          <Icon size={18} />
+                        </span>
+                        <span className="block text-sm font-black">
+                          {t(`communityEconomy.deliveryPreset.${preset.value}`)}
+                        </span>
+                        <span className="mt-1 block text-xs leading-5 text-text-muted">
+                          {t(`communityEconomy.deliveryPresetHint.${preset.value}`)}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
               <select
                 className={selectClassName}
                 value={billingMode}
@@ -699,28 +951,81 @@ export function PersonalShopPage({
                   inputMode="numeric"
                 />
               </div>
-              <select
-                className={selectClassName}
-                value={capability}
-                onChange={(e) => setCapability(e.target.value as ResourceCapability)}
-                aria-label={t('commerce.capability')}
-              >
-                {RESOURCE_CAPABILITIES.map((item) => (
-                  <option key={item} value={item}>
-                    {t(`commerce.capabilities.${item}`)}
-                  </option>
-                ))}
-              </select>
-              <Input
-                value={resourceId}
-                onChange={(e) => setResourceId(e.target.value)}
-                placeholder={t('commerce.resourceId')}
-              />
+              {deliveryPreset === 'service' ? (
+                <>
+                  <select
+                    className={selectClassName}
+                    value={capability}
+                    onChange={(e) => setCapability(e.target.value as ResourceCapability)}
+                    aria-label={t('commerce.capability')}
+                  >
+                    {RESOURCE_CAPABILITIES.map((item) => (
+                      <option key={item} value={item}>
+                        {t(`commerce.capabilities.${item}`)}
+                      </option>
+                    ))}
+                  </select>
+                  <Input
+                    value={resourceId}
+                    onChange={(e) => setResourceId(e.target.value)}
+                    placeholder={t('commerce.resourceId')}
+                  />
+                </>
+              ) : (
+                <div className="grid gap-3 rounded-2xl border border-border-subtle bg-bg-secondary/50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-black uppercase tracking-[0.12em] text-text-muted">
+                      {t('communityEconomy.assetDelivery')}
+                    </span>
+                    <span className="text-xs font-bold text-text-muted">
+                      {t('communityEconomy.assetDefinitionsCount', { count: shopAssets.length })}
+                    </span>
+                  </div>
+                  <Input
+                    value={assetName}
+                    onChange={(e) => setAssetName(e.target.value)}
+                    placeholder={t('communityEconomy.assetNamePlaceholder')}
+                  />
+                  <Input
+                    value={assetDescription}
+                    onChange={(e) => setAssetDescription(e.target.value)}
+                    placeholder={t('communityEconomy.assetDescriptionPlaceholder')}
+                  />
+                </div>
+              )}
               <Input
                 value={privilegeDescription}
                 onChange={(e) => setPrivilegeDescription(e.target.value)}
                 placeholder={t('commerce.privilegeDescription')}
               />
+              <div className="rounded-2xl border border-primary/20 bg-primary/[0.06] p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <span className="text-xs font-black uppercase tracking-[0.12em] text-primary">
+                    {t('commerce.buyerPreview')}
+                  </span>
+                  <CommercePill tone="primary" icon={<PreviewDeliveryIcon size={13} />}>
+                    {selectedDeliveryLabel}
+                  </CommercePill>
+                </div>
+                <div className="text-base font-black text-text-primary">{buyerPreviewName}</div>
+                <p className="mt-1 text-sm leading-6 text-text-secondary">{buyerPreviewSummary}</p>
+                <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                  <div className="rounded-xl bg-bg-primary/55 px-3 py-2">
+                    <div className="font-black uppercase tracking-[0.12em] text-text-muted">
+                      {t('commerce.productPrice')}
+                    </div>
+                    <div className="mt-1">
+                      <PriceBadge amount={Number.isFinite(numericPrice) ? numericPrice : 0} />
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-bg-primary/55 px-3 py-2">
+                    <div className="font-black uppercase tracking-[0.12em] text-text-muted">
+                      {t('communityEconomy.deliveryType')}
+                    </div>
+                    <div className="mt-1 font-black text-text-primary">{selectedDeliveryLabel}</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </CommerceDrawer>
         </>
@@ -742,16 +1047,18 @@ export function ProductDetailPage() {
 
   const purchase = useMutation({
     mutationFn: () =>
-      fetchApi<{ entitlement: Entitlement; provisioning?: Provisioning }>(
-        `/api/shops/${product!.shopId}/products/${product!.id}/purchase`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
-        },
-      ),
+      fetchApi<{
+        entitlement: Entitlement
+        provisioning?: Provisioning
+        fulfillmentJobs?: FulfillmentJob[]
+      }>(`/api/shops/${product!.shopId}/products/${product!.id}/purchase`, {
+        method: 'POST',
+        body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
+      }),
     onSuccess: async () => {
       setPurchaseError(null)
       await queryClient.invalidateQueries({ queryKey: ['entitlements'] })
+      await queryClient.invalidateQueries({ queryKey: ['community-assets'] })
       showToast(t('commerce.purchaseCompleted'), 'success')
     },
     onError: (err) => {
@@ -774,6 +1081,7 @@ export function ProductDetailPage() {
   const provisioning = purchase.data?.provisioning
   const durationSeconds = config?.durationSeconds ?? config?.renewalPeriodSeconds ?? null
   const durationDays = durationSeconds ? Math.ceil(durationSeconds / 86400) : null
+  const productIsCommunityAsset = config?.resourceType === 'community_asset'
   const modalDetails = {
     name: product.name,
     summary: product.summary,
@@ -786,8 +1094,12 @@ export function ProductDetailPage() {
     durationLabel: durationDays
       ? t('commerce.validDays', { count: durationDays })
       : t('commerce.permanent'),
-    targetLabel: config?.resourceId ?? product.id,
-    deliveryLabel: t('commerce.immediateDelivery'),
+    targetLabel: productIsCommunityAsset
+      ? t('communityEconomy.assets')
+      : (config?.resourceId ?? product.id),
+    deliveryLabel: productIsCommunityAsset
+      ? t('communityEconomy.assetDelivery')
+      : t('commerce.immediateDelivery'),
   }
 
   return (
@@ -822,32 +1134,40 @@ export function ProductDetailPage() {
                   <PriceBadge amount={product.basePrice} />
                 </div>
               </div>
-              <div className="rounded-xl border border-border-subtle bg-bg-secondary/60 p-3">
-                <div className="text-xs font-bold text-text-muted">
-                  {t('commerce.entitlementResource')}
-                </div>
-                <div className="mt-2 truncate text-sm font-bold text-text-primary">
-                  {config?.resourceId ?? product.id}
-                </div>
-              </div>
+              <ProductDeliverySummary product={product} />
             </div>
             {product.description && (
               <div className="rounded-xl border border-border-subtle bg-bg-secondary/60 p-3 text-sm leading-6 text-text-secondary">
                 {product.description}
               </div>
             )}
+            {purchase.data && (
+              <PurchaseDeliveryStatus
+                provisioning={provisioning}
+                fulfillmentJobs={purchase.data.fulfillmentJobs ?? []}
+              />
+            )}
             <div className="mt-auto flex flex-wrap items-center gap-3">
               <Button onClick={() => setShowPurchaseModal(true)} disabled={purchase.isPending}>
                 {purchase.isPending ? t('commerce.purchasing') : t('commerce.buyNow')}
               </Button>
               {purchase.data && (
-                <a
-                  href="/app/settings?tab=wallet&section=entitlements"
-                  className="inline-flex items-center gap-2 text-sm font-bold text-success"
-                >
-                  <ShieldCheck size={16} />
-                  {t('commerce.viewEntitlement')}
-                </a>
+                <div className="flex flex-wrap items-center gap-3">
+                  <a
+                    href="/app/settings?tab=wallet&section=entitlements"
+                    className="inline-flex items-center gap-2 text-sm font-bold text-success"
+                  >
+                    <ShieldCheck size={16} />
+                    {t('commerce.viewEntitlement')}
+                  </a>
+                  <a
+                    href="/app/settings?tab=wallet&section=assets"
+                    className="inline-flex items-center gap-2 text-sm font-bold text-primary"
+                  >
+                    <Package size={16} />
+                    {t('communityEconomy.viewAssets')}
+                  </a>
+                </div>
               )}
               <ProvisioningPill provisioning={provisioning} />
             </div>

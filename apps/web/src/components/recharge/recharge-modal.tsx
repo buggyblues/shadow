@@ -81,7 +81,13 @@ export function RechargeModal() {
     if (loading) return
     setLoading(true)
     try {
-      const params: { tier: string; customAmount?: number } = { tier: selectedTier }
+      const idempotencyKey =
+        globalThis.crypto?.randomUUID?.() ??
+        `recharge-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const params: { tier: string; customAmount?: number; idempotencyKey: string } = {
+        tier: selectedTier,
+        idempotencyKey,
+      }
       if (selectedTier === 'custom') {
         params.customAmount = customAmount
       }

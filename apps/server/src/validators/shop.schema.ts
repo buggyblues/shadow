@@ -96,6 +96,7 @@ export const updateCartItemSchema = z.object({
 /* ═══════════════ Order ═══════════════ */
 
 export const createOrderSchema = z.object({
+  idempotencyKey: z.string().min(8).max(200),
   items: z
     .array(
       z.object({

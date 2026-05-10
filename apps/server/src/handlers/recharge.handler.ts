@@ -7,7 +7,8 @@ import { authMiddleware } from '../middleware/auth.middleware'
 const createIntentSchema = z.object({
   tier: z.enum(['1000', '3000', '5000', 'custom']),
   customAmount: z.number().int().optional(),
-  currency: z.string().default('usd'),
+  currency: z.string().length(3).optional(),
+  idempotencyKey: z.string().min(8).max(200),
 })
 
 export function createRechargeHandler(container: AppContainer) {
@@ -23,13 +24,15 @@ export function createRechargeHandler(container: AppContainer) {
   /** POST /api/v1/recharge/create-intent — Create Stripe PaymentIntent */
   h.post('/create-intent', zValidator('json', createIntentSchema), async (c) => {
     const user = c.get('user')
-    const { tier, customAmount, currency } = c.req.valid('json')
+    const { tier, customAmount, currency, idempotencyKey } = c.req.valid('json')
     const rechargeService = container.resolve('rechargeService')
     const result = await rechargeService.createPaymentIntent(
       user.userId,
       tier,
       customAmount,
       currency,
+      c.get('actor'),
+      idempotencyKey,
     )
     return c.json(result, 201)
   })

@@ -35,6 +35,35 @@ export { dmAttachments } from './dm-attachments'
 export { dmChannels } from './dm-channels'
 export { dmMessages } from './dm-messages'
 export { dmReactions } from './dm-reactions'
+export {
+  commerceFulfillmentRecordStatusEnum,
+  commerceFulfillmentRecords,
+  communityAssetDefinitionStatusEnum,
+  communityAssetDefinitions,
+  communityAssetGrantStatusEnum,
+  communityAssetGrants,
+  communityAssetIssuerKindEnum,
+  communityAssetTransferActionEnum,
+  communityAssetTransferLogs,
+  communityAssetTypeEnum,
+  economyAuditEvents,
+  economyAuditResultEnum,
+  economyGiftItemKindEnum,
+  economyGiftItems,
+  economyGiftStatusEnum,
+  economyGifts,
+  economyTipStatusEnum,
+  economyTips,
+  paymentProviderEventStatusEnum,
+  paymentProviderEvents,
+  riskCaseKindEnum,
+  riskCaseStatusEnum,
+  riskCases,
+  settlementAccounts,
+  settlementLineStatusEnum,
+  settlementLines,
+  settlementOwnerKindEnum,
+} from './economy'
 export { friendshipStatusEnum, friendships } from './friendships'
 export { inviteCodes } from './invite-codes'
 export { memberRoleEnum, members } from './members'
@@ -124,5 +153,5 @@ export {
 } from './shops'
 export { userRewardLogs, userTaskClaims } from './task-center'
 export { threads } from './threads'
-export { userStatusEnum, users } from './users'
+export { userEconomyStatusEnum, userStatusEnum, users } from './users'
 export { workspaceNodeKindEnum, workspaceNodes, workspaces } from './workspaces'

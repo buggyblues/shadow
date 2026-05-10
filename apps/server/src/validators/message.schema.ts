@@ -137,19 +137,36 @@ const paidFileCardSchema = z.object({
   action: z.record(z.unknown()).optional(),
 })
 
-const metadataSchema = z
-  .object({
-    agentChain: agentChainSchema.optional(),
-    interactive: interactiveBlockSchema.optional(),
-    interactiveResponse: interactiveResponseSchema.optional(),
-    mentions: messageMentionsSchema.optional(),
-    commerceCards: z
-      .array(z.union([commerceOfferCardSchema, commerceProductCardSchema]))
-      .max(3)
-      .optional(),
-    paidFileCards: z.array(paidFileCardSchema).max(3).optional(),
-  })
-  .passthrough() // Allow additional custom metadata
+const commerceFulfillmentSchema = z.object({
+  jobId: z.string().uuid(),
+  deliverableId: z.string().uuid(),
+})
+
+const playLaunchSchema = z.union([
+  z.boolean(),
+  z.object({
+    kind: z.enum(['public_channel', 'private_room', 'cloud_deploy']).optional(),
+    playId: z.string().max(120).nullable().optional(),
+    deploymentId: z.string().uuid().optional(),
+    templateSlug: z.string().max(160).optional(),
+  }),
+])
+
+export const metadataSchema = z.object({
+  agentChain: agentChainSchema.optional(),
+  interactive: interactiveBlockSchema.optional(),
+  interactiveResponse: interactiveResponseSchema.optional(),
+  mentions: messageMentionsSchema.optional(),
+  commerceOfferId: z.string().uuid().optional(),
+  commerceCards: z
+    .array(z.union([commerceOfferCardSchema, commerceProductCardSchema]))
+    .max(3)
+    .optional(),
+  paidFileCards: z.array(paidFileCardSchema).max(3).optional(),
+  commerceFulfillment: commerceFulfillmentSchema.optional(),
+  playLaunch: playLaunchSchema.optional(),
+  custom: z.record(z.unknown()).optional(),
+})
 
 export const sendMessageSchema = z.object({
   content: z
