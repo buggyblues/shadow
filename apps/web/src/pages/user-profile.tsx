@@ -1,7 +1,17 @@
 import { Badge, Button, GlassPanel, Tabs, TabsContent, TabsList, TabsTrigger } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from '@tanstack/react-router'
-import { ArrowRight, Calendar, ChevronLeft, QrCode, Shield, UserPlus, X } from 'lucide-react'
+import {
+  ArrowRight,
+  Calendar,
+  ChevronLeft,
+  Gift,
+  HandCoins,
+  QrCode,
+  Shield,
+  UserPlus,
+  X,
+} from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -16,6 +26,7 @@ import {
 } from '../components/buddy-dashboard'
 import { UserAvatar } from '../components/common/avatar'
 import { formatDuration, OnlineRank } from '../components/common/online-rank'
+import { CommunityEconomySendModal } from '../components/community-economy/community-economy-send-modal'
 import { ProfileCommentSection } from '../components/profile/ProfileCommentSection'
 import { fetchApi } from '../lib/api'
 import { useAuthStore } from '../stores/auth.store'
@@ -101,6 +112,7 @@ export function UserProfilePage() {
   const [dashboardTab, setDashboardTab] = useState<
     'weekly' | 'hourly' | 'monthly' | 'recent' | 'rental'
   >('weekly')
+  const [economyModal, setEconomyModal] = useState<'tip' | 'gift' | null>(null)
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['user-profile', userId],
@@ -162,9 +174,27 @@ export function UserProfilePage() {
                     {t('profile.myQrCard')}
                   </Button>
                 ) : (
-                  <Button size="sm" variant="outline" icon={UserPlus}>
-                    {t('friends.addFriend')}
-                  </Button>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="glass"
+                      icon={HandCoins}
+                      onClick={() => setEconomyModal('tip')}
+                    >
+                      {t('communityEconomy.sendTip')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="glass"
+                      icon={Gift}
+                      onClick={() => setEconomyModal('gift')}
+                    >
+                      {t('communityEconomy.sendGift')}
+                    </Button>
+                    <Button size="sm" variant="outline" icon={UserPlus}>
+                      {t('friends.addFriend')}
+                    </Button>
+                  </div>
                 )}
               </div>
 
@@ -520,6 +550,17 @@ export function UserProfilePage() {
           </div>,
           document.body,
         )}
+      <CommunityEconomySendModal
+        open={economyModal !== null}
+        mode={economyModal ?? 'tip'}
+        recipient={{
+          id: profile.id,
+          username: profile.username,
+          displayName: profile.displayName,
+          avatarUrl: profile.avatarUrl,
+        }}
+        onClose={() => setEconomyModal(null)}
+      />
     </div>
   )
 }

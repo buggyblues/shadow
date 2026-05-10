@@ -95,7 +95,8 @@ export class PaidFileService {
         status: grant.status,
         expiresAt: grant.expiresAt,
       },
-      viewerUrl: `/api/paid-files/${fileId}/view/${grant.id}?token=${encodeURIComponent(token)}`,
+      grantToken: token,
+      viewerUrl: `/api/paid-files/${fileId}/view/${grant.id}`,
     }
   }
 

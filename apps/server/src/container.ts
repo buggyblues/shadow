@@ -58,8 +58,12 @@ import { CommerceCardService } from './services/commerce-card.service'
 import { CommerceCheckoutService } from './services/commerce-checkout.service'
 import { CommerceFulfillmentService } from './services/commerce-fulfillment.service'
 import { CommerceOfferService } from './services/commerce-offer.service'
+import { CommunityAssetService } from './services/community-asset.service'
 import { DiyCloudRunService } from './services/diy-cloud-run.service'
 import { DmService } from './services/dm.service'
+import { EconomyAuditService } from './services/economy-audit.service'
+import { EconomyIdempotencyService } from './services/economy-idempotency.service'
+import { EconomyPolicyService } from './services/economy-policy.service'
 import { EntitlementService } from './services/entitlement.service'
 import { EntitlementAccessService } from './services/entitlement-access.service'
 import { EntitlementCancellationService } from './services/entitlement-cancellation.service'
@@ -68,6 +72,7 @@ import { EntitlementPurchaseService } from './services/entitlement-purchase.serv
 import { EntitlementRenewalService } from './services/entitlement-renewal.service'
 import { ExternalOAuthService } from './services/external-oauth.service'
 import { FriendshipService } from './services/friendship.service'
+import { GiftService } from './services/gift.service'
 import { LedgerService } from './services/ledger.service'
 import { MediaService } from './services/media.service'
 import { MembershipService } from './services/membership.service'
@@ -91,9 +96,11 @@ import { RentalService } from './services/rental.service'
 import { ReviewService } from './services/review.service'
 import { SearchService } from './services/search.service'
 import { ServerService } from './services/server.service'
+import { SettlementService } from './services/settlement.service'
 import { ShopService } from './services/shop.service'
 import { ShopScopeService } from './services/shop-scope.service'
 import { TaskCenterService } from './services/task-center.service'
+import { TipService } from './services/tip.service'
 import { VoiceEnhanceService } from './services/voice-enhance.service'
 import { WalletService } from './services/wallet.service'
 import { WorkspaceService } from './services/workspace.service'
@@ -188,6 +195,13 @@ export interface Cradle {
   commerceCheckoutService: CommerceCheckoutService
   commerceOfferService: CommerceOfferService
   commerceFulfillmentService: CommerceFulfillmentService
+  communityAssetService: CommunityAssetService
+  economyAuditService: EconomyAuditService
+  economyIdempotencyService: EconomyIdempotencyService
+  economyPolicyService: EconomyPolicyService
+  giftService: GiftService
+  settlementService: SettlementService
+  tipService: TipService
   permissionService: PermissionService
   policyService: PolicyService
   dmService: DmService
@@ -316,6 +330,13 @@ export function createAppContainer(db: Database): AppContainer {
     commerceCheckoutService: asClass(CommerceCheckoutService).singleton(),
     commerceOfferService: asClass(CommerceOfferService).singleton(),
     commerceFulfillmentService: asClass(CommerceFulfillmentService).singleton(),
+    communityAssetService: asClass(CommunityAssetService).singleton(),
+    economyAuditService: asClass(EconomyAuditService).singleton(),
+    economyIdempotencyService: asClass(EconomyIdempotencyService).singleton(),
+    economyPolicyService: asClass(EconomyPolicyService).singleton(),
+    giftService: asClass(GiftService).singleton(),
+    settlementService: asClass(SettlementService).singleton(),
+    tipService: asClass(TipService).singleton(),
     permissionService: asClass(PermissionService).singleton(),
     policyService: asClass(PolicyService).singleton(),
     dmService: asClass(DmService).singleton(),

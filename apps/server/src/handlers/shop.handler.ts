@@ -56,13 +56,44 @@ const createOfferSchema = z.object({
 })
 
 const createDeliverableSchema = z.object({
-  kind: z.enum(['paid_file', 'message', 'external']).optional(),
+  kind: z
+    .enum(['paid_file', 'message', 'external', 'entitlement', 'community_asset', 'currency'])
+    .optional(),
   resourceType: z.string().min(1).max(80).optional(),
   resourceId: z.string().min(1),
   senderBuddyUserId: z.string().uuid().nullable().optional(),
   messageTemplateKey: z.string().max(120).nullable().optional(),
   metadata: z.record(z.unknown()).optional(),
 })
+
+const createAssetDefinitionSchema = z.object({
+  assetType: z.enum([
+    'badge',
+    'gift',
+    'coupon',
+    'service_ticket',
+    'collectible',
+    'content_pass',
+    'reward',
+  ]),
+  name: z.string().min(1).max(120),
+  description: z.string().max(2000).nullable().optional(),
+  imageUrl: z.string().url().nullable().optional(),
+  giftable: z.boolean().optional(),
+  transferable: z.boolean().optional(),
+  consumable: z.boolean().optional(),
+  revocable: z.boolean().optional(),
+  expiresAfterDays: z.number().int().min(1).max(3650).nullable().optional(),
+  status: z.enum(['draft', 'active', 'paused']).optional(),
+  metadata: z.record(z.unknown()).optional(),
+})
+
+const updateAssetDefinitionSchema = createAssetDefinitionSchema
+  .omit({ assetType: true })
+  .partial()
+  .extend({
+    status: z.enum(['draft', 'active', 'paused', 'archived']).optional(),
+  })
 
 const createPersonalShopSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -215,6 +246,45 @@ export function createShopHandler(container: AppContainer) {
     })
   })
 
+  h.get('/shops/:shopId/assets', async (c) => {
+    const user = c.get('user')
+    const shopScopeService = container.resolve('shopScopeService')
+    const communityAssetService = container.resolve('communityAssetService')
+    await shopScopeService.requireShopManager(c.req.param('shopId'), user.userId)
+    return c.json({
+      assets: await communityAssetService.listDefinitionsForShop(c.req.param('shopId')),
+    })
+  })
+
+  h.post('/shops/:shopId/assets', zValidator('json', createAssetDefinitionSchema), async (c) => {
+    const user = c.get('user')
+    const shopScopeService = container.resolve('shopScopeService')
+    const communityAssetService = container.resolve('communityAssetService')
+    const shop = await shopScopeService.requireShopManager(c.req.param('shopId'), user.userId)
+    const input = c.req.valid('json')
+    return c.json(
+      await communityAssetService.createDefinition({
+        actor: c.get('actor'),
+        createdBy: user.userId,
+        issuerKind: 'shop',
+        issuerId: shop.id,
+        shopId: shop.id,
+        assetType: input.assetType,
+        name: input.name,
+        description: input.description,
+        imageUrl: input.imageUrl,
+        giftable: input.giftable,
+        transferable: input.transferable,
+        consumable: input.consumable,
+        revocable: input.revocable,
+        expiresAfterDays: input.expiresAfterDays,
+        status: input.status,
+        metadata: input.metadata,
+      }),
+      201,
+    )
+  })
+
   h.get('/products/:productId', async (c) => {
     const user = c.get('user')
     return c.json(await requireProductVisible(c.req.param('productId'), user.userId))
@@ -265,6 +335,36 @@ export function createShopHandler(container: AppContainer) {
     await productService.deleteProduct(product.id)
     return c.json({ ok: true })
   })
+
+  h.patch(
+    '/shops/:shopId/assets/:assetDefinitionId',
+    zValidator('json', updateAssetDefinitionSchema),
+    async (c) => {
+      const user = c.get('user')
+      const shopScopeService = container.resolve('shopScopeService')
+      const communityAssetService = container.resolve('communityAssetService')
+      const shop = await shopScopeService.requireShopManager(c.req.param('shopId'), user.userId)
+      const input = c.req.valid('json')
+      return c.json(
+        await communityAssetService.updateDefinition({
+          actor: c.get('actor'),
+          definitionId: c.req.param('assetDefinitionId'),
+          shopId: shop.id,
+          updatedBy: user.userId,
+          name: input.name,
+          description: input.description,
+          imageUrl: input.imageUrl,
+          giftable: input.giftable,
+          transferable: input.transferable,
+          consumable: input.consumable,
+          revocable: input.revocable,
+          expiresAfterDays: input.expiresAfterDays,
+          status: input.status,
+          metadata: input.metadata,
+        }),
+      )
+    },
+  )
 
   h.get('/commerce/product-picker', zValidator('query', productPickerSchema), async (c) => {
     const user = c.get('user')
@@ -398,6 +498,7 @@ export function createShopHandler(container: AppContainer) {
           skuId: input.skuId,
           idempotencyKey: input.idempotencyKey,
           destination,
+          actor: c.get('actor'),
         }),
         201,
       )
@@ -445,6 +546,7 @@ export function createShopHandler(container: AppContainer) {
           productId: c.req.param('productId'),
           skuId: input.skuId,
           idempotencyKey: input.idempotencyKey,
+          actor: c.get('actor'),
         }),
         201,
       )
@@ -479,6 +581,7 @@ export function createShopHandler(container: AppContainer) {
           skuId: input.skuId,
           idempotencyKey: input.idempotencyKey,
           destination: { kind: 'channel', id: message.channelId },
+          actor: c.get('actor'),
         }),
         201,
       )
@@ -516,6 +619,7 @@ export function createShopHandler(container: AppContainer) {
           skuId: input.skuId,
           idempotencyKey: input.idempotencyKey,
           destination: { kind: 'dm', id: message.dmChannelId },
+          actor: c.get('actor'),
         }),
         201,
       )
@@ -630,6 +734,7 @@ export function createShopHandler(container: AppContainer) {
           actorUserId: user.userId,
           entitlementId: c.req.param('entitlementId'),
           reason: c.req.valid('json').reason,
+          actor: c.get('actor'),
         }),
       )
     },
@@ -646,6 +751,7 @@ export function createShopHandler(container: AppContainer) {
           actorUserId: user.userId,
           entitlementId: c.req.param('entitlementId'),
           reason: c.req.valid('json').reason ?? 'cancel_renewal',
+          actor: c.get('actor'),
         }),
       )
     },
@@ -704,8 +810,19 @@ export function createShopHandler(container: AppContainer) {
       if (input.approved) {
         const entitlementService = container.resolve('entitlementService')
         const ledgerService = container.resolve('ledgerService')
+        const economyPolicyService = container.resolve('economyPolicyService')
+        const economyAuditService = container.resolve('economyAuditService')
+        const settlementService = container.resolve('settlementService')
         const entitlement = await entitlementService.getEntitlement(request.entitlementId)
         if (input.refundAmount && input.refundAmount > 0) {
+          await economyPolicyService.authorize({
+            actor: c.get('actor'),
+            action: 'wallet.refund',
+            resource: { kind: 'entitlement', id: entitlement.id },
+            scope: { kind: 'wallet', id: entitlement.userId },
+            dataClass: 'financial',
+            targetUserId: entitlement.userId,
+          })
           await ledgerService.credit({
             userId: entitlement.userId,
             amount: input.refundAmount,
@@ -714,6 +831,22 @@ export function createShopHandler(container: AppContainer) {
             referenceType: 'order',
             note: '不可抗力裁定退款',
           })
+          await economyAuditService.record({
+            actor: c.get('actor'),
+            action: 'wallet.refund',
+            resource: { kind: 'entitlement', id: entitlement.id },
+            scope: { kind: 'wallet', id: entitlement.userId },
+            request: { forceMajeureRequestId: request.id, approved: input.approved },
+            result: 'succeeded',
+            metadata: { refundAmount: input.refundAmount, orderId: entitlement.orderId },
+          })
+          if (entitlement.orderId) {
+            await settlementService.reverseLinesForSource({
+              sourceType: 'order',
+              sourceId: entitlement.orderId,
+              reason: 'force_majeure_refund',
+            })
+          }
         }
         await entitlementService.revokeEntitlement(
           request.entitlementId,
@@ -945,7 +1078,14 @@ export function createShopHandler(container: AppContainer) {
     const orderService = container.resolve('orderService')
     const input = c.req.valid('json')
     return c.json(
-      await orderService.createOrder(user.userId, shop.id, input.items, input.buyerNote),
+      await orderService.createOrder(
+        user.userId,
+        shop.id,
+        input.items,
+        input.buyerNote,
+        input.idempotencyKey,
+        c.get('actor'),
+      ),
       201,
     )
   })

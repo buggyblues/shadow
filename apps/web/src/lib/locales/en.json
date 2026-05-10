@@ -28,7 +28,9 @@
     "close": "Close",
     "back": "Back",
     "bot": "Buddy",
-    "shrimpCoin": "Shrimp Coins"
+    "shrimpCoin": "Shrimp Coins",
+    "done": "Done",
+    "unknown": "Unknown"
   },
   "nav": {
     "features": "Features",
@@ -775,6 +777,9 @@
     "deleteConfirm": "Are you sure you want to delete this message?",
     "copyMessage": "Copy Message",
     "shareLink": "Share Message Link",
+    "sendFailed": "Failed to send",
+    "retry": "Retry",
+    "selectMessages": "Select messages",
     "loading": "Loading...",
     "loadingOlder": "Loading older messages...",
     "downloadFile": "Download File",
@@ -844,7 +849,8 @@
       "manual_pending": "Manual handling",
       "failed": "Delivery issue"
     },
-    "copyFailed": "Copy failed"
+    "copyFailed": "Copy failed",
+    "typing": "is typing..."
   },
   "member": {
     "online": "Online",
@@ -1035,7 +1041,8 @@
     "tagDeploy": "Deployment",
     "tagCustom": "Custom",
     "tagMcp": "MCP",
-    "tagApi": "API"
+    "tagApi": "API",
+    "owner": "Owner"
   },
   "pricing": {
     "pageTitle": "Simple, Transparent Pricing",
@@ -1738,7 +1745,8 @@
     "tipSearch": "Search",
     "tipSearchDesc": "Type a username to quickly find contacts",
     "tipAdd": "Add",
-    "tipAddDesc": "Tap the + icon to add friends by username"
+    "tipAddDesc": "Tap the + icon to add friends by username",
+    "inputPlaceholderToUser": "Message @{{name}}"
   },
   "openclaw": {
     "nav": {
@@ -2089,7 +2097,8 @@
     "expense": "Expense",
     "transactionNote": "Note",
     "balanceAfter": "Balance",
-    "rechargeBtn": "Recharge"
+    "rechargeBtn": "Recharge",
+    "frozen": "Frozen"
   },
   "commerce": {
     "myShop": "My shop",
@@ -2200,6 +2209,8 @@
     "cancelFailed": "Cancellation failed",
     "noOrders": "No delivery records",
     "buyer": "Buyer",
+    "buyerPreview": "Buyer preview",
+    "serviceDeliveryHint": "The buyer receives the service access or manual fulfillment described by the creator.",
     "entitlementGroups": {
       "active": "Active entitlements",
       "expiring": "Expiring soon",
@@ -2214,6 +2225,7 @@
       "service": "Virtual service",
       "workspace_file": "Paid file",
       "digital_asset": "Digital asset",
+      "community_asset": "Community asset",
       "subscription": "Subscription entitlement",
       "external_resource": "External resource"
     },
@@ -2328,5 +2340,114 @@
       "pricingTitle": "You keep the compute.",
       "pricingDesc": "Shop revenue funds the compute cost — creators absorb the infra and own the resources."
     }
-  }
+  },
+  "communityEconomy": {
+    "assets": "Assets",
+    "settlements": "Settlements",
+    "actions": "Send",
+    "assetCount": "{{count}} assets",
+    "noAssets": "No assets yet",
+    "noAssetsHint": "Purchased, granted, or gifted assets will appear here.",
+    "quantity": "Quantity",
+    "remaining": "Remaining",
+    "type": "Type",
+    "expiresAt": "Expires",
+    "never": "Never",
+    "consume": "Consume",
+    "lock": "Lock",
+    "unlock": "Unlock",
+    "revoke": "Revoke",
+    "settleAvailable": "Settle available",
+    "totalLines": "Total",
+    "availableLines": "Available",
+    "pendingNet": "Pending net",
+    "noSettlements": "No settlement lines yet",
+    "noSettlementsHint": "Tips, gifts, and creator revenue will collect here before settlement.",
+    "availableAt": "Available at",
+    "notAvailable": "Not available",
+    "settledAt": "Settled at",
+    "gross": "Gross",
+    "fee": "Fee",
+    "net": "Net",
+    "sendTip": "Send tip",
+    "sendGift": "Send gift",
+    "recipientUserId": "Recipient user ID",
+    "amount": "Amount",
+    "message": "Message",
+    "tipSent": "Tip sent",
+    "giftSent": "Gift sent",
+    "operationFailed": "Operation failed",
+    "currencyGiftAmount": "Currency gift amount",
+    "assetGift": "Asset gift",
+    "noAssetGift": "Do not include an asset",
+    "assetQuantity": "Asset quantity",
+    "source": {
+      "tip": "Tip",
+      "gift": "Gift",
+      "purchase": "Purchase",
+      "settlement": "Settlement",
+      "asset": "Asset"
+    },
+    "status": {
+      "active": "Active",
+      "locked": "Locked",
+      "consumed": "Consumed",
+      "revoked": "Revoked",
+      "expired": "Expired",
+      "pending": "Pending",
+      "available": "Available",
+      "settled": "Settled",
+      "held": "Held",
+      "frozen": "Frozen",
+      "reversed": "Reversed",
+      "failed": "Failed",
+      "canceled": "Canceled",
+      "provisioned": "Provisioned",
+      "processing": "Processing"
+    },
+    "allAssetTypes": "All types",
+    "viewAssets": "View assets",
+    "purchaseDeliveryStatus": "Purchase delivery status",
+    "deliveryTarget": "Delivery target",
+    "chooseRecipient": "Choose recipient",
+    "searchRecipient": "Search friends or recent chats",
+    "noRecipients": "No contacts found. Open a profile or chat to send directly.",
+    "sendTo": "Send to",
+    "customAmount": "Custom amount",
+    "chooseAsset": "Choose asset",
+    "noGiftableAssets": "No giftable assets available",
+    "confirmation": "Confirm",
+    "deliveryType": "What buyers receive",
+    "assetDelivery": "Asset delivery",
+    "assetDeliveryHint": "The asset is delivered to the buyer's asset library after purchase.",
+    "assetDefinitionsCount": "{{count}} asset templates",
+    "assetNamePlaceholder": "Asset name shown to buyers",
+    "assetDescriptionPlaceholder": "Short description for this asset",
+    "deliveryPreset": {
+      "service": "Service access",
+      "badge": "Badge",
+      "gift": "Digital gift",
+      "service_ticket": "Service ticket"
+    },
+    "deliveryPresetHint": {
+      "service": "Access, membership, files, or manual service fulfillment.",
+      "badge": "A permanent identity badge for supporters or members.",
+      "gift": "A collectible digital gift that can be transferred.",
+      "service_ticket": "A redeemable ticket for one service or event."
+    },
+    "tipEntryTitle": "Send appreciation in seconds",
+    "tipEntryHint": "Choose a friend or recent chat, pick an amount, and send with a short note.",
+    "giftEntryTitle": "Share coins and owned assets",
+    "giftEntryHint": "Send Shrimp Coins, a badge, gift, or service ticket from your asset library.",
+    "estimatedBalanceAfter": "After sending",
+    "insufficientBalance": "Your balance is not enough for this send.",
+    "assetQuantityExceeded": "Asset quantity exceeds what you currently own.",
+    "sentTo": "Sent to {{name}}",
+    "sendAnother": "Send another",
+    "confirm": {
+      "consume": "Use this asset now? This may reduce the remaining quantity.",
+      "revoke": "Revoke this asset? This action cannot be undone."
+    }
+  },
+  "buddy": "Buddy"
 }

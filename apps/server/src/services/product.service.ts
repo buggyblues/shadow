@@ -149,17 +149,37 @@ export class ProductService {
     }
 
     if (skus !== undefined) {
-      await this.deps.skuDao.deleteByProductId(id)
+      const retainedSkuIds: string[] = []
       for (const s of skus) {
-        await this.deps.skuDao.create({
+        if (s.id) {
+          const existing = await this.deps.skuDao.findById(s.id)
+          if (!existing || existing.productId !== id) {
+            throw apiError('SKU_PRODUCT_MISMATCH', 400)
+          }
+          await this.deps.skuDao.update(s.id, {
+            specValues: s.specValues,
+            price: s.price,
+            stock: s.stock,
+            imageUrl: s.imageUrl,
+            skuCode: s.skuCode,
+            isActive: s.isActive ?? true,
+          })
+          retainedSkuIds.push(s.id)
+          continue
+        }
+
+        const created = await this.deps.skuDao.create({
           productId: id,
           specValues: s.specValues,
           price: s.price,
           stock: s.stock,
           imageUrl: s.imageUrl,
           skuCode: s.skuCode,
+          isActive: s.isActive ?? true,
         })
+        if (created) retainedSkuIds.push(created.id)
       }
+      await this.deps.skuDao.deactivateMissing(id, retainedSkuIds)
     }
 
     return this.getProductDetail(id)

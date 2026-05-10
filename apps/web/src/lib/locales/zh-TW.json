@@ -28,7 +28,9 @@
     "close": "關閉",
     "back": "返回",
     "bot": "Buddy",
-    "shrimpCoin": "蝦幣"
+    "shrimpCoin": "蝦幣",
+    "done": "完成",
+    "unknown": "未知"
   },
   "nav": {
     "features": "特色功能",
@@ -587,6 +589,9 @@
     "deleteConfirm": "確定要刪除此訊息嗎？",
     "copyMessage": "複製訊息",
     "shareLink": "分享訊息連結",
+    "sendFailed": "發送失敗",
+    "retry": "重試",
+    "selectMessages": "多選訊息",
     "loading": "載入中...",
     "loadingOlder": "載入更早的訊息...",
     "downloadFile": "下載檔案",
@@ -656,7 +661,8 @@
       "manual_pending": "待人工處理",
       "failed": "發貨異常"
     },
-    "copyFailed": "複製失敗"
+    "copyFailed": "複製失敗",
+    "typing": "正在輸入..."
   },
   "member": {
     "online": "線上",
@@ -847,7 +853,8 @@
     "tagDeploy": "部署",
     "tagCustom": "自訂",
     "tagMcp": "MCP",
-    "tagApi": "API"
+    "tagApi": "API",
+    "owner": "擁有者"
   },
   "pricing": {
     "pageTitle": "簡單透明的定價",
@@ -1550,7 +1557,8 @@
     "tipSearch": "搜尋",
     "tipSearchDesc": "輸入使用者名稱快速定位聯絡人",
     "tipAdd": "新增",
-    "tipAddDesc": "點擊 + 圖示透過使用者名稱新增好友"
+    "tipAddDesc": "點擊 + 圖示透過使用者名稱新增好友",
+    "inputPlaceholderToUser": "傳送訊息給 @{{name}}"
   },
   "openclaw": {
     "nav": {
@@ -1891,7 +1899,8 @@
     "expense": "支出",
     "transactionNote": "備註",
     "balanceAfter": "餘額",
-    "rechargeBtn": "去充值"
+    "rechargeBtn": "去充值",
+    "frozen": "凍結"
   },
   "commerce": {
     "myShop": "我的店鋪",
@@ -2002,6 +2011,8 @@
     "cancelFailed": "取消失敗",
     "noOrders": "暫無發貨記錄",
     "buyer": "買家",
+    "buyerPreview": "買家預覽",
+    "serviceDeliveryHint": "買家會獲得創作者描述的服務權益或人工交付。",
     "entitlementGroups": {
       "active": "可用權益",
       "expiring": "即將到期",
@@ -2016,6 +2027,7 @@
       "service": "虛擬服務",
       "workspace_file": "付費檔案",
       "digital_asset": "數位資產",
+      "community_asset": "社群資產",
       "subscription": "訂閱權益",
       "external_resource": "外部資源"
     },
@@ -2328,5 +2340,114 @@
       "deployInfrastructureFailed": "部署服務暫時遇到環境問題，蝦幣會自動退回。你可以稍後再試，或從 Cloud 頁面查看部署記錄。",
       "deployTimeout": "部署還在進行中，請稍後從 Cloud 頁面查看。"
     }
-  }
+  },
+  "communityEconomy": {
+    "assets": "社群資產",
+    "settlements": "結算",
+    "actions": "打賞與贈送",
+    "assetCount": "{{count}} 個資產",
+    "noAssets": "暫無資產",
+    "noAssetsHint": "購買、發放或收到的社群資產會顯示在這裡。",
+    "quantity": "數量",
+    "remaining": "剩餘",
+    "type": "類型",
+    "expiresAt": "到期時間",
+    "never": "永久",
+    "consume": "消耗",
+    "lock": "鎖定",
+    "unlock": "解鎖",
+    "revoke": "撤銷",
+    "settleAvailable": "結算可用項",
+    "totalLines": "總數",
+    "availableLines": "可結算",
+    "pendingNet": "待入帳淨額",
+    "noSettlements": "暫無結算記錄",
+    "noSettlementsHint": "打賞、贈送和創作者收入會先進入這裡，再按週期結算。",
+    "availableAt": "可用時間",
+    "notAvailable": "暫不可用",
+    "settledAt": "結算時間",
+    "gross": "總額",
+    "fee": "費用",
+    "net": "淨額",
+    "sendTip": "發送打賞",
+    "sendGift": "發送贈送",
+    "recipientUserId": "接收方使用者 ID",
+    "amount": "金額",
+    "message": "留言",
+    "tipSent": "打賞已發送",
+    "giftSent": "贈送已發送",
+    "operationFailed": "操作失敗",
+    "currencyGiftAmount": "蝦幣贈送金額",
+    "assetGift": "資產贈送",
+    "noAssetGift": "不贈送資產",
+    "assetQuantity": "資產數量",
+    "source": {
+      "tip": "打賞",
+      "gift": "贈送",
+      "purchase": "購買",
+      "settlement": "結算",
+      "asset": "資產"
+    },
+    "status": {
+      "active": "可用",
+      "locked": "已鎖定",
+      "consumed": "已消耗",
+      "revoked": "已撤銷",
+      "expired": "已過期",
+      "pending": "待結算",
+      "available": "可結算",
+      "settled": "已結算",
+      "held": "暫掛",
+      "frozen": "凍結",
+      "reversed": "已沖正",
+      "failed": "失敗",
+      "canceled": "已取消",
+      "provisioned": "已發放",
+      "processing": "處理中"
+    },
+    "allAssetTypes": "全部類型",
+    "viewAssets": "查看資產",
+    "purchaseDeliveryStatus": "購買發放狀態",
+    "deliveryTarget": "發放對象",
+    "chooseRecipient": "選擇接收人",
+    "searchRecipient": "搜尋好友或最近聊天",
+    "noRecipients": "暫無可選聯絡人。可以從使用者主頁或聊天視窗直接發起。",
+    "sendTo": "發送給",
+    "customAmount": "自訂金額",
+    "chooseAsset": "選擇資產",
+    "noGiftableAssets": "暫無可贈送資產",
+    "confirmation": "確認發送",
+    "deliveryType": "買家將獲得",
+    "assetDelivery": "資產發放",
+    "assetDeliveryHint": "購買完成後，資產會進入買家的資產庫。",
+    "assetDefinitionsCount": "{{count}} 個資產模板",
+    "assetNamePlaceholder": "買家看到的資產名稱",
+    "assetDescriptionPlaceholder": "這份資產的簡短說明",
+    "deliveryPreset": {
+      "service": "服務權益",
+      "badge": "身份徽章",
+      "gift": "數位禮物",
+      "service_ticket": "服務券"
+    },
+    "deliveryPresetHint": {
+      "service": "適合存取權限、會員、檔案或人工服務交付。",
+      "badge": "適合粉絲、成員或早鳥身份的永久徽章。",
+      "gift": "適合可轉贈、可收藏的數位禮物。",
+      "service_ticket": "適合可核銷的一次性服務或活動憑證。"
+    },
+    "tipEntryTitle": "快速表達支持",
+    "tipEntryHint": "選擇好友或最近聊天，點選金額並附上一句留言即可發送。",
+    "giftEntryTitle": "贈送蝦幣和已有資產",
+    "giftEntryHint": "可以把蝦幣、徽章、數位禮物或服務券從資產庫中贈送給對方。",
+    "estimatedBalanceAfter": "發送後餘額",
+    "insufficientBalance": "目前餘額不足，無法完成發送。",
+    "assetQuantityExceeded": "贈送數量超過目前可用資產數量。",
+    "sentTo": "已發送給 {{name}}",
+    "sendAnother": "再發一筆",
+    "confirm": {
+      "consume": "確認現在使用這份資產嗎？可用數量會減少。",
+      "revoke": "確認撤銷這份資產嗎？此操作不可復原。"
+    }
+  },
+  "buddy": "Buddy"
 }

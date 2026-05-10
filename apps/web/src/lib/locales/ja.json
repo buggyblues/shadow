@@ -28,7 +28,9 @@
     "close": "閉じる",
     "back": "戻る",
     "bot": "Buddy",
-    "shrimpCoin": "シュリンプコイン"
+    "shrimpCoin": "シュリンプコイン",
+    "done": "完了",
+    "unknown": "不明"
   },
   "nav": {
     "features": "機能紹介",
@@ -587,6 +589,9 @@
     "deleteConfirm": "このメッセージを削除しますか？",
     "copyMessage": "メッセージをコピー",
     "shareLink": "メッセージリンクを共有",
+    "sendFailed": "送信に失敗しました",
+    "retry": "再試行",
+    "selectMessages": "メッセージを選択",
     "loading": "読み込み中...",
     "loadingOlder": "過去のメッセージを読み込み中...",
     "downloadFile": "ファイルをダウンロード",
@@ -656,7 +661,8 @@
       "manual_pending": "手動対応待ち",
       "failed": "配布エラー"
     },
-    "copyFailed": "コピー失敗"
+    "copyFailed": "コピー失敗",
+    "typing": "入力中..."
   },
   "member": {
     "online": "オンライン",
@@ -847,7 +853,8 @@
     "tagDeploy": "デプロイ",
     "tagCustom": "カスタム",
     "tagMcp": "MCP",
-    "tagApi": "API"
+    "tagApi": "API",
+    "owner": "オーナー"
   },
   "pricing": {
     "pageTitle": "シンプルで透明な料金体系",
@@ -1550,7 +1557,8 @@
     "tipSearch": "検索",
     "tipSearchDesc": "ユーザー名で連絡先をすばやく検索",
     "tipAdd": "追加",
-    "tipAddDesc": "+ アイコンをタップしてユーザー名でフレンドを追加"
+    "tipAddDesc": "+ アイコンをタップしてユーザー名でフレンドを追加",
+    "inputPlaceholderToUser": "@{{name}} にメッセージを送信"
   },
   "openclaw": {
     "nav": {
@@ -1891,7 +1899,8 @@
     "expense": "支出",
     "transactionNote": "メモ",
     "balanceAfter": "残高",
-    "rechargeBtn": "チャージする"
+    "rechargeBtn": "チャージする",
+    "frozen": "凍結中"
   },
   "commerce": {
     "myShop": "自分のショップ",
@@ -2002,6 +2011,8 @@
     "cancelFailed": "キャンセルに失敗しました",
     "noOrders": "配布記録はありません",
     "buyer": "購入者",
+    "buyerPreview": "購入者向けプレビュー",
+    "serviceDeliveryHint": "購入者は、クリエイターが説明したサービス権限または手動対応を受け取ります。",
     "entitlementGroups": {
       "active": "利用可能な権限",
       "expiring": "まもなく期限切れ",
@@ -2016,6 +2027,7 @@
       "service": "仮想サービス",
       "workspace_file": "有料ファイル",
       "digital_asset": "デジタル資産",
+      "community_asset": "コミュニティ資産",
       "subscription": "サブスクリプション権限",
       "external_resource": "外部リソース"
     },
@@ -2328,5 +2340,114 @@
       "deployInfrastructureFailed": "デプロイサービスで環境上の問題が発生しました。虾幣は自動的に返金されます。後で再試行するか、Cloud のデプロイ履歴をご確認ください。",
       "deployTimeout": "デプロイはまだ進行中です。後ほど Cloud を確認してください。"
     }
-  }
+  },
+  "communityEconomy": {
+    "assets": "コミュニティ資産",
+    "settlements": "精算",
+    "actions": "チップとギフト",
+    "assetCount": "{{count}} 件の資産",
+    "noAssets": "資産はまだありません",
+    "noAssetsHint": "購入、付与、受け取ったコミュニティ資産がここに表示されます。",
+    "quantity": "数量",
+    "remaining": "残数",
+    "type": "タイプ",
+    "expiresAt": "有効期限",
+    "never": "無期限",
+    "consume": "消費",
+    "lock": "ロック",
+    "unlock": "解除",
+    "revoke": "取り消し",
+    "settleAvailable": "利用可能分を精算",
+    "totalLines": "合計",
+    "availableLines": "精算可能",
+    "pendingNet": "保留中の純額",
+    "noSettlements": "精算行はまだありません",
+    "noSettlementsHint": "チップ、ギフト、クリエイター収益は精算前にここへ集約されます。",
+    "availableAt": "利用可能日時",
+    "notAvailable": "未利用可能",
+    "settledAt": "精算日時",
+    "gross": "総額",
+    "fee": "手数料",
+    "net": "純額",
+    "sendTip": "チップを送る",
+    "sendGift": "ギフトを送る",
+    "recipientUserId": "受取人ユーザー ID",
+    "amount": "金額",
+    "message": "メッセージ",
+    "tipSent": "チップを送信しました",
+    "giftSent": "ギフトを送信しました",
+    "operationFailed": "操作に失敗しました",
+    "currencyGiftAmount": "通貨ギフト金額",
+    "assetGift": "資産ギフト",
+    "noAssetGift": "資産を含めない",
+    "assetQuantity": "資産数量",
+    "source": {
+      "tip": "チップ",
+      "gift": "ギフト",
+      "purchase": "購入",
+      "settlement": "精算",
+      "asset": "資産"
+    },
+    "status": {
+      "active": "有効",
+      "locked": "ロック中",
+      "consumed": "消費済み",
+      "revoked": "取り消し済み",
+      "expired": "期限切れ",
+      "pending": "保留中",
+      "available": "精算可能",
+      "settled": "精算済み",
+      "held": "保留",
+      "frozen": "凍結",
+      "reversed": "取り消し済み",
+      "failed": "失敗",
+      "canceled": "キャンセル済み",
+      "provisioned": "配信済み",
+      "processing": "処理中"
+    },
+    "allAssetTypes": "すべてのタイプ",
+    "viewAssets": "資産を見る",
+    "purchaseDeliveryStatus": "購入後の配信状態",
+    "deliveryTarget": "配信先",
+    "chooseRecipient": "受取人を選択",
+    "searchRecipient": "友だちや最近のチャットを検索",
+    "noRecipients": "選択できる連絡先がありません。プロフィールまたはチャットから直接送信できます。",
+    "sendTo": "送信先",
+    "customAmount": "任意の金額",
+    "chooseAsset": "資産を選択",
+    "noGiftableAssets": "贈れる資産がありません",
+    "confirmation": "確認",
+    "deliveryType": "購入者が受け取るもの",
+    "assetDelivery": "資産配信",
+    "assetDeliveryHint": "購入後、資産は購入者の資産ライブラリに届きます。",
+    "assetDefinitionsCount": "{{count}} 件の資産テンプレート",
+    "assetNamePlaceholder": "購入者に表示する資産名",
+    "assetDescriptionPlaceholder": "この資産の短い説明",
+    "deliveryPreset": {
+      "service": "サービス権限",
+      "badge": "バッジ",
+      "gift": "デジタルギフト",
+      "service_ticket": "サービスチケット"
+    },
+    "deliveryPresetHint": {
+      "service": "アクセス権、会員権、ファイル、手動サービスに適しています。",
+      "badge": "支援者やメンバー向けの永続バッジです。",
+      "gift": "譲渡やコレクションに向くデジタルギフトです。",
+      "service_ticket": "1 回分のサービスやイベントに使えるチケットです。"
+    },
+    "tipEntryTitle": "すばやく応援を送る",
+    "tipEntryHint": "友だちや最近のチャットを選び、金額と短いメッセージを添えて送れます。",
+    "giftEntryTitle": "コインと保有資産を贈る",
+    "giftEntryHint": "Shrimp Coin、バッジ、ギフト、サービスチケットを資産ライブラリから送れます。",
+    "estimatedBalanceAfter": "送信後の残高",
+    "insufficientBalance": "残高が不足しているため送信できません。",
+    "assetQuantityExceeded": "贈る数量が現在保有している数量を超えています。",
+    "sentTo": "{{name}} に送信しました",
+    "sendAnother": "もう一度送る",
+    "confirm": {
+      "consume": "この資産を今使いますか？残数が減る場合があります。",
+      "revoke": "この資産を取り消しますか？この操作は元に戻せません。"
+    }
+  },
+  "buddy": "Buddy"
 }

@@ -7,6 +7,10 @@ import { fetchApi } from '../../lib/api'
 import { showToast } from '../../lib/toast'
 import { PriceDisplay } from './ui/currency'
 
+function createIdempotencyKey(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 interface CartItem {
   id: string
   userId: string
@@ -67,7 +71,7 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
     mutationFn: (items: Array<{ productId: string; skuId?: string; quantity: number }>) =>
       fetchApi<{ id: string }>(`/api/servers/${serverId}/shop/orders`, {
         method: 'POST',
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items, idempotencyKey: createIdempotencyKey('shop-order') }),
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['shop-cart', serverId] })

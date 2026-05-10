@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, sql } from 'drizzle-orm'
+import { and, desc, eq, ilike, notInArray, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import { productMedia, products, skus } from '../db/schema'
 
@@ -123,7 +123,10 @@ export class ProductDao {
   }
 
   async delete(id: string) {
-    await this.db.delete(products).where(eq(products.id, id))
+    await this.db
+      .update(products)
+      .set({ status: 'archived', updatedAt: new Date() })
+      .where(eq(products.id, id))
   }
 }
 
@@ -187,6 +190,7 @@ export class SkuDao {
     stock?: number
     imageUrl?: string
     skuCode?: string
+    isActive?: boolean
   }) {
     const r = await this.db.insert(skus).values(data).returning()
     return r[0] ?? null
@@ -222,5 +226,14 @@ export class SkuDao {
 
   async deleteByProductId(productId: string) {
     await this.db.delete(skus).where(eq(skus.productId, productId))
+  }
+
+  async deactivateMissing(productId: string, activeIds: string[]) {
+    const filters = [eq(skus.productId, productId)]
+    if (activeIds.length > 0) filters.push(notInArray(skus.id, activeIds))
+    await this.db
+      .update(skus)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(and(...filters))
   }
 }

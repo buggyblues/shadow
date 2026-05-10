@@ -72,7 +72,7 @@ export class EntitlementRenewalService {
     const orderNo = `SH${Date.now().toString(36).toUpperCase()}${nanoid(6).toUpperCase()}`
     const price = product.basePrice
 
-    const order = await this.deps.db.transaction(async (tx) => {
+    return this.deps.db.transaction(async (tx) => {
       const [created] = await tx
         .insert(orders)
         .values({
@@ -97,11 +97,14 @@ export class EntitlementRenewalService {
         },
         tx,
       )
+      await this.deps.entitlementService.extendEntitlement(
+        entitlement.id,
+        nextExpiresAt,
+        created.id,
+        tx,
+      )
+      await tx.update(orders).set({ updatedAt: new Date() }).where(eq(orders.id, created.id))
       return created
     })
-
-    await this.deps.entitlementService.extendEntitlement(entitlement.id, nextExpiresAt, order.id)
-    await this.deps.db.update(orders).set({ updatedAt: new Date() }).where(eq(orders.id, order.id))
-    return order
   }
 }

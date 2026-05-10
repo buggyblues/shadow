@@ -94,6 +94,16 @@ async function json<T = unknown>(res: Response): Promise<T> {
   return res.json() as Promise<T>
 }
 
+function orderBody(input: {
+  items: Array<{ productId: string; skuId?: string; quantity: number }>
+  buyerNote?: string
+}) {
+  return {
+    idempotencyKey: `shop-e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    ...input,
+  }
+}
+
 /* ── Setup & Teardown ── */
 
 beforeAll(async () => {
@@ -684,10 +694,10 @@ describe('Order — creation & payment', () => {
 
     const res = await req('POST', `/api/servers/${serverId}/shop/orders`, {
       token: buyerToken,
-      body: {
+      body: orderBody({
         items: [{ productId: productId1, skuId: skuId1, quantity: 2 }],
         buyerNote: '请尽快发货',
-      },
+      }),
     })
     expect(res.status).toBe(201)
     const order = await json<{
@@ -717,7 +727,7 @@ describe('Order — creation & payment', () => {
   it('create order for entitlement product', async () => {
     const res = await req('POST', `/api/servers/${serverId}/shop/orders`, {
       token: buyerToken,
-      body: { items: [{ productId: productId2, quantity: 1 }] },
+      body: orderBody({ items: [{ productId: productId2, quantity: 1 }] }),
     })
     expect(res.status).toBe(201)
     const order = await json<{ id: string; status: string; totalAmount: number }>(res)
@@ -767,7 +777,7 @@ describe('Order — creation & payment', () => {
 
     const res = await req('POST', `/api/servers/${serverId}/shop/orders`, {
       token: buyerToken,
-      body: { items: [{ productId: expensiveProduct.id, quantity: 1 }] },
+      body: orderBody({ items: [{ productId: expensiveProduct.id, quantity: 1 }] }),
     })
     expect(res.status).toBe(402)
 
@@ -880,7 +890,7 @@ describe('Order status management', () => {
     await container.resolve('walletService').topUp(buyerUserId, 500, 'Test balance seed')
     const createRes = await req('POST', `/api/servers/${serverId}/shop/orders`, {
       token: buyerToken,
-      body: { items: [{ productId: productId1, skuId: skuId1, quantity: 1 }] },
+      body: orderBody({ items: [{ productId: productId1, skuId: skuId1, quantity: 1 }] }),
     })
     expect(createRes.status).toBe(201)
     const created = await json<{ id: string; status: string }>(createRes)
@@ -914,7 +924,7 @@ describe('Order cancellation & refund', () => {
 
     const res = await req('POST', `/api/servers/${serverId}/shop/orders`, {
       token: buyerToken,
-      body: { items: [{ productId: productId1, skuId: skuId2, quantity: 1 }] },
+      body: orderBody({ items: [{ productId: productId1, skuId: skuId2, quantity: 1 }] }),
     })
     expect(res.status).toBe(201)
     const order = await json<{ id: string; status: string; totalAmount: number }>(res)
@@ -956,7 +966,7 @@ describe('Order cancellation & refund', () => {
     await container.resolve('walletService').topUp(buyerUserId, 500, 'Test balance seed')
     const createRes = await req('POST', `/api/servers/${serverId}/shop/orders`, {
       token: buyerToken,
-      body: { items: [{ productId: productId1, skuId: skuId1, quantity: 1 }] },
+      body: orderBody({ items: [{ productId: productId1, skuId: skuId1, quantity: 1 }] }),
     })
     const newOrder = await json<{ id: string }>(createRes)
 
@@ -1170,7 +1180,7 @@ describe('Edge cases & validation', () => {
   it('empty order items rejected', async () => {
     const res = await req('POST', `/api/servers/${serverId}/shop/orders`, {
       token: buyerToken,
-      body: { items: [] },
+      body: orderBody({ items: [] }),
     })
     expect(res.status).toBe(400)
   })
@@ -1178,7 +1188,9 @@ describe('Edge cases & validation', () => {
   it('order with non-existent product fails', async () => {
     const res = await req('POST', `/api/servers/${serverId}/shop/orders`, {
       token: buyerToken,
-      body: { items: [{ productId: '00000000-0000-0000-0000-000000000000', quantity: 1 }] },
+      body: orderBody({
+        items: [{ productId: '00000000-0000-0000-0000-000000000000', quantity: 1 }],
+      }),
     })
     expect(res.status).toBeGreaterThanOrEqual(400)
   })

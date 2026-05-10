@@ -302,14 +302,18 @@ Server shops continue to use `/api/servers/:serverId/shop`. Scope-neutral and pe
 | GET    | `/api/commerce/product-picker` | Return sendable Offer-backed `CommerceProductCard` records plus shop groups for `target=channel` or `target=dm`. Channel pickers include personal, server, and Buddy shops visible in the channel. |
 | GET    | `/api/commerce/offers/:offerId/checkout-preview` | Return a server-trusted checkout snapshot for an Offer, including product, seller shop, entitlement resource, paid-file metadata, `viewerState`, `primaryAction`, `displayState`, and `nextAction`. Clients call this before showing buy confirmation or opening already-owned content. Sellers and selling Buddies may pass `viewerUserId` to inspect the current conversation user's state for their own Offer; wallet balance display data is returned only when inspecting yourself. |
 | POST   | `/api/shops/:shopId/offers` | Create a managed shop Offer for a product. Offers define sales surface, seller/Buddy sender, optional price override, and metadata. |
-| POST   | `/api/shops/:shopId/offers/:offerId/deliverables` | Attach a deliverable to an Offer. Phase 4 supports `kind: "paid_file"` with `resourceType: "workspace_file"` and a workspace file id. |
-| POST   | `/api/commerce/offers/:offerId/purchase` | Buy an active Offer with `{ idempotencyKey, skuId?, destinationKind?, destinationId? }`. Orders complete immediately, grant Entitlements immediately, and enqueue fulfillment when a destination is supplied. |
+| GET    | `/api/shops/:shopId/assets` | List community asset definitions for a managed shop. |
+| POST   | `/api/shops/:shopId/assets` | Create a community asset definition for a managed shop. Supported `assetType` values include `badge`, `gift`, `coupon`, `service_ticket`, `collectible`, `content_pass`, and `reward`. |
+| PATCH  | `/api/shops/:shopId/assets/:assetDefinitionId` | Update a managed shop community asset definition, including display fields, transfer flags, metadata, and `status`. |
+| POST   | `/api/shops/:shopId/offers/:offerId/deliverables` | Attach a deliverable to an Offer. Supported `kind` values include `paid_file`, `message`, `external`, `entitlement`, `community_asset`, and `currency`. `community_asset` uses the asset definition id as `resourceId`; `currency` uses `metadata.amount`. |
+| POST   | `/api/commerce/offers/:offerId/purchase` | Buy an active Offer with `{ idempotencyKey, skuId?, destinationKind?, destinationId? }`. Orders complete immediately, grant Entitlements immediately, write seller settlement lines, and enqueue fulfillment. Destination-less fulfillment is supported for asset, entitlement, and currency deliverables. |
 | POST   | `/api/shops/:shopId/products/:productId/purchase` | Compatibility direct purchase path for an entitlement product. New chat flows should buy Offers. |
+| POST   | `/api/servers/:serverId/shop/orders` | Create a server-shop order with `{ idempotencyKey, items: [{ productId, skuId?, quantity }] }`. The idempotency key is required so retries cannot double charge the wallet. |
 | POST   | `/api/messages/:messageId/commerce-cards/:cardId/purchase` | Buy from an Offer card embedded in channel message metadata. |
 | POST   | `/api/dm/messages/:messageId/commerce-cards/:cardId/purchase` | Buy from an Offer card embedded in DM metadata. |
 | GET    | `/api/paid-files/:fileId` | Check paid file metadata and whether the current user has an active entitlement. |
-| POST   | `/api/paid-files/:fileId/open` | Mint a short-lived paid file grant for an entitled user and return a viewer URL. |
-| GET    | `/api/paid-files/:fileId/view/:grantId` | Render a grant-protected paid file. The grant is short-lived and rechecks the entitlement before serving content. |
+| POST   | `/api/paid-files/:fileId/open` | Mint a short-lived paid file grant for an entitled user, set an HttpOnly grant cookie, and return a viewer URL without query-token material. |
+| GET    | `/api/paid-files/:fileId/view/:grantId` | Render a grant-protected paid file. The grant token is accepted from the HttpOnly cookie or `X-Paid-File-Grant-Token` header, and the backing entitlement is rechecked before serving content. |
 | GET    | `/api/entitlements` | List current user's entitlements across shop scopes, enriched with linked shop/product/offer summaries and paid-file metadata when the entitlement targets a paid file. |
 | GET    | `/api/shops/:shopId/entitlements` | Merchant view of entitlements issued by a managed shop. |
 | GET    | `/api/entitlements/:entitlementId/verify` | Verify current entitlement status and provisioning state. |
@@ -321,8 +325,28 @@ Server shops continue to use `/api/servers/:serverId/shop`. Scope-neutral and pe
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| POST | `/api/v1/recharge/create-intent` | Create a Stripe PaymentIntent for wallet recharge with `{ tier, idempotencyKey, customAmount?, currency? }`. The idempotency key is required so retries cannot create duplicate payment intents or payment orders. |
 | GET | `/api/wallet/transactions?audience=consumer&direction=all\|income\|expense&limit=&offset=` | List the current user's wallet transactions. `audience=consumer` returns the ToC display view, excludes internal model-proxy reserve/adjustment ledger entries, and applies the `direction` filter on the server. |
 | GET | `/api/wallet/transactions/count?audience=consumer&direction=all\|income\|expense` | Return the pagination count using the same display filters as the list endpoint. |
+
+## Community Economy
+
+All community economy write endpoints require an `idempotencyKey`. User JWT writes are allowed for the authenticated user's own economy actions; PAT, OAuth, and agent actors must carry the matching `economy:*` scope.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/economy/assets` | List the current user's asset grants with their asset definitions. |
+| GET | `/api/economy/assets/:grantId` | Read one owned asset grant. |
+| POST | `/api/economy/assets/:grantId/consume` | Consume an owned consumable asset grant with `{ idempotencyKey }`. |
+| POST | `/api/economy/assets/:grantId/lock` | Lock an owned active asset grant with `{ idempotencyKey }`. |
+| POST | `/api/economy/assets/:grantId/unlock` | Unlock an owned locked asset grant with `{ idempotencyKey }`. |
+| POST | `/api/economy/assets/:grantId/revoke` | Revoke an owned active or locked asset grant with `{ idempotencyKey, reason? }`. |
+| POST | `/api/economy/tips` | Send a tip with `{ recipientUserId, amount, message?, context?, idempotencyKey }`. The sender is debited immediately and the recipient receives a settlement line. |
+| GET | `/api/economy/tips` | List tips received by the current user. |
+| POST | `/api/economy/gifts` | Send assets and/or Shrimp Coins with `{ recipientUserId, assets?, currencies?, message?, idempotencyKey }`. Asset gifts transfer owned giftable grants; currency gifts debit the sender and create a recipient settlement line. |
+| GET | `/api/economy/gifts` | List gifts received by the current user. |
+| GET | `/api/economy/settlements?limit=&offset=` | List settlement lines owed to the current user. |
+| POST | `/api/economy/settlements/settle` | Move currently available settlement lines into the user's wallet through `LedgerService`. |
 
 ## Notifications
 

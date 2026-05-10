@@ -39,6 +39,7 @@ describe('AuthService', () => {
     isAdmin: false,
     isBot: false,
     status: 'online' as const,
+    economyStatus: 'normal' as const,
     oauthAppId: null,
     parentUserId: null,
     createdAt: new Date(),

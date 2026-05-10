@@ -28,7 +28,9 @@
     "close": "닫기",
     "back": "뒤로",
     "bot": "Buddy",
-    "shrimpCoin": "쉬림프 코인"
+    "shrimpCoin": "쉬림프 코인",
+    "done": "완료",
+    "unknown": "알 수 없음"
   },
   "nav": {
     "features": "기능 소개",
@@ -587,6 +589,9 @@
     "deleteConfirm": "이 메시지를 삭제하시겠습니까?",
     "copyMessage": "메시지 복사",
     "shareLink": "메시지 링크 공유",
+    "sendFailed": "전송 실패",
+    "retry": "다시 시도",
+    "selectMessages": "메시지 선택",
     "loading": "로딩 중...",
     "loadingOlder": "이전 메시지 로딩 중...",
     "downloadFile": "파일 다운로드",
@@ -656,7 +661,8 @@
       "manual_pending": "수동 처리 대기",
       "failed": "배송 오류"
     },
-    "copyFailed": "복사 실패"
+    "copyFailed": "복사 실패",
+    "typing": "입력 중..."
   },
   "member": {
     "online": "온라인",
@@ -847,7 +853,8 @@
     "tagDeploy": "배포",
     "tagCustom": "커스텀",
     "tagMcp": "MCP",
-    "tagApi": "API"
+    "tagApi": "API",
+    "owner": "소유자"
   },
   "pricing": {
     "pageTitle": "간단하고 투명한 요금제",
@@ -1550,7 +1557,8 @@
     "tipSearch": "검색",
     "tipSearchDesc": "사용자 이름으로 빠르게 연락처 찾기",
     "tipAdd": "추가",
-    "tipAddDesc": "+ 아이콘을 눌러 사용자 이름으로 친구 추가"
+    "tipAddDesc": "+ 아이콘을 눌러 사용자 이름으로 친구 추가",
+    "inputPlaceholderToUser": "@{{name}}에게 메시지 보내기"
   },
   "openclaw": {
     "nav": {
@@ -1891,7 +1899,8 @@
     "expense": "지출",
     "transactionNote": "메모",
     "balanceAfter": "잔액",
-    "rechargeBtn": "충전하기"
+    "rechargeBtn": "충전하기",
+    "frozen": "동결"
   },
   "commerce": {
     "myShop": "내 상점",
@@ -2002,6 +2011,8 @@
     "cancelFailed": "취소 실패",
     "noOrders": "배송 기록이 없습니다",
     "buyer": "구매자",
+    "buyerPreview": "구매자 미리보기",
+    "serviceDeliveryHint": "구매자는 크리에이터가 설명한 서비스 권한 또는 수동 제공을 받습니다.",
     "entitlementGroups": {
       "active": "사용 가능한 권한",
       "expiring": "곧 만료됨",
@@ -2016,6 +2027,7 @@
       "service": "가상 서비스",
       "workspace_file": "유료 파일",
       "digital_asset": "디지털 자산",
+      "community_asset": "커뮤니티 자산",
       "subscription": "구독 권한",
       "external_resource": "외부 리소스"
     },
@@ -2328,5 +2340,114 @@
       "deployInfrastructureFailed": "배포 서비스에 일시적인 환경 문제가 발생했습니다. 새우 코인은 자동으로 환불됩니다. 잠시 후 다시 시도하거나 Cloud에서 배포 기록을 확인해 주세요.",
       "deployTimeout": "배포가 아직 진행 중입니다. 잠시 후 Cloud에서 확인해 주세요."
     }
-  }
+  },
+  "communityEconomy": {
+    "assets": "커뮤니티 자산",
+    "settlements": "정산",
+    "actions": "팁과 선물",
+    "assetCount": "자산 {{count}}개",
+    "noAssets": "아직 자산이 없습니다",
+    "noAssetsHint": "구매, 지급, 선물받은 커뮤니티 자산이 여기에 표시됩니다.",
+    "quantity": "수량",
+    "remaining": "남은 수량",
+    "type": "유형",
+    "expiresAt": "만료일",
+    "never": "영구",
+    "consume": "사용",
+    "lock": "잠금",
+    "unlock": "잠금 해제",
+    "revoke": "회수",
+    "settleAvailable": "사용 가능분 정산",
+    "totalLines": "전체",
+    "availableLines": "정산 가능",
+    "pendingNet": "대기 순액",
+    "noSettlements": "정산 내역이 없습니다",
+    "noSettlementsHint": "팁, 선물, 크리에이터 수익은 정산 전 여기에 모입니다.",
+    "availableAt": "사용 가능 시각",
+    "notAvailable": "아직 사용 불가",
+    "settledAt": "정산 시각",
+    "gross": "총액",
+    "fee": "수수료",
+    "net": "순액",
+    "sendTip": "팁 보내기",
+    "sendGift": "선물 보내기",
+    "recipientUserId": "받는 사용자 ID",
+    "amount": "금액",
+    "message": "메시지",
+    "tipSent": "팁을 보냈습니다",
+    "giftSent": "선물을 보냈습니다",
+    "operationFailed": "작업 실패",
+    "currencyGiftAmount": "통화 선물 금액",
+    "assetGift": "자산 선물",
+    "noAssetGift": "자산 포함 안 함",
+    "assetQuantity": "자산 수량",
+    "source": {
+      "tip": "팁",
+      "gift": "선물",
+      "purchase": "구매",
+      "settlement": "정산",
+      "asset": "자산"
+    },
+    "status": {
+      "active": "활성",
+      "locked": "잠김",
+      "consumed": "사용됨",
+      "revoked": "회수됨",
+      "expired": "만료됨",
+      "pending": "대기",
+      "available": "정산 가능",
+      "settled": "정산됨",
+      "held": "보류",
+      "frozen": "동결",
+      "reversed": "취소됨",
+      "failed": "실패",
+      "canceled": "취소됨",
+      "provisioned": "지급됨",
+      "processing": "처리 중"
+    },
+    "allAssetTypes": "전체 유형",
+    "viewAssets": "자산 보기",
+    "purchaseDeliveryStatus": "구매 지급 상태",
+    "deliveryTarget": "지급 대상",
+    "chooseRecipient": "받는 사람 선택",
+    "searchRecipient": "친구 또는 최근 채팅 검색",
+    "noRecipients": "선택할 연락처가 없습니다. 프로필이나 채팅에서 바로 보낼 수 있습니다.",
+    "sendTo": "받는 사람",
+    "customAmount": "직접 입력",
+    "chooseAsset": "자산 선택",
+    "noGiftableAssets": "선물 가능한 자산이 없습니다",
+    "confirmation": "확인",
+    "deliveryType": "구매자가 받을 항목",
+    "assetDelivery": "자산 지급",
+    "assetDeliveryHint": "구매가 완료되면 자산이 구매자의 자산 라이브러리에 지급됩니다.",
+    "assetDefinitionsCount": "자산 템플릿 {{count}}개",
+    "assetNamePlaceholder": "구매자에게 보일 자산 이름",
+    "assetDescriptionPlaceholder": "이 자산에 대한 짧은 설명",
+    "deliveryPreset": {
+      "service": "서비스 권한",
+      "badge": "배지",
+      "gift": "디지털 선물",
+      "service_ticket": "서비스 티켓"
+    },
+    "deliveryPresetHint": {
+      "service": "접근 권한, 멤버십, 파일, 수동 서비스 제공에 적합합니다.",
+      "badge": "후원자나 멤버를 위한 영구 배지입니다.",
+      "gift": "양도하거나 수집할 수 있는 디지털 선물입니다.",
+      "service_ticket": "1회 서비스나 이벤트에 사용할 수 있는 티켓입니다."
+    },
+    "tipEntryTitle": "빠르게 응원 보내기",
+    "tipEntryHint": "친구나 최근 채팅을 선택하고 금액과 짧은 메시지를 더해 보낼 수 있습니다.",
+    "giftEntryTitle": "코인과 보유 자산 선물하기",
+    "giftEntryHint": "새우 코인, 배지, 디지털 선물, 서비스 티켓을 자산함에서 보낼 수 있습니다.",
+    "estimatedBalanceAfter": "보낸 후 잔액",
+    "insufficientBalance": "현재 잔액이 부족해 보낼 수 없습니다.",
+    "assetQuantityExceeded": "선물 수량이 현재 보유 수량을 초과했습니다.",
+    "sentTo": "{{name}}님에게 보냈습니다",
+    "sendAnother": "한 번 더 보내기",
+    "confirm": {
+      "consume": "이 자산을 지금 사용하시겠습니까? 남은 수량이 줄어들 수 있습니다.",
+      "revoke": "이 자산을 회수하시겠습니까? 이 작업은 되돌릴 수 없습니다."
+    }
+  },
+  "buddy": "Buddy"
 }

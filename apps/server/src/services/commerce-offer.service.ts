@@ -205,7 +205,7 @@ export class CommerceOfferService {
   async createDeliverable(input: {
     offerId: string
     productId?: string
-    kind?: 'paid_file' | 'message' | 'external'
+    kind?: 'paid_file' | 'message' | 'external' | 'entitlement' | 'community_asset' | 'currency'
     resourceType?: string
     resourceId: string
     senderBuddyUserId?: string | null

@@ -64,16 +64,44 @@ function checkWalletCreditBoundary() {
     )
   }
   for (const relPath of walk('apps/server/src', /\.(ts|tsx)$/)) {
-    if (
-      relPath === 'apps/server/src/dao/wallet.dao.ts' ||
-      relPath === 'apps/server/src/services/ledger.service.ts'
-    ) {
+    if (relPath === 'apps/server/src/services/ledger.service.ts') {
       continue
     }
     assertNoRegex(
       relPath,
       /walletDao\.(?:credit|debit|updateBalance)\(/g,
       'wallet balance mutations must go through LedgerService',
+    )
+    assertNoRegex(
+      relPath,
+      /db\s*\.\s*update\(\s*wallets\s*\)|tx\s*\.\s*update\(\s*wallets\s*\)/g,
+      'direct wallets table updates must go through LedgerService',
+    )
+    assertNoRegex(
+      relPath,
+      /\$\{\s*wallets\.balance\s*\}\s*[+-]/g,
+      'wallet balance arithmetic must be isolated to LedgerService',
+    )
+  }
+}
+
+function checkCommunityAssetGrantBoundary() {
+  for (const relPath of walk('apps/server/src', /\.(ts|tsx)$/)) {
+    if (
+      relPath === 'apps/server/src/services/community-asset.service.ts' ||
+      relPath.startsWith('apps/server/src/db/schema/')
+    ) {
+      continue
+    }
+    assertNoRegex(
+      relPath,
+      /(?:db|tx)\s*\.\s*(?:insert|update|delete)\(\s*communityAssetGrants\s*\)/g,
+      'community asset grant mutations must go through CommunityAssetService',
+    )
+    assertNoRegex(
+      relPath,
+      /\$\{\s*communityAssetGrants\.(?:ownerUserId|status|remainingQuantity)\s*\}\s*[+-]/g,
+      'community asset owner/status/quantity arithmetic must stay inside CommunityAssetService',
     )
   }
 }
@@ -145,6 +173,7 @@ function checkSecurityGuardsStillWired() {
 function main() {
   checkTypedJwtVerification()
   checkWalletCreditBoundary()
+  checkCommunityAssetGrantBoundary()
   checkMediaBoundary()
   checkCloudRuntimeSecrets()
   checkSecurityGuardsStillWired()

@@ -15,6 +15,7 @@ import { createCloudSaasHandler } from './handlers/cloud-saas.handler'
 import { createConfigHandler } from './handlers/config.handler'
 import { createDiscoverHandler } from './handlers/discover.handler'
 import { createDmHandler } from './handlers/dm.handler'
+import { createEconomyHandler } from './handlers/economy.handler'
 import { createFeatureFlagsHandler } from './handlers/feature-flags.handler'
 import { createFriendshipHandler } from './handlers/friendship.handler'
 import { createInviteHandler } from './handlers/invite.handler'
@@ -209,6 +210,7 @@ export function createApp(container: AppContainer) {
   app.route('/api/admin', createAdminHandler(container))
   app.route('/api', createTaskCenterHandler(container))
   app.route('/api', createShopHandler(container))
+  app.route('/api/economy', createEconomyHandler(container))
   app.route('/api', createRentalHandler(container))
   app.route('/api/profile-comments', createProfileCommentHandler(container))
   app.route('/api/voice', createVoiceEnhanceHandler(container))

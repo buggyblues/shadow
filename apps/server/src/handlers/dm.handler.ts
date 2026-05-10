@@ -6,6 +6,7 @@ import type { AppContainer } from '../container'
 import { relayDmToBot } from '../lib/dm-relay'
 import { logger } from '../lib/logger'
 import { authMiddleware } from '../middleware/auth.middleware'
+import { sendMessageSchema } from '../validators/message.schema'
 
 export function createDmHandler(container: AppContainer) {
   const dmHandler = new Hono()
@@ -60,97 +61,76 @@ export function createDmHandler(container: AppContainer) {
   })
 
   // POST /api/dm/channels/:id/messages
-  dmHandler.post(
-    '/channels/:id/messages',
-    zValidator(
-      'json',
-      z.object({
-        content: z.string().min(1).max(LIMITS.MESSAGE_CONTENT_MAX),
-        replyToId: z.string().uuid().optional(),
-        metadata: z.record(z.unknown()).optional(),
-        attachments: z
-          .array(
-            z.object({
-              filename: z.string(),
-              url: z.string(),
-              contentType: z.string(),
-              size: z.number(),
-            }),
-          )
-          .optional(),
-      }),
-    ),
-    async (c) => {
-      const dmService = container.resolve('dmService')
-      const id = c.req.param('id')
-      const { content, replyToId, attachments, metadata } = c.req.valid('json')
-      const user = c.get('user')
+  dmHandler.post('/channels/:id/messages', zValidator('json', sendMessageSchema), async (c) => {
+    const dmService = container.resolve('dmService')
+    const id = c.req.param('id')
+    const { content, replyToId, attachments, metadata } = c.req.valid('json')
+    const user = c.get('user')
 
-      // Verify participant
-      const isParticipant = await dmService.isParticipant(id, user.userId)
-      if (!isParticipant) {
-        return c.json({ ok: false, error: 'Not a participant of this DM channel' }, 403)
-      }
-      const commerceCardService = container.resolve('commerceCardService')
-      const normalizedMetadata = await commerceCardService.inferMessageMetadata({
-        metadata,
-        target: { kind: 'dm', dmChannelId: id },
-        authorId: user.userId,
-        content,
-      })
+    // Verify participant
+    const isParticipant = await dmService.isParticipant(id, user.userId)
+    if (!isParticipant) {
+      return c.json({ ok: false, error: 'Not a participant of this DM channel' }, 403)
+    }
+    const commerceCardService = container.resolve('commerceCardService')
+    const normalizedMetadata = await commerceCardService.inferMessageMetadata({
+      metadata,
+      target: { kind: 'dm', dmChannelId: id },
+      authorId: user.userId,
+      content,
+    })
 
-      const message = await dmService.sendMessage(
-        id,
-        user.userId,
-        content,
-        replyToId,
-        attachments,
-        normalizedMetadata,
-      )
+    const message = await dmService.sendMessage(
+      id,
+      user.userId,
+      content,
+      replyToId,
+      attachments,
+      normalizedMetadata,
+    )
 
-      // Broadcast to DM room via WebSocket
-      const io = container.resolve('io')
-      io.to(`dm:${id}`).emit('dm:message', message)
+    // Broadcast to DM room via WebSocket
+    const io = container.resolve('io')
+    io.to(`dm:${id}`).emit('dm:message', message)
 
-      // Relay to bot user if recipient is a bot (for AI processing)
-      try {
-        const channel = await dmService.getChannelById(id)
-        if (channel) {
-          const otherUserId = channel.userAId === user.userId ? channel.userBId : channel.userAId
-          const notificationTriggerService = container.resolve('notificationTriggerService')
-          const senderName = message.author?.displayName ?? message.author?.username ?? 'Someone'
-          await notificationTriggerService.triggerDm({
-            userId: otherUserId,
-            actorId: user.userId,
-            actorName: senderName,
-            dmChannelId: id,
-            preview: content.substring(0, 200),
-          })
+    // Relay to bot user if recipient is a bot (for AI processing)
+    try {
+      const channel = await dmService.getChannelById(id)
+      if (channel) {
+        const otherUserId = channel.userAId === user.userId ? channel.userBId : channel.userAId
+        const notificationTriggerService = container.resolve('notificationTriggerService')
+        const senderName = message.author?.displayName ?? message.author?.username ?? 'Someone'
+        await notificationTriggerService.triggerDm({
+          userId: otherUserId,
+          actorId: user.userId,
+          actorName: senderName,
+          dmChannelId: id,
+          preview: content.substring(0, 200),
+        })
 
-          await relayDmToBot(io, container, id, user.userId, otherUserId, {
-            id: message.id!,
-            content: message.content!,
-            author: message.author,
-            createdAt: message.createdAt,
-            replyToId: message.replyToId,
-            attachments: message.attachments,
-          })
+        await relayDmToBot(io, container, id, user.userId, otherUserId, {
+          id: message.id!,
+          content: message.content!,
+          author: message.author,
+          createdAt: message.createdAt,
+          replyToId: message.replyToId,
+          attachments: message.attachments,
+        })
 
-          // Record rental message for billing (fire-and-forget)
-          try {
-            const rentalService = container.resolve('rentalService')
-            await rentalService.recordRentalMessage(user.userId, otherUserId)
-          } catch {
-            /* non-critical */
-          }
+        // Record rental message for billing (fire-and-forget)
+        try {
+          const rentalService = container.resolve('rentalService')
+          await rentalService.recordRentalMessage(user.userId, otherUserId)
+        } catch {
+          /* non-critical */
         }
-      } catch (err) {
-        logger.error({ err, dmChannelId: id }, 'REST: Bot DM relay failed')
       }
+    } catch (err) {
+      logger.error({ err, dmChannelId: id }, 'REST: Bot DM relay failed')
+    }
 
-      return c.json(message, 201)
-    },
-  )
+    return c.json(message, 201)
+  })
 
   // PATCH /api/dm/channels/:channelId/messages/:messageId — edit a DM message
   dmHandler.patch(

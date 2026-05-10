@@ -1,7 +1,8 @@
+import { createHash } from 'node:crypto'
 import { and, eq, ne } from 'drizzle-orm'
 import type { RechargeDao } from '../dao/recharge.dao'
 import type { Database } from '../db'
-import { paymentOrders } from '../db/schema'
+import { paymentOrders, paymentProviderEvents, riskCases } from '../db/schema'
 import {
   CUSTOM_AMOUNT_MAX,
   CUSTOM_AMOUNT_MIN,
@@ -11,8 +12,25 @@ import {
   shrimpCoinsToUsdCents,
   stripe,
 } from '../lib/stripe'
+import { type Actor, actorFromUserId } from '../security/actor'
+import type { EconomyAuditService } from './economy-audit.service'
+import type { EconomyIdempotencyService } from './economy-idempotency.service'
+import type { EconomyPolicyService } from './economy-policy.service'
 import type { LedgerService } from './ledger.service'
 import type { NotificationTriggerService } from './notification-trigger.service'
+
+function supportedStripeCurrencies() {
+  return new Set(
+    (process.env.SUPPORTED_STRIPE_CURRENCIES ?? 'usd')
+      .split(',')
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean),
+  )
+}
+
+function hashPayload(value: unknown) {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex')
+}
 
 export class RechargeService {
   constructor(
@@ -20,6 +38,9 @@ export class RechargeService {
       rechargeDao: RechargeDao
       db: Database
       ledgerService: LedgerService
+      economyPolicyService: EconomyPolicyService
+      economyAuditService: EconomyAuditService
+      economyIdempotencyService: EconomyIdempotencyService
       notificationTriggerService: NotificationTriggerService
     },
   ) {}
@@ -49,9 +70,47 @@ export class RechargeService {
     tier: RechargeTierKey | 'custom',
     customAmount?: number,
     currency = 'usd',
+    actor: Actor = actorFromUserId(userId),
+    idempotencyKey?: string,
   ) {
     if (!stripe) {
       throw Object.assign(new Error('Payment service unavailable'), { status: 503 })
+    }
+
+    await this.deps.economyPolicyService.authorize({
+      actor,
+      action: 'recharge.create',
+      resource: { kind: 'payment_order' },
+      scope: { kind: 'wallet', id: userId },
+      dataClass: 'financial',
+      targetUserId: userId,
+    })
+
+    if (!idempotencyKey) {
+      throw Object.assign(new Error('idempotencyKey is required'), {
+        status: 400,
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+      })
+    }
+
+    const cached = await this.deps.economyIdempotencyService.getCompleted<{
+      clientSecret: string
+      paymentIntentId: string
+      orderNo: string
+      amount: { shrimpCoins: number; usdCents: number }
+    }>({
+      actorUserId: userId,
+      key: idempotencyKey,
+      action: 'recharge.create-intent',
+    })
+    if (cached) return cached
+
+    const normalizedCurrency = currency.toLowerCase()
+    if (!supportedStripeCurrencies().has(normalizedCurrency)) {
+      throw Object.assign(new Error('Unsupported payment currency'), {
+        status: 400,
+        code: 'UNSUPPORTED_PAYMENT_CURRENCY',
+      })
     }
 
     // Determine amounts
@@ -84,38 +143,86 @@ export class RechargeService {
 
     const orderNo = generateOrderNo()
 
-    // Create Stripe PaymentIntent
-    const paymentIntent = await stripe.paymentIntents.create(
-      {
-        amount: usdCents,
-        currency,
-        automatic_payment_methods: { enabled: true },
-        metadata: {
-          userId,
-          orderNo,
-          shrimpCoins: String(shrimpCoins),
-        },
-      },
-      { idempotencyKey: `recharge-${orderNo}` },
-    )
-
-    // Create local payment order record
-    const order = await this.deps.rechargeDao.createPaymentOrder({
-      userId,
-      orderNo,
-      shrimpCoinAmount: shrimpCoins,
-      usdAmount: usdCents,
-      stripePaymentIntentId: paymentIntent.id,
+    await this.deps.economyIdempotencyService.begin({
+      actorUserId: userId,
+      key: idempotencyKey,
+      action: 'recharge.create-intent',
     })
 
-    return {
-      clientSecret: paymentIntent.client_secret!,
-      paymentIntentId: paymentIntent.id,
-      orderNo: order.orderNo,
-      amount: {
-        shrimpCoins,
-        usdCents,
-      },
+    try {
+      // Create Stripe PaymentIntent
+      const paymentIntent = await stripe.paymentIntents.create(
+        {
+          amount: usdCents,
+          currency: normalizedCurrency,
+          automatic_payment_methods: { enabled: true },
+          metadata: {
+            userId,
+            orderNo,
+            shrimpCoins: String(shrimpCoins),
+          },
+        },
+        { idempotencyKey: `recharge-${userId}-${idempotencyKey}` },
+      )
+
+      // Create local payment order record
+      const order = await this.deps.rechargeDao.createPaymentOrder({
+        userId,
+        orderNo,
+        shrimpCoinAmount: shrimpCoins,
+        usdAmount: usdCents,
+        stripePaymentIntentId: paymentIntent.id,
+      })
+
+      await this.deps.economyAuditService.record({
+        actor,
+        action: 'recharge.create-intent',
+        resource: { kind: 'payment_order', id: order.id },
+        scope: { kind: 'wallet', id: userId },
+        idempotencyKey,
+        request: { tier, customAmount, currency: normalizedCurrency },
+        result: 'succeeded',
+        metadata: { stripePaymentIntentId: paymentIntent.id, shrimpCoins, usdCents },
+      })
+
+      const response = {
+        clientSecret: paymentIntent.client_secret!,
+        paymentIntentId: paymentIntent.id,
+        orderNo: order.orderNo,
+        amount: {
+          shrimpCoins,
+          usdCents,
+        },
+      }
+
+      await this.deps.economyIdempotencyService.complete({
+        actorUserId: userId,
+        key: idempotencyKey,
+        action: 'recharge.create-intent',
+        referenceId: order.id,
+        response,
+      })
+
+      return response
+    } catch (err) {
+      const errorCode = (err as { code?: string }).code ?? 'RECHARGE_CREATE_INTENT_FAILED'
+      await this.deps.economyIdempotencyService.fail({
+        actorUserId: userId,
+        key: idempotencyKey,
+        action: 'recharge.create-intent',
+        error: errorCode,
+      })
+      await this.deps.economyAuditService.record({
+        actor,
+        action: 'recharge.create-intent',
+        resource: { kind: 'payment_order' },
+        scope: { kind: 'wallet', id: userId },
+        idempotencyKey,
+        request: { tier, customAmount, currency: normalizedCurrency },
+        result: 'failed',
+        errorCode,
+      })
+      throw err
     }
   }
 
@@ -123,23 +230,77 @@ export class RechargeService {
    * Handle Stripe webhook events.
    * This is the primary way payments are confirmed — NOT client-side confirmation.
    */
-  async handleWebhookEvent(event: { type: string; data: { object: Record<string, unknown> } }) {
+  async handleWebhookEvent(event: {
+    id?: string
+    type: string
+    data: { object: Record<string, unknown> }
+  }) {
+    const providerEventId =
+      event.id ??
+      `${event.type}:${typeof event.data.object.id === 'string' ? event.data.object.id : hashPayload(event)}`
+    const payloadHash = hashPayload(event)
+    const inserted = await this.deps.db
+      .insert(paymentProviderEvents)
+      .values({
+        provider: 'stripe',
+        providerEventId,
+        eventType: event.type,
+        payloadHash,
+        status: 'processing',
+      })
+      .onConflictDoNothing()
+      .returning({ id: paymentProviderEvents.id })
+
+    if (inserted.length === 0) return
+
     const obj = event.data.object
 
-    switch (event.type) {
-      case 'payment_intent.succeeded':
-        await this.handlePaymentSucceeded(obj)
-        break
-      case 'payment_intent.payment_failed':
-        await this.handlePaymentFailed(obj)
-        break
-      case 'payment_intent.canceled':
-        await this.handlePaymentCanceled(obj)
-        break
-      case 'charge.dispute.created':
-        await this.handleDisputeCreated(obj)
-        break
+    try {
+      switch (event.type) {
+        case 'payment_intent.succeeded':
+          await this.handlePaymentSucceeded(obj)
+          break
+        case 'payment_intent.payment_failed':
+          await this.handlePaymentFailed(obj)
+          break
+        case 'payment_intent.canceled':
+          await this.handlePaymentCanceled(obj)
+          break
+        case 'charge.dispute.created':
+          await this.handleDisputeCreated(obj)
+          break
+        default:
+          await this.markProviderEvent(providerEventId, 'ignored')
+          return
+      }
+      await this.markProviderEvent(providerEventId, 'processed')
+    } catch (err) {
+      await this.markProviderEvent(providerEventId, 'failed', {
+        errorCode: (err as { code?: string }).code ?? 'STRIPE_WEBHOOK_PROCESSING_FAILED',
+      })
+      throw err
     }
+  }
+
+  private async markProviderEvent(
+    providerEventId: string,
+    status: 'processed' | 'failed' | 'ignored',
+    opts?: { errorCode?: string },
+  ) {
+    await this.deps.db
+      .update(paymentProviderEvents)
+      .set({
+        status,
+        errorCode: opts?.errorCode,
+        processedAt: status === 'processed' || status === 'ignored' ? new Date() : undefined,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(paymentProviderEvents.provider, 'stripe'),
+          eq(paymentProviderEvents.providerEventId, providerEventId),
+        ),
+      )
   }
 
   private async handlePaymentSucceeded(paymentIntent: Record<string, unknown>) {
@@ -210,8 +371,28 @@ export class RechargeService {
     if (!order) return
 
     await this.deps.rechargeDao.updateStatus(order.id, 'disputed')
-    // Log the dispute for manual review
-    console.error(`[DISPUTE] Order ${order.orderNo} disputed. PaymentIntent: ${piId}`)
+    await this.deps.db.insert(riskCases).values({
+      userId: order.userId,
+      resourceType: 'payment_order',
+      resourceId: order.id,
+      kind: 'payment_dispute',
+      status: 'open',
+      severity: 'high',
+      metadata: { stripePaymentIntentId: piId, disputeId: dispute.id },
+    })
+
+    await this.deps.economyAuditService.record({
+      actor: {
+        kind: 'system',
+        service: 'stripe-webhook',
+        capabilities: ['economy:recharge:write'],
+      },
+      action: 'recharge.dispute.created',
+      resource: { kind: 'payment_order', id: order.id },
+      scope: { kind: 'wallet', id: order.userId },
+      result: 'succeeded',
+      metadata: { stripePaymentIntentId: piId, orderNo: order.orderNo },
+    })
   }
 
   /** Get a user's recharge history. */

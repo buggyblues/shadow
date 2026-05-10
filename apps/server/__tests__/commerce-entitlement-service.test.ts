@@ -4,6 +4,7 @@ import {
   agents,
   commerceDeliverables,
   commerceFulfillmentJobs,
+  commerceFulfillmentRecords,
   commerceIdempotencyKeys,
   entitlements,
   orders,
@@ -434,6 +435,9 @@ describe('EntitlementPurchaseService', () => {
       credit: vi.fn(async () => undefined),
       debit: vi.fn(async () => undefined),
     }
+    const settlementService = {
+      createLine: vi.fn(async () => ({ id: 'settlement-line-1' })),
+    }
     const commerceFulfillmentService = {
       processJobs: vi.fn(async () => [{ id: fulfillmentJobId, status: 'sent' }]),
     }
@@ -470,6 +474,13 @@ describe('EntitlementPurchaseService', () => {
         listDeliverablesForOffer: vi.fn(async () => [deliverable]),
       } as any,
       commerceFulfillmentService: commerceFulfillmentService as any,
+      economyPolicyService: {
+        authorize: vi.fn(async () => ({ ok: true })),
+      } as any,
+      economyAuditService: {
+        record: vi.fn(async () => undefined),
+      } as any,
+      settlementService: settlementService as any,
     })
 
     const result = await service.purchaseOffer({
@@ -488,16 +499,17 @@ describe('EntitlementPurchaseService', () => {
       }),
       expect.anything(),
     )
-    expect(ledgerService.credit).toHaveBeenCalledWith(
+    expect(settlementService.createLine).toHaveBeenCalledWith(
       expect.objectContaining({
-        userId: ownerId,
-        amount: 900,
-        type: 'settlement',
-        referenceId: orderId,
-        referenceType: 'order',
+        sellerUserId: ownerId,
+        shopId,
+        sourceType: 'order',
+        sourceId: orderId,
+        grossAmount: 900,
       }),
       expect.anything(),
     )
+    expect(ledgerService.credit).not.toHaveBeenCalled()
     expect(db.inserts.find((entry) => entry.table === entitlements)?.data).toMatchObject({
       userId: buyerId,
       productId,
@@ -630,14 +642,14 @@ describe('PaidFileService', () => {
     })
 
     const opened = await service.openPaidFile(buyerId, fileId)
-    const viewerUrl = new URL(opened.viewerUrl, 'http://shadow.test')
     const read = await service.readGrantFile({
       fileId,
       grantId: opened.grant.id,
-      token: viewerUrl.searchParams.get('token'),
+      token: opened.grantToken,
     })
 
     expect(opened.viewerUrl).toContain(`/api/paid-files/${fileId}/view/${opened.grant.id}`)
+    expect(opened.viewerUrl).not.toContain('token=')
     expect(read.file).toMatchObject({ id: fileId, mime: 'text/html' })
     expect(read.buffer.toString('utf8')).toBe('<html>match</html>')
   })
@@ -674,13 +686,12 @@ describe('PaidFileService', () => {
       } as any,
     })
     const opened = await service.openPaidFile(buyerId, fileId)
-    const viewerUrl = new URL(opened.viewerUrl, 'http://shadow.test')
 
     await expect(
       service.readGrantFile({
         fileId,
         grantId: opened.grant.id,
-        token: viewerUrl.searchParams.get('token'),
+        token: opened.grantToken,
       }),
     ).rejects.toMatchObject({ code: 'PAID_FILE_ENTITLEMENT_REQUIRED' })
   })
@@ -705,7 +716,9 @@ describe('paid file routes', () => {
       },
     } as any)
 
-    const response = await app.request(`/api/paid-files/${fileId}/view/grant-1?token=grant-token`)
+    const response = await app.request(`/api/paid-files/${fileId}/view/grant-1`, {
+      headers: { 'x-paid-file-grant-token': 'grant-token' },
+    })
 
     expect(response.status).toBe(200)
     expect(response.headers.get('content-security-policy')).toContain("default-src 'none'")
@@ -764,7 +777,9 @@ function createFileNode(overrides: Record<string, unknown> = {}) {
 }
 
 function createFulfillmentDb(job: Record<string, unknown>, deliverable: Record<string, unknown>) {
+  const records: Record<string, unknown>[] = []
   return {
+    records,
     select: () => ({
       table: null as unknown,
       from(table: unknown) {
@@ -777,7 +792,20 @@ function createFulfillmentDb(job: Record<string, unknown>, deliverable: Record<s
       limit() {
         if (this.table === commerceFulfillmentJobs) return Promise.resolve([job])
         if (this.table === commerceDeliverables) return Promise.resolve([deliverable])
+        if (this.table === commerceFulfillmentRecords) return Promise.resolve(records.slice(0, 1))
         return Promise.resolve([])
+      },
+    }),
+    insert: (table: unknown) => ({
+      values(data: Record<string, unknown>) {
+        if (table === commerceFulfillmentRecords) records.push(data)
+        return this
+      },
+      onConflictDoNothing() {
+        return this
+      },
+      then(resolve: (value: unknown) => void) {
+        return Promise.resolve(undefined).then(resolve)
       },
     }),
     update: (table: unknown) => createUpdateBuilder(table, { job }),

@@ -57,8 +57,9 @@ client.channels.join("channel-uuid")
 | `servers`   | `list`, `create`, `get`, `update`, `delete`, `join`, `leave` |
 | `channels`  | `list`, `create`, `get`, `update`, `delete`, `join`, `leave` |
 | `messages`  | `list`, `send`, `get`, `update`, `delete`     |
-| `commerce`  | `getMyShop`, `getManagedUserShop`, `listCommerceProductCards`, `getCommerceOfferCheckoutPreview`, `purchaseShopProduct`, `purchaseMessageCommerceCard`, `purchaseDmMessageCommerceCard`, `verifyEntitlement`, `getAllEntitlements`, `cancelEntitlement`, push-channel preference helpers |
-| `wallet`    | `getWallet`, `getWalletTransactions({ audience, direction, limit, offset })` |
+| `commerce`  | `getMyShop`, `getManagedUserShop`, `listCommerceProductCards`, `getCommerceOfferCheckoutPreview`, `purchaseShopProduct`, `createShopAssetDefinition`, `updateShopAssetDefinition`, `listShopAssetDefinitions`, `purchaseMessageCommerceCard`, `purchaseDmMessageCommerceCard`, `verifyEntitlement`, `getAllEntitlements`, `cancelEntitlement`, push-channel preference helpers |
+| `community economy` | `listCommunityAssets`, `consumeCommunityAsset`, `lockCommunityAsset`, `unlockCommunityAsset`, `revokeCommunityAsset`, `sendTip`, `listTips`, `sendGift`, `listGifts`, `listSettlements`, `settleAvailableSettlements` |
+| `wallet`    | `getWallet`, `getWalletTransactions({ audience, direction, limit, offset })`, `createRechargeIntent({ tier, idempotencyKey })` |
 | `members`   | `list`, `get`, `kick`, `updateRole`           |
 | `upload`    | `file`                                        |
 
@@ -78,11 +79,44 @@ await authedClient.purchaseShopProduct("shop-uuid", "product-uuid", {
   idempotencyKey: crypto.randomUUID(),
 })
 
+await authedClient.createOrder("server-uuid", {
+  idempotencyKey: crypto.randomUUID(),
+  items: [{ productId: "product-uuid", quantity: 1 }],
+})
+
+await authedClient.createRechargeIntent({
+  tier: "1000",
+  idempotencyKey: crypto.randomUUID(),
+})
+
 await authedClient.updateNotificationChannelPreference({
   kind: "commerce.renewal_failed",
   channel: "mobile_push",
   enabled: true,
 })
+```
+
+### Community Economy
+
+```typescript
+await authedClient.sendTip({
+  recipientUserId: "user-uuid",
+  amount: 100,
+  idempotencyKey: crypto.randomUUID(),
+})
+
+await authedClient.sendGift({
+  recipientUserId: "user-uuid",
+  currencies: [{ currencyCode: "shrimp_coin", amount: 50 }],
+  idempotencyKey: crypto.randomUUID(),
+})
+
+const { assets } = await authedClient.listCommunityAssets()
+if (assets[0]?.definition.consumable) {
+  await authedClient.consumeCommunityAsset(assets[0].grant.id, {
+    idempotencyKey: crypto.randomUUID(),
+  })
+}
 ```
 
 ### Membership And Play Launch
@@ -192,6 +226,12 @@ authed_client.purchase_shop_product(
     "shop-uuid",
     "product-uuid",
     idempotency_key="purchase-idempotency-key",
+)
+
+authed_client.send_tip(
+    recipient_user_id="user-uuid",
+    amount=100,
+    idempotency_key="tip-idempotency-key",
 )
 
 authed_client.update_notification_channel_preference(

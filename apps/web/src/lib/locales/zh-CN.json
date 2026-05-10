@@ -28,7 +28,9 @@
     "close": "关闭",
     "back": "返回",
     "bot": "Buddy",
-    "shrimpCoin": "虾币"
+    "shrimpCoin": "虾币",
+    "done": "完成",
+    "unknown": "未知"
   },
   "nav": {
     "features": "特色功能",
@@ -775,6 +777,9 @@
     "deleteConfirm": "确定要删除这条消息吗？",
     "copyMessage": "复制消息",
     "shareLink": "分享消息链接",
+    "sendFailed": "发送失败",
+    "retry": "重试",
+    "selectMessages": "多选消息",
     "loading": "加载中...",
     "loadingOlder": "加载更早的消息...",
     "downloadFile": "下载文件",
@@ -844,7 +849,8 @@
       "manual_pending": "待人工处理",
       "failed": "发货异常"
     },
-    "copyFailed": "复制失败"
+    "copyFailed": "复制失败",
+    "typing": "正在输入..."
   },
   "member": {
     "online": "在线",
@@ -1035,7 +1041,8 @@
     "tagDeploy": "部署",
     "tagCustom": "自定义",
     "tagMcp": "MCP",
-    "tagApi": "API"
+    "tagApi": "API",
+    "owner": "所有者"
   },
   "pricing": {
     "pageTitle": "简单透明的定价",
@@ -1738,7 +1745,8 @@
     "tipSearch": "搜索",
     "tipSearchDesc": "输入用户名快速定位联系人",
     "tipAdd": "添加",
-    "tipAddDesc": "点击 + 图标通过用户名添加好友"
+    "tipAddDesc": "点击 + 图标通过用户名添加好友",
+    "inputPlaceholderToUser": "给 @{{name}} 发送消息"
   },
   "openclaw": {
     "nav": {
@@ -2089,7 +2097,8 @@
     "expense": "支出",
     "transactionNote": "备注",
     "balanceAfter": "余额",
-    "rechargeBtn": "去充值"
+    "rechargeBtn": "去充值",
+    "frozen": "冻结"
   },
   "commerce": {
     "myShop": "我的店铺",
@@ -2200,6 +2209,8 @@
     "cancelFailed": "取消失败",
     "noOrders": "暂无发货记录",
     "buyer": "买家",
+    "buyerPreview": "买家预览",
+    "serviceDeliveryHint": "买家会获得创作者描述的服务权益或人工交付。",
     "entitlementGroups": {
       "active": "可用权益",
       "expiring": "即将到期",
@@ -2214,6 +2225,7 @@
       "service": "虚拟服务",
       "workspace_file": "付费文件",
       "digital_asset": "数字资产",
+      "community_asset": "社区资产",
       "subscription": "订阅权益",
       "external_resource": "外部资源"
     },
@@ -2328,5 +2340,114 @@
       "pricingTitle": "算力你全有。",
       "pricingDesc": "Shop 的收入覆盖算力成本 — 创作者承担基础设施，同时保留资源归属。"
     }
-  }
+  },
+  "communityEconomy": {
+    "assets": "社区资产",
+    "settlements": "结算",
+    "actions": "打赏与赠送",
+    "assetCount": "{{count}} 个资产",
+    "noAssets": "暂无资产",
+    "noAssetsHint": "购买、发放或收到的社区资产会显示在这里。",
+    "quantity": "数量",
+    "remaining": "剩余",
+    "type": "类型",
+    "expiresAt": "到期时间",
+    "never": "永久",
+    "consume": "消费",
+    "lock": "锁定",
+    "unlock": "解锁",
+    "revoke": "撤销",
+    "settleAvailable": "结算可用项",
+    "totalLines": "总数",
+    "availableLines": "可结算",
+    "pendingNet": "待入账净额",
+    "noSettlements": "暂无结算记录",
+    "noSettlementsHint": "打赏、赠送和创作者收入会先进入这里，再按周期结算。",
+    "availableAt": "可用时间",
+    "notAvailable": "暂不可用",
+    "settledAt": "结算时间",
+    "gross": "总额",
+    "fee": "费用",
+    "net": "净额",
+    "sendTip": "发送打赏",
+    "sendGift": "发送赠送",
+    "recipientUserId": "接收方用户 ID",
+    "amount": "金额",
+    "message": "留言",
+    "tipSent": "打赏已发送",
+    "giftSent": "赠送已发送",
+    "operationFailed": "操作失败",
+    "currencyGiftAmount": "虾币赠送金额",
+    "assetGift": "资产赠送",
+    "noAssetGift": "不赠送资产",
+    "assetQuantity": "资产数量",
+    "source": {
+      "tip": "打赏",
+      "gift": "赠送",
+      "purchase": "购买",
+      "settlement": "结算",
+      "asset": "资产"
+    },
+    "status": {
+      "active": "可用",
+      "locked": "已锁定",
+      "consumed": "已消费",
+      "revoked": "已撤销",
+      "expired": "已过期",
+      "pending": "待结算",
+      "available": "可结算",
+      "settled": "已结算",
+      "held": "暂挂",
+      "frozen": "冻结",
+      "reversed": "已冲正",
+      "failed": "失败",
+      "canceled": "已取消",
+      "provisioned": "已发放",
+      "processing": "处理中"
+    },
+    "allAssetTypes": "全部类型",
+    "viewAssets": "查看资产",
+    "purchaseDeliveryStatus": "购买发放状态",
+    "deliveryTarget": "发放对象",
+    "chooseRecipient": "选择接收人",
+    "searchRecipient": "搜索好友或最近聊天",
+    "noRecipients": "暂无可选联系人。可以从用户主页或聊天窗口直接发起。",
+    "sendTo": "发送给",
+    "customAmount": "自定义金额",
+    "chooseAsset": "选择资产",
+    "noGiftableAssets": "暂无可赠送资产",
+    "confirmation": "确认发送",
+    "deliveryType": "买家将获得",
+    "assetDelivery": "资产发放",
+    "assetDeliveryHint": "购买完成后，资产会进入买家的资产库。",
+    "assetDefinitionsCount": "{{count}} 个资产模板",
+    "assetNamePlaceholder": "买家看到的资产名称",
+    "assetDescriptionPlaceholder": "这份资产的简短说明",
+    "deliveryPreset": {
+      "service": "服务权益",
+      "badge": "身份徽章",
+      "gift": "数字礼物",
+      "service_ticket": "服务券"
+    },
+    "deliveryPresetHint": {
+      "service": "适合访问权限、会员、文件或人工服务交付。",
+      "badge": "适合粉丝、成员或早鸟身份的永久徽章。",
+      "gift": "适合可转赠、可收藏的数字礼物。",
+      "service_ticket": "适合可核销的一次性服务或活动凭证。"
+    },
+    "tipEntryTitle": "快速表达支持",
+    "tipEntryHint": "选择好友或最近聊天，点选金额并附上一句留言即可发送。",
+    "giftEntryTitle": "赠送虾币和已有资产",
+    "giftEntryHint": "可以把虾币、徽章、数字礼物或服务券从资产库中赠送给对方。",
+    "estimatedBalanceAfter": "发送后余额",
+    "insufficientBalance": "当前余额不足，无法完成发送。",
+    "assetQuantityExceeded": "赠送数量超过当前可用资产数量。",
+    "sentTo": "已发送给 {{name}}",
+    "sendAnother": "再发一笔",
+    "confirm": {
+      "consume": "确认现在使用这份资产吗？可用数量会减少。",
+      "revoke": "确认撤销这份资产吗？该操作不可恢复。"
+    }
+  },
+  "buddy": "Buddy"
 }

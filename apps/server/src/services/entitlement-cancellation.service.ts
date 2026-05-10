@@ -1,9 +1,13 @@
 import type { OrderDao } from '../dao/order.dao'
 import { apiError } from '../lib/api-error'
+import { type Actor, actorFromUserId } from '../security/actor'
+import type { EconomyAuditService } from './economy-audit.service'
+import type { EconomyPolicyService } from './economy-policy.service'
 import type { EntitlementService } from './entitlement.service'
 import type { LedgerService } from './ledger.service'
 import type { NotificationTriggerService } from './notification-trigger.service'
 import type { ProductService } from './product.service'
+import type { SettlementService } from './settlement.service'
 
 function startOfUtcDay(date: Date) {
   return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
@@ -30,11 +34,20 @@ export class EntitlementCancellationService {
       orderDao: OrderDao
       productService: ProductService
       ledgerService: LedgerService
+      economyPolicyService: EconomyPolicyService
+      economyAuditService: EconomyAuditService
       notificationTriggerService: NotificationTriggerService
+      settlementService: SettlementService
     },
   ) {}
 
-  async cancel(input: { actorUserId: string; entitlementId: string; reason?: string }) {
+  async cancel(input: {
+    actorUserId: string
+    entitlementId: string
+    reason?: string
+    actor?: Actor
+  }) {
+    const actor = input.actor ?? actorFromUserId(input.actorUserId)
     const entitlement = await this.deps.entitlementService.getEntitlement(input.entitlementId)
     if (entitlement.userId !== input.actorUserId) {
       throw apiError('ENTITLEMENT_OWNER_MISMATCH', 403)
@@ -70,6 +83,14 @@ export class EntitlementCancellationService {
     )
 
     if (refundAmount > 0) {
+      await this.deps.economyPolicyService.authorize({
+        actor,
+        action: 'wallet.refund',
+        resource: { kind: 'entitlement', id: entitlement.id },
+        scope: { kind: 'wallet', id: entitlement.userId },
+        dataClass: 'financial',
+        targetUserId: entitlement.userId,
+      })
       await this.deps.ledgerService.credit({
         userId: entitlement.userId,
         amount: refundAmount,
@@ -78,6 +99,22 @@ export class EntitlementCancellationService {
         referenceType: 'order',
         note: `虚拟服务取消退款 - ${product?.name ?? entitlement.id}`,
       })
+      await this.deps.economyAuditService.record({
+        actor,
+        action: 'wallet.refund',
+        resource: { kind: 'entitlement', id: entitlement.id },
+        scope: { kind: 'wallet', id: entitlement.userId },
+        request: { reason: input.reason },
+        result: 'succeeded',
+        metadata: { refundAmount, orderId: entitlement.orderId },
+      })
+      if (entitlement.orderId) {
+        await this.deps.settlementService.reverseLinesForSource({
+          sourceType: 'order',
+          sourceId: entitlement.orderId,
+          reason: 'entitlement_refund',
+        })
+      }
     }
 
     await this.deps.notificationTriggerService.triggerCommerceSubscriptionCancelled({

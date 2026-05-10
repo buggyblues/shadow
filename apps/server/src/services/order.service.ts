@@ -3,18 +3,15 @@ import { nanoid } from 'nanoid'
 import type { OrderDao } from '../dao/order.dao'
 import type { ServerDao } from '../dao/server.dao'
 import type { Database } from '../db'
-import {
-  cartItems,
-  orderItems,
-  orders,
-  products,
-  skus,
-  wallets,
-  walletTransactions,
-} from '../db/schema'
+import { cartItems, orderItems, orders, products, skus } from '../db/schema'
+import { type Actor, actorFromUserId } from '../security/actor'
 import type { CartService } from './cart.service'
+import type { EconomyAuditService } from './economy-audit.service'
+import type { EconomyIdempotencyService } from './economy-idempotency.service'
+import type { EconomyPolicyService } from './economy-policy.service'
 import type { EntitlementService } from './entitlement.service'
 import { resolveProductEntitlementResource } from './entitlement-resource'
+import type { LedgerService } from './ledger.service'
 import type { ProductService } from './product.service'
 import type { ShopService } from './shop.service'
 import type { WalletService } from './wallet.service'
@@ -48,6 +45,10 @@ export class OrderService {
       serverDao: ServerDao
       productService: ProductService
       walletService: WalletService
+      ledgerService: LedgerService
+      economyPolicyService: EconomyPolicyService
+      economyAuditService: EconomyAuditService
+      economyIdempotencyService: EconomyIdempotencyService
       entitlementService: EntitlementService
       cartService: CartService
       shopService: ShopService
@@ -61,8 +62,35 @@ export class OrderService {
     shopId: string,
     items: Array<{ productId: string; skuId?: string; quantity: number }>,
     buyerNote?: string,
+    idempotencyKey?: string,
+    actor: Actor = actorFromUserId(buyerId),
   ) {
     if (items.length === 0) throw Object.assign(new Error('Cart is empty'), { status: 400 })
+    if (!idempotencyKey) {
+      throw Object.assign(new Error('idempotencyKey is required'), {
+        status: 400,
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+      })
+    }
+
+    await this.deps.economyPolicyService.authorize({
+      actor,
+      action: 'order.purchase',
+      resource: { kind: 'shop', id: shopId },
+      scope: { kind: 'shop', id: shopId },
+      dataClass: 'financial',
+      targetUserId: buyerId,
+    })
+
+    const cached = await this.deps.economyIdempotencyService.getCompleted<{
+      id: string
+      items: Array<Record<string, unknown>>
+    }>({
+      actorUserId: buyerId,
+      key: idempotencyKey,
+      action: 'shop.order.create',
+    })
+    if (cached) return cached
 
     // 1. Validate items and calculate total
     let totalAmount = 0
@@ -134,9 +162,16 @@ export class OrderService {
     // 2. Generate order number
     const orderNo = `SH${Date.now().toString(36).toUpperCase()}${nanoid(6).toUpperCase()}`
 
-    const wallet = await this.deps.walletService.getOrCreateWallet(buyerId)
-
     const order = await this.deps.db.transaction(async (tx) => {
+      await this.deps.economyIdempotencyService.begin(
+        {
+          actorUserId: buyerId,
+          key: idempotencyKey,
+          action: 'shop.order.create',
+        },
+        tx,
+      )
+
       for (const item of items) {
         if (!item.skuId) continue
         const stockRows = await tx
@@ -147,22 +182,6 @@ export class OrderService {
         if (stockRows.length === 0) {
           throw Object.assign(new Error('Insufficient stock'), { status: 400 })
         }
-      }
-
-      const debitRows = await tx
-        .update(wallets)
-        .set({ balance: sql`${wallets.balance} - ${totalAmount}`, updatedAt: new Date() })
-        .where(and(eq(wallets.id, wallet.id), sql`${wallets.balance} >= ${totalAmount}`))
-        .returning({ balance: wallets.balance })
-      if (debitRows.length === 0) {
-        throw Object.assign(new Error('Insufficient balance'), {
-          status: 402,
-          code: 'WALLET_INSUFFICIENT_BALANCE',
-          requiredAmount: totalAmount,
-          balance: wallet.balance,
-          shortfall: Math.max(totalAmount - wallet.balance, 0),
-          nextAction: 'earn_or_recharge',
-        })
       }
 
       const [createdOrder] = await tx
@@ -183,17 +202,49 @@ export class OrderService {
         ...item,
         orderId: createdOrder.id,
       }))
-      await tx.insert(orderItems).values(itemsWithOrderId)
+      const createdItems = await tx.insert(orderItems).values(itemsWithOrderId).returning()
 
-      await tx.insert(walletTransactions).values({
-        walletId: wallet.id,
-        type: 'purchase',
-        amount: -totalAmount,
-        balanceAfter: debitRows[0]!.balance,
-        referenceId: createdOrder.id,
-        referenceType: 'order',
-        note: `购买商品 - 订单 ${orderNo}`,
-      })
+      await this.deps.ledgerService.debit(
+        {
+          userId: buyerId,
+          amount: totalAmount,
+          type: 'purchase',
+          referenceId: createdOrder.id,
+          referenceType: 'order',
+          note: `购买商品 - 订单 ${orderNo}`,
+        },
+        tx,
+      )
+
+      await this.deps.economyAuditService.record(
+        {
+          actor,
+          action: 'shop.order.create',
+          resource: { kind: 'order', id: createdOrder.id },
+          scope: { kind: 'shop', id: shopId },
+          idempotencyKey,
+          request: { shopId, items, buyerNote },
+          result: 'succeeded',
+          metadata: { totalAmount },
+        },
+        tx,
+      )
+
+      const response = {
+        ...createdOrder,
+        items: createdItems,
+      }
+
+      await this.deps.economyIdempotencyService.complete(
+        {
+          actorUserId: buyerId,
+          key: idempotencyKey,
+          action: 'shop.order.create',
+          referenceId: createdOrder.id,
+          response,
+        },
+        tx,
+      )
 
       for (const item of items) {
         await tx
@@ -206,7 +257,7 @@ export class OrderService {
         .delete(cartItems)
         .where(and(eq(cartItems.userId, buyerId), eq(cartItems.shopId, shopId)))
 
-      return createdOrder
+      return response
     })
 
     // 9. Provision entitlements for entitlement-type products
@@ -241,7 +292,7 @@ export class OrderService {
       }
     }
 
-    return this.getOrderDetail(order.id)
+    return order
   }
 
   /* ───────── Query ───────── */
@@ -310,11 +361,7 @@ export class OrderService {
 
     // Settle: credit the shop owner (server owner) on order completion
     if (status === 'completed') {
-      try {
-        await this.settleOrder(currentOrder)
-      } catch {
-        // Settlement failure should not block order completion
-      }
+      await this.settleOrder(currentOrder)
     }
 
     return result

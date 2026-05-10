@@ -13,6 +13,8 @@ import {
   Copy,
   ExternalLink,
   FileText,
+  Gift,
+  HandCoins,
   Hash,
   Lock,
   MoreHorizontal,
@@ -40,6 +42,7 @@ import { UserAvatar } from '../common/avatar'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { EmojiPicker } from '../common/emoji-picker'
 import { UserProfileCard } from '../common/user-profile-card'
+import { CommunityEconomySendModal } from '../community-economy/community-economy-send-modal'
 import { formatFileSize } from '../workspace/workspace-utils'
 import { FileCard } from './file-card'
 import { ImageContextMenu } from './image-context-menu'
@@ -341,7 +344,7 @@ function formatPriceValue(
   t: (key: string, options?: Record<string, unknown>) => string,
 ) {
   if (currency === 'shrimp_coin') {
-    return `${price.toLocaleString()} ${t('common.shrimpCoin', { defaultValue: '虾币' })}`
+    return `${price.toLocaleString()} ${t('common.shrimpCoin')}`
   }
   return new Intl.NumberFormat(undefined, {
     style: 'currency',
@@ -1185,6 +1188,7 @@ function MessageBubbleInner({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [showFullPicker, setShowFullPicker] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
+  const [economyMode, setEconomyMode] = useState<'tip' | 'gift' | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState('')
   const [copied, setCopied] = useState(false)
@@ -1260,6 +1264,7 @@ function MessageBubbleInner({
   )
   const queryClient = useQueryClient()
   const author = message.author
+  const canSendEconomyAction = Boolean(author && !isOwn && !author.isBot)
 
   const handleEdit = useCallback(() => {
     setEditContent(message.content)
@@ -1874,7 +1879,7 @@ function MessageBubbleInner({
         {message.sendStatus === 'failed' && (
           <div className="flex items-center gap-1.5 mt-1 text-xs text-danger">
             <AlertCircle size={12} />
-            <span>{t('chat.sendFailed', '发送失败')}</span>
+            <span>{t('chat.sendFailed')}</span>
             <button
               type="button"
               onClick={() => {
@@ -1928,7 +1933,7 @@ function MessageBubbleInner({
               }}
               className="ml-1 px-2 py-0.5 bg-danger/10 hover:bg-danger/20 rounded text-danger text-xs font-medium transition"
             >
-              {t('chat.retry', '重试')}
+              {t('chat.retry')}
             </button>
           </div>
         )}
@@ -1938,7 +1943,7 @@ function MessageBubbleInner({
       {showActions &&
         messageRef.current &&
         (() => {
-          const floatingStyle = getFloatingControlsStyle(16, 116)
+          const floatingStyle = getFloatingControlsStyle(16, canSendEconomyAction ? 184 : 116)
           if (!floatingStyle) return null
           return createPortal(
             <div
@@ -1966,6 +1971,35 @@ function MessageBubbleInner({
               >
                 <Reply size={18} strokeWidth={2} />
               </Button>
+              {canSendEconomyAction && (
+                <>
+                  <div className="mx-0.5 h-5 w-px bg-black/5 dark:bg-white/10" />
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => {
+                      setShowMoreMenu(false)
+                      setEconomyMode('tip')
+                    }}
+                    className="!w-8 !h-8 !p-0 !rounded-[10px] !font-normal !normal-case !tracking-normal text-text-secondary hover:text-primary hover:bg-primary/10 transition-colors"
+                    title={t('communityEconomy.sendTip')}
+                  >
+                    <HandCoins size={18} strokeWidth={2} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => {
+                      setShowMoreMenu(false)
+                      setEconomyMode('gift')
+                    }}
+                    className="!w-8 !h-8 !p-0 !rounded-[10px] !font-normal !normal-case !tracking-normal text-text-secondary hover:text-primary hover:bg-primary/10 transition-colors"
+                    title={t('communityEconomy.sendGift')}
+                  >
+                    <Gift size={18} strokeWidth={2} />
+                  </Button>
+                </>
+              )}
               <div className="relative">
                 <Button
                   variant="ghost"
@@ -2010,6 +2044,35 @@ function MessageBubbleInner({
                       <ExternalLink size={16} strokeWidth={2} className="mr-1.5 opacity-70" />
                       {t('chat.shareLink')}
                     </Button>
+                    {canSendEconomyAction && (
+                      <>
+                        <div className="h-px bg-black/5 dark:bg-white/10 mx-2 my-1" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setShowMoreMenu(false)
+                            setEconomyMode('tip')
+                          }}
+                          className="!w-full !justify-start !rounded-[10px] !font-medium !normal-case !tracking-normal !px-3 !py-2.5 !text-[14px] !h-auto text-text-primary hover:bg-primary/10 hover:text-primary transition-colors"
+                        >
+                          <HandCoins size={16} strokeWidth={2} className="mr-1.5 opacity-70" />
+                          {t('communityEconomy.sendTip')}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setShowMoreMenu(false)
+                            setEconomyMode('gift')
+                          }}
+                          className="!w-full !justify-start !rounded-[10px] !font-medium !normal-case !tracking-normal !px-3 !py-2.5 !text-[14px] !h-auto text-text-primary hover:bg-primary/10 hover:text-primary transition-colors"
+                        >
+                          <Gift size={16} strokeWidth={2} className="mr-1.5 opacity-70" />
+                          {t('communityEconomy.sendGift')}
+                        </Button>
+                      </>
+                    )}
                     {onEnterSelectionMode && (
                       <Button
                         variant="ghost"
@@ -2021,7 +2084,7 @@ function MessageBubbleInner({
                         className="!w-full !justify-start !rounded-[10px] !font-medium !normal-case !tracking-normal !px-3 !py-2.5 !text-[14px] !h-auto text-text-primary hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
                       >
                         <CheckSquare size={16} strokeWidth={2} className="mr-1.5 opacity-70" />
-                        {t('chat.selectMessages', '多选消息')}
+                        {t('chat.selectMessages')}
                       </Button>
                     )}
                     {canDelete && (
@@ -2251,6 +2314,19 @@ function MessageBubbleInner({
           </>,
           document.body,
         )}
+      {author && canSendEconomyAction && (
+        <CommunityEconomySendModal
+          open={economyMode !== null}
+          mode={economyMode ?? 'tip'}
+          recipient={{
+            id: author.id,
+            username: author.username,
+            displayName: author.displayName,
+            avatarUrl: author.avatarUrl,
+          }}
+          onClose={() => setEconomyMode(null)}
+        />
+      )}
     </div>
   )
 }

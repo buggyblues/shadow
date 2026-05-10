@@ -670,8 +670,13 @@ def test_commerce_picker_purchase_and_entitlement_paths(monkeypatch):
         captured.append(("post", path, json))
         return {"ok": True}
 
+    def fake_patch(path, json=None):
+        captured.append(("patch", path, json))
+        return {"ok": True}
+
     monkeypatch.setattr(client, "_get", fake_get)
     monkeypatch.setattr(client, "_post", fake_post)
+    monkeypatch.setattr(client, "_patch", fake_patch)
 
     assert client.list_commerce_product_cards(
         target="dm",
@@ -683,6 +688,45 @@ def test_commerce_picker_purchase_and_entitlement_paths(monkeypatch):
         "prod-1",
         idempotency_key="idem-1",
     ) == {"ok": True}
+    assert client.create_shop_asset_definition(
+        "shop-1",
+        assetType="badge",
+        name="Founder",
+        status="active",
+    ) == {"ok": True}
+    assert client.update_shop_asset_definition(
+        "shop-1",
+        "asset-def-1",
+        status="paused",
+    ) == {"ok": True}
+    assert client.create_commerce_deliverable(
+        "shop-1",
+        "offer-1",
+        kind="community_asset",
+        resourceType="community_asset_definition",
+        resourceId="asset-def-1",
+    ) == {"ok": True}
+    assert client.lock_community_asset("grant-1", idempotency_key="lock-idem-1") == {"ok": True}
+    assert client.unlock_community_asset("grant-1", idempotency_key="unlock-idem-1") == {"ok": True}
+    assert client.revoke_community_asset(
+        "grant-1", idempotency_key="revoke-idem-1", reason="cleanup"
+    ) == {"ok": True}
+    assert client.send_tip(
+        recipient_user_id="user-2",
+        amount=10,
+        idempotency_key="tip-idem-1",
+    ) == {"ok": True}
+    assert client.send_gift(
+        recipient_user_id="user-2",
+        currencies=[{"currencyCode": "shrimp_coin", "amount": 5}],
+        idempotency_key="gift-idem-1",
+    ) == {"ok": True}
+    assert client.list_settlements(limit=20, offset=40) == {"cards": []}
+    assert client.create_order(
+        "server-1",
+        idempotency_key="order-idem-1",
+        items=[{"productId": "prod-1", "skuId": "sku-1", "quantity": 2}],
+    ) == {"ok": True}
     assert client.cancel_entitlement("ent-1", reason="user_cancelled") == {"ok": True}
     assert captured == [
         ("get", "/api/commerce/product-picker", {"target": "dm", "dmChannelId": "dm-1", "limit": 3}),
@@ -690,6 +734,63 @@ def test_commerce_picker_purchase_and_entitlement_paths(monkeypatch):
             "post",
             "/api/shops/shop-1/products/prod-1/purchase",
             {"idempotencyKey": "idem-1"},
+        ),
+        (
+            "post",
+            "/api/shops/shop-1/assets",
+            {"assetType": "badge", "name": "Founder", "status": "active"},
+        ),
+        (
+            "patch",
+            "/api/shops/shop-1/assets/asset-def-1",
+            {"status": "paused"},
+        ),
+        (
+            "post",
+            "/api/shops/shop-1/offers/offer-1/deliverables",
+            {
+                "kind": "community_asset",
+                "resourceType": "community_asset_definition",
+                "resourceId": "asset-def-1",
+            },
+        ),
+        (
+            "post",
+            "/api/economy/assets/grant-1/lock",
+            {"idempotencyKey": "lock-idem-1"},
+        ),
+        (
+            "post",
+            "/api/economy/assets/grant-1/unlock",
+            {"idempotencyKey": "unlock-idem-1"},
+        ),
+        (
+            "post",
+            "/api/economy/assets/grant-1/revoke",
+            {"idempotencyKey": "revoke-idem-1", "reason": "cleanup"},
+        ),
+        (
+            "post",
+            "/api/economy/tips",
+            {"recipientUserId": "user-2", "amount": 10, "idempotencyKey": "tip-idem-1"},
+        ),
+        (
+            "post",
+            "/api/economy/gifts",
+            {
+                "recipientUserId": "user-2",
+                "idempotencyKey": "gift-idem-1",
+                "currencies": [{"currencyCode": "shrimp_coin", "amount": 5}],
+            },
+        ),
+        ("get", "/api/economy/settlements", {"limit": 20, "offset": 40}),
+        (
+            "post",
+            "/api/servers/server-1/shop/orders",
+            {
+                "idempotencyKey": "order-idem-1",
+                "items": [{"productId": "prod-1", "skuId": "sku-1", "quantity": 2}],
+            },
         ),
         ("post", "/api/entitlements/ent-1/cancel", {"reason": "user_cancelled"}),
     ]
