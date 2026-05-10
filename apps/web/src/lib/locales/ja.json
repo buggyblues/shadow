@@ -31,7 +31,8 @@
     "shrimpCoin": "シュリンプコイン",
     "done": "完了",
     "unknown": "不明",
-    "buddy": "Buddy"
+    "buddy": "Buddy",
+    "search": "検索"
   },
   "nav": {
     "features": "機能紹介",
@@ -695,6 +696,8 @@
     "activityTyping": "入力中...",
     "buddyWorkStatus": "{{name}} {{status}}",
     "addToChannel": "チャンネルに追加",
+    "uidLabel": "UID",
+    "buddyTagLabel": "Buddy タグ",
     "removeFromChannel": "チャンネルから削除",
     "removeFromChannelConfirm": "{{name}} をこのチャンネルから削除してもよろしいですか？",
     "addBuddyToChannel": "Buddy をチャンネルに追加",
@@ -736,6 +739,7 @@
     "goCreate": "作成する",
     "noInvitable": "招待できる他のサーバーメンバーがいません",
     "selectedBuddies": "{{count}} 人の Buddy を選択",
+    "selectedCount": "{{count}} 件",
     "addToServer": "サーバーに追加"
   },
   "profile": {

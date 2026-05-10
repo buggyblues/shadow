@@ -1,4 +1,5 @@
 import type {
+  ShadowAddAgentsToServerResult,
   ShadowAgentUsageSnapshotInput,
   ShadowApp,
   ShadowAuthResponse,
@@ -643,7 +644,10 @@ export class ShadowClient {
     return this.request(`/api/servers/${serverId}/invite`, { method: 'POST' })
   }
 
-  async addAgentsToServer(serverId: string, agentIds: string[]): Promise<{ added: string[] }> {
+  async addAgentsToServer(
+    serverId: string,
+    agentIds: string[],
+  ): Promise<ShadowAddAgentsToServerResult> {
     return this.request(`/api/servers/${serverId}/agents`, {
       method: 'POST',
       body: JSON.stringify({ agentIds }),

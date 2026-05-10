@@ -1,6 +1,7 @@
 from shadowob_sdk.client import ShadowClient
 from shadowob_sdk.socket import ShadowSocket
 from shadowob_sdk.types import (
+    ShadowAddAgentsToServerResult,
     ShadowAgentUsageSnapshotInput,
     ShadowApiErrorBody,
     ShadowAttachment,
@@ -12,6 +13,8 @@ from shadowob_sdk.types import (
     ShadowMembership,
     ShadowMembershipTier,
     ShadowMentionSuggestion,
+    ShadowMember,
+    ShadowMemberCreator,
     ShadowMessageMention,
     ShadowModelProxyBilling,
     ShadowModelProxyModel,
@@ -25,6 +28,7 @@ from shadowob_sdk.types import (
 __all__ = [
     "ShadowAgentUsageSnapshotInput",
     "ShadowApiErrorBody",
+    "ShadowAddAgentsToServerResult",
     "ShadowAttachment",
     "ShadowChannelAccess",
     "ShadowClient",
@@ -35,6 +39,8 @@ __all__ = [
     "ShadowMembership",
     "ShadowMembershipTier",
     "ShadowMentionSuggestion",
+    "ShadowMember",
+    "ShadowMemberCreator",
     "ShadowMessageMention",
     "ShadowModelProxyBilling",
     "ShadowModelProxyModel",

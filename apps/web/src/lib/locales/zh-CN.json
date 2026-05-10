@@ -31,7 +31,8 @@
     "shrimpCoin": "虾币",
     "done": "完成",
     "unknown": "未知",
-    "buddy": "Buddy"
+    "buddy": "Buddy",
+    "search": "搜索"
   },
   "nav": {
     "features": "特色功能",
@@ -883,6 +884,8 @@
     "activityTyping": "输入中...",
     "buddyWorkStatus": "{{name}} {{status}}",
     "addToChannel": "添加到频道",
+    "uidLabel": "UID",
+    "buddyTagLabel": "Buddy 标签",
     "removeFromChannel": "从频道移除",
     "removeFromChannelConfirm": "确定要将 {{name}} 从此频道移除吗？",
     "addBuddyToChannel": "添加 Buddy 到频道",
@@ -924,6 +927,7 @@
     "goCreate": "去创建",
     "noInvitable": "暂无其他服务器成员可邀请",
     "selectedBuddies": "已选择 {{count}} 个 Buddy",
+    "selectedCount": "{{count}} 个",
     "addToServer": "添加到服务器"
   },
   "profile": {

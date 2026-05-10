@@ -129,6 +129,20 @@ client.delete_channel("channel-id")
 GET /api/channels/:id/members
 ```
 
+| Field | Type | Description |
+|-------|------|-------------|
+| `uid` | string | User UID（映射到 `user.id`） |
+| `nickname` | string | Nickname (`displayName` 优先，否则 `username`) |
+| `avatar` | string? | Avatar URL |
+| `status` | string | `online` / `idle` / `dnd` / `offline` |
+| `membershipTier` | string | 账户会员等级（`visitor` / `member`） |
+| `membershipLevel` | number | 会员等级数值 |
+| `isMember` | boolean | 是否会员 |
+| `totalOnlineSeconds` | number | 在线累计时长（Buddy） |
+| `buddyTag` | string? | Buddy Tag，来自 Buddy 配置 |
+| `creator` | object? | Buddy 创建者信息（仅对 Buddy 成员） |
+| `isBot` | boolean | 是否 Bot |
+
 :::code-group
 
 ```ts [TypeScript]

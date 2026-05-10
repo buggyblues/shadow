@@ -265,7 +265,7 @@ export function ProductDetail({
         Array.from(files).map(async (file) => {
           const formData = new FormData()
           formData.append('file', file)
-          const res = await fetchApi<{ url: string }>('/api/media/upload', {
+          const res = await fetchApi<{ url: string; signedUrl?: string }>('/api/media/upload', {
             method: 'POST',
             body: formData,
           })

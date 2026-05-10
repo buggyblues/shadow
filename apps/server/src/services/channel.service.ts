@@ -4,6 +4,7 @@ import type { ServerDao } from '../dao/server.dao'
 import { type ActorInput, actorUserId } from '../security/actor'
 import type { CreateChannelInput, UpdateChannelInput } from '../validators/channel.schema'
 import type { PolicyService } from './policy.service'
+import type { ServerService } from './server.service'
 
 export class ChannelService {
   constructor(
@@ -11,6 +12,7 @@ export class ChannelService {
       channelDao: ChannelDao
       channelMemberDao: ChannelMemberDao
       serverDao: ServerDao
+      serverService: ServerService
       policyService: PolicyService
     },
   ) {}
@@ -184,17 +186,17 @@ export class ChannelService {
       if (channelUserIds.length === 0) {
         // No channel members found — either empty or legacy data without channel_members.
         // Fall back to server members.
-        return this.deps.serverDao.getMembers(serverId)
+        return this.deps.serverService.getMembers(serverId)
       }
 
       // Get full server member data (role, nickname, user info)
-      const allServerMembers = await this.deps.serverDao.getMembers(serverId)
+      const allServerMembers = await this.deps.serverService.getMembers(serverId)
 
       // Filter to only those in the channel
       return allServerMembers.filter((m) => channelUserIds.includes(m.userId))
     } catch {
       // channel_members table may not exist — fall back to server members
-      return this.deps.serverDao.getMembers(serverId)
+      return this.deps.serverService.getMembers(serverId)
     }
   }
 

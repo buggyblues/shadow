@@ -1,12 +1,14 @@
 import type { ChannelDao } from '../dao/channel.dao'
 import type { ChannelMemberDao } from '../dao/channel-member.dao'
 import type { ServerDao } from '../dao/server.dao'
+import type { UserDao } from '../dao/user.dao'
 import type { ActorInput } from '../security/actor'
 import type {
   CreateServerInput,
   UpdateMemberInput,
   UpdateServerInput,
 } from '../validators/server.schema'
+import type { MembershipSnapshot } from './membership.service'
 import type { PolicyService } from './policy.service'
 
 /** Convert a name to a URL-safe slug (lowercase, spaces → hyphens, strip non-alphanumeric). */
@@ -28,6 +30,10 @@ export class ServerService {
       serverDao: ServerDao
       channelDao: ChannelDao
       channelMemberDao: ChannelMemberDao
+      userDao: UserDao
+      membershipService: {
+        getMembership: (userId: string) => Promise<MembershipSnapshot>
+      }
       policyService: PolicyService
     },
   ) {}
@@ -236,7 +242,137 @@ export class ServerService {
   }
 
   async getMembers(serverId: string) {
-    return this.deps.serverDao.getMembers(serverId)
+    const members = await this.deps.serverDao.getMembers(serverId)
+    if (members.length === 0) return []
+
+    const userIds = Array.from(
+      new Set(
+        members
+          .map((member) => member.user?.id)
+          .filter((userId): userId is string => Boolean(userId)),
+      ),
+    )
+    const creatorIds = Array.from(
+      new Set(
+        members
+          .map((member) => (member.user?.isBot ? member.agent?.ownerId : null))
+          .filter((ownerId): ownerId is string => Boolean(ownerId)),
+      ),
+    )
+    const [membershipByUserId, creatorByUserId] = await Promise.all([
+      this.getMembershipByUserIds(userIds),
+      this.getUsersByIds(creatorIds),
+    ])
+
+    return members.map((member) => {
+      const user = member.user
+      const status = user?.status ?? 'offline'
+      const membership = user?.id ? membershipByUserId.get(user.id) : null
+      const creator = (() => {
+        if (!user?.isBot || !member.agent?.ownerId) return null
+        const owner = creatorByUserId.get(member.agent.ownerId)
+        if (!owner) return null
+        return {
+          uid: owner.id,
+          nickname: owner.displayName || owner.username || owner.id,
+          username: owner.username,
+          avatarUrl: owner.avatarUrl,
+        }
+      })()
+      const botTag =
+        user?.isBot && member.agent?.config
+          ? this.extractBuddyTag(member.agent.config['buddyTag'])
+          : null
+      const totalOnlineSeconds = user?.isBot ? (member.agent?.totalOnlineSeconds ?? 0) : 0
+
+      return {
+        ...member,
+        uid: user?.id ?? member.userId,
+        nickname: user?.displayName || user?.username || user?.id || member.userId,
+        avatar: user?.avatarUrl ?? null,
+        status,
+        membershipTier: membership?.tier.id ?? 'visitor',
+        membershipLevel: membership?.level ?? 0,
+        isMember: membership?.isMember ?? false,
+        totalOnlineSeconds,
+        buddyTag: botTag,
+        creator,
+        isBot: user?.isBot ?? false,
+        user: user
+          ? {
+              ...user,
+              membership: membership
+                ? {
+                    status: membership.status,
+                    tier: membership.tier,
+                    level: membership.level,
+                    isMember: membership.isMember,
+                    memberSince: membership.memberSince,
+                    inviteCodeId: membership.inviteCodeId,
+                    capabilities: membership.capabilities,
+                  }
+                : undefined,
+            }
+          : null,
+      }
+    })
+  }
+
+  private async getMembershipByUserIds(userIds: string[]) {
+    if (userIds.length === 0) return new Map<string, MembershipSnapshot>()
+    const rows = await Promise.all(
+      userIds.map(async (userId) => {
+        try {
+          const membership = await this.deps.membershipService.getMembership(userId)
+          return { userId, membership }
+        } catch {
+          return null
+        }
+      }),
+    )
+    const byUserId = new Map<string, MembershipSnapshot>()
+    for (const row of rows) {
+      if (row) byUserId.set(row.userId, row.membership)
+    }
+    return byUserId
+  }
+
+  private async getUsersByIds(userIds: string[]) {
+    if (userIds.length === 0)
+      return new Map<
+        string,
+        { id: string; username: string; displayName: string | null; avatarUrl: string | null }
+      >()
+    const rows = await Promise.all(
+      userIds.map(async (userId) => {
+        try {
+          const user = await this.deps.userDao.findById(userId)
+          if (!user) return null
+          return {
+            id: user.id,
+            username: user.username,
+            displayName: user.displayName ?? null,
+            avatarUrl: user.avatarUrl ?? null,
+          }
+        } catch {
+          return null
+        }
+      }),
+    )
+    const map = new Map<
+      string,
+      { id: string; username: string; displayName: string | null; avatarUrl: string | null }
+    >()
+    for (const row of rows) {
+      if (row) map.set(row.id, row)
+    }
+    return map
+  }
+
+  private extractBuddyTag(value: unknown) {
+    if (typeof value !== 'string') return null
+    const trimmed = value.trim()
+    return trimmed || null
   }
 
   async kickMember(serverId: string, targetUserId: string, actor: ActorInput) {

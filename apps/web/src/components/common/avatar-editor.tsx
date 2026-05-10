@@ -14,11 +14,13 @@ export function AvatarEditor({ value, onChange }: AvatarEditorProps) {
   const { t } = useTranslation()
   const [initialSvg] = useState(() => renderCatSvg(generateRandomCatConfig()))
   const [pendingPreview, setPendingPreview] = useState<string | null>(null)
+  const [uploadedPreview, setUploadedPreview] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleRollDice = () => {
     const config = generateRandomCatConfig()
+    setUploadedPreview(null)
     setPendingPreview(renderCatSvg(config))
   }
 
@@ -36,11 +38,15 @@ export function AvatarEditor({ value, onChange }: AvatarEditorProps) {
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const res = await fetchApi<{ url: string }>('/api/media/upload', {
+      const res = await fetchApi<{ url: string; signedUrl?: string }>('/api/media/upload', {
         method: 'POST',
         body: formData,
       })
-      if (res?.url) onChange(res.url)
+      if (res?.url) {
+        setPendingPreview(null)
+        setUploadedPreview(res.signedUrl ?? res.url)
+        onChange(res.url)
+      }
     } catch (err) {
       console.error('Failed to upload avatar', err)
     } finally {
@@ -49,7 +55,7 @@ export function AvatarEditor({ value, onChange }: AvatarEditorProps) {
     }
   }
 
-  const currentSrc = value || initialSvg
+  const currentSrc = uploadedPreview || value || initialSvg
   const hasPending = !!pendingPreview
 
   return (

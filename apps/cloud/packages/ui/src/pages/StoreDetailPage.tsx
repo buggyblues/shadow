@@ -1,10 +1,10 @@
 import { Button, GlassPanel } from '@shadowob/ui'
-import { EmptyState } from '@shadowob/ui/components/ui/empty-state'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { BookOpen, Clock, FolderOpen, GitFork, Key, Rocket, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { DashboardEmptyState } from '@/components/DashboardEmptyState'
 import {
   parseTemplateAgents,
   TemplateAgentsTab,
@@ -63,12 +63,11 @@ export function StoreDetailPage() {
 
   if (!detail && !detailLoading) {
     return (
-      <div className="p-6">
-        <EmptyState
-          title={t('storeDetail.templateNotFound')}
-          description={t('storeDetail.templateNotFoundDesc')}
-        />
-      </div>
+      <DashboardEmptyState
+        title={t('storeDetail.templateNotFound')}
+        description={t('storeDetail.templateNotFoundDesc')}
+        cardVariant="glass"
+      />
     )
   }
 
@@ -159,7 +158,7 @@ export function StoreDetailPage() {
       activeTab={activeTab}
       onTabChange={setActiveTab}
     >
-      <GlassPanel className="rounded-3xl p-5">
+      <GlassPanel className="rounded-3xl p-6">
         {activeTab === 'agents' && (
           <TemplateAgentsTab
             agents={agents}

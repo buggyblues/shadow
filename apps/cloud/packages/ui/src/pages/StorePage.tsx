@@ -1,9 +1,9 @@
 import { Button, GlassCard, Search } from '@shadowob/ui'
-import { EmptyState } from '@shadowob/ui/components/ui/empty-state'
 import { useQuery } from '@tanstack/react-query'
 import { AlertCircle, ChevronRight, Package, Rocket, Star, Users } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { DashboardEmptyState } from '@/components/DashboardEmptyState'
 import { PageShell } from '@/components/PageShell'
 import { TemplateGalleryCard } from '@/components/TemplateGalleryCard'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -35,7 +35,6 @@ export function StorePage() {
       >,
     [categories],
   )
-
   const filtered = useMemo(() => {
     let list = templates
 
@@ -68,7 +67,7 @@ export function StorePage() {
     <PageShell
       breadcrumb={[]}
       title={t('store.title')}
-      description={t('store.description')}
+      description={undefined}
       headerContent={
         <Search
           value={search}
@@ -112,7 +111,7 @@ export function StorePage() {
       )}
 
       {!isLoading && filtered.length === 0 && (
-        <EmptyState
+        <DashboardEmptyState
           icon={Package}
           title={t('store.noTemplatesFound')}
           description={

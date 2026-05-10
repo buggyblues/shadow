@@ -69,6 +69,12 @@ export function createMediaHandler(container: AppContainer) {
 
     const contentType = file.type || 'application/octet-stream'
     const result = await mediaService.upload(buffer, file.name, contentType)
+    const signed = mediaService.createSignedUrl({
+      contentRef: result.url,
+      contentType,
+      disposition: 'inline',
+      filename: file.name,
+    })
 
     // If messageId is provided, create attachment record (channel message)
     if (typeof messageId === 'string' && channelMessage) {
@@ -92,7 +98,7 @@ export function createMediaHandler(container: AppContainer) {
                 id: author.id,
                 username: author.username,
                 displayName: author.displayName,
-                avatarUrl: author.avatarUrl,
+                avatarUrl: mediaService.resolveMediaUrl(author.avatarUrl),
                 status: author.status,
                 isBot: author.isBot,
               }
@@ -104,7 +110,7 @@ export function createMediaHandler(container: AppContainer) {
       }
     }
 
-    return c.json(result, 201)
+    return c.json({ ...result, signedUrl: signed.url }, 201)
   })
 
   // GET /api/media/:id

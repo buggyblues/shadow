@@ -1,5 +1,4 @@
 import { Badge, Button, Card, GlassCard, Search } from '@shadowob/ui'
-import { EmptyState } from '@shadowob/ui/components/ui/empty-state'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
@@ -14,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { DashboardEmptyState } from '@/components/DashboardEmptyState'
 import { PageShell } from '@/components/PageShell'
 import { useDebounce } from '@/hooks/useDebounce'
 import { api, type TemplateCatalogSummary } from '@/lib/api'
@@ -204,7 +204,7 @@ export function CommunityPage() {
       )}
 
       {!isError && !isLoading && filtered.length === 0 && (
-        <EmptyState
+        <DashboardEmptyState
           icon={Package}
           title={t('community.noTemplates')}
           description={t('community.noTemplatesHint')}

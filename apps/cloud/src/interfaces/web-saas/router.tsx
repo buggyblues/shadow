@@ -21,7 +21,6 @@ import { ProviderProfilesPage } from '@shadowob/cloud-ui/pages/ProviderProfilesP
 import { SecretsPage } from '@shadowob/cloud-ui/pages/SecretsPage'
 import { StoreDetailPage } from '@shadowob/cloud-ui/pages/StoreDetailPage'
 import { StorePage } from '@shadowob/cloud-ui/pages/StorePage'
-import { WalletPage } from '@shadowob/cloud-ui/pages/WalletPage'
 import {
   createBrowserHistory,
   createRootRoute,
@@ -146,14 +145,6 @@ const providersRoute = createRoute({
   component: withErrorBoundary(ProviderProfilesPage),
 })
 
-// ── Wallet / Billing ───────────────────────────────────────────────────────
-
-const walletRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/wallet',
-  component: withErrorBoundary(WalletPage),
-})
-
 // ── Route tree ─────────────────────────────────────────────────────────────
 
 const routeTree = rootRoute.addChildren([
@@ -170,7 +161,6 @@ const routeTree = rootRoute.addChildren([
   myTemplateDetailRoute,
   providersRoute,
   secretsRoute,
-  walletRoute,
 ])
 
 // Use browser history with explicit basepath so every SaaS page has a real URL:

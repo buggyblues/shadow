@@ -31,7 +31,8 @@
     "shrimpCoin": "쉬림프 코인",
     "done": "완료",
     "unknown": "알 수 없음",
-    "buddy": "Buddy"
+    "buddy": "Buddy",
+    "search": "검색"
   },
   "nav": {
     "features": "기능 소개",
@@ -695,6 +696,8 @@
     "activityTyping": "입력 중...",
     "buddyWorkStatus": "{{name}} {{status}}",
     "addToChannel": "채널에 추가",
+    "uidLabel": "UID",
+    "buddyTagLabel": "Buddy 태그",
     "removeFromChannel": "채널에서 제거",
     "removeFromChannelConfirm": "{{name}}을(를) 이 채널에서 제거하시겠습니까?",
     "addBuddyToChannel": "Buddy를 채널에 추가",
@@ -736,6 +739,7 @@
     "goCreate": "만들기",
     "noInvitable": "초대할 수 있는 다른 서버 멤버가 없습니다",
     "selectedBuddies": "{{count}}명의 Buddy 선택됨",
+    "selectedCount": "{{count}}개 선택",
     "addToServer": "서버에 추가"
   },
   "profile": {

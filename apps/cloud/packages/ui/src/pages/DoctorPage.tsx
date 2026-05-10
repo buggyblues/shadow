@@ -1,9 +1,9 @@
 import { Button, Card } from '@shadowob/ui'
-import { EmptyState } from '@shadowob/ui/components/ui/empty-state'
 import { useQuery } from '@tanstack/react-query'
 import { clsx } from 'clsx'
 import { Activity, AlertTriangle, CheckCircle, Clock, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { DashboardEmptyState } from '@/components/DashboardEmptyState'
 import { PageShell } from '@/components/PageShell'
 import { StatCard } from '@/components/StatCard'
 import { StatsGrid } from '@/components/StatsGrid'
@@ -46,14 +46,17 @@ export function DoctorPage() {
       }
     >
       {isLoading && (
-        <EmptyState
+        <DashboardEmptyState
           icon={Activity}
           title={t('doctor.runningTitle')}
           description={t('doctor.runningDescription')}
         />
       )}
       {error && (
-        <EmptyState title={t('doctor.failedTitle')} description={t('doctor.failedDescription')} />
+        <DashboardEmptyState
+          title={t('doctor.failedTitle')}
+          description={t('doctor.failedDescription')}
+        />
       )}
 
       {data && (

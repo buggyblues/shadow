@@ -1,352 +1,230 @@
-import { useRouter } from 'expo-router'
-import { Check } from 'lucide-react-native'
-import { useCallback } from 'react'
+import { Bot, Check } from 'lucide-react-native'
+import { useTranslation } from 'react-i18next'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { fontSize, radius, spacing, useColors } from '../../theme'
 import { Avatar } from './avatar'
-import { OnlineRank } from './online-rank'
 import { StatusBadge } from './status-badge'
 
+export type InviteStatus = 'online' | 'idle' | 'dnd' | 'offline'
+
 export interface BuddyListItemData {
-  id: string
-  userId: string
+  uid: string
+  nickname: string
   username: string
-  displayName: string
-  avatarUrl: string | null
-  status: 'online' | 'idle' | 'dnd' | 'offline'
+  avatar: string | null
+  status: InviteStatus
   isBot: boolean
-  role?: 'owner' | 'admin' | 'member'
-  nickname?: string | null
-  // Buddy-specific fields
-  ownerId?: string
-  ownerName?: string
-  ownerAvatarUrl?: string | null
-  description?: string
+  canAddToChannel: boolean
+  canAddToServer: boolean
+  membershipTier?: string | null
+  membershipLevel?: number | null
   totalOnlineSeconds?: number
+  buddyTag?: string | null
+  creator?: {
+    uid: string
+    nickname: string
+  } | null
+  agentId?: string
 }
 
 interface BuddyListItemProps {
-  buddy: BuddyListItemData
-  /** Whether the item is clickable to navigate to profile */
-  clickable?: boolean
-  /** Callback when item is clicked */
-  onClick?: (buddy: BuddyListItemData) => void
-  /** Whether to show the Buddy badge */
-  showBotBadge?: boolean
-  /** Whether to show the role badge */
-  showRoleBadge?: boolean
-  /** Whether to show online rank for bots */
-  showOnlineRank?: boolean
-  /** Right element to render (e.g., select button) */
-  rightElement?: React.ReactNode
-  /** Additional styles */
-  style?: object
+  member: BuddyListItemData
+  showCheckbox?: boolean
+  selected?: boolean
+  onSelect?: (member: BuddyListItemData) => void
+  disabled?: boolean
 }
 
-/**
- * Unified Buddy List Item Component (Mobile)
- *
- * Displays avatar, nickname/username, slug, online status, and level.
- * - Mobile: Click to navigate to profile (unless in select mode)
- * - Supports custom rightElement for actions (select buttons, etc.)
- */
+const toReadableSeconds = (seconds?: number) => {
+  if (seconds == null) return '--'
+  const total = Math.max(0, Math.floor(seconds))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`
+  }
+
+  return `${minutes}m`
+}
+
 export function BuddyListItem({
-  buddy,
-  clickable = true,
-  onClick,
-  showBotBadge = true,
-  showRoleBadge = true,
-  showOnlineRank = true,
-  rightElement,
-  style,
+  member,
+  showCheckbox,
+  selected,
+  onSelect,
+  disabled = false,
 }: BuddyListItemProps) {
+  const { t } = useTranslation()
   const colors = useColors()
-  const router = useRouter()
 
-  const displayName = buddy.nickname ?? buddy.displayName
+  const canSelect = !disabled && onSelect != null && showCheckbox
+  const statusText = t(`member.${member.status}`, member.status)
+  const membershipInfo = (
+    member.membershipTier || member.membershipLevel != null
+      ? [
+          member.membershipTier
+            ? t(`settings.membershipTiers.${member.membershipTier}`, member.membershipTier)
+            : null,
+          member.membershipLevel != null
+            ? t('settings.membershipLevelLabel', { level: member.membershipLevel })
+            : null,
+        ]
+      : []
+  )
+    .filter(Boolean)
+    .join(' · ')
 
-  const handlePress = useCallback(() => {
-    if (onClick) {
-      onClick(buddy)
-    } else if (clickable) {
-      router.push(`/(main)/profile/${buddy.userId}` as never)
-    }
-  }, [buddy, clickable, onClick, router])
-
-  const roleLabel =
-    showRoleBadge && buddy.role && buddy.role !== 'member'
-      ? buddy.role === 'owner'
-        ? '房主'
-        : buddy.role === 'admin'
-          ? '管理员'
-          : null
-      : null
+  const isSelectable = showCheckbox && canSelect
 
   return (
     <Pressable
-      onPress={handlePress}
       style={({ pressed }) => [
         styles.container,
         {
-          backgroundColor: pressed ? colors.surfaceHover : 'transparent',
+          backgroundColor: pressed ? (colors.surfaceHover ?? colors.border) : colors.surface,
+          opacity: disabled ? 0.6 : 1,
         },
-        style,
       ]}
+      onPress={() => {
+        if (isSelectable) {
+          onSelect?.(member)
+        }
+      }}
+      disabled={!isSelectable}
     >
-      {/* Avatar with status */}
-      <View style={styles.avatarWrapper}>
-        <Avatar uri={buddy.avatarUrl} name={displayName} size={40} userId={buddy.userId} />
-        <View style={styles.statusBadge}>
-          <StatusBadge status={buddy.status} size={12} />
+      <View style={styles.checkboxWrap}>
+        {showCheckbox ? (
+          <View
+            style={[
+              styles.checkbox,
+              {
+                backgroundColor: selected ? colors.primary : 'transparent',
+                borderColor: disabled
+                  ? colors.textMuted
+                  : selected
+                    ? colors.primary
+                    : colors.textMuted,
+              },
+            ]}
+          >
+            {selected ? <Check size={10} color="#fff" /> : null}
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.avatarWrap}>
+        <Avatar uri={member.avatar} name={member.nickname} size={36} userId={member.uid} />
+        <View style={styles.statusWrap}>
+          <StatusBadge status={member.status} size={8} />
         </View>
       </View>
 
-      {/* Info */}
-      <View style={styles.infoContainer}>
-        {/* Name row */}
+      <View style={styles.content}>
         <View style={styles.nameRow}>
           <Text
-            style={[
-              styles.displayName,
-              { color: buddy.status === 'offline' ? colors.textMuted : colors.text },
-            ]}
+            style={[styles.nickname, { color: member.isBot ? colors.primary : colors.text }]}
             numberOfLines={1}
           >
-            {displayName}
+            {member.nickname}
           </Text>
-          {buddy.isBot && showBotBadge && (
-            <View style={[styles.botBadge, { backgroundColor: '#5865F2' }]}>
-              <Check size={10} color="#fff" />
-              <Text style={styles.botBadgeText}>Buddy</Text>
+          {member.isBot ? (
+            <View style={[styles.badge, { backgroundColor: `${colors.primary}20` }]}>
+              <Bot size={10} color={colors.primary} />
+              <Text style={[styles.badgeText, { color: colors.primary }]}>Buddy</Text>
             </View>
-          )}
+          ) : null}
         </View>
 
-        {/* Username and role row */}
-        <View style={styles.metaRow}>
-          <Text style={[styles.username, { color: colors.textMuted }]} numberOfLines={1}>
-            @{buddy.username}
+        <Text style={[styles.username, { color: colors.textMuted }]} numberOfLines={1}>
+          @{member.username}
+        </Text>
+        <Text style={[styles.subText, { color: colors.textMuted }]}>
+          {t('member.uidLabel', 'UID')}: {member.uid}
+        </Text>
+        <Text style={[styles.subText, { color: colors.textMuted }]}>
+          {statusText}
+          {membershipInfo ? ` · ${membershipInfo}` : ''}
+        </Text>
+        {member.buddyTag ? (
+          <Text style={[styles.subText, { color: colors.textMuted }]}>
+            {t('member.buddyTagLabel', 'Buddy Tag')}: {member.buddyTag}
           </Text>
-          {roleLabel && (
-            <Text
-              style={[
-                styles.roleBadge,
-                {
-                  color:
-                    buddy.role === 'owner'
-                      ? '#F59E0B'
-                      : buddy.role === 'admin'
-                        ? '#3B82F6'
-                        : colors.textMuted,
-                },
-              ]}
-            >
-              · {roleLabel}
-            </Text>
-          )}
-        </View>
-
-        {/* Online rank for bots */}
-        {buddy.isBot &&
-          showOnlineRank &&
-          buddy.totalOnlineSeconds != null &&
-          buddy.totalOnlineSeconds > 0 && (
-            <View style={styles.rankRow}>
-              <OnlineRank totalSeconds={buddy.totalOnlineSeconds} />
-            </View>
-          )}
+        ) : null}
+        {member.creator ? (
+          <Text style={[styles.subText, { color: colors.textMuted }]}>
+            {t('channel.buddyOwner', 'Creator')}: {member.creator.nickname}
+          </Text>
+        ) : null}
+        <Text style={[styles.subText, { color: colors.textMuted }]}>
+          {t('member.onlineTime', 'Online Time')}: {toReadableSeconds(member.totalOnlineSeconds)}
+        </Text>
       </View>
-
-      {/* Right element */}
-      {rightElement && <View style={styles.rightContainer}>{rightElement}</View>}
     </Pressable>
   )
-}
-
-/**
- * Buddy List Item Skeleton for loading states
- */
-export function BuddyListItemSkeleton() {
-  const colors = useColors()
-
-  return (
-    <View style={styles.container}>
-      {/* Avatar skeleton */}
-      <View style={styles.avatarWrapper}>
-        <View style={[styles.avatarSkeleton, { backgroundColor: colors.inputBackground }]} />
-      </View>
-
-      {/* Text skeleton */}
-      <View style={styles.infoContainer}>
-        <View
-          style={[styles.textSkeleton, { backgroundColor: colors.inputBackground, width: 100 }]}
-        />
-        <View
-          style={[
-            styles.textSkeleton,
-            { backgroundColor: colors.inputBackground, width: 60, marginTop: 4 },
-          ]}
-        />
-      </View>
-    </View>
-  )
-}
-
-/**
- * Convert Member data to BuddyListItemData
- */
-export function memberToBuddyItem(
-  member: {
-    id: string
-    userId: string
-    role?: 'owner' | 'admin' | 'member'
-    nickname?: string | null
-    user?: {
-      id: string
-      username: string
-      displayName: string
-      avatarUrl: string | null
-      status: 'online' | 'idle' | 'dnd' | 'offline'
-      isBot: boolean
-    } | null
-  },
-  buddyMeta?: {
-    ownerId?: string
-    ownerName?: string
-    ownerAvatarUrl?: string | null
-    description?: string
-    totalOnlineSeconds?: number
-  },
-): BuddyListItemData | null {
-  if (!member.user) return null
-
-  return {
-    id: member.id,
-    userId: member.userId,
-    username: member.user.username,
-    displayName: member.user.displayName,
-    avatarUrl: member.user.avatarUrl,
-    status: member.user.status,
-    isBot: member.user.isBot,
-    role: member.role,
-    nickname: member.nickname,
-    ownerId: buddyMeta?.ownerId,
-    ownerName: buddyMeta?.ownerName,
-    ownerAvatarUrl: buddyMeta?.ownerAvatarUrl,
-    description: buddyMeta?.description,
-    totalOnlineSeconds: buddyMeta?.totalOnlineSeconds,
-  }
-}
-
-/**
- * Convert Agent data to BuddyListItemData
- */
-export function agentToBuddyItem(agent: {
-  id: string
-  userId: string
-  status: string
-  totalOnlineSeconds?: number
-  config?: { description?: string }
-  botUser?: {
-    id: string
-    username: string
-    displayName: string | null
-    avatarUrl: string | null
-  } | null
-  owner?: {
-    id: string
-    username: string
-    displayName: string | null
-    avatarUrl: string | null
-  } | null
-}): BuddyListItemData | null {
-  if (!agent.botUser) return null
-
-  return {
-    id: agent.id,
-    userId: agent.userId,
-    username: agent.botUser.username,
-    displayName: agent.botUser.displayName || agent.botUser.username,
-    avatarUrl: agent.botUser.avatarUrl,
-    status: agent.status === 'running' ? 'online' : 'offline',
-    isBot: true,
-    role: 'member',
-    ownerId: agent.owner?.id,
-    ownerName: agent.owner?.displayName || agent.owner?.username,
-    ownerAvatarUrl: agent.owner?.avatarUrl,
-    description: agent.config?.description,
-    totalOnlineSeconds: agent.totalOnlineSeconds,
-  }
 }
 
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
     gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    marginBottom: 2,
   },
-  avatarWrapper: {
+  checkboxWrap: {
+    width: 20,
+    alignItems: 'center',
+  },
+  avatarWrap: {
     position: 'relative',
   },
-  statusBadge: {
+  statusWrap: {
     position: 'absolute',
+    right: -4,
     bottom: -2,
-    right: -2,
   },
-  infoContainer: {
+  content: {
     flex: 1,
-    minWidth: 0,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
   },
-  displayName: {
+  nickname: {
     fontSize: fontSize.md,
     fontWeight: '600',
     flex: 1,
   },
-  botBadge: {
+  badge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
     borderRadius: radius.sm,
   },
-  botBadgeText: {
+  badgeText: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
+    fontWeight: '600',
   },
   username: {
     fontSize: fontSize.xs,
+    marginTop: 2,
   },
-  roleBadge: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
+  subText: {
+    marginTop: 2,
+    fontSize: 11,
   },
-  rankRow: {
-    marginTop: 4,
-  },
-  rightContainer: {
-    marginLeft: spacing.sm,
-  },
-  avatarSkeleton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  textSkeleton: {
+  checkbox: {
+    width: 14,
     height: 14,
-    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 })

@@ -1,6 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { extname } from 'node:path'
 import { Readable } from 'node:stream'
+import { lookup } from 'mime-types'
 import type { Logger } from 'pino'
 import type { MessageDao } from '../dao/message.dao'
 import type { ActorInput } from '../security/actor'
@@ -38,6 +39,36 @@ function parseContentRef(contentRef: string): { bucket: string; key: string } | 
   const match = contentRef.match(/^\/([^/]+)\/(.+)$/)
   if (!match?.[1] || !match[2]) return null
   return { bucket: match[1], key: match[2] }
+}
+
+function mediaPathFromUrl(value: string): string {
+  if (!/^https?:\/\//i.test(value)) return value.split(/[?#]/)[0] ?? value
+  try {
+    return new URL(value).pathname
+  } catch {
+    return value
+  }
+}
+
+function parseSignedMediaContentRef(value: string): string | null {
+  const path = mediaPathFromUrl(value)
+  const token = path.match(/^\/api\/media\/signed\/([^/]+)$/)?.[1]
+  const encoded = token?.split('.')[0]
+  if (!encoded) return null
+
+  try {
+    const payload = JSON.parse(
+      base64UrlDecode(encoded).toString('utf8'),
+    ) as Partial<MediaTokenPayload>
+    if (!payload.bucket || !payload.key || !payload.key.startsWith('uploads/')) return null
+    return `/${payload.bucket}/${payload.key}`
+  } catch {
+    return null
+  }
+}
+
+function isUploadedContentRef(value: string): boolean {
+  return /^\/[^/]+\/uploads\/.+/.test(value)
 }
 
 function isActiveContent(contentType: string): boolean {
@@ -152,6 +183,28 @@ export class MediaService {
 
     const bucketName = process.env.MINIO_BUCKET ?? 'shadow'
     return this.minioClient.presignedGetObject(bucketName, key, 3600)
+  }
+
+  normalizeMediaUrl(mediaUrl: string | null | undefined): string | null {
+    if (!mediaUrl) return null
+    return parseSignedMediaContentRef(mediaUrl) ?? mediaUrl
+  }
+
+  resolveMediaUrl(
+    mediaUrl: string | null | undefined,
+    fallbackContentType = 'image/png',
+  ): string | null {
+    const normalized = this.normalizeMediaUrl(mediaUrl)
+    if (!normalized || !isUploadedContentRef(normalized)) return normalized
+    try {
+      return this.createSignedUrl({
+        contentRef: normalized,
+        contentType: (lookup(normalized) as string | false) || fallbackContentType,
+        disposition: 'inline',
+      }).url
+    } catch {
+      return normalized
+    }
   }
 
   async resolveAttachmentMediaUrl(input: {

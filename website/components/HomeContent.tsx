@@ -1672,11 +1672,11 @@ function CategorySection({ meta, isZh }: { meta: CategoryMeta; isZh: boolean }) 
 function Leaderboard({ isZh }: { isZh: boolean }) {
   const t = useI18n()
   const rankColors = [
-    'linear-gradient(135deg, #f8e71c, #ffb300)',
-    'rgba(226,232,240,0.6)',
-    'linear-gradient(135deg, #FFD7A0, #f97316)',
+    'linear-gradient(135deg, #f8e71c, #ffb300)', // Gold
+    'linear-gradient(135deg, #e2e8f0, #94a3b8)', // Silver
+    'linear-gradient(135deg, #ffedd5, #f97316)', // Bronze
   ]
-  const rankTextColors = ['#050508', 'var(--rp-c-text-1)', '#7c2d12']
+  const rankTextColors = ['#451a03', '#0f172a', '#7c2d12']
 
   return (
     <div style={{ marginBottom: '32px' }}>
@@ -1705,21 +1705,25 @@ function Leaderboard({ isZh }: { isZh: boolean }) {
             className="leaderboard-row"
             style={{
               display: 'flex',
-              gap: '12px',
+              gap: '14px',
               alignItems: 'center',
               padding: '12px',
-              borderRadius: '18px',
-              border: '1px solid var(--shadow-card-border)',
+              borderRadius: '20px',
+              border: '1px solid',
+              borderColor: i === 0 ? 'rgba(0, 198, 209, 0.25)' : 'var(--shadow-card-border)',
               cursor: 'pointer',
-              background: i === 0 ? 'rgba(0,198,209,0.04)' : 'transparent',
+              background:
+                i === 0
+                  ? 'linear-gradient(135deg, rgba(0,198,209,0.06), transparent)'
+                  : 'transparent',
               transition: 'all 0.3s var(--bezier-bouncy)',
             }}
           >
             <div
               style={{
                 position: 'relative',
-                width: '62px',
-                height: '62px',
+                width: '64px',
+                height: '64px',
                 flexShrink: 0,
               }}
             >
@@ -1727,12 +1731,16 @@ function Leaderboard({ isZh }: { isZh: boolean }) {
                 src={play.image}
                 alt={isZh ? play.title : play.titleEn}
                 style={{
-                  width: '62px',
-                  height: '62px',
-                  borderRadius: '18px',
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '16px',
                   objectFit: 'cover',
-                  border: '1px solid rgba(255,255,255,0.16)',
-                  boxShadow: '0 8px 18px rgba(0,0,0,0.18)',
+                  border:
+                    i === 0
+                      ? '2px solid rgba(0, 198, 209, 0.4)'
+                      : '1px solid rgba(255,255,255,0.16)',
+                  boxShadow:
+                    i === 0 ? '0 8px 20px rgba(0,198,209,0.15)' : '0 8px 18px rgba(0,0,0,0.1)',
                 }}
                 loading="lazy"
               />
@@ -1740,32 +1748,36 @@ function Leaderboard({ isZh }: { isZh: boolean }) {
                 className="leaderboard-rank-badge"
                 style={{
                   position: 'absolute',
-                  left: '-8px',
-                  top: '-8px',
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '11px',
-                  background: i < 3 ? rankColors[i] : 'rgba(10,12,20,0.82)',
-                  border: i < 3 ? 'none' : '2px solid var(--shadow-card-border)',
+                  left: '-10px',
+                  top: '-10px',
+                  width: '30px',
+                  height: '30px',
+                  borderRadius: '12px',
+                  background: i < 3 ? rankColors[i] : 'var(--rp-c-bg)',
+                  border:
+                    i < 3
+                      ? '1px solid rgba(255,255,255,0.5)'
+                      : '2px solid var(--shadow-card-border)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontWeight: 900,
-                  fontSize: '13px',
+                  fontSize: '14px',
                   color: i < 3 ? rankTextColors[i] : 'var(--shadow-text-muted)',
-                  boxShadow: i === 0 ? '0 8px 18px rgba(248,231,28,0.32)' : undefined,
+                  boxShadow: i < 3 ? '0 4px 10px rgba(0,0,0,0.15)' : undefined,
+                  zIndex: 2,
                 }}
               >
-                {i === 0 ? <Crown size={15} fill="currentColor" strokeWidth={2.7} /> : i + 1}
+                {i === 0 ? <Crown size={16} fill="currentColor" strokeWidth={2.5} /> : i + 1}
               </div>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div
                 style={{
                   fontWeight: 900,
-                  fontSize: '14px',
+                  fontSize: '15px',
                   color: 'var(--rp-c-text-1)',
-                  marginBottom: '2px',
+                  marginBottom: '4px',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
@@ -1774,19 +1786,38 @@ function Leaderboard({ isZh }: { isZh: boolean }) {
               >
                 {isZh ? play.title : play.titleEn}
               </div>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--shadow-text-muted)' }}>
-                {play.starts} {t('home.launches')}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span
+                  style={{ fontSize: '12px', fontWeight: 800, color: 'var(--shadow-text-muted)' }}
+                >
+                  {play.starts} {t('home.launches')}
+                </span>
+                {i === 0 && (
+                  <span
+                    style={{
+                      fontSize: '10px',
+                      fontWeight: 900,
+                      color: '#00C6D1',
+                      background: 'rgba(0,198,209,0.1)',
+                      padding: '2px 6px',
+                      borderRadius: '6px',
+                    }}
+                  >
+                    HOT
+                  </span>
+                )}
               </div>
             </div>
             {i === 0 && (
               <div
                 style={{
-                  width: '10px',
-                  height: '10px',
+                  width: '12px',
+                  height: '12px',
                   background: '#00E676',
                   borderRadius: '50%',
-                  boxShadow: '0 0 8px rgba(0,230,118,0.6)',
+                  boxShadow: '0 0 12px rgba(0,230,118,0.8)',
                   flexShrink: 0,
+                  marginRight: '4px',
                 }}
               />
             )}

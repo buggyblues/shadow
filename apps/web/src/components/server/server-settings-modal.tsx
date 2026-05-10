@@ -198,13 +198,13 @@ export function ServerSettingsModal({
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const result = await fetchApi<{ url: string }>('/api/media/upload', {
+      const result = await fetchApi<{ url: string; signedUrl?: string }>('/api/media/upload', {
         method: 'POST',
         body: formData,
       })
       updateDraftField('bannerUrl', result.url)
       // Auto-save after upload
-      saveServerChanges()
+      saveServerChanges({ bannerUrl: result.url })
     } catch {
       /* upload failed */
     } finally {
@@ -219,13 +219,13 @@ export function ServerSettingsModal({
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const result = await fetchApi<{ url: string }>('/api/media/upload', {
+      const result = await fetchApi<{ url: string; signedUrl?: string }>('/api/media/upload', {
         method: 'POST',
         body: formData,
       })
       updateDraftField('iconUrl', result.url)
       // Auto-save after upload
-      saveServerChanges()
+      saveServerChanges({ iconUrl: result.url })
     } catch {
       /* upload failed */
     } finally {
@@ -233,17 +233,18 @@ export function ServerSettingsModal({
     }
   }
 
-  const saveServerChanges = () => {
-    if (!formDraft.name.trim()) return
+  const saveServerChanges = (overrides: Partial<typeof formDraft> = {}) => {
+    const nextDraft = { ...formDraft, ...overrides }
+    if (!nextDraft.name.trim()) return
     updateServer.mutate(
       {
-        name: formDraft.name.trim(),
-        description: formDraft.description.trim() || null,
-        slug: formDraft.slug.trim() || undefined,
-        isPublic: formDraft.isPublic,
-        homepageHtml: formDraft.homepageHtml.trim() || null,
-        iconUrl: formDraft.iconUrl,
-        bannerUrl: formDraft.bannerUrl,
+        name: nextDraft.name.trim(),
+        description: nextDraft.description.trim() || null,
+        slug: nextDraft.slug.trim() || undefined,
+        isPublic: nextDraft.isPublic,
+        homepageHtml: nextDraft.homepageHtml.trim() || null,
+        iconUrl: nextDraft.iconUrl,
+        bannerUrl: nextDraft.bannerUrl,
       },
       { onSuccess: () => onClose() },
     )
@@ -571,7 +572,7 @@ export function ServerSettingsModal({
               <Button
                 variant="primary"
                 size="sm"
-                onClick={saveServerChanges}
+                onClick={() => saveServerChanges()}
                 disabled={!formDraft.name.trim() || updateServer.isPending || !hasDraftChanges()}
                 loading={updateServer.isPending}
                 icon={Save}

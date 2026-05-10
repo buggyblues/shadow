@@ -241,7 +241,29 @@ export interface ShadowMember {
   userId: string
   serverId: string
   role: string
+  isBot?: boolean
+  uid?: string
+  nickname?: string
+  avatar?: string | null
+  status?: 'online' | 'idle' | 'dnd' | 'offline'
+  membershipTier?: string
+  membershipLevel?: number
+  isMember?: boolean
+  totalOnlineSeconds?: number
+  buddyTag?: string | null
+  creator?: {
+    uid: string
+    nickname: string
+    username?: string
+    displayName?: string | null
+    avatarUrl?: string | null
+  } | null
   user?: ShadowUser
+}
+
+export interface ShadowAddAgentsToServerResult {
+  added: string[]
+  failed: Array<{ agentId: string; error: string }>
 }
 
 export interface ShadowInviteCode {

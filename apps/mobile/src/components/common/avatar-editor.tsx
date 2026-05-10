@@ -20,12 +20,15 @@ export function AvatarEditor({ value, userId, onChange }: AvatarEditorProps) {
   const colors = useColors()
   const [uploading, setUploading] = useState(false)
   const [tab, setTab] = useState<'preset' | 'upload'>('preset')
+  const [uploadedPreview, setUploadedPreview] = useState<string | null>(null)
 
-  const resolvedSrc = getImageUrl(value) || (userId ? getCatAvatarByUserId(userId) : null)
+  const resolvedSrc =
+    uploadedPreview || getImageUrl(value) || (userId ? getCatAvatarByUserId(userId) : null)
 
   const handleRandomize = () => {
     const config = generateRandomCatConfig()
     const svgDataUri = renderCatSvg(config)
+    setUploadedPreview(null)
     onChange(svgDataUri)
   }
 
@@ -49,10 +52,11 @@ export function AvatarEditor({ value, userId, onChange }: AvatarEditorProps) {
         type: asset.mimeType || 'image/jpeg',
       } as unknown as Blob)
 
-      const data = await fetchApi<{ url: string }>('/api/media/upload', {
+      const data = await fetchApi<{ url: string; signedUrl?: string }>('/api/media/upload', {
         method: 'POST',
         body: formData,
       })
+      setUploadedPreview(data.signedUrl ?? data.url)
       onChange(data.url)
       showToast(t('common.avatarUploaded'))
     } catch (err) {
