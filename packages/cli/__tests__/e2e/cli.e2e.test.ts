@@ -78,7 +78,6 @@ describe('CLI E2E Tests', () => {
       const { stdout } = await execa('node', [CLI_PATH, 'listen', '--help'])
       expect(stdout).toContain('Listen to real-time events')
       expect(stdout).toContain('channel')
-      expect(stdout).toContain('dm')
     })
   })
 

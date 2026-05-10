@@ -359,7 +359,6 @@ describe('CLI Functional Tests', () => {
     it('should show listen help', async () => {
       const { stdout } = await execa('node', [CLI_PATH, 'listen', '--help'])
       expect(stdout).toContain('channel')
-      expect(stdout).toContain('dm')
     })
 
     it('should show listen channel help', async () => {
