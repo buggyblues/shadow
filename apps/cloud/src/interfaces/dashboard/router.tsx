@@ -19,7 +19,6 @@ import { SecretsPage } from '@/pages/SecretsPage'
 import { StoreDetailPage } from '@/pages/StoreDetailPage'
 import { StorePage } from '@/pages/StorePage'
 import { ValidatePage } from '@/pages/ValidatePage'
-import { WalletPage } from '@/pages/WalletPage'
 
 function withErrorBoundary(Page: React.ComponentType) {
   return function WrappedPage() {
@@ -191,12 +190,6 @@ const providersRoute = createRoute({
   component: withErrorBoundary(ProviderProfilesPage),
 })
 
-const walletRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/wallet',
-  component: withErrorBoundary(WalletPage),
-})
-
 const myTemplatesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/my-templates',
@@ -230,7 +223,6 @@ const routeTree = rootRoute.addChildren([
   activityRoute,
   settingsRoute,
   providersRoute,
-  walletRoute,
   secretsRoute,
   myTemplatesRoute,
   myTemplateDetailRoute,

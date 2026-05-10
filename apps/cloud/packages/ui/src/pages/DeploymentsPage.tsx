@@ -26,6 +26,7 @@ import { DashboardTabsList } from '@/components/DashboardTabsList'
 import { DashboardTaskCard } from '@/components/DashboardTaskCard'
 import { MetricCardContent, MetricCardWrapper } from '@/components/MetricCard'
 import { PageShell } from '@/components/PageShell'
+import { StatsGrid } from '@/components/StatsGrid'
 import { StatusBadge } from '@/components/StatusBadge'
 import { StatusDot } from '@/components/StatusDot'
 import { ToolbarActionButton } from '@/components/ToolbarActionButton'
@@ -209,7 +210,12 @@ function TasksPanel({ tasks }: { tasks: DeployTaskListItem[] }) {
 
   if (tasks.length === 0) {
     return (
-      <DashboardEmptyState icon={FolderClock} title={t('deployTask.noTasks')} className="p-0" />
+      <DashboardEmptyState
+        icon={FolderClock}
+        title={t('deployTask.noTasks')}
+        cardVariant="glassPanel"
+        className="p-0"
+      />
     )
   }
 
@@ -442,8 +448,8 @@ export function DeploymentsPage() {
         </div>
       }
       headerContent={
-        <div className="space-y-3">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <>
+          <StatsGrid className="mb-4 grid-cols-2 md:grid-cols-4 xl:grid-cols-5">
             <MetricCardWrapper>
               <MetricCardContent
                 label={t('clusters.totalDeployments')}
@@ -492,7 +498,7 @@ export function DeploymentsPage() {
                 valueClassName="text-accent"
               />
             </MetricCardWrapper>
-          </div>
+          </StatsGrid>
           <div className="flex items-center justify-between gap-3">
             <Tabs value={activeTab} onChange={setActiveTab}>
               <DashboardTabsList tabs={tabs} />
@@ -505,7 +511,7 @@ export function DeploymentsPage() {
               />
             )}
           </div>
-        </div>
+        </>
       }
     >
       {/* Infrastructure Tab */}
@@ -524,6 +530,7 @@ export function DeploymentsPage() {
               description={
                 debouncedSearch ? t('clusters.noNamespacesMatch') : t('clusters.noDeploymentsYet')
               }
+              cardVariant="glassPanel"
               action={
                 <Button asChild variant="primary" size="sm">
                   <Link to="/store">

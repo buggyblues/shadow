@@ -31,7 +31,8 @@
     "shrimpCoin": "Shrimp Coins",
     "done": "Done",
     "unknown": "Unknown",
-    "buddy": "Buddy"
+    "buddy": "Buddy",
+    "search": "Search"
   },
   "nav": {
     "features": "Features",
@@ -883,6 +884,9 @@
     "activityTyping": "Typing...",
     "buddyWorkStatus": "{{name}} {{status}}",
     "addToChannel": "Add to Channel",
+    "uidLabel": "UID",
+    "buddyTagLabel": "Buddy Tag",
+    "selectedCount": "{{count}} selected",
     "removeFromChannel": "Remove from Channel",
     "removeFromChannelConfirm": "Are you sure you want to remove {{name}} from this channel?",
     "addBuddyToChannel": "Add Buddy to Channel",

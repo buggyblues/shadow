@@ -833,7 +833,7 @@ export function DiyCloudPage() {
           }),
           primaryHref: '/app/settings/tasks',
           primaryLabel: t('diyCloud.gates.goTasks'),
-          secondaryHref: '/app/settings/wallet',
+          secondaryHref: '/app/settings?tab=wallet',
           secondaryLabel: t('diyCloud.gates.goWallet'),
         })
         return

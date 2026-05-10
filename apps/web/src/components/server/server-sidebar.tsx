@@ -152,6 +152,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   const scopeReadCooldownRef = useRef<Map<string, number>>(new Map())
   const scopeReadInFlightRef = useRef<Set<string>>(new Set())
   const { user } = useAuthStore()
+  const createServerNameInputRef = useRef<HTMLInputElement>(null)
 
   // Listen for 'create-server' pending action from task center
   const pendingAction = useUIStore((s) => s.pendingAction)
@@ -162,6 +163,12 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
       setPendingAction(null)
     }
   }, [pendingAction, setPendingAction])
+
+  useEffect(() => {
+    if (showCreate) {
+      requestAnimationFrame(() => createServerNameInputRef.current?.focus())
+    }
+  }, [showCreate])
 
   const { data: servers = [] } = useQuery({
     queryKey: ['servers'],
@@ -526,6 +533,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
             <ModalBody className="space-y-5 py-5">
               <Input
                 type="text"
+                ref={createServerNameInputRef}
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => {

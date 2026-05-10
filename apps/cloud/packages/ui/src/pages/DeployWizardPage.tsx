@@ -970,7 +970,7 @@ function StepConfigure({
     window.setTimeout(() => {
       window.removeEventListener('shadow:open-recharge:ack', onAck)
       if (!acked) {
-        navigate({ to: '/wallet' })
+        window.location.assign('/app/settings?tab=wallet')
       }
     }, 500)
   }
@@ -1323,7 +1323,7 @@ function StepConfigure({
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => navigate({ to: '/wallet' })}
+                        onClick={() => window.location.assign('/app/settings?tab=wallet')}
                       >
                         <Wallet size={13} />
                         {t('deploy.viewWalletAndBilling')}

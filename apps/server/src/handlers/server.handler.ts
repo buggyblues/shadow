@@ -14,6 +14,18 @@ const reviewJoinRequestSchema = z.object({
   status: z.enum(['approved', 'rejected']),
 })
 
+async function resolveSignedMediaUrl(
+  mediaService: {
+    resolveMediaUrl: (
+      mediaUrl: string | null | undefined,
+      fallbackContentType?: string,
+    ) => string | null
+  },
+  mediaUrl: string | null | undefined,
+): Promise<string | null> {
+  return mediaService.resolveMediaUrl(mediaUrl)
+}
+
 export function createServerHandler(container: AppContainer) {
   const serverHandler = new Hono()
 
@@ -37,6 +49,7 @@ export function createServerHandler(container: AppContainer) {
 
   async function getServerAccessStatus(idOrSlug: string, userId: string) {
     const serverDao = container.resolve('serverDao')
+    const mediaService = container.resolve('mediaService')
     const serverJoinRequestDao = container.resolve('serverJoinRequestDao')
     const serverId = await resolveServerId(idOrSlug)
     const server = await serverDao.findById(serverId)
@@ -53,8 +66,8 @@ export function createServerHandler(container: AppContainer) {
         id: server.id,
         name: server.name,
         slug: server.slug,
-        iconUrl: server.iconUrl,
-        bannerUrl: server.bannerUrl,
+        iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl),
+        bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl),
         description: server.description,
         isPublic: server.isPublic,
         ownerId: server.ownerId,
@@ -122,22 +135,32 @@ export function createServerHandler(container: AppContainer) {
   // Public endpoint: GET /api/servers/discover - browse public servers
   serverHandler.get('/discover', async (c) => {
     const serverService = container.resolve('serverService')
+    const mediaService = container.resolve('mediaService')
     const limit = Number(c.req.query('limit') ?? '50')
     const offset = Number(c.req.query('offset') ?? '0')
     const servers = await serverService.discoverPublic(limit, offset)
-    return c.json(servers)
+    const signedServers = await Promise.all(
+      servers.map(async (server) => ({
+        ...server,
+        iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl),
+        bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl),
+      })),
+    )
+    return c.json(signedServers)
   })
 
   // Public endpoint: GET /api/servers/invite/:code - get server info by invite code
   serverHandler.get('/invite/:code', async (c) => {
     const serverService = container.resolve('serverService')
+    const mediaService = container.resolve('mediaService')
     const code = c.req.param('code')
     try {
       const server = await serverService.getByInviteCode(code)
+      const iconUrl = await resolveSignedMediaUrl(mediaService, server.iconUrl)
       return c.json({
         id: server.id,
         name: server.name,
-        iconUrl: server.iconUrl,
+        iconUrl,
       })
     } catch {
       return c.json({ ok: false, error: 'Invalid invite code' }, 404)
@@ -151,19 +174,42 @@ export function createServerHandler(container: AppContainer) {
   serverHandler.post('/', zValidator('json', createServerSchema), async (c) => {
     const serverService = container.resolve('serverService')
     const membershipService = container.resolve('membershipService')
+    const mediaService = container.resolve('mediaService')
     const input = c.req.valid('json')
     const user = c.get('user')
     await membershipService.requireMember(user.userId, 'server:create')
-    const server = await serverService.create(input, user.userId)
+    const server = await serverService.create(
+      {
+        ...input,
+        iconUrl: input.iconUrl
+          ? (mediaService.normalizeMediaUrl(input.iconUrl) ?? undefined)
+          : input.iconUrl,
+        bannerUrl: input.bannerUrl
+          ? (mediaService.normalizeMediaUrl(input.bannerUrl) ?? undefined)
+          : input.bannerUrl,
+      },
+      user.userId,
+    )
     return c.json(server, 201)
   })
 
   // GET /api/servers
   serverHandler.get('/', async (c) => {
     const serverService = container.resolve('serverService')
+    const mediaService = container.resolve('mediaService')
     const user = c.get('user')
     const servers = await serverService.getUserServers(user.userId)
-    return c.json(servers)
+    const signedServers = await Promise.all(
+      servers.map(async (entry) => ({
+        ...entry,
+        server: {
+          ...entry.server,
+          iconUrl: await resolveSignedMediaUrl(mediaService, entry.server.iconUrl),
+          bannerUrl: await resolveSignedMediaUrl(mediaService, entry.server.bannerUrl),
+        },
+      })),
+    )
+    return c.json(signedServers)
   })
 
   // GET /api/servers/:id/access — server visibility gate status for private server links
@@ -178,6 +224,7 @@ export function createServerHandler(container: AppContainer) {
   // GET /api/servers/:id (supports UUID or slug)
   serverHandler.get('/:id', async (c) => {
     const serverService = container.resolve('serverService')
+    const mediaService = container.resolve('mediaService')
     const serverDao = container.resolve('serverDao')
     const id = c.req.param('id')
     // Try UUID first, then slug
@@ -193,24 +240,46 @@ export function createServerHandler(container: AppContainer) {
         id: server.id,
         name: server.name,
         slug: server.slug,
-        iconUrl: server.iconUrl,
-        bannerUrl: server.bannerUrl,
+        iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl),
+        bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl),
         description: server.description,
         isPublic: server.isPublic,
       })
     }
-    return c.json(server)
+    return c.json({
+      ...server,
+      iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl),
+      bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl),
+    })
   })
 
   // PATCH /api/servers/:id (supports UUID or slug)
   serverHandler.patch('/:id', zValidator('json', updateServerSchema), async (c) => {
     const serverService = container.resolve('serverService')
+    const mediaService = container.resolve('mediaService')
     const id = c.req.param('id')
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
     const resolvedId = isUuid ? id : (await serverService.getBySlug(id)).id
     const input = c.req.valid('json')
-    const server = await serverService.update(resolvedId, input, c.get('actor'))
-    return c.json(server)
+    const server = await serverService.update(
+      resolvedId,
+      {
+        ...input,
+        ...(input.iconUrl !== undefined
+          ? { iconUrl: mediaService.normalizeMediaUrl(input.iconUrl) }
+          : {}),
+        ...(input.bannerUrl !== undefined
+          ? { bannerUrl: mediaService.normalizeMediaUrl(input.bannerUrl) }
+          : {}),
+      },
+      c.get('actor'),
+    )
+    if (!server) return c.json({ ok: false, error: 'Server not found' }, 404)
+    return c.json({
+      ...server,
+      iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl),
+      bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl),
+    })
   })
 
   // DELETE /api/servers/:id (supports UUID or slug)
@@ -413,12 +482,31 @@ export function createServerHandler(container: AppContainer) {
   // GET /api/servers/:id/members
   serverHandler.get('/:id/members', async (c) => {
     const serverService = container.resolve('serverService')
+    const mediaService = container.resolve('mediaService')
     const idOrSlug = c.req.param('id')
     const serverId = await resolveServerId(idOrSlug)
     const permissionService = container.resolve('permissionService')
     await permissionService.requireMember(serverId, c.get('user').userId)
     const members = await serverService.getMembers(serverId)
-    return c.json(members)
+    const signedMembers = await Promise.all(
+      members.map(async (member) => ({
+        ...member,
+        avatar: await resolveSignedMediaUrl(mediaService, member.avatar),
+        creator: member.creator
+          ? {
+              ...member.creator,
+              avatarUrl: await resolveSignedMediaUrl(mediaService, member.creator.avatarUrl),
+            }
+          : null,
+        user: member.user
+          ? {
+              ...member.user,
+              avatarUrl: await resolveSignedMediaUrl(mediaService, member.user.avatarUrl),
+            }
+          : null,
+      })),
+    )
+    return c.json(signedMembers)
   })
 
   // PATCH /api/servers/:id/members/:userId
@@ -547,7 +635,9 @@ export function createServerHandler(container: AppContainer) {
     const serverService = container.resolve('serverService')
     const agentService = container.resolve('agentService')
     const agentPolicyService = container.resolve('agentPolicyService')
-    const id = c.req.param('id')
+    const serverDao = container.resolve('serverDao')
+    const idOrSlug = c.req.param('id')
+    const id = await resolveServerId(idOrSlug)
     const user = c.get('user')
     const body = await c.req.json<{ agentIds: string[] }>()
 
@@ -555,24 +645,32 @@ export function createServerHandler(container: AppContainer) {
       return c.json({ ok: false, error: 'agentIds is required' }, 400)
     }
 
-    const results: Array<{ agentId: string; success: boolean; error?: string }> = []
-    for (const agentId of body.agentIds) {
+    const added: string[] = []
+    const failed: Array<{ agentId: string; error: string }> = []
+    const uniqueAgentIds = Array.from(new Set(body.agentIds))
+
+    for (const agentId of uniqueAgentIds) {
       try {
         const agent = await agentService.getById(agentId)
         if (!agent) {
-          results.push({ agentId, success: false, error: 'Agent not found' })
+          failed.push({ agentId, error: 'Agent not found' })
           continue
         }
         // Verify the user owns the agent
         if (agent.ownerId !== user.userId) {
-          results.push({ agentId, success: false, error: 'Not the owner' })
+          failed.push({ agentId, error: 'Not the owner' })
+          continue
+        }
+        const existingMember = await serverDao.getMember(id, agent.userId)
+        if (existingMember) {
+          failed.push({ agentId, error: 'Agent is already a server member' })
           continue
         }
         // Add bot user as server member
         await serverService.addBotMember(id, agent.userId)
         // Auto-create default server-wide policy
         await agentPolicyService.ensureServerDefault(agentId, id)
-        results.push({ agentId, success: true })
+        added.push(agentId)
 
         // Emit member:joined to the server's channels so existing members see the bot
         // The bot is not yet in any channel, but server members should know it's available
@@ -606,11 +704,11 @@ export function createServerHandler(container: AppContainer) {
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error'
-        results.push({ agentId, success: false, error: msg })
+        failed.push({ agentId, error: msg })
       }
     }
 
-    return c.json({ results })
+    return c.json({ added, failed })
   })
 
   return serverHandler

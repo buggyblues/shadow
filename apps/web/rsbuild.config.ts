@@ -46,7 +46,7 @@ export default defineConfig({
         ws: true,
       },
       '/shadow': {
-        target: 'http://localhost:9000',
+        target: devApiTarget,
         changeOrigin: true,
       },
     },

@@ -17,7 +17,6 @@ import {
   ModalHeader,
   Search as SearchField,
 } from '@shadowob/ui'
-import { EmptyState } from '@shadowob/ui/components/ui/empty-state'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
@@ -34,6 +33,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { DashboardEmptyState } from '@/components/DashboardEmptyState'
 import { PageShell } from '@/components/PageShell'
 import { parseTemplateAgents } from '@/components/TemplateDetailShared'
 import { TemplateGalleryCard } from '@/components/TemplateGalleryCard'
@@ -483,7 +483,8 @@ export function MyTemplatesPage() {
       )}
 
       {!isLoading && templates.length === 0 && (
-        <EmptyState
+        <DashboardEmptyState
+          cardVariant="glassPanel"
           icon={Copy}
           title={t('templates.noCustomTemplates')}
           description={t('templates.noCustomTemplateHint')}
@@ -513,7 +514,8 @@ export function MyTemplatesPage() {
       )}
 
       {!isLoading && templates.length > 0 && filteredTemplates.length === 0 && (
-        <EmptyState
+        <DashboardEmptyState
+          cardVariant="glassPanel"
           icon={SearchIcon}
           title={t('templates.noTemplatesMatch', {
             query: debouncedSearch || t('templates.title'),

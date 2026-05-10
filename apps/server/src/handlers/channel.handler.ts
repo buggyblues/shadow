@@ -15,6 +15,18 @@ const reviewJoinRequestSchema = z.object({
   status: z.enum(['approved', 'rejected']),
 })
 
+async function resolveSignedMediaUrl(
+  mediaService: {
+    resolveMediaUrl: (
+      mediaUrl: string | null | undefined,
+      fallbackContentType?: string,
+    ) => string | null
+  },
+  mediaUrl: string | null | undefined,
+): Promise<string | null> {
+  return mediaService.resolveMediaUrl(mediaUrl)
+}
+
 export function createChannelHandler(container: AppContainer) {
   const channelHandler = new Hono()
 
@@ -228,6 +240,7 @@ export function createChannelHandler(container: AppContainer) {
   // GET /api/channels/:id/members — returns channel members with full user info
   channelHandler.get('/channels/:id/members', async (c) => {
     const channelService = container.resolve('channelService')
+    const mediaService = container.resolve('mediaService')
     const id = c.req.param('id')
     const userId = c.get('user').userId
     const channel = await channelService.getById(id)
@@ -236,7 +249,18 @@ export function createChannelHandler(container: AppContainer) {
       return c.json({ ok: false, error: 'Not a member of this channel' }, 403)
     }
     const members = await channelService.getChannelMembers(id, channel.serverId)
-    return c.json(members)
+    const signedMembers = await Promise.all(
+      members.map(async (member) => ({
+        ...member,
+        user: member.user
+          ? {
+              ...member.user,
+              avatarUrl: await resolveSignedMediaUrl(mediaService, member.user.avatarUrl),
+            }
+          : null,
+      })),
+    )
+    return c.json(signedMembers)
   })
 
   // POST /api/channels/:id/join-requests — request approval to enter a private channel

@@ -1286,13 +1286,12 @@ export function MonitoringPage() {
     { id: 'activity', label: t('activity.title'), icon: <Activity size={13} /> },
   ]
 
-  const tabPanelClassName = 'rounded-2xl p-4 md:p-5 lg:p-6'
+  const tabPanelClassName = 'rounded-2xl p-6'
 
   return (
     <PageShell
       breadcrumb={[]}
       title={t('monitoring.title')}
-      description={t('monitoring.description')}
       actions={
         <Button type="button" variant="ghost" size="sm" onClick={handleRefresh}>
           <RefreshCw size={12} />

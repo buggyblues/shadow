@@ -114,6 +114,7 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
   const [newName, setNewName] = useState('')
   const [newType, setNewType] = useState<'text' | 'voice' | 'announcement'>('text')
   const [newIsPrivate, setNewIsPrivate] = useState(false)
+  const createChannelNameInputRef = useRef<HTMLInputElement>(null)
 
   // Listen for 'create-channel' pending action from task center
   const pendingAction = useUIStore((s) => s.pendingAction)
@@ -124,6 +125,12 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
       setPendingAction(null)
     }
   }, [pendingAction, setPendingAction])
+
+  useEffect(() => {
+    if (showCreate) {
+      requestAnimationFrame(() => createChannelNameInputRef.current?.focus())
+    }
+  }, [showCreate])
 
   const [contextMenu, setContextMenu] = useState<{
     x: number
@@ -209,6 +216,7 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
       handleSelectChannel(data.id)
       // Show invite panel for the new channel
       setInviteTargetChannel(data)
+      setInviteInitialTab('buddies')
       setShowInvitePanel(true)
     },
   })
@@ -609,6 +617,7 @@ export function ChannelSidebar({ serverSlug }: { serverSlug: string }) {
           <ModalBody className="space-y-4 py-5">
             <Input
               label={t('channel.channelName')}
+              ref={createChannelNameInputRef}
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => {

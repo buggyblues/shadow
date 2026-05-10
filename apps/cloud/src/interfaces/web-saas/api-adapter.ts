@@ -860,7 +860,7 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension & ModelProxyApi
 
   // ── Wallet ────────────────────────────────────────────────────────────────
   // top-up is performed via the apps/web Stripe recharge modal (host app),
-  // triggered by the 'shadow:open-recharge' DOM event from WalletPage.
+  // triggered by the 'shadow:open-recharge' DOM event from cloud UI actions.
   wallet: {
     get: () => saasApi.wallet.get(),
     transactions: (params?: { limit?: number; offset?: number }) =>

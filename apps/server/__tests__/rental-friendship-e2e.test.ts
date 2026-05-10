@@ -93,7 +93,7 @@ beforeAll(async () => {
   })
   app.route('/api', createRentalHandler(container))
   app.route('/api/friends', createFriendshipHandler(container))
-  app.route('/api/channels', createChannelHandler(container))
+  app.route('/api', createChannelHandler(container))
 
   // Create test users
   const userDao = container.resolve('userDao')

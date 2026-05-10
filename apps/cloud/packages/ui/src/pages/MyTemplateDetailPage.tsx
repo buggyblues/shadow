@@ -12,7 +12,6 @@ import {
   Button,
   GlassPanel,
 } from '@shadowob/ui'
-import { EmptyState } from '@shadowob/ui/components/ui/empty-state'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import {
@@ -36,6 +35,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { DashboardEmptyState } from '@/components/DashboardEmptyState'
 import { PageShell } from '@/components/PageShell'
 import {
   parseTemplateAgents,
@@ -303,7 +303,7 @@ function VersionsTab({ name }: { name: string }) {
 
   if (versions.length <= 1) {
     return (
-      <EmptyState
+      <DashboardEmptyState
         icon={History}
         title={t('templateDetail.noVersionHistory')}
         description={t('templateDetail.editAndSaveToCreate')}
@@ -473,7 +473,7 @@ export function MyTemplateDetailPage() {
           </Button>
         }
       >
-        <EmptyState
+        <DashboardEmptyState
           title={t('storeDetail.templateNotFound')}
           description={t('templateDetail.missingTemplateDescription', { name })}
         />
@@ -596,7 +596,7 @@ export function MyTemplateDetailPage() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
       >
-        <GlassPanel className="rounded-3xl p-5">
+        <GlassPanel className="rounded-3xl p-6">
           {activeTab === 'agents' && (
             <TemplateAgentsTab
               agents={agents}

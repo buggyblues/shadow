@@ -10,7 +10,6 @@ import {
 import { Link, useRouterState } from '@tanstack/react-router'
 import {
   BarChart3,
-  Coins,
   Copy,
   KeyRound,
   Layers,
@@ -54,7 +53,6 @@ const NAV_SECTIONS: NavSection[] = [
       { to: '/deployments', labelKey: 'nav.deployments', icon: Layers },
       { to: '/providers', labelKey: 'nav.providers', icon: KeyRound },
       { to: '/secrets', labelKey: 'nav.secrets', icon: ShieldCheck },
-      { to: '/wallet', labelKey: 'nav.wallet', icon: Coins },
     ],
   },
 ]

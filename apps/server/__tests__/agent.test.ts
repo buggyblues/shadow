@@ -746,6 +746,12 @@ describe('Agent Handler (HTTP)', () => {
             ),
           }
         }
+        if (name === 'mediaService') {
+          return {
+            normalizeMediaUrl: vi.fn((url: string | null | undefined) => url ?? null),
+            resolveMediaUrl: vi.fn((url: string | null | undefined) => url ?? null),
+          }
+        }
         if (name === 'clawListingDao') return { findByAgentIds: vi.fn().mockResolvedValue([]) }
         if (name === 'rentalContractDao')
           return { findActiveByListingId: vi.fn().mockResolvedValue(null) }

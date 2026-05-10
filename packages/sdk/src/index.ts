@@ -28,6 +28,7 @@ export type {
   ReactionPayload,
   ServerEventMap,
   ServerJoinedPayload,
+  ShadowAddAgentsToServerResult,
   ShadowAgentUsageSnapshotInput,
   ShadowApp,
   ShadowAttachment,

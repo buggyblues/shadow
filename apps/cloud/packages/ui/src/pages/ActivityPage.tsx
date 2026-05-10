@@ -1,5 +1,4 @@
 import { Badge, Button, Card, NativeSelect, Search } from '@shadowob/ui'
-import { EmptyState } from '@shadowob/ui/components/ui/empty-state'
 import { useQuery } from '@tanstack/react-query'
 import {
   Activity,
@@ -20,6 +19,7 @@ import {
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityMetadataTable, getActivityMetadataRows } from '@/components/ActivityMetadataTable'
+import { DashboardEmptyState } from '@/components/DashboardEmptyState'
 import { PageShell } from '@/components/PageShell'
 import { useDebounce } from '@/hooks/useDebounce'
 import { formatActivityAbsoluteTime, normalizeActivityRecord } from '@/lib/activity-utils'
@@ -279,7 +279,7 @@ export function ActivityPage() {
       <StatsBar activities={activities} />
 
       {filtered.length === 0 && (
-        <EmptyState
+        <DashboardEmptyState
           icon={Activity}
           title={t('activity.noActivityRecorded')}
           description={

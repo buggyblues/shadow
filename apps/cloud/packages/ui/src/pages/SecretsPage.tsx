@@ -17,7 +17,6 @@ import {
   TableHeader,
   TableRow,
 } from '@shadowob/ui'
-import { EmptyState } from '@shadowob/ui/components/ui/empty-state'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   FolderPlus,
@@ -32,6 +31,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { DashboardEmptyState } from '@/components/DashboardEmptyState'
 import { EnvVarEditorDialog } from '@/components/EnvVarEditorDialog'
 import { PageShell } from '@/components/PageShell'
 import { type CloudApiClient, useApiClient } from '@/lib/api-context'
@@ -376,15 +376,8 @@ export function SecretsPage() {
               <ShieldCheck size={13} />
             </span>
             <div className="min-w-0 flex-1">
-              <span className="text-sm font-semibold text-success">
-                {t('secrets.encryptionActive')}
-              </span>
-              <span className="ml-2 text-xs text-text-muted">
-                {t('secrets.allSecretsEncrypted')}
-              </span>
-              <code className="ml-1 rounded border border-success/20 bg-bg-primary/40 px-1.5 py-0.5 font-mono text-[11px] text-success/80">
-                SHADOWOB_PASSPHRASE
-              </code>
+              <p className="text-sm font-semibold text-success">{t('secrets.encryptionActive')}</p>
+              <p className="mt-1 text-xs text-text-muted">{t('secrets.allSecretsEncrypted')}</p>
             </div>
             <span className="shrink-0 rounded-full border border-success/20 bg-success/10 px-2.5 py-0.5 text-[11px] font-semibold text-success">
               {data?.envVars.length ?? 0} {t('secrets.encryptedValues')}
@@ -408,27 +401,26 @@ export function SecretsPage() {
           {t('common.loading')}
         </div>
       ) : envVars.length === 0 ? (
-        <Card variant="glass">
-          <EmptyState
-            icon={Variable}
-            title={t('secrets.noValuesInGroup', { group: activeGroup })}
-            description={t('secrets.description')}
-            action={
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                onClick={() => {
-                  setEditingEntry(null)
-                  setDialogMode('create')
-                }}
-              >
-                <Plus size={14} />
-                {t('secrets.addEnvironmentValue')}
-              </Button>
-            }
-          />
-        </Card>
+        <DashboardEmptyState
+          cardVariant="glass"
+          icon={Variable}
+          title={t('secrets.noValuesInGroup', { group: activeGroup })}
+          description={t('secrets.emptyDescription')}
+          action={
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                setEditingEntry(null)
+                setDialogMode('create')
+              }}
+            >
+              <Plus size={14} />
+              {t('secrets.addEnvironmentValue')}
+            </Button>
+          }
+        />
       ) : (
         <Card variant="glass">
           <Table>

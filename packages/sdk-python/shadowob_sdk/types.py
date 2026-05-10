@@ -18,6 +18,12 @@ class ShadowApiErrorBody:
 
 
 @dataclass
+class ShadowAddAgentsToServerResult:
+    added: list[str] = field(default_factory=list)
+    failed: list[dict[str, str]] = field(default_factory=list)
+
+
+@dataclass
 class ShadowMembershipTier:
     id: str
     level: int
@@ -242,10 +248,30 @@ class ShadowThread:
 
 
 @dataclass
+class ShadowMemberCreator:
+    uid: str
+    nickname: str
+    username: str | None = None
+    display_name: str | None = None
+    avatar_url: str | None = None
+
+
+@dataclass
 class ShadowMember:
     user_id: str
     server_id: str
     role: str
+    is_bot: bool | None = None
+    uid: str | None = None
+    nickname: str | None = None
+    avatar: str | None = None
+    status: str | None = None
+    membership_tier: str | None = None
+    membership_level: int | None = None
+    is_member: bool | None = None
+    total_online_seconds: int | None = None
+    buddy_tag: str | None = None
+    creator: ShadowMemberCreator | dict[str, Any] | None = None
     user: ShadowUser | None = None
 
 

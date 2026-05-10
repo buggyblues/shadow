@@ -26,9 +26,7 @@ import {
   SelectValue,
   Switch,
 } from '@shadowob/ui'
-import { EmptyState } from '@shadowob/ui/components/ui/empty-state'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
 import {
   ArrowLeft,
   CheckCircle,
@@ -48,6 +46,7 @@ import {
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { DashboardEmptyState } from '@/components/DashboardEmptyState'
 import { PageShell } from '@/components/PageShell'
 import type { ProviderCatalogEntry, ProviderProfile, ProviderTestResult } from '@/lib/api'
 import { useApiClient } from '@/lib/api-context'
@@ -449,6 +448,7 @@ export function ProviderProfilesPage() {
     () => new Map(catalogs.map((catalog) => [catalog.provider.id, catalog])),
     [catalogs],
   )
+  const connectedProfileCount = profiles.filter((profile) => profile.enabled).length
   const selectedCatalog = form ? catalogById.get(form.providerId) : undefined
   const apiKeyCatalogs = useMemo(
     () => catalogs.filter((catalog) => catalog.provider.id !== 'custom'),
@@ -636,50 +636,71 @@ export function ProviderProfilesPage() {
       }
       headerContent={
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-success/20 bg-success/5 px-4 py-2.5">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-success/10 text-success">
-              <ShieldCheck size={13} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <span className="text-sm font-semibold text-success">
-                {t('providers.encryptionActive')}
-              </span>
-              <span className="ml-2 text-xs text-text-muted">
-                {t('providers.encryptionDescription')}
-              </span>
-            </div>
-            <span className="shrink-0 rounded-full border border-success/20 bg-success/10 px-2.5 py-0.5 text-[11px] font-semibold text-success">
-              {profiles.filter((profile) => profile.enabled).length}{' '}
-              {t('providers.enabledProfiles')}
-            </span>
-          </div>
-
-          <div className="flex flex-col gap-3 rounded-xl bg-primary/8 px-4 py-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex min-w-0 items-start gap-3">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
-                <Wallet size={15} />
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-text-primary">
-                  {t('providers.officialProviderTitle')}
-                </p>
-                <p className="mt-1 text-xs leading-relaxed text-text-muted">
-                  {t('providers.officialProviderDescription')}
-                </p>
-                <p className="mt-2 text-xs font-medium text-primary">{modelProxyPricingText}</p>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-success/20 bg-success/5 px-4 py-3">
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-success/10 text-success">
+                  <ShieldCheck size={13} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-success">
+                    {t('providers.encryptionActive')}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-text-muted">
+                    {t('providers.encryptionDescription')}
+                  </p>
+                </div>
               </div>
             </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              <Button asChild variant="ghost" size="sm">
-                <Link to="/wallet">
+
+            <div className="rounded-xl border border-border-subtle bg-bg-secondary/45 px-4 py-3">
+              <p className="text-xs font-bold uppercase tracking-[0.1em] text-text-muted">
+                {t('providers.connectionCount', { count: profiles.length })}
+              </p>
+              <p className="mt-1 text-xl font-bold text-text-primary">{profiles.length}</p>
+            </div>
+
+            <div className="rounded-xl border border-border-subtle bg-bg-secondary/45 px-4 py-3">
+              <p className="text-xs font-bold uppercase tracking-[0.1em] text-text-muted">
+                {t('providers.enabledProfiles')}
+              </p>
+              <p className="mt-1 text-xl font-bold text-text-primary">{connectedProfileCount}</p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border-subtle bg-bg-secondary/35 px-4 py-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
+                  <Wallet size={15} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-text-primary">
+                    {t('providers.officialProviderTitle')}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-text-muted">
+                    {t('providers.officialProviderDescription')}
+                  </p>
+                  <p className="mt-2 text-xs font-medium text-primary">{modelProxyPricingText}</p>
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    window.location.assign('/app/settings?tab=wallet')
+                  }}
+                >
                   <Wallet size={13} />
                   {t('deploy.viewWalletAndBilling')}
-                </Link>
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={openRecharge}>
-                <DollarSign size={13} />
-                {t('deploy.topUp')}
-              </Button>
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={openRecharge}>
+                  <DollarSign size={13} />
+                  {t('deploy.topUp')}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -691,19 +712,18 @@ export function ProviderProfilesPage() {
           {t('common.loading')}
         </div>
       ) : profiles.length === 0 ? (
-        <Card variant="glass">
-          <EmptyState
-            icon={KeyRound}
-            title={t('providers.noProfiles')}
-            description={t('providers.noProfilesDescription')}
-            action={
-              <Button type="button" variant="primary" size="sm" onClick={openConnectDialog}>
-                <Plus size={14} />
-                {t('providers.addProvider')}
-              </Button>
-            }
-          />
-        </Card>
+        <DashboardEmptyState
+          cardVariant="glass"
+          icon={KeyRound}
+          title={t('providers.noProfiles')}
+          description={t('providers.noProfilesDescription')}
+          action={
+            <Button type="button" variant="primary" size="sm" onClick={openConnectDialog}>
+              <Plus size={14} />
+              {t('providers.addProvider')}
+            </Button>
+          }
+        />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {profiles.map((profile) => {

@@ -31,7 +31,8 @@
     "shrimpCoin": "蝦幣",
     "done": "完成",
     "unknown": "未知",
-    "buddy": "Buddy"
+    "buddy": "Buddy",
+    "search": "搜尋"
   },
   "nav": {
     "features": "特色功能",
@@ -695,6 +696,8 @@
     "activityTyping": "輸入中...",
     "buddyWorkStatus": "{{name}} {{status}}",
     "addToChannel": "新增到頻道",
+    "uidLabel": "UID",
+    "buddyTagLabel": "Buddy 標籤",
     "removeFromChannel": "從頻道移除",
     "removeFromChannelConfirm": "確定要將 {{name}} 從此頻道移除嗎？",
     "addBuddyToChannel": "新增 Buddy 到頻道",
@@ -736,6 +739,7 @@
     "goCreate": "去建立",
     "noInvitable": "暫無其他伺服器成員可邀請",
     "selectedBuddies": "已選擇 {{count}} 個 Buddy",
+    "selectedCount": "已選擇 {{count}} 項",
     "addToServer": "新增到伺服器"
   },
   "profile": {

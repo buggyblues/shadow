@@ -226,6 +226,20 @@ client.leave_server("server-id")
 GET /api/servers/:id/members
 ```
 
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `uid` | string | 用户 UID（映射到 `user.id`） |
+| `nickname` | string | 昵称（优先 `displayName`，否则 `username`） |
+| `avatar` | string? | 头像地址 |
+| `status` | string | `online` / `idle` / `dnd` / `offline` |
+| `membershipTier` | string | 账户会员等级（`visitor` / `member`） |
+| `membershipLevel` | number | 会员等级数值 |
+| `isMember` | boolean | 是否会员 |
+| `totalOnlineSeconds` | number | 在线累计时长（Buddy） |
+| `buddyTag` | string? | Buddy Tag，来自 Buddy 配置 |
+| `creator` | object? | Buddy 创建者信息（仅 Buddy 成员） |
+| `isBot` | boolean | 是否 Bot |
+
 :::code-group
 
 ```ts [TypeScript]
@@ -317,11 +331,20 @@ POST /api/servers/:id/agents
 :::code-group
 
 ```ts [TypeScript]
-const { added } = await client.addAgentsToServer('server-id', ['agent-1', 'agent-2'])
+const { added, failed } = await client.addAgentsToServer('server-id', ['agent-1', 'agent-2'])
 ```
 
 ```python [Python]
 result = client.add_agents_to_server("server-id", ["agent-1", "agent-2"])
+```
+
+```json
+{
+  "added": ["agent-1"],
+  "failed": [
+    { "agentId": "agent-2", "error": "Not the owner" }
+  ]
+}
 ```
 
 :::

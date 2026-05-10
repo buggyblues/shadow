@@ -12,7 +12,11 @@ from typing import Any, Iterator
 
 import httpx
 
-from .types import ShadowAgentUsageSnapshotInput, ShadowEntitlement
+from .types import (
+    ShadowAddAgentsToServerResult,
+    ShadowAgentUsageSnapshotInput,
+    ShadowEntitlement,
+)
 
 
 _USAGE_SNAPSHOT_FIELD_ALIASES = {
@@ -434,7 +438,7 @@ class ShadowClient:
 
     def add_agents_to_server(
         self, server_id: str, agent_ids: list[str]
-    ) -> dict[str, Any]:
+    ) -> ShadowAddAgentsToServerResult | dict[str, Any]:
         return self._post(
             f"/api/servers/{server_id}/agents", json={"agentIds": agent_ids}
         )

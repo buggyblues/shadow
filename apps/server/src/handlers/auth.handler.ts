@@ -32,6 +32,18 @@ async function resolveLiveUserStatus(
   }
 }
 
+async function resolveSignedMediaUrl(
+  mediaService: {
+    resolveMediaUrl: (
+      mediaUrl: string | null | undefined,
+      fallbackContentType?: string,
+    ) => string | null
+  },
+  mediaUrl: string | null | undefined,
+): Promise<string | null> {
+  return mediaService.resolveMediaUrl(mediaUrl)
+}
+
 export function createAuthHandler(container: AppContainer) {
   const authHandler = new Hono()
   const authEntryRateLimit = createRateLimitMiddleware({
@@ -52,18 +64,37 @@ export function createAuthHandler(container: AppContainer) {
     zValidator('json', registerSchema),
     async (c) => {
       const authService = container.resolve('authService')
+      const mediaService = container.resolve('mediaService')
       const input = c.req.valid('json')
       const result = await authService.register(input)
-      return c.json(result, 201)
+      const userAvatarUrl = await resolveSignedMediaUrl(mediaService, result.user.avatarUrl)
+      return c.json(
+        {
+          ...result,
+          user: {
+            ...result.user,
+            avatarUrl: userAvatarUrl,
+          },
+        },
+        201,
+      )
     },
   )
 
   // POST /api/auth/login
   authHandler.post('/login', authEntryRateLimit, zValidator('json', loginSchema), async (c) => {
     const authService = container.resolve('authService')
+    const mediaService = container.resolve('mediaService')
     const input = c.req.valid('json')
     const result = await authService.login(input)
-    return c.json(result)
+    const userAvatarUrl = await resolveSignedMediaUrl(mediaService, result.user.avatarUrl)
+    return c.json({
+      ...result,
+      user: {
+        ...result.user,
+        avatarUrl: userAvatarUrl,
+      },
+    })
   })
 
   // POST /api/auth/email/start — send a one-time email verification code
@@ -86,9 +117,17 @@ export function createAuthHandler(container: AppContainer) {
     zValidator('json', emailLoginVerifySchema),
     async (c) => {
       const authService = container.resolve('authService')
+      const mediaService = container.resolve('mediaService')
       const input = c.req.valid('json')
       const result = await authService.verifyEmailLogin(input)
-      return c.json(result)
+      const userAvatarUrl = await resolveSignedMediaUrl(mediaService, result.user.avatarUrl)
+      return c.json({
+        ...result,
+        user: {
+          ...result.user,
+          avatarUrl: userAvatarUrl,
+        },
+      })
     },
   )
 
@@ -120,10 +159,12 @@ export function createAuthHandler(container: AppContainer) {
   // GET /api/auth/me
   authHandler.get('/me', authMiddleware, async (c) => {
     const authService = container.resolve('authService')
+    const mediaService = container.resolve('mediaService')
     const user = c.get('user')
     const result = await authService.getMe(user.userId)
     const status = await resolveLiveUserStatus(result.id, result.status)
-    return c.json({ ...result, status })
+    const avatarUrl = await resolveSignedMediaUrl(mediaService, result.avatarUrl)
+    return c.json({ ...result, status, avatarUrl })
   })
 
   // PATCH /api/auth/me — update profile
@@ -139,10 +180,17 @@ export function createAuthHandler(container: AppContainer) {
     ),
     async (c) => {
       const authService = container.resolve('authService')
+      const mediaService = container.resolve('mediaService')
       const user = c.get('user')
       const input = c.req.valid('json')
-      const result = await authService.updateProfile(user.userId, input)
-      return c.json(result)
+      const result = await authService.updateProfile(user.userId, {
+        ...input,
+        ...(input.avatarUrl !== undefined
+          ? { avatarUrl: mediaService.normalizeMediaUrl(input.avatarUrl) }
+          : {}),
+      })
+      const avatarUrl = await resolveSignedMediaUrl(mediaService, result.avatarUrl)
+      return c.json({ ...result, avatarUrl })
     },
   )
 
@@ -171,6 +219,7 @@ export function createAuthHandler(container: AppContainer) {
   authHandler.get('/users/:id', authMiddleware, async (c) => {
     const userDao = container.resolve('userDao')
     const agentDao = container.resolve('agentDao')
+    const mediaService = container.resolve('mediaService')
     const id = c.req.param('id')
     if (!id) {
       return c.json({ ok: false, error: 'Missing user id' }, 400)
@@ -195,7 +244,7 @@ export function createAuthHandler(container: AppContainer) {
             id: owner.id,
             username: owner.username,
             displayName: owner.displayName ?? owner.username,
-            avatarUrl: owner.avatarUrl,
+            avatarUrl: await resolveSignedMediaUrl(mediaService, owner.avatarUrl),
           }
         }
       }
@@ -229,7 +278,7 @@ export function createAuthHandler(container: AppContainer) {
                   id: botUser.id,
                   username: botUser.username,
                   displayName: botUser.displayName ?? botUser.username,
-                  avatarUrl: botUser.avatarUrl,
+                  avatarUrl: await resolveSignedMediaUrl(mediaService, botUser.avatarUrl),
                 }
               : undefined,
           }
@@ -242,7 +291,7 @@ export function createAuthHandler(container: AppContainer) {
       id: user.id,
       username: user.username,
       displayName: user.displayName ?? user.username,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: await resolveSignedMediaUrl(mediaService, user.avatarUrl),
       isBot: user.isBot,
       status,
       createdAt: user.createdAt,

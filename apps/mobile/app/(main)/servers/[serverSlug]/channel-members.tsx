@@ -1,19 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import * as Clipboard from 'expo-clipboard'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Bot,
   Check,
   ChevronRight,
+  Copy,
   Crown,
   MessageSquare,
   MinusCircle,
-  Plus,
+  PawPrint,
   Search,
   Shield,
   UserPlus,
   X,
 } from 'lucide-react-native'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ActivityIndicator,
@@ -27,11 +29,17 @@ import {
   View,
 } from 'react-native'
 import { Avatar } from '../../../../src/components/common/avatar'
+import {
+  BuddyListItem,
+  type BuddyListItemData,
+} from '../../../../src/components/common/buddy-list-item'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
 import { StatusBadge } from '../../../../src/components/common/status-badge'
 import { fetchApi } from '../../../../src/lib/api'
 import { useAuthStore } from '../../../../src/stores/auth.store'
 import { fontSize, radius, spacing, useColors } from '../../../../src/theme'
+
+type OnlineStatus = 'online' | 'idle' | 'dnd' | 'offline'
 
 interface ChannelMember {
   id: string
@@ -42,35 +50,114 @@ interface ChannelMember {
     username: string
     displayName: string | null
     avatarUrl: string | null
-    status?: string
+    status?: OnlineStatus | string
     isBot?: boolean
   }
 }
 
 interface ServerMember {
-  user: {
+  userId: string
+  id: string
+  role: 'owner' | 'admin' | 'member'
+  nickname?: string | null
+  uid?: string
+  avatar?: string | null
+  status?: OnlineStatus | string
+  membershipTier?: string | null
+  membershipLevel?: number | null
+  isMember?: boolean
+  totalOnlineSeconds?: number
+  buddyTag?: string | null
+  creator?: {
+    uid?: string
+    username?: string
+    id?: string
+    displayName?: string | null
+  } | null
+  isBot?: boolean
+  user?: {
     id: string
     username: string
     displayName: string | null
     avatarUrl: string | null
+    status?: OnlineStatus | string
     isBot?: boolean
-  }
-  role: string
+  } | null
 }
 
 interface BuddyAgent {
   id: string
   ownerId: string
   userId: string
+  status: string
+  totalOnlineSeconds?: number
   botUser?: {
     id: string
     username: string
     displayName?: string | null
     avatarUrl?: string | null
   } | null
+  config?: {
+    description?: string
+    buddyTag?: string
+  }
+  owner?: {
+    userId?: string
+    id?: string
+    username?: string
+    displayName?: string | null
+    avatarUrl?: string | null
+  } | null
+}
+
+type AddAgentsResponse = {
+  added?: string[]
+  failed?: Array<{ agentId: string; error: string }>
+  results?: Array<{ agentId: string; success: boolean; error?: string }>
+}
+
+type AddAgentsParsedResult = {
+  added: string[]
+  failed: Array<{ agentId: string; error: string }>
+}
+
+type InviteMode = 'members' | 'buddies'
+
+type InviteCandidate = BuddyListItemData & {
+  key: string
+  source: 'member' | 'buddy'
+  canAddToChannel: boolean
+  canAddToServer: boolean
+  agentId?: string
 }
 
 type PolicyMode = 'replyAll' | 'mentionOnly' | 'disabled'
+
+const normalizeStatus = (value?: string | null): OnlineStatus => {
+  if (value === 'online' || value === 'idle' || value === 'dnd' || value === 'offline') {
+    return value
+  }
+  if (value === 'running') return 'online'
+  return 'offline'
+}
+
+const parseAddAgentsResult = (
+  result: AddAgentsResponse | null | undefined,
+): AddAgentsParsedResult => {
+  if (!result) return { added: [], failed: [] }
+
+  if (Array.isArray(result.added) && Array.isArray(result.failed)) {
+    return { added: result.added, failed: result.failed }
+  }
+
+  const results = Array.isArray(result.results) ? result.results : []
+  return {
+    added: results.filter((item) => item.success).map((item) => item.agentId),
+    failed: results
+      .filter((item) => !item.success)
+      .map((item) => ({ agentId: item.agentId, error: item.error || 'Failed' })),
+  }
+}
 
 export default function ChannelMembersScreen() {
   const { serverSlug, channelId, autoInvite } = useLocalSearchParams<{
@@ -87,7 +174,10 @@ export default function ChannelMembersScreen() {
   const [policySheet, setPolicySheet] = useState<ChannelMember | null>(null)
   const [showInviteSheet, setShowInviteSheet] = useState(autoInvite === '1')
   const [inviteSearch, setInviteSearch] = useState('')
-  const [addedUserIds, setAddedUserIds] = useState<Set<string>>(new Set())
+  const [inviteMode, setInviteMode] = useState<InviteMode>('members')
+  const [selectedCandidateKeys, setSelectedCandidateKeys] = useState<Set<string>>(new Set())
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [copiedInvite, setCopiedInvite] = useState(false)
 
   // Channel info
   const { data: channel } = useQuery({
@@ -121,91 +211,162 @@ export default function ChannelMembersScreen() {
   // Server info for permissions
   const { data: server } = useQuery({
     queryKey: ['server', serverSlug],
-    queryFn: () => fetchApi<{ id: string; name: string }>(`/api/servers/${serverSlug}`),
+    queryFn: () =>
+      fetchApi<{ id: string; name: string; inviteCode?: string }>(`/api/servers/${serverSlug}`),
     enabled: !!serverSlug,
   })
 
-  // Invite: server members not in channel
-  const invitableServerMembers = useMemo(() => {
-    const channelUserIds = new Set(members.map((m) => m.userId))
-    const q = inviteSearch.toLowerCase()
-    return serverMembers
-      .filter((m) => !channelUserIds.has(m.user.id) && !m.user.isBot)
-      .filter((m) => {
-        if (!q) return true
-        const name = (m.user.displayName || m.user.username).toLowerCase()
-        return name.includes(q) || m.user.username.toLowerCase().includes(q)
-      })
-  }, [serverMembers, members, inviteSearch])
-
-  // Invite: user's buddies not in channel (also check if on server)
+  const channelUserIds = useMemo(() => new Set(members.map((m) => m.userId)), [members])
+  const searchKeyword = useMemo(() => inviteSearch.trim().toLowerCase(), [inviteSearch])
   const serverBotUserIds = useMemo(
-    () => new Set(serverMembers.filter((m) => m.user.isBot).map((m) => m.user.id)),
+    () => new Set(serverMembers.filter((m) => m.user?.isBot).map((m) => m.user.id)),
     [serverMembers],
   )
-  const channelBotUserIds = useMemo(
-    () => new Set(members.filter((m) => m.user.isBot).map((m) => m.userId)),
-    [members],
+  const myAgentByBotUserId = useMemo(() => {
+    const map = new Map<string, BuddyAgent>()
+    for (const agent of myAgents) {
+      if (agent.botUser?.id) {
+        map.set(agent.botUser.id, agent)
+      }
+    }
+    return map
+  }, [myAgents])
+
+  const memberCandidates = useMemo(() => {
+    return serverMembers
+      .filter((m) => m.user && !m.user.isBot)
+      .filter((m) => !channelUserIds.has(m.userId))
+      .filter((m) => {
+        if (!searchKeyword) return true
+        const displayName = m.nickname || m.user!.displayName || m.user!.username
+        return (
+          displayName.toLowerCase().includes(searchKeyword) ||
+          m.user!.username.toLowerCase().includes(searchKeyword)
+        )
+      })
+      .map((m) => {
+        const user = m.user!
+        return {
+          key: `member:${user.id}`,
+          uid: user.id,
+          nickname: m.nickname || user.displayName || user.username,
+          username: user.username,
+          avatar: user.avatarUrl,
+          status: normalizeStatus(user.status),
+          isBot: false,
+          canAddToServer: false,
+          canAddToChannel: !channelUserIds.has(user.id),
+          membershipTier: m.membershipTier,
+          membershipLevel: m.membershipLevel,
+          totalOnlineSeconds: m.totalOnlineSeconds,
+          buddyTag: null,
+          creator: null,
+          source: 'member' as const,
+          agentId: undefined,
+        }
+      })
+  }, [serverMembers, channelUserIds, searchKeyword])
+
+  const buddyCandidatesOnServer = useMemo(() => {
+    return serverMembers
+      .filter((m) => m.user?.isBot && !channelUserIds.has(m.user!.id))
+      .filter((m) => myAgentByBotUserId.has(m.user!.id))
+      .filter((m) => {
+        if (!searchKeyword) return true
+        const displayName = m.user!.displayName || m.user!.username
+        return displayName.toLowerCase().includes(searchKeyword)
+      })
+      .map((m) => {
+        const user = m.user!
+        const agent = myAgentByBotUserId.get(user.id)
+        if (!agent) return null
+        return {
+          key: `buddy:${agent.id}`,
+          uid: user.id,
+          nickname: m.nickname || user.displayName || user.username,
+          username: user.username,
+          avatar: user.avatarUrl,
+          status: normalizeStatus(user.status),
+          isBot: true,
+          canAddToServer: false,
+          canAddToChannel: true,
+          membershipTier: m.membershipTier,
+          membershipLevel: m.membershipLevel,
+          totalOnlineSeconds: m.totalOnlineSeconds,
+          buddyTag: agent.config?.buddyTag ?? null,
+          creator: {
+            uid: agent.owner?.userId || agent.owner?.id || '',
+            nickname: agent.owner?.displayName || agent.owner?.username || '',
+          },
+          source: 'buddy' as const,
+          agentId: agent.id,
+        }
+      })
+      .filter((candidate): candidate is InviteCandidate => !!candidate)
+  }, [serverMembers, searchKeyword, channelUserIds, myAgentByBotUserId])
+
+  const buddyCandidatesNew = useMemo(() => {
+    return myAgents
+      .filter((agent) => agent.botUser && !serverBotUserIds.has(agent.botUser.id))
+      .filter((agent) => {
+        if (!searchKeyword) return true
+        const name = (agent.botUser?.displayName || agent.botUser?.username || '').toLowerCase()
+        return name.includes(searchKeyword)
+      })
+      .map((agent) => ({
+        key: `buddy-new:${agent.id}`,
+        uid: agent.botUser!.id,
+        nickname: agent.botUser!.displayName || agent.botUser!.username,
+        username: agent.botUser!.username,
+        avatar: agent.botUser!.avatarUrl ?? null,
+        status: normalizeStatus(agent.status),
+        isBot: true,
+        canAddToServer: true,
+        canAddToChannel: !!channelId,
+        membershipTier: null,
+        membershipLevel: null,
+        totalOnlineSeconds: agent.totalOnlineSeconds,
+        buddyTag: agent.config?.buddyTag ?? null,
+        creator: agent.owner
+          ? {
+              uid: agent.owner.userId || agent.owner.id || '',
+              nickname: agent.owner.displayName || agent.owner.username || '',
+            }
+          : null,
+        source: 'buddy' as const,
+        agentId: agent.id,
+      }))
+  }, [myAgents, serverBotUserIds, searchKeyword, channelId])
+
+  const buddyCandidates = useMemo(
+    () => [...buddyCandidatesOnServer, ...buddyCandidatesNew],
+    [buddyCandidatesOnServer, buddyCandidatesNew],
   )
 
-  // Server bots not in this channel
-  const serverBotsNotInChannel = useMemo(() => {
-    const q = inviteSearch.toLowerCase()
-    return serverMembers
-      .filter((m) => m.user.isBot && !channelBotUserIds.has(m.user.id))
-      .filter((m) => {
-        if (!q) return true
-        const name = (m.user.displayName || m.user.username).toLowerCase()
-        return name.includes(q)
-      })
-  }, [serverMembers, channelBotUserIds, inviteSearch])
+  const activeCandidates = useMemo(
+    () => (inviteMode === 'members' ? memberCandidates : buddyCandidates),
+    [inviteMode, memberCandidates, buddyCandidates],
+  )
 
-  // User's agents not on this server
-  const myAgentsNotOnServer = useMemo(() => {
-    const q = inviteSearch.toLowerCase()
-    return myAgents
-      .filter((a) => a.botUser && !serverBotUserIds.has(a.botUser.id))
-      .filter((a) => {
-        if (!q) return true
-        const name = (a.botUser?.displayName || a.botUser?.username || '').toLowerCase()
-        return name.includes(q)
-      })
-  }, [myAgents, serverBotUserIds, inviteSearch])
+  const selectedCandidates = useMemo(
+    () => activeCandidates.filter((candidate) => selectedCandidateKeys.has(candidate.key)),
+    [activeCandidates, selectedCandidateKeys],
+  )
 
-  // Invite member to channel
-  const inviteMember = useMutation({
+  const addToChannelCandidate = useMutation({
     mutationFn: (userId: string) =>
       fetchApi(`/api/channels/${channelId}/members`, {
         method: 'POST',
         body: JSON.stringify({ userId }),
       }),
-    onSuccess: (_data, userId) => {
-      setAddedUserIds((prev) => new Set(prev).add(userId))
-      queryClient.invalidateQueries({ queryKey: ['channel-members', channelId] })
-    },
   })
 
-  // Add agent to server then to channel
-  const addAgentToServer = useMutation({
-    mutationFn: async (agent: BuddyAgent) => {
-      await fetchApi(`/api/servers/${channel!.serverId}/agents`, {
+  const addAgentsToServer = useMutation({
+    mutationFn: (agentIds: string[]) =>
+      fetchApi<AddAgentsResponse>(`/api/servers/${channel!.serverId}/agents`, {
         method: 'POST',
-        body: JSON.stringify({ agentIds: [agent.id] }),
-      })
-      if (agent.botUser?.id) {
-        await fetchApi(`/api/channels/${channelId}/members`, {
-          method: 'POST',
-          body: JSON.stringify({ userId: agent.botUser.id }),
-        })
-      }
-    },
-    onSuccess: (_data, agent) => {
-      if (agent.botUser?.id) {
-        setAddedUserIds((prev) => new Set(prev).add(agent.botUser!.id))
-      }
-      queryClient.invalidateQueries({ queryKey: ['channel-members', channelId] })
-      queryClient.invalidateQueries({ queryKey: ['server-members-for-invite'] })
-    },
+        body: JSON.stringify({ agentIds }),
+      }),
   })
 
   // Remove member from channel
@@ -260,6 +421,137 @@ export default function ChannelMembersScreen() {
     const agent = buddyAgents.find((a) => a.botUser?.id === member.user.id)
     if (!agent) return false
     return agent.ownerId === currentUser?.id || server?.id != null
+  }
+
+  useEffect(() => {
+    if (!showInviteSheet) {
+      setInviteSearch('')
+      setInviteMode('members')
+      setSelectedCandidateKeys(new Set())
+    }
+  }, [showInviteSheet])
+
+  const inviteLink = server?.inviteCode
+    ? `https://shadowob.com/app/invite/${server.inviteCode}`
+    : ''
+
+  const isBottomActionDisabled = (() => {
+    if (isSubmitting) return true
+    if (selectedCandidates.length === 0) return true
+    if (inviteMode === 'members' && !channelId) return true
+    return selectedCandidates.every(
+      (candidate) => !(candidate.canAddToChannel || candidate.canAddToServer),
+    )
+  })()
+
+  const selectedCount = selectedCandidates.length
+  const noSelectedCountMessage = t('member.selectedCount', { count: selectedCount })
+  const inviteToChannelDescription =
+    inviteMode === 'members'
+      ? channelId
+        ? t('member.inviteToChannelDesc', { channel: channel?.name ?? '' })
+        : t('member.inviteSelectChannelDesc')
+      : channelId
+        ? t('member.addBuddyToChannelDesc', { channel: channel?.name ?? '' })
+        : t('member.addBuddyToServerDesc')
+
+  const copyInviteCode = async () => {
+    if (!inviteLink) return
+    await Clipboard.setStringAsync(inviteLink)
+    setCopiedInvite(true)
+    setTimeout(() => setCopiedInvite(false), 1500)
+  }
+
+  const closeInvitePanel = () => {
+    setShowInviteSheet(false)
+    setInviteSearch('')
+    setInviteMode('members')
+    setSelectedCandidateKeys(new Set())
+  }
+
+  const toggleCandidateSelection = (key: string) => {
+    setSelectedCandidateKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  const handleInviteSubmit = async () => {
+    if (isBottomActionDisabled) return
+    setIsSubmitting(true)
+    try {
+      const success = new Set<string>()
+      if (inviteMode === 'members') {
+        const results = await Promise.allSettled(
+          selectedCandidates.map((candidate) => addToChannelCandidate.mutateAsync(candidate.uid)),
+        )
+        results.forEach((result, index) => {
+          if (result.status === 'fulfilled') {
+            success.add(selectedCandidates[index].key)
+          }
+        })
+      } else {
+        const addToServerAgentIds = Array.from(
+          new Set(
+            selectedCandidates
+              .filter((candidate) => candidate.canAddToServer && candidate.agentId)
+              .map((candidate) => candidate.agentId),
+          ),
+        ).filter(Boolean) as string[]
+
+        const serverAddedAgentIds = new Set<string>()
+        if (addToServerAgentIds.length > 0) {
+          const addServerResult = await addAgentsToServer.mutateAsync(addToServerAgentIds)
+          const parsed = parseAddAgentsResult(addServerResult)
+          parsed.added.forEach((agentId) => serverAddedAgentIds.add(agentId))
+        }
+
+        const needChannelCandidates = selectedCandidates.filter(
+          (candidate) =>
+            candidate.canAddToChannel &&
+            (!candidate.canAddToServer ||
+              (candidate.agentId && serverAddedAgentIds.has(candidate.agentId))),
+        )
+
+        const channelResults = await Promise.allSettled(
+          needChannelCandidates.map((candidate) =>
+            addToChannelCandidate.mutateAsync(candidate.uid),
+          ),
+        )
+        channelResults.forEach((result, index) => {
+          if (result.status === 'fulfilled') {
+            success.add(needChannelCandidates[index].key)
+          }
+        })
+
+        selectedCandidates.forEach((candidate) => {
+          if (!candidate.canAddToChannel && candidate.canAddToServer && candidate.agentId) {
+            if (serverAddedAgentIds.has(candidate.agentId)) {
+              success.add(candidate.key)
+            }
+          }
+        })
+      }
+
+      setSelectedCandidateKeys((prev) => {
+        const next = new Set(prev)
+        success.forEach((key) => next.delete(key))
+        return next
+      })
+
+      queryClient.invalidateQueries({ queryKey: ['server-members-for-invite', channel?.serverId] })
+      queryClient.invalidateQueries({ queryKey: ['server-members', channel?.serverId] })
+      queryClient.invalidateQueries({ queryKey: ['channel-members', channelId] })
+      queryClient.invalidateQueries({ queryKey: ['my-agents-for-invite'] })
+
+      if (success.size > 0 && selectedCandidates.every((candidate) => success.has(candidate.key))) {
+        closeInvitePanel()
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   if (isLoading) return <LoadingScreen />
@@ -397,7 +689,9 @@ export default function ChannelMembersScreen() {
             ]}
           >
             <Text style={[styles.inviteTitle, { color: colors.text }]}>
-              {t('members.addToChannel', '添加成员到频道')}
+              {inviteMode === 'members'
+                ? t('channel.inviteMember', '邀请成员')
+                : t('channel.addAgent', '添加 Buddy')}
             </Text>
             <Pressable
               onPress={() => setShowInviteSheet(false)}
@@ -408,14 +702,101 @@ export default function ChannelMembersScreen() {
             </Pressable>
           </View>
 
+          {inviteMode === 'members' ? (
+            <>
+              <Text style={[styles.inviteSectionTitle, { color: colors.textMuted }]}>
+                {t('channel.inviteLink', '邀请链接')}
+              </Text>
+              <View style={styles.inviteLinkRow}>
+                <Text style={[styles.inviteLink, { color: colors.textMuted }]} numberOfLines={1}>
+                  {inviteLink || '...'}
+                </Text>
+                <Pressable
+                  onPress={copyInviteCode}
+                  disabled={!inviteLink}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                >
+                  <Copy size={16} color={inviteLink ? colors.primary : colors.textMuted} />
+                </Pressable>
+              </View>
+            </>
+          ) : null}
+
           {/* Search */}
+          <View style={styles.inviteTabRow}>
+            <Pressable
+              onPress={() => setInviteMode('members')}
+              style={({ pressed }) => [
+                styles.inviteTab,
+                {
+                  backgroundColor:
+                    inviteMode === 'members'
+                      ? colors.surfaceHover
+                      : pressed
+                        ? colors.surfaceHover
+                        : colors.surface,
+                },
+              ]}
+            >
+              <UserPlus
+                size={14}
+                color={inviteMode === 'members' ? colors.primary : colors.textMuted}
+              />
+              <Text
+                style={{
+                  color: inviteMode === 'members' ? colors.text : colors.textMuted,
+                  marginLeft: spacing.xs,
+                  fontSize: fontSize.xs,
+                }}
+              >
+                {t('member.title', '成员')} ({memberCandidates.length})
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setInviteMode('buddies')}
+              style={({ pressed }) => [
+                styles.inviteTab,
+                {
+                  backgroundColor:
+                    inviteMode === 'buddies'
+                      ? `${colors.primary}12`
+                      : pressed
+                        ? colors.surfaceHover
+                        : colors.surface,
+                },
+              ]}
+            >
+              <PawPrint
+                size={14}
+                color={inviteMode === 'buddies' ? colors.primary : colors.textMuted}
+              />
+              <Text
+                style={{
+                  color: inviteMode === 'buddies' ? colors.text : colors.textMuted,
+                  marginLeft: spacing.xs,
+                  fontSize: fontSize.xs,
+                }}
+              >
+                Buddy ({buddyCandidates.length})
+              </Text>
+            </Pressable>
+          </View>
+
+          <Text style={[styles.inviteDesc, { color: colors.textMuted }]}>
+            {inviteToChannelDescription}
+          </Text>
+
           <View style={[styles.inviteSearchRow, { backgroundColor: colors.inputBackground }]}>
             <Search size={16} color={colors.textMuted} />
             <TextInput
               style={[styles.inviteSearchInput, { color: colors.text }]}
               value={inviteSearch}
               onChangeText={setInviteSearch}
-              placeholder={t('common.search', '搜索...')}
+              placeholder={
+                inviteMode === 'members'
+                  ? t('common.search', '搜索...')
+                  : t('channel.searchBuddy', '搜索 Buddy...')
+              }
               placeholderTextColor={colors.textMuted}
               autoFocus
             />
@@ -427,209 +808,67 @@ export default function ChannelMembersScreen() {
           </View>
 
           <FlatList
-            data={[]}
-            renderItem={() => null}
-            ListHeaderComponent={
-              <>
-                {/* Server members not in channel */}
-                {invitableServerMembers.length > 0 && (
-                  <>
-                    <Text style={[styles.inviteSectionTitle, { color: colors.textMuted }]}>
-                      {t('members.serverMembers', '服务器成员')}
-                    </Text>
-                    {invitableServerMembers.map((m) => {
-                      const isPending =
-                        inviteMember.isPending && inviteMember.variables === m.user.id
-                      const isAdded = addedUserIds.has(m.user.id)
-                      return (
-                        <View
-                          key={m.user.id}
-                          style={[styles.inviteMemberRow, { borderBottomColor: colors.border }]}
-                        >
-                          <Avatar
-                            uri={m.user.avatarUrl}
-                            name={m.user.displayName || m.user.username}
-                            size={36}
-                            userId={m.user.id}
-                          />
-                          <Text
-                            style={[styles.inviteMemberName, { color: colors.text }]}
-                            numberOfLines={1}
-                          >
-                            {m.user.displayName || m.user.username}
-                          </Text>
-                          {isAdded ? (
-                            <View style={[styles.inviteBtn, { backgroundColor: '#23a55920' }]}>
-                              <Check size={14} color="#23a559" />
-                            </View>
-                          ) : (
-                            <Pressable
-                              style={[
-                                styles.inviteBtn,
-                                { backgroundColor: colors.primary, opacity: isPending ? 0.6 : 1 },
-                              ]}
-                              onPress={() => inviteMember.mutate(m.user.id)}
-                              disabled={isPending}
-                            >
-                              {isPending ? (
-                                <ActivityIndicator size="small" color="#fff" />
-                              ) : (
-                                <>
-                                  <Plus size={14} color="#fff" />
-                                  <Text style={styles.inviteBtnText}>
-                                    {t('common.invite', '邀请')}
-                                  </Text>
-                                </>
-                              )}
-                            </Pressable>
-                          )}
-                        </View>
-                      )
-                    })}
-                  </>
-                )}
-
-                {/* Server bots not in channel */}
-                {serverBotsNotInChannel.length > 0 && (
-                  <>
-                    <Text style={[styles.inviteSectionTitle, { color: colors.textMuted }]}>
-                      {t('members.serverBuddies', '服务器 Buddy')}
-                    </Text>
-                    {serverBotsNotInChannel.map((m) => {
-                      const isPending =
-                        inviteMember.isPending && inviteMember.variables === m.user.id
-                      const isAdded = addedUserIds.has(m.user.id)
-                      return (
-                        <View
-                          key={m.user.id}
-                          style={[styles.inviteMemberRow, { borderBottomColor: colors.border }]}
-                        >
-                          <Avatar
-                            uri={m.user.avatarUrl}
-                            name={m.user.displayName || m.user.username}
-                            size={36}
-                            userId={m.user.id}
-                          />
-                          <View style={{ flex: 1 }}>
-                            <Text
-                              style={[styles.inviteMemberName, { color: colors.primary }]}
-                              numberOfLines={1}
-                            >
-                              {m.user.displayName || m.user.username}
-                            </Text>
-                          </View>
-                          {isAdded ? (
-                            <View style={[styles.inviteBtn, { backgroundColor: '#23a55920' }]}>
-                              <Check size={14} color="#23a559" />
-                            </View>
-                          ) : (
-                            <Pressable
-                              style={[
-                                styles.inviteBtn,
-                                { backgroundColor: colors.primary, opacity: isPending ? 0.6 : 1 },
-                              ]}
-                              onPress={() => inviteMember.mutate(m.user.id)}
-                              disabled={isPending}
-                            >
-                              {isPending ? (
-                                <ActivityIndicator size="small" color="#fff" />
-                              ) : (
-                                <>
-                                  <Plus size={14} color="#fff" />
-                                  <Text style={styles.inviteBtnText}>
-                                    {t('common.add', '添加')}
-                                  </Text>
-                                </>
-                              )}
-                            </Pressable>
-                          )}
-                        </View>
-                      )
-                    })}
-                  </>
-                )}
-
-                {/* User's own agents not on server */}
-                {myAgentsNotOnServer.length > 0 && (
-                  <>
-                    <Text style={[styles.inviteSectionTitle, { color: colors.textMuted }]}>
-                      {t('members.myBuddies', '我的 Buddy')}
-                    </Text>
-                    {myAgentsNotOnServer.map((a) => {
-                      const isPending =
-                        addAgentToServer.isPending && addAgentToServer.variables?.id === a.id
-                      const isAdded = a.botUser?.id ? addedUserIds.has(a.botUser.id) : false
-                      return (
-                        <View
-                          key={a.id}
-                          style={[styles.inviteMemberRow, { borderBottomColor: colors.border }]}
-                        >
-                          <Avatar
-                            uri={a.botUser?.avatarUrl ?? null}
-                            name={a.botUser?.displayName || a.botUser?.username || '?'}
-                            size={36}
-                            userId={a.botUser?.id}
-                          />
-                          <View style={{ flex: 1 }}>
-                            <Text
-                              style={[styles.inviteMemberName, { color: colors.primary }]}
-                              numberOfLines={1}
-                            >
-                              {a.botUser?.displayName || a.botUser?.username || '?'}
-                            </Text>
-                            <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                              {t('members.notOnServer', '未加入服务器')}
-                            </Text>
-                          </View>
-                          {isAdded ? (
-                            <View style={[styles.inviteBtn, { backgroundColor: '#23a55920' }]}>
-                              <Check size={14} color="#23a559" />
-                            </View>
-                          ) : (
-                            <Pressable
-                              style={[
-                                styles.inviteBtn,
-                                { backgroundColor: colors.primary, opacity: isPending ? 0.6 : 1 },
-                              ]}
-                              onPress={() => addAgentToServer.mutate(a)}
-                              disabled={isPending}
-                            >
-                              {isPending ? (
-                                <ActivityIndicator size="small" color="#fff" />
-                              ) : (
-                                <>
-                                  <Plus size={14} color="#fff" />
-                                  <Text style={styles.inviteBtnText}>
-                                    {t('common.add', '添加')}
-                                  </Text>
-                                </>
-                              )}
-                            </Pressable>
-                          )}
-                        </View>
-                      )
-                    })}
-                  </>
-                )}
-
-                {/* Empty state */}
-                {invitableServerMembers.length === 0 &&
-                  serverBotsNotInChannel.length === 0 &&
-                  myAgentsNotOnServer.length === 0 && (
-                    <Text
-                      style={{
-                        color: colors.textMuted,
-                        fontSize: fontSize.sm,
-                        textAlign: 'center',
-                        paddingTop: spacing['3xl'],
-                      }}
-                    >
-                      {t('members.noInvitable', '没有可邀请的成员')}
-                    </Text>
-                  )}
-              </>
+            data={activeCandidates}
+            contentContainerStyle={styles.inviteList}
+            keyboardShouldPersistTaps="handled"
+            keyExtractor={(item) => item.key}
+            renderItem={({ item }) => {
+              const isSelectable = item.canAddToChannel || item.canAddToServer
+              return (
+                <BuddyListItem
+                  member={item}
+                  showCheckbox
+                  selected={selectedCandidateKeys.has(item.key)}
+                  disabled={!isSelectable}
+                  onSelect={() => toggleCandidateSelection(item.key)}
+                />
+              )
+            }}
+            ListEmptyComponent={
+              <View style={styles.inviteEmpty}>
+                <Text
+                  style={{ color: colors.textMuted, textAlign: 'center', marginBottom: spacing.md }}
+                >
+                  {inviteMode === 'members'
+                    ? t('member.noInvitable', '暂无可邀请成员')
+                    : myAgents.length === 0
+                      ? t('member.noBuddies', '暂无可用 Buddy')
+                      : t('member.noInvitable', '暂无可邀请成员')}
+                </Text>
+              </View>
             }
           />
+
+          <View style={styles.inviteBottomBar}>
+            <Text style={[styles.inviteSelectedText, { color: colors.textMuted }]}>
+              {noSelectedCountMessage}
+            </Text>
+            <View style={styles.inviteBottomAction}>
+              <Pressable style={[styles.inviteCancelButton]} onPress={closeInvitePanel}>
+                <Text style={[styles.inviteCancelText, { color: colors.text }]}>
+                  {t('common.cancel', '取消')}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.inviteSubmitButton,
+                  {
+                    backgroundColor: colors.primary,
+                    opacity: isBottomActionDisabled || isSubmitting ? 0.5 : 1,
+                  },
+                  { opacity: pressed ? 0.8 : 1 },
+                ]}
+                disabled={isBottomActionDisabled || isSubmitting}
+                onPress={handleInviteSubmit}
+              >
+                <Text style={styles.inviteSubmitText}>
+                  {inviteMode === 'members'
+                    ? t('member.addToChannel', '添加到频道')
+                    : t('member.addToServer', '添加到服务器')}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
         </View>
       </Modal>
 
@@ -806,36 +1045,80 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     height: 40,
   },
-  inviteSectionTitle: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  inviteMemberRow: {
+  inviteLinkRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  inviteMemberName: {
-    flex: 1,
-    fontSize: fontSize.md,
-    fontWeight: '500',
-  },
-  inviteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    padding: spacing.sm,
     borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: `${'#000'}20`,
   },
-  inviteBtnText: {
+  inviteLink: {
+    flex: 1,
+    fontSize: fontSize.xs,
+  },
+  inviteTabRow: {
+    flexDirection: 'row',
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    padding: spacing.xs,
+    borderRadius: radius.md,
+    backgroundColor: `${'#000'}10`,
+    gap: spacing.xs,
+  },
+  inviteTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    gap: spacing.xs,
+  },
+  inviteDesc: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    fontSize: fontSize.xs,
+  },
+  inviteList: {
+    paddingBottom: spacing.md + spacing.sm,
+  },
+  inviteBottomBar: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: `${'#000'}20`,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  inviteSelectedText: {
+    fontSize: fontSize.xs,
+    flex: 1,
+  },
+  inviteBottomAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  inviteCancelButton: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  inviteCancelText: {
+    fontSize: fontSize.sm,
+  },
+  inviteSubmitButton: {
+    borderRadius: radius.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  inviteSubmitText: {
     color: '#fff',
     fontSize: fontSize.sm,
     fontWeight: '600',

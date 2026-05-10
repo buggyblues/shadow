@@ -172,13 +172,24 @@ export class ServerDao {
           `.as('status'),
           isBot: users.isBot,
         },
+        agent: {
+          id: agents.id,
+          ownerId: agents.ownerId,
+          config: agents.config,
+          status: agents.status,
+          totalOnlineSeconds: agents.totalOnlineSeconds,
+        },
       })
       .from(members)
       .leftJoin(users, eq(members.userId, users.id))
       .leftJoin(agents, eq(agents.userId, users.id))
       .where(eq(members.serverId, serverId))
 
-    return rows.map((r) => ({ ...r.member, user: r.user }))
+    return rows.map((r) => ({
+      ...r.member,
+      user: r.user,
+      agent: r.agent?.id ? r.agent : null,
+    }))
   }
 
   async findAll(limit = 50, offset = 0) {

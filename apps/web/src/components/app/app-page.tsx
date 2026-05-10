@@ -579,7 +579,7 @@ function CreateEditOverlay({
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const result = await fetchApi<{ url: string }>('/api/media/upload', {
+      const result = await fetchApi<{ url: string; signedUrl?: string }>('/api/media/upload', {
         method: 'POST',
         body: formData,
       })

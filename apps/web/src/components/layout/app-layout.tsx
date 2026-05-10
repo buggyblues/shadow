@@ -1,6 +1,6 @@
 import { Button, cn } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
-import { Outlet } from '@tanstack/react-router'
+import { Outlet, useLocation } from '@tanstack/react-router'
 import { Menu } from 'lucide-react'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -16,9 +16,14 @@ import { DynamicBackground } from './dynamic-background'
 
 export function AppLayout() {
   const { t } = useTranslation()
+  const location = useLocation()
+  const pathname = location?.pathname ?? ''
   const { setUser } = useAuthStore()
+  const { backgroundImage } = useUIStore()
   const { mobileServerSidebarOpen, closeMobileServerSidebar, openMobileServerSidebar } =
     useUIStore()
+  const isCloudRoute = /^\/app\/cloud(?:\/|$)/.test(pathname)
+  const showAtmosphereOrbs = !backgroundImage
 
   // Fetch current user on mount
   const {
@@ -58,21 +63,27 @@ export function AppLayout() {
 
   return (
     <div className="relative flex h-dvh w-screen overflow-hidden bg-transparent p-3 gap-3">
-      <DynamicBackground />
-      {/* ── Neon Frost atmosphere orbs ── */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
-        <div
-          className="absolute top-[-150px] left-[5%] w-[560px] h-[560px] rounded-full blur-[120px] animate-float opacity-18"
-          style={{ background: 'radial-gradient(circle, #00F3FF 0%, transparent 70%)' }}
-        />
-        <div
-          className="absolute top-[25%] right-[-150px] w-[640px] h-[640px] rounded-full blur-[120px] animate-float opacity-16"
-          style={{
-            background: 'radial-gradient(circle, #FF2A55 0%, transparent 70%)',
-            animationDelay: '-7s',
-          }}
-        />
-      </div>
+      {!isCloudRoute && (
+        <>
+          <DynamicBackground />
+          {/* ── Neon Frost atmosphere orbs ── */}
+          {showAtmosphereOrbs && (
+            <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
+              <div
+                className="absolute top-[-180px] left-[8%] w-[520px] h-[520px] rounded-full blur-[130px] animate-float opacity-[0.13]"
+                style={{ background: 'radial-gradient(circle, #00F3FF 0%, transparent 70%)' }}
+              />
+              <div
+                className="absolute top-[25%] right-[-150px] w-[640px] h-[640px] rounded-full blur-[120px] animate-float opacity-16"
+                style={{
+                  background: 'radial-gradient(circle, #FF2A55 0%, transparent 70%)',
+                  animationDelay: '-7s',
+                }}
+              />
+            </div>
+          )}
+        </>
+      )}
 
       {/* ── Server sidebar — always visible on md+, overlay on mobile ── */}
       <div className="relative z-10 hidden md:flex">

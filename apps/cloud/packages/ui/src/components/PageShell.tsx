@@ -43,7 +43,7 @@ export function PageShell({
         <Breadcrumb items={breadcrumb} className="mb-4" />
       ) : null}
 
-      <GlassPanel as="section" className="p-5 md:p-6">
+      <GlassPanel as="section" className="p-6">
         {renderBreadcrumbInHeader ? <Breadcrumb items={breadcrumb} className="mb-3" /> : null}
         {/* Title row */}
         {hasTitleRow ? (

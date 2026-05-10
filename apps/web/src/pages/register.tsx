@@ -68,18 +68,21 @@ export function RegisterPage() {
       })
 
       // Set avatar after registration
+      let sessionUser = result.user
       try {
-        await fetchApi('/api/auth/me', {
+        const updatedUser = await fetchApi<typeof result.user>('/api/auth/me', {
           method: 'PATCH',
           headers: { Authorization: `Bearer ${result.accessToken}` },
           body: JSON.stringify({ avatarUrl: selectedAvatar }),
         })
+        sessionUser = { ...result.user, ...updatedUser }
       } catch {
         // Non-critical, continue
+        sessionUser = { ...result.user, avatarUrl: selectedAvatar }
       }
 
       applyAuthenticatedSession({
-        user: { ...result.user, avatarUrl: selectedAvatar },
+        user: sessionUser,
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,
       })

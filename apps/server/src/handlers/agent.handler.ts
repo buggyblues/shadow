@@ -120,13 +120,16 @@ export function createAgentHandler(container: AppContainer) {
   agentHandler.post('/', zValidator('json', createAgentSchema), async (c) => {
     try {
       const agentService = container.resolve('agentService')
+      const mediaService = container.resolve('mediaService')
       const user = c.get('user')
       const input = c.req.valid('json')
       const agent = await agentService.create({
         name: input.name,
         username: input.username,
         description: input.description,
-        avatarUrl: input.avatarUrl,
+        avatarUrl: input.avatarUrl
+          ? (mediaService.normalizeMediaUrl(input.avatarUrl) ?? undefined)
+          : input.avatarUrl,
         kernelType: input.kernelType,
         config: input.config,
         ownerId: user.userId,
@@ -158,6 +161,7 @@ export function createAgentHandler(container: AppContainer) {
   // PATCH /api/agents/:id — update existing agent (owner only, zod validated)
   agentHandler.patch('/:id', zValidator('json', updateAgentSchema), async (c) => {
     const agentService = container.resolve('agentService')
+    const mediaService = container.resolve('mediaService')
     const user = c.get('user')
     const id = c.req.param('id')
     const input = c.req.valid('json')
@@ -166,7 +170,12 @@ export function createAgentHandler(container: AppContainer) {
     const ownershipError = await requireAgentOwner(container, c, id, user.userId)
     if (ownershipError) return ownershipError
 
-    const agent = await agentService.update(id, user.userId, input)
+    const agent = await agentService.update(id, user.userId, {
+      ...input,
+      ...(input.avatarUrl !== undefined
+        ? { avatarUrl: mediaService.normalizeMediaUrl(input.avatarUrl) ?? undefined }
+        : {}),
+    })
     if (!agent) {
       return c.json({ ok: false, error: 'Agent not found' }, 404)
     }
