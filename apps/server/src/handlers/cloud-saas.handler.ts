@@ -37,25 +37,18 @@ import {
 } from '../lib/model-proxy-config'
 import { assertSafeHttpUrl } from '../lib/ssrf'
 import { authMiddleware } from '../middleware/auth.middleware'
-import { createRateLimitMiddleware } from '../middleware/rate-limit.middleware'
+import {
+  areRateLimitsDisabled,
+  createRateLimitMiddleware,
+} from '../middleware/rate-limit.middleware'
 import { assertCloudTemplatePolicy } from '../services/cloud-template-policy.service'
 import {
   DIY_CLOUD_MAX_ESTIMATED_TOKENS,
   estimateDiyCloudInputBudget,
-  generateDiyCloudDraft,
   listDiyCloudPlugins,
   listDiyCloudTemplates,
   searchDiyCloudPlugins,
 } from '../services/diy-cloud.service'
-import {
-  createDiyCloudAcceptedEvent,
-  runDiyCloudAgentSession,
-} from '../services/diy-cloud-agent.service'
-import {
-  appendDiyCloudSessionEvent,
-  createDiyCloudSession,
-  getDiyCloudSession,
-} from '../services/diy-cloud-session.service'
 import {
   type LlmProviderApiFormat,
   normalizeLlmProviderConfig,
@@ -92,7 +85,9 @@ function isReservedRuntimeEnvKey(name: string): boolean {
 }
 
 function diyCloudDailyLimit() {
+  if (areRateLimitsDisabled()) return null
   const limit = Number.parseInt(process.env.SHADOW_DIY_CLOUD_DAILY_LIMIT ?? '', 10)
+  if (limit === 0) return null
   return Number.isFinite(limit) && limit > 0 ? limit : DEFAULT_DIY_CLOUD_DAILY_LIMIT
 }
 
@@ -179,6 +174,13 @@ const diyCloudGenerateSchema = z
       })
     }
   })
+
+const diyCloudRunFeedbackSchema = z.object({
+  feedback: z.string().min(1).max(2000),
+  prompt: z.string().min(4).max(2000).optional(),
+  locale: z.string().max(16).optional(),
+  timezone: z.string().max(64).optional(),
+})
 
 const K8S_NAMESPACE_RE = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/
 
@@ -1123,6 +1125,15 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function publicDiyStreamError(err: unknown) {
+  const message =
+    err instanceof Error ? err.message : 'DIY Cloud generation stream failed. Please retry.'
+  if (/failed query|insert into|update .* set|select .* from|params:/i.test(message)) {
+    return 'DIY Cloud generation failed while saving progress. Please retry.'
+  }
+  return message.length > 600 ? `${message.slice(0, 597)}...` : message
+}
+
 function requestOrigin(c: Context): string | undefined {
   const host = c.req.header('x-forwarded-host') ?? c.req.header('host')
   if (!host) return undefined
@@ -1201,17 +1212,19 @@ export function createCloudSaasHandler(container: AppContainer) {
     }
     const activityDao = container.resolve('cloudActivityDao')
     const limit = diyCloudDailyLimit()
-    const usedToday = await activityDao.countByUserTypeSince(
-      userId,
-      'diy_generate',
-      new Date(Date.now() - 24 * 60 * 60 * 1000),
-    )
-    if (usedToday >= limit) {
-      throw Object.assign(new Error('DIY Cloud daily generation quota exceeded'), {
-        status: 429,
-        code: 'DIY_CLOUD_DAILY_QUOTA_EXCEEDED',
-        params: { limit },
-      })
+    if (limit !== null) {
+      const usedToday = await activityDao.countByUserTypeSince(
+        userId,
+        'diy_generate',
+        new Date(Date.now() - 24 * 60 * 60 * 1000),
+      )
+      if (usedToday >= limit) {
+        throw Object.assign(new Error('DIY Cloud daily generation quota exceeded'), {
+          status: 429,
+          code: 'DIY_CLOUD_DAILY_QUOTA_EXCEEDED',
+          params: { limit },
+        })
+      }
     }
     await activityDao.log({
       userId,
@@ -1592,134 +1605,138 @@ export function createCloudSaasHandler(container: AppContainer) {
     return c.json({ templates: listDiyCloudTemplates() })
   })
 
-  h.post('/diy/generate', diyRateLimit, zValidator('json', diyCloudGenerateSchema), async (c) => {
+  h.post('/diy/runs', diyRateLimit, zValidator('json', diyCloudGenerateSchema), async (c) => {
     const user = c.get('user') as { userId: string }
     const input = c.req.valid('json')
     await authorizeDiyGeneration(user.userId, input)
-    return c.json(await generateDiyCloudDraft(input))
+    const run = await container.resolve('diyCloudRunService').createRun(user.userId, input)
+    return c.json(
+      {
+        runId: run.id,
+        status: run.status,
+        createdAt: run.createdAt,
+        expiresAt: run.expiresAt,
+        streamUrl: `/api/cloud-saas/diy/runs/${encodeURIComponent(run.id)}/stream`,
+      },
+      201,
+    )
+  })
+
+  h.get('/diy/runs/:runId', diyRateLimit, async (c) => {
+    const user = c.get('user') as { userId: string }
+    const runId = c.req.param('runId')
+    if (!runId) return c.json({ error: 'DIY Cloud generation run not found' }, 404)
+    const runService = container.resolve('diyCloudRunService')
+    const run = await runService.getRun(user.userId, runId)
+    if (!run) return c.json({ error: 'DIY Cloud generation run not found' }, 404)
+    const afterSeq = Math.max(Number(c.req.query('afterSeq')) || 0, 0)
+    const events = await runService.listEvents(run.id, afterSeq)
+    return c.json({
+      run: {
+        runId: run.id,
+        input: run.input,
+        status: run.status,
+        createdAt: run.createdAt,
+        updatedAt: run.updatedAt,
+        expiresAt: run.expiresAt,
+        draft: run.draft,
+        error: run.error,
+      },
+      events: events.map((event) => event.payload),
+    })
+  })
+
+  h.post('/diy/runs/:runId/cancel', diyRateLimit, async (c) => {
+    const user = c.get('user') as { userId: string }
+    const runId = c.req.param('runId')
+    if (!runId) return c.json({ error: 'DIY Cloud generation run not found' }, 404)
+    const runService = container.resolve('diyCloudRunService')
+    const run = await runService.getRun(user.userId, runId)
+    if (!run) return c.json({ error: 'DIY Cloud generation run not found' }, 404)
+    const cancelled = await runService.cancelRun(user.userId, runId)
+    return c.json({ ok: Boolean(cancelled), status: cancelled?.status ?? run.status })
   })
 
   h.post(
-    '/diy/generate/stream',
+    '/diy/runs/:runId/feedback',
     diyRateLimit,
-    zValidator('json', diyCloudGenerateSchema),
+    zValidator('json', diyCloudRunFeedbackSchema),
     async (c) => {
       const user = c.get('user') as { userId: string }
-      const input = c.req.valid('json')
+      const runId = c.req.param('runId')
+      if (!runId) return c.json({ error: 'DIY Cloud generation run not found' }, 404)
+      const runService = container.resolve('diyCloudRunService')
+      const sourceRun = await runService.getRun(user.userId, runId)
+      if (!sourceRun) return c.json({ error: 'DIY Cloud generation run not found' }, 404)
+
+      const payload = c.req.valid('json')
+      const sourceInput =
+        sourceRun.input && typeof sourceRun.input === 'object' && !Array.isArray(sourceRun.input)
+          ? (sourceRun.input as Record<string, unknown>)
+          : {}
+      const sourceDraft =
+        sourceRun.draft && typeof sourceRun.draft === 'object' && !Array.isArray(sourceRun.draft)
+          ? (sourceRun.draft as Record<string, unknown>)
+          : {}
+      const previousConfig =
+        sourceDraft.cloudConfig &&
+        typeof sourceDraft.cloudConfig === 'object' &&
+        !Array.isArray(sourceDraft.cloudConfig)
+          ? (sourceDraft.cloudConfig as Record<string, unknown>)
+          : undefined
+      const input = {
+        prompt:
+          payload.prompt ??
+          (typeof sourceInput.prompt === 'string' ? sourceInput.prompt : 'Refine DIY Cloud run'),
+        feedback: payload.feedback,
+        previousConfig,
+        locale:
+          payload.locale ??
+          (typeof sourceInput.locale === 'string' ? sourceInput.locale : undefined),
+        timezone:
+          payload.timezone ??
+          (typeof sourceInput.timezone === 'string' ? sourceInput.timezone : undefined),
+      }
       await authorizeDiyGeneration(user.userId, input)
-      const session = await createDiyCloudSession(user.userId, input)
-
-      return c.body(
-        new ReadableStream({
-          async start(controller) {
-            const encoder = new TextEncoder()
-            let closed = false
-            const send = (event: string, data: unknown) => {
-              if (closed || c.req.raw.signal.aborted) return
-              controller.enqueue(
-                encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
-              )
-            }
-            c.req.raw.signal.addEventListener(
-              'abort',
-              () => {
-                closed = true
-                try {
-                  controller.close()
-                } catch {
-                  /* already closed */
-                }
-              },
-              { once: true },
-            )
-
-            try {
-              send('session', {
-                sessionId: session.sessionId,
-                status: session.status,
-                createdAt: session.createdAt,
-                expiresAt: session.expiresAt,
-                input: session.input,
-              })
-
-              const acceptedEvent = createDiyCloudAcceptedEvent(input)
-              await appendDiyCloudSessionEvent(user.userId, session.sessionId, acceptedEvent)
-              send('progress', acceptedEvent)
-
-              await runDiyCloudAgentSession({
-                userId: user.userId,
-                sessionId: session.sessionId,
-                input,
-                onEvent: (event) => send(event.type === 'draft' ? 'draft' : 'progress', event),
-              })
-              send('done', { ok: true })
-            } catch (err) {
-              send('error', {
-                ok: false,
-                error: err instanceof Error ? err.message : 'Failed to generate DIY Cloud draft',
-                code:
-                  err && typeof err === 'object' && 'code' in err
-                    ? String((err as { code?: unknown }).code)
-                    : undefined,
-              })
-            } finally {
-              closed = true
-              try {
-                controller.close()
-              } catch {
-                /* already closed */
-              }
-            }
-          },
-        }),
-        200,
+      const nextRun = await runService.createRun(user.userId, input)
+      return c.json(
         {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache, no-transform',
-          Connection: 'keep-alive',
-          'X-Accel-Buffering': 'no',
+          runId: nextRun.id,
+          sourceRunId: sourceRun.id,
+          status: nextRun.status,
+          createdAt: nextRun.createdAt,
+          expiresAt: nextRun.expiresAt,
+          streamUrl: `/api/cloud-saas/diy/runs/${encodeURIComponent(nextRun.id)}/stream`,
         },
+        201,
       )
     },
   )
 
-  h.get('/diy/sessions/:sessionId', diyRateLimit, async (c) => {
+  h.get('/diy/runs/:runId/stream', diyRateLimit, async (c) => {
     const user = c.get('user') as { userId: string }
-    const sessionId = c.req.param('sessionId')
-    if (!sessionId) return c.json({ error: 'DIY Cloud generation session not found' }, 404)
-    const session = await getDiyCloudSession(user.userId, sessionId)
-    if (!session) return c.json({ error: 'DIY Cloud generation session not found' }, 404)
-    return c.json({
-      session: {
-        sessionId: session.sessionId,
-        input: session.input,
-        status: session.status,
-        createdAt: session.createdAt,
-        updatedAt: session.updatedAt,
-        expiresAt: session.expiresAt,
-        events: session.events,
-        draft: session.draft,
-        error: session.error,
-      },
-    })
-  })
-
-  h.get('/diy/sessions/:sessionId/stream', diyRateLimit, async (c) => {
-    const user = c.get('user') as { userId: string }
-    const sessionId = c.req.param('sessionId')
-    if (!sessionId) return c.json({ error: 'DIY Cloud generation session not found' }, 404)
-    const initialSession = await getDiyCloudSession(user.userId, sessionId)
-    if (!initialSession) return c.json({ error: 'DIY Cloud generation session not found' }, 404)
+    const runId = c.req.param('runId')
+    if (!runId) return c.json({ error: 'DIY Cloud generation run not found' }, 404)
+    const afterSeq = Math.max(Number(c.req.query('afterSeq')) || 0, 0)
+    const runService = container.resolve('diyCloudRunService')
+    const initialRun = await runService.getRun(user.userId, runId)
+    if (!initialRun) return c.json({ error: 'DIY Cloud generation run not found' }, 404)
 
     return c.body(
       new ReadableStream({
         async start(controller) {
           const encoder = new TextEncoder()
           let closed = false
-          let sentCount = 0
+          let sentSeq = afterSeq
           const send = (event: string, data: unknown) => {
             if (closed || c.req.raw.signal.aborted) return
-            controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
+            try {
+              controller.enqueue(
+                encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+              )
+            } catch {
+              closed = true
+            }
           }
           c.req.raw.signal.addEventListener(
             'abort',
@@ -1734,42 +1751,77 @@ export function createCloudSaasHandler(container: AppContainer) {
             { once: true },
           )
 
+          if (initialRun.status === 'pending') {
+            void runService.startPendingRun(user.userId, runId).catch(() => false)
+          }
+          send('ping', {
+            schemaVersion: 2,
+            runId,
+            timestamp: new Date().toISOString(),
+          })
+          let lastHeartbeatAt = Date.now()
+
           try {
-            send('session', {
-              sessionId: initialSession.sessionId,
-              status: initialSession.status,
-              createdAt: initialSession.createdAt,
-              expiresAt: initialSession.expiresAt,
-              input: initialSession.input,
-            })
-
             while (!closed && !c.req.raw.signal.aborted) {
-              const session = await getDiyCloudSession(user.userId, sessionId)
-              if (!session) {
-                send('error', { ok: false, error: 'DIY Cloud generation session not found' })
-                break
+              const events = await runService.listEvents(runId, sentSeq)
+              for (const event of events) {
+                send(event.type, event.payload)
+                sentSeq = Math.max(sentSeq, event.seq)
               }
 
-              const nextEvents = session.events.slice(sentCount)
-              for (const event of nextEvents) {
-                send(event.type === 'draft' ? 'draft' : 'progress', event)
+              if (Date.now() - lastHeartbeatAt > 10_000) {
+                send('ping', {
+                  schemaVersion: 2,
+                  runId,
+                  timestamp: new Date().toISOString(),
+                })
+                lastHeartbeatAt = Date.now()
               }
-              sentCount = session.events.length
 
-              if (session.status === 'completed') {
-                send('done', { ok: true })
-                break
-              }
-              if (session.status === 'failed') {
-                send('error', {
-                  ok: false,
-                  error: session.error ?? 'Failed to generate DIY Cloud draft',
+              const run = await runService.getRun(user.userId, runId)
+              if (!run) {
+                send('run.failed', {
+                  schemaVersion: 2,
+                  runId,
+                  error: 'DIY Cloud generation run not found',
+                  retryable: false,
                 })
                 break
               }
 
-              await delay(1000)
+              if (run.status === 'completed') {
+                const finalEvents = await runService.listEvents(runId, sentSeq)
+                for (const event of finalEvents) {
+                  send(event.type, event.payload)
+                  sentSeq = Math.max(sentSeq, event.seq)
+                }
+                send('done', { ok: true, runId, status: run.status, lastSeq: sentSeq })
+                break
+              }
+              if (run.status === 'failed' || run.status === 'cancelled') {
+                const finalEvents = await runService.listEvents(runId, sentSeq)
+                for (const event of finalEvents) {
+                  send(event.type, event.payload)
+                  sentSeq = Math.max(sentSeq, event.seq)
+                }
+                send(run.status === 'cancelled' ? 'run.cancelled' : 'run.failed', {
+                  schemaVersion: 2,
+                  runId,
+                  error: run.error ?? (run.status === 'cancelled' ? 'Run cancelled' : 'Run failed'),
+                  retryable: run.status !== 'cancelled',
+                })
+                break
+              }
+
+              await delay(500)
             }
+          } catch (err) {
+            send('run.failed', {
+              schemaVersion: 2,
+              runId,
+              error: publicDiyStreamError(err),
+              retryable: true,
+            })
           } finally {
             closed = true
             try {

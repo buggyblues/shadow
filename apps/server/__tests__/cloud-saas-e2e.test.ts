@@ -34,8 +34,10 @@ import { createAgentHandler } from '../src/handlers/agent.handler'
 import { createCloudSaasHandler } from '../src/handlers/cloud-saas.handler'
 import { processCloudDeploymentQueueOnce } from '../src/lib/cloud-deployment-processor'
 import { signAccessToken, signAgentToken } from '../src/lib/jwt'
+import { closeRedisClient } from '../src/lib/redis'
 
 process.env.KMS_MASTER_KEY = process.env.KMS_MASTER_KEY ?? 'a'.repeat(64)
+process.env.REDIS_URL = process.env.REDIS_URL ?? 'redis://127.0.0.1:16379'
 
 vi.mock('../src/lib/ssrf', () => ({
   assertSafeHttpUrl: async (rawUrl: string) => new URL(rawUrl),
@@ -121,6 +123,138 @@ async function req(method: string, path: string, body?: unknown, authToken = tok
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
+}
+
+function jsonModelResponse(body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+function mockDiyCloudModel() {
+  process.env.SHADOW_DIY_CLOUD_GENERATOR_API_KEY = 'test-key'
+  process.env.SHADOW_DIY_CLOUD_GENERATOR_BASE_URL = 'https://model.test/v1'
+  process.env.SHADOW_DIY_CLOUD_GENERATOR_MODEL = 'test-tool-agent'
+  const dsl = {
+    title: '客服知识库空间',
+    description: '读取资料、回答常见问题，并提示缺失资料的客服知识库空间。',
+    space: {
+      servers: [
+        {
+          name: '客服知识库',
+          channels: [
+            { name: '资料库', purpose: '收集客服文档' },
+            { name: '常见问题', purpose: '沉淀 FAQ' },
+            { name: '人工升级', purpose: '记录需要人工处理的问题' },
+          ],
+        },
+      ],
+    },
+    buddies: [
+      {
+        name: '客服知识库 Buddy',
+        role: '读取文档、回答 FAQ，并标记缺失资料。',
+        systemPrompt: '你是客服知识库 Buddy。优先依据资料回答问题，缺少资料时明确标记并建议补充。',
+        skills: ['知识库整理', 'FAQ 回答', '缺口识别'],
+        channelBindings: ['资料库', '常见问题', '人工升级'],
+      },
+    ],
+    integrations: [],
+    guidebook: {
+      summary: '一个用于客服文档沉淀和 FAQ 回答的知识库空间。',
+      beforeDeploy: ['准备客服文档和常见问题列表。'],
+      howToUse: ['把文档放进资料库频道，再让 Buddy 整理 FAQ。'],
+      reviewNotes: ['未选择 Figma，因为需求不涉及设计文件。'],
+    },
+    review: {
+      assumptions: ['客服资料会由用户部署后补充。'],
+      risks: [],
+      openQuestions: [],
+    },
+    score: 88,
+  }
+  let call = 0
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => {
+      call += 1
+      if (call === 1) {
+        return jsonModelResponse({
+          choices: [
+            {
+              message: {
+                role: 'assistant',
+                content: '',
+                tool_calls: [
+                  {
+                    id: 'search-plugins',
+                    type: 'function',
+                    function: {
+                      name: 'search_plugins',
+                      arguments: JSON.stringify({ query: '客服 知识库 FAQ 文档', limit: 8 }),
+                    },
+                  },
+                  {
+                    id: 'search-templates',
+                    type: 'function',
+                    function: {
+                      name: 'search_templates',
+                      arguments: JSON.stringify({ query: 'support knowledge base faq', limit: 5 }),
+                    },
+                  },
+                  {
+                    id: 'validate',
+                    type: 'function',
+                    function: {
+                      name: 'validate_template_dsl',
+                      arguments: JSON.stringify({ selectedPluginIds: [], dsl }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        })
+      }
+      return jsonModelResponse({
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              content: JSON.stringify({
+                intent: '搭建客服知识库 Buddy，读取文档、回答常见问题，并提示缺失资料',
+                selectedPluginIds: [],
+                rejectedPluginIds: ['figma'],
+                selectedTemplateSlugs: ['google-workspace-buddy'],
+                dsl,
+                decisions: [
+                  {
+                    title: '不选择 Figma',
+                    selected: 'shadowob',
+                    rationale: '用户需要客服知识库能力，不涉及设计稿或 Figma 文件。',
+                    evidence: ['用户输入包含客服、知识库、FAQ'],
+                    rejectedOptions: ['figma'],
+                    confidence: 0.9,
+                  },
+                ],
+                assumptions: ['客服资料会在部署后补充。'],
+                score: 88,
+              }),
+            },
+          },
+        ],
+      })
+    }),
+  )
+}
+
+function restoreEnv(key: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[key]
+  } else {
+    process.env[key] = value
+  }
 }
 
 /* ── Setup ── */
@@ -214,6 +348,7 @@ afterAll(async () => {
   }
 
   await sql.end()
+  await closeRedisClient()
 })
 
 /* ══════════════════════════════════════════════════════════
@@ -221,42 +356,48 @@ afterAll(async () => {
    ══════════════════════════════════════════════════════════ */
 
 describe('Cloud SaaS — template store', () => {
-  it('POST /api/cloud-saas/diy/generate/stream emits progress and a final draft', async () => {
+  it('POST /api/cloud-saas/diy/runs creates a run and streams V2 events', async () => {
     const previousKey = process.env.SHADOW_DIY_CLOUD_GENERATOR_API_KEY
-    delete process.env.SHADOW_DIY_CLOUD_GENERATOR_API_KEY
+    const previousBaseUrl = process.env.SHADOW_DIY_CLOUD_GENERATOR_BASE_URL
+    const previousModel = process.env.SHADOW_DIY_CLOUD_GENERATOR_MODEL
+    mockDiyCloudModel()
 
     try {
-      const res = await req('POST', '/api/cloud-saas/diy/generate/stream', {
+      const createRes = await req('POST', '/api/cloud-saas/diy/runs', {
         prompt: '帮我搭一个客服知识库 Buddy，能读取文档、回答常见问题，并提示缺失资料',
         locale: 'zh-CN',
         timezone: 'Asia/Shanghai',
       })
+      expect(createRes.status).toBe(201)
+      const createBody = (await createRes.json()) as { runId: string; expiresAt: string }
+      expect(createBody.runId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+      )
+      expect(Date.parse(createBody.expiresAt)).toBeGreaterThan(Date.now())
+
+      const res = await req(
+        'GET',
+        `/api/cloud-saas/diy/runs/${encodeURIComponent(createBody.runId)}/stream`,
+      )
       expect(res.status).toBe(200)
       expect(res.headers.get('Content-Type')).toContain('text/event-stream')
 
       const body = await res.text()
-      expect(body).toContain('event: session')
-      expect(body).toContain('event: progress')
-      expect(body).toContain('event: draft')
+      expect(body).toContain('event: run.created')
+      expect(body).toContain('event: step.created')
+      expect(body).toContain('event: decision')
+      expect(body).toContain('event: draft.completed')
+      expect(body).not.toContain('docsExcerpt')
+      expect(body).not.toContain('Failed query')
 
-      const sessionBlock = body.split('\n\n').find((block) => block.startsWith('event: session\n'))
-      expect(sessionBlock).toBeTruthy()
-      const sessionDataLine = sessionBlock?.split('\n').find((line) => line.startsWith('data: '))
-      const sessionPayload = JSON.parse(sessionDataLine!.slice('data: '.length)) as {
-        sessionId: string
-        expiresAt: string
-      }
-      expect(sessionPayload.sessionId).toMatch(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-      )
-      expect(Date.parse(sessionPayload.expiresAt)).toBeGreaterThan(Date.now())
-
-      const draftBlock = body.split('\n\n').find((block) => block.startsWith('event: draft\n'))
+      const draftBlock = body
+        .split('\n\n')
+        .find((block) => block.startsWith('event: draft.completed\n'))
       expect(draftBlock).toBeTruthy()
       const dataLine = draftBlock?.split('\n').find((line) => line.startsWith('data: '))
       const payload = JSON.parse(dataLine!.slice('data: '.length)) as {
         draft: {
-          agentOutputs: Array<{ step: string; result: unknown; reasons: unknown[]; raw: unknown }>
+          agentOutputs: Array<{ step: string; result: unknown; reasons: unknown[]; raw?: unknown }>
           agentReport: { pluginDecisions: unknown[]; templateDecisions: unknown[] }
           validation: { valid: boolean }
           steps: Array<{ id: string }>
@@ -270,7 +411,7 @@ describe('Cloud SaaS — template store', () => {
         'validate',
         'review',
       ])
-      expect(payload.draft.agentOutputs.every((output) => output.result && output.raw)).toBe(true)
+      expect(payload.draft.agentOutputs.every((output) => output.result && !output.raw)).toBe(true)
       expect(payload.draft.agentReport.pluginDecisions.length).toBeGreaterThan(0)
       expect(payload.draft.agentReport.templateDecisions.length).toBeGreaterThan(0)
       expect(payload.draft.steps.map((step) => step.id)).toEqual([
@@ -281,39 +422,115 @@ describe('Cloud SaaS — template store', () => {
         'review',
       ])
 
-      const progressBlocks = body
+      const decisionBlocks = body
         .split('\n\n')
-        .filter((block) => block.startsWith('event: progress\n'))
+        .filter((block) => block.startsWith('event: decision\n'))
       expect(
-        progressBlocks.some((block) => {
+        decisionBlocks.some((block) => {
           const line = block.split('\n').find((item) => item.startsWith('data: '))
           if (!line) return false
-          const event = JSON.parse(line.slice('data: '.length)) as { output?: unknown }
-          return Boolean(event.output)
+          const event = JSON.parse(line.slice('data: '.length)) as { basis?: unknown }
+          return Boolean(event.basis)
         }),
       ).toBe(true)
 
-      const sessionRes = await req(
+      const runRes = await req(
         'GET',
-        `/api/cloud-saas/diy/sessions/${encodeURIComponent(sessionPayload.sessionId)}`,
+        `/api/cloud-saas/diy/runs/${encodeURIComponent(createBody.runId)}`,
       )
-      expect(sessionRes.status).toBe(200)
-      const sessionBody = (await sessionRes.json()) as {
-        session: { status: string; events: unknown[]; draft?: { validation: { valid: boolean } } }
+      expect(runRes.status).toBe(200)
+      const runBody = (await runRes.json()) as {
+        run: { status: string; draft?: { validation: { valid: boolean } } }
+        events: unknown[]
       }
-      expect(sessionBody.session.status).toBe('completed')
-      expect(sessionBody.session.events.length).toBeGreaterThan(0)
-      expect(sessionBody.session.draft?.validation.valid).toBe(true)
+      expect(runBody.run.status).toBe('completed')
+      expect(runBody.events.length).toBeGreaterThan(0)
+      expect(runBody.run.draft?.validation.valid).toBe(true)
 
       const replayRes = await req(
         'GET',
-        `/api/cloud-saas/diy/sessions/${encodeURIComponent(sessionPayload.sessionId)}/stream`,
+        `/api/cloud-saas/diy/runs/${encodeURIComponent(createBody.runId)}/stream`,
       )
       expect(replayRes.status).toBe(200)
       const replayBody = await replayRes.text()
-      expect(replayBody).toContain('event: draft')
+      expect(replayBody).toContain('event: draft.completed')
+
+      const feedbackRes = await req(
+        'POST',
+        `/api/cloud-saas/diy/runs/${encodeURIComponent(createBody.runId)}/feedback`,
+        {
+          feedback: '把知识库入口改成客服值班台，并补充人工升级流程',
+        },
+      )
+      expect(feedbackRes.status).toBe(201)
+      const feedbackBody = (await feedbackRes.json()) as { runId: string; sourceRunId: string }
+      expect(feedbackBody.sourceRunId).toBe(createBody.runId)
+      expect(feedbackBody.runId).not.toBe(createBody.runId)
     } finally {
-      if (previousKey) process.env.SHADOW_DIY_CLOUD_GENERATOR_API_KEY = previousKey
+      restoreEnv('SHADOW_DIY_CLOUD_GENERATOR_API_KEY', previousKey)
+      restoreEnv('SHADOW_DIY_CLOUD_GENERATOR_BASE_URL', previousBaseUrl)
+      restoreEnv('SHADOW_DIY_CLOUD_GENERATOR_MODEL', previousModel)
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('GET /api/cloud-saas/diy/runs/:runId/stream closes with structured failure events', async () => {
+    const previousKey = process.env.SHADOW_DIY_CLOUD_GENERATOR_API_KEY
+    const previousBaseUrl = process.env.SHADOW_DIY_CLOUD_GENERATOR_BASE_URL
+    const previousModel = process.env.SHADOW_DIY_CLOUD_GENERATOR_MODEL
+    process.env.SHADOW_DIY_CLOUD_GENERATOR_API_KEY = 'test-key'
+    process.env.SHADOW_DIY_CLOUD_GENERATOR_BASE_URL = 'https://model.test/v1'
+    process.env.SHADOW_DIY_CLOUD_GENERATOR_MODEL = 'test-tool-agent'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('model unavailable')
+      }),
+    )
+
+    try {
+      const createRes = await req('POST', '/api/cloud-saas/diy/runs', {
+        prompt: 'Build a growth space that monitors competitors and connects Google Drive',
+        locale: 'en',
+        timezone: 'America/Los_Angeles',
+      })
+      expect(createRes.status).toBe(201)
+      const createBody = (await createRes.json()) as { runId: string }
+
+      const res = await req(
+        'GET',
+        `/api/cloud-saas/diy/runs/${encodeURIComponent(createBody.runId)}/stream`,
+      )
+      expect(res.status).toBe(200)
+      const body = await res.text()
+
+      expect(body).toContain('event: run.failed')
+      expect(body).not.toContain('ERR_INCOMPLETE_CHUNKED_ENCODING')
+      const failedBlock = body
+        .split('\n\n')
+        .find((block) => block.startsWith('event: run.failed\n'))
+      expect(failedBlock).toBeTruthy()
+      const dataLine = failedBlock?.split('\n').find((line) => line.startsWith('data: '))
+      const payload = JSON.parse(dataLine!.slice('data: '.length)) as {
+        error: string
+        retryable: boolean
+      }
+      expect(payload.error).toContain('model unavailable')
+      expect(payload.retryable).toBe(true)
+
+      const runRes = await req(
+        'GET',
+        `/api/cloud-saas/diy/runs/${encodeURIComponent(createBody.runId)}`,
+      )
+      expect(runRes.status).toBe(200)
+      const runBody = (await runRes.json()) as { run: { status: string; error: string } }
+      expect(runBody.run.status).toBe('failed')
+      expect(runBody.run.error).toContain('model unavailable')
+    } finally {
+      restoreEnv('SHADOW_DIY_CLOUD_GENERATOR_API_KEY', previousKey)
+      restoreEnv('SHADOW_DIY_CLOUD_GENERATOR_BASE_URL', previousBaseUrl)
+      restoreEnv('SHADOW_DIY_CLOUD_GENERATOR_MODEL', previousModel)
+      vi.unstubAllGlobals()
     }
   })
 

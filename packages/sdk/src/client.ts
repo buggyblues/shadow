@@ -16,9 +16,10 @@ import type {
   ShadowCommerceProductCard,
   ShadowCommerceProductPickerResponse,
   ShadowContract,
-  ShadowDiyCloudDraft,
   ShadowDiyCloudGenerateInput,
-  ShadowDiyCloudGenerationSession,
+  ShadowDiyCloudRun,
+  ShadowDiyCloudRunEvent,
+  ShadowDiyCloudRunStatus,
   ShadowDmChannel,
   ShadowEntitlement,
   ShadowEntitlementProvisioning,
@@ -2183,35 +2184,65 @@ export class ShadowClient {
 
   // ── Cloud SaaS DIY Generation ───────────────────────────────────────
 
-  async generateDiyCloudDraft(data: ShadowDiyCloudGenerateInput): Promise<ShadowDiyCloudDraft> {
-    return this.request('/api/cloud-saas/diy/generate', {
+  async createDiyCloudRun(data: ShadowDiyCloudGenerateInput): Promise<{
+    runId: string
+    status: ShadowDiyCloudRunStatus
+    createdAt: string
+    expiresAt: string
+    streamUrl: string
+  }> {
+    return this.request('/api/cloud-saas/diy/runs', {
       method: 'POST',
       body: JSON.stringify(data),
     })
   }
 
-  async generateDiyCloudDraftStream(data: ShadowDiyCloudGenerateInput): Promise<Response> {
-    return this.requestRaw('/api/cloud-saas/diy/generate/stream', {
+  async getDiyCloudRun(runId: string): Promise<{
+    run: ShadowDiyCloudRun
+    events: ShadowDiyCloudRunEvent[]
+  }> {
+    return this.request(`/api/cloud-saas/diy/runs/${encodeURIComponent(runId)}`)
+  }
+
+  async createDiyCloudFeedbackRun(
+    runId: string,
+    data: {
+      feedback: string
+      prompt?: string
+      locale?: string
+      timezone?: string
+    },
+  ): Promise<{
+    runId: string
+    sourceRunId: string
+    status: ShadowDiyCloudRunStatus
+    createdAt: string
+    expiresAt: string
+    streamUrl: string
+  }> {
+    return this.request(`/api/cloud-saas/diy/runs/${encodeURIComponent(runId)}/feedback`, {
       method: 'POST',
-      headers: {
-        Accept: 'text/event-stream',
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(data),
     })
   }
 
-  async getDiyCloudGenerationSession(
-    sessionId: string,
-  ): Promise<{ session: ShadowDiyCloudGenerationSession }> {
-    return this.request(`/api/cloud-saas/diy/sessions/${encodeURIComponent(sessionId)}`)
+  async streamDiyCloudRun(runId: string, options: { afterSeq?: number } = {}): Promise<Response> {
+    const qs = new URLSearchParams()
+    if (options.afterSeq != null) qs.set('afterSeq', String(options.afterSeq))
+    const suffix = qs.toString() ? `?${qs}` : ''
+    return this.requestRaw(
+      `/api/cloud-saas/diy/runs/${encodeURIComponent(runId)}/stream${suffix}`,
+      {
+        headers: { Accept: 'text/event-stream' },
+      },
+    )
   }
 
-  async streamDiyCloudGenerationSession(sessionId: string): Promise<Response> {
-    return this.requestRaw(`/api/cloud-saas/diy/sessions/${encodeURIComponent(sessionId)}/stream`, {
-      headers: {
-        Accept: 'text/event-stream',
-      },
+  async cancelDiyCloudRun(
+    runId: string,
+  ): Promise<{ ok: boolean; status: ShadowDiyCloudRunStatus }> {
+    return this.request(`/api/cloud-saas/diy/runs/${encodeURIComponent(runId)}/cancel`, {
+      method: 'POST',
     })
   }
 

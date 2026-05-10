@@ -19,7 +19,6 @@ import {
   buildCommerceContextForAgent,
   buildCommerceViewerContextForAgent,
   commerceContextFields,
-  inferCommerceOfferIdForReply,
 } from './commerce-context.js'
 import { buildInteractiveResponseContext } from './interactive-response.js'
 import { resolveShadowInboundMediaContext } from './media.js'
@@ -340,7 +339,7 @@ export async function processShadowMessage(params: {
       ctx: ctxPayload,
       cfg,
       replyOptions: {
-        sourceReplyDeliveryMode: 'automatic',
+        sourceReplyDeliveryMode: 'message_tool_only',
       },
       dispatcherOptions: {
         ...replyPipeline,
@@ -356,11 +355,6 @@ export async function processShadowMessage(params: {
             agentChain: triggerChain,
             agentId: dispatchAgentId,
             botUserId,
-            commerceOfferId: inferCommerceOfferIdForReply({
-              account,
-              inboundText: messageBodyForAgent,
-              replyText: payload.text ?? '',
-            }),
           })
         },
         onError: (err, info) => {

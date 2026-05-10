@@ -64,6 +64,8 @@ services:
     environment:
       DATABASE_URL: postgresql://shadow:shadow@postgres:5432/shadow
       REDIS_URL: redis://redis:6379
+      SHADOW_DISABLE_RATE_LIMITS: ${SHADOW_DISABLE_RATE_LIMITS:-false}
+      SHADOW_DIY_CLOUD_DAILY_LIMIT: ${SHADOW_DIY_CLOUD_DAILY_LIMIT:-24}
       ENABLE_DEV_TOPUP: ${ENABLE_DEV_TOPUP:-0}
       JWT_SECRET: ${JWT_SECRET:-shadow-dev-jwt-secret-do-not-use-in-production}
       JWT_EXPIRES_IN: 7d

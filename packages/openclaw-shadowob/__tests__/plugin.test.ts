@@ -373,7 +373,7 @@ describe('Slash Commands', () => {
     ).toBe(true)
   })
 
-  it('should force automatic source replies for monitored channel dispatches', async () => {
+  it('should require the message tool for visible monitored channel replies', async () => {
     vi.useFakeTimers()
     const { processShadowMessage } = await import('../src/monitor/channel-message.js')
     const dispatch = vi.fn(async () => undefined)
@@ -435,7 +435,7 @@ describe('Slash Commands', () => {
       expect(dispatch).toHaveBeenCalledWith(
         expect.objectContaining({
           replyOptions: {
-            sourceReplyDeliveryMode: 'automatic',
+            sourceReplyDeliveryMode: 'message_tool_only',
           },
           ctx: expect.objectContaining({
             ChatType: 'channel',
@@ -449,7 +449,7 @@ describe('Slash Commands', () => {
     }
   })
 
-  it('should force automatic source replies for monitored DM dispatches', async () => {
+  it('should require the message tool for visible monitored DM replies', async () => {
     const { processShadowDmMessage } = await import('../src/monitor/dm-message.js')
     const dispatch = vi.fn(async () => undefined)
     const core = {
@@ -508,7 +508,7 @@ describe('Slash Commands', () => {
     expect(dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         replyOptions: {
-          sourceReplyDeliveryMode: 'automatic',
+          sourceReplyDeliveryMode: 'message_tool_only',
         },
         ctx: expect.objectContaining({
           ChatType: 'direct',
@@ -601,6 +601,68 @@ describe('Plugin Entry Point', () => {
     expect(schema?.properties.filename).toBeDefined()
     expect(schema?.properties.serverId).toBeUndefined()
     expect(schema?.properties.html).toBeUndefined()
+  })
+
+  it('should expose configured commerce offers in the message tool schema', async () => {
+    const { shadowPlugin } = await import('../src/channel.js')
+    const discovery = shadowPlugin.actions?.describeMessageTool({
+      cfg: {
+        channels: {
+          shadowob: {
+            token: 'tok',
+            serverUrl: 'http://localhost:3002',
+            accounts: {
+              default: {
+                token: 'tok',
+                serverUrl: 'http://localhost:3002',
+                commerceOffers: [
+                  {
+                    offerId: 'offer-match',
+                    name: '一盒会发光的火柴',
+                    summary: '购买后解锁一段火柴点亮的 HTML 动画。',
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+      accountId: 'default',
+    } as never)
+    const schema = Array.isArray(discovery?.schema) ? discovery.schema[0] : discovery?.schema
+
+    expect(schema?.properties.commerceOfferId.description).toContain('offer-match')
+    expect(schema?.properties.commerceOfferId.description).toContain('一盒会发光的火柴')
+  })
+
+  it('should not expose unresolved commerce offer placeholders in the message tool schema', async () => {
+    const { shadowPlugin } = await import('../src/channel.js')
+    const discovery = shadowPlugin.actions?.describeMessageTool({
+      cfg: {
+        channels: {
+          shadowob: {
+            accounts: {
+              default: {
+                token: 'tok',
+                serverUrl: 'http://localhost:3002',
+                commerceOffers: [
+                  {
+                    offerId: '${env:SHADOW_COMMERCE_OFFER_MATCH}',
+                    name: '一盒会发光的火柴',
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+      accountId: 'default',
+    } as never)
+    const schema = Array.isArray(discovery?.schema) ? discovery.schema[0] : discovery?.schema
+
+    expect(schema?.properties.commerceOfferId.description).not.toContain(
+      'SHADOW_COMMERCE_OFFER_MATCH',
+    )
   })
 
   it('should tell agents to include message when sending interactive dialogs', async () => {
@@ -799,85 +861,6 @@ describe('Plugin Entry Point', () => {
         }),
       }),
     )
-  })
-
-  it('should attach commerce cards to monitored channel replies when sales intent is inferred', async () => {
-    const { inferCommerceOfferIdForReply } = await import('../src/monitor/commerce-context.js')
-    const { deliverShadowReply } = await import('../src/monitor/reply-delivery.js')
-    const sendMessage = vi.fn().mockResolvedValue({
-      id: 'commerce-reply-msg-1',
-      content: '这盒火柴会点亮一段小动画，点击下面就可以带走它。',
-      channelId: 'ch-1',
-      authorId: 'bot-1',
-      createdAt: '2026-04-27T00:00:00.000Z',
-      updatedAt: '2026-04-27T00:00:00.000Z',
-    })
-
-    const commerceOfferId = inferCommerceOfferIdForReply({
-      account: {
-        token: 'tok',
-        serverUrl: 'http://localhost:3002',
-        commerceOffers: [
-          {
-            offerId: 'offer-match',
-            name: '一盒会发光的火柴',
-            summary: '购买后解锁一段火柴点亮的 HTML 动画。',
-          },
-        ],
-      },
-      inboundText: '我今晚有点冷，想买一盒火柴，可以给我看看吗？',
-      replyText: '请看——这就是我说的那盒会发光的火柴。你要把它带回家吗？',
-    })
-
-    await deliverShadowReply({
-      payload: { text: '这盒火柴会点亮一段小动画，点击下面就可以带走它。' },
-      channelId: 'ch-1',
-      replyToId: 'source-message-1',
-      client: { sendMessage } as never,
-      runtime: {},
-      agentId: null,
-      botUserId: 'bot-1',
-      commerceOfferId,
-    })
-
-    expect(commerceOfferId).toBe('offer-match')
-    expect(sendMessage).toHaveBeenCalledWith(
-      'ch-1',
-      '这盒火柴会点亮一段小动画，点击下面就可以带走它。',
-      expect.objectContaining({
-        replyToId: 'source-message-1',
-        metadata: expect.objectContaining({
-          commerceCards: [{ kind: 'offer', offerId: 'offer-match' }],
-          shadowDelivery: expect.objectContaining({
-            source: 'openclaw-shadowob',
-            replyToId: 'source-message-1',
-          }),
-        }),
-      }),
-    )
-  })
-
-  it('should not attach commerce cards to provider error fallback replies', async () => {
-    const { inferCommerceOfferIdForReply } = await import('../src/monitor/commerce-context.js')
-
-    const commerceOfferId = inferCommerceOfferIdForReply({
-      account: {
-        token: 'tok',
-        serverUrl: 'http://localhost:3002',
-        commerceOffers: [
-          {
-            offerId: 'offer-match',
-            name: '一盒会发光的火柴',
-            summary: '购买后解锁一段火柴点亮的 HTML 动画。',
-          },
-        ],
-      },
-      inboundText: '我想买一盒会发光的火柴，想看看动画',
-      replyText:
-        '⚠️ Something went wrong while processing your request. Please try again, or use /new to start a fresh session.',
-    })
-
-    expect(commerceOfferId).toBeUndefined()
   })
 
   it('should keep interactive dialogs on the shared send action', async () => {

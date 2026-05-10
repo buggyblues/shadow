@@ -222,33 +222,28 @@ Cloud cost dashboards read Buddy usage from `usage-snapshot` rows. They do not e
 | GET    | `/api/cloud-saas/diy/plugins`                 | List official plugins available to the DIY generator |
 | GET    | `/api/cloud-saas/diy/plugins/search?q=...`    | Search official DIY plugin capabilities |
 | GET    | `/api/cloud-saas/diy/templates`               | List valid official templates available as references |
-| POST   | `/api/cloud-saas/diy/generate`                | Generate a DIY Cloud draft as one JSON response |
-| POST   | `/api/cloud-saas/diy/generate/stream`         | Create a one-day generation session and stream progress with SSE |
-| GET    | `/api/cloud-saas/diy/sessions/:sessionId`     | Read a cached DIY generation session and its latest progress |
-| GET    | `/api/cloud-saas/diy/sessions/:sessionId/stream` | Replay cached progress and continue streaming a running session |
+| POST   | `/api/cloud-saas/diy/runs`                    | Create a one-day DIY Cloud Agent run |
+| GET    | `/api/cloud-saas/diy/runs/:runId`             | Read a DIY Cloud Agent run and replayable events |
+| GET    | `/api/cloud-saas/diy/runs/:runId/stream`      | Replay cached V2 events and continue streaming a running Agent run |
+| POST   | `/api/cloud-saas/diy/runs/:runId/cancel`      | Cancel a pending DIY Cloud Agent run |
+| POST   | `/api/cloud-saas/diy/runs/:runId/feedback`    | Create a new run from an existing run plus user feedback |
 
-DIY generation requires the `cloud:diy_generate` membership capability and is rate-limited per user. The streaming endpoint accepts the same JSON body as `/diy/generate`: `prompt`, optional `feedback`, optional bounded `previousConfig`, optional `locale`, and optional `timezone`. It returns `text/event-stream` events named `session`, `progress`, `draft`, `done`, and `error`. The initial `session` event includes a `sessionId` and `expiresAt`; sessions are scoped to the authenticated user and cached for one day. Each `progress` event includes the current step (`think`, `search`, `generate`, `validate`, or `review`) plus a status, localized detail text, optional structured metadata, and when a step finishes, an `output` object.
+DIY generation requires the `cloud:diy_generate` membership capability and is rate-limited per user. `POST /diy/runs` accepts `prompt`, optional `feedback`, optional bounded `previousConfig`, optional `locale`, and optional `timezone`, then returns a `runId` and `streamUrl`. `POST /diy/runs/:runId/feedback` accepts `feedback` plus optional `prompt`, `locale`, and `timezone`, uses the source run draft as `previousConfig`, and returns a new run. The stream returns `text/event-stream` events whose names match their V2 `type`, including `run.created`, `run.started`, `step.created`, `step.delta`, `decision`, `artifact.patch`, `draft.completed`, `run.failed`, and `done`. Runs are scoped to the authenticated user, cached only in Redis, and expire after one day. `GET /diy/runs/:runId/stream?afterSeq=...` replays events after a sequence number before continuing live.
 
-Each step `output` is a JSON object with this stable shape:
+Each event has this stable envelope:
 
 ```json
 {
-  "type": "agent_step_output",
-  "schemaVersion": 1,
-  "step": "think",
-  "status": "completed",
-  "title": "Goal breakdown JSON output",
-  "locale": "zh-CN",
-  "timezone": "Asia/Shanghai",
-  "generatedAt": "2026-05-09T00:00:00.000Z",
-  "result": {},
-  "reasons": [],
-  "confidence": 0.86,
-  "raw": {}
+  "schemaVersion": 2,
+  "seq": 12,
+  "runId": "00000000-0000-0000-0000-000000000000",
+  "eventId": "00000000-0000-0000-0000-000000000001",
+  "timestamp": "2026-05-09T00:00:00.000Z",
+  "type": "decision"
 }
 ```
 
-`result` contains the normalized step result used by the product UI. `reasons` explains why the Agent made that decision. `raw` contains the raw model/tool JSON for review, with secret-like values redacted before persistence. The final `draft` payload is the same deployable draft returned by the non-streaming endpoint, including `agentOutputs` for all five steps, an `agentReport` with objective decomposition, assumptions, plugin/template selection rationale, validation checks, and any repair notes applied before the template was accepted.
+Decision events expose the reviewable basis for model choices: observations, constraints, evidence refs, rejected options, confidence, and whether user review is needed. Tool/model raw payloads and draft artifacts are redacted before persistence. The final `draft.completed` event contains the deployable draft, including `agentOutputs`, `agentReport`, guidebook, template, validation, required keys, and policy repair notes.
 
 ## Cloud SaaS Deployments
 

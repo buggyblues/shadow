@@ -1,5 +1,39 @@
+import {
+  Input,
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  Search,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@shadowob/ui'
 import { RefreshCw } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ComposedChart,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { ConfigManagementPage } from './config-management'
 
 const API_BASE = '/api/admin'
@@ -135,6 +169,37 @@ interface Stats {
   totalChannels: number
   totalInviteCodes: number
   usedInviteCodes: number
+  trends?: {
+    periodDays: number
+    points: Array<{
+      date: string
+      newUsers: number
+      messages: number
+      activeUsers: number
+      usedInviteCodes: number
+    }>
+  }
+}
+
+interface TrendPoint {
+  date: string
+  newUsers: number
+  messages: number
+  activeUsers: number
+  usedInviteCodes: number
+  cumulativeUsers: number
+}
+
+interface StatsSummary {
+  trendWindowDays: number
+  periodNewUsers: number
+  periodMessages: number
+  avgDAU: number
+  dauRatePct: number
+  msgPerActiveUser: number
+  growthVsPreviousPct: number | null
+  inviteUseRatePct: number
+  dailyTrendData: TrendPoint[]
 }
 
 interface InviteCode {
@@ -157,6 +222,182 @@ interface User {
   status: string
   isBot: boolean
   createdAt: string
+}
+
+type UserStatusFilter = 'all' | 'online' | 'offline' | 'idle'
+type UserTypeFilter = 'all' | 'user' | 'bot'
+type UserSortBy = 'createdAt' | 'username' | 'email' | 'status'
+type SortOrder = 'asc' | 'desc'
+type AgentStatusFilter = 'all' | 'running' | 'stopped' | 'error'
+type AgentSortBy = 'updatedAt' | 'name' | 'owner' | 'kernelType' | 'status'
+type TplSourceFilter = 'all' | 'official' | 'community'
+type TplSortBy =
+  | 'createdAt'
+  | 'updatedAt'
+  | 'name'
+  | 'reviewStatus'
+  | 'source'
+  | 'deployCount'
+  | 'baseCost'
+
+const USER_STATUS_OPTIONS: { value: UserStatusFilter; label: string }[] = [
+  { value: 'all', label: '全部状态' },
+  { value: 'online', label: '在线' },
+  { value: 'idle', label: '空闲' },
+  { value: 'offline', label: '离线' },
+]
+
+const USER_TYPE_OPTIONS: { value: UserTypeFilter; label: string }[] = [
+  { value: 'all', label: '全部类型' },
+  { value: 'user', label: '普通用户' },
+  { value: 'bot', label: 'Buddy' },
+]
+
+const USER_SORT_OPTIONS: { value: UserSortBy; label: string }[] = [
+  { value: 'createdAt', label: '注册时间' },
+  { value: 'username', label: '用户名' },
+  { value: 'email', label: '邮箱' },
+  { value: 'status', label: '状态' },
+]
+
+const USER_SORT_ORDER_OPTIONS: { value: SortOrder; label: string }[] = [
+  { value: 'desc', label: '降序' },
+  { value: 'asc', label: '升序' },
+]
+
+const USER_PAGE_SIZE_OPTIONS = [10, 20, 50]
+const AGENT_PAGE_SIZE_OPTIONS = [10, 20, 50]
+const TEMPLATE_PAGE_SIZE_OPTIONS = [10, 20, 50]
+const STATS_WINDOW_OPTIONS = [7, 14, 21, 30]
+
+const AGENT_STATUS_OPTIONS: { value: AgentStatusFilter; label: string }[] = [
+  { value: 'all', label: '全部状态' },
+  { value: 'running', label: '在线' },
+  { value: 'error', label: '异常' },
+  { value: 'stopped', label: '离线' },
+]
+
+const AGENT_SORT_OPTIONS: { value: AgentSortBy; label: string }[] = [
+  { value: 'updatedAt', label: '更新时间' },
+  { value: 'name', label: '名称' },
+  { value: 'owner', label: '所有者' },
+  { value: 'kernelType', label: '引擎' },
+  { value: 'status', label: '状态' },
+]
+
+const AGENT_SORT_ORDER_OPTIONS: { value: SortOrder; label: string }[] = [
+  { value: 'desc', label: '降序' },
+  { value: 'asc', label: '升序' },
+]
+
+const TPL_STATUS_OPTIONS: { value: TplStatusFilter; label: string }[] = [
+  { value: 'all', label: '全部状态' },
+  { value: 'draft', label: '草稿' },
+  { value: 'pending', label: '待审核' },
+  { value: 'approved', label: '已上架' },
+  { value: 'rejected', label: '已拒绝' },
+]
+
+const TPL_SOURCE_OPTIONS: { value: TplSourceFilter; label: string }[] = [
+  { value: 'all', label: '全部来源' },
+  { value: 'official', label: '官方' },
+  { value: 'community', label: '社区' },
+]
+
+const TPL_SORT_OPTIONS: { value: TplSortBy; label: string }[] = [
+  { value: 'updatedAt', label: '更新时间' },
+  { value: 'createdAt', label: '创建时间' },
+  { value: 'name', label: '名称' },
+  { value: 'reviewStatus', label: '审核状态' },
+  { value: 'source', label: '来源' },
+  { value: 'deployCount', label: '部署次数' },
+  { value: 'baseCost', label: 'Base Cost' },
+]
+
+const TPL_SORT_ORDER_OPTIONS: { value: SortOrder; label: string }[] = [
+  { value: 'desc', label: '降序' },
+  { value: 'asc', label: '升序' },
+]
+
+function getPaginationWindow(page: number, totalPages: number, maxWindow = 5): number[] {
+  if (totalPages <= 1) return []
+
+  let start = Math.max(1, page - Math.floor(maxWindow / 2))
+  const end = Math.min(totalPages, start + maxWindow - 1)
+
+  if (end - start + 1 < maxWindow) {
+    start = Math.max(1, end - maxWindow + 1)
+  }
+
+  return Array.from({ length: end - start + 1 }, (_, i) => start + i)
+}
+
+function formatTooltipValue(value?: number) {
+  if (value === undefined || value === null) return '0'
+  return value.toLocaleString()
+}
+
+function formatPercent(value: number | null | undefined): string {
+  if (!Number.isFinite(value ?? NaN)) return '—'
+  return `${(value ?? 0).toFixed(1)}%`
+}
+
+function formatChartDate(value: string) {
+  return value.split('-').slice(1).join('-')
+}
+
+function buildTrendSummary(stats: Stats | null): StatsSummary | null {
+  if (
+    !stats ||
+    !stats.trends ||
+    !Array.isArray(stats.trends.points) ||
+    !stats.trends.points.length
+  ) {
+    return null
+  }
+
+  const points = stats.trends.points
+  const ordered = [...points].sort((a, b) => a.date.localeCompare(b.date))
+  const totalNewUsersInWindow = ordered.reduce((sum, item) => sum + item.newUsers, 0)
+  const periodMessages = ordered.reduce((sum, item) => sum + item.messages, 0)
+  const totalActiveByMessageWindow = ordered.reduce((sum, item) => sum + item.activeUsers, 0)
+  const avgDAU = ordered.length ? totalActiveByMessageWindow / ordered.length : 0
+  const dauRatePct = stats.totalUsers > 0 ? (avgDAU / stats.totalUsers) * 100 : 0
+
+  const splitIndex = Math.floor(ordered.length / 2)
+  const firstWindow = ordered.slice(0, splitIndex)
+  const secondWindow = ordered.slice(splitIndex)
+  const firstWindowUsers = firstWindow.reduce((sum, item) => sum + item.newUsers, 0)
+  const secondWindowUsers = secondWindow.reduce((sum, item) => sum + item.newUsers, 0)
+  const growthVsPreviousPct = (() => {
+    if (firstWindowUsers === 0) return secondWindowUsers > 0 ? 100 : 0
+    return ((secondWindowUsers - firstWindowUsers) / firstWindowUsers) * 100
+  })()
+
+  const msgPerActiveUser =
+    totalActiveByMessageWindow > 0 ? periodMessages / totalActiveByMessageWindow : 0
+
+  const inviteUseRatePct =
+    stats.totalInviteCodes > 0 ? (stats.usedInviteCodes / stats.totalInviteCodes) * 100 : 0
+
+  const baselineUsers = Math.max(stats.totalUsers - totalNewUsersInWindow, 0)
+  let runningTotal = baselineUsers
+  const dailyTrendData = ordered.map((item) => {
+    runningTotal += item.newUsers
+    return { ...item, cumulativeUsers: runningTotal }
+  })
+
+  return {
+    trendWindowDays: ordered.length,
+    periodNewUsers: totalNewUsersInWindow,
+    periodMessages: periodMessages,
+    avgDAU,
+    dauRatePct,
+    msgPerActiveUser,
+    growthVsPreviousPct,
+    inviteUseRatePct,
+    dailyTrendData,
+  }
 }
 
 interface Server {
@@ -262,6 +503,8 @@ interface PasswordChangeLog {
 function DashboardContent() {
   const [tab, setTab] = useState<Tab>('stats')
   const [stats, setStats] = useState<Stats | null>(null)
+  const [statsLoading, setStatsLoading] = useState(false)
+  const [statsWindowDays, setStatsWindowDays] = useState<number>(14)
   const [invites, setInvites] = useState<InviteCode[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [servers, setServers] = useState<Server[]>([])
@@ -280,11 +523,30 @@ function DashboardContent() {
     isPublic: boolean
   }>({ name: '', slug: '', description: '', isPublic: false })
   const [adminAgents, setAdminAgents] = useState<AdminAgent[]>([])
+  const [agentSearch, setAgentSearch] = useState('')
+  const [agentStatusFilter, setAgentStatusFilter] = useState<AgentStatusFilter>('all')
+  const [agentSortBy, setAgentSortBy] = useState<AgentSortBy>('updatedAt')
+  const [agentSortOrder, setAgentSortOrder] = useState<SortOrder>('desc')
+  const [agentPage, setAgentPage] = useState(1)
+  const [agentPageSize, setAgentPageSize] = useState<number>(10)
   const [passwordLogs, setPasswordLogs] = useState<PasswordChangeLog[]>([])
+  const [grantAmountByUser, setGrantAmountByUser] = useState<Record<string, string>>({})
+  const [grantLoadingUserId, setGrantLoadingUserId] = useState<string | null>(null)
+  const [userSearch, setUserSearch] = useState('')
+  const [userStatusFilter, setUserStatusFilter] = useState<UserStatusFilter>('all')
+  const [userTypeFilter, setUserTypeFilter] = useState<UserTypeFilter>('all')
+  const [userSortBy, setUserSortBy] = useState<UserSortBy>('createdAt')
+  const [userSortOrder, setUserSortOrder] = useState<SortOrder>('desc')
+  const [userPage, setUserPage] = useState(1)
+  const [userPageSize, setUserPageSize] = useState<number>(10)
 
   // Templates state
   const [templates, setTemplates] = useState<CloudTemplate[]>([])
   const [tplFilter, setTplFilter] = useState<TplStatusFilter>('all')
+  const [tplSearch, setTplSearch] = useState('')
+  const [tplSourceFilter, setTplSourceFilter] = useState<TplSourceFilter>('all')
+  const [tplSortBy, setTplSortBy] = useState<TplSortBy>('updatedAt')
+  const [tplSortOrder, setTplSortOrder] = useState<SortOrder>('desc')
   const [tplLoading, setTplLoading] = useState(false)
   const [tplSelected, setTplSelected] = useState<CloudTemplate | null>(null)
   const [tplActionLoading, setTplActionLoading] = useState<string | null>(null)
@@ -293,9 +555,13 @@ function DashboardContent() {
   const [tplRejectDialogOpen, setTplRejectDialogOpen] = useState(false)
   const [tplRejectNote, setTplRejectNote] = useState('')
   const [tplRejectTargetId, setTplRejectTargetId] = useState<string | null>(null)
+  const [tplPage, setTplPage] = useState(1)
+  const [tplPageSize, setTplPageSize] = useState<number>(10)
   const [tplEditOpen, setTplEditOpen] = useState(false)
   const [tplEditTarget, setTplEditTarget] = useState<CloudTemplate | null>(null)
   const [tplCreateOpen, setTplCreateOpen] = useState(false)
+
+  const statsSummary = useMemo(() => buildTrendSummary(stats), [stats])
   type TplForm = {
     slug: string
     name: string
@@ -321,10 +587,13 @@ function DashboardContent() {
   const [tplForm, setTplForm] = useState<TplForm>(emptyTplForm)
 
   const loadStats = async () => {
+    setStatsLoading(true)
     try {
-      setStats(await apiFetch<Stats>('/stats'))
+      setStats(await apiFetch<Stats>(`/stats?days=${statsWindowDays}`))
     } catch {
       /* */
+    } finally {
+      setStatsLoading(false)
     }
   }
 
@@ -339,10 +608,228 @@ function DashboardContent() {
   const loadUsers = async () => {
     try {
       setUsers(await apiFetch<User[]>('/users'))
+      setUserPage(1)
     } catch {
       /* */
     }
   }
+
+  const filteredSortedUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase()
+    const list = [...users].filter((u) => {
+      if (q) {
+        const name = (u.displayName ?? '').toLowerCase()
+        const target = [u.username, u.email, name].filter(Boolean).some((item) => item.includes(q))
+        if (!target) return false
+      }
+
+      if (userStatusFilter !== 'all' && u.status !== userStatusFilter) return false
+
+      if (userTypeFilter === 'bot' && !u.isBot) return false
+      if (userTypeFilter === 'user' && u.isBot) return false
+
+      return true
+    })
+
+    list.sort((a, b) => {
+      const multiplier = userSortOrder === 'asc' ? 1 : -1
+      if (userSortBy === 'createdAt') {
+        const aTs = a.createdAt ? new Date(a.createdAt).getTime() : 0
+        const bTs = b.createdAt ? new Date(b.createdAt).getTime() : 0
+        return (aTs - bTs) * multiplier
+      }
+      const aValue =
+        userSortBy === 'username' ? a.username : userSortBy === 'email' ? a.email : a.status
+      const bValue =
+        userSortBy === 'username' ? b.username : userSortBy === 'email' ? b.email : b.status
+      return aValue.localeCompare(bValue) * multiplier
+    })
+
+    return list
+  }, [userSearch, userSortBy, userSortOrder, userStatusFilter, userTypeFilter, users])
+
+  const userTotal = filteredSortedUsers.length
+  const userTotalPages = Math.max(1, Math.ceil(userTotal / userPageSize))
+  const userList = useMemo(() => {
+    const start = (userPage - 1) * userPageSize
+    return filteredSortedUsers.slice(start, start + userPageSize)
+  }, [filteredSortedUsers, userPage, userPageSize])
+
+  const userPaginationWindow = useMemo(() => {
+    return getPaginationWindow(userPage, userTotalPages)
+  }, [userPage, userTotalPages])
+
+  const userPaginationFirst = userPaginationWindow[0] ?? 1
+  const userPaginationLast = userPaginationWindow[userPaginationWindow.length - 1] ?? userTotalPages
+
+  const userVisibleStart = userTotal === 0 ? 0 : (userPage - 1) * userPageSize + 1
+  const userVisibleEnd = Math.min(userPage * userPageSize, userTotal)
+
+  useEffect(() => {
+    setUserPage(1)
+  }, [userSearch, userStatusFilter, userTypeFilter, userSortBy, userSortOrder, userPageSize])
+
+  useEffect(() => {
+    if (userPage > userTotalPages) {
+      setUserPage(userTotalPages)
+    } else if (userPage < 1) {
+      setUserPage(1)
+    }
+  }, [userPage, userTotalPages])
+
+  const filteredSortedAgents = useMemo(() => {
+    const q = agentSearch.trim().toLowerCase()
+    const list = [...adminAgents].filter((agent) => {
+      if (q) {
+        const ownerName = (agent.owner?.displayName ?? '').toLowerCase()
+        const ownerUsername = (agent.owner?.username ?? '').toLowerCase()
+        const name = (agent.botUser?.displayName ?? agent.botUser?.username ?? '').toLowerCase()
+        const email = (agent.botUser?.email ?? '').toLowerCase()
+
+        if (![name, email, ownerName, ownerUsername].some((value) => value.includes(q))) {
+          return false
+        }
+      }
+
+      if (agentStatusFilter !== 'all' && agent.status !== agentStatusFilter) return false
+
+      return true
+    })
+
+    list.sort((a, b) => {
+      const multiplier = agentSortOrder === 'asc' ? 1 : -1
+
+      if (agentSortBy === 'updatedAt') {
+        const aTs = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
+        const bTs = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
+        return (aTs - bTs) * multiplier
+      }
+
+      const getValue = (agent: AdminAgent): string => {
+        if (agentSortBy === 'name') {
+          return (agent.botUser?.displayName ?? agent.botUser?.username ?? '').toLowerCase()
+        }
+        if (agentSortBy === 'owner') {
+          return (agent.owner?.username ?? '').toLowerCase()
+        }
+        if (agentSortBy === 'kernelType') {
+          return (agent.kernelType ?? '').toLowerCase()
+        }
+        return (agent.status ?? '').toLowerCase()
+      }
+
+      return getValue(a).localeCompare(getValue(b)) * multiplier
+    })
+
+    return list
+  }, [adminAgents, agentSearch, agentSortBy, agentSortOrder, agentStatusFilter])
+
+  const agentTotal = filteredSortedAgents.length
+  const agentTotalPages = Math.max(1, Math.ceil(agentTotal / agentPageSize))
+  const agentList = useMemo(() => {
+    const start = (agentPage - 1) * agentPageSize
+    return filteredSortedAgents.slice(start, start + agentPageSize)
+  }, [filteredSortedAgents, agentPage, agentPageSize])
+
+  const agentPaginationWindow = useMemo(() => {
+    return getPaginationWindow(agentPage, agentTotalPages)
+  }, [agentPage, agentTotalPages])
+
+  const agentPaginationFirst = agentPaginationWindow[0] ?? 1
+  const agentPaginationLast =
+    agentPaginationWindow[agentPaginationWindow.length - 1] ?? agentTotalPages
+
+  const agentVisibleStart = agentTotal === 0 ? 0 : (agentPage - 1) * agentPageSize + 1
+  const agentVisibleEnd = Math.min(agentPage * agentPageSize, agentTotal)
+
+  useEffect(() => {
+    setAgentPage(1)
+  }, [agentSearch, agentStatusFilter, agentSortBy, agentSortOrder, agentPageSize])
+
+  useEffect(() => {
+    if (agentPage > agentTotalPages) {
+      setAgentPage(agentTotalPages)
+    } else if (agentPage < 1) {
+      setAgentPage(1)
+    }
+  }, [agentPage, agentTotalPages])
+
+  const filteredSortedTemplates = useMemo(() => {
+    const q = tplSearch.trim().toLowerCase()
+    const list = [...templates].filter((tpl) => {
+      if (tplSourceFilter !== 'all' && tpl.source !== tplSourceFilter) return false
+
+      if (q) {
+        const fields = [
+          tpl.name.toLowerCase(),
+          tpl.slug.toLowerCase(),
+          (tpl.description ?? '').toLowerCase(),
+          (tpl.category ?? '').toLowerCase(),
+          ...(tpl.tags ?? []).map((tag) => tag.toLowerCase()),
+        ]
+        if (!fields.some((value) => value.includes(q))) return false
+      }
+
+      return true
+    })
+
+    list.sort((a, b) => {
+      const multiplier = tplSortOrder === 'asc' ? 1 : -1
+      if (tplSortBy === 'createdAt' || tplSortBy === 'updatedAt') {
+        const aTs = new Date(a[tplSortBy]).getTime()
+        const bTs = new Date(b[tplSortBy]).getTime()
+        return (aTs - bTs) * multiplier
+      }
+
+      if (tplSortBy === 'deployCount' || tplSortBy === 'baseCost') {
+        const aValue = tplSortBy === 'deployCount' ? a.deployCount : (a.baseCost ?? -1)
+        const bValue = tplSortBy === 'deployCount' ? b.deployCount : (b.baseCost ?? -1)
+        return (aValue - bValue) * multiplier
+      }
+
+      const getValue = (tpl: CloudTemplate): string =>
+        tplSortBy === 'name'
+          ? tpl.name.toLowerCase()
+          : tplSortBy === 'reviewStatus'
+            ? tpl.reviewStatus
+            : tplSortBy === 'source'
+              ? tpl.source
+              : tpl.name.toLowerCase()
+
+      return getValue(a).localeCompare(getValue(b)) * multiplier
+    })
+
+    return list
+  }, [templates, tplSearch, tplSourceFilter, tplSortBy, tplSortOrder])
+
+  const tplTotal = filteredSortedTemplates.length
+  const tplTotalPages = Math.max(1, Math.ceil(tplTotal / tplPageSize))
+  const tplList = useMemo(() => {
+    const start = (tplPage - 1) * tplPageSize
+    return filteredSortedTemplates.slice(start, start + tplPageSize)
+  }, [filteredSortedTemplates, tplPage, tplPageSize])
+
+  const tplPaginationWindow = useMemo(() => {
+    return getPaginationWindow(tplPage, tplTotalPages)
+  }, [tplPage, tplTotalPages])
+
+  const tplPaginationFirst = tplPaginationWindow[0] ?? 1
+  const tplPaginationLast = tplPaginationWindow[tplPaginationWindow.length - 1] ?? tplTotalPages
+
+  const tplVisibleStart = tplTotal === 0 ? 0 : (tplPage - 1) * tplPageSize + 1
+  const tplVisibleEnd = Math.min(tplPage * tplPageSize, tplTotal)
+
+  useEffect(() => {
+    setTplPage(1)
+  }, [tplSearch, tplFilter, tplSourceFilter, tplSortBy, tplSortOrder, tplPageSize])
+
+  useEffect(() => {
+    if (tplPage > tplTotalPages) {
+      setTplPage(tplTotalPages)
+    } else if (tplPage < 1) {
+      setTplPage(1)
+    }
+  }, [tplPage, tplTotalPages])
 
   const loadServers = async () => {
     try {
@@ -420,10 +907,10 @@ function DashboardContent() {
     }
   }
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional load on mount
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reload stats when window changes
   useEffect(() => {
     loadStats()
-  }, [])
+  }, [statsWindowDays])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional load on tab change
   useEffect(() => {
@@ -433,7 +920,7 @@ function DashboardContent() {
     if (tab === 'agents') loadAgents()
     if (tab === 'passwordLogs') loadPasswordLogs()
     if (tab === 'templates') loadTemplates(tplFilter)
-  }, [tab])
+  }, [tab, tplFilter])
 
   const generateCodes = async () => {
     setLoading(true)
@@ -462,6 +949,54 @@ function DashboardContent() {
     await apiFetch(`/users/${id}`, { method: 'DELETE' })
     loadUsers()
     loadStats()
+  }
+
+  const grantWalletToUser = async (userId: string, username: string) => {
+    const rawAmount = (grantAmountByUser[userId] ?? '').trim()
+    const amount = Number(rawAmount)
+    if (!Number.isFinite(amount) || !Number.isInteger(amount) || amount <= 0) {
+      alert('请输入有效的加款金额（正整数）')
+      return
+    }
+
+    const token = localStorage.getItem('admin_token') ?? ''
+    if (!token) {
+      alert('未检测到管理员登录态')
+      return
+    }
+
+    setGrantLoadingUserId(userId)
+    try {
+      const res = await fetch(`${API_BASE}/wallet/grant`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId,
+          amount,
+          note: `admin grant by ${username}`,
+        }),
+      })
+
+      if (res.status === 403) {
+        const text = await res.text()
+        throw new Error(
+          text && text.trim() ? text : '余额加款被禁用，请确认 ENABLE_DEV_TOPUP 已开启（设置为 1）',
+        )
+      }
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || '加款失败')
+      }
+      alert(`已为 ${username} 增加 ${amount} 点。`)
+      setGrantAmountByUser((prev) => ({ ...prev, [userId]: '' }))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '加款失败')
+    } finally {
+      setGrantLoadingUserId(null)
+    }
   }
 
   const deleteServer = async (id: string) => {
@@ -584,31 +1119,203 @@ function DashboardContent() {
         {/* Main */}
         <main className="flex-1 p-6">
           {/* Stats Tab */}
-          {tab === 'stats' && stats && (
+          {tab === 'stats' && (
             <div>
               <h2 className="text-lg font-bold mb-4">数据看板</h2>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard label="总用户数" value={stats.totalUsers} color="text-blue-400" />
-                <StatCard label="在线用户" value={stats.onlineUsers} color="text-green-400" />
-                <StatCard label="总服务器" value={stats.totalServers} color="text-purple-400" />
-                <StatCard label="总频道数" value={stats.totalChannels} color="text-pink-400" />
-                <StatCard label="总消息数" value={stats.totalMessages} color="text-orange-400" />
-                <StatCard
-                  label="邀请码总数"
-                  value={stats.totalInviteCodes}
-                  color="text-amber-400"
-                />
-                <StatCard
-                  label="已使用邀请码"
-                  value={stats.usedInviteCodes}
-                  color="text-cyan-400"
-                />
-                <StatCard
-                  label="未使用邀请码"
-                  value={stats.totalInviteCodes - stats.usedInviteCodes}
-                  color="text-emerald-400"
-                />
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-zinc-400">时间窗口</span>
+                  <Select
+                    value={String(statsWindowDays)}
+                    onValueChange={(value) => setStatsWindowDays(Number(value))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择时间窗口" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATS_WINDOW_OPTIONS.map((option) => (
+                        <SelectItem key={option} value={String(option)}>
+                          最近 {option} 天
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <button
+                  onClick={loadStats}
+                  disabled={statsLoading}
+                  className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-md text-zinc-100 disabled:opacity-50"
+                >
+                  {statsLoading ? '刷新中...' : '刷新'}
+                </button>
               </div>
+
+              {statsLoading ? (
+                <div className="text-zinc-500 text-sm py-8 text-center">数据加载中…</div>
+              ) : !stats ? (
+                <div className="text-zinc-500 text-sm py-8 text-center">暂未获取到看板数据</div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <StatCard label="总用户数" value={stats.totalUsers} color="text-blue-400" />
+                    <StatCard
+                      label="在线用户"
+                      value={`${stats.onlineUsers} (${((stats.onlineUsers / Math.max(stats.totalUsers, 1)) * 100).toFixed(1)}%)`}
+                      color="text-green-400"
+                    />
+                    <StatCard label="总服务器" value={stats.totalServers} color="text-purple-400" />
+                    <StatCard label="总频道数" value={stats.totalChannels} color="text-pink-400" />
+                    <StatCard
+                      label="总消息数"
+                      value={stats.totalMessages}
+                      color="text-orange-400"
+                    />
+                    <StatCard
+                      label={`新增用户（近${statsSummary?.trendWindowDays ?? 14}天）`}
+                      value={statsSummary?.periodNewUsers ?? 0}
+                      color="text-indigo-400"
+                    />
+                    <StatCard
+                      label={`近${statsSummary?.trendWindowDays ?? 14}天消息数`}
+                      value={statsSummary?.periodMessages ?? 0}
+                      color="text-violet-400"
+                    />
+                    <StatCard
+                      label={`DAU（近${statsSummary?.trendWindowDays ?? 14}天平均）`}
+                      value={Math.round(statsSummary?.avgDAU ?? 0)}
+                      color="text-cyan-400"
+                    />
+                    <StatCard
+                      label="DAU 占比"
+                      value={formatPercent(statsSummary?.dauRatePct)}
+                      color="text-sky-300"
+                    />
+                    <StatCard
+                      label="人均消息活跃度"
+                      value={statsSummary?.msgPerActiveUser.toFixed(2) ?? '0.00'}
+                      color="text-emerald-400"
+                    />
+                    <StatCard
+                      label="邀请码使用率"
+                      value={formatPercent(statsSummary?.inviteUseRatePct)}
+                      color="text-amber-400"
+                    />
+                    <StatCard
+                      label={`用户增长率（后${Math.floor((statsSummary?.trendWindowDays ?? 14) / 2)}天 vs 前${Math.ceil((statsSummary?.trendWindowDays ?? 14) / 2)}天）`}
+                      value={formatPercent(statsSummary?.growthVsPreviousPct)}
+                      color="text-purple-300"
+                    />
+                  </div>
+
+                  {statsSummary && (
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-6">
+                      <div className="bg-zinc-900 rounded-xl p-5 border border-zinc-800">
+                        <h3 className="text-sm font-bold text-zinc-300 mb-4">用户增长趋势</h3>
+                        <div className="h-72">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={statsSummary.dailyTrendData}>
+                              <CartesianGrid
+                                stroke="var(--color-border-subtle)"
+                                strokeDasharray="3 3"
+                              />
+                              <XAxis
+                                dataKey="date"
+                                tickFormatter={formatChartDate}
+                                stroke="var(--color-text-secondary)"
+                              />
+                              <YAxis stroke="var(--color-text-secondary)" />
+                              <Tooltip
+                                formatter={(value: number) => formatTooltipValue(value)}
+                                labelFormatter={(value: string) => value}
+                                contentStyle={{
+                                  backgroundColor: 'var(--color-bg-tertiary)',
+                                  borderColor: 'var(--color-border-subtle)',
+                                  color: 'var(--color-text-primary)',
+                                }}
+                              />
+                              <Line
+                                type="monotone"
+                                dataKey="newUsers"
+                                name="新增用户"
+                                stroke="var(--color-primary)"
+                                strokeWidth={2}
+                                dot={false}
+                              />
+                              <Line
+                                type="monotone"
+                                dataKey="cumulativeUsers"
+                                name="累计用户"
+                                stroke="var(--color-warning)"
+                                strokeWidth={2}
+                                dot={false}
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                      <div className="bg-zinc-900 rounded-xl p-5 border border-zinc-800">
+                        <h3 className="text-sm font-bold text-zinc-300 mb-4">
+                          {`活跃度与消息趋势（近${statsSummary?.trendWindowDays ?? 14}天）`}
+                        </h3>
+                        <div className="h-72">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={statsSummary.dailyTrendData}>
+                              <CartesianGrid
+                                stroke="var(--color-border-subtle)"
+                                strokeDasharray="3 3"
+                              />
+                              <XAxis
+                                dataKey="date"
+                                tickFormatter={formatChartDate}
+                                stroke="var(--color-text-secondary)"
+                              />
+                              <YAxis yAxisId="left" stroke="var(--color-text-secondary)" />
+                              <YAxis
+                                yAxisId="right"
+                                orientation="right"
+                                stroke="var(--color-text-secondary)"
+                              />
+                              <Tooltip
+                                formatter={(value: number) => formatTooltipValue(value)}
+                                labelFormatter={(value: string) => value}
+                                contentStyle={{
+                                  backgroundColor: 'var(--color-bg-tertiary)',
+                                  borderColor: 'var(--color-border-subtle)',
+                                  color: 'var(--color-text-primary)',
+                                }}
+                              />
+                              <Bar
+                                yAxisId="left"
+                                dataKey="activeUsers"
+                                name="日活用户数"
+                                fill="var(--color-success)"
+                              />
+                              <Line
+                                yAxisId="right"
+                                type="monotone"
+                                dataKey="messages"
+                                name="消息数"
+                                stroke="var(--color-primary)"
+                                strokeWidth={2}
+                                dot={false}
+                              />
+                              <Line
+                                yAxisId="right"
+                                type="monotone"
+                                dataKey="usedInviteCodes"
+                                name="邀请码使用"
+                                stroke="var(--color-warning)"
+                                strokeWidth={2}
+                                dot={false}
+                              />
+                            </ComposedChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
 
@@ -717,22 +1424,140 @@ function DashboardContent() {
           {tab === 'users' && (
             <div>
               <h2 className="text-lg font-bold mb-4">用户管理</h2>
+              <div className="mb-4 grid grid-cols-1 lg:grid-cols-6 gap-3">
+                <div className="lg:col-span-2">
+                  <Search
+                    placeholder="搜索用户名 / 昵称 / 邮箱"
+                    value={userSearch}
+                    onChange={setUserSearch}
+                  />
+                </div>
+                <div>
+                  <Select
+                    value={userStatusFilter}
+                    onValueChange={(value) => setUserStatusFilter(value as UserStatusFilter)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="状态筛选" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {USER_STATUS_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Select
+                    value={userTypeFilter}
+                    onValueChange={(value) => setUserTypeFilter(value as UserTypeFilter)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="类型筛选" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {USER_TYPE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Select
+                    value={userSortBy}
+                    onValueChange={(value) => setUserSortBy(value as UserSortBy)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="排序字段" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {USER_SORT_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Select
+                    value={userSortOrder}
+                    onValueChange={(value) => setUserSortOrder(value as SortOrder)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="排序顺序" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {USER_SORT_ORDER_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Select
+                    value={String(userPageSize)}
+                    onValueChange={(value) => setUserPageSize(Number(value))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="每页条数" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {USER_PAGE_SIZE_OPTIONS.map((size) => (
+                        <SelectItem key={size} value={String(size)}>
+                          {size} 条/页
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <p className="text-xs text-zinc-500 mb-2">
+                共 {userTotal} 条
+                {userTotal > 0 && `，显示 ${userVisibleStart}-${userVisibleEnd} 条`}
+              </p>
+
               <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-zinc-800 text-zinc-400 text-left">
-                      <th className="px-4 py-3">用户</th>
-                      <th className="px-4 py-3">邮箱</th>
-                      <th className="px-4 py-3">状态</th>
-                      <th className="px-4 py-3">类型</th>
-                      <th className="px-4 py-3">注册时间</th>
-                      <th className="px-4 py-3">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((u) => (
-                      <tr key={u.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
-                        <td className="px-4 py-3">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                        用户
+                      </TableHead>
+                      <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                        邮箱
+                      </TableHead>
+                      <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                        加款金额
+                      </TableHead>
+                      <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                        状态
+                      </TableHead>
+                      <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                        类型
+                      </TableHead>
+                      <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                        注册时间
+                      </TableHead>
+                      <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                        操作
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {userList.map((u) => (
+                      <TableRow
+                        key={u.id}
+                        className="border-b border-zinc-800/50 hover:bg-zinc-800/30"
+                      >
+                        <TableCell className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             {u.avatarUrl ? (
                               <img src={u.avatarUrl} alt="" className="w-7 h-7 rounded-full" />
@@ -746,9 +1571,33 @@ function DashboardContent() {
                               <p className="text-xs text-zinc-500">@{u.username}</p>
                             </div>
                           </div>
-                        </td>
-                        <td className="px-4 py-3 text-zinc-400">{u.email}</td>
-                        <td className="px-4 py-3">
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-zinc-400">{u.email}</TableCell>
+                        <TableCell className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              min={1}
+                              value={grantAmountByUser[u.id] ?? ''}
+                              onChange={(e) =>
+                                setGrantAmountByUser((prev) => ({
+                                  ...prev,
+                                  [u.id]: e.target.value,
+                                }))
+                              }
+                              className="w-20 h-9"
+                              placeholder="金额"
+                            />
+                            <button
+                              onClick={() => grantWalletToUser(u.id, u.username)}
+                              disabled={grantLoadingUserId === u.id}
+                              className="text-green-400 hover:text-green-300 disabled:opacity-50 text-xs transition whitespace-nowrap"
+                            >
+                              {grantLoadingUserId === u.id ? '加款中...' : '加款'}
+                            </button>
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-4 py-3">
                           <span
                             className={`inline-block w-2 h-2 rounded-full mr-1 ${
                               u.status === 'online'
@@ -759,8 +1608,8 @@ function DashboardContent() {
                             }`}
                           />
                           {u.status}
-                        </td>
-                        <td className="px-4 py-3">
+                        </TableCell>
+                        <TableCell className="px-4 py-3">
                           {u.isBot ? (
                             <span className="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full">
                               Buddy
@@ -768,30 +1617,125 @@ function DashboardContent() {
                           ) : (
                             '用户'
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-zinc-500">
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-zinc-500">
                           {u.createdAt ? new Date(u.createdAt).toLocaleString() : '-'}
-                        </td>
-                        <td className="px-4 py-3">
+                        </TableCell>
+                        <TableCell className="px-4 py-3">
                           <button
                             onClick={() => deleteUser(u.id)}
                             className="text-red-400 hover:text-red-300 text-xs transition"
                           >
                             删除
                           </button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                    {users.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center text-zinc-500">
-                          暂无用户
-                        </td>
-                      </tr>
+                    {userList.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="px-4 py-8 text-center text-zinc-500">
+                          {userSearch || userStatusFilter !== 'all' || userTypeFilter !== 'all'
+                            ? '未匹配到用户'
+                            : '暂无用户'}
+                        </TableCell>
+                      </TableRow>
                     )}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
+
+              {userTotalPages > 1 && (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          href="#"
+                          className={userPage === 1 ? 'pointer-events-none opacity-50' : ''}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            if (userPage === 1) return
+                            setUserPage((p) => p - 1)
+                          }}
+                        />
+                      </PaginationItem>
+
+                      {userPaginationFirst > 1 && (
+                        <>
+                          <PaginationItem>
+                            <PaginationLink
+                              href="#"
+                              isActive={userPage === 1}
+                              onClick={(e) => {
+                                e.preventDefault()
+                                setUserPage(1)
+                              }}
+                            >
+                              1
+                            </PaginationLink>
+                          </PaginationItem>
+                          {userPaginationFirst > 2 && (
+                            <PaginationItem>
+                              <PaginationEllipsis />
+                            </PaginationItem>
+                          )}
+                        </>
+                      )}
+
+                      {userPaginationWindow.map((page) => (
+                        <PaginationItem key={page}>
+                          <PaginationLink
+                            href="#"
+                            isActive={userPage === page}
+                            onClick={(e) => {
+                              e.preventDefault()
+                              setUserPage(page)
+                            }}
+                          >
+                            {page}
+                          </PaginationLink>
+                        </PaginationItem>
+                      ))}
+
+                      {userPaginationLast < userTotalPages - 1 && (
+                        <PaginationItem>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      )}
+
+                      {userPaginationLast !== userTotalPages && (
+                        <PaginationItem>
+                          <PaginationLink
+                            href="#"
+                            isActive={userPage === userTotalPages}
+                            onClick={(e) => {
+                              e.preventDefault()
+                              setUserPage(userTotalPages)
+                            }}
+                          >
+                            {userTotalPages}
+                          </PaginationLink>
+                        </PaginationItem>
+                      )}
+
+                      <PaginationItem>
+                        <PaginationNext
+                          href="#"
+                          className={
+                            userPage === userTotalPages ? 'pointer-events-none opacity-50' : ''
+                          }
+                          onClick={(e) => {
+                            e.preventDefault()
+                            if (userPage === userTotalPages) return
+                            setUserPage((p) => p + 1)
+                          }}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
+              <div className="mt-2 text-xs text-zinc-500 lg:hidden">共 {userTotalPages} 页</div>
             </div>
           )}
 
@@ -1093,25 +2037,116 @@ function DashboardContent() {
           {tab === 'agents' && (
             <div>
               <h2 className="text-lg font-bold mb-4">Buddy 管理</h2>
+              <div className="flex flex-wrap gap-2 mb-4">
+                <Search
+                  value={agentSearch}
+                  onChange={setAgentSearch}
+                  placeholder="搜索 Buddy（名称/用户名/邮箱/所属者）"
+                />
+                <Select
+                  value={agentStatusFilter}
+                  onValueChange={(v: string) => setAgentStatusFilter(v as AgentStatusFilter)}
+                >
+                  <SelectTrigger className="w-36">
+                    <SelectValue placeholder="状态筛选" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AGENT_STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={agentSortBy}
+                  onValueChange={(v: string) => setAgentSortBy(v as AgentSortBy)}
+                >
+                  <SelectTrigger className="w-36">
+                    <SelectValue placeholder="排序字段" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AGENT_SORT_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={agentSortOrder}
+                  onValueChange={(v: string) => setAgentSortOrder(v as SortOrder)}
+                >
+                  <SelectTrigger className="w-28">
+                    <SelectValue placeholder="排序顺序" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AGENT_SORT_ORDER_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={String(agentPageSize)}
+                  onValueChange={(v: string) => {
+                    const value = Number(v)
+                    if (Number.isInteger(value)) {
+                      setAgentPageSize(value)
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-28">
+                    <SelectValue placeholder="每页条数" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AGENT_PAGE_SIZE_OPTIONS.map((size) => (
+                      <SelectItem key={size} value={String(size)}>
+                        {size}/页
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="text-sm text-zinc-400 mb-3">
+                {agentTotal > 0
+                  ? `共 ${agentTotal} 条，当前 ${agentVisibleStart}-${agentVisibleEnd} 条`
+                  : '暂无数据'}
+              </div>
+
               <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-zinc-800 text-zinc-400 text-left">
-                      <th className="px-4 py-3">Buddy</th>
-                      <th className="px-4 py-3">所有者</th>
-                      <th className="px-4 py-3">引擎</th>
-                      <th className="px-4 py-3">状态</th>
-                      <th className="px-4 py-3">更新时间</th>
-                      <th className="px-4 py-3">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {adminAgents.map((agent) => (
-                      <tr
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                        Buddy
+                      </TableHead>
+                      <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                        所有者
+                      </TableHead>
+                      <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                        引擎
+                      </TableHead>
+                      <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                        状态
+                      </TableHead>
+                      <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                        更新时间
+                      </TableHead>
+                      <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                        操作
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {agentList.map((agent) => (
+                      <TableRow
                         key={agent.id}
                         className="border-b border-zinc-800/50 hover:bg-zinc-800/30"
                       >
-                        <td className="px-4 py-3">
+                        <TableCell className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             {agent.botUser?.avatarUrl ? (
                               <img
@@ -1136,18 +2171,18 @@ function DashboardContent() {
                               Buddy
                             </span>
                           </div>
-                        </td>
-                        <td className="px-4 py-3 text-zinc-400">
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-zinc-400">
                           {agent.owner ? (
                             <span>@{agent.owner.username}</span>
                           ) : (
                             <span className="text-zinc-600">—</span>
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-zinc-400 font-mono text-xs">
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-zinc-400 font-mono text-xs">
                           {agent.kernelType}
-                        </td>
-                        <td className="px-4 py-3">
+                        </TableCell>
+                        <TableCell className="px-4 py-3">
                           <span
                             className={`text-xs px-2 py-0.5 rounded-full ${
                               agent.status === 'running'
@@ -1163,33 +2198,103 @@ function DashboardContent() {
                                 ? '异常'
                                 : '离线'}
                           </span>
-                        </td>
-                        <td className="px-4 py-3 text-zinc-500">
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-zinc-500">
                           {agent.updatedAt ? new Date(agent.updatedAt).toLocaleString() : '—'}
-                        </td>
-                        <td className="px-4 py-3">
+                        </TableCell>
+                        <TableCell className="px-4 py-3">
                           <button
                             onClick={() => deleteAgent(agent.id)}
                             className="text-red-400 hover:text-red-300 text-xs transition"
                           >
                             删除
                           </button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                    {adminAgents.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center text-zinc-500">
+                    {agentList.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="px-4 py-8 text-center text-zinc-500">
                           暂无 Agent
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     )}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
+              {agentTotal > 0 && (
+                <div className="mt-4 flex items-center justify-between">
+                  <p className="text-xs text-zinc-500">
+                    第 {agentPage} / {agentTotalPages} 页
+                  </p>
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            if (agentPage > 1) setAgentPage(agentPage - 1)
+                          }}
+                          className={agentPage <= 1 ? 'pointer-events-none opacity-50' : ''}
+                        />
+                      </PaginationItem>
+                      {agentPaginationFirst > 1 && (
+                        <PaginationItem>
+                          <PaginationLink href="#" onClick={() => setAgentPage(1)}>
+                            1
+                          </PaginationLink>
+                        </PaginationItem>
+                      )}
+                      {agentPaginationFirst > 2 && (
+                        <PaginationItem>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      )}
+                      {agentPaginationWindow.map((page) => (
+                        <PaginationItem key={page}>
+                          <PaginationLink
+                            href="#"
+                            isActive={page === agentPage}
+                            onClick={() => setAgentPage(page)}
+                          >
+                            {page}
+                          </PaginationLink>
+                        </PaginationItem>
+                      ))}
+                      {agentPaginationLast < agentTotalPages - 1 && (
+                        <PaginationItem>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      )}
+                      {agentPaginationLast !== agentTotalPages && (
+                        <PaginationItem>
+                          <PaginationLink href="#" onClick={() => setAgentPage(agentTotalPages)}>
+                            {agentTotalPages}
+                          </PaginationLink>
+                        </PaginationItem>
+                      )}
+                      <PaginationItem>
+                        <PaginationNext
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            if (agentPage < agentTotalPages) setAgentPage(agentPage + 1)
+                          }}
+                          className={
+                            agentPage >= agentTotalPages ? 'pointer-events-none opacity-50' : ''
+                          }
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
+              {agentTotal === 0 && (
+                <div className="mt-4 text-xs text-zinc-500 text-center">暂无数据</div>
+              )}
             </div>
           )}
-
           {/* Password Logs Tab */}
           {tab === 'passwordLogs' && (
             <div>
@@ -1314,175 +2419,366 @@ function DashboardContent() {
                 </div>
               )}
 
-              {/* Filter */}
-              <div className="flex gap-2 mb-4">
-                {(['all', 'pending', 'approved', 'rejected', 'draft'] as TplStatusFilter[]).map(
-                  (s) => (
-                    <button
-                      key={s}
-                      onClick={() => {
-                        setTplFilter(s)
-                        void loadTemplates(s)
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${tplFilter === s ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'}`}
-                    >
-                      {s === 'all'
-                        ? '全部'
-                        : s === 'pending'
-                          ? '待审核'
-                          : s === 'approved'
-                            ? '已上架'
-                            : s === 'rejected'
-                              ? '已拒绝'
-                              : '草稿'}
-                    </button>
-                  ),
-                )}
+              <div className="flex flex-wrap gap-2 mb-4">
+                <Search
+                  value={tplSearch}
+                  onChange={setTplSearch}
+                  placeholder="搜索模版（名称 / Slug / 描述 / 标签）"
+                />
+                <Select
+                  value={tplFilter}
+                  onValueChange={(v: string) => setTplFilter(v as TplStatusFilter)}
+                >
+                  <SelectTrigger className="w-36">
+                    <SelectValue placeholder="状态筛选" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TPL_STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={tplSourceFilter}
+                  onValueChange={(v: string) => setTplSourceFilter(v as TplSourceFilter)}
+                >
+                  <SelectTrigger className="w-36">
+                    <SelectValue placeholder="来源筛选" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TPL_SOURCE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={tplSortBy}
+                  onValueChange={(v: string) => setTplSortBy(v as TplSortBy)}
+                >
+                  <SelectTrigger className="w-36">
+                    <SelectValue placeholder="排序字段" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TPL_SORT_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={tplSortOrder}
+                  onValueChange={(v: string) => setTplSortOrder(v as SortOrder)}
+                >
+                  <SelectTrigger className="w-28">
+                    <SelectValue placeholder="排序顺序" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TPL_SORT_ORDER_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={String(tplPageSize)}
+                  onValueChange={(v: string) => {
+                    const value = Number(v)
+                    if (Number.isInteger(value)) {
+                      setTplPageSize(value)
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-28">
+                    <SelectValue placeholder="每页条数" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TEMPLATE_PAGE_SIZE_OPTIONS.map((size) => (
+                      <SelectItem key={size} value={String(size)}>
+                        {size}/页
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-
+              <div className="text-sm text-zinc-400 mb-3">
+                {tplLoading
+                  ? '加载中…'
+                  : tplTotal > 0
+                    ? `共 ${tplTotal} 条，当前 ${tplVisibleStart}-${tplVisibleEnd} 条`
+                    : '暂无模版'}
+              </div>
               <div className="flex gap-4">
-                {/* List */}
                 <div className="flex-1 min-w-0">
-                  {tplLoading ? (
-                    <div className="text-zinc-500 text-sm py-8 text-center">加载中…</div>
-                  ) : templates.length === 0 ? (
-                    <div className="text-zinc-500 text-sm py-8 text-center">暂无模版</div>
-                  ) : (
-                    <div className="space-y-2">
-                      {templates.map((t) => {
-                        const badge: Record<string, string> = {
-                          draft: 'bg-zinc-500/20 text-zinc-300',
-                          pending: 'bg-yellow-500/20 text-yellow-300',
-                          approved: 'bg-green-500/20 text-green-300',
-                          rejected: 'bg-red-500/20 text-red-300',
-                        }
-                        return (
-                          <div
-                            key={t.id}
-                            onClick={() => setTplSelected(t)}
-                            className={`p-4 rounded-xl border cursor-pointer transition ${tplSelected?.id === t.id ? 'border-indigo-500 bg-zinc-800' : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700'}`}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-medium text-white">{t.name}</span>
-                                  <span
-                                    className={`px-2 py-0.5 rounded text-xs font-medium ${badge[t.reviewStatus]}`}
-                                  >
-                                    {t.reviewStatus}
-                                  </span>
-                                  <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded">
-                                    {t.source}
-                                  </span>
-                                  {t.category && (
-                                    <span className="text-xs text-zinc-500">{t.category}</span>
-                                  )}
-                                </div>
-                                <p className="text-xs text-zinc-500 font-mono mt-0.5">{t.slug}</p>
-                                {t.description && (
-                                  <p className="text-sm text-zinc-400 mt-1 line-clamp-1">
-                                    {t.description}
-                                  </p>
-                                )}
-                                {t.reviewStatus === 'rejected' && t.reviewNote && (
-                                  <p className="text-xs text-red-400 mt-1">✕ {t.reviewNote}</p>
-                                )}
-                              </div>
-                              <div
-                                className="flex gap-2 shrink-0"
-                                onClick={(e) => e.stopPropagation()}
+                  <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                            模版
+                          </TableHead>
+                          <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                            状态
+                          </TableHead>
+                          <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                            来源
+                          </TableHead>
+                          <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                            分类
+                          </TableHead>
+                          <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                            部署次数
+                          </TableHead>
+                          <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                            更新时间
+                          </TableHead>
+                          <TableHead className="text-zinc-400 font-normal uppercase normal-case">
+                            操作
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {tplLoading ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="px-4 py-8 text-center text-zinc-500">
+                              加载中…
+                            </TableCell>
+                          </TableRow>
+                        ) : tplList.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="px-4 py-8 text-center text-zinc-500">
+                              暂无模版
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          tplList.map((t) => {
+                            const statusLabel =
+                              t.reviewStatus === 'draft'
+                                ? '草稿'
+                                : t.reviewStatus === 'pending'
+                                  ? '待审核'
+                                  : t.reviewStatus === 'approved'
+                                    ? '已上架'
+                                    : '已拒绝'
+                            const statusBadge = {
+                              draft: 'bg-zinc-500/20 text-zinc-300',
+                              pending: 'bg-yellow-500/20 text-yellow-300',
+                              approved: 'bg-green-500/20 text-green-300',
+                              rejected: 'bg-red-500/20 text-red-300',
+                            }[t.reviewStatus]
+
+                            return (
+                              <TableRow
+                                key={t.id}
+                                className={`border-b border-zinc-800/50 hover:bg-zinc-800/30 ${tplSelected?.id === t.id ? 'bg-zinc-800' : ''}`}
+                                onClick={() => setTplSelected(t)}
                               >
-                                {t.reviewStatus === 'pending' && (
-                                  <>
+                                <TableCell className="px-4 py-3">
+                                  <div>
+                                    <p className="font-medium text-white">{t.name}</p>
+                                    <p className="text-xs text-zinc-500 font-mono mt-1">{t.slug}</p>
+                                    {t.description && (
+                                      <p className="text-xs text-zinc-400 mt-1 line-clamp-1">
+                                        {t.description}
+                                      </p>
+                                    )}
+                                    {t.reviewStatus === 'rejected' && t.reviewNote && (
+                                      <p className="text-xs text-red-400 mt-1">✕ {t.reviewNote}</p>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="px-4 py-3">
+                                  <span
+                                    className={`px-2 py-0.5 rounded text-xs font-medium ${statusBadge}`}
+                                  >
+                                    {statusLabel}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="px-4 py-3 text-zinc-500">
+                                  {t.source}
+                                </TableCell>
+                                <TableCell className="px-4 py-3 text-zinc-500">
+                                  {t.category ?? '—'}
+                                </TableCell>
+                                <TableCell className="px-4 py-3 text-zinc-300">
+                                  {t.deployCount}
+                                </TableCell>
+                                <TableCell className="px-4 py-3 text-zinc-500">
+                                  {t.updatedAt ? new Date(t.updatedAt).toLocaleString() : '—'}
+                                </TableCell>
+                                <TableCell className="px-4 py-3">
+                                  <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                                    {t.reviewStatus === 'pending' && (
+                                      <>
+                                        <button
+                                          onClick={() => {
+                                            setTplActionLoading(t.id)
+                                            apiFetch(`/cloud-templates/${t.id}/approve`, {
+                                              method: 'POST',
+                                            })
+                                              .then(() => {
+                                                setTemplates((p) =>
+                                                  p.map((x) =>
+                                                    x.id === t.id
+                                                      ? {
+                                                          ...x,
+                                                          reviewStatus: 'approved',
+                                                          reviewNote: null,
+                                                        }
+                                                      : x,
+                                                  ),
+                                                )
+                                                if (tplSelected?.id === t.id)
+                                                  setTplSelected(
+                                                    (s) =>
+                                                      s && {
+                                                        ...s,
+                                                        reviewStatus: 'approved',
+                                                        reviewNote: null,
+                                                      },
+                                                  )
+                                              })
+                                              .catch(() => {})
+                                              .finally(() => setTplActionLoading(null))
+                                          }}
+                                          disabled={tplActionLoading === t.id}
+                                          className="px-3 py-1 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-medium disabled:opacity-50 transition"
+                                        >
+                                          通过
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            setTplRejectTargetId(t.id)
+                                            setTplRejectNote('')
+                                            setTplRejectDialogOpen(true)
+                                          }}
+                                          disabled={tplActionLoading === t.id}
+                                          className="px-3 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium disabled:opacity-50 transition"
+                                        >
+                                          拒绝
+                                        </button>
+                                      </>
+                                    )}
                                     <button
                                       onClick={() => {
-                                        setTplActionLoading(t.id)
-                                        apiFetch(`/cloud-templates/${t.id}/approve`, {
-                                          method: 'POST',
+                                        setTplForm({
+                                          slug: t.slug,
+                                          name: t.name,
+                                          description: t.description ?? '',
+                                          source: t.source,
+                                          reviewStatus: t.reviewStatus,
+                                          tags: t.tags.join(', '),
+                                          category: t.category ?? '',
+                                          baseCost: t.baseCost != null ? String(t.baseCost) : '',
+                                          content: JSON.stringify(t.content, null, 2),
                                         })
+                                        setTplEditTarget(t)
+                                        setTplEditOpen(true)
+                                      }}
+                                      className="px-3 py-1 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-medium transition"
+                                    >
+                                      编辑
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        if (!confirm('确定要删除该模版？')) return
+                                        apiFetch(`/cloud-templates/${t.id}`, { method: 'DELETE' })
                                           .then(() => {
-                                            setTemplates((p) =>
-                                              p.map((x) =>
-                                                x.id === t.id
-                                                  ? {
-                                                      ...x,
-                                                      reviewStatus: 'approved',
-                                                      reviewNote: null,
-                                                    }
-                                                  : x,
-                                              ),
-                                            )
-                                            if (tplSelected?.id === t.id)
-                                              setTplSelected(
-                                                (s) =>
-                                                  s && {
-                                                    ...s,
-                                                    reviewStatus: 'approved',
-                                                    reviewNote: null,
-                                                  },
-                                              )
+                                            setTemplates((p) => p.filter((x) => x.id !== t.id))
+                                            if (tplSelected?.id === t.id) setTplSelected(null)
+                                            loadTemplates(tplFilter)
                                           })
                                           .catch(() => {})
-                                          .finally(() => setTplActionLoading(null))
                                       }}
-                                      disabled={tplActionLoading === t.id}
-                                      className="px-3 py-1 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-medium disabled:opacity-50 transition"
+                                      className="px-3 py-1 rounded-lg bg-red-900/40 hover:bg-red-700 text-red-400 hover:text-white text-xs font-medium transition"
                                     >
-                                      通过
+                                      删除
                                     </button>
-                                    <button
-                                      onClick={() => {
-                                        setTplRejectTargetId(t.id)
-                                        setTplRejectNote('')
-                                        setTplRejectDialogOpen(true)
-                                      }}
-                                      disabled={tplActionLoading === t.id}
-                                      className="px-3 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium disabled:opacity-50 transition"
-                                    >
-                                      拒绝
-                                    </button>
-                                  </>
-                                )}
-                                <button
-                                  onClick={() => {
-                                    setTplForm({
-                                      slug: t.slug,
-                                      name: t.name,
-                                      description: t.description ?? '',
-                                      source: t.source,
-                                      reviewStatus: t.reviewStatus,
-                                      tags: t.tags.join(', '),
-                                      category: t.category ?? '',
-                                      baseCost: t.baseCost != null ? String(t.baseCost) : '',
-                                      content: JSON.stringify(t.content, null, 2),
-                                    })
-                                    setTplEditTarget(t)
-                                    setTplEditOpen(true)
-                                  }}
-                                  className="px-3 py-1 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-medium transition"
-                                >
-                                  编辑
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    if (!confirm('确定要删除该模版？')) return
-                                    apiFetch(`/cloud-templates/${t.id}`, { method: 'DELETE' })
-                                      .then(() => {
-                                        setTemplates((p) => p.filter((x) => x.id !== t.id))
-                                        if (tplSelected?.id === t.id) setTplSelected(null)
-                                      })
-                                      .catch(() => {})
-                                  }}
-                                  className="px-3 py-1 rounded-lg bg-red-900/40 hover:bg-red-700 text-red-400 hover:text-white text-xs font-medium transition"
-                                >
-                                  删除
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {tplTotal > 0 && (
+                    <div className="mt-4 flex items-center justify-between">
+                      <p className="text-xs text-zinc-500">
+                        第 {tplPage} / {tplTotalPages} 页
+                      </p>
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                if (tplPage > 1) setTplPage(tplPage - 1)
+                              }}
+                              className={tplPage <= 1 ? 'pointer-events-none opacity-50' : ''}
+                            />
+                          </PaginationItem>
+                          {tplPaginationFirst > 1 && (
+                            <PaginationItem>
+                              <PaginationLink href="#" onClick={() => setTplPage(1)}>
+                                1
+                              </PaginationLink>
+                            </PaginationItem>
+                          )}
+                          {tplPaginationFirst > 2 && (
+                            <PaginationItem>
+                              <PaginationEllipsis />
+                            </PaginationItem>
+                          )}
+                          {tplPaginationWindow.map((page) => (
+                            <PaginationItem key={page}>
+                              <PaginationLink
+                                href="#"
+                                isActive={page === tplPage}
+                                onClick={() => setTplPage(page)}
+                              >
+                                {page}
+                              </PaginationLink>
+                            </PaginationItem>
+                          ))}
+                          {tplPaginationLast < tplTotalPages - 1 && (
+                            <PaginationItem>
+                              <PaginationEllipsis />
+                            </PaginationItem>
+                          )}
+                          {tplPaginationLast !== tplTotalPages && (
+                            <PaginationItem>
+                              <PaginationLink href="#" onClick={() => setTplPage(tplTotalPages)}>
+                                {tplTotalPages}
+                              </PaginationLink>
+                            </PaginationItem>
+                          )}
+                          <PaginationItem>
+                            <PaginationNext
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                if (tplPage < tplTotalPages) setTplPage(tplPage + 1)
+                              }}
+                              className={
+                                tplPage >= tplTotalPages ? 'pointer-events-none opacity-50' : ''
+                              }
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
                     </div>
+                  )}
+                  {tplTotal === 0 && (
+                    <div className="mt-4 text-xs text-zinc-500 text-center">暂无数据</div>
                   )}
                 </div>
 

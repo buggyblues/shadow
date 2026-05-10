@@ -47,12 +47,38 @@ const TOKEN_ALIASES: Record<string, string[]> = {
   支付: ['stripe', 'paypal', 'alipay', 'wechat-pay'],
 }
 
+const STOPWORDS = new Set([
+  'a',
+  'an',
+  'and',
+  'are',
+  'as',
+  'at',
+  'be',
+  'build',
+  'by',
+  'for',
+  'from',
+  'in',
+  'into',
+  'is',
+  'it',
+  'of',
+  'on',
+  'or',
+  'space',
+  'that',
+  'the',
+  'to',
+  'with',
+])
+
 function normalizeQuery(query: string) {
   const rawTerms = query
     .toLowerCase()
     .split(/[^a-z0-9\u4e00-\u9fa5._-]+/u)
     .map((term) => term.trim())
-    .filter((term) => term.length >= 2)
+    .filter((term) => term.length >= 2 && !STOPWORDS.has(term))
     .slice(0, 48)
   const expanded = new Set<string>()
   for (const term of rawTerms) {
@@ -80,6 +106,7 @@ function scorePlugin(entry: PluginLibraryEntry, terms: string[]) {
     if (entry.capabilities.some((capability) => capability.includes(term))) score += 5
     score += 3
   }
+  if (matchedTerms.length === 0) return 0
   score += Math.min(10, Math.round((entry.popularity ?? 0) / 12))
   return { score, matchedTerms }
 }

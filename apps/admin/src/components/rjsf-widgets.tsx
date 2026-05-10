@@ -88,15 +88,13 @@ export function ImageUploadWidget({ value, onChange, disabled }: WidgetProps) {
 // ── Rich Text / Markdown Widget ──────────────────────────────────────────────
 export function RichTextWidget({ value, onChange, disabled }: WidgetProps) {
   return (
-    <div data-color-mode="light">
-      <MDEditor
-        value={(value as string) ?? ''}
-        onChange={(val) => onChange(val ?? '')}
-        height={240}
-        preview="edit"
-        textareaProps={{ disabled }}
-      />
-    </div>
+    <MDEditor
+      value={(value as string) ?? ''}
+      onChange={(val) => onChange(val ?? '')}
+      height={240}
+      preview="edit"
+      textareaProps={{ disabled }}
+    />
   )
 }
 

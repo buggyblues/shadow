@@ -43,35 +43,6 @@ function normalizeMetadata(metadata?: Record<string, unknown>) {
   return metadata
 }
 
-const COMMERCE_INTENT_PATTERN =
-  /(买|购买|下单|付款|付费|价格|多少钱|商品|想要|给我看看|可以给我看看|来一[个份盒]|buy|purchase|price|order|pay|paid|card)/i
-
-const COMMERCE_REPLY_CUE_PATTERN =
-  /(点击下面|下面的|商品卡片|购买|下单|付款|付费|请看|这就是|带.*回家|要.*带|buy|purchase|order|card)/i
-
-function normalizeText(value: string | null | undefined) {
-  return (value ?? '').toLowerCase()
-}
-
-function offerMatchesText(
-  offer: { id: string },
-  product: { name: string; summary: string | null },
-  text: string,
-) {
-  const cjkKeywords = [product.name, product.summary].flatMap((value) => {
-    const terms = normalizeText(value).match(/\p{Script=Han}{2,}/gu) ?? []
-    return terms.flatMap((term) => {
-      const keywords = [term]
-      if (term.length >= 4) keywords.push(term.slice(-2), term.slice(-4))
-      return keywords
-    })
-  })
-  const candidates = [offer.id, product.name, product.summary, ...cjkKeywords]
-    .map(normalizeText)
-    .filter((value) => value.length >= 2)
-  return candidates.some((candidate) => text.includes(candidate))
-}
-
 export class CommerceCardService {
   constructor(
     private deps: {
@@ -239,32 +210,9 @@ export class CommerceCardService {
     content: string
   }) {
     const normalized = normalizeMetadata(input.metadata)
-    if (normalized.commerceCards !== undefined) {
+    if (normalized.commerceCards !== undefined || typeof normalized.commerceOfferId === 'string') {
       return this.normalizeMessageMetadata(normalized, input.target)
     }
-
-    const text = normalizeText(input.content)
-    if (!COMMERCE_INTENT_PATTERN.test(text) && !COMMERCE_REPLY_CUE_PATTERN.test(text)) {
-      return normalized
-    }
-
-    const bundles = await this.deps.commerceOfferService.listActiveOfferBundlesForSeller({
-      sellerUserId: input.authorId,
-      surface: input.target.kind === 'channel' ? 'channel' : 'dm',
-      limit: 10,
-    })
-    if (bundles.length === 0) return normalized
-
-    const matched = bundles.filter((bundle) => offerMatchesText(bundle.offer, bundle.product, text))
-    const selected = matched.length === 1 ? matched[0] : bundles.length === 1 ? bundles[0] : null
-    if (!selected) return normalized
-
-    return this.normalizeMessageMetadata(
-      {
-        ...normalized,
-        commerceCards: [{ kind: 'offer', offerId: selected.offer.id }],
-      },
-      input.target,
-    )
+    return normalized
   }
 }
