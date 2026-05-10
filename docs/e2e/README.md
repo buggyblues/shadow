@@ -25,7 +25,7 @@ The current web screenshot flow captures:
 
 - `session.json` — generated runtime session metadata for the current run
 - `screenshots/` — exported PNG artifacts
-- `../../scripts/e2e/capture-readme-gallery.mjs` — rebuilds docs site and refreshes `docs/readme/*`
+- `../../scripts/e2e/capture-readme-gallery.mjs` — rebuilds docs site and refreshes `website/docs/public/readme/*`
 - `../../scripts/e2e/seed-screenshot-env.mjs` — prepares reusable scenario data
 - `../../apps/desktop/e2e/05_web/00_multi_user_gallery.spec.ts` — multi-user Playwright flow
 - `../../apps/desktop/e2e/04_visual/01_readme_gallery.spec.ts` — README marketing/gallery flow
@@ -61,7 +61,7 @@ This uses the dedicated compose file and writes artifacts back into this folder.
 
 README image assets are now refreshed by scripts:
 
-- `docs/readme/*` — website / marketing surfaces
+- `website/docs/public/readme/*` — website / marketing surfaces
 - `docs/e2e/screenshots/*` — authenticated product surfaces
 
 ## Current artifact set

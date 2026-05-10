@@ -38,10 +38,10 @@ const repoRoot = process.cwd().endsWith(path.join('apps', 'desktop'))
   : process.cwd()
 const sessionPath = process.env.E2E_SESSION_PATH
   ? path.resolve(process.env.E2E_SESSION_PATH)
-  : path.resolve(repoRoot, 'docs/e2e/session.json')
+  : path.resolve(repoRoot, '.tmp/e2e/session.json')
 const screenshotDir = process.env.E2E_SCREENSHOT_DIR
   ? path.resolve(process.env.E2E_SCREENSHOT_DIR)
-  : path.resolve(repoRoot, 'docs/e2e/screenshots')
+  : path.resolve(repoRoot, 'website/docs/public/screenshots')
 
 async function readSession(): Promise<Session> {
   const raw = await fs.readFile(sessionPath, 'utf8')

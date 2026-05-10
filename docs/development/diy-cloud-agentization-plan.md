@@ -496,7 +496,7 @@ Mobile 需要同等能力，但布局换成单列：
 
 API 变化必须同步：
 
-- `docs/wiki/en/API-Reference.md`
+- `website/docs/en/platform`
 - `packages/sdk/src/types.ts`
 - `packages/sdk/src/client.ts`
 - `packages/sdk-python/shadowob_sdk/client.py`

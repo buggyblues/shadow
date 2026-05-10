@@ -1,327 +1,257 @@
 # Contributing to Shadow
 
-Thank you for your interest in contributing to Shadow! This guide will help you set up the development environment, understand the workflow, and submit high-quality contributions.
-
-## Table of Contents
-
-- [Code of Conduct](#code-of-conduct)
-- [Prerequisites](#prerequisites)
-- [Getting Started](#getting-started)
-  - [Fork and Clone](#fork-and-clone)
-  - [Running with Docker Compose](#running-with-docker-compose)
-  - [Running for Local Development](#running-for-local-development)
-- [Project Structure](#project-structure)
-- [Development Workflow](#development-workflow)
-  - [Branching Strategy](#branching-strategy)
-  - [Making Changes](#making-changes)
-  - [Commit Convention](#commit-convention)
-  - [Code Style](#code-style)
-  - [Running Tests](#running-tests)
-  - [Database Migrations](#database-migrations)
-- [Adding a New Feature](#adding-a-new-feature)
-- [Submitting a Pull Request](#submitting-a-pull-request)
-- [Reporting Issues](#reporting-issues)
-- [License](#license)
-
----
-
-## Code of Conduct
-
-This project follows the [Contributor Covenant Code of Conduct](https://www.contributor-covenant.org/version/2/1/code_of_conduct/). By participating, you are expected to uphold this code. Please report unacceptable behavior to the project maintainers.
-
----
+Thanks for contributing to Shadow. This guide covers the current monorepo layout, development
+workflow, documentation ownership, and checks expected before opening a pull request.
 
 ## Prerequisites
 
-| Tool | Version | Installation |
-|------|---------|-------------|
-| **Node.js** | ≥ 22 | [nodejs.org](https://nodejs.org/) or via `nvm install 22` |
-| **pnpm** | ≥ 10 | `corepack enable && corepack prepare pnpm@10.19.0 --activate` |
-| **Docker** | ≥ 24 | [docker.com](https://www.docker.com/get-started/) |
-| **Docker Compose** | ≥ 2.20 | Bundled with Docker Desktop |
-| **Git** | ≥ 2.30 | [git-scm.com](https://git-scm.com/) |
+| Tool | Version |
+|---|---:|
+| Node.js | 22.14+ |
+| pnpm | 10+ |
+| Docker | 24+ |
+| Docker Compose | 2.20+ |
+| Git | 2.30+ |
 
----
+Enable the pinned package manager with Corepack:
+
+```bash
+corepack enable
+corepack prepare pnpm@10.19.0 --activate
+```
 
 ## Getting Started
 
-### Fork and Clone
-
 ```bash
-# Fork the repository on GitHub, then:
 git clone https://github.com/<your-username>/shadow.git
 cd shadow
+pnpm install
+cp .env.example .env
 ```
 
-### Running with Docker Compose
-
-The fastest way to verify the full stack is via Docker Compose. This builds all three applications (server, web, admin) along with the infrastructure (PostgreSQL, Redis, MinIO):
+Run the full stack with Docker:
 
 ```bash
 docker compose up --build
 ```
 
-Once all services are healthy, the following endpoints are available:
+Local services:
 
-| Service | URL | Description |
-|---------|-----|-------------|
-| **Web App** | http://localhost:3000 | Main user-facing application |
-| **Admin Panel** | http://localhost:3001 | Admin dashboard |
-| **API Server** | http://localhost:3002 | REST API + WebSocket |
-| **MinIO Console** | http://localhost:9001 | Object storage admin (minioadmin / minioadmin) |
+| Service | URL | Purpose |
+|---|---:|---|
+| Web + website | `http://localhost:3000` | Public website and product app under `/app` |
+| Admin | `http://localhost:3001` | Admin dashboard |
+| API | `http://localhost:3002` | REST API and Socket.IO |
+| MinIO Console | `http://localhost:9001` | Local object storage console |
 
-A default admin account is seeded automatically:
-- **Email**: `admin@shadowob.app`
-- **Password**: `admin123456`
+Seeded admin account:
 
-To tear down and clean up:
-
-```bash
-# Stop and remove containers
-docker compose down
-
-# Stop and remove containers + volumes (full reset)
-docker compose down -v
+```text
+Email:    admin@shadowob.app
+Password: admin123456
 ```
 
-### Running for Local Development
-
-For a faster development experience with hot-reloading, run infrastructure via Docker and applications natively:
-
-**1. Install dependencies:**
-
-```bash
-pnpm install
-```
-
-**2. Run database migrations:**
-
-```bash
-pnpm db:migrate
-```
-
-**3. Start development environment (one command):**
+For hot reload:
 
 ```bash
 pnpm dev
 ```
 
-Alternative focused workflows:
+Split backend and frontend workflows:
 
 ```bash
 pnpm dev:backend
 pnpm dev:frontend
 ```
 
-These scripts automatically start infrastructure (`postgres`, `redis`, `minio`) via Docker Compose.
-`pnpm dev:frontend` also keeps the Docker `server` service running on `:3002` so the web/admin dev proxies have a live API target.
-Set `SHADOW_DEV_API_BASE` if you need the frontend dev proxies to target a different API origin.
+## Repository Map
 
-This starts:
-- **Server** on `http://localhost:3002` (tsx watch mode)
-- **Web** on `http://localhost:3000` (RSBuild dev server with HMR)
-- **Admin** on `http://localhost:3001` (RSBuild dev server with HMR)
+| Path | Responsibility |
+|---|---|
+| `apps/server` | Hono API, Socket.IO, Drizzle schema/migrations, services, DAOs, security policy, Cloud SaaS bridge. |
+| `apps/web` | Main React product app. |
+| `apps/mobile` | Expo Router / React Native client. |
+| `apps/desktop` | Electron client and Playwright visual/E2E suites. |
+| `apps/admin` | Admin dashboard. |
+| `apps/cloud` | Shadow Cloud CLI, HTTP server, dashboard, SaaS UI, templates, plugins, deployment services. |
+| `apps/flash` | Interactive Flash runtime and demo app. |
+| `apps/promo` | Remotion promotional media source. |
+| `apps/playground` | UI playground. |
+| `packages/shared` | Shared types, constants, play catalog, utilities. |
+| `packages/sdk` | TypeScript REST and Socket.IO SDK. |
+| `packages/sdk-python` | Python REST and Socket.IO SDK. |
+| `packages/cli` | `shadowob` CLI. |
+| `packages/oauth` | OAuth integration helpers. |
+| `packages/openclaw-shadowob` | OpenClaw channel plugin for Shadow Buddies. |
+| `packages/ui` | Shared React UI primitives. |
+| `website` | Rspress product, platform, legal, blog, and public asset docs site. |
+| `docs` | Engineering docs, development plans, design-system notes, decision records, and E2E screenshots. |
 
-The web dev server automatically proxies `/api` and `/socket.io` requests to the server at `:3002`.
+Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing cross-cutting behavior.
 
-**Environment variables** can be customized via a `.env` file in the project root. See [ARCHITECTURE.md](ARCHITECTURE.md#environment-variables) for the full list.
+## Documentation Ownership
 
----
+Product and API documentation live in `website/docs`.
 
-## Project Structure
+Use these locations:
 
-```
-shadow/
-├── apps/
-│   ├── server/        # Hono API server + Socket.IO (TypeScript, Node.js)
-│   ├── web/           # Main React SPA (RSBuild, Tailwind CSS)
-│   └── admin/         # Admin React SPA
-├── packages/
-│   ├── shared/        # Shared types, constants, and utilities
-│   ├── sdk/           # Typed REST client + Socket.IO wrapper
-│   ├── ui/            # Reusable UI component library
-│   ├── oauth/         # OAuth SDK for third-party apps
-│   └── openclaw/      # OpenClaw agent channel plugin
-├── scripts/           # CI and build helper scripts
-├── docs/              # Additional documentation
-└── docker-compose.yml # Container orchestration
-```
+- English product docs: `website/docs/en/product`
+- English platform/API docs: `website/docs/en/platform`
+- Chinese product docs: `website/docs/zh/product`
+- Chinese platform/API docs: `website/docs/zh/platform`
+- Website public assets: `website/docs/public`
+- Reusable product screenshots: `docs/e2e/screenshots`, exposed through `website/docs/public/screenshots`
+- README/marketing visuals: `website/docs/public/readme`
+- Engineering docs and plans: `docs`
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed breakdown of each module, the database schema, and data flows.
-
----
+Do not recreate old wiki-style docs under `docs/wiki`. Do not add new product/API docs under root
+`docs`; update the website docs instead.
 
 ## Development Workflow
 
-### Branching Strategy
+1. Create a focused branch from `main`.
+2. Read the surrounding code before editing.
+3. Keep one logical change per PR.
+4. Prefer existing local patterns and shared helpers.
+5. Update tests, docs, SDKs, and clients with the behavior change.
 
-- `main` is the stable branch. **Never push directly** to `main`.
-- Create feature branches from `main`:
+Branch examples:
 
 ```bash
 git checkout -b feat/my-feature main
+git checkout -b fix/message-ordering main
+git checkout -b docs/platform-oauth main
 ```
 
-Branch naming conventions:
-
-| Prefix | Purpose | Example |
-|--------|---------|---------|
-| `feat/` | New features | `feat/voice-channels` |
-| `fix/` | Bug fixes | `fix/message-ordering` |
-| `docs/` | Documentation | `docs/api-reference` |
-| `refactor/` | Code restructuring | `refactor/auth-middleware` |
-| `test/` | Test additions | `test/rental-e2e` |
-| `chore/` | Tooling, CI, deps | `chore/upgrade-drizzle` |
-
-### Making Changes
-
-1. **Read first.** Understand existing code before modifying it. See [ARCHITECTURE.md](ARCHITECTURE.md) for the layered design.
-2. **Keep changes focused.** One logical change per commit/PR.
-3. **Follow the layered architecture.** Server code flows: **Handler → Service → DAO → Database**. Never import a upper layer from a lower layer.
-4. **Use dependency injection.** Access services via the Awilix container, never import them directly.
-5. **Validate inputs.** Add Zod schemas in the appropriate `validators/` file for new endpoints.
-6. **Share types.** If a type is used by both frontend and backend, add it to `@shadowob/shared`.
-
-### Commit Convention
-
-This project enforces [Conventional Commits](https://www.conventionalcommits.org/) via Commitlint + Husky:
-
-```
-<type>(<scope>): <description>
-
-[optional body]
-
-[optional footer]
-```
-
-**Allowed types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `ci`, `build`, `revert`
-
-Examples:
+Use Conventional Commits:
 
 ```bash
 git commit -m "feat(rental): add contract termination endpoint"
 git commit -m "fix(chat): resolve message ordering in threads"
-git commit -m "docs: update ARCHITECTURE.md with new tables"
-git commit -m "test(shop): add order creation e2e tests"
+git commit -m "docs: update contributor guide"
 ```
 
-### Code Style
+Allowed types include `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `ci`,
+`build`, and `revert`.
 
-Code formatting and linting are handled by **Biome** (replaces ESLint + Prettier):
+## Code Style
+
+Use Biome for formatting and linting. Do not use Prettier in this repository.
 
 ```bash
-# Check for lint and format issues
 pnpm lint
-
-# Auto-fix issues
 pnpm lint:fix
-
-# Format only
 pnpm format
+pnpm exec biome check --write <paths>
 ```
 
-Key rules:
-- 2-space indentation, 100-character line width
-- No unused imports or variables (warnings)
-- Husky runs `lint-staged` on pre-commit automatically
+Keep user-facing UI copy in i18n files for web, mobile, admin, Cloud UI, and website pages.
 
-### Running Tests
+## Backend Changes
 
-Tests use **Vitest** with Node.js environment:
+Server code follows this dependency direction:
 
-```bash
-# Run all tests
-pnpm test
-
-# Watch mode (re-runs on changes)
-pnpm test:watch
-
-# Coverage report
-pnpm test:coverage
+```text
+handler -> service -> DAO -> database
 ```
 
-Test files follow the pattern `**/*.{test,spec}.{ts,tsx}` and are co-located in `__tests__/` directories within each app or package.
+For new or changed API behavior:
 
-### Database Migrations
+1. Add or update validators in `apps/server/src/validators`.
+2. Add handler routes in `apps/server/src/handlers` and mount them in `apps/server/src/app.ts`.
+3. Put business rules in `apps/server/src/services`.
+4. Put database access in `apps/server/src/dao`.
+5. Register services and DAOs in `apps/server/src/container.ts`.
+6. Add or update Drizzle schema and migrations when storage changes.
+7. Add unit and integration tests.
+8. Update website platform docs, TypeScript SDK, Python SDK, CLI, and clients when exposed behavior changes.
 
-Schema changes are managed by **Drizzle Kit**:
+Database commands:
 
 ```bash
-# 1. Modify schema files in apps/server/src/db/schema/
-
-# 2. Generate a new migration SQL file
 pnpm db:generate
-
-# 3. Review the generated SQL in apps/server/src/db/migrations/
-
-# 4. Apply the migration
 pnpm db:migrate
-
-# 5. (Optional) Open Drizzle Studio to inspect data
 pnpm db:studio
-```
-
-> **Important**: Always review generated migration SQL before applying. The server auto-runs migrations on startup, so new migrations will be applied when you restart the server or rebuild the Docker image.
-
-To verify migration consistency:
-
-```bash
 pnpm check:migrations
 ```
 
----
+Always review generated migration SQL before applying it.
 
-## Adding a New Feature
+## Frontend And Product Changes
 
-Here is the typical checklist for adding a backend feature end-to-end:
+For user-facing product features, keep web and mobile behavior aligned when the feature applies to
+both clients.
 
-1. **Schema** — Define tables in `apps/server/src/db/schema/` and generate a migration.
-2. **DAO** — Create a DAO in `apps/server/src/dao/` for data access queries.
-3. **Service** — Create a service in `apps/server/src/services/` for business logic.
-4. **Validator** — Add Zod schemas in `apps/server/src/validators/`.
-5. **Handler** — Create a handler in `apps/server/src/handlers/` and mount it in `app.ts`.
-6. **Container** — Register the DAO and service in `container.ts`.
-7. **Types** — If shared with frontend, add types to `packages/shared/`.
-8. **Tests** — Add tests in `apps/server/__tests__/`.
-9. **Frontend** — Build pages/components in `apps/web/src/` as needed.
+Common checks:
 
----
+```bash
+pnpm --filter @shadowob/web typecheck
+pnpm --filter @shadowob/mobile typecheck
+pnpm --filter @shadowob/admin typecheck
+pnpm --filter @shadowob/cloud typecheck
+pnpm --filter @shadowob/website build
+```
 
-## Submitting a Pull Request
+For UI changes, include screenshots in the PR. Product screenshots used by website docs are captured
+through the Playwright suites under `apps/desktop/e2e`.
 
-1. Ensure all checks pass locally:
+## Security Requirements
 
-   ```bash
-   pnpm lint
-   pnpm test
-   docker compose up --build  # Verify full-stack build
-   ```
+Security-sensitive changes need explicit actor, resource, action, capability, and data-class review.
 
-2. Push your branch and open a pull request against `main`.
+- Authentication middleware must populate an actor.
+- Sensitive services should accept an actor or call `PolicyService`.
+- Resource checks must combine scope/capability and resource access.
+- Wallet mutations must flow through `LedgerService`.
+- Media downloads must remain behind app authorization or signed grants.
+- Cloud/provider URLs need SSRF guards and redirect protections.
+- AI generation endpoints need capability checks, rate/budget controls, token estimates, and audit entries.
+- Secrets and provision state must be redacted before logging or persistence.
 
-3. In your PR description:
-   - Summarize what changed and **why**.
-   - Reference related issues (e.g., `Closes #42`).
-   - Include screenshots for UI changes.
-   - Note any migration or breaking changes.
+Run this for security-sensitive changes:
 
-4. Wait for code review. Address feedback promptly and keep commits clean.
+```bash
+pnpm check:security-pr
+```
 
----
+## Tests And CI Parity
+
+Focused local checks are useful while iterating:
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm --filter @shadowob/server test
+pnpm --filter @shadowob/cloud test
+```
+
+Before relying on results for CI, run the matching Docker Compose stack:
+
+```bash
+docker compose -f docker-compose.ci-tests.yml up --build --abort-on-container-exit --exit-code-from ci-tests
+docker compose -f docker-compose.ci-build.yml up --build --abort-on-container-exit --exit-code-from build-check
+docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from e2e-runner
+```
+
+## Pull Requests
+
+Before opening a PR:
+
+1. Keep the diff focused.
+2. Run the relevant focused checks.
+3. Run Docker Compose CI checks for broad or risky changes.
+4. Update `website/docs` for product/API docs.
+5. Update `docs/ARCHITECTURE.md` or `docs/DEVELOPMENT.md` for repository-level workflow changes.
+6. Note migrations, breaking changes, screenshots, and security implications in the PR body.
 
 ## Reporting Issues
 
-When filing an issue, please include:
-
-- **Steps to reproduce** the problem.
-- **Expected behavior** vs. **actual behavior**.
-- **Environment details** (OS, Node.js version, browser).
-- **Logs or screenshots** if applicable.
-
-Use the appropriate issue template if available. For security vulnerabilities, please report them privately to the maintainers instead of opening a public issue.
-
----
+Include reproduction steps, expected behavior, actual behavior, environment details, and logs or
+screenshots. Report security vulnerabilities privately to maintainers instead of opening a public
+issue.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the same license as the project.
+By contributing, you agree that your contributions are licensed under the same license as the
+project.

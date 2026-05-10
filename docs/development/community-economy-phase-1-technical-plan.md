@@ -294,7 +294,7 @@ webhook 处理流程先写 event，再基于 `provider_event_id` 幂等处理。
 
 - web/mobile 当前普通商城下单没有传 `idempotencyKey`。第一期可先让服务端在缺失时返回 400，同时同步 web/mobile/SDK；不建议服务端自动生成，因为重试无法幂等。
 - TS SDK、Python SDK 的 `createOrder`/`purchase` 类型需要增加 `idempotencyKey`。
-- API 文档同步 `docs/wiki/en/API-Reference.md` 和 `docs/wiki/en/SDK-Usage.md`。
+- API 文档同步 `website/docs/en/platform` 和 `website/docs/zh/platform`。
 
 ### 5.2 Web
 
@@ -438,8 +438,8 @@ Python SDK：
 - `packages/sdk/src/types.ts`
 - `packages/sdk-python/shadowob_sdk/client.py`
 - `packages/sdk-python/shadowob_sdk/types.py`
-- `docs/wiki/en/API-Reference.md`
-- `docs/wiki/en/SDK-Usage.md`
+- `website/docs/en/platform`
+- `website/docs/zh/platform`
 
 产出：
 

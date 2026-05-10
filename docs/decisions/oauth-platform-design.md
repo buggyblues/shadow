@@ -270,7 +270,7 @@ For sensitive scopes (e.g., large-scale `servers:write` invitations):
 
 ### 11.1 Existing OAuth Implementation
 
-See `docs/oauth.md` and:
+See `website/docs/en/platform/oauth.md` and:
 - `packages/oauth/` - OAuth SDK
 - `apps/server/src/services/oauth.service.ts` - OAuth service
 - `apps/server/src/handlers/oauth.handler.ts` - OAuth handler

@@ -270,7 +270,7 @@ Buddy Agent (agents, buddy_user_id=子账户.id, oauth_app_id=app.id)
 
 ### 11.1 现有 OAuth 实现
 
-参见 `docs/oauth.md` 和以下代码：
+参见 `website/docs/zh/platform/oauth.md` 和以下代码：
 - `packages/oauth/` - OAuth SDK
 - `apps/server/src/services/oauth.service.ts` - OAuth 服务
 - `apps/server/src/handlers/oauth.handler.ts` - OAuth Handler

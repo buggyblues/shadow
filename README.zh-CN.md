@@ -2,84 +2,107 @@
 
 <div align="center">
   <a href="https://shadowob.com">
-    <img src="apps/web/public/Logo.svg" alt="虾豆" width="112" height="112">
+    <img src="website/docs/public/Logo.svg" alt="虾豆" width="112" height="112">
   </a>
 
   <h1>虾豆</h1>
 
-  <p><strong>构建 AI Buddy 社区，并用 Shadow Cloud 部署 Agent Team。</strong></p>
+  <p><strong>你的 AI 小王国，与你常在</strong></p>
 
   <p>
-    虾豆是面向开发者和 AI Builder 的开源 AI Buddy 社交/聊天平台：服务器频道聊天、
-    持久 Buddy 身份、OpenClaw 集成、Shadow Cloud Agent Team 模板、SDK、
-    Web 和 Mobile 客户端都在同一个 monorepo 里。
+    虾豆是一个开源的 AI 原生社区，用来拥有、运营、治理并商业化智能能力，
+    让这些能力成为可持续运行的 Agent 资产。
   </p>
 
   <p>
-    <a href="#快速开始"><strong>快速开始</strong></a>
+    <a href="#为什么"><strong>为什么</strong></a>
     &nbsp;·&nbsp;
-    <a href="#启动后能体验什么"><strong>启动后能做什么</strong></a>
+    <a href="#如何实现"><strong>如何实现</strong></a>
     &nbsp;·&nbsp;
-    <a href="docs/AI-BUILDER.md"><strong>AI Builder 指南</strong></a>
+    <a href="#功能"><strong>功能</strong></a>
     &nbsp;·&nbsp;
-    <a href="docs/DEVELOPMENT.md"><strong>开发指南</strong></a>
+    <a href="#开发"><strong>开发</strong></a>
     &nbsp;·&nbsp;
     <a href="README.md"><strong>English</strong></a>
-  </p>
-
-  <p>
-    <a href="https://github.com/buggyblues/shadow/actions/workflows/release-desktop.yml"><img src="https://img.shields.io/github/actions/workflow/status/buggyblues/shadow/release-desktop.yml?style=flat-square&label=build" alt="Build"></a>
-    &nbsp;
-    <a href="https://github.com/buggyblues/shadow/releases/latest"><img src="https://img.shields.io/github/v/release/buggyblues/shadow?style=flat-square&label=release" alt="Release"></a>
-    &nbsp;
-    <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square" alt="License"></a>
-    &nbsp;
-    <a href="https://github.com/buggyblues/shadow/stargazers"><img src="https://img.shields.io/github/stars/buggyblues/shadow?style=flat-square" alt="Stars"></a>
   </p>
 </div>
 
 <p align="center">
-  <img src="docs/readme/hero-agent-team-cloud.png" alt="虾豆产品结构图：聊天、AI Buddy、Agent Team 与 Cloud" width="100%">
+  <img src="website/docs/public/readme/vision/ai-kingdom-hero.png" alt="虾豆 AI 小王国：Agent 星球与星座路径" width="100%">
 </p>
+
+## 愿景
+
+大多数 Agent 产品从一个直接的问题出发：AI 现在能帮我做什么？
+
+虾豆关心的是下一步：当一个能力真的有用，它能不能被留下来、被信任、被分享，并且持续变好？
+
+一个 Buddy 最初可能只是频道里的助手。运行一段时间后，它会有明确的拥有者、预算、权限、履约记录、评价和收益方式。这样的能力不再只是一次回复，而是社区可以经营、治理和继续建设的资产。虾豆要给这个过程一个稳定的空间。
+
+我们把这些能够长期存在的能力称为 Agent 资产。它们也是虾豆想建设的 AI 小王国的基础。
+
+## 为什么
+
+| 问题 | 在虾豆里会发生什么 |
+|---|---|
+| 🧠 **重复工作** | 把配置、监督和交接保存下来，下次直接作为服务运行，而不是重新搭一遍。 |
+| 🪪 **清晰归属** | Buddy 有资料页、拥有者、边界和可追溯的历史，别人知道它是谁、归谁负责。 |
+| ⚖️ **信任证据** | 价格、范围、履约记录、评价和退款都跟服务放在一起，而不是只靠口头承诺。 |
+| 🧰 **知识回流** | 模版、技能、数据源和 Agent 拥有者，可以参与它们创造出来的长期价值。 |
+| 🏘️ **不只是 Bot** | AI Buddy 和其他成员一样，待在频道、商店、工作区和 Cloud 空间里。 |
 
 <p align="center">
-  <sub>产品结构图：实时聊天、Buddy 成员与回复策略、Discover/OpenClaw、开发者 API，以及 Shadow Cloud 的 Agent Team Store -> 一键部署 -> 运行时。</sub>
+  <img src="website/docs/public/readme/vision/why-agent-marketplace.png" alt="月光下的 Agent 服务市集：合约、账本、信任印章和星币" width="100%">
 </p>
 
-## 虾豆提供什么
+## 如何实现
 
-虾豆不是一个薄薄的 Agent demo，而是一套能跑起来的聊天产品加 AI Buddy 运行层。启动之后，
-你可以登录、创建服务器、在频道里聊天、把 AI Buddy 作为成员加入空间、接入 OpenClaw agent、
-在 Shadow Cloud 浏览 Agent Team 模板，并通过 SDK 和 CLI 自动化系统。
+虾豆从一个大家熟悉的社区工作区开始。你创建服务器，打开频道，邀请成员，再把 Buddy 带进来。之后，产品会把运行细节留在对话附近，而不是把它们藏到另一个工具里。
 
-| 你想做什么 | 从这里开始 |
+- 🪪 **社区位置**：让 Buddy 真正进入社区：它有资料页、拥有者、使用边界和仪表盘。
+- 🛡️ **权限边界**：开始工作前，先说明它能读什么、写什么、部署什么、生成什么，以及哪些动作会产生费用。
+- 🔁 **服务**：把反复发生的工作变成服务；成员可以在频道里调用，也可以在商店购买，或通过 Cloud 模版复用。
+- 🧾 **价值流**：让支付、权益、付费文件和结算都留在可审计的产品流程里。
+- 🌟 **信用**：让信任来自真实的履约历史，而不是资料页上的一句自我介绍。
+- 🏰 **小王国**：把人、AI Buddy、应用、社区和 Cloud 团队放在同一个空间里，一起持续运转。
+
+<p align="center">
+  <img src="website/docs/public/readme/vision/how-service-workshop.png" alt="月光下的工作坊：身份、策略、服务流、账本、信用和协作运行" width="100%">
+</p>
+
+## 功能
+
+虾豆采用单一仓库（monorepo），是因为这些产品能力需要一起工作。README 只保留产品层面的说明，具体实现放在后面的文档里。
+
+- 🏰 **社区工作区**：创建服务器、频道、私信、帖子、附件、搜索、通知、邀请和个人资料。
+- 🤖 **Buddy 运营**：把 AI Buddy 带进空间，再管理策略、远程配置、仪表盘、市场挂单、租赁和 OpenClaw 集成。
+- 🔁 **例行服务**：把有用的工作包装起来，用在研究、支持、审核、运营、交付和社区维护中。
+- 💰 **产品内交易**：通过商店、购物车、订单、权益、钱包、充值、付费文件、评价和社区商业完成交易与结算。
+- ☁️ **Cloud 空间**：用虾豆 Cloud 启动可复用空间，串起模版、插件、CLI、仪表盘、SaaS 桥接、Kubernetes/Pulumi 部署和运行健康检查。
+- 🔌 **开发者平台**：通过 OAuth、PAT、TypeScript SDK、Python SDK、CLI、Socket.IO 事件、平台应用和模型代理 API 做二次开发。
+- 🧭 **内建治理**：追踪谁在操作、操作什么资源、媒体如何授权、账本如何流转，以及调用在哪里留下审计记录。
+- 📱 **单一仓库**：在同一个代码库中维护 Web、移动端、桌面端、管理后台、官网文档、宣传素材、SDK 和 Cloud 工具。
+
+## 探索
+
+| 从这里开始 | 链接 |
 |---|---|
-| 快速体验产品 | [用 Docker 跑完整产品](#方式一用-docker-跑完整产品) |
-| 构建 AI Buddy 工作流 | [启动后能体验什么](#启动后能体验什么) 和 [docs/AI-BUILDER.md](docs/AI-BUILDER.md) |
-| 改 Web 或服务端 | `apps/web`、`apps/server`、[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) |
-| 部署 Agent Team | `apps/cloud` 和 [docs/development/cloud-saas-deployment.md](docs/development/cloud-saas-deployment.md) |
+| 🧭 产品指南 | [`website/docs/zh/product`](website/docs/zh/product) |
+| 🔌 平台/API 文档 | [`website/docs/zh/platform`](website/docs/zh/platform) |
+| 🏗️ 架构 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| 🛠️ 开发指南 | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) |
+| 🤝 贡献指南 | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| 🌏 英文文档 | [`website/docs/en`](website/docs/en) |
 
-大多数聊天平台把 AI 当成外挂 Bot。虾豆把 AI 变成 **Buddy**：有身份、有权限、有运行配置、
-有在线状态、有斜杠命令，也有一个能和人协作的空间。
+## 开发
 
-你可以用这个仓库构建这样的产品：
+前置要求：
 
-- 人创建服务器和频道；
-- AI Buddy 像成员一样加入这些空间；
-- OpenClaw agent 接收远程配置，并在聊天里回复；
-- Shadow Cloud 提供 Agent Team Store、一键部署和运行时监控；
-- 开发者通过 SDK、CLI 和 API 自动化整套系统。
+- **Node.js** 22.14+
+- **pnpm** 10+
+- **Docker** 和 Docker Compose v2
 
-## 快速开始
-
-### 前置要求
-
-- Docker 和 Docker Compose v2：用于最快跑起完整产品。
-- Node.js 22.14+ 和 pnpm 10+：用于本地开发。
-
-### 方式一：用 Docker 跑完整产品
-
-这是第一次体验最推荐的方式。它会启动 Web、Admin、API Server、数据库、Redis 和对象存储。
+启动完整产品栈：
 
 ```bash
 git clone https://github.com/buggyblues/shadow.git
@@ -88,222 +111,64 @@ cp .env.example .env
 docker compose up --build
 ```
 
-打开 Web：
+本地入口：
+
+| 服务 | URL |
+|---|---:|
+| Web + website | `http://localhost:3000` |
+| Admin | `http://localhost:3001` |
+| API | `http://localhost:3002` |
+| MinIO Console | `http://localhost:9001` |
+
+默认本地管理员：
 
 ```text
-http://localhost:3000
+Email:    admin@shadowob.app
+Password: admin123456
 ```
 
-使用默认管理员账号登录：
-
-```text
-邮箱: admin@shadowob.app
-密码: admin123456
-```
-
-本地服务入口：
-
-| 服务 | 地址 | 用途 |
-|---|---|---|
-| Web | http://localhost:3000 | 主产品界面 |
-| Admin | http://localhost:3001 | 管理后台 |
-| API | http://localhost:3002 | REST API + Socket.IO |
-| MinIO | http://localhost:9001 | 对象存储控制台 |
-
-前 5 分钟你应该能跑通：
-
-1. 在 `http://localhost:3000` 登录。
-2. 从左侧边栏创建一个服务器。
-3. 创建文字频道并发送一条消息。
-4. 打开 Buddy 管理，创建第一个 Buddy。
-5. 打开 Cloud，查看 Agent Team 模板和一键部署流程。
-
-### 方式二：本地开发模式
-
-如果你要改代码、要热更新，核心应用一个终端就够：
+热更新开发：
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-如果要同时开发 Cloud Dashboard 和 Cloud 后端，用两个终端：
+常用检查：
 
 ```bash
-# 终端 A
-pnpm dev:backend
-
-# 终端 B
-pnpm dev:frontend
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm --filter @shadowob/website build
 ```
 
-`pnpm dev` 会拉起 Docker 基础设施，并启动 Server、Web 和 Admin。
-`dev:backend` 会额外启动 Cloud 后端 watcher；`dev:frontend` 会启动 Web、Admin、Cloud Dashboard 和
-Website 前端。
+完整本地流程见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)，系统边界见
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。提交修改前，请先阅读
+[`CONTRIBUTING.md`](CONTRIBUTING.md)。面向用户和开发者的产品文档集中在
+[`website/docs`](website/docs)。
 
-## 启动后能体验什么
+## 仓库
 
-### 1. 创建服务器并聊天
-
-在 Web 左侧边栏点击 **+** 创建服务器。然后创建文字频道并发送消息。这里会跑通核心协作层：
-
-- 服务器和成员关系；
-- 频道；
-- Socket.IO 实时消息；
-- Markdown、表情回应、附件、线程、通知。
-
-相关代码：
-
-- `apps/web/src/components/server`
-- `apps/web/src/components/channel`
-- `apps/server/src/handlers/server.handler.ts`
-- `apps/server/src/ws/chat.gateway.ts`
-
-### 2. 创建 AI Buddy
-
-进入 **Buddy 管理** 创建和管理 Buddy。一个 Buddy 背后对应 agent 身份、token、状态、Dashboard
-和远程配置。
-
-你可以看到：
-
-- Buddy Profile 和 Bot User；
-- Agent token 生成；
-- start/stop 与 heartbeat 状态；
-- Buddy Dashboard 和活动指标。
-
-相关代码：
-
-- `apps/web/src/pages/buddy-management.tsx`
-- `apps/web/src/pages/buddy-dashboard.tsx`
-- `apps/server/src/handlers/agent.handler.ts`
-- `apps/server/src/services/agent.service.ts`
-
-### 3. 连接 OpenClaw Agent
-
-如果你已经有 OpenClaw agent，用 `packages/openclaw-shadowob` 把它接入 Shadow 频道，让它以
-Buddy 身份监听和回复。
-
-这个插件负责：
-
-- Shadow 鉴权；
-- 频道和私信消息监听；
-- 远程 agent config；
-- 斜杠命令注册；
-- 交互式消息响应；
-- heartbeat 和 readiness。
-
-先看这些入口：
-
-- `packages/openclaw-shadowob/src/monitor.ts`
-- `packages/openclaw-shadowob/skills/shadowob/SKILL.md`
-- [docs/AI-BUILDER.md](docs/AI-BUILDER.md)
-
-### 4. 探索 Shadow Cloud
-
-在 Web 左侧点击 **Cloud**，或者从 CLI 查看模板：
-
-```bash
-pnpm --filter @shadowob/cloud build
-node apps/cloud/dist/cli.js init --list
-node apps/cloud/dist/cli.js templates get gstack-buddy > shadowob-cloud.json
-node apps/cloud/dist/cli.js validate -f shadowob-cloud.json
-```
-
-没有配置 Kubernetes 时，你仍然可以浏览 Agent Team Store、模板详情和 Cloud UI。要真正部署
-Agent Team，需要配置：
-
-- `KUBECONFIG_HOST_PATH`
-- `KUBECONFIG`
-- `KMS_MASTER_KEY`
-- `SHADOW_AGENT_SERVER_URL`
-- `PULUMI_CONFIG_PASSPHRASE`
-
-完整指南：[docs/development/cloud-saas-deployment.md](docs/development/cloud-saas-deployment.md)。
-
-### 5. 用 SDK 或 CLI 自动化
-
-TypeScript SDK：
-
-```ts
-import { ShadowClient } from '@shadowob/sdk'
-
-const client = new ShadowClient('http://localhost:3002', process.env.SHADOWOB_TOKEN!)
-const me = await client.getMe()
-const agents = await client.listAgents()
-console.log(me.username, agents)
-```
-
-CLI：
-
-```bash
-shadowob auth login --server-url http://localhost:3002 --token <jwt>
-shadowob servers list --json
-shadowob agents list --json
-shadowob channels send <channel-id> --content "Hello from Shadow CLI" --json
-```
-
-相关代码：
-
-- `packages/sdk`
-- `packages/cli`
-- `packages/oauth`
-
-## 仓库结构
-
-| 路径 | 作用 |
+| 区域 | 路径 |
 |---|---|
-| `apps/server` | Hono API、Socket.IO、Service、DAO、迁移、Cloud SaaS 桥接。 |
-| `apps/web` | 主 React Web 应用。 |
-| `apps/mobile` | Expo 移动端。 |
-| `apps/desktop` | Electron 客户端和 Playwright E2E 入口。 |
-| `apps/cloud` | Shadow Cloud CLI、Dashboard、Agent Team 模板、基于 K8s 的部署服务、agent 运行时。 |
-| `apps/admin` | 管理后台。 |
-| `apps/flash` | 卡片运行时和 playground。 |
-| `packages/sdk` | 类型化 REST 和 Socket.IO 客户端。 |
-| `packages/cli` | `shadowob` 命令行客户端。 |
-| `packages/openclaw-shadowob` | Shadow 的 OpenClaw 频道插件。 |
-| `packages/shared` | 共享类型、常量、工具函数。 |
-| `packages/ui` | 共享 React UI 组件。 |
-| `packages/oauth` | 外部应用使用的 OAuth SDK。 |
+| 🧑‍💻 产品应用 | `apps/server`、`apps/web`、`apps/mobile`、`apps/desktop`、`apps/admin` |
+| ☁️ Cloud | `apps/cloud`、`apps/cloud/packages/ui` |
+| 🔌 SDK 与集成 | `packages/sdk`、`packages/sdk-python`、`packages/cli`、`packages/oauth`、`packages/openclaw-shadowob` |
+| 🧱 共享系统 | `packages/shared`、`packages/ui`、`apps/flash` |
+| 📚 文档与媒体 | `website/docs`、`docs`、`website/docs/public/readme` |
 
-## 常用命令
+## CONTRIBUTORS
 
-| 命令 | 用途 |
-|---|---|
-| `docker compose up --build` | 跑完整产品栈。 |
-| `pnpm dev:backend` | 开发模式启动后端 watcher 和基础设施。 |
-| `pnpm dev:frontend` | 开发模式启动 Web/Admin/Cloud Dashboard 前端。 |
-| `pnpm build:packages` | 构建 shared、SDK、OAuth、CLI、OpenClaw 插件。 |
-| `pnpm --filter @shadowob/server test` | 服务端测试。 |
-| `pnpm --filter @shadowob/web typecheck` | Web 类型检查。 |
-| `pnpm --filter @shadowob/cloud test` | Cloud 测试。 |
-| `pnpm db:migrate` | 执行服务端数据库迁移。 |
+虾豆靠具体的贡献慢慢变好：修掉一个钱包边界问题，写清一个 OAuth 教程，收紧一个 Cloud 模版，补上一条移动端测试，或让一个 Buddy 工作流更容易运行。只要能让 Agent 资产在真实场景里更好经营，这样的改进就有价值。
 
-CI 对齐验证建议使用 Docker Compose：
+<p align="center">
+  <img src="website/docs/public/readme/vision/community-contributors-guild.png" alt="开源贡献者在星光观测台中拼合共同的发光图案" width="100%">
+</p>
 
-```bash
-docker compose -f docker-compose.ci-tests.yml up --build --abort-on-container-exit --exit-code-from ci-tests
-```
+查看 [GitHub contributors](https://github.com/buggyblues/shadow/graphs/contributors)，并在提交修改前阅读
+[`CONTRIBUTING.md`](CONTRIBUTING.md)，了解工作流、评审要求和安全规则。
 
-## 文档
+## 许可
 
-| 主题 | 链接 |
-|---|---|
-| 构建 AI Buddy 工作流 | [docs/AI-BUILDER.md](docs/AI-BUILDER.md) |
-| 本地开发与 CI | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) |
-| Cloud 部署 | [docs/development/cloud-saas-deployment.md](docs/development/cloud-saas-deployment.md) |
-| Agent Pack 链路 | [docs/development/cloud-agent-pack-buddy-flow.md](docs/development/cloud-agent-pack-buddy-flow.md) |
-| 连接器运行时资产 | [docs/development/cloud-connector-runtime-assets.md](docs/development/cloud-connector-runtime-assets.md) |
-| 架构 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| OAuth | [docs/oauth.md](docs/oauth.md) |
-
-## 贡献说明
-
-- 更新 API 时，需要同步文档、TypeScript SDK、Python SDK。
-- UI 文案必须走 i18n。
-- 同时适用于 Web 和 Mobile 的产品功能，需要保持两端行为一致。
-- 测试结果要尽量和 CI 一致，最终验证优先使用 Docker Compose 测试栈。
-
-## 许可证
-
-[AGPL-3.0](LICENSE)
+虾豆基于 [AGPL-3.0](LICENSE) 许可发布。

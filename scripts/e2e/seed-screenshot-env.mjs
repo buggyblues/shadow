@@ -5,7 +5,7 @@ const origin = (process.env.E2E_ORIGIN ?? 'http://127.0.0.1:3000').replace(/\/$/
 const appBaseUrl = (process.env.E2E_APP_BASE_URL ?? `${origin}/app/`).replace(/([^/])$/, '$1/')
 const sessionPath = process.env.E2E_SESSION_PATH
   ? path.resolve(process.env.E2E_SESSION_PATH)
-  : path.resolve(process.cwd(), 'docs/e2e/session.json')
+  : path.resolve(process.cwd(), '.tmp/e2e/session.json')
 
 const admin = {
   email: process.env.ADMIN_EMAIL ?? 'admin@shadowob.app',
