@@ -179,31 +179,4 @@ export class ShadowSocket {
   updateActivity(channelId: string, activity: string | null): void {
     this.socket.emit('presence:activity' satisfies keyof ClientEventMap, { channelId, activity })
   }
-
-  // ── DM actions ────────────────────────────────────────────────────────
-
-  /** Join a DM channel room */
-  joinDmChannel(dmChannelId: string): void {
-    this.socket.emit('dm:join' as string, { dmChannelId })
-  }
-
-  /** Leave a DM channel room */
-  leaveDmChannel(dmChannelId: string): void {
-    this.socket.emit('dm:leave' as string, { dmChannelId })
-  }
-
-  /** Send a DM message via WebSocket */
-  sendDmMessage(data: {
-    dmChannelId: string
-    content: string
-    replyToId?: string
-    metadata?: Record<string, unknown>
-  }): void {
-    this.socket.emit('dm:send' as string, data)
-  }
-
-  /** Send or clear a DM typing indicator */
-  sendDmTyping(dmChannelId: string, typing = true): void {
-    this.socket.emit('dm:typing' as string, { dmChannelId, typing })
-  }
 }

@@ -64,7 +64,9 @@ export class ServerDao {
     const mcMap: Record<string, number> = {}
     for (const r of memberCounts) mcMap[r.serverId] = r.count
     const ccMap: Record<string, number> = {}
-    for (const r of channelCounts) ccMap[r.serverId] = r.count
+    for (const r of channelCounts) {
+      if (r.serverId) ccMap[r.serverId] = r.count
+    }
 
     return rows.map((r) => ({
       server: {

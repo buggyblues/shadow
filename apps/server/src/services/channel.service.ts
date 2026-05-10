@@ -1,4 +1,4 @@
-import type { ChannelDao } from '../dao/channel.dao'
+import { type ChannelDao, normalizeDirectPair } from '../dao/channel.dao'
 import type { ChannelMemberDao } from '../dao/channel-member.dao'
 import type { ServerDao } from '../dao/server.dao'
 import { type ActorInput, actorUserId } from '../security/actor'
@@ -115,6 +115,11 @@ export class ChannelService {
 
   async update(id: string, input: UpdateChannelInput, actor: ActorInput) {
     const channel = await this.deps.policyService.requireChannelManage(actor, id)
+    if (channel.kind !== 'server' || !channel.serverId) {
+      throw Object.assign(new Error('Direct channels cannot be managed through server routes'), {
+        status: 400,
+      })
+    }
     // Auto-rename if the new name conflicts with an existing channel in the same server
     if (input.name) {
       input = { ...input, name: await this.generateUniqueName(channel.serverId, input.name, id) }
@@ -165,7 +170,12 @@ export class ChannelService {
    * Get members of a channel with full user info and server role.
    * Falls back to server members if channel_members table doesn't exist.
    */
-  async getChannelMembers(channelId: string, serverId: string) {
+  async getChannelMembers(channelId: string, serverId: string | null) {
+    const channel = await this.deps.channelDao.findById(channelId)
+    if (channel?.kind === 'dm') {
+      return this.deps.channelMemberDao.getMembersWithUsers(channelId)
+    }
+    if (!serverId) return []
     try {
       // Get channel member user IDs
       const channelMemberRows = await this.deps.channelMemberDao.getMembers(channelId)
@@ -209,5 +219,58 @@ export class ChannelService {
   /** Get archived channels for a server */
   async getArchivedChannels(serverId: string) {
     return this.deps.channelDao.findArchivedByServerId(serverId)
+  }
+
+  async getOrCreateDirectChannel(viewerUserId: string, peerUserId: string) {
+    if (viewerUserId === peerUserId) {
+      throw Object.assign(new Error('Cannot create a direct channel with yourself'), {
+        status: 400,
+      })
+    }
+    const pair = normalizeDirectPair(viewerUserId, peerUserId)
+    const existing = await this.deps.channelDao.findDirectByPair(pair.userAId, pair.userBId)
+    if (existing) return this.withDirectPeer(existing, viewerUserId)
+
+    const channel = await this.deps.channelDao.createDirectChannel(pair)
+    if (!channel) {
+      const refetched = await this.deps.channelDao.findDirectByPair(pair.userAId, pair.userBId)
+      if (!refetched) {
+        throw Object.assign(new Error('Failed to create direct channel'), { status: 500 })
+      }
+      return this.withDirectPeer(refetched, viewerUserId)
+    }
+
+    await this.deps.channelMemberDao.add(channel.id, pair.userAId)
+    await this.deps.channelMemberDao.add(channel.id, pair.userBId)
+    return this.withDirectPeer(channel, viewerUserId)
+  }
+
+  async listDirectChannels(userId: string) {
+    return this.deps.channelDao.findDirectChannelsForUser(userId)
+  }
+
+  async getDirectChannelById(channelId: string, viewerUserId: string) {
+    const channel = await this.deps.channelDao.findById(channelId)
+    if (!channel || channel.kind !== 'dm') {
+      throw Object.assign(new Error('Direct channel not found'), { status: 404 })
+    }
+    const member = await this.deps.channelMemberDao.get(channelId, viewerUserId)
+    if (!member) {
+      throw Object.assign(new Error('Not a participant of this direct channel'), { status: 403 })
+    }
+    return this.withDirectPeer(channel, viewerUserId)
+  }
+
+  async findDirectPeer(channelId: string, viewerUserId: string) {
+    return this.deps.channelDao.findDirectPeer(channelId, viewerUserId)
+  }
+
+  private async withDirectPeer<T extends { id: string; kind: string }>(
+    channel: T,
+    viewerUserId: string,
+  ) {
+    if (channel.kind !== 'dm') return channel
+    const otherUser = await this.deps.channelDao.findDirectPeer(channel.id, viewerUserId)
+    return { ...channel, otherUser }
   }
 }

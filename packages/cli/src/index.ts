@@ -6,7 +6,7 @@ import { createAuthCommand } from './commands/auth.js'
 import { createChannelsCommand } from './commands/channels.js'
 import { createCloudCommand } from './commands/cloud.js'
 import { createConfigCommand } from './commands/config.js'
-import { createDmsCommand } from './commands/dms.js'
+import { createDirectMessagesCommand } from './commands/dms.js'
 import { createFriendsCommand } from './commands/friends.js'
 import { createInvitesCommand } from './commands/invites.js'
 import { createListenCommand } from './commands/listen.js'
@@ -42,7 +42,7 @@ program.addCommand(createChannelsCommand())
 program.addCommand(createThreadsCommand())
 program.addCommand(createAgentsCommand())
 program.addCommand(createListenCommand())
-program.addCommand(createDmsCommand())
+program.addCommand(createDirectMessagesCommand())
 program.addCommand(createWorkspaceCommand())
 program.addCommand(createShopCommand())
 program.addCommand(createAppsCommand())

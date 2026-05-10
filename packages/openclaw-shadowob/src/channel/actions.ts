@@ -1,7 +1,6 @@
 import { ShadowClient } from '@shadowob/sdk'
 import type { ChannelMessageActionContext } from 'openclaw/plugin-sdk'
 import { DEFAULT_ACCOUNT_ID, getAccountConfig, listAccountIds } from '../config.js'
-import { parseTarget } from '../outbound.js'
 import {
   firstString,
   readMessageTarget,
@@ -90,9 +89,7 @@ async function uploadShadowAttachment(params: {
 }) {
   const contentType = readAttachmentContentType(params.actionParams)
   const filename = readAttachmentFilename(params.actionParams)
-  const uploadTarget = parseTarget(params.to).dmChannelId
-    ? { dmMessageId: params.messageId }
-    : params.messageId
+  const uploadTarget = params.messageId
   const base64Buffer = firstString(params.actionParams.buffer)
   const mediaUrl = readAttachmentSource(params.actionParams)
 

@@ -299,7 +299,7 @@ Server shops continue to use `/api/servers/:serverId/shop`. Scope-neutral and pe
 | GET    | `/api/products/:productId` | Get a visible product without knowing its shop scope. |
 | GET/PUT/DELETE | `/api/shops/:shopId/products/:productId` | Read or manage a product in a scope-neutral shop. |
 | POST   | `/api/shops/:shopId/products` | Create a product in a managed shop. Virtual services use `productType: "entitlement"` and `billingMode` of `fixed_duration` or `subscription`. |
-| GET    | `/api/commerce/product-picker` | Return sendable Offer-backed `CommerceProductCard` records plus shop groups for `target=channel` or `target=dm`. Channel pickers include personal, server, and Buddy shops visible in the channel. |
+| GET    | `/api/commerce/product-picker` | Return sendable Offer-backed `CommerceProductCard` records plus shop groups for `target=channel&channelId=...`. Direct conversations are represented by channel ids. |
 | GET    | `/api/commerce/offers/:offerId/checkout-preview` | Return a server-trusted checkout snapshot for an Offer, including product, seller shop, entitlement resource, paid-file metadata, `viewerState`, `primaryAction`, `displayState`, and `nextAction`. Clients call this before showing buy confirmation or opening already-owned content. Sellers and selling Buddies may pass `viewerUserId` to inspect the current conversation user's state for their own Offer; wallet balance display data is returned only when inspecting yourself. |
 | POST   | `/api/shops/:shopId/offers` | Create a managed shop Offer for a product. Offers define sales surface, seller/Buddy sender, optional price override, and metadata. |
 | GET    | `/api/shops/:shopId/assets` | List community asset definitions for a managed shop. |
@@ -310,7 +310,6 @@ Server shops continue to use `/api/servers/:serverId/shop`. Scope-neutral and pe
 | POST   | `/api/shops/:shopId/products/:productId/purchase` | Compatibility direct purchase path for an entitlement product. New chat flows should buy Offers. |
 | POST   | `/api/servers/:serverId/shop/orders` | Create a server-shop order with `{ idempotencyKey, items: [{ productId, skuId?, quantity }] }`. The idempotency key is required so retries cannot double charge the wallet. |
 | POST   | `/api/messages/:messageId/commerce-cards/:cardId/purchase` | Buy from an Offer card embedded in channel message metadata. |
-| POST   | `/api/dm/messages/:messageId/commerce-cards/:cardId/purchase` | Buy from an Offer card embedded in DM metadata. |
 | GET    | `/api/paid-files/:fileId` | Check paid file metadata and whether the current user has an active entitlement. |
 | POST   | `/api/paid-files/:fileId/open` | Mint a short-lived paid file grant for an entitled user, set an HttpOnly grant cookie, and return a viewer URL without query-token material. |
 | GET    | `/api/paid-files/:fileId/view/:grantId` | Render a grant-protected paid file. The grant token is accepted from the HttpOnly cookie or `X-Paid-File-Grant-Token` header, and the backing entitlement is rechecked before serving content. |
@@ -354,12 +353,12 @@ Notification creation is centralized behind server-side trigger services. Client
 
 | Method | Endpoint                                | Description |
 |--------|-----------------------------------------|-------------|
-| GET    | `/api/notifications`                    | List current user's notifications with `limit` and `offset`. Records include `kind`, `metadata`, `scopeServerId`, `scopeChannelId`, `scopeDmChannelId`, `aggregationKey`, and `aggregatedCount`. |
+| GET    | `/api/notifications`                    | List current user's notifications with `limit` and `offset`. Records include `kind`, `metadata`, `scopeServerId`, `scopeChannelId`, `aggregationKey`, and `aggregatedCount`. |
 | PATCH  | `/api/notifications/:id/read`           | Mark one notification as read. The server scopes the update to the authenticated user. |
 | POST   | `/api/notifications/read-all`           | Mark all notifications for the authenticated user as read. |
-| POST   | `/api/notifications/read-scope`         | Mark unread notifications in a server/channel/DM scope as read with `{ serverId?, channelId?, dmChannelId? }`. At least one field is required. |
+| POST   | `/api/notifications/read-scope`         | Mark unread notifications in a server/channel scope as read with `{ serverId?, channelId? }`. Direct conversations use `channelId`. At least one field is required. |
 | GET    | `/api/notifications/unread-count`       | Return `{ count }` after applying user notification preferences and mute filters. |
-| GET    | `/api/notifications/scoped-unread`      | Return `{ channelUnread, serverUnread, dmUnread }`, counting aggregated notifications by scope. |
+| GET    | `/api/notifications/scoped-unread`      | Return `{ channelUnread, serverUnread, dmUnread }`, counting aggregated notifications by scope. Direct conversation unread counts are included in `channelUnread`. |
 | GET    | `/api/notifications/preferences`        | Get notification preferences: `strategy`, `mutedServerIds`, `mutedChannelIds`. |
 | PATCH  | `/api/notifications/preferences`        | Update notification preferences. `strategy` is `all`, `mention_only`, or `none`. |
 | GET    | `/api/notifications/channel-preferences` | Get per-kind/per-channel delivery preferences. |

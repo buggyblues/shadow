@@ -421,6 +421,13 @@
       "when": 1778677200000,
       "tag": "0059_community_assets_and_settlement",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1778763600000,
+      "tag": "0060_unify_dm_channels",
+      "breakpoints": true
     }
   ]
 }

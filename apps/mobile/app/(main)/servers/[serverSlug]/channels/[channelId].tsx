@@ -103,10 +103,13 @@ function mentionsForContent(content: string, mentions: MessageMention[]): Messag
 }
 
 export default function ChannelViewScreen() {
-  const { serverSlug, channelId } = useLocalSearchParams<{
-    serverSlug: string
-    channelId: string
+  const params = useLocalSearchParams<{
+    serverSlug?: string
+    channelId?: string
+    dmChannelId?: string
   }>()
+  const serverSlug = params.serverSlug
+  const channelId = params.channelId ?? params.dmChannelId
   const { t } = useTranslation()
   const colors = useColors()
   const router = useRouter()
@@ -217,6 +220,7 @@ export default function ChannelViewScreen() {
     queryFn: () => fetchApi<Channel>(`/api/channels/${channelId}`),
     enabled: !!channelId,
   })
+  const isDirectChannel = channel?.kind === 'dm' || channel?.serverId === null
   const { data: access } = useQuery({
     queryKey: ['channel-access', channelId],
     queryFn: () =>
@@ -318,7 +322,7 @@ export default function ChannelViewScreen() {
       })
       return fetchApi<{ suggestions: MentionSuggestion[] }>(`/api/mentions/suggest?${params}`)
     },
-    enabled: Boolean(channelId && mentionTrigger && mentionQuery !== null),
+    enabled: Boolean(channelId && !isDirectChannel && mentionTrigger && mentionQuery !== null),
     staleTime: 5_000,
   })
 
@@ -367,7 +371,7 @@ export default function ChannelViewScreen() {
     queryFn: () => {
       const params = new URLSearchParams({
         query: debouncedSearchQuery.current,
-        channelId,
+        channelId: channelId!,
         limit: '30',
       })
       if (searchFromUser) params.set('from', searchFromUser)
@@ -394,7 +398,9 @@ export default function ChannelViewScreen() {
   useEffect(() => {
     if (channel && canAccessChannel) {
       setActiveChannel(channel.id)
-      void setLastChannel(channel.serverId, channel.id)
+      if (channel.serverId) {
+        void setLastChannel(channel.serverId, channel.id)
+      }
     }
     return () => setActiveChannel(null)
   }, [canAccessChannel, channel, setActiveChannel])
@@ -1491,11 +1497,15 @@ export default function ChannelViewScreen() {
           <ChevronLeft size={26} color={colors.text} />
         </Pressable>
         <Pressable
-          onPress={() =>
-            router.push(
-              `/(main)/servers/${serverSlug}/channel-members?channelId=${channelId}` as never,
-            )
-          }
+          onPress={() => {
+            if (serverSlug) {
+              router.push(
+                `/(main)/servers/${serverSlug}/channel-members?channelId=${channelId}` as never,
+              )
+            } else {
+              setShowMemberList(true)
+            }
+          }}
           style={styles.headerTitleRow}
         >
           <Text style={[styles.headerChannel, { color: colors.text }]} numberOfLines={1}>
@@ -1865,19 +1875,21 @@ export default function ChannelViewScreen() {
                 {t('member.title')} ({channelMembers.length})
               </Text>
               <View style={styles.sheetHeaderActions}>
-                <Pressable
-                  onPress={() => {
-                    Keyboard.dismiss()
-                    setShowMemberList(false)
-                    router.push(
-                      `/(main)/servers/${serverSlug}/channel-members?channelId=${channelId}&autoInvite=1` as never,
-                    )
-                  }}
-                  hitSlop={8}
-                  style={[styles.sheetActionBtn, { backgroundColor: `${colors.primary}12` }]}
-                >
-                  <UserPlus size={16} color={colors.primary} />
-                </Pressable>
+                {serverSlug && (
+                  <Pressable
+                    onPress={() => {
+                      Keyboard.dismiss()
+                      setShowMemberList(false)
+                      router.push(
+                        `/(main)/servers/${serverSlug}/channel-members?channelId=${channelId}&autoInvite=1` as never,
+                      )
+                    }}
+                    hitSlop={8}
+                    style={[styles.sheetActionBtn, { backgroundColor: `${colors.primary}12` }]}
+                  >
+                    <UserPlus size={16} color={colors.primary} />
+                  </Pressable>
+                )}
                 <Pressable
                   onPress={() => setShowMemberList(false)}
                   hitSlop={8}

@@ -14,7 +14,6 @@ import { createCloudHandler } from './handlers/cloud.handler'
 import { createCloudSaasHandler } from './handlers/cloud-saas.handler'
 import { createConfigHandler } from './handlers/config.handler'
 import { createDiscoverHandler } from './handlers/discover.handler'
-import { createDmHandler } from './handlers/dm.handler'
 import { createEconomyHandler } from './handlers/economy.handler'
 import { createFeatureFlagsHandler } from './handlers/feature-flags.handler'
 import { createFriendshipHandler } from './handlers/friendship.handler'
@@ -198,7 +197,6 @@ export function createApp(container: AppContainer) {
   app.route('/api', createMentionHandler(container))
   app.route('/api', createMessageHandler(container))
   app.route('/api/search', createSearchHandler(container))
-  app.route('/api/dm', createDmHandler(container))
   app.route('/api/friends', createFriendshipHandler(container))
   app.route('/api', createAttachmentMediaHandler(container))
   app.route('/api/notifications', createNotificationHandler(container))

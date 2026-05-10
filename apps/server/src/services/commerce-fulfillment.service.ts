@@ -9,7 +9,6 @@ import {
   commerceFulfillmentRecords,
 } from '../db/schema'
 import type { CommunityAssetService } from './community-asset.service'
-import type { DmService } from './dm.service'
 import type { LedgerService } from './ledger.service'
 import type { MessageService } from './message.service'
 
@@ -48,7 +47,6 @@ export class CommerceFulfillmentService {
     private deps: {
       db: Database
       messageService: MessageService
-      dmService: DmService
       communityAssetService: CommunityAssetService
       ledgerService: LedgerService
       workspaceNodeDao: WorkspaceNodeDao
@@ -84,25 +82,17 @@ export class CommerceFulfillmentService {
     metadata?: Record<string, unknown>,
   ) {
     const destination = this.requireDestination(job)
-    if (destination.kind === 'channel') {
-      const message = await this.deps.messageService.send(destination.id, senderId, {
-        content,
-        metadata,
+    if (destination.kind !== 'channel') {
+      throw Object.assign(new Error('Direct message fulfillment destinations must use channel'), {
+        code: 'COMMERCE_DM_DESTINATION_REMOVED',
       })
-      this.emit(`channel:${destination.id}`, 'message:new', message)
-      return message.id
     }
-
-    const message = await this.deps.dmService.sendMessage(
-      destination.id,
-      senderId,
+    const message = await this.deps.messageService.send(destination.id, senderId, {
       content,
-      undefined,
-      undefined,
       metadata,
-    )
-    this.emit(`dm:${destination.id}`, 'dm:message', message)
-    return message.id ?? null
+    })
+    this.emit(`channel:${destination.id}`, 'message:new', message)
+    return message.id
   }
 
   private async fulfillPaidFileMessage(

@@ -73,7 +73,7 @@ export class EntitlementPurchaseService {
     offerId: string
     skuId?: string
     idempotencyKey: string
-    destination?: { kind: 'channel' | 'dm'; id: string }
+    destination?: { kind: 'channel'; id: string }
     actor?: Actor
   }) {
     if (!input.idempotencyKey || input.idempotencyKey.length > 200) {

@@ -3,8 +3,7 @@ import { extname } from 'node:path'
 import { Readable } from 'node:stream'
 import type { Logger } from 'pino'
 import type { MessageDao } from '../dao/message.dao'
-import { type ActorInput, actorUserId } from '../security/actor'
-import type { DmService } from './dm.service'
+import type { ActorInput } from '../security/actor'
 import type { PolicyService } from './policy.service'
 
 type MediaDisposition = 'inline' | 'attachment'
@@ -97,7 +96,6 @@ export class MediaService {
     private deps: {
       logger: Logger
       messageDao: MessageDao
-      dmService: DmService
       policyService: PolicyService
     },
   ) {}
@@ -159,34 +157,13 @@ export class MediaService {
   async resolveAttachmentMediaUrl(input: {
     actor: ActorInput
     attachmentId: string
-    kind: 'channel' | 'dm'
     disposition: MediaDisposition
   }): Promise<{ url: string; expiresAt: string }> {
-    if (input.kind === 'channel') {
-      const attachment = await this.deps.messageDao.findAttachmentById(input.attachmentId)
-      if (!attachment) throw Object.assign(new Error('Attachment not found'), { status: 404 })
-      const message = await this.deps.messageDao.findById(attachment.messageId)
-      if (!message) throw Object.assign(new Error('Message not found'), { status: 404 })
-      await this.deps.policyService.requireChannelRead(input.actor, message.channelId)
-      return this.createSignedUrl({
-        contentRef: attachment.url,
-        contentType: attachment.contentType,
-        disposition: input.disposition,
-        filename: attachment.filename,
-      })
-    }
-
-    const attachment = await this.deps.dmService.getAttachmentById(input.attachmentId)
+    const attachment = await this.deps.messageDao.findAttachmentById(input.attachmentId)
     if (!attachment) throw Object.assign(new Error('Attachment not found'), { status: 404 })
-    const message = await this.deps.dmService.getMessageById(attachment.dmMessageId)
-    if (!message) throw Object.assign(new Error('DM message not found'), { status: 404 })
-    const isParticipant = await this.deps.dmService.isParticipant(
-      message.dmChannelId,
-      actorUserId(input.actor),
-    )
-    if (!isParticipant) {
-      throw Object.assign(new Error('Not a participant of this DM channel'), { status: 403 })
-    }
+    const message = await this.deps.messageDao.findById(attachment.messageId)
+    if (!message) throw Object.assign(new Error('Message not found'), { status: 404 })
+    await this.deps.policyService.requireChannelRead(input.actor, message.channelId)
     return this.createSignedUrl({
       contentRef: attachment.url,
       contentType: attachment.contentType,

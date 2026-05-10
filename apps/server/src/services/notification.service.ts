@@ -21,7 +21,6 @@ export interface NotificationItem {
   referenceType: string | null
   scopeServerId?: string | null
   scopeChannelId?: string | null
-  scopeDmChannelId?: string | null
   aggregatedCount?: number | null
   isRead: boolean
 }
@@ -133,7 +132,7 @@ export class NotificationService {
         const scope = messageScopeMap.get(n.referenceId)
         if (!scope) return true
         if (preference.mutedChannelIds.includes(scope.channelId)) return false
-        if (preference.mutedServerIds.includes(scope.serverId)) return false
+        if (scope.serverId && preference.mutedServerIds.includes(scope.serverId)) return false
       }
 
       if (
@@ -145,7 +144,7 @@ export class NotificationService {
         const scope = channelScopeMap.get(n.referenceId)
         if (!scope) return true
         if (preference.mutedChannelIds.includes(n.referenceId)) return false
-        if (preference.mutedServerIds.includes(scope.serverId)) return false
+        if (scope.serverId && preference.mutedServerIds.includes(scope.serverId)) return false
       }
 
       return true
@@ -166,7 +165,6 @@ export class NotificationService {
           referenceType: input.referenceType ?? null,
           scopeServerId: input.scopeServerId ?? null,
           scopeChannelId: input.scopeChannelId ?? null,
-          scopeDmChannelId: input.scopeDmChannelId ?? null,
           isRead: false,
         },
       ],
@@ -260,7 +258,6 @@ export class NotificationService {
 
     const channelUnread: Record<string, number> = {}
     const serverUnread: Record<string, number> = {}
-    const dmUnread: Record<string, number> = {}
 
     for (const notification of filtered) {
       const count = Math.max(notification.aggregatedCount ?? 1, 1)
@@ -270,14 +267,12 @@ export class NotificationService {
           : undefined
       const channelId = notification.scopeChannelId ?? fallback?.channelId
       const serverId = notification.scopeServerId ?? fallback?.serverId
-      const dmChannelId = notification.scopeDmChannelId
 
       if (channelId) channelUnread[channelId] = (channelUnread[channelId] ?? 0) + count
       if (serverId) serverUnread[serverId] = (serverUnread[serverId] ?? 0) + count
-      if (dmChannelId) dmUnread[dmChannelId] = (dmUnread[dmChannelId] ?? 0) + count
     }
 
-    return { channelUnread, serverUnread, dmUnread }
+    return { channelUnread, serverUnread }
   }
 
   async markScopeAsRead(
@@ -285,7 +280,6 @@ export class NotificationService {
     scope: {
       serverId?: string
       channelId?: string
-      dmChannelId?: string
     },
   ) {
     const unread = await this.deps.notificationDao.findUnreadByUserId(userId)
@@ -328,12 +322,10 @@ export class NotificationService {
             : undefined
       const channelId = n.scopeChannelId ?? fallback?.channelId
       const serverId = n.scopeServerId ?? fallback?.serverId
-      const dmChannelId = n.scopeDmChannelId
 
       const byChannel = scope.channelId ? channelId === scope.channelId : true
       const byServer = scope.serverId ? serverId === scope.serverId : true
-      const byDm = scope.dmChannelId ? dmChannelId === scope.dmChannelId : true
-      if (byChannel && byServer && byDm) matched.push(n.id)
+      if (byChannel && byServer) matched.push(n.id)
     }
 
     await this.deps.notificationDao.markAsReadByIds(matched)

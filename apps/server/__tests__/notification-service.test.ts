@@ -127,7 +127,6 @@ describe('NotificationService', () => {
         senderId: null,
         scopeServerId: null,
         scopeChannelId: null,
-        scopeDmChannelId: null,
         aggregationKey: null,
         aggregatedCount: 1,
         lastAggregatedAt: null,
@@ -186,7 +185,6 @@ describe('NotificationService', () => {
         senderId: 'sender-1',
         scopeServerId: 'server-1',
         scopeChannelId: 'channel-1',
-        scopeDmChannelId: null,
         aggregationKey: 'mention:user-1:channel-1',
         aggregatedCount: 2,
         lastAggregatedAt: now,
@@ -233,7 +231,7 @@ describe('NotificationService', () => {
   describe('getScopedUnread', () => {
     const now = new Date()
 
-    it('counts aggregated unread by server, channel, and DM scope', async () => {
+    it('counts aggregated unread by server and channel scope', async () => {
       mockNotificationDao.getPreference.mockResolvedValue({
         userId: 'user-1',
         strategy: 'all',
@@ -252,7 +250,6 @@ describe('NotificationService', () => {
           referenceType: 'message',
           scopeServerId: 'server-1',
           scopeChannelId: 'channel-1',
-          scopeDmChannelId: null,
           aggregatedCount: 3,
           isRead: false,
         },
@@ -261,11 +258,10 @@ describe('NotificationService', () => {
           userId: 'user-1',
           type: 'dm',
           kind: 'dm.message',
-          referenceId: 'dm-1',
-          referenceType: 'dm_channel',
+          referenceId: 'message-2',
+          referenceType: 'channel',
           scopeServerId: null,
-          scopeChannelId: null,
-          scopeDmChannelId: 'dm-1',
+          scopeChannelId: 'channel-2',
           aggregatedCount: 2,
           isRead: false,
         },
@@ -274,40 +270,39 @@ describe('NotificationService', () => {
       const result = await service.getScopedUnread('user-1')
 
       expect(result).toEqual({
-        channelUnread: { 'channel-1': 3 },
+        channelUnread: { 'channel-1': 3, 'channel-2': 2 },
         serverUnread: { 'server-1': 3 },
-        dmUnread: { 'dm-1': 2 },
       })
     })
   })
 
   describe('markScopeAsRead', () => {
-    it('marks only matching DM scope notifications', async () => {
+    it('marks only matching direct channel scope notifications', async () => {
       mockNotificationDao.findUnreadByUserId.mockResolvedValue([
         {
-          id: 'dm-target',
+          id: 'channel-target',
           userId: 'user-1',
           type: 'dm',
-          referenceId: 'dm-1',
-          referenceType: 'dm_channel',
-          scopeDmChannelId: 'dm-1',
+          referenceId: 'message-1',
+          referenceType: 'channel',
+          scopeChannelId: 'channel-1',
           isRead: false,
         },
         {
-          id: 'dm-other',
+          id: 'channel-other',
           userId: 'user-1',
           type: 'dm',
-          referenceId: 'dm-2',
-          referenceType: 'dm_channel',
-          scopeDmChannelId: 'dm-2',
+          referenceId: 'message-2',
+          referenceType: 'channel',
+          scopeChannelId: 'channel-2',
           isRead: false,
         },
       ] as any)
 
-      const result = await service.markScopeAsRead('user-1', { dmChannelId: 'dm-1' })
+      const result = await service.markScopeAsRead('user-1', { channelId: 'channel-1' })
 
       expect(result).toEqual({ updated: 1 })
-      expect(mockNotificationDao.markAsReadByIds).toHaveBeenCalledWith(['dm-target'])
+      expect(mockNotificationDao.markAsReadByIds).toHaveBeenCalledWith(['channel-target'])
     })
   })
 })

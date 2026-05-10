@@ -58,8 +58,8 @@ export default function FriendsScreen() {
     queryFn: () => fetchApi<FriendEntry[]>('/api/friends/pending'),
   })
 
-  const { data: dmChannels = [] } = useQuery({
-    queryKey: ['dm-channels'],
+  const { data: directChannels = [] } = useQuery({
+    queryKey: ['direct-channels'],
     queryFn: () =>
       fetchApi<
         Array<{
@@ -68,7 +68,7 @@ export default function FriendsScreen() {
           userBId: string
           otherUser?: { id: string }
         }>
-      >('/api/dm/channels'),
+      >('/api/channels/dm'),
   })
 
   const removeFriend = useMutation({
@@ -81,7 +81,7 @@ export default function FriendsScreen() {
 
   const startChat = useMutation({
     mutationFn: (userId: string) =>
-      fetchApi<{ id: string }>('/api/dm/channels', {
+      fetchApi<{ id: string }>('/api/channels/dm', {
         method: 'POST',
         body: JSON.stringify({ userId }),
       }),
@@ -90,20 +90,20 @@ export default function FriendsScreen() {
     },
   })
 
-  const openDm = async (userId: string) => {
-    const existed = dmChannels.find(
-      (dm) => dm.otherUser?.id === userId || dm.userAId === userId || dm.userBId === userId,
+  const openDirectChannel = async (userId: string) => {
+    const existed = directChannels.find(
+      (channel) =>
+        channel.otherUser?.id === userId ||
+        channel.userAId === userId ||
+        channel.userBId === userId,
     )
     if (existed) {
-      showToast(t('friends.dmUnavailable', '私信页面正在升级中，请稍后再试'), 'info')
+      router.push(`/(main)/dm/${existed.id}` as never)
       return
     }
 
     try {
-      const data = await startChat.mutateAsync(userId)
-      if (data?.id) {
-        showToast(t('friends.dmUnavailable', '私信页面正在升级中，请稍后再试'), 'info')
-      }
+      await startChat.mutateAsync(userId)
     } catch {
       showToast(t('common.error', '操作失败'), 'error')
     }
@@ -219,7 +219,7 @@ export default function FriendsScreen() {
                   backgroundColor: pressed ? colors.surfaceHover : colors.surface,
                 },
               ]}
-              onPress={() => openDm(item.user.id)}
+              onPress={() => openDirectChannel(item.user.id)}
               onLongPress={() => {
                 setMenuTarget(item)
               }}
@@ -284,7 +284,7 @@ export default function FriendsScreen() {
               onPress={() => {
                 const target = menuTarget
                 setMenuTarget(null)
-                if (target) void openDm(target.user.id)
+                if (target) void openDirectChannel(target.user.id)
               }}
             >
               <Text style={[styles.sheetActionText, { color: colors.text }]}>

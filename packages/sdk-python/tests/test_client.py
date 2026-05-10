@@ -575,7 +575,7 @@ def test_server_access_fetch_request_and_review(monkeypatch):
     client.close()
 
 
-def test_notifications_mark_scope_read_supports_dm_channel_id(monkeypatch):
+def test_notifications_mark_scope_read_supports_channel_id(monkeypatch):
     client = ShadowClient("https://example.com", "test-token")
     captured = {}
 
@@ -586,10 +586,10 @@ def test_notifications_mark_scope_read_supports_dm_channel_id(monkeypatch):
 
     monkeypatch.setattr(client, "_post", fake_post)
 
-    assert client.mark_scope_read(dm_channel_id="dm-1") == {"updated": 1}
+    assert client.mark_scope_read(channel_id="channel-1") == {"updated": 1}
     assert captured == {
         "path": "/api/notifications/read-scope",
-        "json": {"dmChannelId": "dm-1"},
+        "json": {"channelId": "channel-1"},
     }
     client.close()
 
@@ -679,8 +679,8 @@ def test_commerce_picker_purchase_and_entitlement_paths(monkeypatch):
     monkeypatch.setattr(client, "_patch", fake_patch)
 
     assert client.list_commerce_product_cards(
-        target="dm",
-        dm_channel_id="dm-1",
+        target="channel",
+        channel_id="channel-1",
         limit=3,
     ) == {"cards": []}
     assert client.purchase_shop_product(
@@ -729,7 +729,7 @@ def test_commerce_picker_purchase_and_entitlement_paths(monkeypatch):
     ) == {"ok": True}
     assert client.cancel_entitlement("ent-1", reason="user_cancelled") == {"ok": True}
     assert captured == [
-        ("get", "/api/commerce/product-picker", {"target": "dm", "dmChannelId": "dm-1", "limit": 3}),
+        ("get", "/api/commerce/product-picker", {"target": "channel", "channelId": "channel-1", "limit": 3}),
         (
             "post",
             "/api/shops/shop-1/products/prod-1/purchase",

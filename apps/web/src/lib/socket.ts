@@ -3,15 +3,11 @@ import { io, type Socket } from 'socket.io-client'
 
 let socket: Socket | null = null
 const joinedChannels = new Set<string>()
-const joinedDmChannels = new Set<string>()
 const joinedApps = new Set<string>()
 
 function rejoinRooms(s: Socket): void {
   for (const channelId of joinedChannels) {
     s.emit('channel:join', { channelId })
-  }
-  for (const dmChannelId of joinedDmChannels) {
-    s.emit('dm:join', { dmChannelId })
   }
   for (const appId of joinedApps) {
     s.emit('app:join', { appId })
@@ -56,7 +52,6 @@ export function disconnectSocket(): void {
     socket = null
   }
   joinedChannels.clear()
-  joinedDmChannels.clear()
   joinedApps.clear()
 }
 
@@ -151,62 +146,4 @@ export function leaveApp(appId: string): void {
 
 export function broadcastAppState(appId: string, type: string, payload: unknown): void {
   getSocket().emit('app:broadcast', { appId, type, payload })
-}
-
-// DM helpers
-export function joinDm(dmChannelId: string): void {
-  joinedDmChannels.add(dmChannelId)
-  const s = getSocket()
-  if (s.connected) {
-    s.emit('dm:join', { dmChannelId })
-  }
-}
-
-export function leaveDm(dmChannelId: string): void {
-  joinedDmChannels.delete(dmChannelId)
-  const s = getSocket()
-  if (s.connected) {
-    s.emit('dm:leave', { dmChannelId })
-  }
-}
-
-export function sendDmMessage(data: {
-  dmChannelId: string
-  content: string
-  replyToId?: string
-  metadata?: Record<string, unknown>
-}): void {
-  getSocket().emit('dm:send', data)
-}
-
-export function sendDmTyping(dmChannelId: string, typing = true): void {
-  getSocket().emit('dm:typing', { dmChannelId, typing })
-}
-
-export function editDmMessage(data: {
-  dmChannelId: string
-  messageId: string
-  content: string
-}): void {
-  getSocket().emit('dm:edit', data)
-}
-
-export function deleteDmMessage(data: { dmChannelId: string; messageId: string }): void {
-  getSocket().emit('dm:delete', data)
-}
-
-export function addDmReaction(data: {
-  dmChannelId: string
-  dmMessageId: string
-  emoji: string
-}): void {
-  getSocket().emit('dm:react', data)
-}
-
-export function removeDmReaction(data: {
-  dmChannelId: string
-  dmMessageId: string
-  emoji: string
-}): void {
-  getSocket().emit('dm:unreact', data)
 }

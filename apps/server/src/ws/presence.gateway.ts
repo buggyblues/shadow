@@ -9,7 +9,7 @@ const ACTIVITY_TTL = 60 // seconds — auto-expire safety net
 /**
  * Broadcast presence change to only the rooms where the user is active:
  * - All channel rooms the user is a member of
- * - All DM rooms the user participates in
+ * - Direct message rooms are ordinary channel rooms with kind='dm'
  *
  * This replaces the previous io.emit() which wasted bandwidth sending
  * to every connected client regardless of relevance.
@@ -27,17 +27,6 @@ async function broadcastPresenceToRooms(
     // Broadcast to all channel rooms
     for (const channelId of channelIds) {
       io.to(`channel:${channelId}`).emit('presence:change', payload)
-    }
-
-    // Broadcast to DM rooms
-    try {
-      const dmService = container.resolve('dmService')
-      const dmChannels = await dmService.getUserChannels(userId)
-      for (const dm of dmChannels) {
-        io.to(`dm:${dm.id}`).emit('presence:change', payload)
-      }
-    } catch {
-      // DM service may not be available — non-critical
     }
   } catch (err) {
     logger.warn({ err, userId }, 'Failed to scope presence broadcast to rooms')

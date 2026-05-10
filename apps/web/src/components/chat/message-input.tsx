@@ -202,7 +202,7 @@ export function MessageInput({
       })
       return fetchApi<{ suggestions: MentionSuggestion[] }>(`/api/mentions/suggest?${params}`)
     },
-    enabled: Boolean(channelId && mentionTrigger && mentionQuery !== null),
+    enabled: Boolean(activeServerId && channelId && mentionTrigger && mentionQuery !== null),
     staleTime: 5_000,
   })
 
@@ -210,7 +210,7 @@ export function MessageInput({
     queryKey: ['channel-slash-commands', channelId],
     queryFn: () =>
       fetchApi<{ commands: SlashCommand[] }>(`/api/channels/${channelId}/slash-commands`),
-    enabled: Boolean(channelId),
+    enabled: Boolean(activeServerId && channelId),
     staleTime: 30_000,
   })
 

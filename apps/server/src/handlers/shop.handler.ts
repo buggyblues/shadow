@@ -25,9 +25,8 @@ import {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const productPickerSchema = z.object({
-  target: z.enum(['channel', 'dm']),
-  channelId: z.string().uuid().optional(),
-  dmChannelId: z.string().uuid().optional(),
+  target: z.literal('channel'),
+  channelId: z.string().uuid(),
   keyword: z.string().max(120).optional(),
   limit: z.coerce.number().int().min(1).max(50).optional().default(20),
 })
@@ -38,7 +37,7 @@ const purchaseProductSchema = z.object({
 })
 
 const purchaseOfferSchema = purchaseProductSchema.extend({
-  destinationKind: z.enum(['channel', 'dm']).optional(),
+  destinationKind: z.literal('channel').optional(),
   destinationId: z.string().uuid().optional(),
 })
 
@@ -369,12 +368,6 @@ export function createShopHandler(container: AppContainer) {
   h.get('/commerce/product-picker', zValidator('query', productPickerSchema), async (c) => {
     const user = c.get('user')
     const input = c.req.valid('query')
-    if (input.target === 'channel' && !input.channelId) {
-      throw apiError('CHANNEL_REQUIRED', 400)
-    }
-    if (input.target === 'dm' && !input.dmChannelId) {
-      throw apiError('DM_CHANNEL_REQUIRED', 400)
-    }
     const shopService = container.resolve('shopService')
     const commerceCardService = container.resolve('commerceCardService')
     const commerceOfferService = container.resolve('commerceOfferService')
@@ -387,10 +380,7 @@ export function createShopHandler(container: AppContainer) {
       cards: Awaited<ReturnType<typeof commerceCardService.buildOfferCard>>[]
     }> = []
     const seenShopIds = new Set<string>()
-    const target =
-      input.target === 'dm'
-        ? ({ kind: 'dm', dmChannelId: input.dmChannelId ?? 'unknown' } as const)
-        : ({ kind: 'channel', channelId: input.channelId ?? 'unknown' } as const)
+    const target = { kind: 'channel', channelId: input.channelId } as const
 
     const addShopGroup = async (
       key: string,
@@ -440,18 +430,25 @@ export function createShopHandler(container: AppContainer) {
 
     if (input.target === 'channel' && input.channelId) {
       const channelDao = container.resolve('channelDao')
-      const channelMemberDao = container.resolve('channelMemberDao')
-      const serverDao = container.resolve('serverDao')
+      const channelAccessService = container.resolve('channelAccessService')
       const channel = await channelDao.findById(input.channelId)
       if (channel) {
-        const serverMember = await serverDao.getMember(channel.serverId, user.userId)
-        const channelMember = serverMember
-          ? await channelMemberDao.get(channel.id, user.userId)
-          : null
-        const canManage = serverMember?.role === 'owner' || serverMember?.role === 'admin'
-        if (!serverMember || (channel.isPrivate && !channelMember && !canManage)) {
-          throw apiError('CHANNEL_ACCESS_REQUIRED', 403)
+        await channelAccessService.assertCanRead(channel.id, user.userId)
+        if (channel.kind === 'dm') {
+          const otherUserId =
+            channel.dmUserAId === user.userId ? channel.dmUserBId : channel.dmUserAId
+          if (otherUserId) {
+            const otherShop = await shopService.getShopByOwnerUserId(otherUserId)
+            if (otherShop)
+              await addShopGroup('direct:other', 'chat.productPickerGroupPeer', otherShop)
+          }
+          const selfShop = await shopService.getShopByOwnerUserId(user.userId)
+          if (selfShop)
+            await addShopGroup('direct:self', 'chat.productPickerGroupPersonal', selfShop)
+          const cards = groups.flatMap((group) => group.cards).slice(0, input.limit)
+          return c.json({ cards, groups })
         }
+        if (!channel.serverId) throw apiError('CHANNEL_ACCESS_REQUIRED', 403)
         const serverShop = await shopService.getShopByServerId(channel.serverId)
         if (serverShop) await addShopGroup('server', 'chat.productPickerGroupServer', serverShop)
         const channelService = container.resolve('channelService')
@@ -465,15 +462,6 @@ export function createShopHandler(container: AppContainer) {
           }
         }
       }
-    } else if (input.target === 'dm' && input.dmChannelId) {
-      const dmService = container.resolve('dmService')
-      const channel = await dmService.getChannelById(input.dmChannelId)
-      if (!channel || (channel.userAId !== user.userId && channel.userBId !== user.userId)) {
-        throw apiError('DM_ACCESS_REQUIRED', 403)
-      }
-      const otherUserId = channel.userAId === user.userId ? channel.userBId : channel.userAId
-      const otherShop = await shopService.getShopByOwnerUserId(otherUserId)
-      if (otherShop) await addShopGroup('dm:other', 'chat.productPickerGroupPeer', otherShop)
     }
 
     const cards = groups.flatMap((group) => group.cards).slice(0, input.limit)
@@ -581,44 +569,6 @@ export function createShopHandler(container: AppContainer) {
           skuId: input.skuId,
           idempotencyKey: input.idempotencyKey,
           destination: { kind: 'channel', id: message.channelId },
-          actor: c.get('actor'),
-        }),
-        201,
-      )
-    },
-  )
-
-  h.post(
-    '/dm/messages/:messageId/commerce-cards/:cardId/purchase',
-    zValidator('json', purchaseProductSchema),
-    async (c) => {
-      const user = c.get('user')
-      const dmService = container.resolve('dmService')
-      const entitlementPurchaseService = container.resolve('entitlementPurchaseService')
-      const message = await dmService.getMessageById(c.req.param('messageId'))
-      if (!message) return errorResponse(c, 'MESSAGE_NOT_FOUND', 404)
-      if (!(await dmService.isParticipant(message.dmChannelId, user.userId))) {
-        throw apiError('DM_ACCESS_REQUIRED', 403)
-      }
-      const metadata = (message.metadata ?? {}) as Record<string, unknown>
-      const cards = Array.isArray(metadata.commerceCards) ? metadata.commerceCards : []
-      const card = cards.find(
-        (item) =>
-          item &&
-          typeof item === 'object' &&
-          (item as Record<string, unknown>).id === c.req.param('cardId'),
-      ) as Record<string, unknown> | undefined
-      if (!card || typeof card.offerId !== 'string') {
-        return errorResponse(c, 'COMMERCE_CARD_NOT_FOUND', 404)
-      }
-      const input = c.req.valid('json')
-      return c.json(
-        await entitlementPurchaseService.purchaseOffer({
-          buyerId: user.userId,
-          offerId: card.offerId,
-          skuId: input.skuId,
-          idempotencyKey: input.idempotencyKey,
-          destination: { kind: 'dm', id: message.dmChannelId },
           actor: c.get('actor'),
         }),
         201,

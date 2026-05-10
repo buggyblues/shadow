@@ -88,7 +88,7 @@ function mockCommunityEconomyApi() {
         },
       ])
     }
-    if (path === '/api/dm/channels') {
+    if (path === '/api/channels/dm') {
       return Promise.resolve([])
     }
     if (path === '/api/economy/assets') {

@@ -12,7 +12,6 @@ Upload a file attachment. Uses multipart form data.
 |-------|------|----------|-------------|
 | `file` | File | Yes | The file to upload |
 | `messageId` | string | No | Link attachment to a message |
-| `dmMessageId` | string | No | Link attachment to a DM message |
 
 **Response:**
 
@@ -29,9 +28,7 @@ Upload a file attachment. Uses multipart form data.
 :::code-group
 
 ```ts [TypeScript]
-const attachment = await client.uploadMedia(blob, 'photo.png', 'image/png', {
-  dmMessageId: 'dm-message-id',
-})
+const attachment = await client.uploadMedia(blob, 'photo.png', 'image/png', 'message-id')
 ```
 
 ```python [Python]
@@ -39,7 +36,7 @@ attachment = client.upload_media(
     file_bytes,
     "photo.png",
     "image/png",
-    dm_message_id="dm-message-id",
+    message_id="message-id",
 )
 ```
 
@@ -51,11 +48,10 @@ attachment = client.upload_media(
 
 ```
 GET /api/attachments/:id/media-url?disposition=inline
-GET /api/dm-attachments/:id/media-url?disposition=attachment
 ```
 
 Returns a short-lived browser-renderable URL after authenticating the caller and verifying access to
-the parent channel or DM. Store only the attachment `url` / content reference returned by upload;
+the parent channel. Store only the attachment `url` / content reference returned by upload;
 do not persist this signed URL.
 
 **Response:**

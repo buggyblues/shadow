@@ -78,7 +78,6 @@ export interface Message {
   id: string
   content: string
   channelId?: string
-  dmChannelId?: string
   authorId: string
   threadId?: string | null
   replyToId: string | null
@@ -174,8 +173,6 @@ export interface MessageBubbleProps {
   message: Message
   currentUserId: string
   serverId?: string
-  /** 'channel' (default) enables server-member features; 'dm' disables them */
-  variant?: 'channel' | 'dm'
   onReply?: (messageId: string) => void
   onReact?: (messageId: string, emoji: string) => void
   onMessageUpdate?: (msg: Message) => void
@@ -311,17 +308,13 @@ function isSignedMediaCacheFresh(entry: SignedMediaUrl): boolean {
 
 async function resolveAttachmentMediaUrl(
   attachmentId: string,
-  kind: 'channel' | 'dm',
   disposition: 'inline' | 'attachment',
 ): Promise<SignedMediaUrl> {
-  const cacheKey = `${kind}:${attachmentId}:${disposition}`
+  const cacheKey = `channel:${attachmentId}:${disposition}`
   const cached = signedMediaCache.get(cacheKey)
   if (cached && isSignedMediaCacheFresh(cached)) return cached
 
-  const path =
-    kind === 'dm'
-      ? `/api/dm-attachments/${attachmentId}/media-url?disposition=${disposition}`
-      : `/api/attachments/${attachmentId}/media-url?disposition=${disposition}`
+  const path = `/api/attachments/${attachmentId}/media-url?disposition=${disposition}`
   const resolved = await fetchApi<SignedMediaUrl>(path)
   signedMediaCache.set(cacheKey, resolved)
   return resolved
@@ -459,12 +452,10 @@ function WalletRechargeCard({ data }: { data: WalletRechargeMetadata }) {
 function CommerceProductCardView({
   card,
   messageId,
-  variant,
   onPreviewFile,
 }: {
   card: CommerceProductCard
   messageId: string
-  variant: 'channel' | 'dm'
   onPreviewFile?: (attachment: Attachment) => void
 }) {
   const { t } = useTranslation()
@@ -510,9 +501,7 @@ function CommerceProductCardView({
     setError(null)
     try {
       const result = await fetchApi<NonNullable<typeof purchaseResult>>(
-        variant === 'dm'
-          ? `/api/dm/messages/${messageId}/commerce-cards/${card.id}/purchase`
-          : `/api/messages/${messageId}/commerce-cards/${card.id}/purchase`,
+        `/api/messages/${messageId}/commerce-cards/${card.id}/purchase`,
         {
           method: 'POST',
           body: JSON.stringify({
@@ -1077,13 +1066,11 @@ function CodeBlockWithCopy({ children }: { children: React.ReactNode }) {
 
 function AttachmentView({
   attachment,
-  kind,
   onPreviewFile,
   onSaveToWorkspace,
   onImageContextMenu,
 }: {
   attachment: Attachment
-  kind: 'channel' | 'dm'
   onPreviewFile?: (attachment: Attachment) => void
   onSaveToWorkspace?: (attachment: Attachment) => void
   onImageContextMenu: (event: React.MouseEvent, attachment: Attachment) => void
@@ -1095,7 +1082,7 @@ function AttachmentView({
   useEffect(() => {
     let cancelled = false
     const disposition = isImage ? 'inline' : 'attachment'
-    resolveAttachmentMediaUrl(attachment.id, kind, disposition)
+    resolveAttachmentMediaUrl(attachment.id, disposition)
       .then((resolved) => {
         if (!cancelled) {
           if (isImage) setInlineUrl(resolved.url)
@@ -1111,13 +1098,13 @@ function AttachmentView({
     return () => {
       cancelled = true
     }
-  }, [attachment.id, kind, isImage])
+  }, [attachment.id, isImage])
 
   const resolveDownload = useCallback(async () => {
-    const resolved = await resolveAttachmentMediaUrl(attachment.id, kind, 'attachment')
+    const resolved = await resolveAttachmentMediaUrl(attachment.id, 'attachment')
     setDownloadUrl(resolved.url)
     return resolved.url
-  }, [attachment.id, kind])
+  }, [attachment.id])
 
   if (isImage) {
     const href = downloadUrl ?? inlineUrl ?? '#'
@@ -1166,7 +1153,6 @@ function MessageBubbleInner({
   message,
   currentUserId,
   serverId,
-  variant = 'channel',
   onReply,
   onReact,
   onMessageUpdate,
@@ -1244,7 +1230,6 @@ function MessageBubbleInner({
   }, [showMoreMenu, showEmojiPicker, showFullPicker])
 
   const isOwn = message.authorId === currentUserId
-  const isDmOwn = variant === 'dm' && isOwn
   const getFloatingControlsStyle = useCallback(
     (offsetTop: number, estimatedWidth: number): React.CSSProperties | null => {
       if (typeof window === 'undefined') return null
@@ -1253,14 +1238,14 @@ function MessageBubbleInner({
 
       const maxTop = Math.max(8, window.innerHeight - 56)
       const maxLeft = Math.max(8, window.innerWidth - estimatedWidth - 8)
-      const desiredLeft = isDmOwn ? rect.left + 16 : rect.right - estimatedWidth - 16
+      const desiredLeft = rect.right - estimatedWidth - 16
 
       return {
         top: Math.min(Math.max(8, rect.top - offsetTop), maxTop),
         left: Math.min(Math.max(8, desiredLeft), maxLeft),
       }
     },
-    [isDmOwn],
+    [],
   )
   const queryClient = useQueryClient()
   const author = message.author
@@ -1372,24 +1357,19 @@ function MessageBubbleInner({
     setAvatarHover(false)
   }, [])
 
-  // Look up member info from cache for role/buddy metadata (channel mode only)
-  const membersList =
-    variant === 'channel' && serverId
-      ? (queryClient.getQueryData<MemberEntry[]>(['members', serverId]) ?? [])
-      : []
+  // Look up server member info from cache for role/buddy metadata.
+  const membersList = serverId
+    ? (queryClient.getQueryData<MemberEntry[]>(['members', serverId]) ?? [])
+    : []
   const authorMember = membersList.find((m: MemberEntry) => m.userId === author?.id)
-  const buddyAgentsList =
-    variant === 'channel' && serverId
-      ? (queryClient.getQueryData<BuddyAgentEntry[]>(['members-buddy-agents', serverId]) ?? [])
-      : []
+  const buddyAgentsList = serverId
+    ? (queryClient.getQueryData<BuddyAgentEntry[]>(['members-buddy-agents', serverId]) ?? [])
+    : []
   const buddyAgent = author?.isBot
     ? buddyAgentsList.find((a: BuddyAgentEntry) => a.botUser?.id === author.id)
     : undefined
   const currentMember = membersList.find((m: MemberEntry) => m.userId === currentUserId)
-  const canKick =
-    variant === 'channel' &&
-    !!serverId &&
-    (currentMember?.role === 'owner' || currentMember?.role === 'admin')
+  const canKick = !!serverId && (currentMember?.role === 'owner' || currentMember?.role === 'admin')
   // Allow deletion for own messages OR messages from a bot owned by the current user
   const canDelete = isOwn || (author?.isBot && buddyAgent?.ownerId === currentUserId)
 
@@ -1618,7 +1598,7 @@ function MessageBubbleInner({
     <div
       ref={messageRef}
       id={`msg-${message.id}`}
-      className={`group relative flex gap-4 px-4 ${isGrouped ? 'py-0.5 pl-[72px]' : 'py-2'} mx-1 message-row hover:bg-bg-tertiary/20 ${isDmOwn ? 'flex-row-reverse' : ''} ${highlight ? 'bg-primary/10 animate-pulse' : 'mt-[2px]'} ${isSelected ? 'bg-primary/10' : ''} ${selectionMode ? 'cursor-pointer' : ''}`}
+      className={`group relative flex gap-4 px-4 ${isGrouped ? 'py-0.5 pl-[72px]' : 'py-2'} mx-1 message-row hover:bg-bg-tertiary/20 ${highlight ? 'bg-primary/10 animate-pulse' : 'mt-[2px]'} ${isSelected ? 'bg-primary/10' : ''} ${selectionMode ? 'cursor-pointer' : ''}`}
       onMouseEnter={activateHover}
       onMouseLeave={deactivateHover}
       onClick={selectionMode ? () => onToggleSelect?.(message.id) : undefined}
@@ -1670,48 +1650,33 @@ function MessageBubbleInner({
       )}
 
       {/* Content */}
-      <div className={`flex-1 min-w-0 ${isDmOwn ? 'text-right' : ''}`}>
+      <div className="flex-1 min-w-0">
         {/* Reply reference */}
         {replyToMessage && (
-          <div className={`mb-1 flex w-full ${isDmOwn ? 'justify-end' : 'justify-start'}`}>
+          <div className="mb-1 flex w-full justify-start">
             <button
               type="button"
               onClick={() => {
                 const el = document.getElementById(`msg-${replyToMessage.id}`)
                 el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
               }}
-              className={`grid max-w-[min(100%,42rem)] items-center gap-x-1.5 py-0.5 text-xs text-text-muted transition hover:text-text-secondary ${
-                isDmOwn
-                  ? 'grid-cols-[minmax(0,1fr)_auto] border-r-2 border-primary/70 pr-2 text-right'
-                  : 'grid-cols-[auto_minmax(0,1fr)] border-l-2 border-primary/70 pl-2 text-left'
-              }`}
+              className="grid max-w-[min(100%,42rem)] grid-cols-[auto_minmax(0,1fr)] items-center gap-x-1.5 border-l-2 border-primary/70 py-0.5 pl-2 text-left text-xs text-text-muted transition hover:text-text-secondary"
             >
-              {isDmOwn ? (
-                <>
-                  <span className="min-w-0 truncate opacity-70">{replyToMessage.content}</span>
-                  <Reply size={12} className="shrink-0 text-primary/75" />
-                </>
-              ) : (
-                <>
-                  <Reply size={12} className="shrink-0 text-primary/75" />
-                  <span className="min-w-0 truncate">
-                    <span className="font-semibold text-text-secondary/90">
-                      {replyToMessage.author?.displayName ??
-                        replyToMessage.author?.username ??
-                        t('common.unknownUser')}
-                    </span>
-                    <span className="opacity-70"> {replyToMessage.content}</span>
-                  </span>
-                </>
-              )}
+              <Reply size={12} className="shrink-0 text-primary/75" />
+              <span className="min-w-0 truncate">
+                <span className="font-semibold text-text-secondary/90">
+                  {replyToMessage.author?.displayName ??
+                    replyToMessage.author?.username ??
+                    t('common.unknownUser')}
+                </span>
+                <span className="opacity-70"> {replyToMessage.content}</span>
+              </span>
             </button>
           </div>
         )}
         {/* Author line — hidden in grouped mode */}
         {!isGrouped && (
-          <div
-            className={`flex items-baseline gap-2 leading-none mb-1 ${isDmOwn ? 'flex-row-reverse' : ''}`}
-          >
+          <div className="flex items-baseline gap-2 leading-none mb-1">
             <span
               className={`font-bold text-[15px] hover:underline cursor-pointer ${author?.isBot ? 'text-primary' : 'text-text-primary'}`}
             >
@@ -1795,7 +1760,6 @@ function MessageBubbleInner({
                 key={card.id}
                 card={card}
                 messageId={message.id}
-                variant={variant}
                 onPreviewFile={onPreviewFile}
               />
             ))}
@@ -1817,7 +1781,6 @@ function MessageBubbleInner({
               <AttachmentView
                 key={att.id}
                 attachment={att}
-                kind={message.dmChannelId ? 'dm' : 'channel'}
                 onPreviewFile={onPreviewFile}
                 onSaveToWorkspace={onSaveToWorkspace}
                 onImageContextMenu={(event, attachment) => {
@@ -1854,7 +1817,7 @@ function MessageBubbleInner({
 
         {/* Reactions */}
         {message.reactions && message.reactions.length > 0 && (
-          <div className={`flex flex-wrap gap-1 mt-1.5 ${isDmOwn ? 'justify-end' : ''}`}>
+          <div className="flex flex-wrap gap-1 mt-1.5">
             {message.reactions.map((r) => (
               <Button
                 variant="ghost"
@@ -1883,7 +1846,7 @@ function MessageBubbleInner({
             <button
               type="button"
               onClick={() => {
-                const channelId = message.channelId ?? message.dmChannelId
+                const channelId = message.channelId
                 if (!channelId) return
                 queryClient.setQueryData<InfiniteData<MessagesPage>>(
                   ['messages', channelId],
@@ -2012,9 +1975,7 @@ function MessageBubbleInner({
                 </Button>
                 {/* More dropdown menu */}
                 {showMoreMenu && (
-                  <div
-                    className={`absolute top-[calc(100%+4px)] ${isDmOwn ? 'left-0 origin-top-left' : 'right-0 origin-top-right'} bg-white/95 dark:bg-[#1A1D24]/95 backdrop-blur-2xl rounded-[16px] border border-black/5 dark:border-white/10 shadow-[0_12px_48px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_48px_rgba(0,0,0,0.5)] py-2 min-w-[180px] z-50 flex flex-col gap-0.5 px-1.5 animate-in fade-in zoom-in-95 duration-100`}
-                  >
+                  <div className="absolute top-[calc(100%+4px)] right-0 origin-top-right bg-white/95 dark:bg-[#1A1D24]/95 backdrop-blur-2xl rounded-[16px] border border-black/5 dark:border-white/10 shadow-[0_12px_48px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_48px_rgba(0,0,0,0.5)] py-2 min-w-[180px] z-50 flex flex-col gap-0.5 px-1.5 animate-in fade-in zoom-in-95 duration-100">
                     {isOwn && (
                       <Button
                         variant="ghost"
@@ -2170,9 +2131,7 @@ function MessageBubbleInner({
           (() => {
             const rect = messageRef.current.getBoundingClientRect()
             const top = Math.max(8, rect.top - 440)
-            const fullPickerPosStyle = isDmOwn
-              ? { top, left: rect.left + 16 }
-              : { top, right: window.innerWidth - rect.right + 16 }
+            const fullPickerPosStyle = { top, right: window.innerWidth - rect.right + 16 }
             return (
               <div
                 className="fixed z-[70]"
@@ -2710,7 +2669,6 @@ export const MessageBubble = React.memo(MessageBubbleInner, (prev, next) => {
   if (prev.message.updatedAt !== next.message.updatedAt) return false
   if (prev.currentUserId !== next.currentUserId) return false
   if (prev.serverId !== next.serverId) return false
-  if (prev.variant !== next.variant) return false
   if (prev.highlight !== next.highlight) return false
   if (prev.isGrouped !== next.isGrouped) return false
   if (prev.selectionMode !== next.selectionMode) return false

@@ -1,12 +1,15 @@
 # Direct Messages
 
-## Create DM channel
+Direct conversations are private channels with `kind: "dm"`. They use the same message,
+attachment, reaction, and WebSocket APIs as server channels.
+
+## Create Direct Channel
 
 ```
-POST /api/dm/channels
+POST /api/channels/dm
 ```
 
-Creates or retrieves an existing DM channel with another user.
+Creates or retrieves an existing direct channel with another user.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -15,93 +18,44 @@ Creates or retrieves an existing DM channel with another user.
 :::code-group
 
 ```ts [TypeScript]
-const dm = await client.createDmChannel('other-user-id')
+const channel = await client.createDirectChannel('other-user-id')
 ```
 
 ```python [Python]
-dm = client.create_dm_channel("other-user-id")
+channel = client.create_direct_channel("other-user-id")
 ```
 
 :::
 
----
-
-## List DM channels
+## List Direct Channels
 
 ```
-GET /api/dm/channels
+GET /api/channels/dm
 ```
 
 :::code-group
 
 ```ts [TypeScript]
-const channels = await client.listDmChannels()
+const channels = await client.listDirectChannels()
 ```
 
 ```python [Python]
-channels = client.list_dm_channels()
+channels = client.list_direct_channels()
 ```
 
 :::
 
----
-
-## Get DM messages
+## Read Messages
 
 ```
-GET /api/dm/channels/:id/messages
+GET /api/channels/:id/messages
 ```
 
-| Param | Type | Default | Description |
-|-------|------|---------|-------------|
-| `limit` | number | 50 | Max messages |
-| `cursor` | string | — | Pagination cursor |
-
-:::code-group
-
-```ts [TypeScript]
-const messages = await client.getDmMessages('dm-channel-id', 50)
-```
-
-```python [Python]
-messages = client.get_dm_messages("dm-channel-id", limit=50)
-```
-
-:::
-
----
-
-## Send DM message
+## Send Message
 
 ```
-POST /api/dm/channels/:id/messages
+POST /api/channels/:id/messages
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `content` | string | Message content |
-| `replyToId` | string | Optional message ID to reply to |
-| `metadata` | object | Optional metadata, for example agent chain state |
-| `attachments` | array | Optional pre-uploaded attachment descriptors |
-
-:::code-group
-
-```ts [TypeScript]
-const msg = await client.sendDmMessage('dm-channel-id', 'Hey!', {
-  replyToId: 'message-id',
-  metadata: { agentChain: { depth: 1 } },
-})
-```
-
-```python [Python]
-msg = client.send_dm_message(
-    "dm-channel-id",
-    "Hey!",
-    reply_to_id="message-id",
-    metadata={"agentChain": {"depth": 1}},
-)
-```
-
-:::
-
-DM channels can also be used as OpenClaw Shadow targets with `shadowob:dm:<dm-channel-id>`.
+Direct channel ids can be used anywhere a normal Shadow channel id is accepted, including
+OpenClaw targets such as `shadowob:channel:<channel-id>`.

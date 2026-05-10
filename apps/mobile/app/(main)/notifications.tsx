@@ -213,7 +213,7 @@ export default function NotificationsScreen() {
       if (!n.isRead) markRead.mutate(n.id)
 
       if (n.type === 'dm' && n.referenceId) {
-        showToast(t('friends.dmUnavailable', '私信页面正在升级中，请稍后再试'), 'info')
+        router.push(`/(main)/dm/${n.referenceId}` as never)
         return
       }
 
@@ -222,9 +222,13 @@ export default function NotificationsScreen() {
           const message = await fetchApi<{ id: string; channelId: string }>(
             `/api/messages/${n.referenceId}`,
           )
-          const channel = await fetchApi<{ id: string; serverId: string }>(
+          const channel = await fetchApi<{ id: string; serverId: string | null }>(
             `/api/channels/${message.channelId}`,
           )
+          if (!channel.serverId) {
+            router.push(`/(main)/dm/${channel.id}` as never)
+            return
+          }
           const server = await fetchApi<{ id: string; slug: string }>(
             `/api/servers/${channel.serverId}`,
           )
@@ -234,9 +238,13 @@ export default function NotificationsScreen() {
         } catch {}
       } else if (n.referenceType === 'channel_invite' && n.referenceId) {
         try {
-          const channel = await fetchApi<{ id: string; serverId: string }>(
+          const channel = await fetchApi<{ id: string; serverId: string | null }>(
             `/api/channels/${n.referenceId}`,
           )
+          if (!channel.serverId) {
+            router.push(`/(main)/dm/${channel.id}` as never)
+            return
+          }
           const server = await fetchApi<{ id: string; slug: string }>(
             `/api/servers/${channel.serverId}`,
           )

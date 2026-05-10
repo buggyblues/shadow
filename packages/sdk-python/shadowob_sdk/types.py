@@ -250,14 +250,6 @@ class ShadowMember:
 
 
 @dataclass
-class ShadowDmChannel:
-    id: str
-    user1_id: str
-    user2_id: str
-    created_at: str
-
-
-@dataclass
 class ShadowNotification:
     id: str
     user_id: str
@@ -273,7 +265,6 @@ class ShadowNotification:
     sender_avatar_url: str | None = None
     scope_server_id: str | None = None
     scope_channel_id: str | None = None
-    scope_dm_channel_id: str | None = None
     aggregation_key: str | None = None
     aggregated_count: int | None = None
     last_aggregated_at: str | None = None

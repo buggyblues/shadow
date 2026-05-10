@@ -68,7 +68,6 @@ socket.updatePresence('online')
 | `reaction:add` | `{ messageId, userId, emoji }` | 添加反应 |
 | `reaction:remove` | `{ messageId, userId, emoji }` | 移除反应 |
 | `notification:new` | `ShadowNotification` | 新通知 |
-| `dm:message:new` | `DmMessage` | 新私信 |
 | `channel:created` | `{ id, name, type, serverId }` | 频道已创建 |
 
 ---

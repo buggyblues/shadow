@@ -29,18 +29,31 @@ export function createChannelHandler(container: AppContainer) {
     return server.id
   }
 
+  function requireServerChannel(channel: { kind: string; serverId: string | null }) {
+    if (channel.kind !== 'server' || !channel.serverId) {
+      throw Object.assign(new Error('This operation only supports server channels'), {
+        status: 400,
+      })
+    }
+    return channel.serverId
+  }
+
   async function getAccessStatus(channelId: string, userId: string) {
     const channelService = container.resolve('channelService')
-    const serverDao = container.resolve('serverDao')
-    const channelMemberDao = container.resolve('channelMemberDao')
     const channelJoinRequestDao = container.resolve('channelJoinRequestDao')
-    const channel = await channelService.getById(channelId)
-    const serverMember = await serverDao.getMember(channel.serverId, userId)
-    const channelMember = serverMember ? await channelMemberDao.get(channelId, userId) : null
-    const canManage = serverMember?.role === 'owner' || serverMember?.role === 'admin'
-    const canAccess = Boolean(serverMember && (!channel.isPrivate || channelMember || canManage))
+    const channelAccessService = container.resolve('channelAccessService')
+    const access = await channelAccessService.getAccess(channelId, userId)
+    if (!access.channel)
+      throw Object.assign(new Error(access.error ?? 'Channel not found'), {
+        status: access.status ?? 404,
+      })
+    const channel = access.channel
+    const serverMember = access.serverMember ?? null
+    const channelMember = access.channelMember ?? null
+    const canManage = access.canManage
+    const canAccess = access.canAccess
     const joinRequest =
-      serverMember && channel.isPrivate && !channelMember && !canManage
+      channel.kind === 'server' && serverMember && channel.isPrivate && !channelMember && !canManage
         ? await channelJoinRequestDao.findByChannelAndUser(channelId, userId)
         : null
 
@@ -166,6 +179,29 @@ export function createChannelHandler(container: AppContainer) {
     return c.json(channels)
   })
 
+  // POST /api/channels/dm
+  channelHandler.post(
+    '/channels/dm',
+    zValidator('json', z.object({ userId: z.string().uuid() })),
+    async (c) => {
+      const userDao = container.resolve('userDao')
+      const channelService = container.resolve('channelService')
+      const peerUserId = c.req.valid('json').userId
+      const user = c.get('user')
+      const peer = await userDao.findById(peerUserId)
+      if (!peer) return c.json({ ok: false, error: 'User not found' }, 404)
+      const channel = await channelService.getOrCreateDirectChannel(user.userId, peerUserId)
+      return c.json(channel, 201)
+    },
+  )
+
+  // GET /api/channels/dm
+  channelHandler.get('/channels/dm', async (c) => {
+    const channelService = container.resolve('channelService')
+    const user = c.get('user')
+    return c.json(await channelService.listDirectChannels(user.userId))
+  })
+
   // GET /api/channels/:id
   channelHandler.get('/channels/:id', async (c) => {
     const channelService = container.resolve('channelService')
@@ -174,7 +210,10 @@ export function createChannelHandler(container: AppContainer) {
     if (!access.canAccess) {
       return c.json({ ok: false, error: 'Not a member of this channel' }, 403)
     }
-    const channel = await channelService.getById(id)
+    const channel =
+      access.channel.kind === 'dm'
+        ? await channelService.getDirectChannelById(id, c.get('user').userId)
+        : await channelService.getById(id)
     return c.json(channel)
   })
 
@@ -218,6 +257,7 @@ export function createChannelHandler(container: AppContainer) {
       return c.json({ ok: true, status: 'approved' }, access.isChannelMember ? 200 : 201)
     }
     if (access.canAccess) return c.json({ ok: true, status: 'approved' })
+    const serverId = requireServerChannel(access.channel)
 
     const existing =
       access.joinRequestStatus === 'pending'
@@ -228,7 +268,7 @@ export function createChannelHandler(container: AppContainer) {
       await notifyChannelJoinRequestReviewers({
         channelId: id,
         channelName: access.channel.name,
-        serverId: access.channel.serverId,
+        serverId,
         requestId: request.id,
         requesterId: userId,
       })
@@ -252,8 +292,9 @@ export function createChannelHandler(container: AppContainer) {
       if (!request) return c.json({ ok: false, error: 'Join request not found' }, 404)
 
       const channel = await channelService.getById(request.channelId)
+      const serverId = requireServerChannel(channel)
       const [requesterServerMember, requesterChannelMember] = await Promise.all([
-        serverDao.getMember(channel.serverId, userId),
+        serverDao.getMember(serverId, userId),
         channelMemberDao.get(channel.id, userId),
       ])
       const canManage =
@@ -272,7 +313,7 @@ export function createChannelHandler(container: AppContainer) {
       await notifyChannelJoinRequestDecision({
         channelId: channel.id,
         channelName: channel.name,
-        serverId: channel.serverId,
+        serverId,
         userId: request.userId,
         reviewerId: userId,
         approved: status === 'approved',
@@ -293,7 +334,11 @@ export function createChannelHandler(container: AppContainer) {
 
     try {
       const channel = await channelService.getById(id)
-      const requesterServerMember = await serverDao.getMember(channel.serverId, requesterId)
+      if (channel.kind === 'dm') {
+        return c.json({ commands: [] })
+      }
+      const serverId = requireServerChannel(channel)
+      const requesterServerMember = await serverDao.getMember(serverId, requesterId)
       if (!requesterServerMember) {
         return c.json({ ok: false, error: 'Not a member of this server' }, 403)
       }
@@ -307,7 +352,7 @@ export function createChannelHandler(container: AppContainer) {
         }
       }
 
-      const members = await channelService.getChannelMembers(id, channel.serverId)
+      const members = await channelService.getChannelMembers(id, serverId)
       const botMembers = members.filter((member) => member.user?.isBot)
       const botUserIds = botMembers.map((member) => member.userId)
       const agents = await agentDao.findByUserIds(botUserIds)
@@ -378,11 +423,12 @@ export function createChannelHandler(container: AppContainer) {
 
     // Make sure channel exists
     const channel = await channelService.getById(id)
+    const serverId = requireServerChannel(channel)
 
     // Both requester and target must be server members
     const [requesterServerMember, targetServerMember] = await Promise.all([
-      serverDao.getMember(channel.serverId, requesterId),
-      serverDao.getMember(channel.serverId, targetUserId),
+      serverDao.getMember(serverId, requesterId),
+      serverDao.getMember(serverId, targetUserId),
     ])
     if (!requesterServerMember) {
       return c.json({ ok: false, error: 'Not a member of this server' }, 403)
@@ -393,7 +439,7 @@ export function createChannelHandler(container: AppContainer) {
       const targetUser = await userDao.findById(targetUserId)
       if (targetUser?.isBot) {
         const serverService = container.resolve('serverService')
-        await serverService.addBotMember(channel.serverId, targetUserId)
+        await serverService.addBotMember(serverId, targetUserId)
       } else {
         return c.json({ ok: false, error: 'Target user is not a server member' }, 400)
       }
@@ -418,7 +464,7 @@ export function createChannelHandler(container: AppContainer) {
           await notifyChannelJoinRequestReviewers({
             channelId: id,
             channelName: channel.name,
-            serverId: channel.serverId,
+            serverId,
             requestId: request.id,
             requesterId,
           })
@@ -442,7 +488,7 @@ export function createChannelHandler(container: AppContainer) {
       const targetUser = await userDao.findById(targetUserId)
       if (targetUser) {
         const payload = {
-          serverId: channel.serverId,
+          serverId,
           channelId: id,
           userId: targetUserId,
           username: targetUser.username ?? 'unknown',
@@ -454,14 +500,14 @@ export function createChannelHandler(container: AppContainer) {
         if (targetUser.isBot) {
           io.to(`channel:${id}`).emit('channel:slash-commands-updated', {
             channelId: id,
-            serverId: channel.serverId,
+            serverId,
             botUserId: targetUserId,
           })
         }
         // Notify the user directly so they can join the channel room
         io.to(`user:${targetUserId}`).emit('channel:member-added', {
           channelId: id,
-          serverId: channel.serverId,
+          serverId,
         })
 
         // Send channel invite notification (skip for bots)
@@ -469,13 +515,13 @@ export function createChannelHandler(container: AppContainer) {
           try {
             const notificationTriggerService = container.resolve('notificationTriggerService')
             const inviter = c.get('user')
-            const server = await serverDao.findById(channel.serverId)
+            const server = await serverDao.findById(serverId)
             await notificationTriggerService.triggerChannelMemberAdded({
               userId: targetUserId,
               actorId: inviter.userId,
               channelId: id,
               channelName: channel.name,
-              serverId: channel.serverId,
+              serverId,
               serverName: server?.name,
             })
           } catch {
@@ -547,6 +593,7 @@ export function createChannelHandler(container: AppContainer) {
 
     // Verify channel exists
     const channel = await channelService.getById(channelId)
+    const serverId = requireServerChannel(channel)
 
     // Verify agent exists and user owns it OR user is server admin/owner
     const agent = await agentService.getById(agentId)
@@ -554,7 +601,7 @@ export function createChannelHandler(container: AppContainer) {
       return c.json({ ok: false, error: 'Agent not found' }, 404)
     }
     const serverService = container.resolve('serverService')
-    const serverMembers = await serverService.getMembers(channel.serverId)
+    const serverMembers = await serverService.getMembers(serverId)
     const requester = serverMembers.find((m) => m.userId === user.userId)
     const isAdminOrOwner = requester?.role === 'owner' || requester?.role === 'admin'
     if (agent.ownerId !== user.userId && !isAdminOrOwner) {
@@ -609,7 +656,7 @@ export function createChannelHandler(container: AppContainer) {
     // Upsert channel-level policy
     const policy = await agentPolicyService.upsertPolicies(agentId, [
       {
-        serverId: channel.serverId,
+        serverId,
         channelId,
         listen,
         reply,
@@ -623,7 +670,7 @@ export function createChannelHandler(container: AppContainer) {
       const io = container.resolve('io')
       io.to(`user:${agent.userId}`).emit('agent:policy-changed', {
         agentId,
-        serverId: channel.serverId,
+        serverId,
         channelId,
         mentionOnly,
         reply,
@@ -645,13 +692,14 @@ export function createChannelHandler(container: AppContainer) {
     const agentId = c.req.param('agentId')
 
     const channel = await channelService.getById(channelId)
+    const serverId = requireServerChannel(channel)
     const agent = await agentService.getById(agentId)
     if (!agent) {
       return c.json({ ok: false, error: 'Agent not found' }, 404)
     }
 
     // Try channel-level policy first, fall back to server default
-    const channelPolicy = await agentPolicyDao.findByChannel(agentId, channel.serverId, channelId)
+    const channelPolicy = await agentPolicyDao.findByChannel(agentId, serverId, channelId)
     if (channelPolicy) {
       return c.json({
         mentionOnly: channelPolicy.mentionOnly,
@@ -661,7 +709,7 @@ export function createChannelHandler(container: AppContainer) {
       })
     }
 
-    const serverDefault = await agentPolicyDao.findServerDefault(agentId, channel.serverId)
+    const serverDefault = await agentPolicyDao.findServerDefault(agentId, serverId)
     return c.json({
       mentionOnly: serverDefault?.mentionOnly ?? false,
       listen: serverDefault?.listen ?? true,

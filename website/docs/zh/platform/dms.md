@@ -1,12 +1,14 @@
 # 私信
 
+私信会话是 `kind: "dm"` 的私有频道。消息、附件、反应和 WebSocket 都复用普通频道 API。
+
 ## 创建私信频道
 
 ```
-POST /api/dm/channels
+POST /api/channels/dm
 ```
 
-创建或获取与另一个用户的现有私信频道。
+创建或获取与另一个用户的私信频道。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -15,93 +17,44 @@ POST /api/dm/channels
 :::code-group
 
 ```ts [TypeScript]
-const dm = await client.createDmChannel('other-user-id')
+const channel = await client.createDirectChannel('other-user-id')
 ```
 
 ```python [Python]
-dm = client.create_dm_channel("other-user-id")
+channel = client.create_direct_channel("other-user-id")
 ```
 
 :::
-
----
 
 ## 列出私信频道
 
 ```
-GET /api/dm/channels
+GET /api/channels/dm
 ```
 
 :::code-group
 
 ```ts [TypeScript]
-const channels = await client.listDmChannels()
+const channels = await client.listDirectChannels()
 ```
 
 ```python [Python]
-channels = client.list_dm_channels()
+channels = client.list_direct_channels()
 ```
 
 :::
 
----
-
-## 获取私信消息
+## 获取消息
 
 ```
-GET /api/dm/channels/:id/messages
+GET /api/channels/:id/messages
 ```
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `limit` | number | 50 | 最大消息数 |
-| `cursor` | string | — | 分页游标 |
-
-:::code-group
-
-```ts [TypeScript]
-const messages = await client.getDmMessages('dm-channel-id', 50)
-```
-
-```python [Python]
-messages = client.get_dm_messages("dm-channel-id", limit=50)
-```
-
-:::
-
----
-
-## 发送私信
+## 发送消息
 
 ```
-POST /api/dm/channels/:id/messages
+POST /api/channels/:id/messages
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `content` | string | 消息内容 |
-| `replyToId` | string | 可选，回复的消息 ID |
-| `metadata` | object | 可选元数据，例如 agent chain 状态 |
-| `attachments` | array | 可选，已上传的附件描述 |
-
-:::code-group
-
-```ts [TypeScript]
-const msg = await client.sendDmMessage('dm-channel-id', 'Hey!', {
-  replyToId: 'message-id',
-  metadata: { agentChain: { depth: 1 } },
-})
-```
-
-```python [Python]
-msg = client.send_dm_message(
-    "dm-channel-id",
-    "Hey!",
-    reply_to_id="message-id",
-    metadata={"agentChain": {"depth": 1}},
-)
-```
-
-:::
-
-DM 也可以作为 OpenClaw Shadow 目标使用：`shadowob:dm:<dm-channel-id>`。
+私信频道 id 可以用于任何普通 Shadow channel id 参数，包括 OpenClaw 目标
+`shadowob:channel:<channel-id>`。

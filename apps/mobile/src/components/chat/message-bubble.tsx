@@ -71,16 +71,12 @@ function isSignedMediaCacheFresh(entry: SignedMediaUrl): boolean {
 
 async function resolveAttachmentMediaUrl(
   attachmentId: string,
-  kind: 'channel' | 'dm',
   disposition: 'inline' | 'attachment',
 ): Promise<string> {
-  const cacheKey = `${kind}:${attachmentId}:${disposition}`
+  const cacheKey = `channel:${attachmentId}:${disposition}`
   const cached = signedMediaCache.get(cacheKey)
   if (cached && isSignedMediaCacheFresh(cached)) return cached.url
-  const path =
-    kind === 'dm'
-      ? `/api/dm-attachments/${attachmentId}/media-url?disposition=${disposition}`
-      : `/api/attachments/${attachmentId}/media-url?disposition=${disposition}`
+  const path = `/api/attachments/${attachmentId}/media-url?disposition=${disposition}`
   const resolved = await fetchApi<SignedMediaUrl>(path)
   signedMediaCache.set(cacheKey, resolved)
   return resolved.url
@@ -93,26 +89,18 @@ interface MessageBubbleProps {
   channelId: string
   allMessages?: Message[]
   isGrouped?: boolean
-  variant?: 'channel' | 'dm'
-  dmChannelId?: string
   selectionMode?: boolean
   isSelected?: boolean
   onToggleSelect?: (messageId: string) => void
   onEnterSelectionMode?: (messageId: string) => void
 }
 
-function SignedAttachmentImage({
-  attachment,
-  kind,
-}: {
-  attachment: Attachment
-  kind: 'channel' | 'dm'
-}) {
+function SignedAttachmentImage({ attachment }: { attachment: Attachment }) {
   const [uri, setUri] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    resolveAttachmentMediaUrl(attachment.id, kind, 'inline')
+    resolveAttachmentMediaUrl(attachment.id, 'inline')
       .then((signedUrl) => {
         if (!cancelled) setUri(getImageUrl(signedUrl) ?? signedUrl)
       })
@@ -122,7 +110,7 @@ function SignedAttachmentImage({
     return () => {
       cancelled = true
     }
-  }, [attachment.id, kind])
+  }, [attachment.id])
 
   return (
     <Image
@@ -152,8 +140,6 @@ function MessageBubbleInner({
   channelId: _channelId,
   allMessages = [],
   isGrouped = false,
-  variant = 'channel',
-  dmChannelId,
   selectionMode,
   isSelected,
   onToggleSelect,
@@ -176,9 +162,7 @@ function MessageBubbleInner({
     id: string
     url: string
     filename: string
-    kind: 'channel' | 'dm'
   } | null>(null)
-  const attachmentKind: 'channel' | 'dm' = variant === 'dm' ? 'dm' : 'channel'
   const buildLocalFileUri = useCallback((filename: string) => {
     const extMatch = filename.match(/\.[A-Za-z0-9]+$/)
     const ext = extMatch?.[0] ?? ''
@@ -203,17 +187,13 @@ function MessageBubbleInner({
   const resolveAttachmentUrl = useCallback(
     async (attachment: Pick<Attachment, 'id' | 'url'>, disposition: 'inline' | 'attachment') => {
       try {
-        const signedUrl = await resolveAttachmentMediaUrl(
-          attachment.id,
-          attachmentKind,
-          disposition,
-        )
+        const signedUrl = await resolveAttachmentMediaUrl(attachment.id, disposition)
         return getImageUrl(signedUrl) ?? signedUrl
       } catch {
         return null
       }
     },
-    [attachmentKind],
+    [],
   )
 
   // Attachment long-press actions
@@ -292,37 +272,24 @@ function MessageBubbleInner({
   }, [message.replyToId, allMessages])
 
   const deleteMutation = useMutation({
-    mutationFn: () =>
-      variant === 'dm' && dmChannelId
-        ? fetchApi(`/api/dm/channels/${dmChannelId}/messages/${message.id}`, { method: 'DELETE' })
-        : fetchApi(`/api/messages/${message.id}`, { method: 'DELETE' }),
+    mutationFn: () => fetchApi(`/api/messages/${message.id}`, { method: 'DELETE' }),
   })
 
   const editMutation = useMutation({
     mutationFn: (content: string) =>
-      variant === 'dm' && dmChannelId
-        ? fetchApi(`/api/dm/channels/${dmChannelId}/messages/${message.id}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ content }),
-          })
-        : fetchApi(`/api/messages/${message.id}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ content }),
-          }),
+      fetchApi(`/api/messages/${message.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ content }),
+      }),
     onSuccess: () => setIsEditing(false),
   })
 
   const reactionMutation = useMutation({
     mutationFn: (emoji: string) =>
-      variant === 'dm'
-        ? fetchApi(`/api/dm/messages/${message.id}/reactions`, {
-            method: 'POST',
-            body: JSON.stringify({ emoji }),
-          })
-        : fetchApi(`/api/messages/${message.id}/reactions`, {
-            method: 'POST',
-            body: JSON.stringify({ emoji }),
-          }),
+      fetchApi(`/api/messages/${message.id}/reactions`, {
+        method: 'POST',
+        body: JSON.stringify({ emoji }),
+      }),
   })
 
   const handleSaveEdit = () => {
@@ -663,11 +630,10 @@ function MessageBubbleInner({
                       id: att.id,
                       url: att.url,
                       filename: att.filename,
-                      kind: attachmentKind,
                     })
                   }
                 >
-                  <SignedAttachmentImage attachment={att} kind={attachmentKind} />
+                  <SignedAttachmentImage attachment={att} />
                 </Pressable>
               )
             }
@@ -699,7 +665,6 @@ function MessageBubbleInner({
                     id: att.id,
                     url: att.url,
                     filename: att.filename,
-                    kind: attachmentKind,
                   })
                 }
               >
@@ -724,7 +689,7 @@ function MessageBubbleInner({
           })}
 
           {message.metadata?.commerceCards?.map((card) => (
-            <CommerceCardView key={card.id} card={card} messageId={message.id} variant={variant} />
+            <CommerceCardView key={card.id} card={card} messageId={message.id} />
           ))}
 
           {/* Phase 2 — interactive block (buttons / select) */}
@@ -899,15 +864,7 @@ function MessageBubbleInner({
   )
 }
 
-function CommerceCardView({
-  card,
-  messageId,
-  variant,
-}: {
-  card: CommerceProductCard
-  messageId: string
-  variant: 'channel' | 'dm'
-}) {
+function CommerceCardView({ card, messageId }: { card: CommerceProductCard; messageId: string }) {
   const { t } = useTranslation()
   const colors = useColors()
   const [isBuying, setIsBuying] = useState(false)
@@ -918,10 +875,7 @@ function CommerceCardView({
   const buy = async () => {
     setIsBuying(true)
     try {
-      const path =
-        variant === 'dm'
-          ? `/api/dm/messages/${messageId}/commerce-cards/${card.id}/purchase`
-          : `/api/messages/${messageId}/commerce-cards/${card.id}/purchase`
+      const path = `/api/messages/${messageId}/commerce-cards/${card.id}/purchase`
       await fetchApi(path, {
         method: 'POST',
         body: JSON.stringify({

@@ -184,7 +184,13 @@ const WORK_STATUS_TIMEOUT_MS = {
   activity: 120_000,
 } as const
 
-export function ChatArea() {
+export function ChatArea({
+  onBack,
+  showMemberToggle = true,
+}: {
+  onBack?: () => void
+  showMemberToggle?: boolean
+} = {}) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { activeChannelId, activeServerId } = useChatStore()
@@ -1063,7 +1069,10 @@ export function ChatArea() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setMobileView('channels')}
+            onClick={() => {
+              if (onBack) onBack()
+              else setMobileView('channels')
+            }}
             className="md:hidden shrink-0 -ml-1 mr-1 h-8 w-8 rounded-full"
           >
             <ArrowLeft size={20} />
@@ -1128,15 +1137,17 @@ export function ChatArea() {
               </PopoverContent>
             </Popover>
             <NotificationBell />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => useUIStore.getState().toggleMobileMemberList()}
-              className="lg:hidden h-8 w-8 rounded-full"
-              title={t('member.toggleList')}
-            >
-              <Users size={20} />
-            </Button>
+            {showMemberToggle && activeServerId && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => useUIStore.getState().toggleMobileMemberList()}
+                className="lg:hidden h-8 w-8 rounded-full"
+                title={t('member.toggleList')}
+              >
+                <Users size={20} />
+              </Button>
+            )}
           </div>
         </div>
 

@@ -68,7 +68,6 @@ socket.updatePresence('online')
 | `reaction:add` | `{ messageId, userId, emoji }` | Reaction added |
 | `reaction:remove` | `{ messageId, userId, emoji }` | Reaction removed |
 | `notification:new` | `ShadowNotification` | New notification |
-| `dm:message:new` | `DmMessage` | New DM message |
 | `channel:created` | `{ id, name, type, serverId }` | Channel created |
 
 ---

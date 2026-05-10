@@ -78,6 +78,7 @@ export class MessageService {
       if (!this.deps.workspaceService) return null
       const channel = await this.deps.channelDao.findById(channelId)
       if (!channel) return null
+      if (channel.kind === 'dm' || !channel.serverId) return null
       const workspace = await this.deps.workspaceService.getOrCreateForServer(channel.serverId)
       const access =
         channel.isPrivate === true

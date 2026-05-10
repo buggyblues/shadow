@@ -285,7 +285,7 @@ async function sendRoundTripMessage(session, owner, marker) {
 }
 
 async function createDmChannel(session, owner, userId) {
-  return requestJson(session.origin, '/api/dm/channels', {
+  return requestJson(session.origin, '/api/channels/dm', {
     method: 'POST',
     token: owner.accessToken,
     body: { userId },
@@ -352,7 +352,7 @@ async function ensureSmokeSession(session, owner) {
 }
 
 async function sendDmMessage(session, owner, dmChannelId, body) {
-  return requestJson(session.origin, `/api/dm/channels/${dmChannelId}/messages`, {
+  return requestJson(session.origin, `/api/channels/${dmChannelId}/messages`, {
     method: 'POST',
     token: owner.accessToken,
     body,
@@ -402,7 +402,7 @@ async function createSmokeAgent(session, owner, label) {
 }
 
 async function fetchRecentDmMessages(session, owner, dmChannelId) {
-  return requestJson(session.origin, `/api/dm/channels/${dmChannelId}/messages?limit=50`, {
+  return requestJson(session.origin, `/api/channels/${dmChannelId}/messages?limit=50`, {
     token: owner.accessToken,
   })
 }
@@ -451,7 +451,7 @@ async function waitForDmMessage(
     if (found) return found
     await sleep(2_000)
   }
-  throw new Error(`Timed out waiting for DM message in ${dmChannelId}`)
+  throw new Error(`Timed out waiting for direct message in ${dmChannelId}`)
 }
 
 async function waitForChannelMessage(session, token, predicate, startedAt, timeoutMs = 90_000) {
@@ -849,17 +849,17 @@ async function runMediaOutboundSmoke(session, owner, agent, marker, container) {
   }
 
   const dm = await createDmChannel(session, owner, agent.botUser.id)
-  const dmExpected = `${marker}_OUTBOUND_DM_ATTACHMENT`
+  const dmExpected = `${marker}_OUTBOUND_DIRECT_ATTACHMENT`
   const dmStartedAt = Date.now()
   const dmResult = runShadowAction(container, 'upload-file', {
-    target: `shadowob:dm:${dm.id}`,
+    target: `shadowob:channel:${dm.id}`,
     message: dmExpected,
-    filename: `shadow-dm-outbound-${marker.toLowerCase()}.txt`,
+    filename: `shadow-direct-outbound-${marker.toLowerCase()}.txt`,
     contentType: 'text/plain',
-    buffer: Buffer.from(`outbound DM attachment ${marker}`, 'utf8').toString('base64'),
+    buffer: Buffer.from(`outbound direct attachment ${marker}`, 'utf8').toString('base64'),
   })
   if (!dmResult?.ok) {
-    throw new Error(`DM upload-file action failed: ${JSON.stringify(dmResult)}`)
+    throw new Error(`Direct channel upload-file action failed: ${JSON.stringify(dmResult)}`)
   }
   const dmMessage = await waitForDmMessage(
     session,

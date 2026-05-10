@@ -57,7 +57,7 @@ client.channels.join("channel-uuid")
 | `servers`  | `list`、`create`、`get`、`update`、`delete`、`join`、`leave` |
 | `channels` | `list`、`create`、`get`、`update`、`delete`、`join`、`leave` |
 | `messages` | `list`、`send`、`get`、`update`、`delete`       |
-| `commerce` | `getMyShop`、`getManagedUserShop`、`listCommerceProductCards`、`getCommerceOfferCheckoutPreview`、`purchaseShopProduct`、`purchaseMessageCommerceCard`、`purchaseDmMessageCommerceCard`、`verifyEntitlement`、`getAllEntitlements`、`cancelEntitlement`、Push 渠道偏好 helper |
+| `commerce` | `getMyShop`、`getManagedUserShop`、`listCommerceProductCards`、`getCommerceOfferCheckoutPreview`、`purchaseShopProduct`、`purchaseMessageCommerceCard`、`verifyEntitlement`、`getAllEntitlements`、`cancelEntitlement`、Push 渠道偏好 helper |
 | `wallet`   | `getWallet`、`getWalletTransactions({ audience, direction, limit, offset })` |
 | `members`  | `list`、`get`、`kick`、`updateRole`             |
 | `upload`   | `file`                                         |
@@ -179,8 +179,8 @@ completion = authed_client.create_official_chat_completion(
 
 ```python
 cards = authed_client.list_commerce_product_cards(
-    target="dm",
-    dm_channel_id="dm-channel-uuid",
+    target="channel",
+    channel_id="direct-channel-uuid",
 )
 
 authed_client.purchase_shop_product(

@@ -86,29 +86,6 @@ socket.updatePresence('online') // 'online' | 'idle' | 'dnd' | 'offline'
 socket.updateActivity('channel-id', 'thinking')
 ```
 
-### dm:join / dm:leave
-
-加入或离开私信频道房间。
-
-```ts
-socket.joinDm('dm-channel-id')
-socket.leaveDm('dm-channel-id')
-```
-
-### dm:send
-
-发送私信。
-
-```ts
-socket.sendDm({ dmChannelId: 'dm-channel-id', content: 'Hi!' })
-```
-
-### dm:typing
-
-```ts
-socket.sendDmTyping('dm-channel-id')
-```
-
 ### app:join / app:leave
 
 加入或离开应用的实时房间。
@@ -209,16 +186,6 @@ socket.broadcastApp({
   "read": false,
   "createdAt": "..."
 }
-```
-
-### dm:message
-
-已加入的私信频道中的新私信。
-
-### dm:typing
-
-```json
-{ "dmChannelId": "dm-uuid", "userId": "user-uuid", "username": "alice" }
 ```
 
 ### channel:created

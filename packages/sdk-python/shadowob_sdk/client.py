@@ -690,40 +690,13 @@ class ShadowClient:
             f"/api/threads/{thread_id}/messages", json=payload
         )
 
-    # ── DMs ──────────────────────────────────────────────────────────────
+    # ── Direct channels ─────────────────────────────────────────────────
 
-    def create_dm_channel(self, user_id: str) -> dict[str, Any]:
-        return self._post("/api/dm/channels", json={"userId": user_id})
+    def create_direct_channel(self, user_id: str) -> dict[str, Any]:
+        return self._post("/api/channels/dm", json={"userId": user_id})
 
-    def list_dm_channels(self) -> list[dict[str, Any]]:
-        return self._get("/api/dm/channels")
-
-    def get_dm_messages(
-        self, channel_id: str, limit: int = 50, cursor: str | None = None
-    ) -> list[dict[str, Any]]:
-        params: dict[str, Any] = {"limit": limit}
-        if cursor:
-            params["cursor"] = cursor
-        return self._get(f"/api/dm/channels/{channel_id}/messages", params=params)
-
-    def send_dm_message(
-        self,
-        channel_id: str,
-        content: str,
-        reply_to_id: str | None = None,
-        metadata: dict[str, Any] | None = None,
-        attachments: list[dict[str, Any]] | None = None,
-    ) -> dict[str, Any]:
-        payload: dict[str, Any] = {"content": content}
-        if reply_to_id:
-            payload["replyToId"] = reply_to_id
-        if metadata is not None:
-            payload["metadata"] = metadata
-        if attachments is not None:
-            payload["attachments"] = attachments
-        return self._post(
-            f"/api/dm/channels/{channel_id}/messages", json=payload
-        )
+    def list_direct_channels(self) -> list[dict[str, Any]]:
+        return self._get("/api/channels/dm")
 
     # ── Notifications ────────────────────────────────────────────────────
 
@@ -748,15 +721,12 @@ class ShadowClient:
         *,
         server_id: str | None = None,
         channel_id: str | None = None,
-        dm_channel_id: str | None = None,
     ) -> dict[str, Any]:
         data: dict[str, Any] = {}
         if server_id:
             data["serverId"] = server_id
         if channel_id:
             data["channelId"] = channel_id
-        if dm_channel_id:
-            data["dmChannelId"] = dm_channel_id
         return self._post("/api/notifications/read-scope", json=data)
 
     def get_scoped_unread(self) -> dict[str, Any]:
@@ -859,14 +829,11 @@ class ShadowClient:
         filename: str,
         content_type: str,
         message_id: str | None = None,
-        dm_message_id: str | None = None,
     ) -> dict[str, Any]:
         files = {"file": (filename, file_bytes, content_type)}
         data = {}
         if message_id:
             data["messageId"] = message_id
-        if dm_message_id:
-            data["dmMessageId"] = dm_message_id
         resp = self._http.post(
             "/api/media/upload",
             files=files,
@@ -881,13 +848,8 @@ class ShadowClient:
         attachment_id: str,
         *,
         disposition: str = "inline",
-        dm: bool = False,
     ) -> dict[str, Any]:
-        path = (
-            f"/api/dm-attachments/{attachment_id}/media-url"
-            if dm
-            else f"/api/attachments/{attachment_id}/media-url"
-        )
+        path = f"/api/attachments/{attachment_id}/media-url"
         return self._get(path, params={"disposition": disposition})
 
     # ── Friendships ──────────────────────────────────────────────────────
@@ -1139,33 +1101,16 @@ class ShadowClient:
             payload["skuId"] = sku_id
         return self._post(f"/api/messages/{message_id}/commerce-cards/{card_id}/purchase", json=payload)
 
-    def purchase_dm_message_commerce_card(
-        self,
-        message_id: str,
-        card_id: str,
-        *,
-        idempotency_key: str,
-        sku_id: str | None = None,
-    ) -> dict[str, Any]:
-        payload: dict[str, Any] = {"idempotencyKey": idempotency_key}
-        if sku_id is not None:
-            payload["skuId"] = sku_id
-        return self._post(f"/api/dm/messages/{message_id}/commerce-cards/{card_id}/purchase", json=payload)
-
     def list_commerce_product_cards(
         self,
         *,
-        target: str,
-        channel_id: str | None = None,
-        dm_channel_id: str | None = None,
+        channel_id: str,
+        target: str = "channel",
         keyword: str | None = None,
         limit: int | None = None,
     ) -> dict[str, Any]:
         params: dict[str, Any] = {"target": target}
-        if channel_id:
-            params["channelId"] = channel_id
-        if dm_channel_id:
-            params["dmChannelId"] = dm_channel_id
+        params["channelId"] = channel_id
         if keyword:
             params["keyword"] = keyword
         if limit is not None:

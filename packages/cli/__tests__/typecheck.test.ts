@@ -22,18 +22,18 @@ describe('SDK Method Signatures', () => {
   })
 
   it('should have correct dms method signatures', () => {
-    expectTypeOf<ShadowClient['listDmChannels']>().toEqualTypeOf<() => Promise<unknown>>()
-    expectTypeOf<ShadowClient['createDmChannel']>().toEqualTypeOf<
+    expectTypeOf<ShadowClient['listDirectChannels']>().toEqualTypeOf<() => Promise<unknown>>()
+    expectTypeOf<ShadowClient['createDirectChannel']>().toEqualTypeOf<
       (userId: string) => Promise<unknown>
     >()
-    expectTypeOf<ShadowClient['getDmMessages']>().toEqualTypeOf<
+    expectTypeOf<ShadowClient['getMessages']>().toEqualTypeOf<
       (channelId: string, limit?: number, cursor?: string) => Promise<unknown>
     >()
-    expectTypeOf<ShadowClient['sendDmMessage']>().toEqualTypeOf<
+    expectTypeOf<ShadowClient['sendMessage']>().toEqualTypeOf<
       (channelId: string, content: string) => Promise<unknown>
     >()
     expectTypeOf<ShadowClient['markScopeRead']>().toEqualTypeOf<
-      (scope: { serverId?: string; channelId?: string; dmChannelId?: string }) => Promise<unknown>
+      (scope: { serverId?: string; channelId?: string }) => Promise<unknown>
     >()
   })
 

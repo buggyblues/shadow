@@ -448,75 +448,6 @@ describe('Slash Commands', () => {
       vi.useRealTimers()
     }
   })
-
-  it('should require the message tool for visible monitored DM replies', async () => {
-    const { processShadowDmMessage } = await import('../src/monitor/dm-message.js')
-    const dispatch = vi.fn(async () => undefined)
-    const core = {
-      channel: {
-        routing: {
-          resolveAgentRoute: vi.fn(() => ({
-            agentId: null,
-            sessionKey: null,
-            accountId: 'default',
-          })),
-        },
-        reply: {
-          formatAgentEnvelope: vi.fn((params: { body: string }) => params.body),
-          resolveEnvelopeFormatOptions: vi.fn(() => ({})),
-          finalizeInboundContext: vi.fn((ctx: Record<string, unknown>) => ctx),
-          dispatchReplyWithBufferedBlockDispatcher: dispatch,
-        },
-        session: {
-          resolveStorePath: vi.fn(() => '/tmp/openclaw-shadowob-test-store'),
-          recordInboundSession: vi.fn(async () => undefined),
-        },
-      },
-    } as never
-
-    await processShadowDmMessage({
-      dmMessage: {
-        id: 'dm-msg-1',
-        content: '你是谁？',
-        dmChannelId: 'dm-1',
-        channelId: 'dm:dm-1',
-        authorId: 'user-1',
-        senderId: 'user-1',
-        receiverId: 'bot-1',
-        createdAt: '2026-05-08T09:07:40.000Z',
-        author: {
-          id: 'user-1',
-          username: 'volthesitan_971163',
-          displayName: 'Vol',
-          isBot: false,
-        },
-      },
-      account: { token: 'tok', serverUrl: 'http://localhost:3002' },
-      accountId: 'default',
-      config: {},
-      runtime: {},
-      core,
-      botUserId: 'bot-1',
-      botUsername: 'gstack-bot',
-      shadowAgentId: 'strategy-buddy',
-      slashCommands: [],
-      socket: {
-        sendDmTyping: vi.fn(),
-      } as never,
-    })
-
-    expect(dispatch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        replyOptions: {
-          sourceReplyDeliveryMode: 'message_tool_only',
-        },
-        ctx: expect.objectContaining({
-          ChatType: 'direct',
-          MessageSid: 'dm-msg-1',
-        }),
-      }),
-    )
-  })
 })
 
 // ── Plugin entry point ─────────────────────────────────────────
@@ -1068,7 +999,6 @@ describe('Shadow Outbound', () => {
       threadId: 'xyz',
     })
     expect(parseTarget('shadowob:thread:xyz')).toEqual({ threadId: 'xyz' })
-    expect(parseTarget('shadowob:dm:dm-123')).toEqual({ dmChannelId: 'dm-123' })
   })
 
   it('should parse target with openclaw-shadowob prefix', async () => {
@@ -1170,52 +1100,12 @@ describe('Shadow Outbound', () => {
     }
   })
 
-  it('should expose DM targets through plugin messaging and outbound delivery', async () => {
-    const { ShadowClient } = await import('@shadowob/sdk')
+  it('should not expose removed DM targets through plugin messaging', async () => {
     const { shadowPlugin } = await import('../src/channel.js')
-    const { shadowOutbound } = await import('../src/outbound.js')
-    const sendDmMessage = vi.spyOn(ShadowClient.prototype, 'sendDmMessage').mockResolvedValue({
-      id: 'dm-msg-1',
-      content: 'Hello DM',
-      channelId: 'dm:dm-123',
-      dmChannelId: 'dm-123',
-      authorId: 'bot-1',
-      createdAt: '2026-04-27T00:00:00.000Z',
-      updatedAt: '2026-04-27T00:00:00.000Z',
-    } as never)
-
-    try {
-      expect(shadowPlugin.capabilities?.chatTypes).toContain('direct')
-      expect(shadowPlugin.messaging?.parseExplicitTarget?.({ raw: 'shadowob:dm:dm-123' })).toEqual({
-        to: 'shadowob:dm:dm-123',
-        chatType: 'direct',
-      })
-
-      const result = await shadowOutbound.sendText({
-        cfg: {
-          channels: {
-            shadowob: {
-              token: 'tok',
-              serverUrl: 'http://localhost:3002',
-            },
-          },
-        },
-        to: 'shadowob:dm:dm-123',
-        text: 'Hello DM',
-      })
-
-      expect(sendDmMessage).toHaveBeenCalledWith('dm-123', 'Hello DM', {
-        replyToId: undefined,
-      })
-      expect(result).toMatchObject({
-        channel: 'shadowob',
-        messageId: 'dm-msg-1',
-        dmChannelId: 'dm-123',
-        conversationId: 'dm-123',
-      })
-    } finally {
-      sendDmMessage.mockRestore()
-    }
+    expect(shadowPlugin.messaging?.parseExplicitTarget?.({ raw: 'shadowob:direct:123' })).toBeNull()
+    expect(shadowPlugin.messaging?.inferTargetChatType?.({ to: 'shadowob:direct:123' })).toBe(
+      'channel',
+    )
   })
 
   it('should send official OpenClaw text deliveries into thread-only targets', async () => {

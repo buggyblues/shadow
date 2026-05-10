@@ -27,7 +27,7 @@ interface FriendEntry {
   user: CommunityEconomyRecipient & { status?: string; isBot?: boolean }
 }
 
-interface DmChannelEntry {
+interface DirectChannelEntry {
   otherUser: (CommunityEconomyRecipient & { status?: string; isBot?: boolean }) | null
   lastMessageAt?: string | null
 }
@@ -91,9 +91,9 @@ export function CommunityEconomySendModal({
     enabled: open && !recipient && !recipientUserId,
   })
 
-  const { data: dmChannels = [] } = useQuery({
-    queryKey: ['dm-channels'],
-    queryFn: () => fetchApi<DmChannelEntry[]>('/api/dm/channels'),
+  const { data: directChannels = [] } = useQuery({
+    queryKey: ['direct-channels'],
+    queryFn: () => fetchApi<DirectChannelEntry[]>('/api/channels/dm'),
     enabled: open && !recipient && !recipientUserId,
   })
 
@@ -112,7 +112,7 @@ export function CommunityEconomySendModal({
 
   const contacts = useMemo(() => {
     const map = new Map<string, CommunityEconomyRecipient>()
-    for (const channel of dmChannels) {
+    for (const channel of directChannels) {
       if (channel.otherUser) map.set(channel.otherUser.id, channel.otherUser)
     }
     for (const friend of friends) {
@@ -123,7 +123,7 @@ export function CommunityEconomySendModal({
       if (!query) return true
       return `${item.displayName ?? ''} ${item.username ?? ''}`.toLowerCase().includes(query)
     })
-  }, [dmChannels, friends, recipientQuery])
+  }, [directChannels, friends, recipientQuery])
 
   if (!open) return null
 

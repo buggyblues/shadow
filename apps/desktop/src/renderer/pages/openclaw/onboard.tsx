@@ -1282,16 +1282,16 @@ function DoneStep({
         // Best-effort, don't block launch
       }
 
-      // Step 3: Send greeting DM to buddy if created
-      let dmChannelId: string | null = null
+      // Step 3: Send greeting direct channel message to buddy if created
+      let directChannelId: string | null = null
       if (buddyBotUserId) {
         try {
-          const dm = await fetchApi<{ id: string }>('/api/dm/channels', {
+          const channel = await fetchApi<{ id: string }>('/api/channels/dm', {
             method: 'POST',
             body: JSON.stringify({ userId: buddyBotUserId }),
           })
-          dmChannelId = dm.id
-          await fetchApi('/api/dm/channels/' + dm.id + '/messages', {
+          directChannelId = channel.id
+          await fetchApi('/api/channels/' + channel.id + '/messages', {
             method: 'POST',
             body: JSON.stringify({
               content: t('openclaw.onboard.greeting', '你好！我刚刚完成了设置，来打个招呼 👋'),
@@ -1304,10 +1304,10 @@ function DoneStep({
 
       setLaunchStatus('success')
       setLaunchStage('')
-      // Navigate to buddy DM if created, otherwise dashboard
-      if (dmChannelId) {
+      // Navigate to buddy chat if created, otherwise dashboard
+      if (directChannelId) {
         setTimeout(() => {
-          window.location.hash = `/app/dm/${dmChannelId}`
+          window.location.hash = `/app/dm/${directChannelId}`
         }, 800)
       } else {
         setTimeout(() => onNavigate('dashboard'), 800)
