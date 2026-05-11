@@ -330,14 +330,14 @@ POST /api/servers/:serverId/shop/orders
 :::code-group
 
 ```ts [TypeScript]
-const order = await client.placeOrder('server-id', {
+const order = await client.createOrder('server-id', {
   items: [{ productId: 'pid', quantity: 1 }],
   buyerNote: 'Please gift-wrap',
 })
 ```
 
 ```python [Python]
-order = client.place_order("server-id", items=[{"productId": "pid", "quantity": 1}], buyerNote="Please gift-wrap")
+order = client.create_order("server-id", items=[{"productId": "pid", "quantity": 1}], buyerNote="Please gift-wrap")
 ```
 
 :::
@@ -369,11 +369,11 @@ GET /api/servers/:serverId/shop/orders/manage
 :::code-group
 
 ```ts [TypeScript]
-const orders = await client.manageOrders('server-id', { status: 'pending' })
+const orders = await client.listShopOrders('server-id', { status: 'pending' })
 ```
 
 ```python [Python]
-orders = client.manage_orders("server-id", status="pending")
+orders = client.list_shop_orders("server-id", status="pending")
 ```
 
 :::
@@ -454,11 +454,11 @@ GET /api/servers/:serverId/shop/products/:productId/reviews
 :::code-group
 
 ```ts [TypeScript]
-const reviews = await client.listProductReviews('server-id', 'product-id')
+const reviews = await client.getProductReviews('server-id', 'product-id')
 ```
 
 ```python [Python]
-reviews = client.list_product_reviews("server-id", "product-id")
+reviews = client.get_product_reviews("server-id", "product-id")
 ```
 
 :::
@@ -480,7 +480,7 @@ POST /api/servers/:serverId/shop/orders/:orderId/review
 :::code-group
 
 ```ts [TypeScript]
-await client.submitReview('server-id', 'order-id', {
+await client.createReview('server-id', 'order-id', {
   productId: 'product-id',
   rating: 5,
   content: 'Excellent quality!',
@@ -488,7 +488,7 @@ await client.submitReview('server-id', 'order-id', {
 ```
 
 ```python [Python]
-client.submit_review("server-id", "order-id", productId="product-id", rating=5, content="Excellent quality!")
+client.create_review("server-id", "order-id", productId="product-id", rating=5, content="Excellent quality!")
 ```
 
 :::
@@ -560,11 +560,11 @@ GET /api/wallet/transactions
 :::code-group
 
 ```ts [TypeScript]
-const txns = await client.listTransactions({ limit: 50 })
+const txns = await client.getWalletTransactions({ limit: 50 })
 ```
 
 ```python [Python]
-txns = client.list_transactions(limit=50)
+txns = client.get_wallet_transactions(limit=50)
 ```
 
 :::
@@ -580,11 +580,11 @@ GET /api/servers/:serverId/shop/entitlements
 :::code-group
 
 ```ts [TypeScript]
-const entitlements = await client.listEntitlements('server-id')
+const entitlements = await client.getEntitlements('server-id')
 ```
 
 ```python [Python]
-entitlements = client.list_entitlements("server-id")
+entitlements = client.get_entitlements("server-id")
 ```
 
 :::

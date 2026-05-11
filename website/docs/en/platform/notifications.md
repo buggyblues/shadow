@@ -184,3 +184,120 @@ updated = client.update_notification_preferences(
 ```
 
 :::
+
+---
+
+## Channel notification preferences
+
+```
+GET /api/notifications/channel-preferences
+PATCH /api/notifications/channel-preferences
+```
+
+Get or update per-channel notification preferences.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `kind` | string | Notification kind |
+| `channel` | string | Channel ID |
+| `enabled` | boolean | Whether notifications are enabled |
+
+:::code-group
+
+```ts [TypeScript]
+// Get
+const prefs = await client.getNotificationChannelPreferences()
+
+// Update
+const updated = await client.updateNotificationChannelPreference({
+  kind: 'message',
+  channel: 'channel-id',
+  enabled: false,
+})
+```
+
+```python [Python]
+prefs = client.get_notification_channel_preferences()
+
+updated = client.update_notification_channel_preference(
+    kind="message",
+    channel="channel-id",
+    enabled=False,
+)
+```
+
+:::
+
+---
+
+## Register push token
+
+```
+POST /api/notifications/push-tokens
+DELETE /api/notifications/push-tokens/:idOrToken
+```
+
+Register a mobile push notification token.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `platform` | string | `ios`, `android`, or `web` |
+| `token` | string | Push token |
+| `deviceName` | string | Optional device name |
+
+:::code-group
+
+```ts [TypeScript]
+await client.registerPushToken({
+  platform: 'ios',
+  token: 'push-token-string',
+  deviceName: 'iPhone',
+})
+```
+
+```python [Python]
+client.register_push_token(
+    platform="ios",
+    token="push-token-string",
+    deviceName="iPhone",
+)
+```
+
+:::
+
+---
+
+## Register web push subscription
+
+```
+POST /api/notifications/web-push-subscriptions
+DELETE /api/notifications/web-push-subscriptions/:idOrEndpoint
+```
+
+Register a Web Push API subscription.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `endpoint` | string | Push subscription endpoint |
+| `keys.p256dh` | string | P-256 DH key |
+| `keys.auth` | string | Auth secret |
+| `userAgent` | string | Optional user agent |
+
+:::code-group
+
+```ts [TypeScript]
+await client.registerWebPushSubscription({
+  endpoint: 'https://...',
+  keys: { p256dh: '...', auth: '...' },
+  userAgent: navigator.userAgent,
+})
+```
+
+```python [Python]
+client.register_web_push_subscription(
+    endpoint="https://...",
+    keys={"p256dh": "...", "auth": "..."},
+)
+```
+
+:::

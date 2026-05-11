@@ -249,6 +249,26 @@ cart = client.get_cart("server-id")
 
 :::
 
+---
+
+## Remove from cart
+
+```
+DELETE /api/servers/:serverId/shop/cart/:itemId
+```
+
+:::code-group
+
+```ts [TypeScript]
+await client.removeCartItem('server-id', 'item-id')
+```
+
+```python [Python]
+client.remove_cart_item("server-id", "item-id")
+```
+
+:::
+
 ### Add to cart
 
 ```
@@ -330,7 +350,7 @@ POST /api/servers/:serverId/shop/orders
 :::code-group
 
 ```ts [TypeScript]
-const order = await client.placeOrder('server-id', {
+const order = await client.createOrder('server-id', {
   items: [{ productId: 'pid', quantity: 1 }],
   buyerNote: 'Please gift-wrap',
 })
@@ -369,7 +389,7 @@ GET /api/servers/:serverId/shop/orders/manage
 :::code-group
 
 ```ts [TypeScript]
-const orders = await client.manageOrders('server-id', { status: 'pending' })
+const orders = await client.listShopOrders('server-id', { status: 'pending' })
 ```
 
 ```python [Python]
@@ -454,7 +474,7 @@ GET /api/servers/:serverId/shop/products/:productId/reviews
 :::code-group
 
 ```ts [TypeScript]
-const reviews = await client.listProductReviews('server-id', 'product-id')
+const reviews = await client.getProductReviews('server-id', 'product-id')
 ```
 
 ```python [Python]
@@ -480,7 +500,7 @@ POST /api/servers/:serverId/shop/orders/:orderId/review
 :::code-group
 
 ```ts [TypeScript]
-await client.submitReview('server-id', 'order-id', {
+await client.createReview('server-id', 'order-id', {
   productId: 'product-id',
   rating: 5,
   content: 'Excellent quality!',
@@ -560,7 +580,7 @@ GET /api/wallet/transactions
 :::code-group
 
 ```ts [TypeScript]
-const txns = await client.listTransactions({ limit: 50 })
+const txns = await client.getWalletTransactions({ limit: 50 })
 ```
 
 ```python [Python]
@@ -580,7 +600,7 @@ GET /api/servers/:serverId/shop/entitlements
 :::code-group
 
 ```ts [TypeScript]
-const entitlements = await client.listEntitlements('server-id')
+const entitlements = await client.getEntitlements('server-id')
 ```
 
 ```python [Python]

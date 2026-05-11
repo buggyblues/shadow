@@ -136,8 +136,8 @@ class ShadowClient:
     def _put(self, path: str, json: Any = None) -> Any:
         return self._request("PUT", path, json=json)
 
-    def _delete(self, path: str) -> Any:
-        return self._request("DELETE", path)
+    def _delete(self, path: str, json: Any = None) -> Any:
+        return self._request("DELETE", path, json=json)
 
     # ── Auth ─────────────────────────────────────────────────────────────
 
@@ -434,7 +434,7 @@ class ShadowClient:
         return self._delete(f"/api/servers/{server_id}/members/{user_id}")
 
     def regenerate_invite_code(self, server_id: str) -> dict[str, Any]:
-        return self._post(f"/api/servers/{server_id}/invite")
+        return self._post(f"/api/servers/{server_id}/invite/regenerate")
 
     def add_agents_to_server(
         self, server_id: str, agent_ids: list[str]
@@ -482,8 +482,8 @@ class ShadowClient:
     def reorder_channels(
         self, server_id: str, channel_ids: list[str]
     ) -> dict[str, Any]:
-        return self._put(
-            f"/api/servers/{server_id}/channels/reorder",
+        return self._patch(
+            f"/api/servers/{server_id}/channels/positions",
             json={"channelIds": channel_ids},
         )
 
@@ -510,15 +510,14 @@ class ShadowClient:
         return self._delete(f"/api/channels/{channel_id}/members/{user_id}")
 
     def set_buddy_policy(
-        self, channel_id: str, buddy_user_id: str, **kwargs: Any
+        self, channel_id: str, agent_id: str, **kwargs: Any
     ) -> dict[str, Any]:
-        return self._put(
-            f"/api/channels/{channel_id}/buddy-policy",
-            json={"buddyUserId": buddy_user_id, **kwargs},
-        )
+        return self._put(f"/api/channels/{channel_id}/agents/{agent_id}/policy", json=kwargs)
 
-    def get_buddy_policy(self, channel_id: str) -> dict[str, Any] | None:
-        return self._get(f"/api/channels/{channel_id}/buddy-policy")
+    def get_buddy_policy(
+        self, channel_id: str, agent_id: str
+    ) -> dict[str, Any]:
+        return self._get(f"/api/channels/{channel_id}/agents/{agent_id}/policy")
 
     # ── Messages ─────────────────────────────────────────────────────────
 
@@ -1599,3 +1598,186 @@ class ShadowClient:
         self, server_id: str, file_id: str
     ) -> dict[str, Any]:
         return self._delete(f"/api/servers/{server_id}/workspace/files/{file_id}")
+
+    # ── API Tokens ───────────────────────────────────────────────────────
+
+    def create_api_token(
+        self, name: str, scope: str | None = None, expires_in_days: int | None = None
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {"name": name}
+        if scope:
+            body["scope"] = scope
+        if expires_in_days:
+            body["expiresInDays"] = expires_in_days
+        return self._post("/api/tokens", json=body)
+
+    def list_api_tokens(self) -> list[dict[str, Any]]:
+        return self._get("/api/tokens")
+
+    def delete_api_token(self, token_id: str) -> dict[str, Any]:
+        return self._delete(f"/api/tokens/{token_id}")
+
+    # ── Discover ─────────────────────────────────────────────────────────
+
+    def discover_feed(
+        self,
+        type: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        if type:
+            params["type"] = type
+        if limit:
+            params["limit"] = limit
+        if offset:
+            params["offset"] = offset
+        return self._get("/api/discover/feed", params=params or None)
+
+    def discover_search(
+        self,
+        q: str,
+        type: str | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"q": q}
+        if type:
+            params["type"] = type
+        if limit:
+            params["limit"] = limit
+        return self._get("/api/discover/search", params=params)
+
+    # ── Voice Enhance ────────────────────────────────────────────────────
+
+    def enhance_voice(
+        self,
+        transcript: str,
+        language: str | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {"transcript": transcript}
+        if language:
+            body["language"] = language
+        if options:
+            body["options"] = options
+        return self._post("/api/voice/enhance", json=body)
+
+    def get_voice_config(self) -> dict[str, Any]:
+        return self._get("/api/voice/config")
+
+    def update_voice_config(self, **kwargs: Any) -> dict[str, Any]:
+        return self._post("/api/voice/config", json=kwargs)
+
+    def voice_health_check(self) -> dict[str, Any]:
+        return self._get("/api/voice/health")
+
+    # ── Profile Comments ─────────────────────────────────────────────────
+
+    def get_profile_comments(
+        self, profile_user_id: str, limit: int | None = None, offset: int | None = None
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {}
+        if limit:
+            params["limit"] = limit
+        if offset:
+            params["offset"] = offset
+        return self._get(
+            f"/api/profile-comments/{profile_user_id}", params=params or None
+        )
+
+    def get_profile_comment_stats(self, profile_user_id: str) -> dict[str, Any]:
+        return self._get(f"/api/profile-comments/{profile_user_id}/stats")
+
+    def get_comment_replies(
+        self, parent_id: str, limit: int | None = None, offset: int | None = None
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {}
+        if limit:
+            params["limit"] = limit
+        if offset:
+            params["offset"] = offset
+        return self._get(
+            f"/api/profile-comments/replies/{parent_id}", params=params or None
+        )
+
+    def create_profile_comment(
+        self,
+        profile_user_id: str,
+        content: str,
+        parent_id: str | None = None,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {"profileUserId": profile_user_id, "content": content}
+        if parent_id:
+            body["parentId"] = parent_id
+        return self._post("/api/profile-comments", json=body)
+
+    def delete_profile_comment(self, comment_id: str) -> dict[str, Any]:
+        return self._delete(f"/api/profile-comments/{comment_id}")
+
+    def add_profile_comment_reaction(
+        self, comment_id: str, emoji: str
+    ) -> dict[str, Any]:
+        return self._post(
+            f"/api/profile-comments/{comment_id}/reactions", json={"emoji": emoji}
+        )
+
+    def remove_profile_comment_reaction(
+        self, comment_id: str, emoji: str
+    ) -> dict[str, Any]:
+        return self._delete(
+            f"/api/profile-comments/{comment_id}/reactions", json={"emoji": emoji}
+        )
+
+    # ── Agent Dashboard ──────────────────────────────────────────────────
+
+    def get_agent_dashboard(self, agent_id: str) -> dict[str, Any]:
+        return self._get(f"/api/agents/{agent_id}/dashboard")
+
+    def add_agent_dashboard_event(
+        self,
+        agent_id: str,
+        event_type: str,
+        event_data: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {"eventType": event_type}
+        if event_data:
+            body["eventData"] = event_data
+        return self._post(f"/api/agents/{agent_id}/dashboard/events", json=body)
+
+    # ── Channel Archive ──────────────────────────────────────────────────
+
+    def archive_channel(
+        self, channel_id: str, reason: str | None = None
+    ) -> dict[str, Any]:
+        body = {"reason": reason} if reason else {}
+        return self._post(f"/api/channels/{channel_id}/archive", json=body)
+
+    def unarchive_channel(self, channel_id: str) -> dict[str, Any]:
+        return self._post(f"/api/channels/{channel_id}/unarchive")
+
+    def get_archived_channels(self, server_id: str) -> list[dict[str, Any]]:
+        return self._get(f"/api/servers/{server_id}/channels/archived")
+
+    # ── Auth (extended) ──────────────────────────────────────────────────
+
+    def change_password(
+        self, current_password: str, new_password: str
+    ) -> dict[str, Any]:
+        return self._put(
+            "/api/auth/password",
+            json={"currentPassword": current_password, "newPassword": new_password},
+        )
+
+    def get_dashboard(self) -> dict[str, Any]:
+        return self._get("/api/auth/dashboard")
+
+    def login_with_google_id_token(self, id_token: str) -> dict[str, Any]:
+        return self._post("/api/auth/google/id-token", json={"idToken": id_token})
+
+    # ── Server Apps (extended) ───────────────────────────────────────────
+
+    def publish_app(self, server_id: str, name: str, slug: str) -> dict[str, Any]:
+        return self._post(
+            f"/api/servers/{server_id}/apps/publish",
+            json={"name": name, "slug": slug},
+        )

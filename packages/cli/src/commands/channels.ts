@@ -258,13 +258,13 @@ export function createChannelsCommand(): Command {
     .command('pin')
     .description('Pin a message')
     .argument('<message-id>', 'Message ID')
-    .option('--channel-id <id>', 'Channel ID (if not in channel context)')
+    .requiredOption('--channel-id <id>', 'Channel ID')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')
     .action(
       async (
         messageId: string,
-        options: { channelId?: string; profile?: string; json?: boolean },
+        options: { channelId: string; profile?: string; json?: boolean },
       ) => {
         try {
           const client = await getClient(options.profile)
@@ -285,13 +285,13 @@ export function createChannelsCommand(): Command {
     .command('unpin')
     .description('Unpin a message')
     .argument('<message-id>', 'Message ID')
-    .option('--channel-id <id>', 'Channel ID (if not in channel context)')
+    .requiredOption('--channel-id <id>', 'Channel ID')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')
     .action(
       async (
         messageId: string,
-        options: { channelId?: string; profile?: string; json?: boolean },
+        options: { channelId: string; profile?: string; json?: boolean },
       ) => {
         try {
           const client = await getClient(options.profile)

@@ -348,3 +348,71 @@ result = client.add_agents_to_server("server-id", ["agent-1", "agent-2"])
 ```
 
 :::
+
+---
+
+## Get server access
+
+```
+GET /api/servers/:id/access
+```
+
+Returns the current user's access level for the server (e.g., member, pending, blocked, public).
+
+:::code-group
+
+```ts [TypeScript]
+const access = await client.getServerAccess('server-id')
+```
+
+```python [Python]
+access = client.get_server_access("server-id")
+```
+
+:::
+
+---
+
+## Request server access
+
+```
+POST /api/servers/:id/join-requests
+```
+
+Request access to a private server. The server owner can approve or reject.
+
+:::code-group
+
+```ts [TypeScript]
+const result = await client.requestServerAccess('server-id')
+```
+
+```python [Python]
+result = client.request_server_access("server-id")
+```
+
+:::
+
+---
+
+## Review server join request
+
+```
+PATCH /api/servers/join-requests/:requestId
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | string | `approved` or `rejected` |
+
+:::code-group
+
+```ts [TypeScript]
+await client.reviewServerJoinRequest('request-id', 'approved')
+```
+
+```python [Python]
+client.review_server_join_request("request-id", "approved")
+```
+
+:::
