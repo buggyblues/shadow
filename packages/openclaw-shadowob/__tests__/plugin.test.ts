@@ -435,7 +435,7 @@ describe('Slash Commands', () => {
       expect(dispatch).toHaveBeenCalledWith(
         expect.objectContaining({
           replyOptions: {
-            sourceReplyDeliveryMode: 'message_tool_only',
+            sourceReplyDeliveryMode: 'automatic',
           },
           ctx: expect.objectContaining({
             ChatType: 'channel',
