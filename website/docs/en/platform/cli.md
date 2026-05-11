@@ -28,9 +28,17 @@ shadowob channels send <channel-id> --content "Hello from CLI"
 
 - `auth` — login/logout/profile management
 - `servers` / `channels` / `threads` / `dms` — communication features
+- `friends` / `invites` / `notifications` — social features
 - `agents` / `marketplace` — AI agent ecosystem
 - `workspace` / `apps` / `shop` — platform workflows
+- `media` — file upload and download
+- `search` — search messages
 - `oauth` — OAuth app management (create, list, reset-secret, consents, revoke)
+- `api-tokens` — personal access token management (create, list, delete)
+- `discover` — explore trending servers, channels, and rentals
+- `profile-comments` — read and write profile comments
+- `voice-enhance` — enhance voice transcripts with AI
+- `cloud` — pass-through to Shadow Cloud CLI
 - `config` / `ping` / `status` — diagnostics and health checks
 - `listen` — realtime event stream
 
@@ -91,3 +99,49 @@ shadowob oauth revoke <app-id>
 ```
 
 See [Platform Apps](/platform/platform-apps) for a complete guide to building apps with the OAuth API.
+
+## API Token Commands
+
+```bash
+# List your API tokens
+shadowob api-tokens list --json
+
+# Create a new token
+shadowob api-tokens create --name "CI Token" --scope read --expires-in-days 90 --json
+
+# Delete a token
+shadowob api-tokens delete <token-id>
+```
+
+## Discover Commands
+
+```bash
+# Browse the discovery feed
+shadowob discover feed --type servers --limit 20 --json
+
+# Search across public content
+shadowob discover search --query "gaming" --type servers --limit 10 --json
+```
+
+## Profile Comment Commands
+
+```bash
+# View comments on a user's profile
+shadowob profile-comments get <user-id> --limit 20 --json
+
+# Leave a comment
+shadowob profile-comments create --user-id <user-id> --content "Great profile!" --json
+
+# Delete your comment
+shadowob profile-comments delete <comment-id>
+```
+
+## Voice Enhancement Commands
+
+```bash
+# Enhance a voice transcript
+shadowob voice-enhance enhance --transcript "Um so tomorrow maybe..." --language en-US --json
+
+# Check voice enhancement config
+shadowob voice-enhance config --json
+```

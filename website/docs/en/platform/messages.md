@@ -325,3 +325,32 @@ reactions = client.get_reactions("message-id")
 ```
 
 :::
+
+---
+
+## Get interactive state
+
+```
+GET /api/messages/:id/interactive-state
+```
+
+Retrieve the state of an interactive message (form submissions, button clicks, etc.).
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `blockId` | string | Optional block ID to filter |
+
+:::code-group
+
+```ts [TypeScript]
+const state = await client.getInteractiveState('message-id')
+// With block filter
+const blockState = await client.getInteractiveState('message-id', 'block-id')
+```
+
+```python [Python]
+state = client.get_interactive_state("message-id")
+block_state = client.get_interactive_state("message-id", blockId="block-id")
+```
+
+:::

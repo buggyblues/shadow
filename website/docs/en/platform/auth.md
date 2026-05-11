@@ -277,3 +277,82 @@ client.unlink_oauth_account("account-id")
 ```
 
 :::
+
+---
+
+## Change password
+
+```
+PUT /api/auth/password
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `currentPassword` | string | Yes | Current password |
+| `newPassword` | string | Yes | New password |
+
+:::code-group
+
+```ts [TypeScript]
+await client.changePassword({
+  currentPassword: 'old-pass',
+  newPassword: 'new-pass',
+})
+```
+
+```python [Python]
+client.change_password(
+    current_password="old-pass",
+    new_password="new-pass",
+)
+```
+
+:::
+
+---
+
+## Google ID token login
+
+```
+POST /api/auth/google/id-token
+```
+
+Sign in or register using a Google ID token.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `idToken` | string | Yes | Google ID token |
+
+:::code-group
+
+```ts [TypeScript]
+const { accessToken, refreshToken, user } = await client.loginWithGoogleIdToken('google-id-token')
+```
+
+```python [Python]
+result = client.login_with_google_id_token("google-id-token")
+```
+
+:::
+
+---
+
+## Dashboard
+
+```
+GET /api/auth/dashboard
+```
+
+Returns the current user's dashboard summary.
+
+:::code-group
+
+```ts [TypeScript]
+const dashboard = await client.getDashboard()
+```
+
+```python [Python]
+dashboard = client.get_dashboard()
+```
+
+:::

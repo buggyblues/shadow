@@ -93,11 +93,11 @@ GET /api/servers/:serverId/workspace/children?parentId=folder-id
 :::code-group
 
 ```ts [TypeScript]
-const children = await client.listWorkspaceChildren('server-id', 'parent-folder-id')
+const children = await client.getWorkspaceChildren('server-id', 'parent-folder-id')
 ```
 
 ```python [Python]
-children = client.list_workspace_children("server-id", parent_id="parent-folder-id")
+children = client.get_workspace_children("server-id", parent_id="parent-folder-id")
 ```
 
 :::
@@ -113,11 +113,11 @@ POST /api/servers/:serverId/workspace/children/batch
 :::code-group
 
 ```ts [TypeScript]
-const result = await client.batchListChildren('server-id', ['folder-1', 'folder-2'])
+const result = await client.batchWorkspaceChildren('server-id', ['folder-1', 'folder-2'])
 ```
 
 ```python [Python]
-result = client.batch_list_children("server-id", parent_ids=["folder-1", "folder-2"])
+result = client.batch_workspace_children("server-id", parent_ids=["folder-1", "folder-2"])
 ```
 
 :::
@@ -404,7 +404,7 @@ POST /api/servers/:serverId/workspace/commands
 :::code-group
 
 ```ts [TypeScript]
-await client.runWorkspaceCommands('server-id', {
+await client.executeWorkspaceCommands('server-id', {
   commands: [
     { type: 'rename', nodeId: 'file-id', name: 'new-name.txt' },
   ],
@@ -412,7 +412,7 @@ await client.runWorkspaceCommands('server-id', {
 ```
 
 ```python [Python]
-client.run_workspace_commands("server-id", commands=[
+client.execute_workspace_commands("server-id", commands=[
     {"type": "rename", "nodeId": "file-id", "name": "new-name.txt"},
 ])
 ```

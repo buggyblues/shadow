@@ -93,7 +93,7 @@ GET /api/servers/:serverId/workspace/children?parentId=folder-id
 :::code-group
 
 ```ts [TypeScript]
-const children = await client.listWorkspaceChildren('server-id', 'parent-folder-id')
+const children = await client.getWorkspaceChildren('server-id', 'parent-folder-id')
 ```
 
 ```python [Python]
@@ -113,7 +113,7 @@ POST /api/servers/:serverId/workspace/children/batch
 :::code-group
 
 ```ts [TypeScript]
-const result = await client.batchListChildren('server-id', ['folder-1', 'folder-2'])
+const result = await client.batchWorkspaceChildren('server-id', ['folder-1', 'folder-2'])
 ```
 
 ```python [Python]
@@ -404,7 +404,7 @@ POST /api/servers/:serverId/workspace/commands
 :::code-group
 
 ```ts [TypeScript]
-await client.runWorkspaceCommands('server-id', {
+await client.executeWorkspaceCommands('server-id', {
   commands: [
     { type: 'rename', nodeId: 'file-id', name: 'new-name.txt' },
   ],

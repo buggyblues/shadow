@@ -337,18 +337,26 @@ export default defineConfig({
             },
             {
               text: 'Commerce',
-              items: [{ text: 'Shop', link: '/platform/shop' }],
+              items: [
+                { text: 'Shop', link: '/platform/shop' },
+                { text: 'Economy', link: '/platform/economy' },
+                { text: 'Recharge', link: '/platform/recharge' },
+              ],
             },
             {
               text: 'Platform',
               items: [
                 { text: 'OAuth', link: '/platform/oauth' },
+                { text: 'API Tokens', link: '/platform/api-tokens' },
                 { text: 'Platform Apps', link: '/platform/platform-apps' },
                 { text: 'Apps', link: '/platform/apps' },
                 { text: 'Workspace', link: '/platform/workspace' },
                 { text: 'Search', link: '/platform/search' },
                 { text: 'Media', link: '/platform/media' },
                 { text: 'Task Center', link: '/platform/tasks' },
+                { text: 'Discover', link: '/platform/discover' },
+                { text: 'Voice Enhance', link: '/platform/voice-enhance' },
+                { text: 'Profile Comments', link: '/platform/profile-comments' },
               ],
             },
             {
@@ -485,18 +493,26 @@ export default defineConfig({
             },
             {
               text: '商业',
-              items: [{ text: '商店', link: '/zh/platform/shop' }],
+              items: [
+                { text: '商店', link: '/zh/platform/shop' },
+                { text: '经济', link: '/zh/platform/economy' },
+                { text: '充值', link: '/zh/platform/recharge' },
+              ],
             },
             {
               text: '平台',
               items: [
                 { text: 'OAuth', link: '/zh/platform/oauth' },
+                { text: 'API 令牌', link: '/zh/platform/api-tokens' },
                 { text: '平台应用', link: '/zh/platform/platform-apps' },
                 { text: '应用', link: '/zh/platform/apps' },
                 { text: '工作区', link: '/zh/platform/workspace' },
                 { text: '搜索', link: '/zh/platform/search' },
                 { text: '媒体', link: '/zh/platform/media' },
                 { text: '任务中心', link: '/zh/platform/tasks' },
+                { text: '发现', link: '/zh/platform/discover' },
+                { text: '语音增强', link: '/zh/platform/voice-enhance' },
+                { text: '主页留言', link: '/zh/platform/profile-comments' },
               ],
             },
             {

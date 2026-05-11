@@ -641,7 +641,7 @@ export class ShadowClient {
   }
 
   async regenerateInviteCode(serverId: string): Promise<{ inviteCode: string }> {
-    return this.request(`/api/servers/${serverId}/invite`, { method: 'POST' })
+    return this.request(`/api/servers/${serverId}/invite/regenerate`, { method: 'POST' })
   }
 
   async addAgentsToServer(
@@ -704,8 +704,8 @@ export class ShadowClient {
   }
 
   async reorderChannels(serverId: string, channelIds: string[]): Promise<{ success: boolean }> {
-    return this.request(`/api/servers/${serverId}/channels/reorder`, {
-      method: 'PUT',
+    return this.request(`/api/servers/${serverId}/channels/positions`, {
+      method: 'PATCH',
       body: JSON.stringify({ channelIds }),
     })
   }
@@ -744,9 +744,15 @@ export class ShadowClient {
 
   async setBuddyPolicy(
     channelId: string,
-    data: { buddyUserId: string; mentionOnly?: boolean; reply?: boolean },
+    agentId: string,
+    data: {
+      mentionOnly?: boolean
+      reply?: boolean
+      mode?: string
+      config?: Record<string, unknown>
+    },
   ): Promise<{ success: boolean }> {
-    return this.request(`/api/channels/${channelId}/buddy-policy`, {
+    return this.request(`/api/channels/${channelId}/agents/${agentId}/policy`, {
       method: 'PUT',
       body: JSON.stringify(data),
     })
@@ -754,8 +760,9 @@ export class ShadowClient {
 
   async getBuddyPolicy(
     channelId: string,
-  ): Promise<{ buddyUserId: string | null; mentionOnly: boolean; reply: boolean } | null> {
-    return this.request(`/api/channels/${channelId}/buddy-policy`)
+    agentId: string,
+  ): Promise<Record<string, unknown> | null> {
+    return this.request(`/api/channels/${channelId}/agents/${agentId}/policy`)
   }
 
   // ── Messages ──────────────────────────────────────────────────────────
@@ -860,18 +867,12 @@ export class ShadowClient {
 
   // ── Pins ──────────────────────────────────────────────────────────────
 
-  async pinMessage(messageId: string, channelId?: string): Promise<{ success: boolean }> {
-    if (channelId) {
-      return this.request(`/api/channels/${channelId}/pins/${messageId}`, { method: 'PUT' })
-    }
-    return this.request(`/api/messages/${messageId}/pin`, { method: 'POST' })
+  async pinMessage(messageId: string, channelId: string): Promise<{ success: boolean }> {
+    return this.request(`/api/channels/${channelId}/pins/${messageId}`, { method: 'PUT' })
   }
 
-  async unpinMessage(messageId: string, channelId?: string): Promise<{ success: boolean }> {
-    if (channelId) {
-      return this.request(`/api/channels/${channelId}/pins/${messageId}`, { method: 'DELETE' })
-    }
-    return this.request(`/api/messages/${messageId}/pin`, { method: 'DELETE' })
+  async unpinMessage(messageId: string, channelId: string): Promise<{ success: boolean }> {
+    return this.request(`/api/channels/${channelId}/pins/${messageId}`, { method: 'DELETE' })
   }
 
   async getPinnedMessages(channelId: string): Promise<ShadowMessage[]> {
@@ -1436,6 +1437,27 @@ export class ShadowClient {
 
   async unlinkOAuthAccount(accountId: string): Promise<{ success: boolean }> {
     return this.request(`/api/auth/oauth/accounts/${accountId}`, { method: 'DELETE' })
+  }
+
+  async changePassword(data: {
+    currentPassword: string
+    newPassword: string
+  }): Promise<{ ok: boolean }> {
+    return this.request('/api/auth/password', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async getDashboard(): Promise<Record<string, unknown>> {
+    return this.request('/api/auth/dashboard')
+  }
+
+  async loginWithGoogleIdToken(idToken: string): Promise<ShadowAuthResponse> {
+    return this.request('/api/auth/google/id-token', {
+      method: 'POST',
+      body: JSON.stringify({ idToken }),
+    })
   }
 
   // ── Friendships ───────────────────────────────────────────────────────
@@ -2528,5 +2550,213 @@ export class ShadowClient {
       method: 'POST',
       body: JSON.stringify(data),
     })
+  }
+
+  // ── API Tokens ────────────────────────────────────────────────────────
+
+  async createApiToken(data: { name: string; scope?: string; expiresInDays?: number }): Promise<{
+    id: string
+    name: string
+    token: string
+    scope?: string
+    expiresAt?: string | null
+    createdAt: string
+  }> {
+    return this.request('/api/tokens', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async listApiTokens(): Promise<
+    { id: string; name: string; scope?: string; expiresAt?: string | null; createdAt: string }[]
+  > {
+    return this.request('/api/tokens')
+  }
+
+  async deleteApiToken(tokenId: string): Promise<{ ok: boolean }> {
+    return this.request(`/api/tokens/${tokenId}`, { method: 'DELETE' })
+  }
+
+  // ── Discover ──────────────────────────────────────────────────────────
+
+  async discoverFeed(params?: {
+    type?: 'all' | 'servers' | 'channels' | 'rentals'
+    limit?: number
+    offset?: number
+  }): Promise<{ items: Record<string, unknown>[]; total: number; hasMore: boolean }> {
+    const qs = new URLSearchParams()
+    if (params?.type) qs.set('type', params.type)
+    if (params?.limit) qs.set('limit', String(params.limit))
+    if (params?.offset) qs.set('offset', String(params.offset))
+    return this.request(`/api/discover/feed?${qs}`)
+  }
+
+  async discoverSearch(params: {
+    q: string
+    type?: 'all' | 'servers' | 'channels' | 'rentals'
+    limit?: number
+  }): Promise<{ items: Record<string, unknown>[]; total: number }> {
+    const qs = new URLSearchParams({ q: params.q })
+    if (params?.type) qs.set('type', params.type)
+    if (params?.limit) qs.set('limit', String(params.limit))
+    return this.request(`/api/discover/search?${qs}`)
+  }
+
+  // ── Voice Enhance ─────────────────────────────────────────────────────
+
+  async enhanceVoice(data: {
+    transcript: string
+    language?: string
+    options?: {
+      enableSelfCorrection?: boolean
+      enableListFormatting?: boolean
+      enableFillerRemoval?: boolean
+      enableToneAdjustment?: boolean
+      targetTone?: 'formal' | 'casual' | 'professional'
+    }
+  }): Promise<Record<string, unknown>> {
+    return this.request('/api/voice/enhance', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async enhanceVoiceQuery(params: {
+    transcript: string
+    language?: string
+    enableSelfCorrection?: boolean
+    enableListFormatting?: boolean
+    enableFillerRemoval?: boolean
+    enableToneAdjustment?: boolean
+    targetTone?: 'formal' | 'casual' | 'professional'
+  }): Promise<Record<string, unknown>> {
+    const qs = new URLSearchParams({ transcript: params.transcript })
+    if (params.language) qs.set('language', params.language)
+    if (params.enableSelfCorrection !== undefined)
+      qs.set('enableSelfCorrection', String(params.enableSelfCorrection))
+    if (params.enableListFormatting !== undefined)
+      qs.set('enableListFormatting', String(params.enableListFormatting))
+    if (params.enableFillerRemoval !== undefined)
+      qs.set('enableFillerRemoval', String(params.enableFillerRemoval))
+    if (params.enableToneAdjustment !== undefined)
+      qs.set('enableToneAdjustment', String(params.enableToneAdjustment))
+    if (params.targetTone) qs.set('targetTone', params.targetTone)
+    return this.request(`/api/voice/enhance?${qs}`)
+  }
+
+  async getVoiceConfig(): Promise<Record<string, unknown>> {
+    return this.request('/api/voice/config')
+  }
+
+  async updateVoiceConfig(data: {
+    provider: 'openai' | 'anthropic' | 'alibaba' | 'custom'
+    apiKey: string
+    baseUrl?: string
+    model?: string
+    temperature?: number
+    maxTokens?: number
+    timeout?: number
+    enabled?: boolean
+  }): Promise<{ ok: boolean; message: string }> {
+    return this.request('/api/voice/config', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async voiceHealthCheck(): Promise<Record<string, unknown>> {
+    return this.request('/api/voice/health')
+  }
+
+  // ── Profile Comments ──────────────────────────────────────────────────
+
+  async getProfileComments(
+    profileUserId: string,
+    params?: { limit?: number; offset?: number },
+  ): Promise<Record<string, unknown>[]> {
+    const qs = new URLSearchParams()
+    if (params?.limit) qs.set('limit', String(params.limit))
+    if (params?.offset) qs.set('offset', String(params.offset))
+    return this.request(`/api/profile-comments/${profileUserId}?${qs}`)
+  }
+
+  async getProfileCommentStats(profileUserId: string): Promise<Record<string, unknown>> {
+    return this.request(`/api/profile-comments/${profileUserId}/stats`)
+  }
+
+  async getCommentReplies(
+    parentId: string,
+    params?: { limit?: number; offset?: number },
+  ): Promise<Record<string, unknown>[]> {
+    const qs = new URLSearchParams()
+    if (params?.limit) qs.set('limit', String(params.limit))
+    if (params?.offset) qs.set('offset', String(params.offset))
+    return this.request(`/api/profile-comments/replies/${parentId}?${qs}`)
+  }
+
+  async createProfileComment(data: {
+    profileUserId: string
+    content: string
+    parentId?: string
+  }): Promise<Record<string, unknown>> {
+    return this.request('/api/profile-comments', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteProfileComment(commentId: string): Promise<{ ok: boolean }> {
+    return this.request(`/api/profile-comments/${commentId}`, { method: 'DELETE' })
+  }
+
+  async addProfileCommentReaction(
+    commentId: string,
+    emoji: string,
+  ): Promise<Record<string, unknown>> {
+    return this.request(`/api/profile-comments/${commentId}/reactions`, {
+      method: 'POST',
+      body: JSON.stringify({ emoji }),
+    })
+  }
+
+  async removeProfileCommentReaction(commentId: string, emoji: string): Promise<{ ok: boolean }> {
+    return this.request(`/api/profile-comments/${commentId}/reactions`, {
+      method: 'DELETE',
+      body: JSON.stringify({ emoji }),
+    })
+  }
+
+  // ── Agent Dashboard ───────────────────────────────────────────────────
+
+  async getAgentDashboard(agentId: string): Promise<Record<string, unknown>> {
+    return this.request(`/api/agents/${agentId}/dashboard`)
+  }
+
+  async addAgentDashboardEvent(
+    agentId: string,
+    data: { eventType: string; eventData?: Record<string, unknown> },
+  ): Promise<{ ok: boolean }> {
+    return this.request(`/api/agents/${agentId}/dashboard/events`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  // ── Channel Archive ───────────────────────────────────────────────────
+
+  async archiveChannel(channelId: string, reason?: string): Promise<Record<string, unknown>> {
+    return this.request(`/api/channels/${channelId}/archive`, {
+      method: 'POST',
+      body: JSON.stringify(reason ? { reason } : {}),
+    })
+  }
+
+  async unarchiveChannel(channelId: string): Promise<Record<string, unknown>> {
+    return this.request(`/api/channels/${channelId}/unarchive`, { method: 'POST' })
+  }
+
+  async getArchivedChannels(serverId: string): Promise<Record<string, unknown>[]> {
+    return this.request(`/api/servers/${serverId}/channels/archived`)
   }
 }

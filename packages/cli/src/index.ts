@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
 import { createAgentsCommand } from './commands/agents.js'
+import { createApiTokensCommand } from './commands/api-tokens.js'
 import { createAppsCommand } from './commands/apps.js'
 import { createAuthCommand } from './commands/auth.js'
 import { createChannelsCommand } from './commands/channels.js'
 import { createCloudCommand } from './commands/cloud.js'
 import { createConfigCommand } from './commands/config.js'
+import { createDiscoverCommand } from './commands/discover.js'
 import { createDirectMessagesCommand } from './commands/dms.js'
 import { createFriendsCommand } from './commands/friends.js'
 import { createInvitesCommand } from './commands/invites.js'
@@ -15,11 +17,13 @@ import { createMediaCommand } from './commands/media.js'
 import { createNotificationsCommand } from './commands/notifications.js'
 import { createOAuthCommand } from './commands/oauth.js'
 import { createPingCommand } from './commands/ping.js'
+import { createProfileCommentsCommand } from './commands/profile-comments.js'
 import { createSearchCommand } from './commands/search.js'
 import { createServersCommand } from './commands/servers.js'
 import { createShopCommand } from './commands/shop.js'
 import { createStatusCommand } from './commands/status.js'
 import { createThreadsCommand } from './commands/threads.js'
+import { createVoiceEnhanceCommand } from './commands/voice-enhance.js'
 import { createWorkspaceCommand } from './commands/workspace.js'
 
 const program = new Command()
@@ -57,5 +61,9 @@ program.addCommand(createConfigCommand())
 program.addCommand(createPingCommand())
 program.addCommand(createStatusCommand())
 program.addCommand(createCloudCommand())
+program.addCommand(createApiTokensCommand())
+program.addCommand(createDiscoverCommand())
+program.addCommand(createProfileCommentsCommand())
+program.addCommand(createVoiceEnhanceCommand())
 
 program.parse()

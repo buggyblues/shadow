@@ -269,3 +269,141 @@ policy = client.get_buddy_policy("channel-id")
 ```
 
 :::
+
+---
+
+## Get channel access
+
+```
+GET /api/channels/:id/access
+```
+
+Returns the current user's access level for the channel (e.g., member, pending, blocked).
+
+:::code-group
+
+```ts [TypeScript]
+const access = await client.getChannelAccess('channel-id')
+```
+
+```python [Python]
+access = client.get_channel_access("channel-id")
+```
+
+:::
+
+---
+
+## Request channel access
+
+```
+POST /api/channels/:id/join-requests
+```
+
+Request access to a private channel. The server/channel owner can approve or reject.
+
+:::code-group
+
+```ts [TypeScript]
+const result = await client.requestChannelAccess('channel-id')
+```
+
+```python [Python]
+result = client.request_channel_access("channel-id")
+```
+
+:::
+
+---
+
+## Review channel join request
+
+```
+PATCH /api/channel-join-requests/:requestId
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | string | `approved` or `rejected` |
+
+:::code-group
+
+```ts [TypeScript]
+await client.reviewChannelJoinRequest('request-id', 'approved')
+```
+
+```python [Python]
+client.review_channel_join_request("request-id", "approved")
+```
+
+:::
+
+---
+
+## Archive channel
+
+```
+POST /api/channels/:id/archive
+```
+
+Archive a channel (admin only). Optionally provide a reason.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `reason` | string | Why the channel is being archived |
+
+:::code-group
+
+```ts [TypeScript]
+const channel = await client.archiveChannel('channel-id', 'No longer needed')
+```
+
+```python [Python]
+channel = client.archive_channel("channel-id", reason="No longer needed")
+```
+
+:::
+
+---
+
+## Unarchive channel
+
+```
+POST /api/channels/:id/unarchive
+```
+
+Restore an archived channel (admin only).
+
+:::code-group
+
+```ts [TypeScript]
+const channel = await client.unarchiveChannel('channel-id')
+```
+
+```python [Python]
+channel = client.unarchive_channel("channel-id")
+```
+
+:::
+
+---
+
+## List archived channels
+
+```
+GET /api/servers/:serverId/channels/archived
+```
+
+Returns archived channels for a server.
+
+:::code-group
+
+```ts [TypeScript]
+const channels = await client.getArchivedChannels('server-id')
+```
+
+```python [Python]
+channels = client.get_archived_channels("server-id")
+```
+
+:::
