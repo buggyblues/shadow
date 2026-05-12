@@ -180,7 +180,14 @@ const serverHomeRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/settings',
-  beforeLoad: () => {
+  beforeLoad: ({ search }: { search: Record<string, unknown> }) => {
+    const legacyTab = search.tab as string | undefined
+    if (
+      legacyTab &&
+      ['developer', 'profile', 'account', 'appearance', 'notification'].includes(legacyTab)
+    ) {
+      throw redirect({ to: '/settings/buddy', search: { tab: legacyTab } })
+    }
     throw redirect({ to: '/settings/buddy' })
   },
   component: SettingsPage,
