@@ -562,6 +562,7 @@ describe('AgentService', () => {
       const agent = {
         id: 'agent-1',
         userId: 'bot-user-1',
+        ownerId: 'owner-1',
         status: 'running',
       }
 
