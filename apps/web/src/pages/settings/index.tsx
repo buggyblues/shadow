@@ -36,6 +36,7 @@ type MergedSettingsSection =
   | 'actions'
   | 'orders'
   | 'market'
+  | 'buddies'
 
 interface NavItem {
   id: SettingsTab
@@ -149,7 +150,7 @@ export function SettingsPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const unreadCount = useUnreadCount()
-  const searchParams = useSearch({ strict: false }) as { dm?: string }
+  const searchParams = useSearch({ strict: false }) as { dm?: string; tab?: string }
   const { user } = useAuthStore()
   const normalizedLocation = resolveSettingsLocationFromPath(location.pathname)
 
@@ -165,6 +166,13 @@ export function SettingsPage() {
     searchParams.dm || null,
   )
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
+
+  // Backward compatibility: legacy ?tab=developer URLs auto-open the SettingsModal
+  useEffect(() => {
+    if (searchParams.tab === 'developer') {
+      setSettingsModalOpen(true)
+    }
+  }, [searchParams.tab])
 
   // Fetch wallet balance for nav display
   const { data: wallet } = useQuery({
@@ -435,7 +443,19 @@ export function SettingsPage() {
       <SettingsModal
         open={settingsModalOpen}
         onClose={() => setSettingsModalOpen(false)}
-        initialTab={undefined}
+        initialTab={
+          searchParams.tab === 'developer'
+            ? 'developer'
+            : searchParams.tab === 'profile'
+              ? 'profile'
+              : searchParams.tab === 'account'
+                ? 'account'
+                : searchParams.tab === 'appearance'
+                  ? 'appearance'
+                  : searchParams.tab === 'notification'
+                    ? 'notification'
+                    : undefined
+        }
       />
     </div>
   )
