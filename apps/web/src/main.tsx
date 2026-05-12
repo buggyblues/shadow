@@ -189,6 +189,7 @@ const settingsRoute = createRoute({
     view: (search.view as string) || undefined,
     agent: (search.agent as string) || undefined,
     agentId: (search.agentId as string) || undefined,
+    tab: (search.tab as string) || undefined,
   }),
 })
 
@@ -219,6 +220,7 @@ const settingsSubRoutes: Array<{ path: string }> = [
       view: (search.view as string) || undefined,
       agent: (search.agent as string) || undefined,
       agentId: (search.agentId as string) || undefined,
+      tab: (search.tab as string) || undefined,
     }),
   }),
 )
