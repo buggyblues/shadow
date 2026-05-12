@@ -71,6 +71,7 @@
     "check:sdk-versions": "node scripts/check-sdk-version-consistency.mjs",
     "check:workspace-deps": "node scripts/check-workspace-deps.mjs",
     "check:exports": "node scripts/check-exports-consistency.mjs",
+    "check:audit": "node scripts/check-npm-audit.mjs",
     "check:dashboard-style": "node scripts/check-dashboard-style.mjs",
     "check:dashboard-i18n": "node scripts/check-dashboard-i18n.mjs",
     "check:i18n": "node scripts/check-i18n.mjs",
