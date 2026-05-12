@@ -1,0 +1,68 @@
+rules:
+  - id: no-direct-fetch-outside-safe-http-client
+    message: Use SafeHttpClient instead of direct fetch in server code.
+    severity: ERROR
+    languages: [typescript, javascript]
+    patterns:
+      - pattern: fetch($URL, ...)
+      - pattern-not-inside: |
+          class SafeHttpClient { ... }
+    paths:
+      include:
+        - apps/server/src/**/*.ts
+      exclude:
+        - apps/server/src/gateways/safe-http-client.ts
+
+  - id: no-handler-dao-import
+    message: Handlers must not import DAO directly. Move logic into UseCase/AccessService.
+    severity: ERROR
+    languages: [typescript]
+    patterns:
+      - pattern-regex: "from ['\"]\.\.\/dao\/"
+    paths:
+      include:
+        - apps/server/src/handlers/**/*.ts
+
+  - id: no-direct-k8s-dangerous-runtime
+    message: Dangerous Kubernetes operations must go through KubernetesOpsGateway.
+    severity: ERROR
+    languages: [typescript]
+    pattern-either:
+      - pattern: deleteNamespace(...)
+      - pattern: spawnPodLogStream(...)
+      - pattern: readPodLogsAsync(...)
+      - pattern: restorePvcFromVolumeSnapshot(...)
+    paths:
+      include:
+        - apps/server/src/**/*.ts
+      exclude:
+        - apps/server/src/gateways/kubernetes-ops.gateway.ts
+        - apps/server/src/lib/cloud-deployment-processor.ts
+        - apps/server/src/lib/cloud-deployment-backup-runtime.ts
+
+  - id: no-raw-object-stream-outside-media-gateway
+    message: Private media must be served through MediaAccessGateway / signed token flow.
+    severity: ERROR
+    languages: [typescript]
+    pattern: $MEDIA.getObjectStream(...)
+    paths:
+      include:
+        - apps/server/src/**/*.ts
+      exclude:
+        - apps/server/src/services/media.service.ts
+        - apps/server/src/gateways/media-access.gateway.ts
+        - apps/server/src/handlers/media.handler.ts
+
+  - id: review-global-id-write-methods
+    message: Global-ID write method requires review. Prefer scoped update/delete methods.
+    severity: WARNING
+    languages: [typescript]
+    pattern-either:
+      - pattern: async update(id: string, ...)
+      - pattern: async delete(id: string, ...)
+      - pattern: async updateById(...)
+      - pattern: async deleteById(...)
+    paths:
+      include:
+        - apps/server/src/dao/**/*.ts
+        - apps/server/src/services/**/*.ts

@@ -1,7 +1,6 @@
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { cors } from 'hono/cors'
-import { lookup } from 'mime-types'
 import type { AppContainer } from './container'
 import { createAdminHandler } from './handlers/admin.handler'
 import { createAgentHandler } from './handlers/agent.handler'
@@ -123,25 +122,11 @@ export function createApp(container: AppContainer) {
   // Health check
   app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
 
-  // Media content refs returned by MediaService.upload(), e.g. /shadow/uploads/file.txt.
-  // Downloads go through the app layer so future contentRef authorization can be enforced here.
+  // Raw object refs, e.g. /shadow/uploads/file.txt, are intentionally not served directly.
+  // Private media must be resolved through /api/attachments/:id/media-url or /api/media/signed/:token,
+  // where object-level authorization has already happened before token issuance.
   app.get('/:bucket/uploads/:filename', authMiddleware, async (c) => {
-    const bucket = c.req.param('bucket')
-    const filename = c.req.param('filename')
-    if (!bucket || !filename) return c.json({ ok: false, error: 'Invalid media path' }, 400)
-    const mediaService = container.resolve('mediaService')
-    const contentRef = `/${bucket}/uploads/${filename}`
-    const contentType = lookup(filename) || 'application/octet-stream'
-    const activeContent = /(?:html|xml|svg|javascript|ecmascript)/i.test(contentType)
-    const stream = await mediaService.getObjectStream(contentRef, c.req.header('Range'))
-    if (!stream) return c.json({ ok: false, error: 'File not found' }, 404)
-
-    return c.body(stream.body, stream.status, {
-      ...stream.headers,
-      'Cache-Control': 'private, max-age=300',
-      'Content-Type': contentType,
-      ...(activeContent ? { 'Content-Disposition': 'attachment' } : {}),
-    })
+    return c.json({ ok: false, error: 'File not found' }, 404)
   })
 
   // Public endpoint for homepage / Buddy Market (no auth required)

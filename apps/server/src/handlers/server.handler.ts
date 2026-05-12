@@ -640,6 +640,8 @@ export function createServerHandler(container: AppContainer) {
     const id = await resolveServerId(idOrSlug)
     const user = c.get('user')
     const body = await c.req.json<{ agentIds: string[] }>()
+    const accessService = container.resolve('accessService')
+    await accessService.assertCanInstallAgentToServer(c.get('actor'), id)
 
     if (!Array.isArray(body.agentIds) || body.agentIds.length === 0) {
       return c.json({ ok: false, error: 'agentIds is required' }, 400)

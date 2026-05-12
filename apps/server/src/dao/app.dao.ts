@@ -114,8 +114,38 @@ export class AppDao {
     return r[0] ?? null
   }
 
+  async updateByServerIdAndId(
+    serverId: string,
+    id: string,
+    data: Partial<{
+      name: string
+      slug: string | null
+      description: string | null
+      iconUrl: string | null
+      bannerUrl: string | null
+      sourceType: 'zip' | 'url'
+      sourceUrl: string
+      version: string | null
+      status: 'draft' | 'active' | 'archived'
+      isHomepage: boolean
+      channelId: string | null
+      settings: Record<string, unknown> | null
+    }>,
+  ) {
+    const r = await this.db
+      .update(apps)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(apps.serverId, serverId), eq(apps.id, id)))
+      .returning()
+    return r[0] ?? null
+  }
+
   async delete(id: string) {
     await this.db.delete(apps).where(eq(apps.id, id))
+  }
+
+  async deleteByServerIdAndId(serverId: string, id: string) {
+    await this.db.delete(apps).where(and(eq(apps.serverId, serverId), eq(apps.id, id)))
   }
 
   async clearHomepage(serverId: string) {

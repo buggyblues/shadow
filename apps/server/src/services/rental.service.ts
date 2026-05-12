@@ -570,9 +570,21 @@ export class RentalService {
     if (contract.tenantId !== reporterId && contract.ownerId !== reporterId) {
       throw Object.assign(new Error('Not a party to this contract'), { status: 403 })
     }
+    if (contract.status !== 'active') {
+      throw Object.assign(new Error('Contract is not active'), { status: 409 })
+    }
 
     // Determine violator (the other party)
     const violatorId = reporterId === contract.tenantId ? contract.ownerId : contract.tenantId
+    const existingViolations = await this.deps.rentalViolationDao.findByContractId(contractId)
+    const alreadyReported = existingViolations.some(
+      (item) => item.violationType === data.violationType && item.violatorId === violatorId,
+    )
+    if (alreadyReported) {
+      throw Object.assign(new Error('Violation already reported for this contract'), {
+        status: 409,
+      })
+    }
 
     const violation = await this.deps.rentalViolationDao.create({
       contractId,

@@ -69,6 +69,22 @@ export class CloudDeploymentDao {
     return result[0] ?? null
   }
 
+  async findByNamespaceGlobal(namespace: string, clusterId?: string | null) {
+    const result = await this.db
+      .select()
+      .from(cloudDeployments)
+      .where(
+        and(
+          eq(cloudDeployments.namespace, namespace),
+          clusterId
+            ? eq(cloudDeployments.clusterId, clusterId)
+            : isNull(cloudDeployments.clusterId),
+        ),
+      )
+      .limit(1)
+    return result[0] ?? null
+  }
+
   async listByUser(userId: string, limit = 50, offset = 0) {
     return this.db
       .select()

@@ -108,6 +108,32 @@ export class ProductDao {
     return r[0] ?? null
   }
 
+  async updateByShopIdAndId(
+    shopId: string,
+    id: string,
+    data: Partial<{
+      name: string
+      slug: string
+      type: 'physical' | 'entitlement'
+      billingMode: 'one_time' | 'fixed_duration' | 'subscription'
+      status: 'draft' | 'active' | 'archived'
+      description: string | null
+      summary: string | null
+      basePrice: number
+      specNames: string[]
+      tags: string[]
+      entitlementConfig: EntitlementConfigInput | null
+      categoryId: string | null
+    }>,
+  ) {
+    const r = await this.db
+      .update(products)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(products.shopId, shopId), eq(products.id, id)))
+      .returning()
+    return r[0] ?? null
+  }
+
   async incrementSalesCount(id: string, qty: number) {
     await this.db
       .update(products)
@@ -127,6 +153,13 @@ export class ProductDao {
       .update(products)
       .set({ status: 'archived', updatedAt: new Date() })
       .where(eq(products.id, id))
+  }
+
+  async deleteByShopIdAndId(shopId: string, id: string) {
+    await this.db
+      .update(products)
+      .set({ status: 'archived', updatedAt: new Date() })
+      .where(and(eq(products.shopId, shopId), eq(products.id, id)))
   }
 }
 

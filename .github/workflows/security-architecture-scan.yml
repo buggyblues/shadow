@@ -1,0 +1,25 @@
+name: security-architecture-scan
+
+on:
+  pull_request:
+    paths:
+      - 'apps/server/src/**'
+      - 'tools/security/**'
+      - '.github/workflows/security-architecture-scan.yml'
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run architecture scanner in report mode
+        run: node tools/security/security-scan.mjs --report=security-scan-report.md
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-scan-report
+          path: security-scan-report.md

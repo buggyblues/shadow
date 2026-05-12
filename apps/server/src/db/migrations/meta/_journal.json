@@ -463,6 +463,13 @@
       "when": 1779195600000,
       "tag": "0065_cloud_deployment_last_active_at",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1779282000000,
+      "tag": "0066_security_idempotency_constraints",
+      "breakpoints": true
     }
   ]
 }
