@@ -170,7 +170,7 @@ export function CreateListingPage() {
       )
       useMarketplaceStore.getState().setRentalsTab('renting-out')
       useMarketplaceStore.getState().setRentalsSubTab('listings')
-      navigate({ to: '/marketplace/my-rentals' })
+      navigate({ to: '/settings', search: { tab: 'buddy', section: 'listings' } })
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })
@@ -221,7 +221,8 @@ export function CreateListingPage() {
       <div className="max-w-3xl mx-auto px-6 py-8 pb-24">
         {/* Header */}
         <Link
-          to="/marketplace/my-rentals"
+          to="/settings"
+          search={{ tab: 'buddy', section: 'rentals' }}
           className="inline-flex items-center gap-2 text-text-muted hover:text-text-primary transition-colors font-bold mb-6"
         >
           <ChevronLeft className="w-5 h-5" />
@@ -244,26 +245,26 @@ export function CreateListingPage() {
               {t('marketplace.basicInfo', '基本信息')}
             </h2>
             <div className="space-y-4">
-              {/* Agent / Claw selector */}
+              {/* Agent / Buddy selector */}
               <label className="block">
                 <span className="text-sm font-bold text-text-muted block mb-1">
-                  {t('marketplace.selectClaw', '选择 Claw')}
+                  {t('marketplace.selectBuddy', '选择 Buddy')}
                 </span>
                 <select
                   value={form.agentId}
                   onChange={(e) => update('agentId', e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl border-2 border-border-subtle font-medium focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 bg-bg-secondary"
                 >
-                  <option value="">{t('marketplace.noClawSelected', '-- 不绑定 Claw --')}</option>
+                  <option value="">{t('marketplace.noBuddySelected', '-- 不绑定 Buddy --')}</option>
                   {agents.map((agent) => {
                     const name = agent.botUser?.displayName ?? agent.botUser?.username ?? agent.id
                     const disabled = !!agent.isRented
                     return (
                       <option key={agent.id} value={agent.id} disabled={disabled}>
                         {name}
-                        {disabled ? ` 🔒 ${t('marketplace.clawRented', '租赁中')}` : ''}
+                        {disabled ? ` 🔒 ${t('marketplace.buddyRented', '租赁中')}` : ''}
                         {agent.isListed && !disabled
-                          ? ` (${t('marketplace.clawListed', '已上架')})`
+                          ? ` (${t('marketplace.buddyListed', '已上架')})`
                           : ''}
                       </option>
                     )
@@ -272,7 +273,7 @@ export function CreateListingPage() {
                 {agents.length === 0 && (
                   <p className="text-xs text-text-muted mt-1 flex items-center gap-1">
                     <Lock className="w-3 h-3" />
-                    {t('marketplace.noClawHint', '你还没有 Claw，请先在 Buddy 管理页面创建')}
+                    {t('marketplace.noBuddyHint', '你还没有 Buddy，请先在“我的 Buddy”里创建')}
                   </p>
                 )}
               </label>
@@ -303,7 +304,7 @@ export function CreateListingPage() {
                   onChange={(e) => update('description', e.target.value)}
                   maxLength={2000}
                   rows={4}
-                  placeholder={t('marketplace.descPlaceholder', '介绍你的 Claw 可以做什么...')}
+                  placeholder={t('marketplace.descPlaceholder', '介绍你的 Buddy 可以做什么...')}
                   className="w-full px-4 py-2.5 rounded-xl border-2 border-border-subtle font-medium focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none"
                 />
               </label>

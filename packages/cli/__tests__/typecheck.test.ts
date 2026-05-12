@@ -8,19 +8,6 @@ import type { ShadowClient } from '../../sdk/src/client'
  * These tests compile-time check the method signatures
  */
 describe('SDK Method Signatures', () => {
-  it('should have correct apps method signatures', () => {
-    expectTypeOf<ShadowClient['listApps']>().toEqualTypeOf<(serverId: string) => Promise<unknown>>()
-    expectTypeOf<ShadowClient['getApp']>().toEqualTypeOf<
-      (serverId: string, appId: string) => Promise<unknown>
-    >()
-    expectTypeOf<ShadowClient['deleteApp']>().toEqualTypeOf<
-      (serverId: string, appId: string) => Promise<unknown>
-    >()
-    expectTypeOf<ShadowClient['publishApp']>().toEqualTypeOf<
-      (serverId: string, data: { name: string; slug: string }) => Promise<unknown>
-    >()
-  })
-
   it('should have correct dms method signatures', () => {
     expectTypeOf<ShadowClient['listDirectChannels']>().toEqualTypeOf<() => Promise<unknown>>()
     expectTypeOf<ShadowClient['createDirectChannel']>().toEqualTypeOf<

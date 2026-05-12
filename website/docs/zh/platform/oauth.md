@@ -364,11 +364,11 @@ client.revoke_oauth_consent("app-id")
 |------|------|---------|------|
 | `GET` | `/api/oauth/workspaces/:id` | `workspaces:read` | 获取工作区信息 |
 
-### Buddy 搭子
+### Buddy
 
 | 方法 | 端点 | 权限范围 | 说明 |
 |------|------|---------|------|
-| `POST` | `/api/oauth/buddies` | `buddies:create` | 创建 Buddy 搭子 |
+| `POST` | `/api/oauth/buddies` | `buddies:create` | 创建 Buddy |
 | `POST` | `/api/oauth/buddies/:id/messages` | `buddies:manage` | Buddy 发送消息 |
 
 ---
@@ -389,8 +389,8 @@ client.revoke_oauth_consent("app-id")
 | `attachments:write` | 上传附件 |
 | `workspaces:read` | 查看工作区信息 |
 | `workspaces:write` | 修改工作区文件 |
-| `buddies:create` | 创建 Buddy 搭子 |
-| `buddies:manage` | 管理搭子、发送消息 |
+| `buddies:create` | 创建 Buddy |
+| `buddies:manage` | 管理 Buddy 并发送消息 |
 
 :::tip
 参阅 [平台应用](/zh/platform/platform-apps) 了解使用 OAuth API 构建完整应用的示例。

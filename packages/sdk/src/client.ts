@@ -1,7 +1,6 @@
 import type {
   ShadowAddAgentsToServerResult,
   ShadowAgentUsageSnapshotInput,
-  ShadowApp,
   ShadowAuthResponse,
   ShadowCartItem,
   ShadowCategory,
@@ -2598,59 +2597,6 @@ export class ShadowClient {
     rewards: { amount: number; reason: string; createdAt: string }[]
   }> {
     return this.request('/api/tasks/rewards')
-  }
-
-  // ── Server Apps ───────────────────────────────────────────────────────
-
-  async listApps(
-    serverId: string,
-    params?: { status?: string; limit?: number; offset?: number },
-  ): Promise<{ apps: ShadowApp[]; total: number }> {
-    const qs = new URLSearchParams()
-    if (params?.status) qs.set('status', params.status)
-    if (params?.limit) qs.set('limit', String(params.limit))
-    if (params?.offset) qs.set('offset', String(params.offset))
-    return this.request(`/api/servers/${serverId}/apps?${qs}`)
-  }
-
-  async getHomepageApp(serverId: string): Promise<ShadowApp | null> {
-    return this.request(`/api/servers/${serverId}/apps/homepage`)
-  }
-
-  async getApp(serverId: string, appId: string): Promise<ShadowApp> {
-    return this.request(`/api/servers/${serverId}/apps/${appId}`)
-  }
-
-  async createApp(
-    serverId: string,
-    data: { name: string; slug: string; type: string; url?: string },
-  ): Promise<ShadowApp> {
-    return this.request(`/api/servers/${serverId}/apps`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
-  }
-
-  async updateApp(
-    serverId: string,
-    appId: string,
-    data: Partial<{ name: string; slug: string; type: string; url: string; status: string }>,
-  ): Promise<ShadowApp> {
-    return this.request(`/api/servers/${serverId}/apps/${appId}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    })
-  }
-
-  async deleteApp(serverId: string, appId: string): Promise<{ success: boolean }> {
-    return this.request(`/api/servers/${serverId}/apps/${appId}`, { method: 'DELETE' })
-  }
-
-  async publishApp(serverId: string, data: { name: string; slug: string }): Promise<ShadowApp> {
-    return this.request(`/api/servers/${serverId}/apps/publish`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
   }
 
   // ── API Tokens ────────────────────────────────────────────────────────

@@ -86,29 +86,6 @@ Set activity status in a channel (auto-expires after 60s).
 socket.updateActivity('channel-id', 'thinking')
 ```
 
-### app:join / app:leave
-
-Join or leave an app's real-time room.
-
-```ts
-socket.joinApp('app-id')   // ack: { ok: boolean, channelId?: string }
-socket.leaveApp('app-id')
-```
-
-### app:broadcast
-
-Broadcast state to all users in an app room (host only).
-
-```ts
-socket.broadcastApp({
-  appId: 'app-id',
-  type: 'state-update',
-  payload: { count: 42 },
-})
-```
-
----
-
 ## Server → Client Events
 
 ### message:new
@@ -210,14 +187,6 @@ New notification pushed to the current user.
 
 ```json
 { "agentId": "agent-uuid", "serverId": "srv-uuid", "channelId": "ch-uuid" }
-```
-
-### app:broadcast
-
-Relayed app state broadcast (adds `senderId`).
-
-```json
-{ "appId": "app-uuid", "type": "state-update", "payload": { "count": 42 }, "senderId": "user-uuid" }
 ```
 
 ### error

@@ -34,9 +34,7 @@
     "yes": "예",
     "no": "아니요",
     "search": "검색",
-    "noResults": "결과 없음",
-    "avatarUploaded": "아바타가 업로드되었습니다",
-    "uploadFailed": "업로드 실패"
+    "noResults": "결과 없음"
   },
   "nav": {
     "features": "기능 소개",
@@ -157,7 +155,7 @@
     "tabQuickStart": "빠른 시작",
     "tabProfile": "프로필",
     "tabAccount": "계정",
-    "tabBuddy": "Buddy 관리",
+    "tabBuddy": "내 Buddy",
     "logout": "로그아웃",
     "profileTitle": "프로필",
     "displayNameLabel": "표시 이름",
@@ -238,7 +236,8 @@
     "appearanceTitle": "외관 설정",
     "darkTheme": "다크 모드",
     "lightTheme": "라이트 모드",
-    "systemTheme": "시스템 설정"
+    "systemTheme": "시스템 설정",
+    "activityGroup": "작업 & BUDDY"
   },
   "server": {
     "home": "홈",
@@ -989,7 +988,10 @@
     "listingDraft": "초안",
     "listingPaused": "일시 중지",
     "listingExpired": "만료됨",
-    "listingClosed": "종료됨"
+    "listingClosed": "종료됨",
+    "myBuddies": "내 Buddy",
+    "selectBuddy": "Buddy 선택",
+    "selectBuddyDesc": "왼쪽에서 Buddy를 선택해 설정을 관리하세요."
   },
   "serverHome": {
     "welcome": "환영합니다",
@@ -1043,7 +1045,6 @@
     "priceAsc": "가격: 낮은 순",
     "priceDesc": "가격: 높은 순",
     "results": "결과",
-    "listMyClaw": "내 Buddy 등록",
     "emptyTitle": "등록된 항목 없음",
     "emptyDesc": "아직 등록된 Buddy가 없습니다 — 첫 번째가 되세요!",
     "myRentals": "내 대여",
@@ -1124,7 +1125,7 @@
     "listingTitle": "제목",
     "titlePlaceholder": "예: 고사양 Mac Studio 풀스택 개발 환경",
     "listingDesc": "설명",
-    "descPlaceholder": "당신의 Claw가 무엇을 할 수 있는지 설명하세요...",
+    "descPlaceholder": "당신의 Buddy가 무엇을 할 수 있는지 설명하세요...",
     "skillTags": "스킬 태그",
     "skillsPlaceholder": "웹 개발, Python, DevOps (쉼표로 구분)",
     "guidelinesPlaceholder": "임차인에 대한 요구사항 및 제한...",
@@ -1162,17 +1163,19 @@
     "deviceMidRange": "중급",
     "deviceLowEnd": "보급형",
     "noDescription": "설명 없음",
-    "resultCount": "{{count}}개의 OpenClaw 대여 가능",
-    "noResults": "아직 대여 가능한 OpenClaw가 없습니다. 첫 번째로 등록해보세요!",
+    "resultCount": "{{count}}개의 Buddy 대여 가능",
+    "noResults": "아직 대여 가능한 Buddy가 없습니다. 첫 번째로 등록해보세요!",
     "myRentalsCta": "내 대여",
-    "myRentalsCtaDesc": "대여 및 등록 중인 OpenClaw 계약 관리",
+    "myRentalsCtaDesc": "대여 및 등록 중인 Buddy 계약 관리",
     "goToMyRentals": "내 대여",
     "unlimited": "무제한",
-    "delistClaw": "Claw 하장",
-    "delistSuccess": "Claw가 하장되었습니다",
-    "delistHint": "하장하면 이 Claw가 더 이상 마켓에 표시되지 않습니다",
-    "confirmDelist": "이 Claw를 하장하시겠습니까?",
-    "official": "공식"
+    "delistSuccess": "Buddy가 하장되었습니다",
+    "delistHint": "하장하면 이 Buddy가 더 이상 마켓에 표시되지 않습니다",
+    "confirmDelist": "이 Buddy를 하장하시겠습니까?",
+    "official": "공식",
+    "listMyBuddy": "내 Buddy 등록",
+    "delistBuddy": "Buddy 하장",
+    "rentalsAndListings": "대여 및 등록"
   },
   "apps": {
     "noApps": "앱 없음"

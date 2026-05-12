@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid'
 import type { AgentDao } from '../dao/agent.dao'
-import type { ClawListingDao } from '../dao/claw-listing.dao'
+import type { AgentListingDao } from '../dao/agent-listing.dao'
 import type {
   RentalContractDao,
   RentalUsageDao,
@@ -22,10 +22,10 @@ const TOKEN_UNIT_PRICE = 1
 const DEFAULT_PLATFORM_FEE_BPS = 500
 
 /** Platform terms template */
-const PLATFORM_TERMS = `虾豆平台 OpenClaw 租赁服务条款
+const PLATFORM_TERMS = `虾豆平台 Buddy 租赁服务条款
 
 1. 平台收取 5% 的服务手续费。
-2. 出租方在租赁期间不得自行使用已出租的 OpenClaw，违者需支付合同约定的违约金。
+2. 出租方在租赁期间不得自行使用已出租的 Buddy，违者需支付合同约定的违约金。
 3. 使用方应遵守出租方设定的使用准则，不得滥用或用于非法用途。
 4. Token 消耗费用由使用方承担。
 5. 基础租赁费每日收取，消息费按使用次数计费。
@@ -45,13 +45,13 @@ const CONTRACT_STATE_TRANSITIONS: Record<string, string[]> = {
 }
 
 /**
- * RentalService — orchestrates the P2P OpenClaw rental lifecycle.
+ * RentalService — orchestrates the P2P Agent rental lifecycle.
  * Handles listings, contract signing, usage tracking, pricing, and violations.
  */
 export class RentalService {
   constructor(
     private deps: {
-      clawListingDao: ClawListingDao
+      agentListingDao: AgentListingDao
       rentalContractDao: RentalContractDao
       rentalUsageDao: RentalUsageDao
       rentalViolationDao: RentalViolationDao
@@ -96,7 +96,7 @@ export class RentalService {
         throw Object.assign(new Error('Agent does not belong to listing owner'), { status: 403 })
       }
     }
-    return this.deps.clawListingDao.create({
+    return this.deps.agentListingDao.create({
       ownerId,
       ...data,
       hourlyRate: data.hourlyRate ?? 0,
@@ -106,7 +106,7 @@ export class RentalService {
   }
 
   async updateListing(id: string, ownerId: string, data: Record<string, unknown>) {
-    const listing = await this.deps.clawListingDao.findById(id)
+    const listing = await this.deps.agentListingDao.findById(id)
     if (!listing) throw Object.assign(new Error('Listing not found'), { status: 404 })
     if (listing.ownerId !== ownerId) {
       throw Object.assign(new Error('Not your listing'), { status: 403 })
@@ -135,26 +135,26 @@ export class RentalService {
         : null
     }
 
-    return this.deps.clawListingDao.update(
+    return this.deps.agentListingDao.update(
       id,
-      updateData as Parameters<typeof this.deps.clawListingDao.update>[1],
+      updateData as Parameters<typeof this.deps.agentListingDao.update>[1],
     )
   }
 
   async toggleListing(id: string, ownerId: string, isListed: boolean) {
-    const listing = await this.deps.clawListingDao.findById(id)
+    const listing = await this.deps.agentListingDao.findById(id)
     if (!listing) throw Object.assign(new Error('Listing not found'), { status: 404 })
     if (listing.ownerId !== ownerId) {
       throw Object.assign(new Error('Not your listing'), { status: 403 })
     }
-    return this.deps.clawListingDao.update(id, { isListed })
+    return this.deps.agentListingDao.update(id, { isListed })
   }
 
   async getListingDetail(id: string) {
-    const listing = await this.deps.clawListingDao.findById(id)
+    const listing = await this.deps.agentListingDao.findById(id)
     if (!listing) throw Object.assign(new Error('Listing not found'), { status: 404 })
     // Increment view count
-    await this.deps.clawListingDao.incrementViewCount(id)
+    await this.deps.agentListingDao.incrementViewCount(id)
     // Enrich with agent online time
     let totalOnlineSeconds = 0
     if (listing.agentId) {
@@ -175,7 +175,7 @@ export class RentalService {
   }
 
   async getMyListings(ownerId: string, opts?: { limit?: number; offset?: number }) {
-    const listings = await this.deps.clawListingDao.findByOwnerId(ownerId, opts)
+    const listings = await this.deps.agentListingDao.findByOwnerId(ownerId, opts)
 
     // Enrich listings with rental status
     const enriched = await Promise.all(
@@ -201,8 +201,8 @@ export class RentalService {
     offset?: number
   }) {
     const [listings, total] = await Promise.all([
-      this.deps.clawListingDao.browse(opts),
-      this.deps.clawListingDao.countBrowse(opts),
+      this.deps.agentListingDao.browse(opts),
+      this.deps.agentListingDao.countBrowse(opts),
     ])
     // Enrich listings with agent totalOnlineSeconds and owner info
     const enriched = await Promise.all(
@@ -231,7 +231,7 @@ export class RentalService {
   }
 
   async deleteListing(id: string, ownerId: string) {
-    const listing = await this.deps.clawListingDao.findById(id)
+    const listing = await this.deps.agentListingDao.findById(id)
     if (!listing) throw Object.assign(new Error('Listing not found'), { status: 404 })
     if (listing.ownerId !== ownerId) {
       throw Object.assign(new Error('Not your listing'), { status: 403 })
@@ -240,7 +240,7 @@ export class RentalService {
     if (activeContract) {
       throw Object.assign(new Error('Cannot delete listing with active rental'), { status: 400 })
     }
-    await this.deps.clawListingDao.deleteByUserIdAndId(ownerId, id)
+    await this.deps.agentListingDao.deleteByUserIdAndId(ownerId, id)
   }
 
   /* ═══════════════ Contract Signing ═══════════════ */
@@ -260,7 +260,7 @@ export class RentalService {
       agreedToTerms: boolean
     },
   ) {
-    const listing = await this.deps.clawListingDao.findById(data.listingId)
+    const listing = await this.deps.agentListingDao.findById(data.listingId)
     if (!listing) throw Object.assign(new Error('Listing not found'), { status: 404 })
 
     // Cannot rent own listing
@@ -351,7 +351,7 @@ export class RentalService {
         type: 'purchase',
         referenceId: contract.id,
         referenceType: 'rental_usage',
-        note: `OpenClaw 基础租赁费（首日）- 合同 ${contractNo}`,
+        note: `Buddy 基础租赁费（首日）- 合同 ${contractNo}`,
       })
 
       const ownerPayout = firstDayCost // platform fee is NOT paid to owner
@@ -361,7 +361,7 @@ export class RentalService {
         type: 'settlement',
         referenceId: contract.id,
         referenceType: 'rental_usage',
-        note: `OpenClaw 出租收入（首日）- 合同 ${contractNo}`,
+        note: `Buddy 出租收入（首日）- 合同 ${contractNo}`,
       })
 
       await this.deps.rentalUsageDao.create({
@@ -397,7 +397,7 @@ export class RentalService {
     })
 
     // Increment rental count
-    await this.deps.clawListingDao.incrementRentalCount(listing.id)
+    await this.deps.agentListingDao.incrementRentalCount(listing.id)
 
     return this.deps.rentalContractDao.findById(contract.id)
   }
@@ -452,7 +452,7 @@ export class RentalService {
     }
 
     // Delist the listing so it doesn't reappear on the marketplace
-    await this.deps.clawListingDao.update(contract.listingId, { isListed: false })
+    await this.deps.agentListingDao.update(contract.listingId, { isListed: false })
 
     return this.deps.rentalContractDao.update(contractId, {
       status: 'completed',
@@ -491,7 +491,7 @@ export class RentalService {
         status: 403,
       })
     }
-    const listing = await this.deps.clawListingDao.findById(contract.listingId)
+    const listing = await this.deps.agentListingDao.findById(contract.listingId)
     if (!listing?.agentId) {
       throw Object.assign(new Error('Contract is not bound to an agent listing'), { status: 403 })
     }
@@ -539,7 +539,7 @@ export class RentalService {
       type: 'purchase',
       referenceId: contractId,
       referenceType: 'rental_usage',
-      note: `OpenClaw 使用费 - 合同 ${contract.contractNo}`,
+      note: `Buddy 使用费 - 合同 ${contract.contractNo}`,
     })
 
     // Credit owner (minus platform fee)
@@ -551,7 +551,7 @@ export class RentalService {
         type: 'settlement',
         referenceId: usage.id,
         referenceType: 'rental_usage',
-        note: `OpenClaw 出租收入 - 合同 ${contract.contractNo}`,
+        note: `Buddy 出租收入 - 合同 ${contract.contractNo}`,
       })
     }
 
@@ -639,7 +639,7 @@ export class RentalService {
    * Returns different format based on listing's pricingVersion.
    */
   async estimateCost(listingId: string, durationHours: number) {
-    const listing = await this.deps.clawListingDao.findById(listingId)
+    const listing = await this.deps.agentListingDao.findById(listingId)
     if (!listing) throw Object.assign(new Error('Listing not found'), { status: 404 })
 
     const isV2 = (listing.pricingVersion ?? 1) >= 2
@@ -717,7 +717,7 @@ export class RentalService {
         }
 
         // Delist the listing so it doesn't reappear on the marketplace
-        await this.deps.clawListingDao.update(contract.listingId, { isListed: false })
+        await this.deps.agentListingDao.update(contract.listingId, { isListed: false })
 
         await this.deps.rentalContractDao.update(contract.id, {
           status: 'completed',
@@ -785,7 +785,7 @@ export class RentalService {
     platformFeeRate: number
     lastBilledOnlineSeconds: number
   }) {
-    const listing = await this.deps.clawListingDao.findById(contract.listingId)
+    const listing = await this.deps.agentListingDao.findById(contract.listingId)
     if (!listing?.agentId) return 0
 
     const agent = await this.deps.agentDao.findById(listing.agentId)
@@ -828,7 +828,7 @@ export class RentalService {
       type: 'purchase',
       referenceId: contract.id,
       referenceType: 'rental_usage',
-      note: `OpenClaw 使用费（自动结算）- 合同 ${contract.contractNo}`,
+      note: `Buddy 使用费（自动结算）- 合同 ${contract.contractNo}`,
     })
 
     const ownerPayout = totalCost - platformFee
@@ -839,7 +839,7 @@ export class RentalService {
         type: 'settlement',
         referenceId: usage.id,
         referenceType: 'rental_usage',
-        note: `OpenClaw 出租收入（自动结算）- 合同 ${contract.contractNo}`,
+        note: `Buddy 出租收入（自动结算）- 合同 ${contract.contractNo}`,
       })
     }
 
@@ -915,7 +915,7 @@ export class RentalService {
       type: 'purchase',
       referenceId: contract.id,
       referenceType: 'rental_usage',
-      note: `OpenClaw 使用费（自动结算）- 合同 ${contract.contractNo}`,
+      note: `Buddy 使用费（自动结算）- 合同 ${contract.contractNo}`,
     })
 
     // Credit owner (minus platform fee)
@@ -927,7 +927,7 @@ export class RentalService {
         type: 'settlement',
         referenceId: usage.id,
         referenceType: 'rental_usage',
-        note: `OpenClaw 出租收入（自动结算）- 合同 ${contract.contractNo}`,
+        note: `Buddy 出租收入（自动结算）- 合同 ${contract.contractNo}`,
       })
     }
 
@@ -956,7 +956,7 @@ export class RentalService {
 
   /**
    * Records a rental message for billing purposes.
-   * Called when a tenant sends a DM to a rented BuddyClaw bot.
+   * Called when a tenant sends a DM to a rented Buddy.
    * Only increments the counter; actual billing happens in the scheduled job.
    */
   async recordRentalMessage(senderId: string, botUserId: string) {

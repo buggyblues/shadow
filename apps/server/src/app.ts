@@ -6,7 +6,6 @@ import { createAdminHandler } from './handlers/admin.handler'
 import { createAgentHandler } from './handlers/agent.handler'
 import { createAgentDashboardHandler } from './handlers/agent-dashboard.handler'
 import { createApiTokenHandler } from './handlers/api-token.handler'
-import { createAppHandler } from './handlers/app.handler'
 import { createAuthHandler } from './handlers/auth.handler'
 import { createChannelHandler } from './handlers/channel.handler'
 import { createCloudHandler } from './handlers/cloud.handler'
@@ -172,10 +171,8 @@ export function createApp(container: AppContainer) {
   // Paid file viewer URLs are authorized by short-lived grant tokens, so this handler must be
   // mounted before broad /api sub-app auth middleware.
   app.route('/api', createPaidFileHandler(container))
-  // IMPORTANT: Mount app/workspace handlers before /api/servers base handler
-  // so nested routes like /api/servers/:serverId/apps/* and
-  // /api/servers/:serverId/workspace/* are not pre-empted by server auth middleware.
-  app.route('/api', createAppHandler(container))
+  // Mount workspace before /api/servers so nested /api/servers/:serverId/workspace/*
+  // routes are not pre-empted by server auth middleware.
   app.route('/api', createWorkspaceHandler(container))
   app.route('/api/servers', createServerHandler(container))
   app.route('/api', createChannelHandler(container))

@@ -30,7 +30,6 @@ export type {
   ServerJoinedPayload,
   ShadowAddAgentsToServerResult,
   ShadowAgentUsageSnapshotInput,
-  ShadowApp,
   ShadowAttachment,
   ShadowCartItem,
   ShadowCategory,

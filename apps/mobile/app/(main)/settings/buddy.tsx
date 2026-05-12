@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
-import { Bot, ChevronRight } from 'lucide-react-native'
+import { Bot, ChevronRight, Package, Store } from 'lucide-react-native'
 import { useTranslation } from 'react-i18next'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Avatar } from '../../../src/components/common/avatar'
@@ -45,21 +45,49 @@ export default function BuddySettingsScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <SettingsHeader title={t('settings.tabBuddy')} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
-        <Pressable
-          style={[styles.manageBtn, { backgroundColor: colors.primary }]}
-          onPress={() => router.push('/(main)/buddy-management')}
-        >
-          <Text style={{ color: '#fff', fontWeight: '700', fontSize: fontSize.sm }}>
-            {t('common.manage', '管理 Buddy')}
-          </Text>
-          <ChevronRight size={16} color="#fff" />
-        </Pressable>
+        <View style={[styles.actionGroup, { backgroundColor: colors.surface }]}>
+          <Pressable
+            style={styles.actionRow}
+            onPress={() => router.push('/(main)/buddy-management')}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: `${colors.primary}18` }]}>
+              <Bot size={16} color={colors.primary} />
+            </View>
+            <Text style={[styles.actionLabel, { color: colors.text }]}>
+              {t('common.manage', '管理 Buddy')}
+            </Text>
+            <ChevronRight size={16} color={colors.textMuted} />
+          </Pressable>
+          <View style={[styles.separator, { backgroundColor: colors.border }]} />
+          <Pressable
+            style={styles.actionRow}
+            onPress={() => router.push('/(main)/settings/buddy-market' as never)}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: `${colors.primary}18` }]}>
+              <Store size={16} color={colors.primary} />
+            </View>
+            <Text style={[styles.actionLabel, { color: colors.text }]}>
+              {t('settings.goBuddyMarket', 'Buddy 市场')}
+            </Text>
+            <ChevronRight size={16} color={colors.textMuted} />
+          </Pressable>
+          <View style={[styles.separator, { backgroundColor: colors.border }]} />
+          <Pressable style={styles.actionRow} onPress={() => router.push('/(main)/my-rentals')}>
+            <View style={[styles.actionIcon, { backgroundColor: `${colors.primary}18` }]}>
+              <Package size={16} color={colors.primary} />
+            </View>
+            <Text style={[styles.actionLabel, { color: colors.text }]}>
+              {t('marketplace.rentalsAndListings', '租赁与挂单')}
+            </Text>
+            <ChevronRight size={16} color={colors.textMuted} />
+          </Pressable>
+        </View>
 
         {agents.length === 0 ? (
           <View style={styles.emptyState}>
             <Bot size={40} color={colors.textMuted} />
             <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginTop: spacing.sm }}>
-              暂无 Buddy
+              {t('agentMgmt.noAgents', '暂无 Buddy')}
             </Text>
           </View>
         ) : (
@@ -108,7 +136,7 @@ export default function BuddySettingsScreen() {
                         fontWeight: '600',
                       }}
                     >
-                      {online ? 'online' : agent.status}
+                      {online ? t('marketplace.online', '在线') : agent.status}
                     </Text>
                   </View>
                 </Pressable>
@@ -124,14 +152,23 @@ export default function BuddySettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xl * 2 },
-  manageBtn: {
+  actionGroup: { borderRadius: radius.xl, overflow: 'hidden' },
+  actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    height: 48,
-    borderRadius: radius.xl,
+    gap: spacing.md,
+    minHeight: 52,
+    paddingHorizontal: spacing.lg,
   },
+  actionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionLabel: { flex: 1, fontSize: fontSize.sm, fontWeight: '700' },
+  separator: { height: StyleSheet.hairlineWidth, marginLeft: spacing.lg + 32 + spacing.md },
   emptyState: { alignItems: 'center', paddingVertical: spacing.xl * 2 },
   card: { borderRadius: radius.xl, overflow: 'hidden' },
   row: {

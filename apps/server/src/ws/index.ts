@@ -4,7 +4,6 @@ import type { AppContainer } from '../container'
 import { verifyToken } from '../lib/jwt'
 import { logger } from '../lib/logger'
 import { getRedisClient } from '../lib/redis'
-import { setupAppGateway } from './app.gateway'
 import { setupChatGateway } from './chat.gateway'
 import { setupNotificationGateway } from './notification.gateway'
 import { setupPresenceGateway } from './presence.gateway'
@@ -87,10 +86,9 @@ export function setupWebSocket(io: SocketIOServer, container: AppContainer): voi
     .catch((err) => {
       logger.error({ err }, 'Failed to initialize Redis for presence — falling back to local-only')
       setupPresenceGateway(io, container, null)
-    })
+  })
 
   setupChatGateway(io, container)
-  setupAppGateway(io, container)
   setupNotificationGateway(io)
 
   logger.info('WebSocket gateways initialized')

@@ -1,24 +1,24 @@
 import { and, desc, eq, gte, ilike, inArray, lte, or, sql } from 'drizzle-orm'
 import type { Database } from '../db'
-import { clawListings, rentalContracts } from '../db/schema'
+import { agentListings, rentalContracts } from '../db/schema'
 
-export class ClawListingDao {
+export class AgentListingDao {
   constructor(private deps: { db: Database }) {}
   private get db() {
     return this.deps.db
   }
 
   async findById(id: string) {
-    const r = await this.db.select().from(clawListings).where(eq(clawListings.id, id)).limit(1)
+    const r = await this.db.select().from(agentListings).where(eq(agentListings.id, id)).limit(1)
     return r[0] ?? null
   }
 
   async findByOwnerId(ownerId: string, opts?: { limit?: number; offset?: number }) {
     return this.db
       .select()
-      .from(clawListings)
-      .where(eq(clawListings.ownerId, ownerId))
-      .orderBy(desc(clawListings.createdAt))
+      .from(agentListings)
+      .where(eq(agentListings.ownerId, ownerId))
+      .orderBy(desc(agentListings.createdAt))
       .limit(opts?.limit ?? 50)
       .offset(opts?.offset ?? 0)
   }
@@ -26,9 +26,9 @@ export class ClawListingDao {
   async findByAgentId(agentId: string) {
     return this.db
       .select()
-      .from(clawListings)
-      .where(eq(clawListings.agentId, agentId))
-      .orderBy(desc(clawListings.createdAt))
+      .from(agentListings)
+      .where(eq(agentListings.agentId, agentId))
+      .orderBy(desc(agentListings.createdAt))
   }
 
   /** Helper: get IDs of listings currently actively rented */
@@ -52,17 +52,17 @@ export class ClawListingDao {
   }) {
     const now = new Date()
     const conditions = [
-      eq(clawListings.listingStatus, 'active'),
-      eq(clawListings.isListed, true),
-      or(lte(clawListings.availableFrom, now), sql`${clawListings.availableFrom} IS NULL`),
-      or(gte(clawListings.availableUntil, now), sql`${clawListings.availableUntil} IS NULL`),
+      eq(agentListings.listingStatus, 'active'),
+      eq(agentListings.isListed, true),
+      or(lte(agentListings.availableFrom, now), sql`${agentListings.availableFrom} IS NULL`),
+      or(gte(agentListings.availableUntil, now), sql`${agentListings.availableUntil} IS NULL`),
     ]
 
     // Exclude listings that are currently being rented
     const rentedIds = await this.getActivelyRentedListingIds()
     if (rentedIds.length > 0) {
       conditions.push(
-        sql`${clawListings.id} NOT IN (${sql.join(
+        sql`${agentListings.id} NOT IN (${sql.join(
           rentedIds.map((id) => sql`${id}`),
           sql`, `,
         )})`,
@@ -72,8 +72,8 @@ export class ClawListingDao {
     if (opts?.keyword) {
       conditions.push(
         or(
-          ilike(clawListings.title, `%${opts.keyword}%`),
-          ilike(clawListings.description, `%${opts.keyword}%`),
+          ilike(agentListings.title, `%${opts.keyword}%`),
+          ilike(agentListings.description, `%${opts.keyword}%`),
         )!,
       )
     }
@@ -81,43 +81,43 @@ export class ClawListingDao {
     if (opts?.deviceTier) {
       const tiers = opts.deviceTier
         .split(',')
-        .filter(Boolean) as (typeof clawListings.deviceTier.enumValues)[number][]
+        .filter(Boolean) as (typeof agentListings.deviceTier.enumValues)[number][]
       if (tiers.length === 1) {
-        conditions.push(eq(clawListings.deviceTier, tiers[0]!))
+        conditions.push(eq(agentListings.deviceTier, tiers[0]!))
       } else if (tiers.length > 1) {
-        conditions.push(inArray(clawListings.deviceTier, tiers))
+        conditions.push(inArray(agentListings.deviceTier, tiers))
       }
     }
 
     if (opts?.osType) {
       const types = opts.osType
         .split(',')
-        .filter(Boolean) as (typeof clawListings.osType.enumValues)[number][]
+        .filter(Boolean) as (typeof agentListings.osType.enumValues)[number][]
       if (types.length === 1) {
-        conditions.push(eq(clawListings.osType, types[0]!))
+        conditions.push(eq(agentListings.osType, types[0]!))
       } else if (types.length > 1) {
-        conditions.push(inArray(clawListings.osType, types))
+        conditions.push(inArray(agentListings.osType, types))
       }
     }
 
     const getOrderBy = () => {
       switch (opts?.sortBy) {
         case 'newest':
-          return desc(clawListings.createdAt)
+          return desc(agentListings.createdAt)
         case 'price-asc':
-          return clawListings.hourlyRate
+          return agentListings.hourlyRate
         case 'price-desc':
-          return desc(clawListings.hourlyRate)
+          return desc(agentListings.hourlyRate)
         default:
           // Popular = weighted by rentalCount + viewCount
-          return desc(sql`${clawListings.rentalCount} * 10 + ${clawListings.viewCount}`)
+          return desc(sql`${agentListings.rentalCount} * 10 + ${agentListings.viewCount}`)
       }
     }
     const orderBy = getOrderBy()
 
     return this.db
       .select()
-      .from(clawListings)
+      .from(agentListings)
       .where(and(...conditions))
       .orderBy(orderBy)
       .limit(opts?.limit ?? 20)
@@ -128,17 +128,17 @@ export class ClawListingDao {
   async countBrowse(opts?: { keyword?: string; deviceTier?: string; osType?: string }) {
     const now = new Date()
     const conditions = [
-      eq(clawListings.listingStatus, 'active'),
-      eq(clawListings.isListed, true),
-      or(lte(clawListings.availableFrom, now), sql`${clawListings.availableFrom} IS NULL`),
-      or(gte(clawListings.availableUntil, now), sql`${clawListings.availableUntil} IS NULL`),
+      eq(agentListings.listingStatus, 'active'),
+      eq(agentListings.isListed, true),
+      or(lte(agentListings.availableFrom, now), sql`${agentListings.availableFrom} IS NULL`),
+      or(gte(agentListings.availableUntil, now), sql`${agentListings.availableUntil} IS NULL`),
     ]
 
     // Exclude listings that are currently being rented
     const rentedIds = await this.getActivelyRentedListingIds()
     if (rentedIds.length > 0) {
       conditions.push(
-        sql`${clawListings.id} NOT IN (${sql.join(
+        sql`${agentListings.id} NOT IN (${sql.join(
           rentedIds.map((id) => sql`${id}`),
           sql`, `,
         )})`,
@@ -148,8 +148,8 @@ export class ClawListingDao {
     if (opts?.keyword) {
       conditions.push(
         or(
-          ilike(clawListings.title, `%${opts.keyword}%`),
-          ilike(clawListings.description, `%${opts.keyword}%`),
+          ilike(agentListings.title, `%${opts.keyword}%`),
+          ilike(agentListings.description, `%${opts.keyword}%`),
         )!,
       )
     }
@@ -157,28 +157,28 @@ export class ClawListingDao {
     if (opts?.deviceTier) {
       const tiers = opts.deviceTier
         .split(',')
-        .filter(Boolean) as (typeof clawListings.deviceTier.enumValues)[number][]
+        .filter(Boolean) as (typeof agentListings.deviceTier.enumValues)[number][]
       if (tiers.length === 1) {
-        conditions.push(eq(clawListings.deviceTier, tiers[0]!))
+        conditions.push(eq(agentListings.deviceTier, tiers[0]!))
       } else if (tiers.length > 1) {
-        conditions.push(inArray(clawListings.deviceTier, tiers))
+        conditions.push(inArray(agentListings.deviceTier, tiers))
       }
     }
 
     if (opts?.osType) {
       const types = opts.osType
         .split(',')
-        .filter(Boolean) as (typeof clawListings.osType.enumValues)[number][]
+        .filter(Boolean) as (typeof agentListings.osType.enumValues)[number][]
       if (types.length === 1) {
-        conditions.push(eq(clawListings.osType, types[0]!))
+        conditions.push(eq(agentListings.osType, types[0]!))
       } else if (types.length > 1) {
-        conditions.push(inArray(clawListings.osType, types))
+        conditions.push(inArray(agentListings.osType, types))
       }
     }
 
     const r = await this.db
       .select({ count: sql<number>`count(*)::int` })
-      .from(clawListings)
+      .from(agentListings)
       .where(and(...conditions))
     return r[0]?.count ?? 0
   }
@@ -204,7 +204,7 @@ export class ClawListingDao {
     availableUntil?: Date | null
     tags?: string[]
   }) {
-    const r = await this.db.insert(clawListings).values(data).returning()
+    const r = await this.db.insert(agentListings).values(data).returning()
     return r[0] ?? null
   }
 
@@ -232,32 +232,32 @@ export class ClawListingDao {
     }>,
   ) {
     const r = await this.db
-      .update(clawListings)
+      .update(agentListings)
       .set({ ...data, updatedAt: new Date() })
-      .where(eq(clawListings.id, id))
+      .where(eq(agentListings.id, id))
       .returning()
     return r[0] ?? null
   }
 
   async incrementViewCount(id: string) {
     await this.db
-      .update(clawListings)
-      .set({ viewCount: sql`${clawListings.viewCount} + 1` })
-      .where(eq(clawListings.id, id))
+      .update(agentListings)
+      .set({ viewCount: sql`${agentListings.viewCount} + 1` })
+      .where(eq(agentListings.id, id))
   }
 
   async incrementRentalCount(id: string) {
     await this.db
-      .update(clawListings)
-      .set({ rentalCount: sql`${clawListings.rentalCount} + 1` })
-      .where(eq(clawListings.id, id))
+      .update(agentListings)
+      .set({ rentalCount: sql`${agentListings.rentalCount} + 1` })
+      .where(eq(agentListings.id, id))
   }
 
   /** Scoped delete by userId (owner) and listing id */
   async deleteByUserIdAndId(userId: string, id: string) {
     await this.db
-      .delete(clawListings)
-      .where(and(eq(clawListings.id, id), eq(clawListings.ownerId, userId)))
+      .delete(agentListings)
+      .where(and(eq(agentListings.id, id), eq(agentListings.ownerId, userId)))
   }
 
   /** Find active (listed) listings that reference any of the given agent IDs */
@@ -265,13 +265,15 @@ export class ClawListingDao {
     if (agentIds.length === 0) return []
     return this.db
       .select()
-      .from(clawListings)
-      .where(and(inArray(clawListings.agentId, agentIds), eq(clawListings.listingStatus, 'active')))
+      .from(agentListings)
+      .where(
+        and(inArray(agentListings.agentId, agentIds), eq(agentListings.listingStatus, 'active')),
+      )
   }
 
   /** Find all listings (any status) that reference any of the given agent IDs */
   async findByAgentIds(agentIds: string[]) {
     if (agentIds.length === 0) return []
-    return this.db.select().from(clawListings).where(inArray(clawListings.agentId, agentIds))
+    return this.db.select().from(agentListings).where(inArray(agentListings.agentId, agentIds))
   }
 }

@@ -32,9 +32,9 @@ interface FriendUser {
 
 interface FriendEntry {
   friendshipId: string
-  source: 'friend' | 'owned_claw' | 'rented_claw'
+  source: 'friend' | 'owned_agent' | 'rented_agent'
   user: FriendUser
-  clawStatus?: 'available' | 'listed' | 'rented_out'
+  agentStatus?: 'available' | 'listed' | 'rented_out'
   createdAt: string
 }
 

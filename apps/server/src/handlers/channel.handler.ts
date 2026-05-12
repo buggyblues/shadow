@@ -694,7 +694,7 @@ export function createChannelHandler(container: AppContainer) {
       },
     ])
 
-    // Broadcast policy change to the bot so openclaw can react
+    // Broadcast policy change to the Buddy runtime so OpenClaw can react.
     try {
       const io = container.resolve('io')
       io.to(`user:${agent.userId}`).emit('agent:policy-changed', {

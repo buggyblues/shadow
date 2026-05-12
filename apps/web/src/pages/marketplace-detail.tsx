@@ -167,7 +167,7 @@ export function MarketplaceDetailPage() {
         setIsAlreadyRented(true)
         setShowContract(false)
         showToast(
-          t('marketplace.alreadyRented', '该 Claw 已被其他用户租赁，请稍后再试或选择其他 Claw'),
+          t('marketplace.alreadyRented', '该 Buddy 已被其他用户租赁，请稍后再试或选择其他 Buddy'),
           'error',
         )
       } else {
@@ -186,8 +186,8 @@ export function MarketplaceDetailPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplace'] })
-      showToast(t('marketplace.delistSuccess', 'Claw 已下架'), 'success')
-      navigate({ to: '/marketplace/my-rentals' })
+      showToast(t('marketplace.delistSuccess', 'Buddy 已下架'), 'success')
+      navigate({ to: '/settings', search: { tab: 'buddy', section: 'listings' } })
     },
     onError: (err: Error) => {
       showToast(err.message, 'error')
@@ -225,7 +225,7 @@ export function MarketplaceDetailPage() {
       <div className="max-w-5xl mx-auto px-6 py-8">
         {/* Back */}
         <a
-          href="/buddies"
+          href="/settings?tab=buddy&section=market"
           className="inline-flex items-center gap-2 text-text-muted hover:text-text-primary transition-colors font-bold mb-6"
         >
           <ChevronLeft className="w-5 h-5" />
@@ -502,7 +502,7 @@ export function MarketplaceDetailPage() {
                     <Clock className="w-3.5 h-3.5 inline mr-1" />
                     {t(
                       'marketplace.availabilityWarning',
-                      '此 Claw 最长可用至 {{date}}（剩余 {{hours}} 小时），费用和合同将按限制时间计算。',
+                      '此 Buddy 最长可用至 {{date}}（剩余 {{hours}} 小时），费用和合同将按限制时间计算。',
                       {
                         date: new Date(listing!.availableUntil!).toLocaleString(),
                         hours: maxAvailableHours,
@@ -569,7 +569,7 @@ export function MarketplaceDetailPage() {
                     type="button"
                     onClick={() => {
                       if (
-                        window.confirm(t('marketplace.confirmDelist', '确定要下架此 Claw 吗？'))
+                        window.confirm(t('marketplace.confirmDelist', '确定要下架此 Buddy 吗？'))
                       ) {
                         delistMutation.mutate()
                       }
@@ -580,10 +580,10 @@ export function MarketplaceDetailPage() {
                   >
                     {delistMutation.isPending
                       ? t('common.loading', '处理中...')
-                      : t('marketplace.delistClaw', '下架 Claw')}
+                      : t('marketplace.delistBuddy', '下架 Buddy')}
                   </button>
                   <p className="text-xs text-text-muted text-center mt-3 font-medium">
-                    {t('marketplace.delistHint', '下架后此 Claw 将不再展示在集市中')}
+                    {t('marketplace.delistHint', '下架后此 Buddy 将不再展示在集市中')}
                   </p>
                 </>
               ) : isAlreadyRented ? (
@@ -599,7 +599,7 @@ export function MarketplaceDetailPage() {
                   <p className="text-xs text-warning text-center mt-3 font-medium">
                     {t(
                       'marketplace.alreadyRentedHint',
-                      '该 Claw 当前正在被其他用户使用，暂时无法租赁。请稍后再来看看吧~',
+                      '该 Buddy 当前正在被其他用户使用，暂时无法租赁。请稍后再来看看吧~',
                     )}
                   </p>
                 </>

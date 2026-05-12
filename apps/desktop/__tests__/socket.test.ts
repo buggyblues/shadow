@@ -174,32 +174,4 @@ describe('socket.ts', () => {
       expect(mockSocket.emit).toHaveBeenCalledWith('presence:update', { status: 'online' })
     })
   })
-
-  describe('app operations', () => {
-    it('joinApp emits app:join', async () => {
-      const { getSocket, joinApp } = await import('../src/renderer/lib/socket')
-      getSocket()
-      const ack = vi.fn()
-      joinApp('app-1', ack)
-      expect(mockSocket.emit).toHaveBeenCalledWith('app:join', { appId: 'app-1' }, ack)
-    })
-
-    it('leaveApp emits app:leave', async () => {
-      const { getSocket, leaveApp } = await import('../src/renderer/lib/socket')
-      getSocket()
-      leaveApp('app-1')
-      expect(mockSocket.emit).toHaveBeenCalledWith('app:leave', { appId: 'app-1' })
-    })
-
-    it('broadcastAppState emits app:broadcast', async () => {
-      const { broadcastAppState, getSocket } = await import('../src/renderer/lib/socket')
-      getSocket()
-      broadcastAppState('app-1', 'stateChange', { key: 'value' })
-      expect(mockSocket.emit).toHaveBeenCalledWith('app:broadcast', {
-        appId: 'app-1',
-        type: 'stateChange',
-        payload: { key: 'value' },
-      })
-    })
-  })
 })

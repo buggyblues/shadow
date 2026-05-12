@@ -31,6 +31,7 @@ vi.mock('../src/lib/cloud-deployment-backup-runtime', () => ({
 
 import {
   calculateCloudHourlyBillingCharge,
+  createCloudHourlyBillingReferenceId,
   ensureNamespaceDeletionStarted,
   hasReadyDeploymentRuntimeResources,
   isUserCancelledDeploymentError,
@@ -68,6 +69,23 @@ describe('calculateCloudHourlyBillingCharge', () => {
         hourlyCost: 1,
       }),
     ).toBeNull()
+  })
+})
+
+describe('createCloudHourlyBillingReferenceId', () => {
+  it('creates a stable UUID per deployment billing window', () => {
+    const deploymentId = '105eaf9f-d1b9-4c18-9990-d26975878422'
+    const billedUntil = new Date('2026-05-08T00:30:00.000Z')
+
+    const referenceId = createCloudHourlyBillingReferenceId(deploymentId, billedUntil)
+
+    expect(referenceId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    )
+    expect(referenceId).toBe(createCloudHourlyBillingReferenceId(deploymentId, billedUntil))
+    expect(referenceId).not.toBe(
+      createCloudHourlyBillingReferenceId(deploymentId, new Date('2026-05-08T00:45:00.000Z')),
+    )
   })
 })
 

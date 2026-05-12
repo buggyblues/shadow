@@ -1633,30 +1633,6 @@ class ShadowClient:
     def get_reward_history(self) -> dict[str, Any]:
         return self._get("/api/tasks/rewards")
 
-    # ── Server Apps ──────────────────────────────────────────────────────
-
-    def list_apps(
-        self, server_id: str, **kwargs: Any
-    ) -> dict[str, Any]:
-        return self._get(f"/api/servers/{server_id}/apps", params=kwargs or None)
-
-    def get_homepage_app(self, server_id: str) -> dict[str, Any] | None:
-        return self._get(f"/api/servers/{server_id}/apps/homepage")
-
-    def get_app(self, server_id: str, app_id: str) -> dict[str, Any]:
-        return self._get(f"/api/servers/{server_id}/apps/{app_id}")
-
-    def create_app(self, server_id: str, **kwargs: Any) -> dict[str, Any]:
-        return self._post(f"/api/servers/{server_id}/apps", json=kwargs)
-
-    def update_app(
-        self, server_id: str, app_id: str, **kwargs: Any
-    ) -> dict[str, Any]:
-        return self._patch(f"/api/servers/{server_id}/apps/{app_id}", json=kwargs)
-
-    def delete_app(self, server_id: str, app_id: str) -> dict[str, Any]:
-        return self._delete(f"/api/servers/{server_id}/apps/{app_id}")
-
     # ── Workspace ────────────────────────────────────────────────────────
 
     def get_workspace(self, server_id: str) -> dict[str, Any]:
@@ -1894,11 +1870,3 @@ class ShadowClient:
 
     def login_with_google_id_token(self, id_token: str) -> dict[str, Any]:
         return self._post("/api/auth/google/id-token", json={"idToken": id_token})
-
-    # ── Server Apps (extended) ───────────────────────────────────────────
-
-    def publish_app(self, server_id: str, name: str, slug: str) -> dict[str, Any]:
-        return self._post(
-            f"/api/servers/{server_id}/apps/publish",
-            json={"name": name, "slug": slug},
-        )

@@ -4,12 +4,11 @@ import { AgentDao } from './dao/agent.dao'
 import { AgentDashboardDao } from './dao/agent-dashboard.dao'
 import { AgentPolicyDao } from './dao/agent-policy.dao'
 import { ApiTokenDao } from './dao/api-token.dao'
-import { AppDao } from './dao/app.dao'
 import { CartDao } from './dao/cart.dao'
 import { ChannelDao } from './dao/channel.dao'
 import { ChannelJoinRequestDao } from './dao/channel-join-request.dao'
 import { ChannelMemberDao } from './dao/channel-member.dao'
-import { ClawListingDao } from './dao/claw-listing.dao'
+import { AgentListingDao } from './dao/agent-listing.dao'
 import { CloudActivityDao } from './dao/cloud-activity.dao'
 import { CloudClusterDao } from './dao/cloud-cluster.dao'
 import { CloudConfigDao } from './dao/cloud-config.dao'
@@ -53,7 +52,6 @@ import { AccessService } from './security/access.service'
 import { AgentService } from './services/agent.service'
 import { AgentDashboardService } from './services/agent-dashboard.service'
 import { AgentPolicyService } from './services/agent-policy.service'
-import { AppService } from './services/app.service'
 import { AuditLogService } from './services/audit-log.service'
 // Service classes
 import { AuthService } from './services/auth.service'
@@ -113,7 +111,6 @@ import { WalletService } from './services/wallet.service'
 import { WorkspaceService } from './services/workspace.service'
 import { AdminUseCase } from './usecases/admin.usecase'
 import { ApiTokenUseCase } from './usecases/api-token.usecase'
-import { AppUseCase } from './usecases/app.usecase'
 import { AuthUseCase } from './usecases/auth.usecase'
 import { ChannelUseCase } from './usecases/channel.usecase'
 import { ServerUseCase } from './usecases/server.usecase'
@@ -138,7 +135,6 @@ export interface Cradle {
   kubernetesOpsGateway: KubernetesOpsGateway
   mediaAccessGateway: MediaAccessGateway
   commandGateway: CommandGateway
-  appUseCase: AppUseCase
   cloudUseCase: CloudUseCase
   cloudSaasUseCase: CloudSaasUseCase
   adminUseCase: AdminUseCase
@@ -171,9 +167,6 @@ export interface Cradle {
   oauthAccountDao: OAuthAccountDao
   taskCenterDao: TaskCenterDao
 
-  // App DAOs
-  appDao: AppDao
-
   // Shop DAOs
   shopDao: ShopDao
   productDao: ProductDao
@@ -191,7 +184,7 @@ export interface Cradle {
   workspaceNodeDao: WorkspaceNodeDao
 
   // Rental DAOs
-  clawListingDao: ClawListingDao
+  agentListingDao: AgentListingDao
   rentalContractDao: RentalContractDao
   rentalUsageDao: RentalUsageDao
   rentalViolationDao: RentalViolationDao
@@ -251,7 +244,6 @@ export interface Cradle {
   mediaService: MediaService
   agentService: AgentService
   agentPolicyService: AgentPolicyService
-  appService: AppService
   shopService: ShopService
   shopScopeService: ShopScopeService
   productService: ProductService
@@ -298,7 +290,6 @@ export function createAppContainer(db: Database): AppContainer {
     kubernetesOpsGateway: asClass(KubernetesOpsGateway).singleton(),
     mediaAccessGateway: asClass(MediaAccessGateway).singleton(),
     commandGateway: asClass(CommandGateway).singleton(),
-    appUseCase: asClass(AppUseCase).singleton(),
     cloudUseCase: asClass(CloudUseCase).singleton(),
     cloudSaasUseCase: asClass(CloudSaasUseCase).singleton(),
     adminUseCase: asClass(AdminUseCase).singleton(),
@@ -330,9 +321,6 @@ export function createAppContainer(db: Database): AppContainer {
     oauthAccountDao: asClass(OAuthAccountDao).singleton(),
     taskCenterDao: asClass(TaskCenterDao).singleton(),
 
-    // App DAOs
-    appDao: asClass(AppDao).singleton(),
-
     // Shop DAOs
     shopDao: asClass(ShopDao).singleton(),
     productDao: asClass(ProductDao).singleton(),
@@ -350,7 +338,7 @@ export function createAppContainer(db: Database): AppContainer {
     workspaceNodeDao: asClass(WorkspaceNodeDao).singleton(),
 
     // Rental DAOs
-    clawListingDao: asClass(ClawListingDao).singleton(),
+    agentListingDao: asClass(AgentListingDao).singleton(),
     rentalContractDao: asClass(RentalContractDao).singleton(),
     rentalUsageDao: asClass(RentalUsageDao).singleton(),
     rentalViolationDao: asClass(RentalViolationDao).singleton(),
@@ -408,7 +396,6 @@ export function createAppContainer(db: Database): AppContainer {
     mediaService: asClass(MediaService).singleton(),
     agentService: asClass(AgentService).singleton(),
     agentPolicyService: asClass(AgentPolicyService).singleton(),
-    appService: asClass(AppService).singleton(),
     shopService: asClass(ShopService).singleton(),
     shopScopeService: asClass(ShopScopeService).singleton(),
     productService: asClass(ProductService).singleton(),

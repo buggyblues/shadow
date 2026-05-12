@@ -320,27 +320,12 @@ interface ServerHomeProps {
   standalone?: boolean
 }
 
-interface HomepageApp {
-  id: string
-  name: string
-  sourceType: 'zip' | 'url'
-  sourceUrl: string
-  version: string | null
-  iconUrl: string | null
-  settings?: {
-    proxyEnabled?: boolean
-  } | null
-}
-
 export function ServerHome({ serverId: propServerId, standalone }: ServerHomeProps = {}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { activeServerId } = useChatStore()
   const effectiveServerId = propServerId || activeServerId
   const [copied, setCopied] = useState(false)
-  const [homepageLoadError, setHomepageLoadError] = useState(false)
-  const [forceBuiltinHomepage, setForceBuiltinHomepage] = useState(false)
-  const [homepageLoaded, setHomepageLoaded] = useState(false)
 
   const { data: server } = useQuery({
     queryKey: ['server', effectiveServerId],
@@ -355,13 +340,6 @@ export function ServerHome({ serverId: propServerId, standalone }: ServerHomePro
       fetchApi<Array<{ id: string; name: string; type: string }>>(
         `/api/servers/${effectiveServerId}/channels`,
       ),
-    enabled: !!effectiveServerId,
-  })
-
-  // Check for homepage app
-  const { data: homepageApp } = useQuery({
-    queryKey: ['homepage-app', effectiveServerId],
-    queryFn: () => fetchApi<HomepageApp | null>(`/api/servers/${effectiveServerId}/apps/homepage`),
     enabled: !!effectiveServerId,
   })
 
@@ -411,34 +389,6 @@ export function ServerHome({ serverId: propServerId, standalone }: ServerHomePro
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
   }, [handleMessage])
-
-  // Use custom HTML if set, otherwise generate default with i18n
-  // If a homepage app exists, resolve its URL for the iframe
-  const homepageAppUrl = homepageApp
-    ? homepageApp.sourceType === 'url'
-      ? homepageApp.settings?.proxyEnabled
-        ? `/api/app-proxy/${homepageApp.id}`
-        : homepageApp.sourceUrl
-      : `/api/servers/${effectiveServerId}/apps/${homepageApp.id}/serve`
-    : null
-
-  // Reset homepage fallback when server/homepage source changes
-  useEffect(() => {
-    setHomepageLoadError(false)
-    setForceBuiltinHomepage(false)
-    setHomepageLoaded(false)
-  }, [homepageAppUrl, effectiveServerId])
-
-  // Fallback if iframe hangs without explicit error (common with blocked/embed-restricted pages)
-  useEffect(() => {
-    if (!homepageAppUrl || forceBuiltinHomepage || homepageLoaded || homepageLoadError) return
-
-    const timer = window.setTimeout(() => {
-      setHomepageLoadError(true)
-    }, 12_000)
-
-    return () => window.clearTimeout(timer)
-  }, [homepageAppUrl, forceBuiltinHomepage, homepageLoaded, homepageLoadError])
 
   if (!server) {
     return (
@@ -534,49 +484,12 @@ document.addEventListener('click', function(e) {
       </div>
       {/* HTML content in sandboxed iframe */}
       <div className="server-page-content relative flex-1 overflow-auto">
-        {homepageAppUrl && !forceBuiltinHomepage ? (
-          <iframe
-            src={homepageAppUrl}
-            title={`${homepageApp?.name ?? server.name} homepage`}
-            className="w-full h-full border-0"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-            allow="fullscreen; clipboard-write"
-            onLoad={() => setHomepageLoaded(true)}
-            onError={() => setHomepageLoadError(true)}
-          />
-        ) : (
-          <iframe
-            srcDoc={htmlContent}
-            title={`${server.name} homepage`}
-            className="w-full h-full border-0"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-          />
-        )}
-
-        {homepageLoadError && homepageAppUrl && !forceBuiltinHomepage && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-bg-primary/90 backdrop-blur-sm px-4">
-            <div className="max-w-md w-full rounded-2xl border border-border-subtle bg-bg-secondary/95 p-5 shadow-xl">
-              <h3 className="text-text-primary font-black text-base mb-2">
-                {t('serverHome.homepageLoadFailedTitle', 'Homepage app failed to load')}
-              </h3>
-              <p className="text-text-muted text-sm leading-relaxed mb-4">
-                {t(
-                  'serverHome.homepageLoadFailedDesc',
-                  'The homepage app cannot be displayed in the embedded view right now. You can switch to the built-in homepage and continue navigating channels.',
-                )}
-              </p>
-              <div className="flex items-center gap-2 justify-end">
-                <button
-                  type="button"
-                  onClick={() => setForceBuiltinHomepage(true)}
-                  className="px-3 py-2 rounded-lg bg-primary text-black font-bold text-sm hover:opacity-90"
-                >
-                  {t('serverHome.switchToBuiltinHomepage', 'Switch to built-in homepage')}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <iframe
+          srcDoc={htmlContent}
+          title={`${server.name} homepage`}
+          className="w-full h-full border-0"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+        />
       </div>
     </GlassPanel>
   )

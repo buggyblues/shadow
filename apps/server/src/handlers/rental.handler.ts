@@ -145,7 +145,7 @@ export function createRentalHandler(container: AppContainer) {
      Contracts — Signing & Management
      ══════════════════════════════════════════ */
 
-  /** Sign a rental contract (tenant rents a claw) */
+  /** Sign a rental contract (tenant rents a Buddy) */
   h.post('/marketplace/contracts', zValidator('json', signContractSchema), async (c) => {
     const user = c.get('user')
     const rentalService = container.resolve('rentalService')
@@ -157,7 +157,7 @@ export function createRentalHandler(container: AppContainer) {
   h.get('/marketplace/contracts', async (c) => {
     const user = c.get('user')
     const rentalService = container.resolve('rentalService')
-    const clawListingDao = container.resolve('clawListingDao')
+    const agentListingDao = container.resolve('agentListingDao')
     const agentDao = container.resolve('agentDao')
     const role = c.req.query('role') as 'tenant' | 'owner' | undefined
     const status = c.req.query('status')
@@ -172,7 +172,7 @@ export function createRentalHandler(container: AppContainer) {
     // Enrich each contract with listing summary and agent bot user ID
     const enriched = await Promise.all(
       contracts.map(async (contract) => {
-        const listing = await clawListingDao.findById(contract.listingId)
+        const listing = await agentListingDao.findById(contract.listingId)
         let agentUserId: string | null = null
         if (listing?.agentId) {
           const agent = await agentDao.findById(listing.agentId)
@@ -194,7 +194,7 @@ export function createRentalHandler(container: AppContainer) {
   h.get('/marketplace/contracts/:contractId', async (c) => {
     const user = c.get('user')
     const rentalService = container.resolve('rentalService')
-    const clawListingDao = container.resolve('clawListingDao')
+    const agentListingDao = container.resolve('agentListingDao')
     const agentDao = container.resolve('agentDao')
     const detail = await rentalService.getContractDetail(c.req.param('contractId'))
     // Ensure the user is a party to the contract
@@ -202,7 +202,7 @@ export function createRentalHandler(container: AppContainer) {
       throw Object.assign(new Error('Not a party to this contract'), { status: 403 })
     }
     // Enrich with listing summary and agent bot user ID
-    const listing = await clawListingDao.findById(detail.listingId)
+    const listing = await agentListingDao.findById(detail.listingId)
     let agentUserId: string | null = null
     if (listing?.agentId) {
       const agent = await agentDao.findById(listing.agentId)
@@ -242,7 +242,7 @@ export function createRentalHandler(container: AppContainer) {
    *  Also returns rental info when the requesting user is the active tenant. */
   h.get('/marketplace/agent-chat-status/:agentUserId', async (c) => {
     const agentDao = container.resolve('agentDao')
-    const clawListingDao = container.resolve('clawListingDao')
+    const agentListingDao = container.resolve('agentListingDao')
     const rentalContractDao = container.resolve('rentalContractDao')
     const user = c.get('user')
     const agentUserId = c.req.param('agentUserId')
@@ -254,7 +254,7 @@ export function createRentalHandler(container: AppContainer) {
     }
 
     // Check if agent has any listing
-    const listings = await clawListingDao.findByOwnerId(agent.ownerId)
+    const listings = await agentListingDao.findByOwnerId(agent.ownerId)
     const agentListing = listings.find((l) => l.agentId === agent.id)
     if (!agentListing) {
       // No listing for this agent - always allow chat

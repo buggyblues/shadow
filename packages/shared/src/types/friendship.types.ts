@@ -9,7 +9,7 @@ export interface Friendship {
   updatedAt: string
 }
 
-export type FriendSource = 'friend' | 'owned_claw' | 'rented_claw'
+export type FriendSource = 'friend' | 'owned_agent' | 'rented_agent'
 
 export interface FriendEntry {
   friendshipId: string

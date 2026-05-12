@@ -448,7 +448,7 @@ describe('ReviewService security validation', () => {
 })
 
 describe('RentalService security validation', () => {
-  const clawListingDao = {
+  const agentListingDao = {
     create: vi.fn(),
     findById: vi.fn(),
   }
@@ -479,7 +479,7 @@ describe('RentalService security validation', () => {
     walletService.debit.mockResolvedValue(undefined)
     walletService.settle.mockResolvedValue(undefined)
     service = new RentalService({
-      clawListingDao,
+      agentListingDao,
       rentalContractDao,
       rentalUsageDao,
       rentalViolationDao,
@@ -498,7 +498,7 @@ describe('RentalService security validation', () => {
         title: 'Listing',
       }),
     ).rejects.toThrow('Agent does not belong to listing owner')
-    expect(clawListingDao.create).not.toHaveBeenCalled()
+    expect(agentListingDao.create).not.toHaveBeenCalled()
   })
 
   it('requires a bound agent actor before recording rental usage', async () => {
@@ -529,7 +529,7 @@ describe('RentalService security validation', () => {
       platformFeeRate: 500,
       tenantId: 'tenant-1',
     })
-    clawListingDao.findById.mockResolvedValue({ id: 'listing-1', agentId: 'agent-bound' })
+    agentListingDao.findById.mockResolvedValue({ id: 'listing-1', agentId: 'agent-bound' })
     agentDao.findByUserId.mockResolvedValue({ id: 'agent-other', userId: 'bot-1' })
 
     await expect(
@@ -556,7 +556,7 @@ describe('RentalService security validation', () => {
       tenantId: 'tenant-1',
       ownerId: 'owner-1',
     })
-    clawListingDao.findById.mockResolvedValue({ id: 'listing-1', agentId: 'agent-bound' })
+    agentListingDao.findById.mockResolvedValue({ id: 'listing-1', agentId: 'agent-bound' })
     agentDao.findByUserId.mockResolvedValue({ id: 'agent-bound', userId: 'bot-1' })
 
     await expect(
@@ -584,7 +584,7 @@ describe('RentalService security validation', () => {
       tenantId: 'tenant-1',
       ownerId: 'owner-1',
     })
-    clawListingDao.findById.mockResolvedValue({ id: 'listing-1', agentId: 'agent-bound' })
+    agentListingDao.findById.mockResolvedValue({ id: 'listing-1', agentId: 'agent-bound' })
     agentDao.findByUserId.mockResolvedValue({ id: 'agent-bound', userId: 'bot-1' })
     rentalUsageDao.findByUsageEventId.mockResolvedValue(existingUsage)
 

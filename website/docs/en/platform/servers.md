@@ -238,7 +238,7 @@ GET /api/servers/:id/members
 | `totalOnlineSeconds` | number | 在线累计时长（Buddy） |
 | `buddyTag` | string? | Buddy Tag，来自 Buddy 配置 |
 | `creator` | object? | Buddy 创建者信息（仅对 Buddy 成员） |
-| `isBot` | boolean | 是否 Bot |
+| `isBot` | boolean | Whether this member is a Buddy |
 
 :::code-group
 

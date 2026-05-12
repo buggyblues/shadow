@@ -13,8 +13,6 @@ import {
 import { AppLayout } from '@web/components/layout/app-layout'
 import { RootLayout } from '@web/components/layout/root-layout'
 import { queryClient } from '@web/lib/query-client'
-import { AppPageRoute } from '@web/pages/apps'
-import { BuddyManagementPage } from '@web/pages/buddy-management'
 import { ChannelView } from '@web/pages/channel-view'
 import { ContractDetailPage } from '@web/pages/contract-detail'
 import { CreateListingPage } from '@web/pages/create-listing'
@@ -24,7 +22,6 @@ import { DirectChatPage } from '@web/pages/dm-chat'
 import { InvitePage } from '@web/pages/invite'
 import { LoginPage } from '@web/pages/login'
 import { MarketplaceDetailPage } from '@web/pages/marketplace-detail'
-import { MyRentalsPage } from '@web/pages/my-rentals'
 import { OAuthAuthorizePage } from '@web/pages/oauth-authorize'
 import { OAuthCallbackPage } from '@web/pages/oauth-callback'
 
@@ -142,7 +139,7 @@ const marketplaceRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/marketplace',
   beforeLoad: () => {
-    throw redirect({ to: '/buddies' })
+    throw redirect({ to: '/settings', search: { tab: 'buddy', section: 'market' } })
   },
   component: () => null,
 })
@@ -222,12 +219,6 @@ const serverWorkspaceRoute = createRoute({
   component: WorkspacePageRoute,
 })
 
-const serverAppsRoute = createRoute({
-  getParentRoute: () => serverLayoutRoute,
-  path: '/apps',
-  component: AppPageRoute,
-})
-
 const serverHomeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/s/$serverId',
@@ -269,7 +260,10 @@ const dmChatRoute = createRoute({
 const buddyMgmtRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/buddies',
-  component: BuddyManagementPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/settings', search: { tab: 'buddy' } })
+  },
+  component: () => null,
 })
 
 const discoverRoute = createRoute({
@@ -287,7 +281,10 @@ const marketplaceDetailRoute = createRoute({
 const myRentalsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/marketplace/my-rentals',
-  component: MyRentalsPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/settings', search: { tab: 'buddy', section: 'rentals' } })
+  },
+  component: () => null,
 })
 
 const contractDetailRoute = createRoute({
@@ -332,7 +329,6 @@ const routeTree = rootRoute.addChildren([
       serverShopAdminRoute,
       serverShopRoute,
       serverWorkspaceRoute,
-      serverAppsRoute,
     ]),
     settingsRoute,
     desktopSettingsRoute,

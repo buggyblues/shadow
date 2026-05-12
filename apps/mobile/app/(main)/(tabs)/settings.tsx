@@ -248,12 +248,14 @@ export default function SettingsScreen() {
                 glassCardStyle,
                 { backgroundColor: colors.surface, transform: [{ scale: pressed ? 0.98 : 1 }] },
               ]}
-              onPress={() => router.push('/(main)/buddies')}
+              onPress={() => router.push('/(main)/settings/buddy')}
             >
               <View style={[styles.quickIconCircle, { backgroundColor: '#00c8d620' }]}>
                 <Bot size={18} color="#00c8d6" />
               </View>
-              <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>Buddy</Text>
+              <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>
+                {t('settings.tabBuddy', '我的 Buddy')}
+              </Text>
             </Pressable>
             <Pressable
               style={({ pressed }) => [
@@ -267,7 +269,9 @@ export default function SettingsScreen() {
               <View style={[styles.quickIconCircle, { backgroundColor: '#ed424520' }]}>
                 <Target size={18} color="#ed4245" />
               </View>
-              <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>任务</Text>
+              <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>
+                {t('settings.tabTasks', '任务')}
+              </Text>
             </Pressable>
             <Pressable
               style={({ pressed }) => [
@@ -289,7 +293,7 @@ export default function SettingsScreen() {
 
           {/* ── Section groups ──────────────────────── */}
           {renderGroup(t('settings.tabProfile').toUpperCase(), userSettings)}
-          {renderGroup('任务 & BUDDY', activitySettings)}
+          {renderGroup(t('settings.activityGroup', '任务 & BUDDY'), activitySettings)}
           {renderGroup(t('settings.tabAccount').toUpperCase(), accountSettings)}
 
           {/* ── Logout ────────────────────────────────── */}

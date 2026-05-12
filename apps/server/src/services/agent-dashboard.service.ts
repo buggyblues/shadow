@@ -1,7 +1,7 @@
 import type { Logger } from 'pino'
 import type { AgentDao } from '../dao/agent.dao'
 import type { AgentDashboardDao } from '../dao/agent-dashboard.dao'
-import type { ClawListingDao } from '../dao/claw-listing.dao'
+import type { AgentListingDao } from '../dao/agent-listing.dao'
 import type { RentalContractDao } from '../dao/rental-contract.dao'
 import type { UserDao } from '../dao/user.dao'
 
@@ -89,7 +89,7 @@ export class AgentDashboardService {
       agentDashboardDao: AgentDashboardDao
       agentDao: AgentDao
       rentalContractDao: RentalContractDao
-      clawListingDao: ClawListingDao
+      agentListingDao: AgentListingDao
       userDao: UserDao
       logger: Logger
     },
@@ -221,7 +221,7 @@ export class AgentDashboardService {
 
   private async checkIsTenant(agentId: string, userId: string): Promise<boolean> {
     // Find listings for this agent
-    const listings = await this.deps.clawListingDao.findByAgentId(agentId)
+    const listings = await this.deps.agentListingDao.findByAgentId(agentId)
     if (listings.length === 0) {
       return false
     }
@@ -235,7 +235,7 @@ export class AgentDashboardService {
 
   private async getRentalStats(agentId: string): Promise<RentalStats> {
     // Find listings for this agent
-    const listings = await this.deps.clawListingDao.findByAgentId(agentId)
+    const listings = await this.deps.agentListingDao.findByAgentId(agentId)
 
     if (listings.length === 0) {
       return {

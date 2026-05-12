@@ -2,7 +2,6 @@
 import { Command } from 'commander'
 import { createAgentsCommand } from './commands/agents.js'
 import { createApiTokensCommand } from './commands/api-tokens.js'
-import { createAppsCommand } from './commands/apps.js'
 import { createAuthCommand } from './commands/auth.js'
 import { createChannelsCommand } from './commands/channels.js'
 import { createCloudCommand } from './commands/cloud.js'
@@ -49,7 +48,6 @@ program.addCommand(createListenCommand())
 program.addCommand(createDirectMessagesCommand())
 program.addCommand(createWorkspaceCommand())
 program.addCommand(createShopCommand())
-program.addCommand(createAppsCommand())
 program.addCommand(createNotificationsCommand())
 program.addCommand(createFriendsCommand())
 program.addCommand(createInvitesCommand())

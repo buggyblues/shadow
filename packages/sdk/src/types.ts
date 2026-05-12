@@ -1458,19 +1458,6 @@ export interface ShadowRechargeHistory {
   offset: number
 }
 
-// ─── App Types ──────────────────────────────────────────────────────────────
-
-export interface ShadowApp {
-  id: string
-  serverId: string
-  name: string
-  slug: string
-  type: string
-  url?: string | null
-  status: string
-  createdAt: string
-}
-
 // ─── Notification Preferences ───────────────────────────────────────────────
 
 export interface ShadowNotificationPreferences {

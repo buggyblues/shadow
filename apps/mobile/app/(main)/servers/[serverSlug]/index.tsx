@@ -490,23 +490,8 @@ export default function ServerHomeScreen() {
             </SquishyCard>
           </Reanimated.View>
 
-          {/* Apps */}
-          <Reanimated.View entering={FadeInDown.delay(300).springify()}>
-            <SquishyCard
-              style={styles.actionItem}
-              onPress={() => router.push(`/(main)/servers/${serverSlug}/apps` as never)}
-            >
-              <LinearGradient colors={['#10B981', '#34D399']} style={styles.actionBubbleGlow}>
-                <ChannelCatSvg width={40} height={40} style={{ transform: [{ scale: 1.1 }] }} />
-              </LinearGradient>
-              <Text style={[styles.actionLabel, { color: colors.textSecondary }]}>
-                {t('server.apps')}
-              </Text>
-            </SquishyCard>
-          </Reanimated.View>
-
           {/* Members */}
-          <Reanimated.View entering={FadeInDown.delay(400).springify()}>
+          <Reanimated.View entering={FadeInDown.delay(300).springify()}>
             <SquishyCard
               style={styles.actionItem}
               onPress={() => router.push(`/(main)/servers/${serverSlug}/members` as never)}

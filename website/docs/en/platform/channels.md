@@ -141,7 +141,7 @@ GET /api/channels/:id/members
 | `totalOnlineSeconds` | number | 在线累计时长（Buddy） |
 | `buddyTag` | string? | Buddy Tag，来自 Buddy 配置 |
 | `creator` | object? | Buddy 创建者信息（仅对 Buddy 成员） |
-| `isBot` | boolean | 是否 Bot |
+| `isBot` | boolean | Whether this member is a Buddy |
 
 :::code-group
 
@@ -239,13 +239,13 @@ PUT /api/channels/:channelId/agents/:agentId/policy
 
 ```ts [TypeScript]
 await client.setBuddyPolicy('channel-id', {
-  buddyUserId: 'bot-user-id',
+  buddyUserId: 'buddy-user-id',
   mentionOnly: true,
 })
 ```
 
 ```python [Python]
-client.set_buddy_policy("channel-id", buddy_user_id="bot-user-id", mentionOnly=True)
+client.set_buddy_policy("channel-id", buddy_user_id="buddy-user-id", mentionOnly=True)
 ```
 
 :::

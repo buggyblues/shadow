@@ -7,11 +7,22 @@
  * - MCP server for real-time integration (fallback)
  */
 
+import { attachConnectorRuntimeAssets, installedCheck } from '../connector-kit.js'
 import { defineSkillPlugin } from '../helpers.js'
-import type { PluginManifest } from '../types.js'
+import type { PluginManifest, PluginRuntimeDependency } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-export default defineSkillPlugin(
+const runtimeDependencies: PluginRuntimeDependency[] = [
+  {
+    id: 'gh',
+    kind: 'system-package',
+    packages: ['github-cli'],
+    binPath: '/usr/bin/gh',
+    description: 'GitHub CLI',
+  },
+]
+
+const plugin = defineSkillPlugin(
   manifest as PluginManifest,
   {
     skills: {
@@ -45,6 +56,27 @@ export default defineSkillPlugin(
     },
   },
   (api) => {
+    api.addRuntimeDependencies(runtimeDependencies)
+    api.addVerificationChecks([
+      installedCheck('github-cli-installed', 'GitHub CLI installed', ['gh', '--version']),
+      {
+        id: 'github-cli-auth',
+        label: 'GitHub CLI authenticated',
+        kind: 'command',
+        command: ['gh', 'auth', 'status'],
+        timeoutMs: 10_000,
+        risk: 'safe',
+        requiredEnv: ['GITHUB_PERSONAL_ACCESS_TOKEN'],
+      },
+    ])
+    api.onBuildEnv((context) => {
+      const token = context.secrets.GITHUB_PERSONAL_ACCESS_TOKEN
+      if (!token) return undefined
+      return {
+        GH_TOKEN: token,
+        GITHUB_TOKEN: token,
+      }
+    })
     api.onHealthCheck(async (context) => {
       const token = context.secrets.GITHUB_PERSONAL_ACCESS_TOKEN
       if (!token) {
@@ -65,3 +97,5 @@ export default defineSkillPlugin(
     })
   },
 )
+
+export default attachConnectorRuntimeAssets(plugin, { runtimeDependencies })

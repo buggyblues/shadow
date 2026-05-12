@@ -166,7 +166,7 @@ afterAll(async () => {
     const { eq, inArray } = await import('drizzle-orm')
     const {
       users,
-      clawListings,
+      agentListings,
       rentalContracts,
       rentalUsageRecords,
       rentalViolations,
@@ -183,7 +183,7 @@ afterAll(async () => {
 
     // Delete listings
     if (ownerUserId) {
-      await db.delete(clawListings).where(eq(clawListings.ownerId, ownerUserId))
+      await db.delete(agentListings).where(eq(agentListings.ownerId, ownerUserId))
     }
 
     // Delete agent
@@ -219,7 +219,7 @@ describe('Rental Lifecycle E2E', () => {
     const res = await req('POST', '/api/marketplace/listings', {
       token: ownerToken,
       body: {
-        title: 'Lifecycle Test Claw',
+        title: 'Lifecycle Test Buddy',
         description: 'For lifecycle testing',
         deviceTier: 'mid_range',
         osType: 'macos',

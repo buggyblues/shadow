@@ -1,3 +1,4 @@
+import { cn } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -116,7 +117,7 @@ function formatOnlineDuration(seconds: number, t: TranslateFn): string {
   return `${Math.floor(seconds / 86400)}${t('time.days', '天')}${Math.floor((seconds % 86400) / 3600)}${t('time.hours', '小时')}`
 }
 
-export function MyRentalsPage() {
+export function MyRentalsPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -175,7 +176,7 @@ export function MyRentalsPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplace'] })
-      showToast(t('marketplace.delistSuccess', 'Claw 已下架'), 'success')
+      showToast(t('marketplace.delistSuccess', 'Buddy 已下架'), 'success')
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })
@@ -190,12 +191,12 @@ export function MyRentalsPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplace'] })
-      showToast(t('marketplace.relistSuccess', 'Claw 已重新上架'), 'success')
+      showToast(t('marketplace.relistSuccess', 'Buddy 已重新上架'), 'success')
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })
 
-  // Start chat with rented claw
+  // Start chat with a rented Buddy.
   const startChatMutation = useMutation({
     mutationFn: (agentUserId: string) =>
       fetchApi<{ id: string }>('/api/channels/dm', {
@@ -203,7 +204,7 @@ export function MyRentalsPage() {
         body: JSON.stringify({ userId: agentUserId }),
       }),
     onSuccess: (data) => {
-      navigate({ to: '/settings', search: { tab: 'chat', dm: data.id } })
+      navigate({ to: '/settings', search: { tab: 'dm', dm: data.id } })
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })
@@ -214,22 +215,28 @@ export function MyRentalsPage() {
 
   return (
     <div
-      className="min-h-screen bg-bg-deep text-text-primary"
+      className={cn(
+        'text-text-primary',
+        embedded ? 'flex-1 min-h-0 overflow-y-auto' : 'min-h-screen bg-bg-deep',
+      )}
       style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}
     >
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className={cn('max-w-5xl mx-auto px-4 md:px-6', embedded ? 'py-1 pb-6' : 'py-8')}>
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <a
-              href="/buddies"
-              className="inline-flex items-center gap-2 text-text-muted hover:text-text-primary transition-colors font-bold mb-2"
-            >
-              <ChevronLeft className="w-5 h-5" />
-              {t('marketplace.backToMarket', '返回集市')}
-            </a>
+            {!embedded && (
+              <Link
+                to="/settings"
+                search={{ tab: 'buddy', section: 'rentals' }}
+                className="inline-flex items-center gap-2 text-text-muted hover:text-text-primary transition-colors font-bold mb-2"
+              >
+                <ChevronLeft className="w-5 h-5" />
+                {t('settings.tabBuddy', '我的 Buddy')}
+              </Link>
+            )}
             <h1 style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }} className="text-3xl font-bold">
-              {t('marketplace.myRentals', '我的租赁')}
+              {t('marketplace.rentalsAndListings', '租赁与挂单')}
             </h1>
           </div>
           <Link
@@ -384,7 +391,7 @@ export function MyRentalsPage() {
                             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-primary to-primary text-white text-sm font-bold hover:from-primary hover:to-primary transition-all shadow-md hover:shadow-lg disabled:opacity-50"
                           >
                             <MessageCircle className="w-3.5 h-3.5" />
-                            {t('marketplace.useClaw', '开始使用')}
+                            {t('marketplace.useBuddy', '开始使用')}
                           </button>
                         )}
                       </div>
@@ -595,12 +602,12 @@ function ListingCard({
                 <button
                   type="button"
                   onClick={() => {
-                    if (window.confirm(t('marketplace.confirmDelist', '确定要下架此 Claw 吗？'))) {
+                    if (window.confirm(t('marketplace.confirmDelist', '确定要下架此 Buddy 吗？'))) {
                       delistMutation.mutate(l.id)
                     }
                   }}
                   className="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
-                  title={t('marketplace.delistClaw', '下架 Claw')}
+                  title={t('marketplace.delistBuddy', '下架 Buddy')}
                 >
                   <PackageMinus className="w-4 h-4" />
                 </button>
@@ -610,7 +617,7 @@ function ListingCard({
                   type="button"
                   onClick={() => relistMutation.mutate(l.id)}
                   className="p-2 rounded-lg text-success hover:bg-success/10 transition-colors"
-                  title={t('marketplace.relistClaw', '重新上架')}
+                  title={t('marketplace.relistBuddy', '重新上架')}
                 >
                   <Play className="w-4 h-4" />
                 </button>

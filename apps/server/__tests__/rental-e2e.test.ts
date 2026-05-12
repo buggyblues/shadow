@@ -130,7 +130,7 @@ afterAll(async () => {
     const { eq, inArray } = await import('drizzle-orm')
 
     // Clean rental data
-    const { clawListings, rentalContracts, rentalUsageRecords, rentalViolations } = schema
+    const { agentListings, rentalContracts, rentalUsageRecords, rentalViolations } = schema
     if (contractId) {
       await db.delete(rentalViolations).where(eq(rentalViolations.contractId, contractId))
       await db.delete(rentalUsageRecords).where(eq(rentalUsageRecords.contractId, contractId))
@@ -139,7 +139,7 @@ afterAll(async () => {
 
     // Delete all listings by owner
     if (ownerUserId) {
-      await db.delete(clawListings).where(eq(clawListings.ownerId, ownerUserId))
+      await db.delete(agentListings).where(eq(agentListings.ownerId, ownerUserId))
     }
 
     // Delete wallets

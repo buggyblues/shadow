@@ -90,7 +90,7 @@ Important directories:
 | `src/middleware` | Auth, PAT/agent token resolution, OAuth auth, logging, rate limiting, security headers. |
 | `src/security` | Actor model. |
 | `src/lib` | Shared server infrastructure: JWT, Redis, KMS, SSRF, Stripe, JSON limits, logging, IDs. |
-| `src/ws` | Socket.IO chat, presence, notification, and app gateways. |
+| `src/ws` | Socket.IO chat, presence, and notification gateways. |
 | `src/validators` | Zod request schemas. |
 
 Major API domains include auth, OAuth, tokens, servers, channels, messages, DMs, mentions, search,

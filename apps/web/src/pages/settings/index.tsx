@@ -19,7 +19,7 @@ import { useAppStatus } from '../../hooks/use-app-status'
 import { useUnreadCount } from '../../hooks/use-unread-count'
 import { fetchApi } from '../../lib/api'
 import { useAuthStore } from '../../stores/auth.store'
-import { BuddyManagementContent } from '../buddy-management'
+import { MyBuddySettingsContent } from '../buddy-management'
 import { PersonalShopPage } from '../commerce'
 import { DirectChatView } from '../dm-chat'
 import { UnifiedContactSidebar } from '../friends'
@@ -35,6 +35,9 @@ type MergedSettingsSection =
   | 'settlements'
   | 'actions'
   | 'orders'
+  | 'market'
+  | 'rentals'
+  | 'listings'
 
 interface NavItem {
   id: SettingsTab
@@ -45,7 +48,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'dm', icon: MessageCircle, labelKey: 'settings.tabDM', labelFallback: '消息' },
-  { id: 'buddy', icon: Terminal, labelKey: 'settings.tabBuddy', labelFallback: '终端代理' },
+  { id: 'buddy', icon: Terminal, labelKey: 'settings.tabBuddy', labelFallback: '我的 Buddy' },
   { id: 'tasks', icon: Target, labelKey: 'settings.tabTasks', labelFallback: '赚取虾币' },
   { id: 'wallet', icon: Wallet, labelKey: 'settings.tabWallet', labelFallback: '钱包' },
   { id: 'shop', icon: Store, labelKey: 'settings.tabShop', labelFallback: '我的店铺' },
@@ -79,6 +82,12 @@ function normalizeSettingsLocation(
   }
   if (tab === 'shop' && section === 'orders') {
     return { tab: 'shop' as const, section: 'orders' as const }
+  }
+  if (
+    tab === 'buddy' &&
+    (section === 'market' || section === 'rentals' || section === 'listings')
+  ) {
+    return { tab: 'buddy' as const, section }
   }
   if (tab === 'buddy' || tab === 'tasks' || tab === 'wallet' || tab === 'shop' || tab === 'dm') {
     return { tab }
@@ -326,7 +335,15 @@ export function SettingsPage() {
         {/* Buddy - full height split layout */}
         {activeTab === 'buddy' && (
           <div className="flex flex-1 min-h-0 gap-3">
-            <BuddyManagementContent />
+            <MyBuddySettingsContent
+              initialSection={
+                activeSection === 'market'
+                  ? 'market'
+                  : activeSection === 'rentals' || activeSection === 'listings'
+                    ? 'rentals'
+                    : 'buddies'
+              }
+            />
           </div>
         )}
 

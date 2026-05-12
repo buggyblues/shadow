@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, isNotNull, lt, or, sql } from 'drizzle-orm'
 import type { Database } from '../db'
-import { clawListings, rentalContracts, rentalUsageRecords, rentalViolations } from '../db/schema'
+import { agentListings, rentalContracts, rentalUsageRecords, rentalViolations } from '../db/schema'
 import { agents } from '../db/schema/agents'
 
 /* ──────────────── Rental Contract DAO ──────────────── */
@@ -218,8 +218,8 @@ export class RentalContractDao {
     const r = await this.db
       .select({ contract: rentalContracts })
       .from(rentalContracts)
-      .innerJoin(clawListings, eq(rentalContracts.listingId, clawListings.id))
-      .innerJoin(agents, eq(clawListings.agentId, agents.id))
+      .innerJoin(agentListings, eq(rentalContracts.listingId, agentListings.id))
+      .innerJoin(agents, eq(agentListings.agentId, agents.id))
       .where(
         and(
           eq(rentalContracts.tenantId, tenantId),

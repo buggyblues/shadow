@@ -1,15 +1,7 @@
 import type { Channel } from '@shadowob/shared'
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
-import {
-  FolderOpen,
-  Hash,
-  Home,
-  LayoutGrid,
-  Megaphone,
-  ShoppingBag,
-  Volume2,
-} from 'lucide-react-native'
+import { FolderOpen, Hash, Home, Megaphone, ShoppingBag, Volume2 } from 'lucide-react-native'
 import { useTranslation } from 'react-i18next'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useChannelSort } from '../../hooks/use-channel-sort'
@@ -138,17 +130,6 @@ export function ChannelSidebar({ serverId, serverSlug }: { serverId: string; ser
           <FolderOpen size={18} color={colors.textSecondary} />
           <Text style={[styles.navLabel, { color: colors.textSecondary }]}>
             {t('docs.workspaceDoc', { defaultValue: 'Workspace' })}
-          </Text>
-        </Pressable>
-
-        {/* Apps */}
-        <Pressable
-          style={styles.navItem}
-          onPress={() => router.push(`/(main)/servers/${serverSlug}/apps`)}
-        >
-          <LayoutGrid size={18} color={colors.textSecondary} />
-          <Text style={[styles.navLabel, { color: colors.textSecondary }]}>
-            {t('common.bot', { defaultValue: 'Apps' })}
           </Text>
         </Pressable>
 

@@ -75,7 +75,7 @@ const OS_TYPES = [
 
 export default function CreateListingScreen() {
   const { listingId } = useLocalSearchParams<{ listingId?: string }>()
-  const isEdit = !!listingId
+  const isEdit = !!listingId && listingId !== 'new'
   const { t } = useTranslation()
   const colors = useColors()
   const router = useRouter()
@@ -233,7 +233,7 @@ export default function CreateListingScreen() {
           style={[...inputStyle, styles.textarea]}
           value={form.description}
           onChangeText={(v) => update('description', v)}
-          placeholder={t('marketplace.descPlaceholder', '介绍你的 Claw 可以做什么...')}
+          placeholder={t('marketplace.descPlaceholder', '介绍你的 Buddy 可以做什么...')}
           placeholderTextColor={colors.textMuted}
           multiline
           maxLength={2000}

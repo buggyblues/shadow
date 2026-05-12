@@ -37,14 +37,14 @@ export const deviceTierEnum = pgEnum('device_tier', ['high_end', 'mid_range', 'l
 
 export const osTypeEnum = pgEnum('os_type', ['macos', 'windows', 'linux'])
 
-/* ──────────────── Claw Listing ──────────────── */
+/* ──────────────── Agent Listing ──────────────── */
 
-/** OpenClaw rental listing on the P2P marketplace. */
-export const clawListings = pgTable(
-  'claw_listings',
+/** Agent rental listing on the P2P marketplace. */
+export const agentListings = pgTable(
+  'agent_listings',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    /** Owner who rents out their OpenClaw */
+    /** Owner who rents out their Agent */
     ownerId: uuid('owner_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -54,7 +54,7 @@ export const clawListings = pgTable(
     /* ── Listing Info ── */
     title: varchar('title', { length: 200 }).notNull(),
     description: text('description'),
-    /** Skills / capabilities of this claw */
+    /** Skills / capabilities of this Agent */
     skills: jsonb('skills').$type<string[]>().default([]),
     /** Usage guidelines set by owner */
     guidelines: text('guidelines'),
@@ -117,13 +117,13 @@ export const clawListings = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({
-    clawListingsOwnerIdIdx: index('claw_listings_owner_id_idx').on(t.ownerId),
+    agentListingsOwnerIdIdx: index('agent_listings_owner_id_idx').on(t.ownerId),
   }),
 )
 
 /* ──────────────── Rental Contract ──────────────── */
 
-/** Signed rental contract between two users for an OpenClaw. */
+/** Signed rental contract between two users for an Agent. */
 export const rentalContracts = pgTable(
   'rental_contracts',
   {
@@ -133,12 +133,12 @@ export const rentalContracts = pgTable(
     /** The listing this contract was created from */
     listingId: uuid('listing_id')
       .notNull()
-      .references(() => clawListings.id, { onDelete: 'cascade' }),
-    /** The tenant (renter / user of the claw) */
+      .references(() => agentListings.id, { onDelete: 'cascade' }),
+    /** The tenant (renter / user of the Agent) */
     tenantId: uuid('tenant_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    /** The owner (landlord) of the claw */
+    /** The owner (landlord) of the Agent */
     ownerId: uuid('owner_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),

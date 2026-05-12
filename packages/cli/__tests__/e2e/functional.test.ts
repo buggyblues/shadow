@@ -252,18 +252,6 @@ describe('CLI Functional Tests', () => {
     })
   })
 
-  describe('apps commands', () => {
-    it('should show apps help', async () => {
-      const { stdout } = await execa('node', [CLI_PATH, 'apps', '--help'])
-      expect(stdout).toContain('list')
-      expect(stdout).toContain('get')
-      expect(stdout).toContain('create')
-      expect(stdout).toContain('update')
-      expect(stdout).toContain('delete')
-      expect(stdout).toContain('publish')
-    })
-  })
-
   describe('notifications commands', () => {
     it('should show notifications help', async () => {
       const { stdout } = await execa('node', [CLI_PATH, 'notifications', '--help'])

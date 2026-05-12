@@ -470,6 +470,20 @@
       "when": 1779282000000,
       "tag": "0066_security_idempotency_constraints",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1779368400000,
+      "tag": "0067_drop_server_apps",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1779454800000,
+      "tag": "0068_rename_agent_listings",
+      "breakpoints": true
     }
   ]
 }

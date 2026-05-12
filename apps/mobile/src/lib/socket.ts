@@ -109,18 +109,3 @@ export function sendTyping(channelId: string): void {
 export function updatePresence(status: 'online' | 'idle' | 'dnd' | 'offline'): void {
   getSocket().emit('presence:update', { status })
 }
-
-export function joinApp(
-  appId: string,
-  ack?: (res: { ok: boolean; channelId?: string }) => void,
-): void {
-  getSocket().emit('app:join', { appId }, ack)
-}
-
-export function leaveApp(appId: string): void {
-  getSocket().emit('app:leave', { appId })
-}
-
-export function broadcastAppState(appId: string, type: string, payload: unknown): void {
-  getSocket().emit('app:broadcast', { appId, type, payload })
-}

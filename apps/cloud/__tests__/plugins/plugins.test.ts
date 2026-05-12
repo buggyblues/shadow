@@ -224,6 +224,7 @@ describe('loadAllPlugins', () => {
       'model-provider',
       'notion',
       'oceanengine',
+      'opencli',
       'paypal',
       'playwright',
       'posthog',
@@ -231,6 +232,7 @@ describe('loadAllPlugins', () => {
       'sentry',
       'seo-suite',
       'shadowob',
+      'sherlock',
       'shopify',
       'skill-discovery',
       'stripe',
@@ -402,6 +404,7 @@ describe('loadAllPlugins', () => {
 
     const agentBrowser = registry.get('agent-browser')
     const skillDiscovery = registry.get('skill-discovery')
+    const opencli = registry.get('opencli')
     const inferenceSh = registry.get('inference-sh')
     const aiImage = registry.get('inference-ai-image-generation')
     const wonda = registry.get('wonda')
@@ -424,6 +427,22 @@ describe('loadAllPlugins', () => {
       expect.objectContaining({
         id: 'find-skills-skill',
         url: 'https://github.com/vercel-labs/skills.git',
+      }),
+    )
+
+    expect(opencli?.runtime?.runtimeDependencies).toContainEqual(
+      expect.objectContaining({ packages: ['@jackwener/opencli'] }),
+    )
+    expect(opencli?.runtime?.skillSources).toContainEqual(
+      expect.objectContaining({
+        id: 'opencli-skills',
+        url: 'https://github.com/jackwener/opencli.git',
+      }),
+    )
+    expect(opencli?.runtime?.verificationChecks).toContainEqual(
+      expect.objectContaining({
+        id: 'opencli-cli-installed',
+        command: ['opencli', '--version'],
       }),
     )
 
@@ -473,6 +492,7 @@ describe('loadAllPlugins', () => {
     const atlassian = registry.get('atlassian')
     const posthog = registry.get('posthog')
     const supabase = registry.get('supabase')
+    const sherlock = registry.get('sherlock')
 
     expect(figma?.runtime?.runtimeDependencies).toContainEqual(
       expect.objectContaining({ packages: ['@figma/code-connect'] }),
@@ -544,6 +564,18 @@ describe('loadAllPlugins', () => {
       expect.objectContaining({
         id: 'supabase-agent-skills',
         url: 'https://github.com/supabase/agent-skills.git',
+      }),
+    )
+    expect(sherlock?.runtime?.runtimeDependencies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'sherlock-python-prereqs', kind: 'system-package' }),
+        expect.objectContaining({ id: 'sherlock', kind: 'shell' }),
+      ]),
+    )
+    expect(sherlock?.runtime?.verificationChecks).toContainEqual(
+      expect.objectContaining({
+        id: 'sherlock-cli-installed',
+        command: ['sherlock', '--version'],
       }),
     )
   }, 30_000)
@@ -1155,10 +1187,32 @@ describe('Tool plugins', () => {
     const plugin = mod.default as PluginDefinition
     expect(plugin.manifest.id).toBe('github')
 
-    const ctx = makeBuildContext({ secrets: { GITHUB_TOKEN: 'ghp_xxx' }, agentConfig: {} })
+    const ctx = makeBuildContext({
+      secrets: { GITHUB_PERSONAL_ACCESS_TOKEN: 'ghp_xxx' },
+      agentConfig: {},
+    })
     const fragment = plugin._hooks.buildConfig[0]!(ctx)
     expect(fragment?.skills).toBeDefined()
     expect(fragment?.tools).toBeUndefined()
+    expect(plugin.runtime?.runtimeDependencies).toContainEqual(
+      expect.objectContaining({
+        id: 'gh',
+        kind: 'system-package',
+        packages: ['github-cli'],
+      }),
+    )
+    expect(plugin.runtime?.verificationChecks).toContainEqual(
+      expect.objectContaining({
+        id: 'github-cli-installed',
+        command: ['gh', '--version'],
+      }),
+    )
+    const env = Object.assign({}, ...plugin._hooks.buildEnv.map((fn) => fn(ctx)))
+    expect(env).toMatchObject({
+      GITHUB_PERSONAL_ACCESS_TOKEN: 'ghp_xxx',
+      GH_TOKEN: 'ghp_xxx',
+      GITHUB_TOKEN: 'ghp_xxx',
+    })
   })
 
   it('google-workspace plugin should expose gws runtime config', async () => {
@@ -1314,6 +1368,41 @@ describe('Tool plugins', () => {
           readOnly: true,
         },
       ]),
+    )
+  })
+
+  it('sherlock plugin should install Python venv at its final runtime mount path', async () => {
+    const mod = await import('../../src/plugins/sherlock/index.js')
+    const plugin = mod.default as PluginDefinition
+    const result = plugin.k8s?.buildK8s(
+      {
+        id: 'agent-1',
+        runtime: 'openclaw',
+        use: [{ plugin: 'sherlock' }],
+        configuration: {},
+      },
+      {
+        agent: {
+          id: 'agent-1',
+          runtime: 'openclaw',
+          configuration: {},
+        },
+        config: { version: '1' },
+        namespace: 'default',
+      },
+    )
+
+    const initContainer = result?.initContainers?.[0]
+    const installCommand = initContainer?.command.join(' ')
+    expect(initContainer?.volumeMounts).toContainEqual({
+      name: 'sherlock-runtime',
+      mountPath: '/opt/shadow-plugin-deps/sherlock',
+    })
+    expect(installCommand).toContain("python3 -m venv '/opt/shadow-plugin-deps/sherlock/venv'")
+    expect(installCommand).toContain('pip')
+    expect(installCommand).toContain('sherlock-project')
+    expect(result?.envVars?.find((env) => env.name === 'PATH')?.value).toBe(
+      '/opt/shadow-plugin-deps/sherlock/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
     )
   })
 

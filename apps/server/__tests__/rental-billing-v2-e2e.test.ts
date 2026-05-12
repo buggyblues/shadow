@@ -113,7 +113,7 @@ beforeAll(async () => {
 afterAll(async () => {
   try {
     const { eq, inArray } = await import('drizzle-orm')
-    const { clawListings, rentalContracts, rentalUsageRecords, rentalViolations, wallets, users } =
+    const { agentListings, rentalContracts, rentalUsageRecords, rentalViolations, wallets, users } =
       schema
 
     if (v2ContractId) {
@@ -122,7 +122,7 @@ afterAll(async () => {
       await db.delete(rentalContracts).where(eq(rentalContracts.id, v2ContractId))
     }
     if (ownerUserId) {
-      await db.delete(clawListings).where(eq(clawListings.ownerId, ownerUserId))
+      await db.delete(agentListings).where(eq(agentListings.ownerId, ownerUserId))
     }
     const userIds = [ownerUserId, tenantUserId].filter(Boolean)
     if (userIds.length > 0) {
@@ -142,7 +142,7 @@ describe('Rental Billing V2 E2E', () => {
     const res = await req('POST', '/api/marketplace/listings', {
       token: ownerToken,
       body: {
-        title: 'V2 Billing Test Claw',
+        title: 'V2 Billing Test Buddy',
         description: 'Testing new billing model',
         deviceTier: 'mid_range',
         osType: 'macos',
