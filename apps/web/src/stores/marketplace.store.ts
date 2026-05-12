@@ -11,11 +11,6 @@ interface MarketplaceState {
   sortBy: 'popular' | 'newest' | 'price-asc' | 'price-desc'
   /** Active listing detail ID */
   activeListingId: string | null
-  /** My rentals tab view */
-  rentalsTab: 'renting' | 'renting-out'
-  /** Sub-tab within renting-out */
-  rentalsSubTab: 'contracts' | 'listings'
-
   setSearchQuery: (q: string) => void
   setDeviceTiers: (tiers: string[]) => void
   toggleDeviceTier: (tier: string) => void
@@ -23,8 +18,6 @@ interface MarketplaceState {
   toggleOsType: (os: string) => void
   setSortBy: (sortBy: 'popular' | 'newest' | 'price-asc' | 'price-desc') => void
   setActiveListingId: (id: string | null) => void
-  setRentalsTab: (tab: 'renting' | 'renting-out') => void
-  setRentalsSubTab: (tab: 'contracts' | 'listings') => void
 }
 
 export const useMarketplaceStore = create<MarketplaceState>((set) => ({
@@ -33,8 +26,6 @@ export const useMarketplaceStore = create<MarketplaceState>((set) => ({
   osTypes: [],
   sortBy: 'popular',
   activeListingId: null,
-  rentalsTab: 'renting',
-  rentalsSubTab: 'contracts',
 
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setDeviceTiers: (deviceTiers) => set({ deviceTiers }),
@@ -53,6 +44,4 @@ export const useMarketplaceStore = create<MarketplaceState>((set) => ({
     })),
   setSortBy: (sortBy) => set({ sortBy }),
   setActiveListingId: (activeListingId) => set({ activeListingId }),
-  setRentalsTab: (rentalsTab) => set({ rentalsTab }),
-  setRentalsSubTab: (rentalsSubTab) => set({ rentalsSubTab }),
 }))

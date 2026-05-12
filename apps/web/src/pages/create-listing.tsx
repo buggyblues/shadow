@@ -16,10 +16,9 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../lib/api'
 import { showToast } from '../lib/toast'
-import { useMarketplaceStore } from '../stores/marketplace.store'
 
 /** Convert ISO date string to datetime-local input value (YYYY-MM-DDTHH:mm) */
-function formatDatetimeLocal(isoString: string): string {
+export function formatDatetimeLocal(isoString: string): string {
   if (!isoString) return ''
   const d = new Date(isoString)
   if (Number.isNaN(d.getTime())) return ''
@@ -27,7 +26,7 @@ function formatDatetimeLocal(isoString: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-interface AgentOption {
+export interface AgentOption {
   id: string
   botUser?: {
     id: string
@@ -39,7 +38,7 @@ interface AgentOption {
   isRented?: boolean
 }
 
-interface ListingForm {
+export interface ListingForm {
   agentId: string
   title: string
   description: string
@@ -83,15 +82,36 @@ const INITIAL_FORM: ListingForm = {
   availableUntil: '',
 }
 
-export function CreateListingPage() {
+type CreateListingPageProps = {
+  listingId?: string
+  defaultAgentId?: string
+  embedded?: boolean
+  onSubmitSuccess?: (data: Record<string, unknown>) => void
+  onCancel?: () => void
+}
+
+export function CreateListingPage({
+  listingId: listingIdFromProps,
+  defaultAgentId,
+  embedded = false,
+  onSubmitSuccess,
+  onCancel,
+}: CreateListingPageProps = {}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { listingId } = useParams({ strict: false }) as { listingId?: string }
+  const { listingId: listingIdFromRoute } = useParams({ strict: false }) as { listingId?: string }
+  const listingId = listingIdFromProps ?? listingIdFromRoute
   const isEdit = !!listingId
 
-  const [form, setForm] = useState<ListingForm>(INITIAL_FORM)
+  const [form, setForm] = useState<ListingForm>({ ...INITIAL_FORM, agentId: defaultAgentId ?? '' })
   const [showDeviceDetail, setShowDeviceDetail] = useState(false)
+
+  useEffect(() => {
+    if (!isEdit && defaultAgentId && form.agentId !== defaultAgentId) {
+      setForm((f) => ({ ...f, agentId: defaultAgentId }))
+    }
+  }, [defaultAgentId, isEdit, form.agentId])
 
   // Fetch user's agents for the dropdown
   const { data: agents = [] } = useQuery({
@@ -160,7 +180,7 @@ export function CreateListingPage() {
         body: JSON.stringify(data),
       })
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['marketplace'] })
       showToast(
         isEdit
@@ -168,9 +188,9 @@ export function CreateListingPage() {
           : t('marketplace.listingCreated', '挂单已创建'),
         'success',
       )
-      useMarketplaceStore.getState().setRentalsTab('renting-out')
-      useMarketplaceStore.getState().setRentalsSubTab('listings')
-      navigate({ to: '/settings', search: { tab: 'buddy', section: 'listings' } })
+      if (onSubmitSuccess) return onSubmitSuccess(data as Record<string, unknown>)
+
+      navigate({ to: '/settings/buddy/market', search: {} })
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })
@@ -215,24 +235,37 @@ export function CreateListingPage() {
 
   return (
     <div
-      className="min-h-screen overflow-y-auto bg-bg-primary text-text-primary"
+      className={
+        embedded
+          ? 'text-text-primary'
+          : 'min-h-screen overflow-y-auto bg-bg-primary text-text-primary'
+      }
       style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}
     >
-      <div className="max-w-3xl mx-auto px-6 py-8 pb-24">
+      <div className={embedded ? 'w-full' : 'max-w-3xl mx-auto px-6 py-8 pb-24'}>
         {/* Header */}
-        <Link
-          to="/settings"
-          search={{ tab: 'buddy', section: 'rentals' }}
-          className="inline-flex items-center gap-2 text-text-muted hover:text-text-primary transition-colors font-bold mb-6"
-        >
-          <ChevronLeft className="w-5 h-5" />
-          {t('marketplace.backToRentals', '返回我的租赁')}
-        </Link>
+        {!embedded && (
+          <Link
+            to="/settings/buddy/market"
+            className="inline-flex items-center gap-2 text-text-muted hover:text-text-primary transition-colors font-bold mb-6"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            {t('marketplace.backToRentals', '返回我的租赁')}
+          </Link>
+        )}
+        {embedded && onCancel && (
+          <div className="flex items-center justify-end mb-4">
+            <Button variant="ghost" size="sm" onClick={onCancel} className="rounded-[12px]">
+              {t('common.cancel')}
+            </Button>
+          </div>
+        )}
 
-        <h1 style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }} className="text-3xl font-bold mb-8">
-          {isEdit
-            ? t('marketplace.editListing', '编辑挂单')
-            : t('marketplace.newListing', '创建挂单')}
+        <h1
+          style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
+          className={embedded ? 'text-2xl font-bold mb-4' : 'text-3xl font-bold mb-8'}
+        >
+          {isEdit ? t('marketplace.editListing', '编辑挂单') : t('marketplace.newListing', '出租')}
         </h1>
 
         <form onSubmit={(e) => handleSubmit(e, 'active')} className="space-y-8">
@@ -250,26 +283,39 @@ export function CreateListingPage() {
                 <span className="text-sm font-bold text-text-muted block mb-1">
                   {t('marketplace.selectBuddy', '选择 Buddy')}
                 </span>
-                <select
-                  value={form.agentId}
-                  onChange={(e) => update('agentId', e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border-2 border-border-subtle font-medium focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 bg-bg-secondary"
-                >
-                  <option value="">{t('marketplace.noBuddySelected', '-- 不绑定 Buddy --')}</option>
-                  {agents.map((agent) => {
-                    const name = agent.botUser?.displayName ?? agent.botUser?.username ?? agent.id
-                    const disabled = !!agent.isRented
-                    return (
-                      <option key={agent.id} value={agent.id} disabled={disabled}>
-                        {name}
-                        {disabled ? ` 🔒 ${t('marketplace.buddyRented', '租赁中')}` : ''}
-                        {agent.isListed && !disabled
-                          ? ` (${t('marketplace.buddyListed', '已上架')})`
-                          : ''}
-                      </option>
-                    )
-                  })}
-                </select>
+                {defaultAgentId ? (
+                  <>
+                    <div className="w-full px-4 py-2.5 rounded-xl border-2 border-border-subtle bg-bg-tertiary/30 text-text-muted">
+                      {agents.find((agent) => agent.id === form.agentId)?.botUser?.displayName ??
+                        agents.find((agent) => agent.id === form.agentId)?.botUser?.username ??
+                        form.agentId}
+                    </div>
+                    <input type="hidden" value={form.agentId} />
+                  </>
+                ) : (
+                  <select
+                    value={form.agentId}
+                    onChange={(e) => update('agentId', e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border-2 border-border-subtle font-medium focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 bg-bg-secondary"
+                  >
+                    <option value="">
+                      {t('marketplace.noBuddySelected', '-- 不绑定 Buddy --')}
+                    </option>
+                    {agents.map((agent) => {
+                      const name = agent.botUser?.displayName ?? agent.botUser?.username ?? agent.id
+                      const disabled = !!agent.isRented
+                      return (
+                        <option key={agent.id} value={agent.id} disabled={disabled}>
+                          {name}
+                          {disabled ? ` 🔒 ${t('marketplace.buddyRented', '租赁中')}` : ''}
+                          {agent.isListed && !disabled
+                            ? ` (${t('marketplace.buddyListed', '已上架')})`
+                            : ''}
+                        </option>
+                      )
+                    })}
+                  </select>
+                )}
                 {agents.length === 0 && (
                   <p className="text-xs text-text-muted mt-1 flex items-center gap-1">
                     <Lock className="w-3 h-3" />
@@ -618,7 +664,7 @@ export function CreateListingPage() {
               variant="glass"
               size="lg"
               onClick={(e) => handleSubmit(e as unknown as React.FormEvent, 'draft')}
-              disabled={mutation.isPending || !form.title.trim()}
+              disabled={mutation.isPending || !form.title.trim() || !form.agentId.trim()}
             >
               <Save className="w-4 h-4" />
               {t('marketplace.saveDraft', '保存草稿')}
@@ -627,7 +673,7 @@ export function CreateListingPage() {
               variant="primary"
               size="lg"
               type="submit"
-              disabled={mutation.isPending || !form.title.trim()}
+              disabled={mutation.isPending || !form.title.trim() || !form.agentId.trim()}
             >
               <Plus className="w-4 h-4" />
               {mutation.isPending

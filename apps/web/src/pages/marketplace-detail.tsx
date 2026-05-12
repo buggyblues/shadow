@@ -1,20 +1,40 @@
+import {
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  GlassPanel,
+  Modal,
+  ModalBody,
+  ModalButtonGroup,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  Separator,
+} from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
+import type { TFunction } from 'i18next'
 import {
-  ChevronLeft,
+  ArrowLeft,
+  CalendarClock,
+  CheckCircle2,
   Clock,
   Cpu,
-  Eye,
   FileText,
   HardDrive,
-  MemoryStick,
+  Laptop,
+  MessageSquare,
   Monitor,
   Shield,
+  Tag,
   Users,
 } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatDuration, OnlineRank } from '../components/common/online-rank'
+import { PriceDisplay } from '../components/shop/ui/currency'
 import { fetchApi } from '../lib/api'
 import { showToast } from '../lib/toast'
 import { useAuthStore } from '../stores/auth.store'
@@ -61,7 +81,6 @@ interface CostEstimate {
   totalPerHour: number
   totalEstimate: number
   note: string
-  // v2 fields
   baseDailyRate?: number
   dailyBaseCost?: number
   estimatedMessageCost?: number
@@ -69,28 +88,23 @@ interface CostEstimate {
   pricingVersion?: number
 }
 
-const DEVICE_TIER_INFO: Record<string, { labelKey: string; color: string; icon: string }> = {
-  high_end: {
-    labelKey: 'marketplace.deviceHighEnd',
-    color: 'text-accent-strong bg-accent-strong/10',
-    icon: '🔥',
-  },
-  mid_range: {
-    labelKey: 'marketplace.deviceMidRange',
-    color: 'text-primary bg-primary/10',
-    icon: '⚡',
-  },
-  low_end: {
-    labelKey: 'marketplace.deviceLowEnd',
-    color: 'text-text-secondary bg-bg-tertiary',
-    icon: '💡',
-  },
-}
-
-const OS_INFO: Record<string, string> = {
+const OS_LABEL: Record<string, string> = {
   macos: 'macOS',
   windows: 'Windows',
   linux: 'Linux',
+}
+
+const RENTAL_PRESETS = [
+  { label: '1h', value: 1 },
+  { label: '1d', value: 24 },
+  { label: '7d', value: 168 },
+  { label: '30d', value: 720 },
+] as const
+
+function getDeviceTierLabel(listing: Listing, t: TFunction<'translation', undefined>) {
+  if (listing.deviceTier === 'high_end') return t('marketplace.deviceHighEnd', '高配')
+  if (listing.deviceTier === 'mid_range') return t('marketplace.deviceMidRange', '中端')
+  return t('marketplace.deviceLowEnd', '入门')
 }
 
 export function MarketplaceDetailPage() {
@@ -101,42 +115,42 @@ export function MarketplaceDetailPage() {
   const currentUser = useAuthStore((s) => s.user)
 
   const [durationHours, setDurationHours] = useState(24)
-  const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [showContract, setShowContract] = useState(false)
-  const [signed, setSigned] = useState(false)
   const [isAlreadyRented, setIsAlreadyRented] = useState(false)
+  const [agreedToTerms, setAgreedToTerms] = useState(false)
 
-  // Fetch listing detail
   const { data: listing, isLoading } = useQuery({
     queryKey: ['marketplace', 'listing', listingId],
     queryFn: () => fetchApi<Listing>(`/api/marketplace/listings/${listingId}`),
     enabled: !!listingId,
   })
 
-  // Compute max available hours based on availability window
   const maxAvailableHours = useMemo(() => {
     if (!listing?.availableUntil) return null
     const until = new Date(listing.availableUntil)
     const now = new Date()
-    const diffMs = until.getTime() - now.getTime()
-    if (diffMs <= 0) return 0
-    return Math.floor(diffMs / 3600000)
+    const remainMs = until.getTime() - now.getTime()
+    if (remainMs <= 0) return 0
+    return Math.floor(remainMs / 3600000)
   }, [listing?.availableUntil])
 
-  const isOverLimit = maxAvailableHours !== null && durationHours > maxAvailableHours
-  const effectiveDurationHours = isOverLimit ? maxAvailableHours : durationHours
+  const isUnavailableByWindow = maxAvailableHours === 0
+  const effectiveDurationHours =
+    maxAvailableHours == null || maxAvailableHours <= 0
+      ? Math.max(1, durationHours)
+      : Math.min(durationHours, maxAvailableHours)
+  const isScheduleLimited = maxAvailableHours !== null && maxAvailableHours > 0
+  const effectiveDuration = isUnavailableByWindow ? 0 : effectiveDurationHours
 
-  // Fetch cost estimate (use effective duration capped by availability)
   const { data: estimate } = useQuery({
-    queryKey: ['marketplace', 'estimate', listingId, effectiveDurationHours],
+    queryKey: ['marketplace', 'estimate', listingId, effectiveDuration],
     queryFn: () =>
       fetchApi<CostEstimate>(
-        `/api/marketplace/listings/${listingId}/estimate?hours=${effectiveDurationHours}`,
+        `/api/marketplace/listings/${listingId}/estimate?hours=${effectiveDuration}`,
       ),
-    enabled: !!listingId && effectiveDurationHours > 0,
+    enabled: !!listingId && effectiveDuration > 0,
   })
 
-  // Sign contract mutation
   const signMutation = useMutation({
     mutationFn: () =>
       fetchApi<{ id: string }>('/api/marketplace/contracts', {
@@ -144,25 +158,22 @@ export function MarketplaceDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           listingId,
-          durationHours: effectiveDurationHours || null,
+          durationHours: effectiveDuration || null,
           agreedToTerms: true,
         }),
       }),
     onSuccess: (contract) => {
-      setSigned(true)
       queryClient.invalidateQueries({ queryKey: ['marketplace'] })
       showToast(t('marketplace.contractSigned', '合同签署成功！'), 'success')
-      setTimeout(
-        () =>
-          navigate({
-            to: '/marketplace/contracts/$contractId',
-            params: { contractId: contract.id },
-          }),
-        2500,
-      )
+      setShowContract(false)
+      setTimeout(() => {
+        navigate({
+          to: '/marketplace/contracts/$contractId',
+          params: { contractId: contract.id },
+        })
+      }, 1800)
     },
     onError: (err: Error) => {
-      // Handle "already rented" error gracefully
       if (err.message.includes('currently rented')) {
         setIsAlreadyRented(true)
         setShowContract(false)
@@ -176,7 +187,6 @@ export function MarketplaceDetailPage() {
     },
   })
 
-  // Delist mutation (for owner's own listing)
   const delistMutation = useMutation({
     mutationFn: () =>
       fetchApi(`/api/marketplace/listings/${listingId}/toggle`, {
@@ -187,707 +197,656 @@ export function MarketplaceDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplace'] })
       showToast(t('marketplace.delistSuccess', 'Buddy 已下架'), 'success')
-      navigate({ to: '/settings', search: { tab: 'buddy', section: 'listings' } })
+      navigate({ to: '/settings/buddy/market', search: {} })
     },
-    onError: (err: Error) => {
-      showToast(err.message, 'error')
-    },
+    onError: (err: Error) => showToast(err.message, 'error'),
   })
 
-  // Handle clicking outside the contract modal to close it
-  const handleModalBackdropClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (e.target === e.currentTarget && !signed) {
-        setShowContract(false)
-      }
+  const isOwner = currentUser?.id === listing?.ownerId
+  const ownerName =
+    listing?.owner?.displayName || listing?.owner?.username || t('marketplace.unknownOwner', '未知')
+  const ownerLink = listing?.owner?.id ? `/profile/${listing.owner.id}` : undefined
+  const ownerUserId = listing?.owner?.id
+  const canMessageOwner = Boolean(ownerUserId && currentUser?.id && ownerUserId !== currentUser.id)
+  const messageOwnerMutation = useMutation({
+    mutationFn: (agentUserId: string) =>
+      fetchApi<{ id: string }>('/api/channels/dm', {
+        method: 'POST',
+        body: JSON.stringify({ userId: agentUserId }),
+      }),
+    onSuccess: (data) => {
+      navigate({ to: '/settings/dm', search: { dm: data.id } })
     },
-    [signed],
-  )
+    onError: (err: Error) => showToast(err.message, 'error'),
+  })
+  const avatarStatus =
+    listing?.totalOnlineSeconds && listing.totalOnlineSeconds > 0 ? 'running' : 'offline'
+  const displayRateLabel =
+    listing?.pricingVersion === 2
+      ? t('marketplace.dailyRate', '日租')
+      : t('marketplace.hourlyRate', '时租')
+  const displayRateValue =
+    listing?.pricingVersion === 2
+      ? (listing.baseDailyRate ?? listing.dailyRate ?? 0)
+      : (listing?.hourlyRate ?? 0)
+  const displayRateUnit =
+    listing?.pricingVersion === 2
+      ? t('marketplace.dailyRateUnit', '🦐/d')
+      : t('marketplace.hourlyRateUnit', '🦐/h')
+
+  const capabilityRows = useMemo(() => {
+    if (!listing) return [] as Array<{ label: string; value: string; icon: typeof Laptop }>
+    return [
+      {
+        label: t('marketplace.model', '型号'),
+        value: listing.deviceInfo.model ?? t('marketplace.noDescription', '未填写'),
+        icon: Laptop,
+      },
+      {
+        label: t('marketplace.cpu', 'CPU'),
+        value: listing.deviceInfo.cpu ?? t('marketplace.noDescription', '未填写'),
+        icon: Monitor,
+      },
+      {
+        label: t('marketplace.ram', '内存'),
+        value: listing.deviceInfo.ram ?? t('marketplace.noDescription', '未填写'),
+        icon: Cpu,
+      },
+      {
+        label: t('marketplace.storage', '存储'),
+        value: listing.deviceInfo.storage ?? t('marketplace.noDescription', '未填写'),
+        icon: HardDrive,
+      },
+      {
+        label: t('marketplace.gpu', '显卡'),
+        value: listing.deviceInfo.gpu ?? t('marketplace.noDescription', '未填写'),
+        icon: Users,
+      },
+    ].filter((item) => item.value)
+  }, [listing, t])
+
+  const skillBadges = useMemo(() => {
+    const fromSkills = listing?.skills ?? []
+    const fromTags = listing?.tags ?? []
+    return fromSkills.length > 0 ? fromSkills : fromTags
+  }, [listing?.skills, listing?.tags])
+
+  const actionButtonLabel = isOwner
+    ? t('marketplace.delistBuddy', '下架 Buddy')
+    : isUnavailableByWindow
+      ? t('marketplace.unavailable', '当前不可租赁')
+      : isAlreadyRented
+        ? t('marketplace.alreadyRentedButton', '已被租赁')
+        : t('marketplace.rentNow', '立即租赁')
+
+  const actionDisabled = isOwner
+    ? delistMutation.isPending
+    : isUnavailableByWindow || isAlreadyRented || signMutation.isPending
 
   if (isLoading || !listing) {
     return (
-      <div className="min-h-screen bg-bg-deep flex items-center justify-center">
-        <div className="animate-pulse text-text-muted text-lg font-bold">
-          {t('common.loading', '加载中...')}
+      <GlassPanel className="h-full min-h-screen overflow-y-auto rounded-[32px] border border-[var(--glass-line)] p-6">
+        <div className="flex h-full items-center justify-center text-text-muted">
+          <div className="text-sm font-black">{t('common.loading', '加载中...')}</div>
         </div>
-      </div>
+      </GlassPanel>
     )
   }
 
-  const tier = DEVICE_TIER_INFO[listing.deviceTier] ?? DEVICE_TIER_INFO.mid_range!
-  const isOwner = currentUser?.id === listing.ownerId
-
   return (
-    <div
-      className="min-h-screen bg-bg-deep text-text-primary"
-      style={{ fontFamily: "'Nunito', 'ZCOOL KuaiLe', sans-serif" }}
-    >
-      <div className="max-w-5xl mx-auto px-6 py-8">
-        {/* Back */}
-        <a
-          href="/settings?tab=buddy&section=market"
-          className="inline-flex items-center gap-2 text-text-muted hover:text-text-primary transition-colors font-bold mb-6"
-        >
-          <ChevronLeft className="w-5 h-5" />
-          {t('marketplace.backToMarket', '返回集市')}
-        </a>
+    <GlassPanel className="h-full min-h-screen overflow-y-auto rounded-[32px] border border-[var(--glass-line)] text-text-primary">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6 md:px-6">
+        <div className="flex items-center justify-between gap-3">
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/settings/buddy/market" className="text-text-muted hover:text-text-primary">
+              <ArrowLeft size={15} />
+              {t('marketplace.backToMarket', '返回集市')}
+            </Link>
+          </Button>
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left: Listing Detail */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Header Card */}
-            <div className="bg-glass-bg backdrop-blur rounded-2xl border border-glass-border shadow-soft p-8">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h1
-                    style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
-                    className="text-3xl font-bold mb-2"
-                  >
-                    {listing.title}
-                  </h1>
-                  <div className="flex items-center gap-3 text-sm text-text-muted font-bold">
-                    <span
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${tier.color}`}
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_360px]">
+          <section className="space-y-4">
+            <Card variant="glassPanel" className="overflow-hidden">
+              <div className="space-y-4 p-5 md:p-6">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="shrink-0 pt-0.5">
+                      <Avatar
+                        userId={listing.ownerId}
+                        avatarUrl={listing.owner?.avatarUrl ?? null}
+                        displayName={ownerName}
+                        size="lg"
+                        status={avatarStatus}
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h1 className="text-2xl font-black leading-tight text-text-primary md:text-3xl">
+                          {listing.title}
+                        </h1>
+                        <Badge size="sm" variant="neutral">
+                          {getDeviceTierLabel(listing, t)}
+                        </Badge>
+                        <Badge size="sm" variant="neutral">
+                          {OS_LABEL[listing.osType]}
+                        </Badge>
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-text-muted">
+                        <span className="font-black uppercase tracking-[0.1em] text-text-muted/70">
+                          {t('marketplace.owner', '出租方')}
+                        </span>
+                        {ownerLink ? (
+                          <Button asChild variant="ghost" size="xs">
+                            <Link to={ownerLink}>{ownerName}</Link>
+                          </Button>
+                        ) : (
+                          <span>{ownerName}</span>
+                        )}
+                      </div>
+
+                      <div className="mt-3 inline-flex flex-wrap items-center gap-2">
+                        <Badge variant="neutral" size="sm">
+                          {t('marketplace.online', '在线')}{' '}
+                          {formatDuration(listing.totalOnlineSeconds)}
+                        </Badge>
+                        <Badge variant="neutral" size="sm">
+                          <OnlineRank totalSeconds={listing.totalOnlineSeconds} />
+                          <span className="ml-1">{t('marketplace.rentalQuality', '在线状态')}</span>
+                        </Badge>
+                        <Badge variant="neutral" size="sm">
+                          {listing.viewCount} {t('marketplace.views', '浏览')}
+                        </Badge>
+                        <Badge variant="neutral" size="sm">
+                          {listing.rentalCount} {t('marketplace.rentals', '次租赁')}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-[var(--glass-line)] bg-bg-secondary/40 px-4 py-3 text-right">
+                    <p className="text-xs font-black uppercase tracking-wider text-text-muted">
+                      {displayRateLabel}
+                    </p>
+                    <p className="mt-1 text-3xl font-black leading-none">
+                      <PriceDisplay amount={displayRateValue} size={28} />
+                      <span className="ml-1.5 text-sm font-bold text-text-muted">
+                        {displayRateUnit}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                {listing.description ? (
+                  <p className="text-sm leading-relaxed text-text-secondary">
+                    {listing.description}
+                  </p>
+                ) : null}
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {canMessageOwner ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      icon={MessageSquare}
+                      loading={messageOwnerMutation.isPending}
+                      onClick={() => {
+                        if (!ownerUserId) return
+                        messageOwnerMutation.mutate(ownerUserId)
+                      }}
                     >
-                      {tier.icon} {t(tier.labelKey)}
-                    </span>
-                    <span>{OS_INFO[listing.osType]}</span>
-                    <span className="flex items-center gap-1">
-                      <Eye className="w-3.5 h-3.5" /> {listing.viewCount}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5" /> {listing.rentalCount}{' '}
-                      {t('marketplace.rentals', '次租赁')}
-                    </span>
-                  </div>
+                      {t('marketplace.messageOwner', '私信')}
+                    </Button>
+                  ) : null}
                 </div>
-              </div>
 
-              {/* Description */}
-              {listing.description && (
-                <p className="text-text-secondary font-medium leading-relaxed mb-6">
-                  {listing.description}
-                </p>
-              )}
-
-              {/* Online rank */}
-              {listing.totalOnlineSeconds > 0 && (
-                <div className="flex items-center gap-3 mb-6 bg-accent-strong/10 rounded-xl p-3">
-                  <span className="text-sm font-bold text-text-secondary">
-                    累计在线 {formatDuration(listing.totalOnlineSeconds)}
-                  </span>
-                  <OnlineRank totalSeconds={listing.totalOnlineSeconds} />
-                </div>
-              )}
-
-              {/* Skills */}
-              {listing.skills.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-sm font-bold text-text-muted mb-2">
-                    {t('marketplace.skills', '技能标签')}
-                  </h3>
+                {skillBadges.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
-                    {listing.skills.map((skill) => (
-                      <span
-                        key={skill}
-                        className="bg-primary/10 text-primary text-sm font-bold px-3 py-1 rounded-full"
-                      >
+                    {skillBadges.map((skill) => (
+                      <Badge key={skill} size="sm" variant="primary">
+                        <Tag size={12} />
                         {skill}
-                      </span>
+                      </Badge>
                     ))}
                   </div>
-                </div>
-              )}
-
-              {/* Device Info */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                {listing.deviceInfo.model && (
-                  <div className="bg-bg-secondary rounded-xl p-3">
-                    <div className="text-xs font-bold text-text-muted mb-1 flex items-center gap-1">
-                      <Monitor className="w-3.5 h-3.5" /> {t('marketplace.model', '型号')}
-                    </div>
-                    <div className="text-sm font-bold">{listing.deviceInfo.model}</div>
-                  </div>
-                )}
-                {listing.deviceInfo.cpu && (
-                  <div className="bg-bg-secondary rounded-xl p-3">
-                    <div className="text-xs font-bold text-text-muted mb-1 flex items-center gap-1">
-                      <Cpu className="w-3.5 h-3.5" /> CPU
-                    </div>
-                    <div className="text-sm font-bold">{listing.deviceInfo.cpu}</div>
-                  </div>
-                )}
-                {listing.deviceInfo.ram && (
-                  <div className="bg-bg-secondary rounded-xl p-3">
-                    <div className="text-xs font-bold text-text-muted mb-1 flex items-center gap-1">
-                      <MemoryStick className="w-3.5 h-3.5" /> RAM
-                    </div>
-                    <div className="text-sm font-bold">{listing.deviceInfo.ram}</div>
-                  </div>
-                )}
-                {listing.deviceInfo.storage && (
-                  <div className="bg-bg-secondary rounded-xl p-3">
-                    <div className="text-xs font-bold text-text-muted mb-1 flex items-center gap-1">
-                      <HardDrive className="w-3.5 h-3.5" /> {t('marketplace.storage', '存储')}
-                    </div>
-                    <div className="text-sm font-bold">{listing.deviceInfo.storage}</div>
-                  </div>
-                )}
+                ) : null}
               </div>
+            </Card>
 
-              {/* Software Tools */}
-              {listing.softwareTools.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-bold text-text-muted mb-2">
-                    {t('marketplace.softwareTools', '已安装工具')}
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {listing.softwareTools.map((tool) => (
-                      <span
-                        key={tool}
-                        className="bg-bg-tertiary text-text-secondary text-xs font-bold px-2.5 py-1 rounded-full"
+            <Card variant="glassPanel" className="overflow-hidden">
+              <div className="p-5 md:p-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-black uppercase tracking-[0.14em] text-text-secondary">
+                    {t('marketplace.deviceInfo', '设备信息')}
+                  </h2>
+                  <Badge variant="neutral" size="sm">
+                    {t('marketplace.hardware', '硬件')}
+                  </Badge>
+                </div>
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  {capabilityRows.map((row) => {
+                    const Icon = row.icon
+                    return (
+                      <div
+                        key={row.label}
+                        className="flex items-center gap-2 rounded-xl border border-border-subtle bg-bg-secondary/35 px-3 py-2.5"
                       >
-                        {tool}
-                      </span>
-                    ))}
-                  </div>
+                        <Icon size={14} className="text-text-muted shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-[11px] uppercase tracking-[0.1em] text-text-muted">
+                            {row.label}
+                          </p>
+                          <p className="truncate font-black">{row.value}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
-              )}
+              </div>
+            </Card>
 
-              {/* Availability Window */}
-              {(listing.availableFrom || listing.availableUntil) && (
-                <div className="bg-success/5 rounded-xl p-4">
-                  <h3 className="text-sm font-bold text-text-muted mb-2 flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-success" />
-                    {t('marketplace.availability', '可用时间')}
-                  </h3>
-                  <div className="flex gap-4 text-sm font-medium text-text-secondary">
-                    {listing.availableFrom && (
-                      <span>
-                        {t('marketplace.availableFrom', '开始时间')}:{' '}
-                        {new Date(listing.availableFrom).toLocaleString()}
-                      </span>
-                    )}
-                    {listing.availableUntil && (
-                      <span>
-                        {t('marketplace.availableUntil', '结束时间')}:{' '}
-                        {new Date(listing.availableUntil).toLocaleString()}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Guidelines */}
-            {listing.guidelines && (
-              <div className="bg-glass-bg backdrop-blur rounded-2xl border border-glass-border shadow-soft p-8">
-                <h2 className="text-lg font-bold mb-3 flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-warning" />
+            <Card variant="glassPanel" className="overflow-hidden">
+              <div className="p-5 md:p-6">
+                <h2 className="text-sm font-black uppercase tracking-[0.14em] text-text-secondary">
                   {t('marketplace.usageGuidelines', '使用准则')}
                 </h2>
-                <div className="text-text-secondary font-medium leading-relaxed whitespace-pre-wrap">
-                  {listing.guidelines}
-                </div>
+                <p className="mt-3 min-h-10 text-sm leading-relaxed text-text-secondary">
+                  {listing.guidelines || t('marketplace.noDescription', '暂无说明')}
+                </p>
               </div>
-            )}
-          </div>
+            </Card>
 
-          {/* Right: Pricing & Action */}
-          <div className="space-y-6">
-            {/* Pricing Card */}
-            <div className="bg-glass-bg backdrop-blur rounded-2xl border border-glass-border shadow-soft p-6 sticky top-6">
-              <h2
-                style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
-                className="text-xl font-bold mb-4"
-              >
-                {t('marketplace.pricing', '费用详情')}
-              </h2>
-
-              {/* Rates */}
-              <div className="space-y-3 mb-6">
-                {listing.pricingVersion === 2 ? (
-                  <>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-text-muted flex items-center gap-1.5">
-                        <Clock className="w-4 h-4" />{' '}
-                        {t('marketplace.baseDailyRate', '基础每日费用')}
-                      </span>
-                      <span className="text-lg font-bold text-accent-strong">
-                        {listing.baseDailyRate ?? 0} 🦐/d
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-text-muted">
-                        {t('marketplace.messageFee', '每条消息费用')}
-                      </span>
-                      <span className="font-bold text-accent-strong">
-                        {listing.messageFee ?? 0} 🦐/msg
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-text-muted flex items-center gap-1.5">
-                        <Clock className="w-4 h-4" /> {t('marketplace.hourlyRate', '时租')}
-                      </span>
-                      <span className="text-lg font-bold text-accent-strong">
-                        {listing.hourlyRate} 🦐/h
-                      </span>
-                    </div>
-                    {listing.dailyRate > 0 && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-text-muted">
-                          {t('marketplace.dailyRate', '日租')}
-                        </span>
-                        <span className="font-bold text-accent-strong">
-                          {listing.dailyRate} 🦐/d
-                        </span>
-                      </div>
-                    )}
-                    {listing.monthlyRate > 0 && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-text-muted">
-                          {t('marketplace.monthlyRate', '月租')}
-                        </span>
-                        <span className="font-bold text-accent-strong">
-                          {listing.monthlyRate} 🦐/m
-                        </span>
-                      </div>
-                    )}
-                  </>
-                )}
-                {listing.depositAmount > 0 && (
-                  <div className="flex justify-between items-center pt-2 border-t border-divider">
-                    <span className="text-sm font-medium text-text-muted flex items-center gap-1.5">
-                      <Shield className="w-4 h-4" /> {t('marketplace.deposit', '押金')}
-                    </span>
-                    <span className="font-bold text-danger">{listing.depositAmount} 🦐</span>
+            {listing.availableFrom || listing.availableUntil ? (
+              <Card variant="glassPanel" className="overflow-hidden">
+                <div className="p-5 md:p-6">
+                  <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-text-muted">
+                    <CalendarClock size={14} />
+                    {t('marketplace.availability', '可用时间')}
                   </div>
-                )}
-              </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {listing.availableFrom ? (
+                      <div className="rounded-xl border border-border-subtle bg-bg-secondary/35 px-3 py-2.5 text-sm text-text-secondary">
+                        <p className="text-[11px] uppercase tracking-[0.12em] text-text-muted">
+                          {t('marketplace.availableFrom', '开始时间')}
+                        </p>
+                        <p className="mt-1 font-bold text-text-primary">
+                          {new Date(listing.availableFrom).toLocaleString()}
+                        </p>
+                      </div>
+                    ) : null}
+                    {listing.availableUntil ? (
+                      <div className="rounded-xl border border-border-subtle bg-bg-secondary/35 px-3 py-2.5 text-sm text-text-secondary">
+                        <p className="text-[11px] uppercase tracking-[0.12em] text-text-muted">
+                          {t('marketplace.availableUntil', '结束时间')}
+                        </p>
+                        <p className="mt-1 font-bold text-text-primary">
+                          {new Date(listing.availableUntil).toLocaleString()}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </Card>
+            ) : null}
 
-              {/* Duration Selector */}
-              <div className="mb-4">
-                <label className="text-sm font-bold text-text-muted mb-2 block">
+            <Card variant="glassPanel" className="overflow-hidden">
+              <div className="p-5 md:p-6">
+                <h2 className="text-sm font-black uppercase tracking-[0.14em] text-text-secondary">
                   {t('marketplace.rentalDuration', '租赁时长（小时）')}
+                </h2>
+                <div className="mt-4 space-y-3">
                   <input
                     type="number"
                     min={1}
-                    max={8760}
+                    max={12000}
                     value={durationHours}
-                    onChange={(e) => setDurationHours(Math.max(1, Number(e.target.value)))}
-                    className="w-full px-4 py-2.5 rounded-xl border-2 border-border-subtle bg-bg-secondary font-bold text-center text-text-primary focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    onChange={(event) =>
+                      setDurationHours(Math.max(1, Number(event.target.value) || 1))
+                    }
+                    className="h-11 w-full rounded-xl border border-border-subtle bg-bg-tertiary px-4 font-black text-sm text-text-primary outline-none ring-0 transition-all focus:border-primary/45 focus:bg-bg-primary/50"
                   />
-                </label>
-                <div className="flex gap-2 mt-2">
-                  {[1, 24, 168, 720].map((h) => (
-                    <button
-                      key={h}
-                      type="button"
-                      onClick={() => setDurationHours(h)}
-                      className={`flex-1 py-1 text-xs font-bold rounded-lg border transition-all ${
-                        durationHours === h
-                          ? 'bg-primary/10 border-primary text-primary'
-                          : 'border-border-subtle text-text-muted hover:border-border-subtle'
-                      }`}
-                    >
-                      {h === 1 ? '1h' : h === 24 ? '1d' : h === 168 ? '1w' : '1m'}
-                    </button>
-                  ))}
-                </div>
-                {isOverLimit && maxAvailableHours !== null && (
-                  <div className="mt-2 bg-warning/10 rounded-lg p-3 text-xs text-warning font-medium">
-                    <Clock className="w-3.5 h-3.5 inline mr-1" />
-                    {t(
-                      'marketplace.availabilityWarning',
-                      '此 Buddy 最长可用至 {{date}}（剩余 {{hours}} 小时），费用和合同将按限制时间计算。',
-                      {
-                        date: new Date(listing!.availableUntil!).toLocaleString(),
-                        hours: maxAvailableHours,
-                      },
-                    )}
+                  <div className="flex flex-wrap gap-2">
+                    {RENTAL_PRESETS.map((preset) => (
+                      <Button
+                        key={preset.value}
+                        type="button"
+                        size="xs"
+                        variant={durationHours === preset.value ? 'primary' : 'ghost'}
+                        onClick={() => setDurationHours(preset.value)}
+                        className="min-w-16 flex-1 sm:flex-none"
+                      >
+                        {preset.label}
+                      </Button>
+                    ))}
                   </div>
-                )}
+                  {isScheduleLimited && !isUnavailableByWindow ? (
+                    <div className="rounded-xl border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning">
+                      <p className="font-black">
+                        {t(
+                          'marketplace.availabilityWarning',
+                          '该 Buddy 最长可用至 {{date}}，当前已选时长会按限制自动生效。',
+                          { date: new Date(listing.availableUntil!).toLocaleString() },
+                        )}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
               </div>
+            </Card>
 
-              {/* Cost Estimate */}
-              {estimate && (
-                <div className="bg-bg-secondary rounded-xl p-4 mb-6 space-y-2">
-                  {estimate.pricingVersion === 2 ? (
-                    <>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-text-muted">
-                          {t('marketplace.dailyBaseCost', '基础日费')}
-                        </span>
-                        <span className="font-bold">{estimate.dailyBaseCost ?? 0} 🦐</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-text-muted">
-                          {t('marketplace.estimatedMessageCost', '预估消息费')}
-                        </span>
-                        <span className="font-bold">{estimate.estimatedMessageCost ?? 0} 🦐</span>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-text-muted">
-                          {t('marketplace.rentalCost', '租赁费用')}
-                        </span>
-                        <span className="font-bold">{estimate.rentalCost} 🦐</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-text-muted">
-                          {t('marketplace.electricityCost', '电费')}
-                        </span>
-                        <span className="font-bold">{estimate.electricityCost} 🦐</span>
-                      </div>
-                    </>
-                  )}
-                  <div className="flex justify-between text-sm">
-                    <span className="text-text-muted">
-                      {t('marketplace.platformFee', '平台手续费 (5%)')}
-                    </span>
-                    <span className="font-bold">{estimate.platformFee} 🦐</span>
+            <Card variant="glassPanel" className="overflow-hidden">
+              <div className="p-5 md:p-6">
+                <h2 className="text-sm font-black uppercase tracking-[0.14em] text-text-secondary">
+                  {t('marketplace.pricingDetail', '费率详情')}
+                </h2>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-border-subtle bg-bg-secondary/35 p-3">
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-text-muted">
+                      {displayRateLabel}
+                    </p>
+                    <p className="text-lg font-black">
+                      <PriceDisplay amount={displayRateValue} size={20} />
+                      <span className="ml-1.5 text-xs font-bold text-text-muted">
+                        {displayRateUnit}
+                      </span>
+                    </p>
                   </div>
-                  <div className="flex justify-between text-sm pt-2 border-t border-divider font-bold">
-                    <span>{t('marketplace.totalEstimate', '预估总费用')}</span>
-                    <span className="text-accent-strong text-base">
-                      {estimate.totalEstimate} 🦐
-                    </span>
+                  <div className="rounded-xl border border-border-subtle bg-bg-secondary/35 p-3">
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-text-muted">
+                      {t('marketplace.deposit', '押金')}
+                    </p>
+                    <p className="text-lg font-black">
+                      {listing.depositAmount ? (
+                        <PriceDisplay amount={listing.depositAmount} size={20} />
+                      ) : (
+                        t('common.none', '暂无')
+                      )}
+                    </p>
                   </div>
-                  <p className="text-xs text-text-muted mt-1">{estimate.note}</p>
+                  <div className="rounded-xl border border-border-subtle bg-bg-secondary/35 p-3">
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-text-muted">
+                      {t('marketplace.dailyRate', '日租')}
+                    </p>
+                    <p className="text-lg font-black">
+                      {listing.dailyRate ? (
+                        <PriceDisplay amount={listing.dailyRate} size={20} />
+                      ) : (
+                        '-'
+                      )}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border-subtle bg-bg-secondary/35 p-3">
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-text-muted">
+                      {t('marketplace.monthlyRate', '月租')}
+                    </p>
+                    <p className="text-lg font-black">
+                      {listing.monthlyRate ? (
+                        <PriceDisplay amount={listing.monthlyRate} size={20} />
+                      ) : (
+                        '-'
+                      )}
+                    </p>
+                  </div>
                 </div>
-              )}
 
-              {/* Action Button: delist (owner) or rent (others) */}
-              {isOwner ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
+                {listing.pricingVersion === 2 ? (
+                  <div className="mt-4 space-y-2 rounded-xl border border-border-subtle bg-bg-secondary/35 p-3 text-sm text-text-secondary">
+                    <p>
+                      {t('marketplace.baseDailyRate', '基础每日费用')}：{listing.baseDailyRate ?? 0}{' '}
+                      🦐/d
+                    </p>
+                    <p>
+                      {t('marketplace.messageFee', '每条消息费用')}：{listing.messageFee ?? 0}{' '}
+                      🦐/msg
+                    </p>
+                  </div>
+                ) : null}
+
+                {estimate ? (
+                  <div className="mt-4 rounded-xl border border-border-subtle bg-bg-secondary/35 p-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-black uppercase tracking-[0.08em] text-text-muted">
+                        {t('marketplace.totalEstimate', '预估总费用')}
+                      </span>
+                      <span className="text-xl font-black text-text-primary">
+                        <PriceDisplay amount={estimate.totalEstimate} size={22} />
+                      </span>
+                    </div>
+                    <Separator className="my-3" />
+                    <div className="space-y-2 text-text-secondary">
+                      <div className="flex items-center justify-between text-sm">
+                        <span>{t('marketplace.rentalCost', '租赁费用')}</span>
+                        <span className="font-black">{estimate.rentalCost}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span>{t('marketplace.electricityCost', '电费')}</span>
+                        <span>{estimate.electricityCost}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span>{t('marketplace.platformFee', '平台手续费 (5%)')}</span>
+                        <span>{estimate.platformFee}</span>
+                      </div>
+                      {estimate.note ? (
+                        <p className="text-xs text-warning">{estimate.note}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </Card>
+          </section>
+
+          <aside id="market-action" className="space-y-4 xl:sticky xl:top-4 xl:self-start">
+            <Card variant="glassPanel" className="overflow-hidden">
+              <div className="p-5 md:p-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-black uppercase tracking-[0.15em] text-text-secondary">
+                    {t('marketplace.pricing', '费用详情')}
+                  </h2>
+                  {isOwner ? (
+                    <Badge variant="warning" size="sm">
+                      {t('marketplace.ownerMode', '出租方')}
+                    </Badge>
+                  ) : null}
+                </div>
+
+                <p className="mt-2 text-xs uppercase tracking-[0.12em] text-text-muted">
+                  {displayRateLabel} · {displayRateValue} {displayRateUnit}
+                </p>
+                <p className="mt-1 text-3xl font-black">
+                  {estimate ? (
+                    <PriceDisplay amount={estimate.totalEstimate} size={36} />
+                  ) : (
+                    t('common.loading', '加载中...')
+                  )}
+                </p>
+                <p className="mt-1 text-sm text-text-muted">
+                  {t('marketplace.estimatedFor', '预估费用（{{hours}}小时）', {
+                    hours: durationHours,
+                  })}
+                </p>
+
+                <p className="mt-4 text-xs text-text-muted leading-relaxed">
+                  {isOwner
+                    ? t('marketplace.delistHint', '下架后此 Buddy 将不再展示在集市中')
+                    : t('marketplace.rentDisclaimer', '租赁前请仔细阅读使用规约和平台条款')}
+                </p>
+
+                <Button
+                  type="button"
+                  variant={isOwner ? 'danger' : 'accent'}
+                  size="lg"
+                  className="mt-4 w-full"
+                  disabled={actionDisabled}
+                  onClick={() => {
+                    if (isOwner) {
                       if (
                         window.confirm(t('marketplace.confirmDelist', '确定要下架此 Buddy 吗？'))
                       ) {
                         delistMutation.mutate()
                       }
-                    }}
-                    disabled={delistMutation.isPending}
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-danger to-danger text-white font-bold text-base hover:brightness-110 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60"
-                    style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
-                  >
-                    {delistMutation.isPending
-                      ? t('common.loading', '处理中...')
-                      : t('marketplace.delistBuddy', '下架 Buddy')}
-                  </button>
-                  <p className="text-xs text-text-muted text-center mt-3 font-medium">
-                    {t('marketplace.delistHint', '下架后此 Buddy 将不再展示在集市中')}
-                  </p>
-                </>
-              ) : isAlreadyRented ? (
-                <>
-                  <button
-                    type="button"
-                    disabled
-                    className="w-full py-3 rounded-xl bg-bg-tertiary text-text-muted font-bold text-base cursor-not-allowed"
-                    style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
-                  >
-                    {t('marketplace.alreadyRentedButton', '已被租赁')}
-                  </button>
-                  <p className="text-xs text-warning text-center mt-3 font-medium">
+                      return
+                    }
+
+                    setAgreedToTerms(false)
+                    setShowContract(true)
+                  }}
+                >
+                  {signMutation.isPending && !isOwner
+                    ? t('common.loading', '处理中...')
+                    : actionButtonLabel}
+                </Button>
+              </div>
+            </Card>
+
+            <Card variant="glassPanel" className="overflow-hidden">
+              <div className="p-5 md:p-6">
+                <h3 className="text-sm font-black uppercase tracking-[0.16em] text-text-secondary">
+                  {t('marketplace.pricingExplain', '费用信息')}
+                </h3>
+                <div className="mt-3 space-y-2 text-sm text-text-secondary">
+                  <p className="flex items-start gap-2">
+                    <MessageSquare size={14} className="mt-0.5" />
                     {t(
-                      'marketplace.alreadyRentedHint',
-                      '该 Buddy 当前正在被其他用户使用，暂时无法租赁。请稍后再来看看吧~',
+                      'marketplace.pricingNote',
+                      '最终费用 = 基础租金 + 电费 (2🦐/h) + Token消耗 (如开启代付) + 5% 平台手续费。',
                     )}
                   </p>
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setShowContract(true)}
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-accent to-accent-strong text-bg-deep font-bold text-base hover:brightness-110 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
-                    style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
-                  >
-                    {t('marketplace.rentNow', '立即租赁')}
-                  </button>
-                  <p className="text-xs text-text-muted text-center mt-3 font-medium">
-                    {t('marketplace.rentDisclaimer', '租赁前请仔细阅读使用规约和平台条款')}
+                  <p className="flex items-start gap-2">
+                    <Shield size={14} className="mt-0.5" />
+                    {t('marketplace.platformTerms', '平台服务条款')}
                   </p>
-                </>
-              )}
-            </div>
-          </div>
+                  <p className="flex items-start gap-2">
+                    <FileText size={14} className="mt-0.5" />
+                    {t('marketplace.ownerTerms', '出租方使用规约')}
+                  </p>
+                  <p className="flex items-start gap-2">
+                    <Users size={14} className="mt-0.5" />
+                    {t('marketplace.softwareTools', '已安装工具')}：
+                    {listing.softwareTools.length || t('common.none', '暂无')}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          </aside>
         </div>
       </div>
 
-      {/* Contract Modal */}
-      {showContract && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-bg-deep/50 backdrop-blur-sm p-4"
-          onClick={handleModalBackdropClick}
-          onKeyDown={() => {}}
-        >
-          <div
-            className="relative max-w-2xl w-full max-h-[90vh] overflow-y-auto bg-[#fdfaf5] rounded-xl shadow-2xl p-6 md:p-8 border border-amber-900/10"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E")`,
-              boxShadow:
-                '0 25px 50px -12px rgba(135, 120, 80, 0.25), 0 0 15px rgba(220, 200, 160, 0.3) inset',
-            }}
-          >
-            <style
-              // biome-ignore lint: needed for inline keyframe anim
-              dangerouslySetInnerHTML={{
-                __html: `
-              @keyframes stampIn {
-                0% { opacity: 0; transform: scale(3) rotate(-30deg); }
-                50% { opacity: 1; transform: scale(0.9) rotate(-15deg); }
-                100% { opacity: 0.85; transform: scale(1) rotate(-15deg); }
-              }
-            `,
-              }}
-            />
+      <Modal
+        open={showContract}
+        onClose={() => setShowContract(false)}
+        closeOnOverlayClick={!isOwner}
+      >
+        <ModalContent size="md">
+          <ModalHeader
+            title={t('marketplace.rentalContract', 'Buddy 租赁合同')}
+            subtitle={
+              listing
+                ? `${getDeviceTierLabel(listing, t)} · ${OS_LABEL[listing.osType]} · ${displayRateValue} ${displayRateUnit}`
+                : undefined
+            }
+            onClose={() => setShowContract(false)}
+            icon={<FileText size={16} className="text-primary" />}
+          />
 
-            {/* Watermark */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none -z-0">
-              <div
-                className="text-6xl font-black text-amber-900 uppercase tracking-widest whitespace-nowrap opacity-[0.03]"
-                style={{ fontFamily: "'ZCOOL KuaiLe', cursive", transform: 'rotate(-20deg)' }}
-              >
-                SHADOW
+          <ModalBody className="space-y-4">
+            <div className="rounded-xl border border-border-subtle bg-bg-secondary/40 p-3 text-sm">
+              <p className="text-xs text-text-muted">{t('marketplace.rentalItem', '租赁条目')}</p>
+              <p className="mt-1 font-black text-text-primary">{listing.title}</p>
+            </div>
+
+            <div className="rounded-xl border border-border-subtle p-3 space-y-2 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-text-muted">
+                  {t('marketplace.contractStart', '租赁开始')}
+                </span>
+                <span>{new Date().toLocaleDateString()}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-text-muted">
+                  {t('marketplace.contractDuration', '租赁时长')}
+                </span>
+                <span>
+                  {durationHours} {t('marketplace.duration', '时长')}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-text-muted">
+                  {t('marketplace.estimatedCost', '预估费用')}
+                </span>
+                <span className="font-black">
+                  {estimate ? (
+                    <PriceDisplay amount={estimate.totalEstimate} size={16} />
+                  ) : (
+                    t('common.loading', '加载中...')
+                  )}
+                </span>
               </div>
             </div>
 
-            {/* Paw Stamp */}
-            {signed && (
-              <div
-                className="absolute right-6 md:right-10 bottom-16 pointer-events-none z-20 mix-blend-multiply"
-                style={{
-                  animation: 'stampIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
-                }}
-              >
-                <div className="relative">
-                  <svg
-                    viewBox="0 0 100 100"
-                    className="w-28 h-28 text-red-600/90 drop-shadow-sm fill-current"
-                    style={{ filter: 'url(#stamp-tex)' }}
-                  >
-                    <title>Approved</title>
-                    <defs>
-                      <filter id="stamp-tex">
-                        <feTurbulence
-                          type="fractalNoise"
-                          baseFrequency="0.5"
-                          numOctaves="2"
-                          result="noise"
-                        />
-                        <feDisplacementMap
-                          in="SourceGraphic"
-                          in2="noise"
-                          scale="3"
-                          xChannelSelector="R"
-                          yChannelSelector="G"
-                        />
-                      </filter>
-                    </defs>
-                    <path d="M50 85 C30 85, 20 70, 25 55 C30 40, 45 45, 50 45 C55 45, 70 40, 75 55 C80 70, 70 85, 50 85 Z" />
-                    <circle cx="25" cy="40" r="10" />
-                    <circle cx="40" cy="25" r="11" />
-                    <circle cx="60" cy="25" r="11" />
-                    <circle cx="75" cy="40" r="10" />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center -rotate-12 mt-8">
-                    <span
-                      className="text-red-700/90 text-base font-bold border-2 border-red-700/90 px-2 py-0.5 rounded-sm tracking-widest"
-                      style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
-                    >
-                      {t('contract.approved', 'APPROVED')}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="relative z-10">
-              {/* Header */}
-              <div className="text-center mb-5 border-b-2 border-amber-900/10 pb-4">
-                <h2
-                  className="text-2xl md:text-3xl font-bold text-amber-950 mb-1"
-                  style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
-                >
-                  {t('marketplace.rentalContract', 'Buddy 租赁合同')}
-                </h2>
-                <p className="text-amber-800/60 font-bold uppercase tracking-[0.2em] text-xs">
-                  P2P RENTAL AGREEMENT
-                </p>
-              </div>
-
-              {/* Listing Summary */}
-              <div className="bg-white/60 p-3 rounded-xl border border-amber-900/10 mb-4">
-                <h3 className="font-bold text-amber-950 text-base mb-0.5">{listing.title}</h3>
-                <p className="text-xs text-amber-900/60">
-                  {tier.icon} {t(tier.labelKey)} · {OS_INFO[listing.osType]} · {listing.hourlyRate}{' '}
-                  🦐/h
-                </p>
-              </div>
-
-              {/* Terms Grid */}
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2 mb-5 text-sm">
-                <div className="flex items-center justify-between border-b border-amber-900/10 pb-2">
-                  <span className="font-bold text-amber-950/80 flex items-center gap-1.5 text-xs">
-                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                    {t('marketplace.contractStart', '租赁开始')}
-                  </span>
-                  <span className="font-mono font-medium text-xs">
-                    {new Date().toLocaleDateString()}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between border-b border-amber-900/10 pb-2">
-                  <span className="font-bold text-amber-950/80 flex items-center gap-1.5 text-xs">
-                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                    {t('marketplace.contractDuration', '租赁时长')}
-                  </span>
-                  <span className="font-mono font-medium text-xs">{effectiveDurationHours}h</span>
-                </div>
-                <div className="flex items-center justify-between border-b border-amber-900/10 pb-2">
-                  <span className="font-bold text-amber-950/80 flex items-center gap-1.5 text-xs">
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                    {t('marketplace.estimatedCost', '预估费用')}
-                  </span>
-                  <span className="font-mono font-bold text-xs text-amber-700">
-                    {estimate?.totalEstimate ?? '...'} 🦐
-                  </span>
-                </div>
-                {listing.depositAmount > 0 && (
-                  <div className="flex items-center justify-between pb-2">
-                    <span className="font-bold text-amber-950/80 flex items-center gap-1.5 text-xs">
-                      <div className="w-1.5 h-1.5 rounded-full bg-danger" />
-                      {t('marketplace.contractDeposit', '违约保证金')}
-                    </span>
-                    <span className="font-mono font-bold text-xs text-danger">
-                      {listing.depositAmount} 🦐
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Owner Terms + Platform Terms side by side on larger screens */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                {listing.guidelines && (
-                  <div>
-                    <h3 className="font-bold text-amber-950/80 mb-1.5 flex items-center gap-1.5 text-xs">
-                      <FileText className="w-3.5 h-3.5 text-amber-500" />
-                      {t('marketplace.ownerTerms', '出租方使用规约')}
-                    </h3>
-                    <div className="bg-white/40 rounded-lg p-3 text-xs text-amber-900/70 leading-relaxed whitespace-pre-wrap max-h-28 overflow-y-auto">
-                      {listing.guidelines}
-                    </div>
-                  </div>
-                )}
-                <div>
-                  <h3 className="font-bold text-amber-950/80 mb-1.5 flex items-center gap-1.5 text-xs">
-                    <Shield className="w-3.5 h-3.5 text-cyan-500" />
-                    {t('marketplace.platformTerms', '平台服务条款')}
-                  </h3>
-                  <div className="bg-white/40 rounded-lg p-3 text-xs text-amber-900/70 leading-relaxed whitespace-pre-wrap max-h-28 overflow-y-auto">
-                    {`虾豆平台 Buddy 租赁服务条款
-
-1. 平台收取 5% 的服务手续费。
-2. 出租方不得自行使用已出租的 Buddy，违者需支付违约金。
-3. 使用方应遵守使用准则，不得滥用或用于非法用途。
-4. Token 消耗费用和电费由使用方承担。
-5. 任一方可提前终止租约，已产生的费用不予退还。
-6. 发生争议时，平台有权介入调解。
-7. 平台保留对违规行为进行处罚的权利。`}
-                  </div>
-                </div>
-              </div>
-
-              {/* Agreement Checkbox */}
-              <label className="flex items-start gap-2.5 mb-5 cursor-pointer group">
-                <input
-                  type="checkbox"
+            <div className="space-y-2">
+              <p className="text-xs font-black uppercase tracking-[0.12em] text-text-muted">
+                {t('marketplace.rentalTerms', '租赁确认')}
+              </p>
+              <div className="flex items-start gap-2">
+                <Checkbox
                   checked={agreedToTerms}
-                  onChange={(e) => setAgreedToTerms(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 rounded border-border-subtle text-accent focus:ring-accent/30"
+                  onCheckedChange={(value) => setAgreedToTerms(value === true)}
                 />
-                <span className="text-xs text-amber-900/80 font-medium leading-relaxed">
+                <label className="text-sm text-text-secondary">
                   {t(
                     'marketplace.agreeTerms',
                     '我已阅读并同意出租方的使用规约和虾豆平台服务条款，理解租赁期间的费用计算规则、违约条款及相关责任。',
                   )}
-                </span>
-              </label>
-
-              {/* Signatures */}
-              <div className="flex flex-col sm:flex-row justify-between items-end gap-6 px-2">
-                <div className="w-full sm:w-2/5">
-                  <div className="border-b-[3px] border-amber-900/30 h-10 flex items-end justify-center pb-1.5">
-                    <span
-                      className="font-medium text-amber-900/70 italic text-lg"
-                      style={{ fontFamily: "cursive, 'ZCOOL KuaiLe'" }}
-                    >
-                      {listing.owner?.displayName ||
-                        listing.owner?.username ||
-                        t('marketplace.ownerSignature', '出租方')}
-                    </span>
-                  </div>
-                  <p className="text-center text-[11px] text-amber-900/60 mt-1.5 uppercase tracking-widest font-semibold">
-                    {t('marketplace.ownerSignatureLabel', '出租方签名')}
-                  </p>
-                </div>
-
-                <div className="w-full sm:w-2/5 relative flex flex-col items-center min-h-[2.5rem]">
-                  {!signed ? (
-                    <button
-                      type="button"
-                      disabled={!agreedToTerms || signMutation.isPending}
-                      onClick={() => signMutation.mutate()}
-                      className={`w-full max-w-[180px] py-2.5 px-5 rounded-full font-bold text-base shadow-xl transition-all transform ${
-                        agreedToTerms
-                          ? 'bg-gradient-to-r from-accent to-accent-strong hover:brightness-110 text-bg-deep hover:-translate-y-1 hover:scale-105 active:scale-95 ring-4 ring-accent/20'
-                          : 'bg-bg-tertiary text-text-muted cursor-not-allowed'
-                      }`}
-                      style={{ fontFamily: "'ZCOOL KuaiLe', cursive" }}
-                    >
-                      {signMutation.isPending
-                        ? t('common.loading', '处理中...')
-                        : t('marketplace.signContract', '确认签约')}
-                    </button>
-                  ) : (
-                    <div className="border-b-[3px] border-amber-900/30 h-10 w-full flex items-end justify-center pb-1.5">
-                      <span className="font-medium text-amber-900 font-serif text-xl italic drop-shadow-sm">
-                        {currentUser?.displayName ||
-                          currentUser?.username ||
-                          t('marketplace.signedTenant', '使用方已签')}
-                      </span>
-                    </div>
-                  )}
-                  <p className="text-center text-[11px] text-amber-900/60 mt-1.5 uppercase tracking-widest font-semibold">
-                    {t('marketplace.tenantSignatureLabel', '使用方签名')}
-                  </p>
-                </div>
+                </label>
               </div>
-
-              {/* Close button */}
-              {!signed && (
-                <div className="text-center mt-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowContract(false)}
-                    className="text-sm text-text-muted hover:text-text-primary font-bold"
-                  >
-                    {t('common.cancel', '取消')}
-                  </button>
-                </div>
-              )}
             </div>
-          </div>
-        </div>
-      )}
-    </div>
+
+            <div className="rounded-xl border border-border-subtle bg-bg-secondary/35 p-3 text-xs text-text-muted">
+              <p className="flex items-start gap-2">
+                <Clock size={13} className="mt-0.5" />
+                {t(
+                  'marketplace.totalEstimateFormula',
+                  '费用说明：基本费率 + 电费 + 服务费，账单以实际使用时长与结算策略为准。',
+                )}
+              </p>
+            </div>
+          </ModalBody>
+
+          <ModalFooter>
+            <ModalButtonGroup>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setShowContract(false)
+                  setAgreedToTerms(false)
+                }}
+              >
+                {t('common.cancel', '取消')}
+              </Button>
+              <Button
+                type="button"
+                variant="accent"
+                size="sm"
+                loading={signMutation.isPending}
+                disabled={!agreedToTerms || signMutation.isPending}
+                onClick={() => signMutation.mutate()}
+                icon={CheckCircle2}
+              >
+                {signMutation.isPending
+                  ? t('common.loading', '处理中...')
+                  : t('marketplace.signContract', '确认签约')}
+              </Button>
+            </ModalButtonGroup>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+    </GlassPanel>
   )
 }

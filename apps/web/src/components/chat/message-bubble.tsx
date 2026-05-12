@@ -384,7 +384,7 @@ function openRechargeModal() {
   window.dispatchEvent(new CustomEvent('shadow:open-recharge', { detail: { source: 'chat' } }))
   window.setTimeout(() => {
     window.removeEventListener('shadow:open-recharge:ack', onAck)
-    if (!acked) window.location.href = '/app/settings?tab=wallet'
+    if (!acked) window.location.href = '/app/settings/wallet'
   }, 500)
 }
 
@@ -438,7 +438,7 @@ function WalletRechargeCard({ data }: { data: WalletRechargeMetadata }) {
           size="sm"
           variant="ghost"
           onClick={() => {
-            window.location.href = '/app/settings?tab=tasks'
+            window.location.href = '/app/settings/tasks'
           }}
           className="!rounded-xl"
         >

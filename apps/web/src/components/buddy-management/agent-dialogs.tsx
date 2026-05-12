@@ -10,8 +10,8 @@ import {
 } from '@shadowob/ui'
 import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
-import { AvatarEditor } from '../common/avatar-editor'
 import { fetchApi } from '../../lib/api'
+import { AvatarEditor } from '../common/avatar-editor'
 import type { Agent } from './types'
 
 function deriveBuddyUsername(name: string) {
@@ -32,12 +32,14 @@ export function CreateAgentDialog({
   onError,
   t,
   initialData,
+  embedded = false,
 }: {
   onClose: () => void
   onSuccess: (agent: Agent) => void
   onError: (message?: string) => void
   t: (key: string) => string
   initialData?: { name?: string; username?: string; description?: string }
+  embedded?: boolean
 }) {
   const [name, setName] = useState(initialData?.name ?? '')
   const [username, setUsername] = useState(initialData?.username ?? '')
@@ -103,80 +105,93 @@ export function CreateAgentDialog({
     })
   }
 
-  return (
-    <Modal open onClose={onClose}>
-      <ModalContent maxWidth="max-w-[560px]" className="shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
+  const content = (
+    <>
+      {!embedded ? (
         <ModalHeader title={t('agentMgmt.createTitle')} closeLabel={t('common.close')} />
+      ) : (
+        <h2 className="text-base leading-6 font-bold text-text-primary">
+          {t('agentMgmt.createTitle')}
+        </h2>
+      )}
 
-        <ModalBody className="space-y-5 py-5">
-          <p className="text-sm leading-6 text-text-secondary">{t('agentMgmt.createIntro')}</p>
+      <div className={embedded ? 'space-y-2' : 'space-y-5 py-5'}>
+        <p
+          className={
+            embedded
+              ? 'text-[11px] leading-4 text-text-muted'
+              : 'text-sm leading-6 text-text-secondary'
+          }
+        >
+          {t('agentMgmt.createIntro')}
+        </p>
 
-          <div className="space-y-3">
-            <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
-              {t('agentMgmt.identitySection')}
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-                  {t('agentMgmt.nameLabel')}
-                </label>
-                <Input
-                  value={name}
-                  onChange={(e) => handleNameChange(e.target.value)}
-                  placeholder={t('agentMgmt.namePlaceholder')}
-                  maxLength={64}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-                  {t('agentMgmt.usernameLabel')}
-                </label>
-                <Input
-                  value={username}
-                  onChange={(e) => handleUsernameChange(e.target.value)}
-                  placeholder={t('agentMgmt.usernamePlaceholder')}
-                  maxLength={32}
-                />
-                <p className="px-1 text-xs leading-5 text-text-muted">
-                  {t('agentMgmt.usernameHint')}
-                </p>
-              </div>
-            </div>
+        <div className={embedded ? 'space-y-2' : 'space-y-3'}>
+          <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
+            {t('agentMgmt.identitySection')}
           </div>
-
-          <div className="space-y-3">
-            <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
-              {t('agentMgmt.profileSection')}
-            </div>
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-                {t('agentMgmt.descLabel')}
+                {t('agentMgmt.nameLabel')}
               </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder={t('agentMgmt.descPlaceholder')}
-                className="w-full bg-bg-tertiary border-2 border-border-subtle text-text-primary rounded-[20px] px-5 py-4 text-sm font-bold leading-6 outline-none transition-all placeholder:text-text-muted/30 focus:border-primary focus:shadow-[0_0_0_5px_rgba(0,198,209,0.1)] resize-none"
-                rows={4}
-                maxLength={500}
+              <Input
+                value={name}
+                onChange={(e) => handleNameChange(e.target.value)}
+                placeholder={t('agentMgmt.namePlaceholder')}
+                maxLength={64}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
+                {t('agentMgmt.usernameLabel')}
+              </label>
+              <Input
+                value={username}
+                onChange={(e) => handleUsernameChange(e.target.value)}
+                placeholder={t('agentMgmt.usernamePlaceholder')}
+                maxLength={32}
               />
               <p className="px-1 text-xs leading-5 text-text-muted">
-                {t('agentMgmt.descriptionHint')}
+                {t('agentMgmt.usernameHint')}
               </p>
             </div>
           </div>
+        </div>
 
-          <div>
-            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-3">
-              {t('agentMgmt.avatarLabel')}
-            </label>
-            <AvatarEditor value={selectedAvatar ?? undefined} onChange={setSelectedAvatar} />
+        <div className={embedded ? 'space-y-2' : 'space-y-3'}>
+          <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
+            {t('agentMgmt.profileSection')}
           </div>
-        </ModalBody>
+          <div className="space-y-2">
+            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
+              {t('agentMgmt.descLabel')}
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder={t('agentMgmt.descPlaceholder')}
+              className="w-full bg-bg-tertiary border-2 border-border-subtle text-text-primary rounded-[20px] px-5 py-4 text-sm font-bold leading-6 outline-none transition-all placeholder:text-text-muted/30 focus:border-primary focus:shadow-[0_0_0_5px_rgba(0,198,209,0.1)] resize-none"
+              rows={4}
+              maxLength={500}
+            />
+            <p className="px-1 text-xs leading-5 text-text-muted">
+              {t('agentMgmt.descriptionHint')}
+            </p>
+          </div>
+        </div>
 
-        {/* Actions */}
-        <ModalFooter>
+        <div>
+          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-3">
+            {t('agentMgmt.avatarLabel')}
+          </label>
+          <AvatarEditor value={selectedAvatar ?? undefined} onChange={setSelectedAvatar} />
+        </div>
+      </div>
+
+      <div className={embedded ? 'mt-2 pt-2 border-t border-border-subtle' : ''}>
+        <div className={embedded ? 'pt-2 flex justify-end' : 'flex justify-end'}>
           <ModalButtonGroup>
             <Button variant="ghost" size="sm" onClick={onClose}>
               {t('common.cancel')}
@@ -190,7 +205,19 @@ export function CreateAgentDialog({
               {createMutation.isPending ? t('agentMgmt.creating') : t('common.create')}
             </Button>
           </ModalButtonGroup>
-        </ModalFooter>
+        </div>
+      </div>
+    </>
+  )
+
+  if (embedded) {
+    return <div className="animate-in fade-in slide-in-from-right-4 duration-300">{content}</div>
+  }
+
+  return (
+    <Modal open onClose={onClose}>
+      <ModalContent maxWidth="max-w-[560px]" className="shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
+        <ModalBody className="space-y-5 py-5">{content}</ModalBody>
       </ModalContent>
     </Modal>
   )

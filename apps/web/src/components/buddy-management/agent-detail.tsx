@@ -1,14 +1,20 @@
 import { Badge, Button, cn } from '@shadowob/ui'
 import type { UseMutationResult } from '@tanstack/react-query'
-import { ClipboardCopy, Edit2, Key, Trash2, XCircle } from 'lucide-react'
+import type { TFunction } from 'i18next'
+import {
+  CircleDollarSign,
+  ClipboardCopy,
+  Edit2,
+  Key,
+  MessageCircle,
+  Trash2,
+  XCircle,
+} from 'lucide-react'
 import { UserAvatar } from '../common/avatar'
 import { OpenClawSetupGuide } from './openclaw-setup-guide'
 import type { Agent, TokenResponse } from './types'
 
-function formatOnlineDuration(
-  totalSeconds: number,
-  t: (key: string, defaultValue?: string) => string,
-): string {
+function formatOnlineDuration(totalSeconds: number, t: TFunction): string {
   if (totalSeconds < 60) return `${totalSeconds}${t('time.seconds', '秒')}`
   const hours = Math.floor(totalSeconds / 3600)
   const minutes = Math.floor((totalSeconds % 3600) / 60)
@@ -31,7 +37,11 @@ export function AgentDetail({
   onDelete,
   onEdit,
   onToggle,
+  onCreateListing,
   togglePending,
+  onMessageOwner,
+  isMessageOwnerPending,
+  currentUserId,
   t,
 }: {
   agent: Agent
@@ -41,12 +51,22 @@ export function AgentDetail({
   onCopyToken: (token: string) => void
   onDelete: () => void
   onEdit: () => void
+  onCreateListing: () => void
   onToggle: (agent: Agent) => void
   togglePending: boolean
-  t: (key: string) => string
+  onMessageOwner?: () => void
+  isMessageOwnerPending?: boolean
+  currentUserId?: string | null
+  t: TFunction
 }) {
   const name = agent.botUser?.displayName ?? agent.botUser?.username ?? 'Agent'
   const desc = (agent.config?.description as string) ?? ''
+  const ownerUserId = agent.botUser?.id ?? agent.userId
+  const canMessageOwner =
+    Boolean(onMessageOwner) &&
+    Boolean(currentUserId) &&
+    Boolean(ownerUserId) &&
+    currentUserId !== ownerUserId
 
   return (
     <div className="space-y-6">
@@ -72,6 +92,30 @@ export function AgentDetail({
             {desc && <p className="text-sm text-text-secondary mt-1">{desc}</p>}
           </div>
           <div className="flex gap-2">
+            {canMessageOwner && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onMessageOwner}
+                loading={isMessageOwnerPending}
+                className="rounded-[12px]"
+              >
+                <MessageCircle size={14} />
+                {t('marketplace.messageOwner', '私信')}
+              </Button>
+            )}
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={onCreateListing}
+              disabled={agent.isRented}
+              className="rounded-[12px]"
+            >
+              <CircleDollarSign size={14} />
+              {agent.listingInfo
+                ? t('marketplace.updateListing', '更新挂单')
+                : t('marketplace.createListing', '出租')}
+            </Button>
             <Button variant="ghost" size="icon" onClick={onEdit} title={t('common.edit')}>
               <Edit2 size={18} />
             </Button>
@@ -181,10 +225,7 @@ export function AgentDetail({
             {t('agentMgmt.totalOnlineTime')}
           </label>
           <p className="text-sm text-text-primary font-bold">
-            {formatOnlineDuration(
-              agent.totalOnlineSeconds ?? 0,
-              t as (key: string, defaultValue?: string) => string,
-            )}
+            {formatOnlineDuration(agent.totalOnlineSeconds ?? 0, t)}
           </p>
         </div>
         <div>

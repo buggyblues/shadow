@@ -57,7 +57,7 @@ export function PurchaseConfirmationModal({
   isCompleted = false,
   error,
   provisioningStatus,
-  viewEntitlementHref = '/app/settings?tab=wallet&section=entitlements',
+  viewEntitlementHref = '/app/settings/wallet/entitlements',
   onViewEntitlement,
   onClose,
   onConfirm,

@@ -1154,14 +1154,14 @@ export function ProductDetailPage() {
               {purchase.data && (
                 <div className="flex flex-wrap items-center gap-3">
                   <a
-                    href="/app/settings?tab=wallet&section=entitlements"
+                    href="/app/settings/wallet/entitlements"
                     className="inline-flex items-center gap-2 text-sm font-bold text-success"
                   >
                     <ShieldCheck size={16} />
                     {t('commerce.viewEntitlement')}
                   </a>
                   <a
-                    href="/app/settings?tab=wallet&section=assets"
+                    href="/app/settings/wallet/assets"
                     className="inline-flex items-center gap-2 text-sm font-bold text-primary"
                   >
                     <Package size={16} />
@@ -1342,7 +1342,7 @@ export function EntitlementsPage({ embedded = false }: { embedded?: boolean } = 
             description={t('commerce.noEntitlementsHint')}
             action={
               <a
-                href="/app/settings?tab=shop"
+                href="/app/settings/shop"
                 className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/70 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
               >
                 <Store size={16} />
@@ -1542,7 +1542,7 @@ export function ShopOrdersPage() {
           <h1 className="text-2xl font-black text-text-primary">{t('commerce.orders')}</h1>
         </div>
         <a
-          href="/app/settings?tab=shop"
+          href="/app/settings/shop"
           className="inline-flex items-center gap-2 rounded-xl border border-border-subtle bg-bg-secondary px-3 py-2 text-sm font-bold text-text-primary transition hover:border-primary/40"
         >
           <Store size={16} />

@@ -1,14 +1,14 @@
 import { cn, GlassHeader, GlassPanel } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useSearch } from '@tanstack/react-router'
+import { useLocation, useNavigate, useSearch } from '@tanstack/react-router'
 import {
   Bot,
   MessageCircle,
   Monitor,
+  PawPrint,
   Settings,
   Store,
   Target,
-  Terminal,
   Wallet,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -36,8 +36,6 @@ type MergedSettingsSection =
   | 'actions'
   | 'orders'
   | 'market'
-  | 'rentals'
-  | 'listings'
 
 interface NavItem {
   id: SettingsTab
@@ -47,65 +45,113 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'dm', icon: MessageCircle, labelKey: 'settings.tabDM', labelFallback: '消息' },
-  { id: 'buddy', icon: Terminal, labelKey: 'settings.tabBuddy', labelFallback: '我的 Buddy' },
+  { id: 'buddy', icon: PawPrint, labelKey: 'settings.tabBuddy', labelFallback: '我的 Buddy' },
+  { id: 'dm', icon: MessageCircle, labelKey: 'settings.tabDM', labelFallback: '私信' },
   { id: 'tasks', icon: Target, labelKey: 'settings.tabTasks', labelFallback: '赚取虾币' },
   { id: 'wallet', icon: Wallet, labelKey: 'settings.tabWallet', labelFallback: '钱包' },
   { id: 'shop', icon: Store, labelKey: 'settings.tabShop', labelFallback: '我的店铺' },
 ]
 
-function normalizeSettingsLocation(
-  tab?: string,
-  section?: string,
-): { tab: SettingsTab; section?: MergedSettingsSection } {
-  if (tab === 'invite') return { tab: 'tasks' as const, section: 'invite' as const }
-  if (tab === 'entitlements') {
-    return { tab: 'wallet' as const, section: 'entitlements' as const }
-  }
-  if (tab === 'community-assets') return { tab: 'wallet' as const, section: 'assets' as const }
-  if (tab === 'community-settlements') {
-    return { tab: 'wallet' as const, section: 'settlements' as const }
-  }
-  if (tab === 'community-actions') return { tab: 'wallet' as const, section: 'actions' as const }
-  if (tab === 'commerce-orders') return { tab: 'shop' as const, section: 'orders' as const }
-  if (tab === 'tasks' && section === 'invite') {
-    return { tab: 'tasks' as const, section: 'invite' as const }
-  }
-  if (tab === 'wallet' && section === 'entitlements') {
-    return { tab: 'wallet' as const, section: 'entitlements' as const }
-  }
+function normalizeSettingsSection(section?: string): MergedSettingsSection | undefined {
   if (
-    tab === 'wallet' &&
-    (section === 'assets' || section === 'settlements' || section === 'actions')
+    section === 'invite' ||
+    section === 'entitlements' ||
+    section === 'assets' ||
+    section === 'settlements' ||
+    section === 'actions' ||
+    section === 'orders' ||
+    section === 'market'
   ) {
-    return { tab: 'wallet' as const, section }
+    return section
   }
-  if (tab === 'shop' && section === 'orders') {
-    return { tab: 'shop' as const, section: 'orders' as const }
+  return undefined
+}
+
+function normalizeSettingsPath(pathname: string) {
+  return pathname.replace(/^\/app(?=\/|$)/, '').replace(/\/+$/, '')
+}
+
+function resolveSettingsLocationFromPath(pathname: string): {
+  tab: SettingsTab
+  section?: MergedSettingsSection
+} {
+  const path = normalizeSettingsPath(pathname)
+
+  if (path === '/settings') {
+    return { tab: 'buddy' }
   }
+
+  if (path === '/settings/dm') {
+    return { tab: 'dm' }
+  }
+
+  if (path.startsWith('/settings/buddy/market')) {
+    return { tab: 'buddy', section: 'market' }
+  }
+
   if (
-    tab === 'buddy' &&
-    (section === 'market' || section === 'rentals' || section === 'listings')
+    path.startsWith('/settings/buddy/detail') ||
+    path.startsWith('/settings/buddy/create') ||
+    path === '/settings/buddy'
   ) {
-    return { tab: 'buddy' as const, section }
+    return { tab: 'buddy', section: 'buddies' }
   }
-  if (tab === 'buddy' || tab === 'tasks' || tab === 'wallet' || tab === 'shop' || tab === 'dm') {
-    return { tab }
+
+  if (path === '/settings/invite') {
+    return { tab: 'tasks', section: 'invite' }
   }
-  return { tab: 'dm' as const }
+
+  if (path === '/settings/tasks') {
+    return { tab: 'tasks' }
+  }
+
+  if (path === '/settings/wallet' || path.startsWith('/settings/wallet/')) {
+    const normalizedSection = path.split('/settings/wallet/')[1]
+    if (normalizedSection && normalizeSettingsSection(normalizedSection)) {
+      return { tab: 'wallet', section: normalizeSettingsSection(normalizedSection) }
+    }
+    return { tab: 'wallet' }
+  }
+
+  if (path === '/settings/shop' || path.startsWith('/settings/shop/')) {
+    const normalizedSection = path.split('/settings/shop/')[1]
+    if (normalizedSection === 'orders') {
+      return { tab: 'shop', section: 'orders' }
+    }
+    return { tab: 'shop' }
+  }
+
+  if (
+    path === '/settings/entitlements' ||
+    path === '/settings/assets' ||
+    path === '/settings/settlements' ||
+    path === '/settings/actions'
+  ) {
+    return { tab: 'wallet', section: normalizeSettingsSection(path.replace('/settings/', '')) }
+  }
+
+  if (
+    path === '/settings/profile' ||
+    path === '/settings/account' ||
+    path === '/settings/appearance' ||
+    path === '/settings/notification' ||
+    path === '/settings/friends' ||
+    path === '/settings/quickstart'
+  ) {
+    return { tab: 'dm' }
+  }
+
+  return { tab: 'dm' }
 }
 
 export function SettingsPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
   const unreadCount = useUnreadCount()
-  const searchParams = useSearch({ strict: false }) as {
-    tab?: string
-    dm?: string
-    section?: string
-  }
+  const searchParams = useSearch({ strict: false }) as { dm?: string }
   const { user } = useAuthStore()
-  const normalizedLocation = normalizeSettingsLocation(searchParams.tab, searchParams.section)
+  const normalizedLocation = resolveSettingsLocationFromPath(location.pathname)
 
   useAppStatus({
     title: t('settings.sidebarTitle'),
@@ -114,18 +160,11 @@ export function SettingsPage() {
     variant: 'workspace',
   })
 
-  const MODAL_TABS = ['profile', 'account', 'appearance', 'notification', 'developer'] as const
-  const initialModalTab = MODAL_TABS.includes(searchParams.tab as (typeof MODAL_TABS)[number])
-    ? (searchParams.tab as (typeof MODAL_TABS)[number])
-    : undefined
-
-  const [activeTab, setActiveTab] = useState<SettingsTab>(
-    initialModalTab ? 'dm' : normalizedLocation.tab,
-  )
+  const activeTab = normalizedLocation.tab
   const [activeDirectChannelId, setActiveDirectChannelId] = useState<string | null>(
     searchParams.dm || null,
   )
-  const [settingsModalOpen, setSettingsModalOpen] = useState(!!initialModalTab)
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false)
 
   // Fetch wallet balance for nav display
   const { data: wallet } = useQuery({
@@ -133,31 +172,29 @@ export function SettingsPage() {
     queryFn: () => fetchApi<{ id: string; balance: number; frozenAmount: number }>('/api/wallet'),
   })
 
-  // Sync activeTab with URL search params
-  const isModalTab = searchParams.tab
-    ? MODAL_TABS.includes(searchParams.tab as (typeof MODAL_TABS)[number])
-    : false
+  // Sync direct chat channel with URL search params
   useEffect(() => {
-    if (searchParams.tab) {
-      if (isModalTab) {
-        setSettingsModalOpen(true)
-      } else {
-        setActiveTab(normalizeSettingsLocation(searchParams.tab, searchParams.section).tab)
-      }
-    }
     if (searchParams.dm !== undefined) {
       setActiveDirectChannelId(searchParams.dm || null)
     }
-  }, [searchParams.tab, searchParams.section, searchParams.dm, isModalTab])
+  }, [searchParams.dm])
 
   const handleTabChange = (tab: SettingsTab) => {
-    setActiveTab(tab)
+    let nextPath = '/settings/buddy'
+    if (tab === 'dm') {
+      nextPath = '/settings/dm'
+    } else if (tab === 'buddy') {
+      nextPath = '/settings/buddy'
+    } else if (tab === 'tasks') {
+      nextPath = '/settings/tasks'
+    } else if (tab === 'wallet') {
+      nextPath = '/settings/wallet'
+    } else if (tab === 'shop') {
+      nextPath = '/settings/shop'
+    }
     navigate({
-      to: '/settings',
-      search: {
-        tab,
-        ...(tab === 'dm' && activeDirectChannelId ? { dm: activeDirectChannelId } : {}),
-      },
+      to: nextPath,
+      search: tab === 'dm' && activeDirectChannelId ? { dm: activeDirectChannelId } : undefined,
       replace: true,
     })
   }
@@ -336,13 +373,7 @@ export function SettingsPage() {
         {activeTab === 'buddy' && (
           <div className="flex flex-1 min-h-0 gap-3">
             <MyBuddySettingsContent
-              initialSection={
-                activeSection === 'market'
-                  ? 'market'
-                  : activeSection === 'rentals' || activeSection === 'listings'
-                    ? 'rentals'
-                    : 'buddies'
-              }
+              initialSection={activeSection === 'market' ? 'market' : 'buddies'}
             />
           </div>
         )}
@@ -361,7 +392,7 @@ export function SettingsPage() {
                 activeDirectChannelId={activeDirectChannelId}
                 onSelectChannel={(id) => {
                   setActiveDirectChannelId(id)
-                  navigate({ to: '/settings', search: { tab: 'dm', dm: id }, replace: true })
+                  navigate({ to: '/settings/dm', search: { dm: id }, replace: true })
                 }}
                 onStartChatWithUser={async (userId) => {
                   const data = await fetchApi<{ id: string }>('/api/channels/dm', {
@@ -370,8 +401,8 @@ export function SettingsPage() {
                   })
                   setActiveDirectChannelId(data.id)
                   navigate({
-                    to: '/settings',
-                    search: { tab: 'dm', dm: data.id },
+                    to: '/settings/dm',
+                    search: { dm: data.id },
                     replace: true,
                   })
                 }}
@@ -404,7 +435,7 @@ export function SettingsPage() {
       <SettingsModal
         open={settingsModalOpen}
         onClose={() => setSettingsModalOpen(false)}
-        initialTab={initialModalTab}
+        initialTab={undefined}
       />
     </div>
   )

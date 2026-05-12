@@ -101,7 +101,7 @@ const indexRoute = createRoute({
   beforeLoad: () => {
     // Desktop: always go to /settings (authenticated) or /login (unauthenticated)
     if (useAuthStore.getState().isAuthenticated) {
-      throw redirect({ to: '/settings' })
+      throw redirect({ to: '/settings/buddy' })
     }
     throw redirect({ to: '/login' })
   },
@@ -113,7 +113,7 @@ const loginRoute = createRoute({
   component: LoginPage,
   beforeLoad: () => {
     if (useAuthStore.getState().isAuthenticated) {
-      throw redirect({ to: '/settings' })
+      throw redirect({ to: '/settings/buddy' })
     }
   },
 })
@@ -124,7 +124,7 @@ const registerRoute = createRoute({
   component: RegisterPage,
   beforeLoad: () => {
     if (useAuthStore.getState().isAuthenticated) {
-      throw redirect({ to: '/settings' })
+      throw redirect({ to: '/settings/buddy' })
     }
   },
 })
@@ -139,7 +139,7 @@ const marketplaceRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/marketplace',
   beforeLoad: () => {
-    throw redirect({ to: '/settings', search: { tab: 'buddy', section: 'market' } })
+    throw redirect({ to: '/settings/buddy/market' })
   },
   component: () => null,
 })
@@ -178,7 +178,7 @@ const appIndexRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/',
   beforeLoad: () => {
-    throw redirect({ to: '/settings' })
+    throw redirect({ to: '/settings/buddy' })
   },
   component: () => null,
 })
@@ -233,6 +233,15 @@ const serverHomeRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/settings',
+  beforeLoad: () => {
+    throw redirect({ to: '/settings/buddy' })
+  },
+  component: SettingsPage,
+})
+
+const settingsDmRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/settings/dm',
   component: SettingsPage,
 })
 
@@ -241,8 +250,32 @@ const desktopSettingsRoute = createRoute({
   path: '/desktop-settings',
   component: () => {
     const navigate = router.navigate
-    return <DesktopSettingsPage onBack={() => navigate({ to: '/settings' })} />
+    return <DesktopSettingsPage onBack={() => navigate({ to: '/settings/buddy' })} />
   },
+})
+
+const settingsBuddyRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/settings/buddy',
+  component: SettingsPage,
+})
+
+const settingsBuddyMarketRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/settings/buddy/market',
+  component: SettingsPage,
+})
+
+const settingsBuddyCreateRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/settings/buddy/create',
+  component: SettingsPage,
+})
+
+const settingsBuddyDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/settings/buddy/detail',
+  component: SettingsPage,
 })
 
 const openclawRoute = createRoute({
@@ -261,7 +294,7 @@ const buddyMgmtRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/buddies',
   beforeLoad: () => {
-    throw redirect({ to: '/settings', search: { tab: 'buddy' } })
+    throw redirect({ to: '/settings/buddy' })
   },
   component: () => null,
 })
@@ -282,7 +315,7 @@ const myRentalsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/marketplace/my-rentals',
   beforeLoad: () => {
-    throw redirect({ to: '/settings', search: { tab: 'buddy', section: 'rentals' } })
+    throw redirect({ to: '/settings/buddy/market' })
   },
   component: () => null,
 })
@@ -331,6 +364,11 @@ const routeTree = rootRoute.addChildren([
       serverWorkspaceRoute,
     ]),
     settingsRoute,
+    settingsDmRoute,
+    settingsBuddyRoute,
+    settingsBuddyMarketRoute,
+    settingsBuddyCreateRoute,
+    settingsBuddyDetailRoute,
     desktopSettingsRoute,
     openclawRoute,
     dmChatRoute,

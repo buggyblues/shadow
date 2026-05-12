@@ -141,7 +141,7 @@ export function ContractDetailPage() {
         body: JSON.stringify({ userId: agentUserId }),
       }),
     onSuccess: (data) => {
-      navigate({ to: '/settings', search: { tab: 'dm', dm: data.id } })
+      navigate({ to: '/settings/dm', search: { dm: data.id } })
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })
@@ -170,8 +170,7 @@ export function ContractDetailPage() {
       <div className="max-w-4xl mx-auto px-6 py-8">
         {/* Back */}
         <Link
-          to="/settings"
-          search={{ tab: 'buddy', section: 'rentals' }}
+          to="/settings/buddy/market"
           className="inline-flex items-center gap-2 text-text-muted hover:text-text-primary transition-colors font-bold mb-6"
         >
           <ChevronLeft className="w-5 h-5" />

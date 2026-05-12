@@ -171,13 +171,13 @@ export function TaskSettings({
       }
       case 'create_buddy':
         setPendingAction('create-buddy')
-        navigate({ to: '/settings/buddy' })
+        navigate({ to: '/settings/buddy/create', search: {} })
         break
       case 'list_buddy':
-        navigate({ to: '/settings/buddy' })
+        navigate({ to: '/settings/buddy/market', search: {} })
         break
       case 'rent_buddy':
-        navigate({ to: '/settings', search: { tab: 'buddy', section: 'market' } })
+        navigate({ to: '/settings/buddy/market', search: {} })
         break
       case 'list_product': {
         const shopSlug = servers[0]?.server?.slug
@@ -187,7 +187,7 @@ export function TaskSettings({
         break
       }
       case 'invite_signup':
-        navigate({ to: '/settings', search: { tab: 'tasks', section: 'invite' } })
+        navigate({ to: '/settings/invite' })
         break
     }
   }
