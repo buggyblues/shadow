@@ -67,6 +67,7 @@ END $$;
 --> statement-breakpoint
 
 -- Retire duplicate active platform namespaces without deleting deployment history.
+-- SaaS deployments intentionally keep multiple rows per namespace as durable operation history.
 WITH ranked AS (
   SELECT
     id,
@@ -79,6 +80,7 @@ WITH ranked AS (
     ) AS rn
   FROM cloud_deployments
   WHERE cluster_id IS NULL
+    AND saas_mode = false
     AND status <> 'failed'
     AND status <> 'destroyed'
 )
@@ -94,11 +96,13 @@ WHERE cd.id = ranked.id AND ranked.rn > 1;
 CREATE UNIQUE INDEX IF NOT EXISTS cloud_deployments_platform_namespace_unique
   ON cloud_deployments (namespace)
   WHERE cluster_id IS NULL
+    AND saas_mode = false
     AND status <> 'failed'
     AND status <> 'destroyed';
 --> statement-breakpoint
 
 -- Retire duplicate active cluster namespaces without deleting deployment history.
+-- SaaS deployments intentionally keep multiple rows per namespace as durable operation history.
 WITH ranked AS (
   SELECT
     id,
@@ -111,6 +115,7 @@ WITH ranked AS (
     ) AS rn
   FROM cloud_deployments
   WHERE cluster_id IS NOT NULL
+    AND saas_mode = false
     AND status <> 'failed'
     AND status <> 'destroyed'
 )
@@ -126,5 +131,6 @@ WHERE cd.id = ranked.id AND ranked.rn > 1;
 CREATE UNIQUE INDEX IF NOT EXISTS cloud_deployments_cluster_namespace_unique
   ON cloud_deployments (cluster_id, namespace)
   WHERE cluster_id IS NOT NULL
+    AND saas_mode = false
     AND status <> 'failed'
     AND status <> 'destroyed';

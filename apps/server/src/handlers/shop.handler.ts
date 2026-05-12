@@ -1157,10 +1157,9 @@ export function createShopHandler(container: AppContainer) {
     '/servers/:serverId/shop/reviews/:reviewId/reply',
     zValidator('json', replyReviewSchema),
     async (c) => {
-      const user = c.get('user')
+      const serverId = c.req.param('serverId')
+      await container.resolve('policyService').requireServerRole(c.get('actor'), serverId, 'admin')
       const reviewService = container.resolve('reviewService')
-      // Note: authorization relies on the fact that only shop admins can access
-      // this route (the review's product belongs to the server's shop).
       return c.json(
         await reviewService.replyToReview(c.req.param('reviewId'), c.req.valid('json').reply),
       )

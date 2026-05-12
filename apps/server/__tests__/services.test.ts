@@ -15,6 +15,7 @@ function createMockServerDao(overrides = {}) {
     findByUserId: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    updateById: vi.fn(),
     delete: vi.fn(),
     addMember: vi.fn(),
     removeMember: vi.fn(),
@@ -275,14 +276,7 @@ describe('MediaService', () => {
 
 describe('MediaHandler', () => {
   it('serves signed media without requiring bearer auth while keeping upload protected', async () => {
-    const mediaService = {
-      verifySignedToken: vi.fn().mockReturnValue({
-        bucket: 'shadow',
-        key: 'uploads/photo.png',
-        contentType: 'image/png',
-        disposition: 'inline',
-        exp: Math.floor(Date.now() / 1000) + 60,
-      }),
+    const mediaAccessGateway = {
       getSignedObjectResponse: vi.fn().mockResolvedValue({
         body: new ReadableStream<Uint8Array>({
           start(controller) {
@@ -296,7 +290,7 @@ describe('MediaHandler', () => {
     }
     const container = {
       resolve(name: string) {
-        if (name === 'mediaService') return mediaService
+        if (name === 'mediaAccessGateway') return mediaAccessGateway
         throw new Error(`Unexpected dependency: ${name}`)
       },
     } as any
@@ -311,7 +305,10 @@ describe('MediaHandler', () => {
     const signed = await handler.request('/api/media/signed/test-token.part')
     expect(signed.status).toBe(200)
     expect(await signed.text()).toBe('ok')
-    expect(mediaService.verifySignedToken).toHaveBeenCalledWith('test-token.part')
+    expect(mediaAccessGateway.getSignedObjectResponse).toHaveBeenCalledWith(
+      'test-token.part',
+      undefined,
+    )
 
     const upload = await handler.request('/api/media/upload', { method: 'POST' })
     expect(upload.status).toBe(401)
@@ -606,7 +603,7 @@ describe('MessageService', () => {
       const updatedMessage = { ...existingMessage, content: longContent, isEdited: true }
       const messageDao = createMockMessageDao({
         findById: vi.fn().mockResolvedValue(existingMessage),
-        update: vi.fn().mockResolvedValue(updatedMessage),
+        updateById: vi.fn().mockResolvedValue(updatedMessage),
       })
       const userDao = createMockUserDao({
         findById: vi.fn().mockResolvedValue({

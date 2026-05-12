@@ -25,7 +25,7 @@ function jsonResponse(body: unknown) {
 
 function mockToolAgent(finalOverrides: Record<string, unknown> = {}) {
   process.env.SHADOW_DIY_CLOUD_GENERATOR_API_KEY = 'test-key'
-  process.env.SHADOW_DIY_CLOUD_GENERATOR_BASE_URL = 'https://model.test/v1'
+  process.env.SHADOW_DIY_CLOUD_GENERATOR_BASE_URL = 'https://example.com/v1'
   process.env.SHADOW_DIY_CLOUD_GENERATOR_MODEL = 'test-tool-agent'
 
   const dsl = {
