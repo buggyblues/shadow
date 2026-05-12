@@ -145,7 +145,7 @@ export class AgentPolicyService {
     if (!policy || policy.agentId !== agentId) {
       throw Object.assign(new Error('Policy not found'), { status: 404 })
     }
-    await this.deps.agentPolicyDao.delete(policyId, agentId)
+    await this.deps.agentPolicyDao.deleteByAgentIdAndId(agentId, policyId)
   }
 
   /**

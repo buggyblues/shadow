@@ -3,7 +3,7 @@ import type { UserDao } from '../dao/user.dao'
 import type { SafeHttpClient } from '../gateways/safe-http-client'
 import { logger } from '../lib/logger'
 import { isModelProxyToken, verifyModelProxyToken } from '../lib/model-proxy-token'
-import type { WalletService } from './wallet.service'
+import type { LedgerService } from './ledger.service'
 
 type ChatCompletionsBody = Record<string, unknown>
 
@@ -463,7 +463,7 @@ function buildUpstreamBody(body: ChatCompletionsBody, model: string) {
 export class ModelProxyService {
   constructor(
     private deps: {
-      walletService: WalletService
+      ledgerService: LedgerService
       userDao: UserDao
       safeHttpClient: SafeHttpClient
     },
@@ -551,13 +551,14 @@ export class ModelProxyService {
     const amountMicros = priceMicrosForUsage(usageFromEstimate(body))
     const amount = reserveAmountForMicros(amountMicros)
     if (amount <= 0) return { referenceId, model, amount, amountMicros }
-    await this.deps.walletService.debit(
-      identity.userId,
+    await this.deps.ledgerService.debit({
+      userId: identity.userId,
       amount,
+      type: 'purchase',
       referenceId,
-      'model_proxy',
-      `Official model usage reserve (${model})`,
-    )
+      referenceType: 'model_proxy',
+      note: `Official model usage reserve (${model})`,
+    })
     return { referenceId, model, amount, amountMicros }
   }
 
@@ -566,7 +567,7 @@ export class ModelProxyService {
     charge: ReservedCharge,
     actualAmountMicros: number,
   ) {
-    await this.deps.walletService.settleReservedMicros(
+    await this.deps.ledgerService.settleReservedMicros(
       identity.userId,
       actualAmountMicros,
       charge.amount,
@@ -579,14 +580,15 @@ export class ModelProxyService {
 
   private async refundReserve(identity: ModelProxyIdentity, charge: ReservedCharge) {
     if (charge.amount <= 0) return
-    await this.deps.walletService
-      .refund(
-        identity.userId,
-        charge.amount,
-        charge.referenceId,
-        'model_proxy',
-        `Official model usage refund (${charge.model})`,
-      )
+    await this.deps.ledgerService
+      .credit({
+        userId: identity.userId,
+        amount: charge.amount,
+        type: 'refund',
+        referenceId: charge.referenceId,
+        referenceType: 'model_proxy',
+        note: `Official model usage refund (${charge.model})`,
+      })
       .catch((err) =>
         logger.warn({ err, userId: identity.userId }, 'Failed to refund model reserve'),
       )

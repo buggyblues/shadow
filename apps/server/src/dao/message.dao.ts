@@ -185,17 +185,19 @@ export class MessageDao {
     return result[0]
   }
 
-  async update(id: string, content: string) {
+  /** Scoped update by message id only if the user is the sender */
+  async updateById(id: string, sender: string, content: string) {
     const result = await this.db
       .update(messages)
       .set({ content, isEdited: true, updatedAt: new Date() })
-      .where(eq(messages.id, id))
+      .where(and(eq(messages.id, id), eq(messages.authorId, sender)))
       .returning()
     return result[0] ?? null
   }
 
-  async delete(id: string) {
-    await this.db.delete(messages).where(eq(messages.id, id))
+  /** Scoped delete by message id only if the user is the sender */
+  async deleteById(id: string, sender: string) {
+    await this.db.delete(messages).where(and(eq(messages.id, id), eq(messages.authorId, sender)))
   }
 
   async search(

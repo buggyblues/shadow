@@ -5,6 +5,7 @@ import type { AppContainer } from '../container'
 import { validateJsonLimits } from '../lib/json-limits'
 import { encrypt } from '../lib/kms'
 import { authMiddleware } from '../middleware/auth.middleware'
+import { createActorContext } from '../security/actor-context'
 
 function resolveTemplateI18nDict(
   content: Record<string, unknown>,
@@ -34,10 +35,11 @@ export function createCloudHandler(container: AppContainer) {
 
   h.get('/templates', async (c) => {
     const locale = c.req.query('locale') ?? 'en'
-    const dao = container.resolve('cloudTemplateDao')
-    const templates = await dao.listApproved()
+    const useCase = container.resolve('cloudUseCase')
+    const templates = await useCase.listTemplates({ ctx: createActorContext(c.get('actor')) })
+    // Apply i18n localization (keeping existing logic in the handler)
     return c.json(
-      templates.map((template) => {
+      templates.map((template: Record<string, unknown>) => {
         const content = template.content as Record<string, unknown>
         const i18nDict = resolveTemplateI18nDict(content, locale)
         return {
@@ -71,16 +73,10 @@ export function createCloudHandler(container: AppContainer) {
     async (c) => {
       const user = c.get('user') as { userId: string }
       const input = c.req.valid('json')
-      const dao = container.resolve('cloudTemplateDao')
-      const template = await dao.submitCommunity({
-        ...input,
-        submittedByUserId: user.userId,
-      })
-      const activityDao = container.resolve('cloudActivityDao')
-      await activityDao.log({
-        userId: user.userId,
-        type: 'template_submit',
-        meta: { slug: input.slug },
+      const useCase = container.resolve('cloudUseCase')
+      const template = await useCase.submitCommunityTemplate({
+        ctx: createActorContext(c.get('actor')),
+        payload: { ...input, content: input.content as Record<string, unknown> },
       })
       return c.json(template, 201)
     },
@@ -89,11 +85,10 @@ export function createCloudHandler(container: AppContainer) {
   // ─── Deployments ──────────────────────────────────────────────────────────
 
   h.get('/deployments', async (c) => {
-    const user = c.get('user') as { userId: string }
     const limit = Math.min(Number(c.req.query('limit')) || 50, 100)
     const offset = Math.max(Number(c.req.query('offset')) || 0, 0)
-    const dao = container.resolve('cloudDeploymentDao')
-    return c.json(await dao.listByUser(user.userId, limit, offset))
+    const useCase = container.resolve('cloudUseCase')
+    return c.json(await useCase.listDeployments({ ctx: createActorContext(c.get('actor')), limit, offset }))
   })
 
   h.post(
@@ -136,14 +131,14 @@ export function createCloudHandler(container: AppContainer) {
   h.get('/deploy/:deploymentId/stream', async (c) => {
     const user = c.get('user') as { userId: string }
     const deploymentId = c.req.param('deploymentId')
-    const deploymentDao = container.resolve('cloudDeploymentDao')
+    const useCase = container.resolve('cloudUseCase')
+    const result = await useCase.getDeploymentStream({ ctx: createActorContext(c.get('actor')), deploymentId })
 
-    const deployment = await deploymentDao.findById(deploymentId, user.userId)
-    if (!deployment) {
-      return c.json({ ok: false, error: 'Deployment not found' }, 404)
+    if (!result.ok) {
+      return c.json({ ok: false, error: result.error }, 404)
     }
 
-    // Stream existing logs then keep polling for new ones (SSE)
+    // Stream existing logs then close (SSE)
     return c.body(
       new ReadableStream({
         async start(controller) {
@@ -152,13 +147,12 @@ export function createCloudHandler(container: AppContainer) {
             controller.enqueue(enc.encode(`data: ${JSON.stringify(data)}\n\n`))
           }
 
-          const logs = await deploymentDao.getLogs(deploymentId)
-          for (const log of logs) {
+          for (const log of result.logs) {
             send({ level: log.level, message: log.message, createdAt: log.createdAt })
           }
 
-          // Send current status and close — worker pushes updates separately
-          send({ type: 'status', status: deployment.status })
+          // Send current status and close
+          send({ type: 'status', status: result.deployment.status })
           controller.close()
         },
       }),
@@ -174,9 +168,8 @@ export function createCloudHandler(container: AppContainer) {
   // ─── Configs ──────────────────────────────────────────────────────────────
 
   h.get('/configs', async (c) => {
-    const user = c.get('user') as { userId: string }
-    const dao = container.resolve('cloudConfigDao')
-    return c.json(await dao.listByUser(user.userId))
+    const useCase = container.resolve('cloudUseCase')
+    return c.json(await useCase.listConfigs({ ctx: createActorContext(c.get('actor')) }))
   })
 
   h.post(
@@ -191,16 +184,13 @@ export function createCloudHandler(container: AppContainer) {
     async (c) => {
       const user = c.get('user') as { userId: string }
       const input = c.req.valid('json')
-      const dao = container.resolve('cloudConfigDao')
-      const config = await dao.create({ userId: user.userId, ...input })
-      if (!config) return c.json({ ok: false, error: 'Failed to create config' }, 500)
-      const activityDao = container.resolve('cloudActivityDao')
-      await activityDao.log({
-        userId: user.userId,
-        type: 'config_update',
-        meta: { configId: config.id },
+      const useCase = container.resolve('cloudUseCase')
+      const result = await useCase.createConfig({
+        ctx: createActorContext(c.get('actor')),
+        payload: { name: input.name, content: input.content as Record<string, unknown> },
       })
-      return c.json(config, 201)
+      if (!result.ok) return c.json({ ok: false, error: result.error }, 500)
+      return c.json(result.config, 201)
     },
   )
 
@@ -214,44 +204,35 @@ export function createCloudHandler(container: AppContainer) {
       }),
     ),
     async (c) => {
-      const user = c.get('user') as { userId: string }
       const id = c.req.param('id')
       const input = c.req.valid('json')
-      const dao = container.resolve('cloudConfigDao')
-      const config = await dao.update(id, user.userId, input)
-      if (!config) return c.json({ ok: false, error: 'Config not found' }, 404)
-      const activityDao = container.resolve('cloudActivityDao')
-      await activityDao.log({
-        userId: user.userId,
-        type: 'config_update',
-        meta: { configId: id as string },
+      const useCase = container.resolve('cloudUseCase')
+      const result = await useCase.updateConfig({
+        ctx: createActorContext(c.get('actor')),
+        configId: id as string,
+        payload: {
+          ...(input.name !== undefined && { name: input.name }),
+          ...(input.content !== undefined && { content: input.content as Record<string, unknown> }),
+        },
       })
-      return c.json(config)
+      if (!result.ok) return c.json({ ok: false, error: result.error }, 404)
+      return c.json(result.config)
     },
   )
 
   h.delete('/configs/:id', async (c) => {
-    const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
-    const dao = container.resolve('cloudConfigDao')
-    await dao.delete(id, user.userId)
+    const useCase = container.resolve('cloudUseCase')
+    await useCase.deleteConfig({ ctx: createActorContext(c.get('actor')), configId: id as string })
     return c.json({ ok: true })
   })
 
   // ─── Env Vars ─────────────────────────────────────────────────────────────
 
   h.get('/env-vars', async (c) => {
-    const user = c.get('user') as { userId: string }
     const scope = c.req.query('scope')
-    const dao = container.resolve('cloudEnvVarDao')
-    const vars = await dao.listByUser(user.userId, scope)
-    // Never return decrypted values
-    return c.json(
-      vars.map((v) => {
-        const { encryptedValue: _e, ...rest } = v
-        return rest
-      }),
-    )
+    const useCase = container.resolve('cloudUseCase')
+    return c.json(await useCase.listEnvVars({ ctx: createActorContext(c.get('actor')), scope }))
   })
 
   h.post(
@@ -266,50 +247,32 @@ export function createCloudHandler(container: AppContainer) {
       }),
     ),
     async (c) => {
-      const user = c.get('user') as { userId: string }
       const input = c.req.valid('json')
-      const encryptedValue = encrypt(input.value)
-      const dao = container.resolve('cloudEnvVarDao')
-      const envVar = await dao.create({
-        userId: user.userId,
+      const useCase = container.resolve('cloudUseCase')
+      const result = await useCase.createEnvVar({
+        ctx: createActorContext(c.get('actor')),
         key: input.key,
-        encryptedValue,
+        value: input.value,
         scope: input.scope,
         groupId: input.groupId,
       })
-      if (!envVar) return c.json({ ok: false, error: 'Failed to create env var' }, 500)
-      const activityDao = container.resolve('cloudActivityDao')
-      await activityDao.log({
-        userId: user.userId,
-        type: 'envvar_update',
-        meta: { key: input.key },
-      })
-      const { encryptedValue: _e2, ...rest } = envVar
-      return c.json(rest, 201)
+      if (!result.ok) return c.json({ ok: false, error: result.error }, 500)
+      return c.json(result.envVar, 201)
     },
   )
 
   h.delete('/env-vars/:id', async (c) => {
-    const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
-    const dao = container.resolve('cloudEnvVarDao')
-    await dao.delete(id, user.userId)
+    const useCase = container.resolve('cloudUseCase')
+    await useCase.deleteEnvVar({ ctx: createActorContext(c.get('actor')), envVarId: id as string })
     return c.json({ ok: true })
   })
 
   // ─── Clusters ─────────────────────────────────────────────────────────────
 
   h.get('/clusters', async (c) => {
-    const user = c.get('user') as { userId: string }
-    const dao = container.resolve('cloudClusterDao')
-    const clusters = await dao.listByUser(user.userId)
-    // Strip encrypted kubeconfig from responses
-    return c.json(
-      clusters.map((cl) => {
-        const { kubeconfigEncrypted: _e, kubeconfigKmsRef: _k, ...rest } = cl
-        return rest
-      }),
-    )
+    const useCase = container.resolve('cloudUseCase')
+    return c.json(await useCase.listClusters({ ctx: createActorContext(c.get('actor')) }))
   })
 
   h.post(
@@ -336,25 +299,23 @@ export function createCloudHandler(container: AppContainer) {
   )
 
   h.delete('/clusters/:id', async (c) => {
-    const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
-    const dao = container.resolve('cloudClusterDao')
-    const cluster = await dao.findById(id, user.userId)
-    if (!cluster) return c.json({ ok: false, error: 'Cluster not found' }, 404)
-    await dao.delete(id, user.userId)
-    const activityDao = container.resolve('cloudActivityDao')
-    await activityDao.log({ userId: user.userId, type: 'cluster_remove', meta: { clusterId: id } })
+    const useCase = container.resolve('cloudUseCase')
+    const result = await useCase.deleteCluster({
+      ctx: createActorContext(c.get('actor')),
+      clusterId: id as string,
+    })
+    if (!result.ok) return c.json({ ok: false, error: result.error }, 404)
     return c.json({ ok: true })
   })
 
   // ─── Activity ─────────────────────────────────────────────────────────────
 
   h.get('/activity', async (c) => {
-    const user = c.get('user') as { userId: string }
     const limit = Math.min(Number(c.req.query('limit')) || 50, 100)
     const offset = Math.max(Number(c.req.query('offset')) || 0, 0)
-    const dao = container.resolve('cloudActivityDao')
-    return c.json(await dao.listByUser(user.userId, limit, offset))
+    const useCase = container.resolve('cloudUseCase')
+    return c.json(await useCase.listActivity({ ctx: createActorContext(c.get('actor')), limit, offset }))
   })
 
   return h

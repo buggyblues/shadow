@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
+import { createActorContext } from '../security/actor-context'
 import { normalizeSlashCommands } from '../services/agent.service'
 import {
   channelPositionsSchema,
@@ -267,8 +268,6 @@ export function createChannelHandler(container: AppContainer) {
   channelHandler.post('/channels/:id/join-requests', async (c) => {
     const id = c.req.param('id')
     const userId = c.get('user').userId
-    const channelService = container.resolve('channelService')
-    const channelJoinRequestDao = container.resolve('channelJoinRequestDao')
     const access = await getAccessStatus(id, userId)
 
     if (!access.isServerMember) {
@@ -276,28 +275,40 @@ export function createChannelHandler(container: AppContainer) {
     }
     if (!access.channel.isPrivate) {
       if (!access.isChannelMember) {
-        await channelService.addMember(id, userId)
+        const channelUseCase = container.resolve('channelUseCase')
+        await channelUseCase.requestChannelAccess({
+          ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+          channelId: id,
+          isPrivate: false,
+        })
       }
       return c.json({ ok: true, status: 'approved' }, access.isChannelMember ? 200 : 201)
     }
     if (access.canAccess) return c.json({ ok: true, status: 'approved' })
     const serverId = requireServerChannel(access.channel)
 
-    const existing =
-      access.joinRequestStatus === 'pending'
-        ? await channelJoinRequestDao.findByChannelAndUser(id, userId)
-        : null
-    const request = existing ?? (await channelJoinRequestDao.request(id, userId))
-    if (!existing) {
-      await notifyChannelJoinRequestReviewers({
-        channelId: id,
-        channelName: access.channel.name,
-        serverId,
-        requestId: request.id,
-        requesterId: userId,
-      })
+    const channelUseCase = container.resolve('channelUseCase')
+    const result = await channelUseCase.requestChannelAccess({
+      ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+      channelId: id,
+      isPrivate: true,
+    })
+
+    if (result.isNewRequest) {
+      try {
+        await notifyChannelJoinRequestReviewers({
+          channelId: id,
+          channelName: access.channel.name,
+          serverId,
+          requestId: result.requestId!,
+          requesterId: userId,
+        })
+      } catch {
+        /* non-critical */
+      }
     }
-    return c.json({ ok: true, status: request.status, requestId: request.id }, 202)
+
+    return c.json({ ok: true, status: 'pending', requestId: result.requestId }, 202)
   })
 
   // PATCH /api/channel-join-requests/:requestId — approve/reject a private-channel request
@@ -305,45 +316,31 @@ export function createChannelHandler(container: AppContainer) {
     '/channel-join-requests/:requestId',
     zValidator('json', reviewJoinRequestSchema),
     async (c) => {
-      const channelService = container.resolve('channelService')
-      const channelJoinRequestDao = container.resolve('channelJoinRequestDao')
-      const serverDao = container.resolve('serverDao')
-      const channelMemberDao = container.resolve('channelMemberDao')
       const requestId = c.req.param('requestId')
       const userId = c.get('user').userId
       const { status } = c.req.valid('json')
-      const request = await channelJoinRequestDao.findById(requestId)
-      if (!request) return c.json({ ok: false, error: 'Join request not found' }, 404)
 
-      const channel = await channelService.getById(request.channelId)
-      const serverId = requireServerChannel(channel)
-      const [requesterServerMember, requesterChannelMember] = await Promise.all([
-        serverDao.getMember(serverId, userId),
-        channelMemberDao.get(channel.id, userId),
-      ])
-      const canManage =
-        requesterServerMember?.role === 'owner' || requesterServerMember?.role === 'admin'
-      if (!canManage && !requesterChannelMember) {
-        return c.json({ ok: false, error: 'Not authorized to review this request' }, 403)
-      }
-
-      const reviewed = await channelJoinRequestDao.review(requestId, status, userId)
-      if (!reviewed) return c.json({ ok: false, error: 'Join request not found' }, 404)
-
-      if (status === 'approved') {
-        await channelService.addMember(channel.id, request.userId)
-      }
-
-      await notifyChannelJoinRequestDecision({
-        channelId: channel.id,
-        channelName: channel.name,
-        serverId,
-        userId: request.userId,
-        reviewerId: userId,
-        approved: status === 'approved',
+      const channelUseCase = container.resolve('channelUseCase')
+      const result = await channelUseCase.reviewChannelJoinRequest({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        requestId,
+        status,
       })
 
-      return c.json({ ok: true, request: reviewed })
+      try {
+        await notifyChannelJoinRequestDecision({
+          channelId: result.channel.id,
+          channelName: result.channel.name,
+          serverId: result.serverId,
+          userId: result.userId,
+          reviewerId: userId,
+          approved: result.approved,
+        })
+      } catch {
+        /* non-critical */
+      }
+
+      return c.json({ ok: true, request: result.request })
     },
   )
 
@@ -436,7 +433,6 @@ export function createChannelHandler(container: AppContainer) {
 
   // POST /api/channels/:id/members — add a user (typically a bot) to a channel
   channelHandler.post('/channels/:id/members', async (c) => {
-    const channelService = container.resolve('channelService')
     const serverDao = container.resolve('serverDao')
     const channelMemberDao = container.resolve('channelMemberDao')
     const id = c.req.param('id')
@@ -446,6 +442,7 @@ export function createChannelHandler(container: AppContainer) {
     const targetUserId = body.userId ?? requesterId
 
     // Make sure channel exists
+    const channelService = container.resolve('channelService')
     const channel = await channelService.getById(id)
     const serverId = requireServerChannel(channel)
 
@@ -477,23 +474,26 @@ export function createChannelHandler(container: AppContainer) {
     if (isSelfJoin) {
       // Self-join to a private channel creates an approval request instead of bypassing the wall.
       if (channel.isPrivate) {
-        const existing = await container
-          .resolve('channelJoinRequestDao')
-          .findByChannelAndUser(id, requesterId)
-        const request =
-          existing?.status === 'pending'
-            ? existing
-            : await container.resolve('channelJoinRequestDao').request(id, requesterId)
-        if (existing?.status !== 'pending') {
-          await notifyChannelJoinRequestReviewers({
-            channelId: id,
-            channelName: channel.name,
-            serverId,
-            requestId: request.id,
-            requesterId,
-          })
+        const channelUseCase = container.resolve('channelUseCase')
+        const result = await channelUseCase.requestChannelAccess({
+          ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+          channelId: id,
+          isPrivate: true,
+        })
+        if (result.isNewRequest) {
+          try {
+            await notifyChannelJoinRequestReviewers({
+              channelId: id,
+              channelName: channel.name,
+              serverId,
+              requestId: result.requestId!,
+              requesterId,
+            })
+          } catch {
+            /* non-critical */
+          }
         }
-        return c.json({ ok: true, status: request.status, requestId: request.id }, 202)
+        return c.json({ ok: true, status: 'pending', requestId: result.requestId }, 202)
       }
     } else {
       // Inviting others requires inviter already in channel
@@ -502,8 +502,13 @@ export function createChannelHandler(container: AppContainer) {
       }
     }
 
-    // Add member
-    await channelService.addMember(id, targetUserId)
+    // Add member via UseCase (handles authorization for non-self-join)
+    const channelUseCase = container.resolve('channelUseCase')
+    await channelUseCase.addChannelMember({
+      ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+      channelId: id,
+      targetUserId,
+    })
 
     // Broadcast member:joined to the channel
     try {

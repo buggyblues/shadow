@@ -336,8 +336,8 @@ export function createAgentHandler(container: AppContainer) {
       try {
         const agent = await agentService.getById(id)
         if (agent) {
-          const io = container.resolve('io')
           const channelMemberDao = container.resolve('channelMemberDao')
+          const io = container.resolve('io')
           const channelIds = await channelMemberDao.getAllChannelIds(agent.userId)
           for (const channelId of channelIds) {
             io.to(`channel:${channelId}`).emit('channel:slash-commands-updated', {

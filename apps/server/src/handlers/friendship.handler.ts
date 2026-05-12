@@ -21,8 +21,8 @@ export function createFriendshipHandler(container: AppContainer) {
 
       // Notify the target user via WebSocket so their UI updates in real-time
       try {
-        const io = container.resolve('io')
         const userDao = container.resolve('userDao')
+        const io = container.resolve('io')
         const targetUser = await userDao.findByUsername(username)
         if (targetUser) {
           const requester = await userDao.findById(user.userId)

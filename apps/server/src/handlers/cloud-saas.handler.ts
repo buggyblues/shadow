@@ -10,8 +10,6 @@ import {
   collectRuntimeEnvRequirements,
   createVolumeSnapshotBackupAsync,
   deleteKubernetesResourceAsync,
-  execInPodAsync,
-  execInPodWithInputAsync,
   extractCloudSaasRuntime,
   extractRequiredEnvVars,
   getPvcVolumeSnapshotCapability,
@@ -30,8 +28,10 @@ import {
 } from '@shadowob/cloud'
 import { and, desc, eq, ne, sql } from 'drizzle-orm'
 import { type Context, Hono } from 'hono'
+import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
+import type { CloudSaasUseCase } from '../usecases/cloud-saas.usecase'
 import { cloudDeployments, cloudTemplates } from '../db/schema'
 import type { SafeHttpClient } from '../gateways/safe-http-client'
 import { requestCloudDeploymentCancellation } from '../lib/cloud-deployment-processor'
@@ -45,6 +45,7 @@ import {
 } from '../lib/model-proxy-config'
 import { assertSafeHttpUrl } from '../lib/ssrf'
 import { authMiddleware } from '../middleware/auth.middleware'
+import { createActorContext } from '../security/actor-context'
 import {
   areRateLimitsDisabled,
   createRateLimitMiddleware,
@@ -1479,7 +1480,8 @@ async function resolveDeploymentKubeconfig(
   deployment: { clusterId?: string | null },
 ): Promise<string | undefined> {
   if (!deployment.clusterId) return undefined
-  const cluster = await container.resolve('cloudClusterDao').findByIdOnly(deployment.clusterId)
+  const useCase = container.resolve('cloudSaasUseCase')
+  const cluster = await useCase.findClusterByIdOnly({ ctx: createActorContext({ kind: 'system', service: 'cloud-processor', capabilities: [] }), clusterId: deployment.clusterId })
   if (!cluster?.kubeconfigEncrypted) return undefined
   return decrypt(cluster.kubeconfigEncrypted)
 }
@@ -1701,8 +1703,18 @@ async function readStateArchiveFromPod(options: {
   path: string
   container?: string
   kubeconfig?: string
+  kubernetesOpsGateway: {
+    execInPod: (opts: {
+      namespace: string
+      pod: string
+      container?: string
+      kubeconfig?: string
+      timeout?: number
+      command: string[]
+    }) => Promise<{ exitCode: number; stdout: string; stderr: string }>
+  }
 }) {
-  const result = await execInPodAsync({
+  const result = await options.kubernetesOpsGateway.execInPod({
     namespace: options.namespace,
     pod: options.podName,
     container: options.container,
@@ -1727,8 +1739,19 @@ async function writeStateArchiveToPod(options: {
   podName: string
   archive: Buffer
   kubeconfig?: string
+  kubernetesOpsGateway: {
+    execInPodWithInput: (opts: {
+      namespace: string
+      pod: string
+      container?: string
+      kubeconfig?: string
+      timeout?: number
+      input: string
+      command: string[]
+    }) => Promise<{ exitCode: number; stdout: string; stderr: string }>
+  }
 }) {
-  const result = await execInPodWithInputAsync({
+  const result = await options.kubernetesOpsGateway.execInPodWithInput({
     namespace: options.namespace,
     pod: options.podName,
     kubeconfig: options.kubeconfig,
@@ -1784,6 +1807,7 @@ async function createObjectStoreBackup(options: {
         path: CLOUD_BACKUP_STATE_DIR,
         container: 'openclaw',
         kubeconfig: options.kubeconfig,
+        kubernetesOpsGateway: options.container.resolve('kubernetesOpsGateway'),
       })
       await options.onPhase?.('object-storing')
       const stored = await putObjectArchive({
@@ -1820,6 +1844,7 @@ async function createObjectStoreBackup(options: {
       podName: helperPod,
       path: '/state',
       kubeconfig: options.kubeconfig,
+      kubernetesOpsGateway: options.container.resolve('kubernetesOpsGateway'),
     })
     await options.onPhase?.('object-storing')
     const stored = await putObjectArchive({
@@ -1863,6 +1888,7 @@ async function restoreObjectStoreBackup(options: {
       podName: helperPod,
       archive,
       kubeconfig: options.kubeconfig,
+      kubernetesOpsGateway: options.container.resolve('kubernetesOpsGateway'),
     })
     return { archiveBytes: archive.byteLength }
   } finally {
@@ -2020,6 +2046,7 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.use('*', authMiddleware)
 
   async function authorizeDiyGeneration(
+    useCase: CloudSaasUseCase,
     userId: string,
     input: z.infer<typeof diyCloudGenerateSchema>,
   ) {
@@ -2047,14 +2074,14 @@ export function createCloudSaasHandler(container: AppContainer) {
         },
       })
     }
-    const activityDao = container.resolve('cloudActivityDao')
     const limit = diyCloudDailyLimit()
     if (limit !== null) {
-      const usedToday = await activityDao.countByUserTypeSince(
+      const usedToday = await useCase.countActivityByUserTypeSince({
+        ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }),
         userId,
-        'diy_generate',
-        new Date(Date.now() - 24 * 60 * 60 * 1000),
-      )
+        type: 'diy_generate',
+        since: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      })
       if (usedToday >= limit) {
         throw Object.assign(new Error('DIY Cloud daily generation quota exceeded'), {
           status: 429,
@@ -2063,7 +2090,8 @@ export function createCloudSaasHandler(container: AppContainer) {
         })
       }
     }
-    await activityDao.log({
+    await useCase.logActivity({
+      ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }),
       userId,
       type: 'diy_generate',
       meta: {
@@ -2075,26 +2103,23 @@ export function createCloudSaasHandler(container: AppContainer) {
     return budget
   }
 
-  async function loadGroupNameLookup(userId: string): Promise<Map<string, string>> {
-    const envDao = container.resolve('cloudEnvVarDao')
-    const groups = await envDao.listGroupsByUser(userId)
-    return new Map(groups.map((group) => [group.id, group.name]))
+  async function loadGroupNameLookup(useCase: CloudSaasUseCase, userId: string): Promise<Map<string, string>> {
+    const groups = await useCase.listEnvGroupsByUser({ ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }) })
+    return new Map(groups.map((group: { id: string; name: string }) => [group.id, group.name]))
   }
 
-  async function resolveGroupId(userId: string, groupName?: string | null): Promise<string | null> {
+  async function resolveGroupId(useCase: CloudSaasUseCase, userId: string, groupName?: string | null): Promise<string | null> {
     if (!groupName || groupName === 'default') return null
 
-    const envDao = container.resolve('cloudEnvVarDao')
-    const existing = await envDao.findGroupByName(userId, groupName)
+    const existing = await useCase.findEnvGroupByName({ ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }), name: groupName })
     if (existing) return existing.id
 
-    const created = await envDao.createGroup({ userId, name: groupName })
+    const created = await useCase.createEnvGroup({ ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }), name: groupName })
     return created?.id ?? null
   }
 
-  async function readProviderProfiles(userId: string): Promise<ProviderProfileView[]> {
-    const envDao = container.resolve('cloudEnvVarDao')
-    const vars = await envDao.listByUser(userId)
+  async function readProviderProfiles(useCase: CloudSaasUseCase, userId: string): Promise<ProviderProfileView[]> {
+    const vars = await useCase.listEnvVarsByUser({ ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }) })
     const byScope = new Map<string, typeof vars>()
     for (const variable of vars) {
       if (!variable.scope.startsWith(PROVIDER_PROFILE_SCOPE_PREFIX)) continue
@@ -2145,6 +2170,7 @@ export function createCloudSaasHandler(container: AppContainer) {
   }
 
   async function readProviderRuntimeProfiles(
+    useCase: CloudSaasUseCase,
     userId: string,
     profileIds?: string[],
   ): Promise<ProviderRuntimeProfile[]> {
@@ -2152,8 +2178,7 @@ export function createCloudSaasHandler(container: AppContainer) {
       profileIds && profileIds.length > 0
         ? new Set(profileIds.map(normalizeProviderProfileId))
         : null
-    const envDao = container.resolve('cloudEnvVarDao')
-    const vars = await envDao.listByUser(userId)
+    const vars = await useCase.listEnvVarsByUser({ ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }) })
     const catalogs = (await listProviderCatalogs()).map((entry) => entry.provider)
     const byScope = new Map<string, typeof vars>()
     for (const variable of vars) {
@@ -2207,6 +2232,7 @@ export function createCloudSaasHandler(container: AppContainer) {
   }
 
   async function resolveCreateRuntimeEnvVars(
+    useCase: CloudSaasUseCase,
     userId: string,
     inputEnvVars: Record<string, string> | undefined,
     configSnapshot: unknown,
@@ -2272,7 +2298,7 @@ export function createCloudSaasHandler(container: AppContainer) {
       : explicitProviderProfileIds.length > 0
         ? explicitProviderProfileIds
         : usesModelProvider
-          ? (await readProviderProfiles(userId))
+          ? (await readProviderProfiles(useCase, userId))
               .filter((profile) => profile.enabled)
               .map((p) => p.id)
           : []
@@ -2295,7 +2321,7 @@ export function createCloudSaasHandler(container: AppContainer) {
       addProviderManagedEnvKeys(providerManagedEnvKeys, provider)
 
     if (usesModelProvider && providerProfileIds.length > 0) {
-      const runtimeProfiles = await readProviderRuntimeProfiles(userId, providerProfileIds)
+      const runtimeProfiles = await readProviderRuntimeProfiles(useCase, userId, providerProfileIds)
       const selectors = [...collectModelProviderSelectors(configSnapshot)]
       const selectedProfiles = selectRuntimeProviderProfiles(runtimeProfiles, selectors)
       if (selectedProfiles.length === 0) {
@@ -2323,15 +2349,14 @@ export function createCloudSaasHandler(container: AppContainer) {
     }
 
     if (needsSavedLookup || runtimeEnvRequirements.length > 0 || providerProfileIds.length > 0) {
-      const envDao = container.resolve('cloudEnvVarDao')
-      const globalVars = await envDao.listByUser(userId, 'global')
+      const globalVars = await useCase.listEnvVarsByUser({ ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }), scope: 'global' })
       for (const variable of globalVars) {
         const decrypted = safeDecryptEnvValue(variable.encryptedValue, 'global', variable.key)
         if (decrypted !== null) savedValues.set(variable.key, decrypted)
       }
       for (const profileId of providerProfileIds) {
         if (usesModelProvider) continue
-        const scopedVars = await envDao.listByUser(userId, providerProfileScope(profileId))
+        const scopedVars = await useCase.listEnvVarsByUser({ ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }), scope: providerProfileScope(profileId) })
         const scope = providerProfileScope(profileId)
         const values = new Map<string, string>()
         for (const variable of scopedVars) {
@@ -2445,7 +2470,8 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.post('/diy/runs', diyRateLimit, zValidator('json', diyCloudGenerateSchema), async (c) => {
     const user = c.get('user') as { userId: string }
     const input = c.req.valid('json')
-    await authorizeDiyGeneration(user.userId, input)
+    const useCase = container.resolve('cloudSaasUseCase')
+    await authorizeDiyGeneration(useCase, user.userId, input)
     const run = await container.resolve('diyCloudRunService').createRun(user.userId, input)
     return c.json(
       {
@@ -2506,6 +2532,7 @@ export function createCloudSaasHandler(container: AppContainer) {
       const sourceRun = await runService.getRun(user.userId, runId)
       if (!sourceRun) return c.json({ error: 'DIY Cloud generation run not found' }, 404)
 
+      const useCase = container.resolve('cloudSaasUseCase')
       const payload = c.req.valid('json')
       const sourceInput =
         sourceRun.input && typeof sourceRun.input === 'object' && !Array.isArray(sourceRun.input)
@@ -2534,7 +2561,7 @@ export function createCloudSaasHandler(container: AppContainer) {
           payload.timezone ??
           (typeof sourceInput.timezone === 'string' ? sourceInput.timezone : undefined),
       }
-      await authorizeDiyGeneration(user.userId, input)
+      await authorizeDiyGeneration(useCase, user.userId, input)
       const nextRun = await runService.createRun(user.userId, input)
       return c.json(
         {
@@ -2703,8 +2730,8 @@ export function createCloudSaasHandler(container: AppContainer) {
     const category = c.req.query('category')
     const q = c.req.query('q')?.toLowerCase()
     const locale = c.req.query('locale') ?? 'en'
-    const dao = container.resolve('cloudTemplateDao')
-    let templates = (await dao.listApproved()).filter((template) =>
+    const useCase = container.resolve('cloudSaasUseCase')
+    let templates = (await useCase.listApprovedTemplates({ ctx: createActorContext(c.get('actor')) })).filter((template) =>
       isDeployableTemplateContent(template.content),
     )
     if (category) {
@@ -2730,14 +2757,8 @@ export function createCloudSaasHandler(container: AppContainer) {
    * List templates authored by the current user (any review status).
    */
   h.get('/templates/mine', async (c) => {
-    const user = c.get('user') as { userId: string }
-    const db = container.resolve('db')
-    const templates = await db
-      .select()
-      .from(cloudTemplates)
-      .where(and(eq(cloudTemplates.authorId, user.userId), ne(cloudTemplates.source, 'official')))
-      .orderBy(desc(cloudTemplates.updatedAt))
-      .limit(100)
+    const useCase = container.resolve('cloudSaasUseCase')
+    const templates = await useCase.listMyTemplates({ ctx: createActorContext(c.get('actor')) })
     return c.json(templates)
   })
 
@@ -2746,21 +2767,9 @@ export function createCloudSaasHandler(container: AppContainer) {
    * Get a single template authored by the current user (any review status).
    */
   h.get('/templates/mine/:slug', async (c) => {
-    const user = c.get('user') as { userId: string }
     const slug = c.req.param('slug')
-    const db = container.resolve('db')
-    const { eq, and, ne } = await import('drizzle-orm')
-    const [template] = await db
-      .select()
-      .from(cloudTemplates)
-      .where(
-        and(
-          eq(cloudTemplates.slug, slug),
-          eq(cloudTemplates.authorId, user.userId),
-          ne(cloudTemplates.source, 'official'),
-        ),
-      )
-      .limit(1)
+    const useCase = container.resolve('cloudSaasUseCase')
+    const template = await useCase.getMyTemplateBySlug({ ctx: createActorContext(c.get('actor')), slug })
     if (!template) return c.json({ ok: false, error: 'Template not found' }, 404)
     return c.json(template)
   })
@@ -2773,8 +2782,8 @@ export function createCloudSaasHandler(container: AppContainer) {
     const user = c.get('user') as { userId: string }
     const slug = c.req.param('slug')
     const locale = c.req.query('locale') ?? 'en'
-    const dao = container.resolve('cloudTemplateDao')
-    const template = await dao.findBySlug(slug)
+    const useCase = container.resolve('cloudSaasUseCase')
+    const template = await useCase.getTemplateBySlug({ ctx: createActorContext(c.get('actor')), slug })
     if (!template || !canUseTemplate(template, user.userId)) {
       return c.json({ ok: false, error: 'Template not found' }, 404)
     }
@@ -2787,8 +2796,8 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.get('/templates/:slug/env-refs', async (c) => {
     const user = c.get('user') as { userId: string }
     const slug = c.req.param('slug')
-    const dao = container.resolve('cloudTemplateDao')
-    const template = await dao.findBySlug(slug)
+    const useCase = container.resolve('cloudSaasUseCase')
+    const template = await useCase.getTemplateBySlug({ ctx: createActorContext(c.get('actor')), slug })
     if (!template || !canUseTemplate(template, user.userId)) {
       return c.json({ ok: false, error: 'Template not found' }, 404)
     }
@@ -2838,11 +2847,6 @@ export function createCloudSaasHandler(container: AppContainer) {
     async (c) => {
       const user = c.get('user') as { userId: string }
       const input = c.req.valid('json')
-      const dao = container.resolve('cloudTemplateDao')
-      const existing = await dao.findBySlug(input.slug)
-      if (existing) {
-        return c.json({ ok: false, error: 'Template slug already exists' }, 409)
-      }
       let content: Record<string, unknown>
       try {
         content = validateTemplateContentForWrite(input.content)
@@ -2850,30 +2854,15 @@ export function createCloudSaasHandler(container: AppContainer) {
         const status = (err as { status?: 413 | 422 }).status ?? 422
         return c.json({ ok: false, error: (err as Error).message }, status)
       }
-      const db = container.resolve('db')
-      const [template] = await db
-        .insert(cloudTemplates)
-        .values({
-          slug: input.slug,
-          name: input.name,
-          description: input.description,
-          content,
-          tags: input.tags ?? [],
-          source: 'community',
-          reviewStatus: 'draft',
-          submittedByUserId: user.userId,
-          authorId: user.userId,
-          category: input.category ?? null,
-          baseCost: input.baseCost ?? null,
-        })
-        .returning()
-      const activityDao = container.resolve('cloudActivityDao')
-      await activityDao.log({
-        userId: user.userId,
-        type: 'template_submit',
-        meta: { slug: input.slug },
+      const useCase = container.resolve('cloudSaasUseCase')
+      const result = await useCase.createTemplate({
+        ctx: createActorContext(c.get('actor')),
+        payload: { ...input, content },
       })
-      return c.json(template, 201)
+      if (!result.ok) {
+        return c.json({ ok: false, error: result.error }, ((result as { status?: number }).status ?? 409) as ContentfulStatusCode)
+      }
+      return c.json(result.template, 201)
     },
   )
 
@@ -2898,15 +2887,6 @@ export function createCloudSaasHandler(container: AppContainer) {
       const user = c.get('user') as { userId: string }
       const slug = c.req.param('slug')
       const input = c.req.valid('json')
-      const dao = container.resolve('cloudTemplateDao')
-      const template = await dao.findBySlug(slug)
-      if (!template) return c.json({ ok: false, error: 'Template not found' }, 404)
-      if (template.authorId !== user.userId) {
-        return c.json({ ok: false, error: 'Forbidden' }, 403)
-      }
-      if (template.reviewStatus === 'approved' || template.reviewStatus === 'pending') {
-        return c.json({ ok: false, error: 'Cannot edit an approved or pending template' }, 422)
-      }
       let content: Record<string, unknown> | undefined
       if (input.content !== undefined) {
         try {
@@ -2916,30 +2896,16 @@ export function createCloudSaasHandler(container: AppContainer) {
           return c.json({ ok: false, error: (err as Error).message }, status)
         }
       }
-      const db = container.resolve('db')
-      const [updated] = await db
-        .update(cloudTemplates)
-        .set({
-          ...(input.name !== undefined && { name: input.name }),
-          ...(input.description !== undefined && {
-            description: input.description,
-          }),
-          ...(content !== undefined && { content }),
-          ...(input.tags !== undefined && { tags: input.tags }),
-          ...(input.category !== undefined && { category: input.category }),
-          ...(input.baseCost !== undefined && { baseCost: input.baseCost }),
-          // Keep current review status (draft or rejected) — don't auto-submit
-          updatedAt: new Date(),
-        })
-        .where(eq(cloudTemplates.slug, slug))
-        .returning()
-      const activityDao = container.resolve('cloudActivityDao')
-      await activityDao.log({
-        userId: user.userId,
-        type: 'template_update',
-        meta: { slug },
+      const useCase = container.resolve('cloudSaasUseCase')
+      const result = await useCase.updateTemplate({
+        ctx: createActorContext(c.get('actor')),
+        slug,
+        payload: { ...input, ...(content !== undefined && { content }) },
       })
-      return c.json(updated)
+      if (!result.ok) {
+        return c.json({ ok: false, error: result.error }, ((result as { status?: number }).status ?? 404) as ContentfulStatusCode)
+      }
+      return c.json(result.template)
     },
   )
 
@@ -2950,31 +2916,15 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.post('/templates/:slug/submit', async (c) => {
     const user = c.get('user') as { userId: string }
     const slug = c.req.param('slug')
-    const dao = container.resolve('cloudTemplateDao')
-    const template = await dao.findBySlug(slug)
-    if (!template) return c.json({ ok: false, error: 'Template not found' }, 404)
-    if (template.authorId !== user.userId) return c.json({ ok: false, error: 'Forbidden' }, 403)
-    if (template.reviewStatus === 'pending') {
-      return c.json({ ok: false, error: 'Already pending review' }, 422)
-    }
-    if (template.reviewStatus === 'approved') {
-      return c.json({ ok: false, error: 'Template already approved' }, 422)
-    }
-    try {
-      validateTemplateContentForWrite(template.content as Record<string, unknown>)
-    } catch (err) {
-      const status = (err as { status?: 413 | 422 }).status ?? 422
-      return c.json({ ok: false, error: (err as Error).message }, status)
-    }
-    // Clear reviewNote when resubmitting
-    const updated = await dao.updateReviewStatus(template.id, 'pending', null)
-    const activityDao = container.resolve('cloudActivityDao')
-    await activityDao.log({
-      userId: user.userId,
-      type: 'template_submit',
-      meta: { slug },
+    const useCase = container.resolve('cloudSaasUseCase')
+    const result = await useCase.submitTemplateForReview({
+      ctx: createActorContext(c.get('actor')),
+      slug,
     })
-    return c.json(updated)
+    if (!result.ok) {
+      return c.json({ ok: false, error: result.error }, ((result as { status?: number }).status ?? 404) as ContentfulStatusCode)
+    }
+    return c.json(result.template)
   })
 
   /**
@@ -2985,20 +2935,14 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.delete('/templates/:slug', async (c) => {
     const user = c.get('user') as { userId: string }
     const slug = c.req.param('slug')
-    const dao = container.resolve('cloudTemplateDao')
-    const template = await dao.findBySlug(slug)
-    if (!template) return c.json({ ok: false, error: 'Template not found' }, 404)
-    if (template.authorId !== user.userId) {
-      return c.json({ ok: false, error: 'Forbidden' }, 403)
-    }
-    const db = container.resolve('db')
-    await db.delete(cloudTemplates).where(eq(cloudTemplates.slug, slug))
-    const activityDao = container.resolve('cloudActivityDao')
-    await activityDao.log({
-      userId: user.userId,
-      type: 'template_delete',
-      meta: { slug, wasApproved: template.reviewStatus === 'approved' },
+    const useCase = container.resolve('cloudSaasUseCase')
+    const result = await useCase.deleteTemplate({
+      ctx: createActorContext(c.get('actor')),
+      slug,
     })
+    if (!result.ok) {
+      return c.json({ ok: false, error: result.error }, ((result as { status?: number }).status ?? 404) as ContentfulStatusCode)
+    }
     return c.json({ ok: true })
   })
 
@@ -3081,8 +3025,8 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.get('/deployments/:id', async (c) => {
     const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
-    const dao = container.resolve('cloudDeploymentDao')
-    const deployment = await dao.findById(id, user.userId)
+    const useCase = container.resolve('cloudSaasUseCase')
+    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
     if (deployment.status === 'deployed') {
       await container
@@ -3107,8 +3051,8 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.get('/deployments/:id/costs', async (c) => {
     const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
-    const dao = container.resolve('cloudDeploymentDao')
-    const deployment = await dao.findById(id, user.userId)
+    const useCase = container.resolve('cloudSaasUseCase')
+    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
 
     const summary = await container.resolve('cloudUsageService').collectDeploymentCost(deployment)
@@ -3123,9 +3067,10 @@ export function createCloudSaasHandler(container: AppContainer) {
       const user = c.get('user') as { userId: string }
       const id = c.req.param('id')
       const input = c.req.valid('json') ?? {}
-      const dao = container.resolve('cloudDeploymentDao')
-      const deployment = await dao.findById(id, user.userId)
+      const useCase = container.resolve('cloudSaasUseCase')
+      const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
       if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+      const dao = container.resolve('cloudDeploymentDao')
 
       const current = await dao.findLatestCurrentInNamespace({
         userId: user.userId,
@@ -3168,7 +3113,8 @@ export function createCloudSaasHandler(container: AppContainer) {
           timeoutMs: 120_000,
         })
         const updated = await dao.updateStatus(id, 'paused')
-        await container.resolve('cloudActivityDao').log({
+        await useCase.logActivity({
+          ctx: createActorContext(c.get('actor')),
           userId: user.userId,
           type: 'scale',
           namespace: deployment.namespace,
@@ -3197,9 +3143,10 @@ export function createCloudSaasHandler(container: AppContainer) {
       const user = c.get('user') as { userId: string }
       const id = c.req.param('id')
       const input = c.req.valid('json') ?? {}
-      const dao = container.resolve('cloudDeploymentDao')
-      const deployment = await dao.findById(id, user.userId)
+      const useCase = container.resolve('cloudSaasUseCase')
+      const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
       if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+      const dao = container.resolve('cloudDeploymentDao')
 
       const current = await dao.findLatestCurrentInNamespace({
         userId: user.userId,
@@ -3236,7 +3183,8 @@ export function createCloudSaasHandler(container: AppContainer) {
           timeoutMs: 180_000,
         })
         const updated = await dao.updateStatus(id, 'deployed')
-        await container.resolve('cloudActivityDao').log({
+        await useCase.logActivity({
+          ctx: createActorContext(c.get('actor')),
           userId: user.userId,
           type: 'scale',
           namespace: deployment.namespace,
@@ -3263,15 +3211,10 @@ export function createCloudSaasHandler(container: AppContainer) {
     const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
     const agentId = c.req.query('agentId')
-    const deployment = await container.resolve('cloudDeploymentDao').findById(id, user.userId)
-    if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
-
-    const backups = await container.resolve('cloudDeploymentBackupDao').listByDeployment({
-      userId: user.userId,
-      deploymentId: id,
-      agentId,
-    })
-    return c.json({ deploymentId: id, backups })
+    const useCase = container.resolve('cloudSaasUseCase')
+    const result = await useCase.listDeploymentBackups({ ctx: createActorContext(c.get('actor')), deploymentId: id, agentId })
+    if (!result) return c.json({ ok: false, error: 'Deployment not found' }, 404)
+    return c.json({ deploymentId: id, backups: result.backups })
   })
 
   h.post(
@@ -3281,8 +3224,9 @@ export function createCloudSaasHandler(container: AppContainer) {
       const user = c.get('user') as { userId: string }
       const id = c.req.param('id')
       const input = c.req.valid('json') ?? {}
+      const useCase = container.resolve('cloudSaasUseCase')
       const deploymentDao = container.resolve('cloudDeploymentDao')
-      const deployment = await deploymentDao.findById(id, user.userId)
+      const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
       if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
       if (deployment.status !== 'deployed' && deployment.status !== 'paused') {
         return c.json(
@@ -3377,7 +3321,8 @@ export function createCloudSaasHandler(container: AppContainer) {
           }`,
           'info',
         )
-        await container.resolve('cloudActivityDao').log({
+        await useCase.logActivity({
+          ctx: createActorContext(c.get('actor')),
           userId: user.userId,
           type: 'scale',
           namespace: deployment.namespace,
@@ -3455,8 +3400,9 @@ export function createCloudSaasHandler(container: AppContainer) {
     const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
     const input = c.req.valid('json') ?? {}
+    const useCase = container.resolve('cloudSaasUseCase')
     const deploymentDao = container.resolve('cloudDeploymentDao')
-    const deployment = await deploymentDao.findById(id, user.userId)
+    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
     const current = await deploymentDao.findLatestCurrentInNamespace({
       userId: user.userId,
@@ -3480,8 +3426,8 @@ export function createCloudSaasHandler(container: AppContainer) {
     const backupDao = container.resolve('cloudDeploymentBackupDao')
     const agentId = resolveDeploymentAgentId(deployment, input.agentId)
     const backup = input.backupId
-      ? await backupDao.findById(input.backupId, user.userId)
-      : (await backupDao.listByDeployment({ userId: user.userId, deploymentId: id, agentId }))[0]
+      ? await useCase.getBackupById({ ctx: createActorContext(c.get('actor')), backupId: input.backupId })
+      : (await useCase.listDeploymentBackups({ ctx: createActorContext(c.get('actor')), deploymentId: id, agentId }))?.backups?.[0] ?? null
     if (!backup || backup.deploymentId !== id) {
       return c.json({ ok: false, error: 'Backup not found' }, 404)
     }
@@ -3513,7 +3459,8 @@ export function createCloudSaasHandler(container: AppContainer) {
           `[restore] User requested restore from backup ${backup.id} for agent "${backup.agentId}"`,
           'info',
         )
-        await container.resolve('cloudActivityDao').log({
+        await useCase.logActivity({
+          ctx: createActorContext(c.get('actor')),
           userId: user.userId,
           type: 'scale',
           namespace: deployment.namespace,
@@ -3621,10 +3568,10 @@ export function createCloudSaasHandler(container: AppContainer) {
       const user = c.get('user') as { userId: string }
       const input = c.req.valid('json')
       const db = container.resolve('db')
+      const useCase = container.resolve('cloudSaasUseCase')
 
       // Verify template exists
-      const templateDao = container.resolve('cloudTemplateDao')
-      const template = await templateDao.findBySlug(input.templateSlug)
+      const template = await useCase.getTemplateBySlug({ ctx: createActorContext(c.get('actor')), slug: input.templateSlug })
       if (!template || !canUseTemplate(template, user.userId)) {
         return c.json({ ok: false, error: 'Template not found or not approved' }, 404)
       }
@@ -3655,6 +3602,7 @@ export function createCloudSaasHandler(container: AppContainer) {
           return c.json({ ok: false, error: `Rejected ${reservedHint}: ${illegalEnvKey}` }, 422)
         }
         const runtimeEnvVars = await resolveCreateRuntimeEnvVars(
+          useCase,
           user.userId,
           input.envVars,
           serverTemplateSnapshot,
@@ -3694,9 +3642,8 @@ export function createCloudSaasHandler(container: AppContainer) {
       // Get or use platform cluster, then reserve the namespace at the
       // deployment-instance level. A template can be deployed multiple times,
       // but each live instance must own a distinct namespace.
-      const clusterDao = container.resolve('cloudClusterDao')
-      const clusters = await clusterDao.listByUser(user.userId)
-      const platformCluster = clusters.find((cl) => cl.isPlatform) ?? null
+      const clusters = await useCase.listClustersByUser({ ctx: createActorContext(c.get('actor')) })
+      const platformCluster = clusters.find((cl: { isPlatform?: boolean }) => cl.isPlatform) ?? null
       const deploymentDao = container.resolve('cloudDeploymentDao')
       const operationScope = {
         userId: user.userId,
@@ -3773,8 +3720,8 @@ export function createCloudSaasHandler(container: AppContainer) {
             .set({ deployCount: sql`${cloudTemplates.deployCount} + 1` })
             .where(eq(cloudTemplates.slug, input.templateSlug))
 
-          const activityDao = container.resolve('cloudActivityDao')
-          await activityDao.log({
+          await useCase.logActivity({
+            ctx: createActorContext(c.get('actor')),
             userId: user.userId,
             type: 'deploy',
             namespace: input.namespace,
@@ -3846,15 +3793,14 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.get('/deployments/:id/manifest', async (c) => {
     const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
-    const dao = container.resolve('cloudDeploymentDao')
-    const deployment = await dao.findById(id, user.userId)
+    const useCase = container.resolve('cloudSaasUseCase')
+    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
 
-    const templateDao = container.resolve('cloudTemplateDao')
     let linkedTemplateSlug: string | null = deploymentTemplateSlugCandidates(deployment)[0] ?? null
     let template: CloudTemplateRecord | null = null
     for (const candidate of deploymentTemplateSlugCandidates(deployment)) {
-      const found = await templateDao.findBySlug(candidate)
+      const found = await useCase.getTemplateBySlug({ ctx: createActorContext(c.get('actor')), slug: candidate })
       if (found && canUseTemplate(found, user.userId)) {
         linkedTemplateSlug = candidate
         template = found
@@ -3885,8 +3831,9 @@ export function createCloudSaasHandler(container: AppContainer) {
       return c.json({ ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid request' }, 422)
     }
 
+    const useCase = container.resolve('cloudSaasUseCase')
     const dao = container.resolve('cloudDeploymentDao')
-    const deployment = await dao.findById(id, user.userId)
+    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
     if (!deployment.configSnapshot || typeof deployment.configSnapshot !== 'object') {
       return c.json({ ok: false, error: 'Deployment has no config snapshot' }, 422)
@@ -3994,8 +3941,8 @@ export function createCloudSaasHandler(container: AppContainer) {
         .where(eq(cloudDeployments.id, deployment.id))
     }
 
-    const activityDao = container.resolve('cloudActivityDao')
-    await activityDao.log({
+    await useCase.logActivity({
+      ctx: createActorContext(c.get('actor')),
       userId: user.userId,
       type: 'template_update',
       namespace: deployment.namespace,
@@ -4021,8 +3968,9 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.delete('/deployments/:id', async (c) => {
     const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
+    const useCase = container.resolve('cloudSaasUseCase')
     const dao = container.resolve('cloudDeploymentDao')
-    const deployment = await dao.findById(id, user.userId)
+    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
 
     if (deployment.status === 'destroyed') {
@@ -4108,8 +4056,8 @@ export function createCloudSaasHandler(container: AppContainer) {
       )
     }
 
-    const activityDao = container.resolve('cloudActivityDao')
-    await activityDao.log({
+    await useCase.logActivity({
+      ctx: createActorContext(c.get('actor')),
       userId: user.userId,
       type: 'destroy',
       namespace: current.namespace,
@@ -4130,8 +4078,9 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.post('/deployments/:id/cancel', async (c) => {
     const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
+    const useCase = container.resolve('cloudSaasUseCase')
     const dao = container.resolve('cloudDeploymentDao')
-    const deployment = await dao.findById(id, user.userId)
+    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
 
     if (deployment.status === 'cancelling') {
@@ -4210,8 +4159,9 @@ export function createCloudSaasHandler(container: AppContainer) {
       )
     }
     const redeployInput = parsedRedeploy.data ?? {}
+    const useCase = container.resolve('cloudSaasUseCase')
     const dao = container.resolve('cloudDeploymentDao')
-    const deployment = await dao.findById(id, user.userId)
+    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
     if (deployment.status === 'destroyed') {
       return c.json({ ok: false, error: 'Destroyed deployments cannot be redeployed' }, 422)
@@ -4279,7 +4229,6 @@ export function createCloudSaasHandler(container: AppContainer) {
         inferTemplateSlugFromConfigSnapshot(deployment.configSnapshot)
       let nextTemplateSlug = currentTemplateSlug
       try {
-        const templateDao = container.resolve('cloudTemplateDao')
         const requestedTemplateSlug = redeployInput.templateSlug ?? currentTemplateSlug
         nextTemplateSlug = requestedTemplateSlug ?? null
         const useTemplate =
@@ -4290,14 +4239,14 @@ export function createCloudSaasHandler(container: AppContainer) {
         if (redeployInput.configSnapshot) {
           baseConfigSnapshot = validateTemplateContentForWrite(redeployInput.configSnapshot)
           if (requestedTemplateSlug) {
-            const found = await templateDao.findBySlug(requestedTemplateSlug)
+            const found = await useCase.getTemplateBySlug({ ctx: createActorContext(c.get('actor')), slug: requestedTemplateSlug })
             templateForManifest = found && canUseTemplate(found, user.userId) ? found : null
           }
         } else if (useTemplate) {
           if (!requestedTemplateSlug) {
             return c.json({ ok: false, error: 'Deployment has no linked template' }, 422)
           }
-          const template = await templateDao.findBySlug(requestedTemplateSlug)
+          const template = await useCase.getTemplateBySlug({ ctx: createActorContext(c.get('actor')), slug: requestedTemplateSlug })
           if (!template || !canUseTemplate(template, user.userId)) {
             return c.json({ ok: false, error: 'Template not found or not approved' }, 404)
           }
@@ -4313,7 +4262,7 @@ export function createCloudSaasHandler(container: AppContainer) {
         } else {
           baseConfigSnapshot = runtime.configSnapshot
           if (requestedTemplateSlug) {
-            const found = await templateDao.findBySlug(requestedTemplateSlug)
+            const found = await useCase.getTemplateBySlug({ ctx: createActorContext(c.get('actor')), slug: requestedTemplateSlug })
             templateForManifest = found && canUseTemplate(found, user.userId) ? found : null
           }
         }
@@ -4330,7 +4279,8 @@ export function createCloudSaasHandler(container: AppContainer) {
         }
 
         const runtimeEnvVars = await resolveCreateRuntimeEnvVars(
-          user.userId,
+          useCase,
+          c.get('user').userId,
           redeployEnvVars,
           baseConfigSnapshot,
           c.req.header('authorization'),
@@ -4406,8 +4356,8 @@ export function createCloudSaasHandler(container: AppContainer) {
         'info',
       )
 
-      const activityDao = container.resolve('cloudActivityDao')
-      await activityDao.log({
+      await useCase.logActivity({
+        ctx: createActorContext(c.get('actor')),
         userId: user.userId,
         type: 'deploy',
         namespace: deployment.namespace,
@@ -4514,16 +4464,15 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.get('/envvars/:deploymentId', async (c) => {
     const user = c.get('user') as { userId: string }
     const deploymentId = c.req.param('deploymentId')
-    const deploymentDao = container.resolve('cloudDeploymentDao')
-    const deployment = await deploymentDao.findById(deploymentId, user.userId)
+    const useCase = container.resolve('cloudSaasUseCase')
+    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
-    const envDao = container.resolve('cloudEnvVarDao')
-    const groupNames = await loadGroupNameLookup(user.userId)
-    const vars = await envDao.listByUser(user.userId, deploymentId)
+    const groupNames = await loadGroupNameLookup(useCase, user.userId)
+    const vars = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope: deploymentId })
     return c.json(
-      vars.map(({ encryptedValue: _e, ...rest }) => ({
+      vars.map(({ encryptedValue: _e, ...rest }: { encryptedValue: string; [key: string]: unknown }) => ({
         ...rest,
-        groupName: rest.groupId ? (groupNames.get(rest.groupId) ?? 'default') : 'default',
+        groupName: (rest as { groupId?: string | null }).groupId ? (groupNames.get((rest as { groupId?: string }).groupId ?? '') ?? 'default') : 'default',
       })),
     )
   })
@@ -4536,13 +4485,12 @@ export function createCloudSaasHandler(container: AppContainer) {
     const user = c.get('user') as { userId: string }
     const deploymentId = c.req.param('deploymentId')
     const key = c.req.param('key')
-    const deploymentDao = container.resolve('cloudDeploymentDao')
-    const deployment = await deploymentDao.findById(deploymentId, user.userId)
+    const useCase = container.resolve('cloudSaasUseCase')
+    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
-    const envDao = container.resolve('cloudEnvVarDao')
-    const groupNames = await loadGroupNameLookup(user.userId)
-    const vars = await envDao.listByUser(user.userId, deploymentId)
-    const found = vars.find((v) => v.key === key)
+    const groupNames = await loadGroupNameLookup(useCase, user.userId)
+    const vars = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope: deploymentId })
+    const found = vars.find((v: { key: string }) => v.key === key)
     if (!found) return c.json({ ok: false, error: 'Not found' }, 404)
     const value = safeDecryptEnvValue(found.encryptedValue, deploymentId, found.key)
     if (value === null) {
@@ -4564,16 +4512,14 @@ export function createCloudSaasHandler(container: AppContainer) {
    * Delete a single env var for a deployment.
    */
   h.delete('/envvars/:deploymentId/:key', async (c) => {
-    const user = c.get('user') as { userId: string }
     const deploymentId = c.req.param('deploymentId')
     const key = c.req.param('key')
-    const deploymentDao = container.resolve('cloudDeploymentDao')
-    const deployment = await deploymentDao.findById(deploymentId, user.userId)
+    const useCase = container.resolve('cloudSaasUseCase')
+    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
-    const envDao = container.resolve('cloudEnvVarDao')
-    const vars = await envDao.listByUser(user.userId, deploymentId)
-    const found = vars.find((v) => v.key === key)
-    if (found) await envDao.delete(found.id, user.userId)
+    const vars = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope: deploymentId })
+    const found = vars.find((v: { key: string }) => v.key === key)
+    if (found) await useCase.deleteEnvVar({ ctx: createActorContext(c.get('actor')), envVarId: found.id })
     return c.json({ ok: true })
   })
 
@@ -4582,10 +4528,10 @@ export function createCloudSaasHandler(container: AppContainer) {
    * Return deployment logs as a plain JSON array (non-streaming).
    */
   h.get('/deployments/:id/logs/history', async (c) => {
-    const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
+    const useCase = container.resolve('cloudSaasUseCase')
     const dao = container.resolve('cloudDeploymentDao')
-    const deployment = await dao.findById(id, user.userId)
+    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
 
     const agentParam = c.req.query('agent')
@@ -4700,8 +4646,8 @@ export function createCloudSaasHandler(container: AppContainer) {
     clusterId: string | null
   }): Promise<string | null> {
     if (!deployment.clusterId) return null
-    const clusterDao = container.resolve('cloudClusterDao')
-    const cluster = await clusterDao.findByIdOnly(deployment.clusterId)
+    const useCase = container.resolve('cloudSaasUseCase')
+    const cluster = await useCase.findClusterByIdOnly({ ctx: createActorContext({ kind: 'system', service: 'cloud-processor', capabilities: [] }), clusterId: deployment.clusterId })
     if (!cluster?.kubeconfigEncrypted) return null
     return decrypt(cluster.kubeconfigEncrypted)
   }
@@ -4711,10 +4657,9 @@ export function createCloudSaasHandler(container: AppContainer) {
    * List pods running in the deployment's namespace, with status snapshot.
    */
   h.get('/deployments/:id/pods', async (c) => {
-    const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
-    const dao = container.resolve('cloudDeploymentDao')
-    const deployment = await dao.findById(id, user.userId)
+    const useCase = container.resolve('cloudSaasUseCase')
+    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
     const kubeconfig = (await resolveKubeconfig(deployment)) ?? undefined
     const pods = await container
@@ -4730,15 +4675,14 @@ export function createCloudSaasHandler(container: AppContainer) {
    * Replaces the stub /logs endpoint that only replayed deploy-script output.
    */
   h.get('/deployments/:id/pod-logs', async (c) => {
-    const user = c.get('user') as { userId: string }
     const id = c.req.param('id')
     const podParam = c.req.query('pod')
     const agentParam = c.req.query('agent')
     const tail = Math.min(Number(c.req.query('tail')) || 200, 2000)
     const containerParam = c.req.query('container')
 
-    const dao = container.resolve('cloudDeploymentDao')
-    const deployment = await dao.findById(id, user.userId)
+    const useCase = container.resolve('cloudSaasUseCase')
+    const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId: id })
     if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
 
     const kubeconfig = (await resolveKubeconfig(deployment)) ?? undefined
@@ -4905,33 +4849,25 @@ export function createCloudSaasHandler(container: AppContainer) {
       }),
     ),
     async (c) => {
-      const user = c.get('user') as { userId: string }
       const deploymentId = c.req.param('deploymentId')
       const { vars } = c.req.valid('json')
-      const deploymentDao = container.resolve('cloudDeploymentDao')
-      const deployment = await deploymentDao.findById(deploymentId, user.userId)
+      const useCase = container.resolve('cloudSaasUseCase')
+      const deployment = await useCase.getDeployment({ ctx: createActorContext(c.get('actor')), deploymentId })
       if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
       const { encrypt } = await import('../lib/kms')
-      const envDao = container.resolve('cloudEnvVarDao')
       for (const { key, value } of vars) {
         const encryptedValue = encrypt(value)
-        const existing = (await envDao.listByUser(user.userId, deploymentId)).find(
-          (v) => v.key === key,
-        )
+        const existingVars = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope: deploymentId })
+        const existing = existingVars.find((v: { key: string }) => v.key === key)
         if (existing) {
-          await envDao.update(existing.id, user.userId, encryptedValue)
+          await useCase.updateEnvVar({ ctx: createActorContext(c.get('actor')), id: existing.id, encryptedValue })
           continue
         }
-        await envDao.create({
-          userId: user.userId,
-          key,
-          encryptedValue,
-          scope: deploymentId,
-        })
+        await useCase.createEnvVar({ ctx: createActorContext(c.get('actor')), key, encryptedValue, scope: deploymentId })
       }
-      const activityDao = container.resolve('cloudActivityDao')
-      await activityDao.log({
-        userId: user.userId,
+      await useCase.logActivity({
+        ctx: createActorContext(c.get('actor')),
+        userId: c.get('user').userId,
         type: 'envvar_update',
         meta: { deploymentId, count: vars.length },
       })
@@ -4981,24 +4917,24 @@ export function createCloudSaasHandler(container: AppContainer) {
    */
   h.get('/global-envvars', async (c) => {
     const user = c.get('user') as { userId: string }
-    const envDao = container.resolve('cloudEnvVarDao')
-    const groupNames = await loadGroupNameLookup(user.userId)
-    const vars = await envDao.listByUser(user.userId, 'global')
-    const persistedGroups = await envDao.listGroupsByUser(user.userId)
+    const useCase = container.resolve('cloudSaasUseCase')
+    const groupNames = await loadGroupNameLookup(useCase, user.userId)
+    const vars = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope: 'global' })
+    const persistedGroups = await useCase.listEnvGroupsByUser({ ctx: createActorContext(c.get('actor')) })
     const groups: string[] = [
       'default',
-      ...persistedGroups.map((group) => group.name),
+      ...persistedGroups.map((group: { name: string }) => group.name),
       ...vars
-        .map((v) => (v.groupId ? groupNames.get(v.groupId) : 'default'))
-        .filter((groupName): groupName is string => Boolean(groupName && groupName !== 'default')),
+        .map((v: { groupId?: string | null }) => (v.groupId ? groupNames.get(v.groupId) : 'default'))
+        .filter((groupName: string | undefined): groupName is string => Boolean(groupName && groupName !== 'default')),
     ]
     return c.json({
-      envVars: vars.map(({ encryptedValue: _e, ...rest }) => ({
-        scope: rest.scope ?? 'global',
-        key: rest.key,
+      envVars: vars.map(({ encryptedValue: _e, ...rest }: { encryptedValue: string; [key: string]: unknown }) => ({
+        scope: (rest as { scope?: string }).scope ?? 'global',
+        key: (rest as { key: string }).key,
         maskedValue: '****',
         isSecret: true,
-        groupName: rest.groupId ? (groupNames.get(rest.groupId) ?? 'default') : 'default',
+        groupName: (rest as { groupId?: string | null }).groupId ? (groupNames.get((rest as { groupId?: string }).groupId ?? '') ?? 'default') : 'default',
       })),
       groups: [...new Set(groups)],
     })
@@ -5010,12 +4946,12 @@ export function createCloudSaasHandler(container: AppContainer) {
     async (c) => {
       const user = c.get('user') as { userId: string }
       const { name } = c.req.valid('json')
-      const envDao = container.resolve('cloudEnvVarDao')
-      const existing = await envDao.findGroupByName(user.userId, name)
+      const useCase = container.resolve('cloudSaasUseCase')
+      const existing = await useCase.findEnvGroupByName({ ctx: createActorContext(c.get('actor')), name })
       if (existing) {
         return c.json({ ok: true, name: existing.name })
       }
-      const created = await envDao.createGroup({ userId: user.userId, name })
+      const created = await useCase.createEnvGroup({ ctx: createActorContext(c.get('actor')), name })
       if (!created) {
         return c.json({ ok: false, error: 'Failed to create env group' }, 500)
       }
@@ -5026,8 +4962,8 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.delete('/global-envvars/groups/:name', async (c) => {
     const user = c.get('user') as { userId: string }
     const name = c.req.param('name')
-    const envDao = container.resolve('cloudEnvVarDao')
-    await envDao.deleteGroupByName(user.userId, name)
+    const useCase = container.resolve('cloudSaasUseCase')
+    await useCase.deleteEnvGroupByName({ ctx: createActorContext(c.get('actor')), name })
     return c.json({ ok: true })
   })
 
@@ -5050,21 +4986,15 @@ export function createCloudSaasHandler(container: AppContainer) {
       const user = c.get('user') as { userId: string }
       const { key, value, isSecret: _isSecret, groupName } = c.req.valid('json')
       const { encrypt } = await import('../lib/kms')
-      const envDao = container.resolve('cloudEnvVarDao')
-      const resolvedGroupId = await resolveGroupId(user.userId, groupName)
-      // Delete existing entry with same key first (upsert pattern)
-      const existing = await envDao.listByUser(user.userId, 'global')
-      const found = existing.find((v) => v.key === key)
+      const useCase = container.resolve('cloudSaasUseCase')
+      const resolvedGroupId = await resolveGroupId(useCase, user.userId, groupName)
+      // Upsert pattern via UseCase
+      const existing = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope: 'global' })
+      const found = existing.find((v: { key: string }) => v.key === key)
       if (found) {
-        await envDao.update(found.id, user.userId, encrypt(value), resolvedGroupId)
+        await useCase.updateEnvVar({ ctx: createActorContext(c.get('actor')), id: found.id, encryptedValue: encrypt(value), groupId: resolvedGroupId })
       } else {
-        await envDao.create({
-          userId: user.userId,
-          key,
-          encryptedValue: encrypt(value),
-          scope: 'global',
-          groupId: resolvedGroupId,
-        })
+        await useCase.createEnvVar({ ctx: createActorContext(c.get('actor')), key, encryptedValue: encrypt(value), scope: 'global', groupId: resolvedGroupId })
       }
       return c.json({ ok: true })
     },
@@ -5075,12 +5005,11 @@ export function createCloudSaasHandler(container: AppContainer) {
    * Delete a global env var.
    */
   h.delete('/global-envvars/:key', async (c) => {
-    const user = c.get('user') as { userId: string }
     const key = c.req.param('key')
-    const envDao = container.resolve('cloudEnvVarDao')
-    const vars = await envDao.listByUser(user.userId, 'global')
-    const found = vars.find((v) => v.key === key)
-    if (found) await envDao.delete(found.id, user.userId)
+    const useCase = container.resolve('cloudSaasUseCase')
+    const vars = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope: 'global' })
+    const found = vars.find((v: { key: string }) => v.key === key)
+    if (found) await useCase.deleteEnvVar({ ctx: createActorContext(c.get('actor')), envVarId: found.id })
     return c.json({ ok: true })
   })
 
@@ -5089,12 +5018,11 @@ export function createCloudSaasHandler(container: AppContainer) {
    * Get a single global env var (value decrypted for display in edit form).
    */
   h.get('/global-envvars/:key', async (c) => {
-    const user = c.get('user') as { userId: string }
     const key = c.req.param('key')
-    const envDao = container.resolve('cloudEnvVarDao')
-    const groupNames = await loadGroupNameLookup(user.userId)
-    const vars = await envDao.listByUser(user.userId, 'global')
-    const found = vars.find((v) => v.key === key)
+    const useCase = container.resolve('cloudSaasUseCase')
+    const groupNames = await loadGroupNameLookup(useCase, c.get('user').userId)
+    const vars = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope: 'global' })
+    const found = vars.find((v: { key: string }) => v.key === key)
     if (!found) return c.json({ ok: false, error: 'Not found' }, 404)
     const value = safeDecryptEnvValue(found.encryptedValue, 'global', found.key)
     if (value === null) {
@@ -5134,8 +5062,8 @@ export function createCloudSaasHandler(container: AppContainer) {
    * List encrypted provider profiles saved by the current user.
    */
   h.get('/provider-profiles', async (c) => {
-    const user = c.get('user') as { userId: string }
-    return c.json({ profiles: await readProviderProfiles(user.userId) })
+    const useCase = container.resolve('cloudSaasUseCase')
+    return c.json({ profiles: await readProviderProfiles(useCase, c.get('user').userId) })
   })
 
   /**
@@ -5182,7 +5110,7 @@ export function createCloudSaasHandler(container: AppContainer) {
         normalizeProviderProfileId(input.id ?? `${input.providerId}-${randomUUID().slice(0, 8)}`) ||
         `${input.providerId}-${randomUUID().slice(0, 8)}`
       const scope = providerProfileScope(profileId)
-      const envDao = container.resolve('cloudEnvVarDao')
+      const useCase = container.resolve('cloudSaasUseCase')
       const meta: Record<string, string> = {
         [PROVIDER_PROFILE_META_KEYS.id]: profileId,
         [PROVIDER_PROFILE_META_KEYS.providerId]: input.providerId,
@@ -5192,8 +5120,8 @@ export function createCloudSaasHandler(container: AppContainer) {
       }
 
       for (const [key, value] of Object.entries(meta)) {
-        await envDao.upsertScoped({
-          userId: user.userId,
+        await useCase.upsertEnvVarScoped({
+          ctx: createActorContext(c.get('actor')),
           scope,
           key,
           encryptedValue: encrypt(value),
@@ -5202,15 +5130,15 @@ export function createCloudSaasHandler(container: AppContainer) {
 
       for (const [key, value] of Object.entries(input.envVars ?? {})) {
         if (!value.trim()) continue
-        await envDao.upsertScoped({
-          userId: user.userId,
+        await useCase.upsertEnvVarScoped({
+          ctx: createActorContext(c.get('actor')),
           scope,
           key,
           encryptedValue: encrypt(value),
         })
       }
 
-      const profile = (await readProviderProfiles(user.userId)).find((p) => p.id === profileId)
+      const profile = (await readProviderProfiles(useCase, user.userId)).find((p) => p.id === profileId)
       return c.json({ ok: true, profile })
     },
   )
@@ -5220,12 +5148,11 @@ export function createCloudSaasHandler(container: AppContainer) {
    * Check whether the encrypted provider credentials can reach the provider API.
    */
   h.post('/provider-profiles/:id/test', async (c) => {
-    const user = c.get('user') as { userId: string }
     const profileId = normalizeProviderProfileId(c.req.param('id'))
     if (!profileId) return c.json({ ok: false, error: 'Invalid provider profile' }, 400)
 
-    const envDao = container.resolve('cloudEnvVarDao')
-    const scopedVars = await envDao.listByUser(user.userId, providerProfileScope(profileId))
+    const useCase = container.resolve('cloudSaasUseCase')
+    const scopedVars = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope: providerProfileScope(profileId) })
     if (scopedVars.length === 0) {
       return c.json({ ok: false, error: 'Provider profile not found' }, 404)
     }
@@ -5261,13 +5188,12 @@ export function createCloudSaasHandler(container: AppContainer) {
    * Discover models from the provider-native API and persist the result.
    */
   h.post('/provider-profiles/:id/models/refresh', async (c) => {
-    const user = c.get('user') as { userId: string }
     const profileId = normalizeProviderProfileId(c.req.param('id'))
     if (!profileId) return c.json({ ok: false, error: 'Invalid provider profile' }, 400)
 
-    const envDao = container.resolve('cloudEnvVarDao')
+    const useCase = container.resolve('cloudSaasUseCase')
     const scope = providerProfileScope(profileId)
-    const scopedVars = await envDao.listByUser(user.userId, scope)
+    const scopedVars = await useCase.listEnvVarsByUser({ ctx: createActorContext(c.get('actor')), scope })
     if (scopedVars.length === 0) {
       return c.json({ ok: false, error: 'Provider profile not found' }, 404)
     }
@@ -5294,14 +5220,14 @@ export function createCloudSaasHandler(container: AppContainer) {
       models: normalizeLlmProviderModels(result.models),
       discoveredAt: new Date().toISOString(),
     }
-    await envDao.upsertScoped({
-      userId: user.userId,
+    await useCase.upsertEnvVarScoped({
+      ctx: createActorContext(c.get('actor')),
       scope,
       key: PROVIDER_PROFILE_META_KEYS.configJson,
       encryptedValue: encrypt(JSON.stringify(nextConfig)),
     })
 
-    const profile = (await readProviderProfiles(user.userId)).find((p) => p.id === profileId)
+    const profile = (await readProviderProfiles(useCase, c.get('user').userId)).find((p) => p.id === profileId)
     return c.json({ ...result, profile })
   })
 
@@ -5310,11 +5236,10 @@ export function createCloudSaasHandler(container: AppContainer) {
    * Delete a saved provider profile and its encrypted values.
    */
   h.delete('/provider-profiles/:id', async (c) => {
-    const user = c.get('user') as { userId: string }
     const profileId = normalizeProviderProfileId(c.req.param('id'))
     if (profileId) {
-      const envDao = container.resolve('cloudEnvVarDao')
-      await envDao.deleteByScope(user.userId, providerProfileScope(profileId))
+      const useCase = container.resolve('cloudSaasUseCase')
+      await useCase.deleteEnvVarByScope({ ctx: createActorContext(c.get('actor')), scope: providerProfileScope(profileId) })
     }
     return c.json({ ok: true })
   })
@@ -5326,11 +5251,10 @@ export function createCloudSaasHandler(container: AppContainer) {
    * Current user's cloud activity log.
    */
   h.get('/activity', async (c) => {
-    const user = c.get('user') as { userId: string }
     const limit = Math.min(Number(c.req.query('limit')) || 50, 100)
     const offset = Math.max(Number(c.req.query('offset')) || 0, 0)
-    const dao = container.resolve('cloudActivityDao')
-    return c.json(await dao.listByUser(user.userId, limit, offset))
+    const useCase = container.resolve('cloudSaasUseCase')
+    return c.json(await useCase.listActivity({ ctx: createActorContext(c.get('actor')), limit, offset }))
   })
 
   return h

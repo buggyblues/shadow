@@ -66,7 +66,7 @@ export class FriendshipService {
     if (friendship.addresseeId !== userId) {
       throw Object.assign(new Error('Not authorized'), { status: 403 })
     }
-    await this.deps.friendshipDao.delete(friendshipId)
+    await this.deps.friendshipDao.deleteByUserIdAndId(userId, friendshipId)
   }
 
   /** Remove a friend (either party can remove) */
@@ -78,7 +78,7 @@ export class FriendshipService {
     if (friendship.requesterId !== userId && friendship.addresseeId !== userId) {
       throw Object.assign(new Error('Not authorized'), { status: 403 })
     }
-    await this.deps.friendshipDao.delete(friendshipId)
+    await this.deps.friendshipDao.deleteByUserIdAndId(userId, friendshipId)
   }
 
   /** Get friend list with user profiles (includes virtual claw friends) */

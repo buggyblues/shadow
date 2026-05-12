@@ -130,15 +130,11 @@ export class AgentPolicyDao {
     return results
   }
 
-  /** Delete a specific policy */
-  async delete(id: string, agentId?: string) {
+  /** Scoped delete by agentId and policy id */
+  async deleteByAgentIdAndId(agentId: string, id: string) {
     await this.db
       .delete(agentPolicies)
-      .where(
-        agentId
-          ? and(eq(agentPolicies.id, id), eq(agentPolicies.agentId, agentId))
-          : eq(agentPolicies.id, id),
-      )
+      .where(and(eq(agentPolicies.agentId, agentId), eq(agentPolicies.id, id)))
   }
 
   /** Delete all policies for an agent in a server */

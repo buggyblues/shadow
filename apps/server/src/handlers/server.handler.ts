@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
 import { authMiddleware } from '../middleware/auth.middleware'
+import { createActorContext } from '../security/actor-context'
 import {
   createServerSchema,
   joinServerSchema,
@@ -35,16 +36,6 @@ export function createServerHandler(container: AppContainer) {
     if (isUuid) return idOrSlug
     const bySlug = await serverService.getBySlug(idOrSlug)
     return bySlug.id
-  }
-
-  async function addUserToPublicChannels(serverId: string, userId: string) {
-    const channelDao = container.resolve('channelDao')
-    const channelMemberDao = container.resolve('channelMemberDao')
-    const channels = await channelDao.findByServerId(serverId)
-    const publicChannelIds = channels
-      .filter((channel) => !channel.isPrivate)
-      .map((channel) => channel.id)
-    await channelMemberDao.addBulk(publicChannelIds, userId)
   }
 
   async function getServerAccessStatus(idOrSlug: string, userId: string) {
@@ -359,33 +350,37 @@ export function createServerHandler(container: AppContainer) {
   serverHandler.post('/:id/join-requests', async (c) => {
     const id = c.req.param('id')
     const user = c.get('user')
-    const serverDao = container.resolve('serverDao')
-    const serverJoinRequestDao = container.resolve('serverJoinRequestDao')
     const access = await getServerAccessStatus(id, user.userId)
 
     if (access.isMember) return c.json({ ok: true, status: 'approved' })
 
-    if (access.server.isPublic) {
-      await serverDao.addMember(access.server.id, user.userId, 'member')
-      await addUserToPublicChannels(access.server.id, user.userId)
+    const serverUseCase = container.resolve('serverUseCase')
+    const result = await serverUseCase.requestServerAccess({
+      ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+      serverId: access.server.id,
+      isPublic: access.server.isPublic,
+    })
+
+    if (result.status === 'approved') {
       return c.json({ ok: true, status: 'approved' }, 201)
     }
 
-    const existing =
-      access.joinRequestStatus === 'pending'
-        ? await serverJoinRequestDao.findByServerAndUser(access.server.id, user.userId)
-        : null
-    const request = existing ?? (await serverJoinRequestDao.request(access.server.id, user.userId))
-    if (!existing) {
-      await notifyServerJoinRequestReviewers({
-        serverId: access.server.id,
-        serverName: access.server.name,
-        requestId: request.id,
-        requesterId: user.userId,
-      })
+    // Private server — join request created (notification needed if not already pending)
+    const isNewRequest = access.joinRequestStatus !== 'pending'
+    if (isNewRequest) {
+      try {
+        await notifyServerJoinRequestReviewers({
+          serverId: access.server.id,
+          serverName: access.server.name,
+          requestId: result.requestId!,
+          requesterId: user.userId,
+        })
+      } catch {
+        /* non-critical */
+      }
     }
 
-    return c.json({ ok: true, status: request.status, requestId: request.id }, 202)
+    return c.json({ ok: true, status: 'pending', requestId: result.requestId }, 202)
   })
 
   // PATCH /api/servers/join-requests/:requestId — approve/reject a private-server request
@@ -393,40 +388,30 @@ export function createServerHandler(container: AppContainer) {
     '/join-requests/:requestId',
     zValidator('json', reviewJoinRequestSchema),
     async (c) => {
-      const serverDao = container.resolve('serverDao')
-      const serverJoinRequestDao = container.resolve('serverJoinRequestDao')
       const requestId = c.req.param('requestId')
       const reviewerId = c.get('user').userId
       const { status } = c.req.valid('json')
-      const request = await serverJoinRequestDao.findById(requestId)
-      if (!request) return c.json({ ok: false, error: 'Join request not found' }, 404)
 
-      const server = await serverDao.findById(request.serverId)
-      if (!server) return c.json({ ok: false, error: 'Server not found' }, 404)
-
-      const policyService = container.resolve('policyService')
-      await policyService.requireServerRole(c.get('actor'), server.id, 'admin')
-
-      const reviewed = await serverJoinRequestDao.review(requestId, status, reviewerId)
-      if (!reviewed) return c.json({ ok: false, error: 'Join request not found' }, 404)
-
-      if (status === 'approved') {
-        const existingMember = await serverDao.getMember(server.id, request.userId)
-        if (!existingMember) {
-          await serverDao.addMember(server.id, request.userId, 'member')
-        }
-        await addUserToPublicChannels(server.id, request.userId)
-      }
-
-      await notifyServerJoinRequestDecision({
-        serverId: server.id,
-        serverName: server.name,
-        userId: request.userId,
-        reviewerId,
-        approved: status === 'approved',
+      const serverUseCase = container.resolve('serverUseCase')
+      const result = await serverUseCase.reviewServerJoinRequest({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        requestId,
+        status,
       })
 
-      return c.json({ ok: true, request: reviewed })
+      try {
+        await notifyServerJoinRequestDecision({
+          serverId: result.server.id,
+          serverName: result.server.name,
+          userId: result.userId,
+          reviewerId,
+          approved: result.approved,
+        })
+      } catch {
+        /* non-critical */
+      }
+
+      return c.json({ ok: true, request: result.request })
     },
   )
 
@@ -632,85 +617,56 @@ export function createServerHandler(container: AppContainer) {
 
   // POST /api/servers/:id/agents — add agent(s) to server as members
   serverHandler.post('/:id/agents', async (c) => {
-    const serverService = container.resolve('serverService')
-    const agentService = container.resolve('agentService')
-    const agentPolicyService = container.resolve('agentPolicyService')
-    const serverDao = container.resolve('serverDao')
     const idOrSlug = c.req.param('id')
     const id = await resolveServerId(idOrSlug)
     const user = c.get('user')
     const body = await c.req.json<{ agentIds: string[] }>()
-    const accessService = container.resolve('accessService')
-    await accessService.assertCanInstallAgentToServer(c.get('actor'), id)
 
     if (!Array.isArray(body.agentIds) || body.agentIds.length === 0) {
       return c.json({ ok: false, error: 'agentIds is required' }, 400)
     }
 
-    const added: string[] = []
-    const failed: Array<{ agentId: string; error: string }> = []
-    const uniqueAgentIds = Array.from(new Set(body.agentIds))
+    const serverUseCase = container.resolve('serverUseCase')
+    const { added, failed } = await serverUseCase.addAgentsToServer({
+      ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+      serverId: id,
+      agentIds: body.agentIds,
+      ownerId: user.userId,
+    })
 
-    for (const agentId of uniqueAgentIds) {
+    // Emit member:joined to server members for each added agent (non-critical)
+    for (const { agentId, userId: botUserId } of added) {
       try {
-        const agent = await agentService.getById(agentId)
-        if (!agent) {
-          failed.push({ agentId, error: 'Agent not found' })
-          continue
+        const io = container.resolve('io')
+        const userDao = container.resolve('userDao')
+        const serverDao = container.resolve('serverDao')
+        const botUser = await userDao.findById(botUserId)
+        const serverMembers = await serverDao.getMembers(id)
+        const payload = {
+          serverId: id,
+          userId: botUserId,
+          username: botUser?.username ?? 'unknown',
+          displayName: botUser?.displayName ?? botUser?.username ?? 'unknown',
+          avatarUrl: botUser?.avatarUrl ?? null,
+          isBot: true,
         }
-        // Verify the user owns the agent
-        if (agent.ownerId !== user.userId) {
-          failed.push({ agentId, error: 'Not the owner' })
-          continue
-        }
-        const existingMember = await serverDao.getMember(id, agent.userId)
-        if (existingMember) {
-          failed.push({ agentId, error: 'Agent is already a server member' })
-          continue
-        }
-        // Add bot user as server member
-        await serverService.addBotMember(id, agent.userId)
-        // Auto-create default server-wide policy
-        await agentPolicyService.ensureServerDefault(agentId, id)
-        added.push(agentId)
-
-        // Emit member:joined to the server's channels so existing members see the bot
-        // The bot is not yet in any channel, but server members should know it's available
-        try {
-          const io = container.resolve('io')
-          const userDao = container.resolve('userDao')
-          const serverDao = container.resolve('serverDao')
-          const botUser = await userDao.findById(agent.userId)
-          const serverMembers = await serverDao.getMembers(id)
-          const payload = {
-            serverId: id,
-            userId: agent.userId,
-            username: botUser?.username ?? 'unknown',
-            displayName: botUser?.displayName ?? botUser?.username ?? 'unknown',
-            avatarUrl: botUser?.avatarUrl ?? null,
-            isBot: true,
+        // Notify all non-bot server members about the new bot
+        for (const m of serverMembers) {
+          if (!m.user?.isBot) {
+            io.to(`user:${m.userId}`).emit('member:joined', payload)
           }
-          // Notify all non-bot server members about the new bot
-          for (const m of serverMembers) {
-            if (!m.user?.isBot) {
-              io.to(`user:${m.userId}`).emit('member:joined', payload)
-            }
-          }
-          // Notify the bot directly so its monitor can connect
-          io.to(`user:${agent.userId}`).emit('server:joined', {
-            serverId: id,
-            agentId,
-          })
-        } catch {
-          /* non-critical */
         }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error'
-        failed.push({ agentId, error: msg })
+        // Notify the bot directly so its monitor can connect
+        io.to(`user:${botUserId}`).emit('server:joined', {
+          serverId: id,
+          agentId,
+        })
+      } catch {
+        /* non-critical */
       }
     }
 
-    return c.json({ added, failed })
+    return c.json({ added: added.map((a) => a.agentId), failed })
   })
 
   return serverHandler

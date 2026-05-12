@@ -14,7 +14,6 @@ import { resolveProductEntitlementResource } from './entitlement-resource'
 import type { LedgerService } from './ledger.service'
 import type { ProductService } from './product.service'
 import type { ShopService } from './shop.service'
-import type { WalletService } from './wallet.service'
 
 /** Platform fee rate in basis points (500 = 5%) */
 const PLATFORM_FEE_BPS = 500
@@ -44,7 +43,6 @@ export class OrderService {
       db: Database
       serverDao: ServerDao
       productService: ProductService
-      walletService: WalletService
       ledgerService: LedgerService
       economyPolicyService: EconomyPolicyService
       economyAuditService: EconomyAuditService
@@ -400,13 +398,14 @@ export class OrderService {
     const sellerPayout = order.totalAmount - platformFee
 
     if (sellerPayout > 0) {
-      await this.deps.walletService.settle(
-        server.ownerId,
-        sellerPayout,
-        order.id,
-        'order',
-        `订单结算 - ${order.orderNo}（扣除${platformFee}虾币手续费）`,
-      )
+      await this.deps.ledgerService.credit({
+        userId: server.ownerId,
+        amount: sellerPayout,
+        type: 'settlement',
+        referenceId: order.id,
+        referenceType: 'order',
+        note: `订单结算 - ${order.orderNo}（扣除${platformFee}虾币手续费）`,
+      })
     }
   }
 
@@ -420,13 +419,14 @@ export class OrderService {
 
     // Refund to wallet
     if (order.status === 'paid') {
-      await this.deps.walletService.refund(
+      await this.deps.ledgerService.credit({
         userId,
-        order.totalAmount,
-        orderId,
-        'order',
-        `退款 - 订单 ${order.orderNo}`,
-      )
+        amount: order.totalAmount,
+        type: 'refund',
+        referenceId: orderId,
+        referenceType: 'order',
+        note: `退款 - 订单 ${order.orderNo}`,
+      })
       // Revoke any entitlements granted by this order
       await this.deps.entitlementService.revokeByOrder(orderId)
     }

@@ -1,6 +1,8 @@
 import type { spawn } from 'node:child_process'
 import {
   deleteNamespace,
+  execInPodAsync,
+  execInPodWithInputAsync,
   listManagedNamespaces,
   listPodsAsync,
   readPodLogsAsync,
@@ -108,5 +110,39 @@ export class KubernetesOpsGateway {
     kubeconfig?: string
   }): { proc: ReturnType<typeof spawn>; cleanup: () => void } {
     return spawnPodLogStream(opts)
+  }
+
+  execInPod(opts: {
+    namespace: string
+    pod: string
+    container?: string
+    kubeconfig?: string
+    timeout?: number
+    command: string[]
+  }) {
+    return execInPodAsync(opts)
+  }
+
+  execInPodWithInput(opts: {
+    namespace: string
+    pod: string
+    container?: string
+    kubeconfig?: string
+    timeout?: number
+    input: string
+    command: string[]
+  }) {
+    return execInPodWithInputAsync(opts)
+  }
+
+  /**
+   * Delete a Kubernetes namespace.
+   *
+   * IMPORTANT: Callers are responsible for authorization checks before
+   * invoking this method. This is a pass-through to the underlying
+   * Kubernetes runtime — it does NOT perform access control on its own.
+   */
+  deleteNamespace(namespace: string, kubeconfig?: string) {
+    deleteNamespace(namespace, kubeconfig)
   }
 }

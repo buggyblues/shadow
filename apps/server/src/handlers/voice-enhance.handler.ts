@@ -42,7 +42,8 @@ export function createVoiceEnhanceHandler(container: AppContainer) {
   const router = new Hono()
 
   async function requireAdmin(userId: string) {
-    const user = await container.resolve('userDao').findById(userId)
+    const userDao = container.resolve('userDao')
+    const user = await userDao.findById(userId)
     if (!user?.isAdmin) {
       throw Object.assign(new Error('Forbidden: admin access required'), { status: 403 })
     }

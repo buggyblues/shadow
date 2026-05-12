@@ -10,7 +10,7 @@ type EntitlementConfig = {
   privilegeDescription?: string
 }
 
-type EntitlementConfigInput = EntitlementConfig | EntitlementConfig[]
+export type EntitlementConfigInput = EntitlementConfig | EntitlementConfig[]
 
 /**
  * ProductService — manages products (SPU), media, and SKUs.

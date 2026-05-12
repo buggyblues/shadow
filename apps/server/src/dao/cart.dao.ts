@@ -54,7 +54,7 @@ export class CartDao {
     return r[0] ?? null
   }
 
-  async delete(id: string, userId: string) {
+  async deleteByUserIdAndId(userId: string, id: string) {
     await this.db.delete(cartItems).where(and(eq(cartItems.id, id), eq(cartItems.userId, userId)))
   }
 
