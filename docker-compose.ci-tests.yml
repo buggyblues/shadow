@@ -77,6 +77,9 @@ services:
         echo "=== Version consistency ==="
         pnpm check:sdk-versions
 
+        echo "=== Drizzle migration guard ==="
+        pnpm check:migrations
+
         echo "=== Workspace dependency check ==="
         node scripts/check-workspace-deps.mjs
 
