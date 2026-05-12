@@ -10,6 +10,10 @@ import type {
   ShadowChannelJoinRequestResult,
   ShadowChannelJoinRequestStatus,
   ShadowChannelSlashCommand,
+  ShadowCloudDeploymentBackup,
+  ShadowCloudDeploymentManifest,
+  ShadowCloudDeploymentRuntimeResponse,
+  ShadowCloudDeploymentTemplateSyncResult,
   ShadowCloudProviderCatalog,
   ShadowCloudProviderModel,
   ShadowCloudProviderProfile,
@@ -2364,6 +2368,103 @@ export class ShadowClient {
   ): Promise<{ ok: boolean; status: ShadowDiyCloudRunStatus }> {
     return this.request(`/api/cloud-saas/diy/runs/${encodeURIComponent(runId)}/cancel`, {
       method: 'POST',
+    })
+  }
+
+  // ── Cloud SaaS Deployment Runtime ──────────────────────────────────
+
+  async getCloudDeploymentManifest(deploymentId: string): Promise<ShadowCloudDeploymentManifest> {
+    return this.request(`/api/cloud-saas/deployments/${encodeURIComponent(deploymentId)}/manifest`)
+  }
+
+  async syncCloudDeploymentTemplate(
+    deploymentId: string,
+    data: {
+      name?: string
+      description?: string
+      content?: Record<string, unknown>
+      tags?: string[]
+      category?: string
+      baseCost?: number
+    } = {},
+  ): Promise<ShadowCloudDeploymentTemplateSyncResult> {
+    return this.request(
+      `/api/cloud-saas/deployments/${encodeURIComponent(deploymentId)}/template`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+    )
+  }
+
+  async redeployCloudDeployment(
+    deploymentId: string,
+    data: {
+      mode?: 'snapshot' | 'template'
+      templateSlug?: string
+      configSnapshot?: Record<string, unknown>
+      envVars?: Record<string, string>
+      runtimeContext?: { locale?: string; timezone?: string }
+    } = {},
+  ): Promise<Record<string, unknown>> {
+    return this.request(
+      `/api/cloud-saas/deployments/${encodeURIComponent(deploymentId)}/redeploy`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+    )
+  }
+
+  async pauseCloudDeployment(
+    deploymentId: string,
+    data: { agentId?: string } = {},
+  ): Promise<ShadowCloudDeploymentRuntimeResponse> {
+    return this.request(`/api/cloud-saas/deployments/${encodeURIComponent(deploymentId)}/pause`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async resumeCloudDeployment(
+    deploymentId: string,
+    data: { agentId?: string } = {},
+  ): Promise<ShadowCloudDeploymentRuntimeResponse> {
+    return this.request(`/api/cloud-saas/deployments/${encodeURIComponent(deploymentId)}/resume`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async listCloudDeploymentBackups(
+    deploymentId: string,
+    params: { agentId?: string } = {},
+  ): Promise<{ deploymentId: string; backups: ShadowCloudDeploymentBackup[] }> {
+    const qs = new URLSearchParams()
+    if (params.agentId) qs.set('agentId', params.agentId)
+    const suffix = qs.toString() ? `?${qs}` : ''
+    return this.request(
+      `/api/cloud-saas/deployments/${encodeURIComponent(deploymentId)}/backups${suffix}`,
+    )
+  }
+
+  async createCloudDeploymentBackup(
+    deploymentId: string,
+    data: { agentId?: string; driver?: 'volumeSnapshot' | 'restic'; retentionDays?: number } = {},
+  ): Promise<{ ok: boolean; backup: ShadowCloudDeploymentBackup }> {
+    return this.request(`/api/cloud-saas/deployments/${encodeURIComponent(deploymentId)}/backups`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async restoreCloudDeploymentBackup(
+    deploymentId: string,
+    data: { agentId?: string; backupId?: string } = {},
+  ): Promise<ShadowCloudDeploymentRuntimeResponse & { backup: ShadowCloudDeploymentBackup }> {
+    return this.request(`/api/cloud-saas/deployments/${encodeURIComponent(deploymentId)}/restore`, {
+      method: 'POST',
+      body: JSON.stringify(data),
     })
   }
 

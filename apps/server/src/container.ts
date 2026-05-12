@@ -14,6 +14,7 @@ import { CloudActivityDao } from './dao/cloud-activity.dao'
 import { CloudClusterDao } from './dao/cloud-cluster.dao'
 import { CloudConfigDao } from './dao/cloud-config.dao'
 import { CloudDeploymentDao } from './dao/cloud-deployment.dao'
+import { CloudDeploymentBackupDao } from './dao/cloud-deployment-backup.dao'
 import { CloudEnvVarDao } from './dao/cloud-envvar.dao'
 import { CloudTemplateDao } from './dao/cloud-template.dao'
 import { CloudUsageDao } from './dao/cloud-usage.dao'
@@ -157,6 +158,7 @@ export interface Cradle {
 
   // Cloud DAOs
   cloudDeploymentDao: CloudDeploymentDao
+  cloudDeploymentBackupDao: CloudDeploymentBackupDao
   cloudTemplateDao: CloudTemplateDao
   cloudConfigDao: CloudConfigDao
   cloudEnvVarDao: CloudEnvVarDao
@@ -297,6 +299,7 @@ export function createAppContainer(db: Database): AppContainer {
 
     // Cloud DAOs
     cloudDeploymentDao: asClass(CloudDeploymentDao).singleton(),
+    cloudDeploymentBackupDao: asClass(CloudDeploymentBackupDao).singleton(),
     cloudTemplateDao: asClass(CloudTemplateDao).singleton(),
     cloudConfigDao: asClass(CloudConfigDao).singleton(),
     cloudEnvVarDao: asClass(CloudEnvVarDao).singleton(),

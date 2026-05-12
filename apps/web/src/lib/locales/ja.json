@@ -1300,6 +1300,18 @@
     "listingClosed": "終了",
     "totalOnlineTime": "累計オンライン時間"
   },
+  "appCenter": {
+    "proxyBySubdomain": "サブドメインプロキシでアクセス（絶対パス、SSE、WebSocket に対応）",
+    "cloudAutoResume": "アプリへのアクセスで Cloud Buddy を起動",
+    "cloudAutoResumeDescription": "このアプリが開かれる、またはプロキシ経由でアクセスされると、Shadow は関連する Cloud sandbox を先に復帰してからトラフィックを転送します。",
+    "cloudAutoResumeTargetsLabel": "Buddy ユーザー ID（任意）",
+    "cloudAutoResumeTargetsPlaceholder": "uuid-1, uuid-2",
+    "cloudAutoResumeTargetsHint": "空欄の場合はアプリのチャンネルメンバーから Buddy を推定します。特定の Cloud Buddy を起動したい場合は ID を入力してください。",
+    "cloudRuntimeStartingTitle": "Cloud ランタイムを起動中",
+    "cloudRuntimeStartingDescription": "関連する Buddy sandbox の復帰に少し時間がかかる場合があります。その後、このアプリが応答します。",
+    "fullscreen": "全画面",
+    "exitFullscreen": "全画面を終了"
+  },
   "serverHome": {
     "welcome": "ようこそ",
     "publicBadge": "パブリックサーバー",

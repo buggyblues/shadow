@@ -12,6 +12,7 @@ import { createApp } from './app'
 import { type AppContainer, createAppContainer } from './container'
 import { db } from './db'
 import { users } from './db/schema'
+import { waitCloudDeploymentAutoResumeForApp } from './lib/cloud-deployment-autoresume'
 import { startCloudDeploymentProcessor } from './lib/cloud-deployment-processor'
 import { resolveCloudTemplatesDir } from './lib/cloud-templates'
 import { randomFixedDigits } from './lib/id'
@@ -208,6 +209,19 @@ async function main() {
         socket.destroy()
         return
       }
+      const resumeResult = await waitCloudDeploymentAutoResumeForApp({
+        container,
+        app,
+        reason: 'app proxy websocket',
+        includeChannelBotMembers: true,
+        timeoutMs: 30_000,
+        logContext: { appId, userId: authPayload.userId, path: reqUrl.pathname },
+      })
+      if (resumeResult.timedOut) {
+        socket.write('HTTP/1.1 503 Service Unavailable\r\nRetry-After: 5\r\n\r\n')
+        socket.destroy()
+        return
+      }
 
       const base = new URL(app.sourceUrl)
       const upstream = new URL(pathPart ? `./${pathPart}` : './', base)
@@ -288,7 +302,7 @@ async function main() {
   startScheduledJobs(container)
 
   // Start cloud deployment processor in-process
-  const cloudDeploymentProcessor = startCloudDeploymentProcessor()
+  const cloudDeploymentProcessor = startCloudDeploymentProcessor({ appContainer: container })
 
   // Graceful shutdown
   const gracefulShutdown = async () => {

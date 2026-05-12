@@ -59,6 +59,35 @@ export SHADOW_USER_TOKEN="..."
 | `shadowob-cloud dashboard` | 打开 Cloud Dashboard。 |
 | `shadowob-cloud serve` | 启动 API Server 和 Dashboard。 |
 | `shadowob-cloud generate manifests` | 导出 Kubernetes manifests，不直接应用。 |
+| `shadowob-cloud sandbox status` | 列出 agent-sandbox 工作负载及其当前状态。 |
+| `shadowob-cloud sandbox pause <agent>` | 通过将 Sandbox 副本缩为 0 来暂停 agent-sandbox 工作负载。 |
+| `shadowob-cloud sandbox resume <agent>` | 恢复已暂停的 agent-sandbox 工作负载。 |
+| `shadowob-cloud sandbox backup <agent>` | 为 agent-sandbox 状态 PVC 创建 VolumeSnapshot 备份。 |
+| `shadowob-cloud sandbox restore <agent>` | PVC 外部恢复完成后恢复 Sandbox。 |
+
+## Agent-Sandbox 生命周期
+
+Agent-sandbox 工作负载支持从 CLI 直接进行暂停/恢复和状态备份/还原：
+
+```bash
+# 暂停 Agent 以释放计算资源，同时保留 PVC 状态
+shadowob-cloud sandbox pause strategy-buddy
+
+# 稍后恢复；Agent 从其保存的状态重建上下文
+shadowob-cloud sandbox resume strategy-buddy
+
+# 创建状态 PVC 的 VolumeSnapshot 备份
+shadowob-cloud sandbox backup strategy-buddy --snapshot-class csi-hostpath-snapclass
+
+# 外部 PVC 恢复完成后，交接给 Sandbox
+shadowob-cloud sandbox restore strategy-buddy --backup-id <backup-id>
+```
+
+`sandbox status` 命令会显示每个 agent-sandbox 工作负载的运行时状态、就绪数和状态 PVC 名称。
+
+```bash
+shadowob-cloud sandbox status -n my-namespace
+```
 
 ## 裸服务器集群
 

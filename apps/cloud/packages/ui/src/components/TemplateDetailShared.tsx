@@ -493,7 +493,7 @@ export function TemplateDetailShell({
         </GlassPanel>
 
         <Tabs value={activeTab} onChange={onTabChange}>
-          <DashboardTabsList tabs={tabs} />
+          <DashboardTabsList tabs={tabs} activeId={activeTab} onSelect={onTabChange} />
         </Tabs>
 
         {children}

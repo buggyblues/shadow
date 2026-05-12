@@ -3,6 +3,13 @@ import {
   Button,
   Card,
   GlassPanel,
+  Input,
+  Modal,
+  ModalBody,
+  ModalButtonGroup,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
   Select,
   SelectContent,
   SelectItem,
@@ -15,25 +22,34 @@ import {
   TableHeader,
   TableRow,
   Tabs,
+  Textarea,
 } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import {
+  Archive,
   Box,
   CheckCircle,
+  Cookie,
   DollarSign,
   Download,
   FileText,
   FolderOpen,
+  GitBranch,
   Info,
   Loader2,
+  Pause,
   Pencil,
+  Play,
   Plus,
   RefreshCw,
   Rocket,
+  RotateCcw,
+  Save,
   Server,
   Terminal,
   Trash2,
+  Upload,
   Variable,
   XCircle,
 } from 'lucide-react'
@@ -52,6 +68,9 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { useSSEStream } from '@/hooks/useSSEStream'
 import {
   type Deployment,
+  type DeploymentBackup,
+  type DeploymentManifestInfo,
+  type DeploymentRedeployOptions,
   type EnvVarListEntry,
   type Pod,
   type ProviderUsageSummary,
@@ -73,6 +92,10 @@ function getPodStatusType(status: string): 'success' | 'warning' | 'error' | 'in
 function formatTokenLabel(value: number | null, locale: string, tokenLabel: string): string {
   if (value === null) return '—'
   return `${formatTokenCount(value, locale)} ${tokenLabel}`
+}
+
+function errorDetail(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
 }
 
 function getProviderMetricDisplay(
@@ -103,14 +126,92 @@ function getProviderMetricDisplay(
   }
 }
 
+type CookieJarImportResult = {
+  envKey: string
+  value: string
+  cookieCount: number
+  originCount: number
+  format: 'playwright' | 'netscape'
+}
+
+function parseCookieJarInput(raw: string, envKey: string): CookieJarImportResult {
+  const text = raw.trim()
+  if (!text) throw new Error('empty')
+
+  try {
+    const parsed = JSON.parse(text) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const record = parsed as Record<string, unknown>
+      const cookies = Array.isArray(record.cookies) ? record.cookies : []
+      const origins = Array.isArray(record.origins) ? record.origins : []
+      return {
+        envKey,
+        value: JSON.stringify({ cookies, origins }),
+        cookieCount: cookies.length,
+        originCount: origins.length,
+        format: 'playwright',
+      }
+    }
+    if (Array.isArray(parsed)) {
+      return {
+        envKey,
+        value: JSON.stringify({ cookies: parsed, origins: [] }),
+        cookieCount: parsed.length,
+        originCount: 0,
+        format: 'playwright',
+      }
+    }
+  } catch {
+    // Fall through to Netscape cookies.txt parsing.
+  }
+
+  const cookies = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'))
+    .map((line) => {
+      const parts = line.split('\t')
+      if (parts.length < 7) throw new Error('invalid')
+      const [domain, _includeSubdomains, path, secure, expires, name, ...valueParts] = parts
+      const expiresNumber = Number.parseInt(expires ?? '0', 10)
+      return {
+        name,
+        value: valueParts.join('\t'),
+        domain,
+        path: path || '/',
+        expires: Number.isFinite(expiresNumber) && expiresNumber > 0 ? expiresNumber : -1,
+        httpOnly: false,
+        secure: secure?.toUpperCase() === 'TRUE',
+      }
+    })
+
+  if (cookies.length === 0) throw new Error('invalid')
+
+  return {
+    envKey,
+    value: JSON.stringify({ cookies, origins: [] }),
+    cookieCount: cookies.length,
+    originCount: 0,
+    format: 'netscape',
+  }
+}
+
 function PodsPanel({
   namespace,
   agent,
   enabled,
+  deployment,
+  onResume,
+  resumePending,
+  resumeDisabledReason,
 }: {
   namespace: string
   agent: string | null
   enabled: boolean
+  deployment?: Deployment | null
+  onResume?: () => void
+  resumePending?: boolean
+  resumeDisabledReason?: string
 }) {
   const api = useApiClient()
   const { t } = useTranslation()
@@ -141,10 +242,29 @@ function PodsPanel({
   }
 
   if (!pods || pods.length === 0) {
+    const paused = deployment?.runtimeState === 'paused'
     return (
       <DashboardEmptyState
         icon={Box}
-        title={t('deployments.noPodsForAgent', { agent })}
+        title={
+          paused ? t('deployments.pausedNoPodsTitle') : t('deployments.noPodsForAgent', { agent })
+        }
+        description={paused ? t('deployments.pausedNoPodsDescription') : undefined}
+        action={
+          paused && onResume ? (
+            <Button
+              type="button"
+              variant="glass"
+              size="sm"
+              onClick={onResume}
+              title={resumeDisabledReason}
+              disabled={resumePending || Boolean(resumeDisabledReason)}
+            >
+              {resumePending ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+              {t('deployments.resumeAgent')}
+            </Button>
+          ) : undefined
+        }
         cardVariant="glass"
       />
     )
@@ -197,16 +317,412 @@ function PodsPanel({
   )
 }
 
-function NamespaceLogsTab({
+function BackupsPanel({
   namespace,
   agent,
-  deployments,
-  onSelectAgent,
+  deployment,
 }: {
   namespace: string
   agent: string | null
+  deployment?: Deployment | null
+}) {
+  const api = useApiClient()
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const sandboxEnabled = deployment?.workloadKind === 'agent-sandbox'
+  const [restoreCandidate, setRestoreCandidate] = useState<DeploymentBackup | null>(null)
+  const [fastBackupPolling, setFastBackupPolling] = useState(false)
+
+  const backupsQuery = useQuery({
+    queryKey: ['deployment-backups', namespace, agent],
+    queryFn: () => api.deployments.backups(namespace, agent ?? ''),
+    enabled: Boolean(agent) && sandboxEnabled,
+    refetchInterval: fastBackupPolling ? 3_000 : 15_000,
+  })
+
+  const backupMutation = useMutation({
+    mutationFn: () => api.deployments.createBackup(namespace, agent ?? ''),
+    onSuccess: () => {
+      setFastBackupPolling(true)
+      toast.success(t('deployments.backupCreated'))
+    },
+    onError: (err) => toast.error(`${t('deployments.backupFailed')}: ${errorDetail(err)}`),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['deployment-backups', namespace, agent] })
+    },
+  })
+
+  const restoreMutation = useMutation({
+    mutationFn: (backup: DeploymentBackup) =>
+      api.deployments.restore(namespace, agent ?? '', {
+        backupId: backup.restoreKey ?? backup.id,
+      }),
+    onSuccess: () => {
+      setFastBackupPolling(true)
+      queryClient.invalidateQueries({ queryKey: ['deployments'] })
+      queryClient.invalidateQueries({ queryKey: ['pods', namespace, agent] })
+      queryClient.invalidateQueries({ queryKey: ['deployment-backups', namespace, agent] })
+      setRestoreCandidate(null)
+      toast.success(t('deployments.restoreQueued'))
+    },
+    onError: (err) => toast.error(`${t('deployments.restoreFailed')}: ${errorDetail(err)}`),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['deployment-backups', namespace, agent] })
+    },
+  })
+
+  const backups: DeploymentBackup[] = backupsQuery.data?.backups ?? []
+  const hasActiveBackupOperation = backups.some(
+    (backup) => backup.status === 'pending' || backup.status === 'running',
+  )
+  useEffect(() => {
+    setFastBackupPolling(hasActiveBackupOperation)
+  }, [hasActiveBackupOperation])
+  const backupAllowed = deployment?.status
+    ? deployment.status === 'deployed' || deployment.status === 'paused'
+    : deployment?.runtimeState === 'running' || deployment?.runtimeState === 'paused'
+  const backupDisabledReason = !backupAllowed
+    ? t('deployments.backupUnavailableRuntime')
+    : hasActiveBackupOperation
+      ? t('deployments.backupUnavailableActiveOperation')
+      : null
+
+  if (!agent) {
+    return (
+      <DashboardEmptyState
+        icon={Archive}
+        title={t('deployments.noAgentSelected')}
+        cardVariant="glass"
+      />
+    )
+  }
+
+  if (!sandboxEnabled) {
+    return (
+      <DashboardEmptyState
+        icon={Archive}
+        title={t('deployments.backupsUnavailableTitle')}
+        description={t('deployments.backupsUnavailableDescription')}
+        cardVariant="glass"
+      />
+    )
+  }
+
+  const backupArtifact = (backup: DeploymentBackup) => backup.snapshotName ?? backup.objectKey
+  const backupDriverLabel = (driver: string) => {
+    if (driver === 'restic') return t('deployments.backupDriverObject')
+    if (driver === 'volumeSnapshot') return t('deployments.backupDriverVolumeSnapshot')
+    return driver
+  }
+  const backupStatusLabel = (status: string) => {
+    if (status === 'pending') return t('deployments.backupStatusPending')
+    if (status === 'running') return t('deployments.backupStatusRunning')
+    if (status === 'succeeded') return t('deployments.backupStatusSucceeded')
+    if (status === 'failed') return t('deployments.backupStatusFailed')
+    if (status === 'expired') return t('deployments.backupStatusExpired')
+    return status
+  }
+  const backupPhaseLabel = (phase: string | null | undefined) => {
+    if (!phase) return null
+    if (phase === 'completed' || phase === 'failed') return null
+    if (phase === 'queued') return t('deployments.backupPhaseQueued')
+    if (phase === 'checking-snapshot-api') return t('deployments.backupPhaseCheckingSnapshotApi')
+    if (phase === 'snapshot-creating') return t('deployments.backupPhaseSnapshotCreating')
+    if (phase === 'snapshot-waiting') return t('deployments.backupPhaseSnapshotWaiting')
+    if (phase === 'object-archiving') return t('deployments.backupPhaseObjectArchiving')
+    if (phase === 'object-storing') return t('deployments.backupPhaseObjectStoring')
+    if (phase === 'restoring-pausing') return t('deployments.backupPhaseRestoringPausing')
+    if (phase === 'restoring-pvc') return t('deployments.backupPhaseRestoringPvc')
+    if (phase === 'restoring-resuming') return t('deployments.backupPhaseRestoringResuming')
+    if (phase === 'restore-failed') return t('deployments.backupPhaseRestoreFailed')
+    return phase
+  }
+  const restoreDisabledReason = (backup: DeploymentBackup, artifact: string | null) => {
+    if (restoreMutation.isPending) return t('deployments.restoreUnavailableActiveOperation')
+    if (backup.status !== 'succeeded') {
+      return t('deployments.restoreUnavailableStatus', {
+        status: backupStatusLabel(backup.status),
+      })
+    }
+    if (!artifact) return t('deployments.restoreUnavailableArtifact')
+    return undefined
+  }
+  const renderRestoreButton = (
+    backup: DeploymentBackup,
+    artifact: string | null,
+    className?: string,
+  ) => {
+    const disabledReason = restoreDisabledReason(backup, artifact)
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className={className}
+        title={disabledReason}
+        onClick={() => setRestoreCandidate(backup)}
+        disabled={Boolean(disabledReason)}
+      >
+        {restoreMutation.isPending && restoreCandidate?.id === backup.id ? (
+          <Loader2 size={12} className="animate-spin" />
+        ) : (
+          <RotateCcw size={12} />
+        )}
+        {t('deployments.restoreBackup')}
+      </Button>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-text-primary">{t('deployments.backupsTitle')}</p>
+          <p className="mt-1 text-xs text-text-muted">
+            {t('deployments.backupsDescription', { agent })}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="glass"
+          size="sm"
+          onClick={() => backupMutation.mutate()}
+          title={backupDisabledReason ?? undefined}
+          disabled={backupMutation.isPending || Boolean(backupDisabledReason)}
+        >
+          {backupMutation.isPending ? (
+            <Loader2 size={12} className="animate-spin" />
+          ) : (
+            <Download size={12} />
+          )}
+          {t('deployments.createBackup')}
+        </Button>
+      </div>
+      {backupDisabledReason ? (
+        <p className="text-text-muted text-xs">{backupDisabledReason}</p>
+      ) : null}
+      {hasActiveBackupOperation ? (
+        <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-warning text-xs">
+          <Loader2 size={13} className="mt-0.5 shrink-0 animate-spin" />
+          <span>{t('deployments.backupActiveOperation')}</span>
+        </div>
+      ) : null}
+
+      {backupsQuery.isLoading ? (
+        <div className="py-10 text-center text-text-muted text-sm">
+          <Loader2 size={16} className="animate-spin inline mr-2" />
+          {t('common.loading')}
+        </div>
+      ) : backups.length === 0 ? (
+        <DashboardEmptyState
+          icon={Archive}
+          title={t('deployments.noBackups')}
+          cardVariant="glass"
+        />
+      ) : (
+        <>
+          <div className="space-y-3 lg:hidden">
+            {backups.map((backup) => {
+              const artifact = backupArtifact(backup)
+              const phase = backupPhaseLabel(backup.phase)
+              return (
+                <Card key={backup.id} variant="glassPanel" className="space-y-3 p-4">
+                  <div className="space-y-3">
+                    <div className="min-w-0">
+                      <Badge
+                        variant={
+                          backup.status === 'succeeded'
+                            ? 'success'
+                            : backup.status === 'failed'
+                              ? 'danger'
+                              : 'warning'
+                        }
+                        size="sm"
+                      >
+                        {backupStatusLabel(backup.status)}
+                      </Badge>
+                      <p className="mt-2 text-text-muted text-xs">
+                        {backupDriverLabel(backup.driver)}
+                      </p>
+                      {phase ? (
+                        <p className="mt-1 text-text-muted text-xs">
+                          {t('deployments.backupPhase', { phase })}
+                        </p>
+                      ) : null}
+                    </div>
+                    {renderRestoreButton(backup, artifact, 'w-full justify-center')}
+                  </div>
+                  <dl className="space-y-2 text-xs">
+                    <div>
+                      <dt className="text-text-muted">{t('deployments.backupPvc')}</dt>
+                      <dd
+                        className="mt-1 truncate font-mono text-text-primary"
+                        title={backup.pvcName}
+                      >
+                        {backup.pvcName}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-text-muted">{t('deployments.backupSnapshot')}</dt>
+                      <dd
+                        className="mt-1 truncate font-mono text-text-primary"
+                        title={artifact ?? undefined}
+                      >
+                        {artifact ?? t('common.none')}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-text-muted">{t('deployments.backupCreatedAt')}</dt>
+                      <dd className="mt-1 text-text-primary">
+                        {formatTimestamp(backup.createdAt)}
+                      </dd>
+                      {backup.updatedAt ? (
+                        <dd className="mt-1 text-text-muted">
+                          {t('deployments.backupUpdatedAt')}: {formatTimestamp(backup.updatedAt)}
+                        </dd>
+                      ) : null}
+                    </div>
+                  </dl>
+                  {backup.error ? (
+                    <p className="break-words text-danger text-xs">{backup.error}</p>
+                  ) : null}
+                </Card>
+              )
+            })}
+          </div>
+          <Card variant="glassPanel" className="hidden overflow-x-auto lg:block">
+            <Table className="min-w-[760px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('deployments.backupStatus')}
+                  </TableHead>
+                  <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('deployments.backupDriver')}
+                  </TableHead>
+                  <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('deployments.backupPvc')}
+                  </TableHead>
+                  <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('deployments.backupSnapshot')}
+                  </TableHead>
+                  <TableHead className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('deployments.backupCreatedAt')}
+                  </TableHead>
+                  <TableHead className="text-right text-[0.72rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+                    {t('deployments.backupActions')}
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {backups.map((backup) => {
+                  const artifact = backupArtifact(backup)
+                  const phase = backupPhaseLabel(backup.phase)
+                  return (
+                    <TableRow key={backup.id}>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            backup.status === 'succeeded'
+                              ? 'success'
+                              : backup.status === 'failed'
+                                ? 'danger'
+                                : 'warning'
+                          }
+                          size="sm"
+                        >
+                          {backupStatusLabel(backup.status)}
+                        </Badge>
+                        {backup.error ? (
+                          <p className="mt-1 max-w-[18rem] break-words text-danger text-xs">
+                            {backup.error}
+                          </p>
+                        ) : null}
+                        {phase ? (
+                          <p className="mt-1 text-text-muted text-xs">
+                            {t('deployments.backupPhase', { phase })}
+                          </p>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>{backupDriverLabel(backup.driver)}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        <span title={backup.pvcName} className="block max-w-[12rem] truncate">
+                          {backup.pvcName}
+                        </span>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {artifact ? (
+                          <span title={artifact} className="block max-w-[18rem] truncate">
+                            {artifact}
+                          </span>
+                        ) : (
+                          t('common.none')
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span>{formatTimestamp(backup.createdAt)}</span>
+                        {backup.updatedAt ? (
+                          <span className="mt-1 block text-text-muted text-xs">
+                            {t('deployments.backupUpdatedAt')}: {formatTimestamp(backup.updatedAt)}
+                          </span>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {renderRestoreButton(backup, artifact)}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </Card>
+        </>
+      )}
+
+      <DangerConfirmDialog
+        open={Boolean(restoreCandidate)}
+        onOpenChange={(open) => {
+          if (!open && !restoreMutation.isPending) setRestoreCandidate(null)
+        }}
+        title={t('deployments.restoreBackupConfirmTitle')}
+        description={
+          restoreCandidate
+            ? t('deployments.restoreBackupConfirmDescription', {
+                artifact: backupArtifact(restoreCandidate),
+                pvc: restoreCandidate.pvcName,
+              })
+            : ''
+        }
+        confirmText={t('deployments.restoreBackupConfirmAction')}
+        cancelText={t('common.cancel')}
+        loading={restoreMutation.isPending}
+        onConfirm={() => {
+          if (restoreCandidate) restoreMutation.mutate(restoreCandidate)
+        }}
+      />
+    </div>
+  )
+}
+
+function NamespaceLogsTab({
+  namespace,
+  agent,
+  deployment,
+  deployments,
+  onSelectAgent,
+  onResume,
+  resumePending,
+  resumeDisabledReason,
+}: {
+  namespace: string
+  agent: string | null
+  deployment?: Deployment | null
   deployments: Deployment[]
   onSelectAgent: (agent: string) => void
+  onResume?: () => void
+  resumePending?: boolean
+  resumeDisabledReason?: string
 }) {
   const api = useApiClient()
   const { t } = useTranslation()
@@ -298,6 +814,8 @@ function NamespaceLogsTab({
           <Tabs value={logMode} onChange={(value) => setLogMode(value as 'recent' | 'live')}>
             <DashboardTabsList
               className="w-fit"
+              activeId={logMode}
+              onSelect={(value) => setLogMode(value as 'recent' | 'live')}
               tabs={[
                 { id: 'recent', label: t('deployments.recentLogs') },
                 { id: 'live', label: t('deployments.liveLogs') },
@@ -333,6 +851,34 @@ function NamespaceLogsTab({
           </div>
         </div>
       </div>
+
+      {deployment?.runtimeState === 'paused' && (
+        <div className="flex flex-col gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-warning sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <Pause size={14} className="mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold">{t('deployments.pausedLogsTitle')}</p>
+              <p className="mt-1 text-xs text-warning/80">
+                {t('deployments.pausedLogsDescription')}
+              </p>
+            </div>
+          </div>
+          {onResume ? (
+            <Button
+              type="button"
+              variant="glass"
+              size="sm"
+              onClick={onResume}
+              title={resumeDisabledReason}
+              disabled={resumePending || Boolean(resumeDisabledReason)}
+              className="self-start sm:self-center"
+            >
+              {resumePending ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+              {t('deployments.resumeAgent')}
+            </Button>
+          ) : null}
+        </div>
+      )}
 
       {error && logMode === 'live' && (
         <div className="rounded-lg border border-danger/25 bg-danger/8 px-4 py-3 text-xs text-danger">
@@ -427,12 +973,126 @@ function NamespaceLogsTab({
   )
 }
 
+function CookieJarImportDialog({
+  isSubmitting,
+  onClose,
+  onImport,
+}: {
+  isSubmitting: boolean
+  onClose: () => void
+  onImport: (data: CookieJarImportResult) => void
+}) {
+  const { t } = useTranslation()
+  const [envKey, setEnvKey] = useState('AGENT_BROWSER_STORAGE_STATE_JSON')
+  const [raw, setRaw] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  const parsed = useMemo(() => {
+    try {
+      return raw.trim() ? parseCookieJarInput(raw, envKey.trim()) : null
+    } catch {
+      return null
+    }
+  }, [envKey, raw])
+
+  useEffect(() => {
+    setError(null)
+  }, [envKey, raw])
+
+  const handleImport = () => {
+    try {
+      const result = parseCookieJarInput(raw, envKey.trim())
+      setError(null)
+      onImport(result)
+    } catch {
+      setError(t('deployments.cookieJarInvalid'))
+    }
+  }
+
+  const handleFile = async (file: File | null | undefined) => {
+    if (!file) return
+    setRaw(await file.text())
+  }
+
+  return (
+    <Modal open onClose={onClose}>
+      <ModalContent maxWidth="max-w-2xl">
+        <ModalHeader
+          icon={<Cookie size={18} />}
+          title={t('deployments.cookieJarImportTitle')}
+          subtitle={t('deployments.cookieJarImportDescription')}
+          onClose={onClose}
+        />
+        <ModalBody>
+          <Input
+            label={t('deployments.cookieJarEnvKey')}
+            value={envKey}
+            onChange={(event) => setEnvKey(event.target.value)}
+            placeholder="AGENT_BROWSER_STORAGE_STATE_JSON"
+          />
+          <div className="space-y-1.5">
+            <p className="ml-1 text-[11px] font-bold uppercase tracking-[0.14em] text-text-muted">
+              {t('deployments.cookieJarFile')}
+            </p>
+            <Input
+              type="file"
+              accept=".json,.txt"
+              onChange={(event) => void handleFile(event.target.files?.[0])}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <p className="ml-1 text-[11px] font-bold uppercase tracking-[0.14em] text-text-muted">
+              {t('deployments.cookieJarPaste')}
+            </p>
+            <Textarea
+              value={raw}
+              onChange={(event) => setRaw(event.target.value)}
+              placeholder={t('deployments.cookieJarPastePlaceholder')}
+              className="min-h-[220px] font-mono text-xs"
+              error={Boolean(error)}
+            />
+            {error ? (
+              <p className="text-xs text-danger">{error}</p>
+            ) : parsed ? (
+              <p className="text-xs text-text-muted">
+                {t('deployments.cookieJarParsed', {
+                  format: parsed.format,
+                  cookies: parsed.cookieCount,
+                  origins: parsed.originCount,
+                })}
+              </p>
+            ) : (
+              <p className="text-xs text-text-muted">{t('deployments.cookieJarFormats')}</p>
+            )}
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <ModalButtonGroup>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              disabled={!raw.trim() || !envKey.trim() || isSubmitting}
+              onClick={handleImport}
+            >
+              {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+              {t('deployments.cookieJarImportAction')}
+            </Button>
+          </ModalButtonGroup>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  )
+}
+
 function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
   const api = useApiClient()
   const { t } = useTranslation()
   const toast = useToast()
   const queryClient = useQueryClient()
-  const [dialogMode, setDialogMode] = useState<'create' | 'edit' | null>(null)
+  const [dialogMode, setDialogMode] = useState<'create' | 'edit' | 'cookie' | null>(null)
   const [editEntry, setEditEntry] = useState<{
     key: string
     value: string
@@ -483,6 +1143,26 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
     onError: () => toast.error(t('secrets.valueDeleteFailed')),
   })
 
+  const cookieJarMutation = useMutation({
+    mutationFn: async (data: CookieJarImportResult) => {
+      await api.deployments.env.upsert(namespace, data.envKey, data.value, true)
+      return data
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ['deployment-env', namespace],
+      })
+      setDialogMode(null)
+      toast.success(
+        t('deployments.cookieJarImported', {
+          key: data.envKey,
+          cookies: data.cookieCount,
+        }),
+      )
+    },
+    onError: () => toast.error(t('deployments.cookieJarImportFailed')),
+  })
+
   const handleEditStart = async (entry: EnvVarListEntry) => {
     try {
       const { envVar } = await api.deployments.env.getOne(namespace, entry.key)
@@ -508,6 +1188,45 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
 
   return (
     <div className="space-y-6">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <Card variant="glassPanel" className="p-4">
+          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-text-primary">
+            <Variable size={14} className="text-primary" />
+            {t('deployments.envGuideScopedTitle')}
+          </div>
+          <p className="text-xs leading-relaxed text-text-muted">
+            {t('deployments.envGuideScopedDescription')}
+          </p>
+        </Card>
+        <Card variant="glassPanel" className="p-4">
+          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-text-primary">
+            <GitBranch size={14} className="text-accent" />
+            {t('deployments.envGuideGlobalTitle')}
+          </div>
+          <p className="text-xs leading-relaxed text-text-muted">
+            {t('deployments.envGuideGlobalDescription')}
+          </p>
+        </Card>
+        <Card variant="glassPanel" className="p-4">
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-primary">
+            <Cookie size={14} className="text-warning" />
+            {t('deployments.cookieJarTitle')}
+          </div>
+          <p className="mb-3 text-xs leading-relaxed text-text-muted">
+            {t('deployments.cookieJarDescription')}
+          </p>
+          <button
+            type="button"
+            onPointerDown={() => setDialogMode('cookie')}
+            onClick={() => setDialogMode('cookie')}
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-4 text-xs font-black uppercase tracking-widest text-text-primary shadow-[0_8px_32px_rgba(0,0,0,0.1),inset_0_1px_1px_rgba(255,255,255,0.05)] transition-all hover:-translate-y-0.5 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/10"
+          >
+            <Upload size={12} />
+            {t('deployments.cookieJarImportAction')}
+          </button>
+        </Card>
+      </div>
+
       <div>
         <div className="flex items-center justify-between gap-3 mb-3">
           <div>
@@ -516,19 +1235,32 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
             </h3>
             <p className="text-xs text-text-muted">{t('deployments.scopedEnvDescription')}</p>
           </div>
-          <Button
-            type="button"
-            onClick={() => {
-              setEditEntry(null)
-              setDialogMode('create')
-            }}
-            variant="primary"
-            size="sm"
-            className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
-          >
-            <Plus size={11} />
-            {t('common.add')}
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              type="button"
+              onPointerDown={() => setDialogMode('cookie')}
+              onClick={() => setDialogMode('cookie')}
+              variant="glass"
+              size="sm"
+              className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
+            >
+              <Upload size={11} />
+              {t('deployments.cookieJarImportAction')}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setEditEntry(null)
+                setDialogMode('create')
+              }}
+              variant="primary"
+              size="sm"
+              className="transition-[background-color,border-color,color,box-shadow,transform] duration-[160ms] ease active:translate-y-[0.5px] focus-visible:outline-none"
+            >
+              <Plus size={11} />
+              {t('common.add')}
+            </Button>
+          </div>
         </div>
 
         {scopedEntries.length === 0 ? (
@@ -650,7 +1382,7 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
         )}
       </div>
 
-      {dialogMode && (
+      {(dialogMode === 'create' || dialogMode === 'edit') && (
         <EnvVarEditorDialog
           mode={dialogMode}
           initial={editEntry ?? undefined}
@@ -683,6 +1415,14 @@ function NamespaceEnvironmentTab({ namespace }: { namespace: string }) {
           }
         }}
       />
+
+      {dialogMode === 'cookie' && (
+        <CookieJarImportDialog
+          isSubmitting={cookieJarMutation.isPending}
+          onClose={() => setDialogMode(null)}
+          onImport={(data) => cookieJarMutation.mutate(data)}
+        />
+      )}
     </div>
   )
 }
@@ -831,16 +1571,252 @@ function NamespaceCostTab({ namespace }: { namespace: string }) {
   )
 }
 
+function manifestStatusVariant(
+  status: DeploymentManifestInfo['drift']['status'],
+): 'success' | 'warning' | 'danger' | 'neutral' {
+  if (status === 'up-to-date') return 'success'
+  if (status === 'template-updated') return 'warning'
+  if (status === 'missing-template') return 'danger'
+  return 'neutral'
+}
+
+function NamespaceManifestPanel({
+  namespace,
+  latestTaskId,
+}: {
+  namespace: string
+  latestTaskId: number | string | null
+}) {
+  const api = useApiClient()
+  const { t } = useTranslation()
+  const toast = useToast()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  const manifestQuery = useQuery({
+    queryKey: ['deployment-manifest', namespace],
+    queryFn: () => api.deployments.manifest(namespace),
+    staleTime: 10_000,
+  })
+
+  const redeployWithOptions = async (options: DeploymentRedeployOptions) => {
+    if (!latestTaskId) throw new Error('No deployment task found')
+    return api.deployTasks.redeployToTaskId(latestTaskId, options)
+  }
+
+  const snapshotRedeployMutation = useMutation({
+    mutationFn: () => redeployWithOptions({ mode: 'snapshot' }),
+    onSuccess: (taskId) => {
+      if (!taskId) return
+      queryClient.invalidateQueries({ queryKey: ['deploy-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['deployments'] })
+      navigate({ to: '/deploy-tasks/$taskId', params: { taskId: String(taskId) } })
+    },
+    onError: (err) => toast.error(`${t('deployments.redeployFailed')}: ${errorDetail(err)}`),
+  })
+
+  const templateRedeployMutation = useMutation({
+    mutationFn: () =>
+      redeployWithOptions({
+        mode: 'template',
+        templateSlug: manifestQuery.data?.templateSlug ?? undefined,
+      }),
+    onSuccess: (taskId) => {
+      if (!taskId) return
+      queryClient.invalidateQueries({ queryKey: ['deploy-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['deployments'] })
+      queryClient.invalidateQueries({ queryKey: ['deployment-manifest', namespace] })
+      navigate({ to: '/deploy-tasks/$taskId', params: { taskId: String(taskId) } })
+    },
+    onError: (err) => toast.error(`${t('deployments.redeployFailed')}: ${errorDetail(err)}`),
+  })
+
+  const syncTemplateMutation = useMutation({
+    mutationFn: async () => {
+      const result = await api.deployments.syncTemplate(namespace, {
+        name: manifestQuery.data?.template?.name ?? manifestQuery.data?.templateSlug ?? namespace,
+      })
+      return result
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['deployment-manifest', namespace] })
+      queryClient.invalidateQueries({ queryKey: ['deployments'] })
+      toast.success(
+        result.action === 'updated'
+          ? t('deployments.templateUpdated')
+          : t('deployments.templateForked', { name: result.template.slug }),
+      )
+    },
+    onError: (err) => toast.error(`${t('deployments.templateSyncFailed')}: ${errorDetail(err)}`),
+  })
+
+  const syncAndRedeployMutation = useMutation({
+    mutationFn: async () => {
+      const result = await api.deployments.syncTemplate(namespace, {
+        name: manifestQuery.data?.template?.name ?? manifestQuery.data?.templateSlug ?? namespace,
+      })
+      return redeployWithOptions({ mode: 'template', templateSlug: result.template.slug })
+    },
+    onSuccess: (taskId) => {
+      queryClient.invalidateQueries({ queryKey: ['deployment-manifest', namespace] })
+      queryClient.invalidateQueries({ queryKey: ['deploy-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['deployments'] })
+      if (taskId) navigate({ to: '/deploy-tasks/$taskId', params: { taskId: String(taskId) } })
+    },
+    onError: (err) =>
+      toast.error(`${t('deployments.templateSyncRedeployFailed')}: ${errorDetail(err)}`),
+  })
+
+  const info = manifestQuery.data
+  const actionPending =
+    snapshotRedeployMutation.isPending ||
+    templateRedeployMutation.isPending ||
+    syncTemplateMutation.isPending ||
+    syncAndRedeployMutation.isPending
+  const templateSlug = info?.templateSlug ?? t('common.none')
+  const canRedeployTemplate = Boolean(
+    latestTaskId && info?.templateSlug && info?.drift.templateAvailable,
+  )
+
+  return (
+    <Card variant="glassPanel" className="p-5">
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <GitBranch size={15} className="text-primary" />
+            <h3 className="text-sm font-semibold text-text-primary">
+              {t('deployments.templateManifestTitle')}
+            </h3>
+          </div>
+          <p className="mt-1 text-xs text-text-muted">
+            {t('deployments.templateManifestDescription')}
+          </p>
+        </div>
+        <Badge variant={manifestStatusVariant(info?.drift.status ?? 'unknown')} size="sm">
+          {t(`deployments.manifestDrift.${info?.drift.status ?? 'unknown'}`)}
+        </Badge>
+      </div>
+
+      {manifestQuery.isLoading ? (
+        <div className="flex items-center py-6 text-sm text-text-muted">
+          <Loader2 size={15} className="mr-2 animate-spin" />
+          {t('common.loading')}
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="min-w-0 rounded-xl border border-border-subtle bg-bg-secondary/40 p-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-text-muted">
+                {t('deployments.templateSlug')}
+              </p>
+              <p className="mt-1 truncate font-mono text-sm text-text-primary">{templateSlug}</p>
+            </div>
+            <div className="min-w-0 rounded-xl border border-border-subtle bg-bg-secondary/40 p-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-text-muted">
+                {t('deployments.manifestRevision')}
+              </p>
+              <p className="mt-1 text-sm text-text-primary">
+                {info?.manifest?.revision ?? t('common.none')}
+              </p>
+            </div>
+            <div className="min-w-0 rounded-xl border border-border-subtle bg-bg-secondary/40 p-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-text-muted">
+                {t('deployments.configHash')}
+              </p>
+              <p className="mt-1 truncate font-mono text-sm text-text-primary">
+                {info?.drift.configHash ?? t('common.none')}
+              </p>
+            </div>
+            <div className="min-w-0 rounded-xl border border-border-subtle bg-bg-secondary/40 p-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-text-muted">
+                {t('deployments.templateUpdatedAt')}
+              </p>
+              <p className="mt-1 text-sm text-text-primary">
+                {info?.template?.updatedAt
+                  ? formatTimestamp(info.template.updatedAt)
+                  : t('common.none')}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="glass"
+              size="sm"
+              disabled={!latestTaskId || actionPending}
+              onClick={() => snapshotRedeployMutation.mutate()}
+            >
+              {snapshotRedeployMutation.isPending ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <RotateCcw size={12} />
+              )}
+              {t('deployments.redeploySnapshot')}
+            </Button>
+            <Button
+              type="button"
+              variant="glass"
+              size="sm"
+              disabled={!canRedeployTemplate || actionPending}
+              onClick={() => templateRedeployMutation.mutate()}
+            >
+              {templateRedeployMutation.isPending ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Rocket size={12} />
+              )}
+              {t('deployments.redeployLatestTemplate')}
+            </Button>
+            <Button
+              type="button"
+              variant="glass"
+              size="sm"
+              disabled={!info || actionPending}
+              onClick={() => syncTemplateMutation.mutate()}
+            >
+              {syncTemplateMutation.isPending ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Save size={12} />
+              )}
+              {t('deployments.saveEditableTemplate')}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              disabled={!latestTaskId || !info || actionPending}
+              onClick={() => syncAndRedeployMutation.mutate()}
+            >
+              {syncAndRedeployMutation.isPending ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Rocket size={12} />
+              )}
+              {t('deployments.saveTemplateAndRedeploy')}
+            </Button>
+          </div>
+        </>
+      )}
+    </Card>
+  )
+}
+
 function NamespaceInfoTab({
   namespace,
   agent,
+  deployment,
   deployments,
   pods,
+  latestTaskId,
 }: {
   namespace: string
   agent: string | null
+  deployment?: Deployment | null
   deployments: Deployment[]
   pods: Pod[] | undefined
+  latestTaskId: number | string | null
 }) {
   const { t } = useTranslation()
   const readyAgents = deployments.filter((deployment) => isDeploymentReady(deployment.ready)).length
@@ -848,6 +1824,8 @@ function NamespaceInfoTab({
 
   return (
     <div className="space-y-6">
+      <NamespaceManifestPanel namespace={namespace} latestTaskId={latestTaskId} />
+
       <Card variant="glassPanel" className="overflow-hidden p-0">
         <div className="px-5 py-3 flex items-center justify-between border-b border-border-subtle">
           <span className="text-xs text-text-muted">{t('deployments.namespaceLabel')}</span>
@@ -864,6 +1842,48 @@ function NamespaceInfoTab({
         <div className="px-5 py-3 flex items-center justify-between border-b border-border-subtle">
           <span className="text-xs text-text-muted">{t('deployments.currentAgent')}</span>
           <span className="text-sm font-mono text-text-secondary">{agent ?? t('common.none')}</span>
+        </div>
+        <div className="px-5 py-3 flex items-center justify-between border-b border-border-subtle">
+          <span className="text-xs text-text-muted">{t('deployments.workloadKind')}</span>
+          <span className="text-sm text-text-secondary">
+            {deployment?.workloadKind ?? 'deployment'}
+          </span>
+        </div>
+        <div className="px-5 py-3 flex items-center justify-between border-b border-border-subtle">
+          <span className="text-xs text-text-muted">{t('deployments.runtimeStateLabel')}</span>
+          <span className="text-sm text-text-secondary">
+            {t(`deployments.runtimeState.${deployment?.runtimeState ?? 'unknown'}`)}
+          </span>
+        </div>
+        <div className="px-5 py-3 flex items-center justify-between border-b border-border-subtle">
+          <span className="text-xs text-text-muted">{t('deployments.sandboxName')}</span>
+          <span className="text-sm font-mono text-text-secondary">
+            {deployment?.sandboxName ?? t('common.none')}
+          </span>
+        </div>
+        <div className="px-5 py-3 flex items-center justify-between border-b border-border-subtle">
+          <span className="text-xs text-text-muted">{t('deployments.statePvc')}</span>
+          <span className="text-sm font-mono text-text-secondary">
+            {deployment?.statePvc ?? t('common.none')}
+          </span>
+        </div>
+        <div className="px-5 py-3 flex items-center justify-between border-b border-border-subtle">
+          <span className="text-xs text-text-muted">{t('deployments.serviceFQDN')}</span>
+          <span className="break-all text-right text-sm font-mono text-text-secondary">
+            {deployment?.serviceFQDN ?? t('common.none')}
+          </span>
+        </div>
+        <div className="px-5 py-3 flex items-center justify-between border-b border-border-subtle">
+          <span className="text-xs text-text-muted">{t('deployments.lastActiveAt')}</span>
+          <span className="text-right text-sm text-text-secondary">
+            {deployment?.lastActiveAt ? formatTimestamp(deployment.lastActiveAt) : t('common.none')}
+          </span>
+        </div>
+        <div className="px-5 py-3 flex items-center justify-between border-b border-border-subtle">
+          <span className="text-xs text-text-muted">{t('deployments.pausedAt')}</span>
+          <span className="text-right text-sm text-text-secondary">
+            {deployment?.pausedAt ? formatTimestamp(deployment.pausedAt) : t('common.none')}
+          </span>
         </div>
         <div className="px-5 py-3 flex items-center justify-between border-b border-border-subtle">
           <span className="text-xs text-text-muted">{t('deployments.selectedPods')}</span>
@@ -910,6 +1930,11 @@ export function DeploymentNamespacePage() {
       .filter((deployment) => deployment.namespace === namespace)
       .sort((left, right) => left.name.localeCompare(right.name))
   }, [deployments, namespace])
+
+  const selectedDeployment = useMemo(() => {
+    if (!selectedAgent) return null
+    return namespaceDeployments.find((deployment) => deployment.name === selectedAgent) ?? null
+  }, [namespaceDeployments, selectedAgent])
 
   useEffect(() => {
     if (namespaceDeployments.length === 0) {
@@ -992,10 +2017,92 @@ export function DeploymentNamespacePage() {
     onError: () => toast.error(t('deployments.destroyNamespaceFailed')),
   })
 
+  const pauseMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedAgent) throw new Error('No selected agent')
+      return api.deployments.pause(namespace, selectedAgent)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deployments'] })
+      queryClient.invalidateQueries({ queryKey: ['pods', namespace, selectedAgent] })
+      toast.success(t('deployments.pauseQueued', { agent: selectedAgent }))
+      addActivity({
+        type: 'scale',
+        title: t('deployments.pauseQueued', { agent: selectedAgent }),
+        namespace,
+      })
+    },
+    onError: (err) => toast.error(`${t('deployments.pauseFailed')}: ${errorDetail(err)}`),
+  })
+
+  const resumeMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedAgent) throw new Error('No selected agent')
+      return api.deployments.resume(namespace, selectedAgent)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deployments'] })
+      queryClient.invalidateQueries({ queryKey: ['pods', namespace, selectedAgent] })
+      toast.success(t('deployments.resumeQueued', { agent: selectedAgent }))
+      addActivity({
+        type: 'scale',
+        title: t('deployments.resumeQueued', { agent: selectedAgent }),
+        namespace,
+      })
+    },
+    onError: (err) => toast.error(`${t('deployments.resumeFailed')}: ${errorDetail(err)}`),
+  })
+
+  const backupMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedAgent) throw new Error('No selected agent')
+      return api.deployments.createBackup(namespace, selectedAgent)
+    },
+    onSuccess: () => {
+      toast.success(t('deployments.backupCreated'))
+      addActivity({
+        type: 'scale',
+        title: t('deployments.backupCreated'),
+        namespace,
+      })
+    },
+    onError: (err) => toast.error(`${t('deployments.backupFailed')}: ${errorDetail(err)}`),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['deployment-backups', namespace, selectedAgent] })
+    },
+  })
+
   const readyAgents = namespaceDeployments.filter((deployment) =>
     isDeploymentReady(deployment.ready),
   ).length
+  const pausedAgents = namespaceDeployments.filter(
+    (deployment) => deployment.runtimeState === 'paused',
+  ).length
   const selectedPods = selectedPodsQuery.data ?? []
+  const selectedRuntimeState = selectedDeployment?.runtimeState ?? 'unknown'
+  const selectedSandboxEnabled = selectedDeployment?.workloadKind === 'agent-sandbox'
+  const selectedBackupAllowed = selectedDeployment?.status
+    ? selectedDeployment.status === 'deployed' || selectedDeployment.status === 'paused'
+    : selectedRuntimeState === 'running' || selectedRuntimeState === 'paused'
+  const selectedResumeDisabledReason = !selectedAgent
+    ? t('deployments.noAgentSelected')
+    : resumeMutation.isPending
+      ? t('deployments.runtimeActionInProgress')
+      : undefined
+  const selectedPauseDisabledReason = !selectedAgent
+    ? t('deployments.noAgentSelected')
+    : pauseMutation.isPending
+      ? t('deployments.runtimeActionInProgress')
+      : selectedRuntimeState === 'resuming'
+        ? t('deployments.pauseUnavailableResuming')
+        : undefined
+  const selectedBackupDisabledReason = !selectedAgent
+    ? t('deployments.noAgentSelected')
+    : backupMutation.isPending
+      ? t('deployments.runtimeActionInProgress')
+      : !selectedBackupAllowed
+        ? t('deployments.backupUnavailableRuntime')
+        : undefined
 
   const tabs = [
     {
@@ -1010,6 +2117,11 @@ export function DeploymentNamespacePage() {
       icon: <FileText size={13} />,
     },
     { id: 'env', label: t('deployments.tabEnv'), icon: <Variable size={13} /> },
+    {
+      id: 'backups',
+      label: t('deployments.tabBackups'),
+      icon: <Archive size={13} />,
+    },
     {
       id: 'cost',
       label: t('deployments.costTab'),
@@ -1053,7 +2165,58 @@ export function DeploymentNamespacePage() {
       breadcrumbPosition="inside"
       title={namespace}
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {selectedSandboxEnabled && selectedRuntimeState === 'paused' && (
+            <Button
+              type="button"
+              onClick={() => resumeMutation.mutate()}
+              title={selectedResumeDisabledReason}
+              disabled={Boolean(selectedResumeDisabledReason)}
+              variant="glass"
+              size="sm"
+            >
+              {resumeMutation.isPending ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Play size={12} />
+              )}
+              {t('deployments.resumeAgent')}
+            </Button>
+          )}
+          {selectedSandboxEnabled && selectedRuntimeState !== 'paused' && (
+            <Button
+              type="button"
+              onClick={() => pauseMutation.mutate()}
+              title={selectedPauseDisabledReason}
+              disabled={Boolean(selectedPauseDisabledReason)}
+              variant="glass"
+              size="sm"
+            >
+              {pauseMutation.isPending ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Pause size={12} />
+              )}
+              {t('deployments.pauseAgent')}
+            </Button>
+          )}
+          {selectedSandboxEnabled && (
+            <Button
+              type="button"
+              onClick={() => backupMutation.mutate()}
+              title={selectedBackupDisabledReason}
+              disabled={Boolean(selectedBackupDisabledReason)}
+              variant="glass"
+              size="sm"
+            >
+              {backupMutation.isPending ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Download size={12} />
+              )}
+              {t('deployments.backupAgent')}
+            </Button>
+          )}
           <Button
             type="button"
             onClick={() => {
@@ -1090,7 +2253,7 @@ export function DeploymentNamespacePage() {
       }
       headerContent={
         <>
-          <StatsGrid className="mb-4 md:mb-5 grid-cols-2 md:grid-cols-4">
+          <StatsGrid className="mb-4 grid-cols-1 md:mb-5 sm:grid-cols-2 xl:grid-cols-5">
             <MetricCardWrapper>
               <MetricCardContent
                 label={t('deployments.agents')}
@@ -1107,6 +2270,15 @@ export function DeploymentNamespacePage() {
                 icon={<CheckCircle size={13} />}
                 iconClassName="text-success"
                 valueClassName="text-success"
+              />
+            </MetricCardWrapper>
+            <MetricCardWrapper>
+              <MetricCardContent
+                label={t('deployments.pausedAgents')}
+                value={pausedAgents}
+                icon={<Pause size={13} />}
+                iconClassName="text-warning"
+                valueClassName="text-warning"
               />
             </MetricCardWrapper>
             <MetricCardWrapper>
@@ -1131,7 +2303,7 @@ export function DeploymentNamespacePage() {
 
           <div className="mt-1">
             <Tabs value={activeTab} onChange={setActiveTab}>
-              <DashboardTabsList tabs={tabs} />
+              <DashboardTabsList tabs={tabs} activeId={activeTab} onSelect={setActiveTab} />
             </Tabs>
           </div>
         </>
@@ -1142,24 +2314,45 @@ export function DeploymentNamespacePage() {
         <div className="space-y-6">
           <div className="min-h-[38vh]">
             {activeTab === 'agents' && (
-              <PodsPanel namespace={namespace} agent={selectedAgent} enabled={!isLoading} />
+              <PodsPanel
+                namespace={namespace}
+                agent={selectedAgent}
+                enabled={!isLoading}
+                deployment={selectedDeployment}
+                onResume={() => resumeMutation.mutate()}
+                resumePending={resumeMutation.isPending}
+                resumeDisabledReason={selectedResumeDisabledReason}
+              />
             )}
             {activeTab === 'logs' && (
               <NamespaceLogsTab
                 namespace={namespace}
                 agent={selectedAgent}
+                deployment={selectedDeployment}
                 deployments={namespaceDeployments}
                 onSelectAgent={setSelectedAgent}
+                onResume={() => resumeMutation.mutate()}
+                resumePending={resumeMutation.isPending}
+                resumeDisabledReason={selectedResumeDisabledReason}
               />
             )}
             {activeTab === 'env' && <NamespaceEnvironmentTab namespace={namespace} />}
+            {activeTab === 'backups' && (
+              <BackupsPanel
+                namespace={namespace}
+                agent={selectedAgent}
+                deployment={selectedDeployment}
+              />
+            )}
             {activeTab === 'cost' && <NamespaceCostTab namespace={namespace} />}
             {activeTab === 'info' && (
               <NamespaceInfoTab
                 namespace={namespace}
                 agent={selectedAgent}
+                deployment={selectedDeployment}
                 deployments={namespaceDeployments}
                 pods={selectedPodsQuery.data}
+                latestTaskId={latestTask?.task.id ?? null}
               />
             )}
           </div>

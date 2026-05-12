@@ -5,21 +5,9 @@
 import * as k8s from '@pulumi/kubernetes'
 import type * as pulumi from '@pulumi/pulumi'
 import type { AgentDeployment } from '../config/schema.js'
-import '../runtimes/loader.js'
-import { getRuntime } from '../runtimes/index.js'
-import {
-  baseEnvVars,
-  baseVolumeMounts,
-  baseVolumes,
-  DEFAULT_RESOURCES,
-  healthPortForRuntime,
-  PULUMI_MANAGED_ANNOTATIONS,
-  probesForRuntime,
-} from './constants.js'
-import { assertNoReservedEnvOverrides, dedupeEnvVars } from './env-vars.js'
-import { resolveImagePullPolicy } from './image-pull-policy.js'
-import { collectPluginK8sArtifacts } from './plugin-k8s.js'
-import { buildContainerSecurityContext, buildSecurityContext } from './security.js'
+import { buildAgentPodSpec } from './agent-pod.js'
+import { PULUMI_MANAGED_ANNOTATIONS } from './constants.js'
+import { buildSecurityContext } from './security.js'
 
 export interface AgentDeploymentOptions {
   agentName: string
@@ -64,42 +52,24 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
     resourceOptions,
   } = options
 
-  const image = agent.image ?? getRuntime(agent.runtime).defaultImage
   const replicas = agent.replicas ?? 1
-  const healthPort = healthPortForRuntime(agent.runtime)
-  const { livenessProbe, readinessProbe, startupProbe } = probesForRuntime(agent.runtime)
-
-  const imagePullPolicy = resolveImagePullPolicy(options.imagePullPolicy, image)
-
-  // Merge user-provided env with runtime adapter env
-  const runtimeEnv = getRuntime(agent.runtime).extraEnv(agent)
-  const mergedExtraEnv = { ...runtimeEnv, ...extraEnv }
-
-  const envVars: k8s.types.input.core.v1.EnvVar[] = [
-    ...baseEnvVars(agentName, agent.runtime),
-    ...Object.entries(mergedExtraEnv).map(([name, value]) => ({ name, value })),
-  ]
-
-  // Build volume mounts from shared constants
-  const volumeMounts: k8s.types.input.core.v1.VolumeMount[] = baseVolumeMounts()
-  const volumes: k8s.types.input.core.v1.Volume[] = baseVolumes(configMapName)
-  const initContainers: k8s.types.input.core.v1.Container[] = []
-
-  // Collect K8s artifacts from all plugins (init containers, volumes, env vars, labels)
   const ns = namespaceName ?? (typeof namespace === 'string' ? namespace : 'default')
-  const pluginArtifacts = collectPluginK8sArtifacts(agent, config, ns)
-  assertNoReservedEnvOverrides(envVars, pluginArtifacts.envVars, 'Plugin env')
-  for (const volume of pluginArtifacts.volumes) {
-    if ('hostPath' in (volume.spec as Record<string, unknown>)) {
-      throw new Error(`Plugin volume ${volume.name} uses forbidden hostPath`)
-    }
-  }
-  for (const container of [...pluginArtifacts.initContainers, ...pluginArtifacts.sidecars]) {
-    const securityContext = (container.securityContext ?? {}) as Record<string, unknown>
-    if (securityContext.privileged === true || securityContext.allowPrivilegeEscalation === true) {
-      throw new Error(`Plugin container ${container.name} requests privileged security context`)
-    }
-  }
+  const pod = buildAgentPodSpec({
+    agentName,
+    agent,
+    namespace: ns,
+    config,
+    configMapName,
+    secretName,
+    extraEnv,
+    imagePullPolicy: options.imagePullPolicy,
+    sharedWorkspacePvcName: options.sharedWorkspacePvcName,
+    sharedWorkspaceMountPath: options.sharedWorkspaceMountPath,
+    skillsInstallDir: options.skillsInstallDir,
+    podTemplateAnnotations: options.podTemplateAnnotations,
+    openclawDataVolume: 'emptyDir',
+  })
+  const { pluginArtifacts } = pod
   const pluginConfigMaps = pluginArtifacts.configMaps.map(
     (configMap) =>
       new k8s.core.v1.ConfigMap(
@@ -119,38 +89,6 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
         { provider, ...resourceOptions },
       ),
   )
-
-  for (const ic of pluginArtifacts.initContainers) {
-    initContainers.push(ic as unknown as k8s.types.input.core.v1.Container)
-  }
-  for (const vol of pluginArtifacts.volumes) {
-    volumes.push({ name: vol.name, ...vol.spec } as k8s.types.input.core.v1.Volume)
-  }
-  for (const vm of pluginArtifacts.volumeMounts) {
-    volumeMounts.push(vm as k8s.types.input.core.v1.VolumeMount)
-  }
-  for (const ev of pluginArtifacts.envVars) {
-    envVars.push(ev as k8s.types.input.core.v1.EnvVar)
-  }
-
-  // Shared workspace PVC mount
-  if (options.sharedWorkspacePvcName) {
-    const mountPath = options.sharedWorkspaceMountPath ?? '/workspace/shared'
-    volumeMounts.push({ name: 'shared-workspace', mountPath })
-    volumes.push({
-      name: 'shared-workspace',
-      persistentVolumeClaim: { claimName: options.sharedWorkspacePvcName },
-    })
-    envVars.push({ name: 'SHARED_WORKSPACE_PATH', value: mountPath })
-  }
-
-  // Skills directory volume
-  if (options.skillsInstallDir) {
-    volumeMounts.push({ name: 'skills', mountPath: options.skillsInstallDir })
-    volumes.push({ name: 'skills', emptyDir: {} })
-    envVars.push({ name: 'SKILLS_DIR', value: options.skillsInstallDir })
-  }
-
   const resourceDependsOn = (
     Array.isArray(resourceOptions?.dependsOn)
       ? resourceOptions.dependsOn
@@ -197,40 +135,10 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
             },
           },
           spec: {
-            initContainers: initContainers.length > 0 ? initContainers : undefined,
+            initContainers: pod.initContainers.length > 0 ? pod.initContainers : undefined,
             securityContext: buildSecurityContext(),
-            containers: [
-              {
-                name: agent.runtime,
-                image,
-                imagePullPolicy,
-                ports: [{ containerPort: healthPort, name: 'health' }],
-                env: dedupeEnvVars(envVars),
-                envFrom: [{ secretRef: { name: secretName } }],
-                volumeMounts,
-                resources: (agent.resources ?? DEFAULT_RESOURCES) as Record<string, unknown>,
-                securityContext: buildContainerSecurityContext(),
-                livenessProbe,
-                readinessProbe,
-                startupProbe,
-              },
-              // Plugin-contributed helper containers (e.g. gitagent git-pull loop)
-              ...pluginArtifacts.sidecars.map(
-                (sc) =>
-                  ({
-                    name: sc.name,
-                    image: sc.image,
-                    imagePullPolicy: sc.imagePullPolicy,
-                    command: sc.command,
-                    args: sc.args,
-                    env: sc.env ? dedupeEnvVars(sc.env) : undefined,
-                    volumeMounts: sc.volumeMounts,
-                    resources: sc.resources,
-                    securityContext: sc.securityContext,
-                  }) as unknown as k8s.types.input.core.v1.Container,
-              ),
-            ],
-            volumes,
+            containers: pod.containers,
+            volumes: pod.volumes,
             restartPolicy: 'Always',
           },
         },

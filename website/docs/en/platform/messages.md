@@ -354,3 +354,7 @@ block_state = client.get_interactive_state("message-id", blockId="block-id")
 ```
 
 :::
+
+## Auto-resume for paused Cloud deployments
+
+When a user @mentions a Buddy whose Cloud deployment is paused, the platform triggers an automatic resume so the Buddy can receive and respond to the message. See [Cloud SaaS Deployment Runtime](./cloud-saas) for details.

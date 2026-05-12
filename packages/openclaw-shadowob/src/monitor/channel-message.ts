@@ -339,7 +339,7 @@ export async function processShadowMessage(params: {
       ctx: ctxPayload,
       cfg,
       replyOptions: {
-        sourceReplyDeliveryMode: 'message_tool_only',
+        sourceReplyDeliveryMode: 'automatic',
       },
       dispatcherOptions: {
         ...replyPipeline,

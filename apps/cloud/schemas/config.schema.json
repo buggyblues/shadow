@@ -2609,6 +2609,15 @@
           "description": "K8s namespace",
           "type": "string"
         },
+        "backend": {
+          "description": "Kubernetes workload backend. Defaults to agent-sandbox for new deployments.",
+          "enum": ["agent-sandbox", "deployment"],
+          "type": "string"
+        },
+        "sandbox": {
+          "description": "Default agent-sandbox options inherited by agents.",
+          "$ref": "#/definitions/AgentSandboxConfig"
+        },
         "agents": {
           "description": "Agent deployments",
           "type": "array",
@@ -2618,6 +2627,271 @@
         }
       },
       "required": ["agents"]
+    },
+    "AgentSandboxConfig": {
+      "type": "object",
+      "properties": {
+        "runtimeClassName": {
+          "description": "RuntimeClass used by sandbox pods. Defaults to gvisor.",
+          "type": "string"
+        },
+        "state": {
+          "description": "Per-agent OpenClaw state volume config.",
+          "$ref": "#/definitions/AgentSandboxStateConfig"
+        },
+        "lifecycle": {
+          "description": "Pause/resume lifecycle config.",
+          "$ref": "#/definitions/AgentSandboxLifecycleConfig"
+        },
+        "backup": {
+          "description": "Backup/restore config.",
+          "$ref": "#/definitions/AgentSandboxBackupConfig"
+        },
+        "warmPool": {
+          "description": "Warm pool config.",
+          "$ref": "#/definitions/AgentSandboxWarmPoolConfig"
+        }
+      }
+    },
+    "AgentSandboxStateConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Enable the per-agent OpenClaw state PVC. Defaults to true for agent-sandbox.",
+          "type": "boolean"
+        },
+        "size": {
+          "description": "PVC size for /home/openclaw/.openclaw.",
+          "type": "string"
+        },
+        "storageClassName": {
+          "description": "Storage class name (empty for cluster default).",
+          "type": "string"
+        },
+        "accessMode": {
+          "description": "Access mode for the state PVC.",
+          "enum": ["ReadOnlyMany", "ReadWriteMany", "ReadWriteOnce"],
+          "type": "string"
+        }
+      }
+    },
+    "AgentSandboxLifecycleConfig": {
+      "type": "object",
+      "properties": {
+        "autoPause": {
+          "description": "Enable Cloud-side automatic pause after idleSeconds.",
+          "type": "boolean"
+        },
+        "idleSeconds": {
+          "description": "Idle duration before automatic pause.",
+          "allOf": [
+            {
+              "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "type"
+                    },
+                    "value": {
+                      "description": "Numeric type identifier",
+                      "type": "string",
+                      "const": "uint32"
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "$importInternal(\"isTypeUint32\")($input)"
+                    },
+                    "exclusive": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "integer"
+                        },
+                        "minimum": {
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum", "type"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "backupBeforePause": {
+          "description": "Create a backup before pause.",
+          "type": "boolean"
+        },
+        "shutdownPolicy": {
+          "description": "agent-sandbox shutdown policy.",
+          "enum": ["Delete", "Retain"],
+          "type": "string"
+        }
+      }
+    },
+    "AgentSandboxBackupConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Enable state backup.",
+          "type": "boolean"
+        },
+        "driver": {
+          "description": "Preferred backup driver.",
+          "enum": ["restic", "volumeSnapshot"],
+          "type": "string"
+        },
+        "schedule": {
+          "description": "Optional schedule expression interpreted by the Cloud control plane.",
+          "type": "string"
+        },
+        "retention": {
+          "description": "Number of backups to retain.",
+          "allOf": [
+            {
+              "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "type"
+                    },
+                    "value": {
+                      "description": "Numeric type identifier",
+                      "type": "string",
+                      "const": "uint32"
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "$importInternal(\"isTypeUint32\")($input)"
+                    },
+                    "exclusive": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "integer"
+                        },
+                        "minimum": {
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum", "type"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "type": "number"
+            }
+          ]
+        }
+      }
+    },
+    "AgentSandboxWarmPoolConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Enable SandboxWarmPool. Disabled by default because current per-agent\nSecret/env injection is not compatible with warm-pool adoption.",
+          "type": "boolean"
+        },
+        "replicas": {
+          "description": "Number of prewarmed sandboxes.",
+          "allOf": [
+            {
+              "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
+              "type": "object",
+              "properties": {
+                "typia.tag": {
+                  "description": "Compile-time marker property for typia transformer.\n\nThis phantom property carries tag metadata in the type system. It is never\nassigned at runtime - it exists only for the transformer to read during\ncompilation.",
+                  "type": "object",
+                  "properties": {
+                    "target": {
+                      "type": "string",
+                      "const": "number"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "type"
+                    },
+                    "value": {
+                      "description": "Numeric type identifier",
+                      "type": "string",
+                      "const": "uint32"
+                    },
+                    "validate": {
+                      "type": "string",
+                      "const": "$importInternal(\"isTypeUint32\")($input)"
+                    },
+                    "exclusive": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "integer"
+                        },
+                        "minimum": {
+                          "type": "number",
+                          "const": 0
+                        }
+                      },
+                      "required": ["minimum", "type"]
+                    }
+                  },
+                  "required": ["exclusive", "kind", "schema", "target", "validate", "value"]
+                }
+              }
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "updateStrategy": {
+          "description": "Warm-pool update strategy.",
+          "enum": ["OnReplenish", "Recreate"],
+          "type": "string"
+        }
+      }
     },
     "AgentDeployment": {
       "description": "Agent deployment definition.",
@@ -2814,6 +3088,10 @@
         "networking": {
           "description": "Network egress policy for this agent's pods.\nGenerates a K8s NetworkPolicy resource.",
           "$ref": "#/definitions/AgentNetworking"
+        },
+        "sandbox": {
+          "description": "agent-sandbox backend options.",
+          "$ref": "#/definitions/AgentSandboxConfig"
         },
         "version": {
           "description": "Agent configuration version (semver).\nRecorded in K8s Deployment annotations for rollback tracking.",

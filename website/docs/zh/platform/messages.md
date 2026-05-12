@@ -325,3 +325,7 @@ reactions = client.get_reactions("message-id")
 ```
 
 :::
+
+## Cloud 部署暂停时的自动恢复
+
+当用户在频道或线程中 @提及 Buddy 时，如果该 Buddy 的 Cloud 部署处于暂停状态，平台将自动触发恢复，以便 Buddy 能够接收并响应消息。详见 [Cloud SaaS 部署运行时](./cloud-saas)。

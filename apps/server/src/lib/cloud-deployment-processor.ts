@@ -5,9 +5,11 @@
  * Kubernetes cluster via KUBECONFIG.
  */
 import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import {
   attachCloudSaasProvisionState,
   createContainer,
+  deleteKubernetesResourceAsync,
   deleteNamespace,
   extractCloudSaasRuntime,
   listManagedNamespaces,
@@ -15,15 +17,22 @@ import {
   namespaceExists,
   resolveCloudSaasShadowRuntime,
   type ServiceContainer,
+  scaleAgentSandboxAsync,
+  waitForAgentSandboxPaused,
+  waitForAgentSandboxReady,
 } from '@shadowob/cloud'
 import { and, eq } from 'drizzle-orm'
+import type { AppContainer } from '../container'
 import { CloudClusterDao } from '../dao/cloud-cluster.dao'
 import { CloudDeploymentDao } from '../dao/cloud-deployment.dao'
+import { CloudDeploymentBackupDao } from '../dao/cloud-deployment-backup.dao'
 import { WalletDao } from '../dao/wallet.dao'
 import type { Database } from '../db'
 import { db } from '../db'
 import { cloudDeployments, wallets, walletTransactions } from '../db/schema'
 import { LedgerService } from '../services/ledger.service'
+import { runCloudDeploymentBackup } from './cloud-deployment-backup-runtime'
+import { extractShadowProvisionBuddyUserIds } from './cloud-shadow-target'
 import { decrypt } from './kms'
 import { logger } from './logger'
 
@@ -40,6 +49,14 @@ const CLOUD_HOURLY_BILLING_INTERVAL_MS = 15 * 60 * 1000
 const CLOUD_HOURLY_PREPAID_UNIT_MS = 60 * 60 * 1000
 const CLOUD_HOURLY_BILLING_MICROS_PER_COIN = 1_000_000
 const CLOUD_HOURLY_BILLING_SOURCE_PREFIX = 'cloud_hourly'
+const ORPHAN_RECONCILE_GRACE_MS = Number(process.env.CLOUD_ORPHAN_RECONCILE_GRACE_MS ?? 10 * 60_000)
+const CLOUD_BACKUP_OPERATION_STALE_MS = Number(
+  process.env.CLOUD_BACKUP_OPERATION_STALE_MS ?? 6 * 60 * 60_000,
+)
+const CLOUD_RESTORE_OPERATION_STALE_MS = Number(
+  process.env.CLOUD_RESTORE_OPERATION_STALE_MS ?? CLOUD_BACKUP_OPERATION_STALE_MS,
+)
+const CLOUD_IDLE_AUTOPAUSE_MIN_SECONDS = Number(process.env.CLOUD_IDLE_AUTOPAUSE_MIN_SECONDS ?? 60)
 
 type CloudDeploymentRecord = NonNullable<Awaited<ReturnType<CloudDeploymentDao['findByIdOnly']>>>
 type DeploymentStatus = CloudDeploymentRecord['status']
@@ -60,10 +77,17 @@ type DeploymentRecoveryProbeResult = {
   podNames: string[]
   readyPods: number
 }
+type AutoPauseAgentConfig = {
+  agentId: string
+  idleSeconds: number
+  backupBeforePause: boolean
+}
 type CloudDeploymentProcessorRuntime = {
   deploymentDao: CloudDeploymentDao
+  backupDao: CloudDeploymentBackupDao
   clusterDao: CloudClusterDao
   container: ServiceContainer
+  appContainer?: AppContainer
   database: Database
   lastReconcileAt: number
 }
@@ -84,6 +108,25 @@ export type CloudHourlyBillingCharge = {
 function extractKubeContext(kubeconfigYaml: string): string | undefined {
   const match = kubeconfigYaml.match(/current-context:\s*(\S+)/)
   return match?.[1]
+}
+
+function readKubeconfigCurrentContext(kubeconfigPath: string | undefined): string | undefined {
+  if (!kubeconfigPath) return undefined
+  try {
+    return extractKubeContext(readFileSync(kubeconfigPath, 'utf8'))
+  } catch {
+    return undefined
+  }
+}
+
+function describeAmbientKubeContext(): string {
+  const envContext = process.env.KUBECONFIG_CONTEXT?.trim()
+  const currentContext = readKubeconfigCurrentContext(process.env.KUBECONFIG)
+  if (!currentContext) return envContext || 'rancher-desktop'
+  if (envContext && envContext !== currentContext) {
+    return `${currentContext} (mounted current-context; env KUBECONFIG_CONTEXT=${envContext} ignored)`
+  }
+  return currentContext
 }
 
 function sanitizePulumiStackPart(value: string): string {
@@ -343,6 +386,7 @@ async function markCloudDeploymentDeployedWithInitialBilling(
         agentCount,
         errorMessage: null,
         lastHourlyBilledAt: billedUntil,
+        lastActiveAt: now,
         updatedAt: now,
       })
       .where(eq(cloudDeployments.id, deployment.id))
@@ -566,6 +610,7 @@ function resolveDestroyVerifyTimeoutMs(): number {
 const runningOperations = new Map<string, RunningOperationToken>()
 
 const queueWaitLogThrottle = new Map<string, { key: string; loggedAt: number }>()
+const autoPauseSkipLogThrottle = new Map<string, number>()
 
 async function signalRunningOperationCancel(
   deploymentId: string,
@@ -624,12 +669,15 @@ export type CloudDeploymentProcessorHandle = {
 function createProcessorRuntime(options?: {
   database?: Database
   container?: ServiceContainer
+  appContainer?: AppContainer
 }): CloudDeploymentProcessorRuntime {
   const database = options?.database ?? (db as Database)
   return {
     container: options?.container ?? createContainer(),
+    appContainer: options?.appContainer,
     database,
     deploymentDao: new CloudDeploymentDao({ db: database }),
+    backupDao: new CloudDeploymentBackupDao({ db: database }),
     clusterDao: new CloudClusterDao({ db: database }),
     lastReconcileAt: 0,
   }
@@ -638,6 +686,7 @@ function createProcessorRuntime(options?: {
 export async function processCloudDeploymentQueueOnce(options?: {
   database?: Database
   container?: ServiceContainer
+  appContainer?: AppContainer
   reconcile?: boolean
   deploymentIds?: string[]
 }): Promise<CloudDeploymentProcessorTickResult> {
@@ -648,7 +697,9 @@ export async function processCloudDeploymentQueueOnce(options?: {
   })
 }
 
-export function startCloudDeploymentProcessor(): CloudDeploymentProcessorHandle {
+export function startCloudDeploymentProcessor(options?: {
+  appContainer?: AppContainer
+}): CloudDeploymentProcessorHandle {
   const enabled = process.env.ENABLE_CLOUD_DEPLOYMENT_PROCESSOR !== 'false'
   if (!enabled) {
     logger.info('Cloud deployment processor disabled (ENABLE_CLOUD_DEPLOYMENT_PROCESSOR=false)')
@@ -658,7 +709,7 @@ export function startCloudDeploymentProcessor(): CloudDeploymentProcessorHandle 
   }
 
   let stopped = false
-  const loopPromise = runLoop(() => stopped).catch((err) => {
+  const loopPromise = runLoop(() => stopped, options).catch((err) => {
     logger.error({ err }, 'Cloud deployment processor stopped unexpectedly')
   })
 
@@ -670,8 +721,11 @@ export function startCloudDeploymentProcessor(): CloudDeploymentProcessorHandle 
   }
 }
 
-async function runLoop(isStopped: () => boolean): Promise<void> {
-  const runtime = createProcessorRuntime()
+async function runLoop(
+  isStopped: () => boolean,
+  options?: { appContainer?: AppContainer },
+): Promise<void> {
+  const runtime = createProcessorRuntime(options)
 
   logger.info({ pollIntervalMs: POLL_INTERVAL_MS }, 'Cloud deployment processor started')
 
@@ -694,7 +748,7 @@ async function processCloudDeploymentQueueTick(
   runtime: CloudDeploymentProcessorRuntime,
   options: { reconcile: boolean; deploymentIds?: string[] },
 ): Promise<CloudDeploymentProcessorTickResult> {
-  const { deploymentDao, clusterDao, container, database } = runtime
+  const { deploymentDao, backupDao, clusterDao, container, appContainer, database } = runtime
   const deploymentIdFilter = options.deploymentIds ? new Set(options.deploymentIds) : null
   const includeDeployment = (deployment: CloudDeploymentRecord) =>
     !deploymentIdFilter || deploymentIdFilter.has(deployment.id)
@@ -762,6 +816,25 @@ async function processCloudDeploymentQueueTick(
     await reconcileReadyFailedDeployments(deploymentDao, clusterDao, database).catch((err) => {
       logger.error({ err }, 'Cloud failed deployment recovery error')
     })
+    await reconcileStaleBackupOperations(backupDao, deploymentDao).catch((err) => {
+      logger.error({ err }, 'Cloud backup operation reconcile error')
+    })
+    await reconcileStaleRestoreOperations(backupDao, deploymentDao, clusterDao, database).catch(
+      (err) => {
+        logger.error({ err }, 'Cloud restore operation reconcile error')
+      },
+    )
+    await reconcileExpiredBackups(backupDao, deploymentDao, clusterDao, appContainer).catch(
+      (err) => {
+        logger.error({ err }, 'Cloud backup retention reconcile error')
+      },
+    )
+    await reconcileIdleAutoPauseDeployments(deploymentDao, clusterDao, new Date(), {
+      backupDao,
+      appContainer,
+    }).catch((err) => {
+      logger.error({ err }, 'Cloud idle auto-pause reconcile error')
+    })
   }
 
   return {
@@ -770,6 +843,428 @@ async function processCloudDeploymentQueueTick(
     cancelling: cancelling.length,
     reconciled,
   }
+}
+
+export async function reconcileStaleBackupOperations(
+  backupDao: CloudDeploymentBackupDao,
+  deploymentDao: CloudDeploymentDao,
+) {
+  const staleMs = Number.isFinite(CLOUD_BACKUP_OPERATION_STALE_MS)
+    ? Math.max(60_000, CLOUD_BACKUP_OPERATION_STALE_MS)
+    : 6 * 60 * 60_000
+  const cutoff = new Date(Date.now() - staleMs)
+  const staleBackups = await backupDao.listActiveUpdatedBefore(cutoff)
+  if (staleBackups.length === 0) return
+
+  for (const backup of staleBackups) {
+    const error = `Backup operation did not update for ${Math.round(staleMs / 60_000)} minutes; marked failed during startup reconcile`
+    const updated = await backupDao.failIfActive(backup.id, error)
+    if (!updated) continue
+
+    await deploymentDao
+      .appendLog(
+        backup.deploymentId,
+        `[backup] ${error} (backup=${backup.id}, phase=${backup.phase})`,
+        'error',
+      )
+      .catch((err) => {
+        logger.warn(
+          { err, deploymentId: backup.deploymentId, backupId: backup.id },
+          'Failed to append stale backup reconcile log',
+        )
+      })
+  }
+}
+
+export async function reconcileStaleRestoreOperations(
+  backupDao: CloudDeploymentBackupDao,
+  deploymentDao: CloudDeploymentDao,
+  clusterDao?: CloudClusterDao,
+  database?: Database,
+) {
+  const staleMs = Number.isFinite(CLOUD_RESTORE_OPERATION_STALE_MS)
+    ? Math.max(60_000, CLOUD_RESTORE_OPERATION_STALE_MS)
+    : 6 * 60 * 60_000
+  const cutoff = new Date(Date.now() - staleMs)
+  const staleRestores = await backupDao.listRestoringUpdatedBefore(cutoff)
+  if (staleRestores.length === 0) return
+
+  for (const backup of staleRestores) {
+    const deployment = await deploymentDao.findByIdOnly(backup.deploymentId).catch(() => null)
+    if (!deployment) {
+      await backupDao.markRestoreCompletedIfRestoring(backup.id)
+      continue
+    }
+
+    if (deployment.status !== 'resuming') {
+      const updated =
+        deployment.status === 'failed'
+          ? await backupDao.markRestoreFailedIfRestoring(
+              backup.id,
+              deployment.errorMessage ?? 'Deployment left resuming in failed status',
+            )
+          : await backupDao.markRestoreCompletedIfRestoring(backup.id)
+      if (!updated) continue
+      await deploymentDao
+        .appendLog(
+          deployment.id,
+          deployment.status === 'failed'
+            ? `[restore] Marked restore phase failed for backup ${backup.id}; deployment status is already failed`
+            : `[restore] Cleared stale restore phase for backup ${backup.id}; deployment status is already ${deployment.status}`,
+          deployment.status === 'failed' ? 'error' : 'warn',
+        )
+        .catch(() => null)
+      continue
+    }
+
+    let recovered = false
+    if (clusterDao && database) {
+      const cluster = await resolveClusterRuntime(deployment.clusterId, clusterDao).catch(
+        () => null,
+      )
+      recovered = await recoverDeploymentFromReadyRuntimeResources(
+        deployment,
+        deploymentDao,
+        database,
+        cluster?.kubeconfig,
+      ).catch(() => false)
+    }
+
+    if (recovered) {
+      await backupDao.markRestoreCompletedIfRestoring(backup.id)
+      await deploymentDao
+        .appendLog(
+          deployment.id,
+          `[restore] Reconciled stale restore for backup ${backup.id}; runtime is ready`,
+          'warn',
+        )
+        .catch(() => null)
+      continue
+    }
+
+    const error = `Restore operation did not update for ${Math.round(staleMs / 60_000)} minutes; marked failed during startup reconcile`
+    const failed = await deploymentDao.failIfStatus(deployment.id, 'resuming', error)
+    const updated = await backupDao.markRestoreFailedIfRestoring(backup.id, error)
+    if (!failed && !updated) continue
+
+    await deploymentDao
+      .appendLog(
+        deployment.id,
+        `[restore] ${error} (backup=${backup.id}, phase=${backup.phase})`,
+        'error',
+      )
+      .catch((err) => {
+        logger.warn(
+          { err, deploymentId: deployment.id, backupId: backup.id },
+          'Failed to append stale restore reconcile log',
+        )
+      })
+  }
+}
+
+export async function reconcileExpiredBackups(
+  backupDao: CloudDeploymentBackupDao,
+  deploymentDao: CloudDeploymentDao,
+  clusterDao: CloudClusterDao,
+  appContainer?: AppContainer,
+) {
+  const expired = await backupDao.listExpiredBefore(new Date())
+  if (expired.length === 0) return
+
+  for (const backup of expired) {
+    const deployment = await deploymentDao.findByIdOnly(backup.deploymentId).catch(() => null)
+    const cleanupErrors: string[] = []
+
+    if (backup.objectKey) {
+      if (!appContainer) {
+        cleanupErrors.push('object storage cleanup unavailable')
+      } else {
+        const deleted = await appContainer
+          .resolve('mediaService')
+          .deletePrivateObject(backup.objectKey)
+          .catch((err: unknown) => {
+            cleanupErrors.push(err instanceof Error ? err.message : String(err))
+            return false
+          })
+        if (!deleted) cleanupErrors.push('object artifact was not deleted')
+      }
+    }
+
+    if (backup.snapshotName) {
+      const cluster = deployment
+        ? await resolveClusterRuntime(deployment.clusterId, clusterDao).catch(() => null)
+        : null
+      await deleteKubernetesResourceAsync({
+        namespace: backup.namespace,
+        kind: 'volumesnapshot',
+        name: backup.snapshotName,
+        kubeconfig: cluster?.kubeconfig,
+        timeoutMs: 60_000,
+      }).catch((err) => {
+        cleanupErrors.push(err instanceof Error ? err.message : String(err))
+      })
+    }
+
+    if (cleanupErrors.length > 0) {
+      if (deployment) {
+        await deploymentDao
+          .appendLog(
+            deployment.id,
+            `[backup] Retention cleanup for backup ${backup.id} is pending: ${cleanupErrors.join('; ')}`,
+            'warn',
+          )
+          .catch(() => null)
+      }
+      continue
+    }
+
+    const updated = await backupDao.markExpired(backup.id)
+    if (!updated || !deployment) continue
+    await deploymentDao
+      .appendLog(
+        deployment.id,
+        `[backup] Backup ${backup.id} expired and artifacts were removed by retention policy`,
+        'info',
+      )
+      .catch(() => null)
+  }
+}
+
+function extractAutoPauseAgentConfigs(configSnapshot: unknown): AutoPauseAgentConfig[] {
+  if (!configSnapshot || typeof configSnapshot !== 'object' || Array.isArray(configSnapshot)) {
+    return []
+  }
+  const deployments = (configSnapshot as { deployments?: unknown }).deployments
+  if (!deployments || typeof deployments !== 'object' || Array.isArray(deployments)) return []
+  if ((deployments as { backend?: unknown }).backend === 'deployment') return []
+
+  const agents = (deployments as { agents?: unknown }).agents
+  if (!Array.isArray(agents) || agents.length === 0) return []
+
+  const minIdleSeconds = Number.isFinite(CLOUD_IDLE_AUTOPAUSE_MIN_SECONDS)
+    ? Math.max(60, CLOUD_IDLE_AUTOPAUSE_MIN_SECONDS)
+    : 60
+  const result: AutoPauseAgentConfig[] = []
+  for (const agent of agents) {
+    if (!agent || typeof agent !== 'object' || Array.isArray(agent)) continue
+    const record = agent as {
+      id?: unknown
+      replicas?: unknown
+      sandbox?: { lifecycle?: Record<string, unknown> }
+    }
+    const agentId = typeof record.id === 'string' && record.id.trim() ? record.id.trim() : null
+    if (!agentId) continue
+    if (typeof record.replicas === 'number' && record.replicas > 1) continue
+
+    const lifecycle = record.sandbox?.lifecycle
+    if (!lifecycle || lifecycle.autoPause !== true) continue
+    const idleSeconds =
+      typeof lifecycle.idleSeconds === 'number' &&
+      Number.isFinite(lifecycle.idleSeconds) &&
+      lifecycle.idleSeconds > 0
+        ? lifecycle.idleSeconds
+        : 30 * 60
+    result.push({
+      agentId,
+      idleSeconds: Math.max(minIdleSeconds, Math.floor(idleSeconds)),
+      backupBeforePause: lifecycle.backupBeforePause === true,
+    })
+  }
+  return result
+}
+
+export async function reconcileIdleAutoPauseDeployments(
+  deploymentDao: CloudDeploymentDao,
+  clusterDao: CloudClusterDao,
+  now = new Date(),
+  options: {
+    backupDao?: CloudDeploymentBackupDao
+    appContainer?: AppContainer
+  } = {},
+) {
+  const live = await deploymentDao.listLive()
+  if (live.length === 0) return
+
+  for (const deployment of live) {
+    const configuredAgents = extractAutoPauseAgentConfigs(deployment.configSnapshot)
+    if (configuredAgents.length === 0) continue
+
+    const configuredAgentIds = new Set(configuredAgents.map((agent) => agent.agentId))
+    const allAgents = extractRuntimeAgentIds(deployment.configSnapshot)
+    if (allAgents.length > 0 && allAgents.some((agentId) => !configuredAgentIds.has(agentId))) {
+      continue
+    }
+
+    if (
+      configuredAgents.some((agent) => agent.backupBeforePause) &&
+      (!options.appContainer || !options.backupDao)
+    ) {
+      const lastLoggedAt = autoPauseSkipLogThrottle.get(deployment.id) ?? 0
+      if (now.getTime() - lastLoggedAt > 30 * 60_000) {
+        autoPauseSkipLogThrottle.set(deployment.id, now.getTime())
+        await deploymentDao
+          .appendLog(
+            deployment.id,
+            '[auto-pause] Skipped idle pause because backupBeforePause is enabled but the backup runtime is unavailable',
+            'warn',
+          )
+          .catch(() => null)
+      }
+      continue
+    }
+
+    const lastActiveAt =
+      deployment.lastActiveAt instanceof Date ? deployment.lastActiveAt : deployment.updatedAt
+    const idleSeconds = Math.floor((now.getTime() - lastActiveAt.getTime()) / 1000)
+    const requiredIdleSeconds = Math.min(...configuredAgents.map((agent) => agent.idleSeconds))
+    if (idleSeconds < requiredIdleSeconds) continue
+
+    const acquired = await deploymentDao.tryAcquireOperationLock(deployment).catch(() => false)
+    if (!acquired) continue
+
+    try {
+      const latest = await deploymentDao.findByIdOnly(deployment.id)
+      if (!latest || latest.status !== 'deployed') continue
+
+      const cluster = await resolveClusterRuntime(latest.clusterId, clusterDao).catch(() => null)
+      await deploymentDao.appendLog(
+        latest.id,
+        `[auto-pause] Deployment idle for ${idleSeconds}s; pausing ${configuredAgents.length} sandbox agent(s)`,
+        'info',
+      )
+      if (options.appContainer && options.backupDao) {
+        const backupAgents = configuredAgents.filter((agent) => agent.backupBeforePause)
+        for (const agent of backupAgents) {
+          await runCloudDeploymentBackup({
+            appContainer: options.appContainer,
+            deploymentDao,
+            backupDao: options.backupDao,
+            deployment: latest,
+            agentId: agent.agentId,
+            kubeconfig: cluster?.kubeconfig,
+            retentionDays: 7,
+            reason: 'auto-pause',
+          })
+        }
+      }
+      for (const agent of configuredAgents) {
+        await scaleAgentSandboxAsync(latest.namespace, agent.agentId, 0, cluster?.kubeconfig)
+        await waitForAgentSandboxPaused({
+          namespace: latest.namespace,
+          agentName: agent.agentId,
+          kubeconfig: cluster?.kubeconfig,
+          timeoutMs: 120_000,
+        })
+      }
+      await deploymentDao.updateStatus(latest.id, 'paused')
+      await deploymentDao.appendLog(latest.id, '[auto-pause] Deployment paused after idle timeout')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      await deploymentDao
+        .appendLog(deployment.id, `[auto-pause] Failed: ${message}`, 'error')
+        .catch(() => null)
+    } finally {
+      await deploymentDao.releaseOperationLock(deployment).catch(() => null)
+    }
+  }
+}
+
+export async function resumePausedDeploymentsForBuddyUsers(input: {
+  deploymentDao: CloudDeploymentDao
+  clusterDao: CloudClusterDao
+  buddyUserIds: string[]
+  reason: string
+}) {
+  const targetUserIds = new Set(input.buddyUserIds.filter(Boolean))
+  if (targetUserIds.size === 0) return 0
+
+  const paused = await input.deploymentDao.listPaused()
+  let resumed = 0
+  for (const deployment of paused) {
+    const buddyUserIds = extractShadowProvisionBuddyUserIds(deployment.configSnapshot)
+    if (!buddyUserIds.some((userId) => targetUserIds.has(userId))) continue
+
+    const acquired = await input.deploymentDao
+      .tryAcquireOperationLock(deployment)
+      .catch(() => false)
+    if (!acquired) continue
+
+    try {
+      const latest = await input.deploymentDao.findByIdOnly(deployment.id)
+      if (!latest || latest.status !== 'paused') continue
+
+      const agentIds = extractRuntimeAgentIds(latest.configSnapshot)
+      if (agentIds.length === 0) continue
+      const cluster = await resolveClusterRuntime(latest.clusterId, input.clusterDao).catch(
+        () => null,
+      )
+      await input.deploymentDao.updateStatus(latest.id, 'resuming')
+      await input.deploymentDao.appendLog(
+        latest.id,
+        `[auto-resume] Resuming ${agentIds.length} sandbox agent(s): ${input.reason}`,
+        'info',
+      )
+      for (const agentId of agentIds) {
+        await scaleAgentSandboxAsync(latest.namespace, agentId, 1, cluster?.kubeconfig)
+        await waitForAgentSandboxReady({
+          namespace: latest.namespace,
+          agentName: agentId,
+          kubeconfig: cluster?.kubeconfig,
+          timeoutMs: 180_000,
+        })
+      }
+      await input.deploymentDao.updateStatus(latest.id, 'deployed')
+      await input.deploymentDao.appendLog(latest.id, '[auto-resume] Deployment is ready', 'info')
+      resumed += 1
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      await input.deploymentDao.appendLog(
+        deployment.id,
+        `[auto-resume] Failed: ${message}`,
+        'error',
+      )
+      await input.deploymentDao.updateStatus(deployment.id, 'failed', message)
+    } finally {
+      await input.deploymentDao.releaseOperationLock(deployment).catch(() => null)
+    }
+  }
+  return resumed
+}
+
+export async function recordDeploymentActivityForBuddyUsers(input: {
+  deploymentDao: CloudDeploymentDao
+  buddyUserIds: string[]
+  at?: Date
+}) {
+  const targetUserIds = new Set(input.buddyUserIds.filter(Boolean))
+  if (targetUserIds.size === 0) return 0
+
+  const live = await input.deploymentDao.listLive()
+  let touched = 0
+  for (const deployment of live) {
+    const buddyUserIds = extractShadowProvisionBuddyUserIds(deployment.configSnapshot)
+    if (!buddyUserIds.some((userId) => targetUserIds.has(userId))) continue
+    await input.deploymentDao.recordActivity(deployment.id, input.at ?? new Date())
+    touched += 1
+  }
+  return touched
+}
+
+function extractRuntimeAgentIds(configSnapshot: unknown): string[] {
+  if (!configSnapshot || typeof configSnapshot !== 'object' || Array.isArray(configSnapshot)) {
+    return []
+  }
+  const deployments = (configSnapshot as { deployments?: unknown }).deployments
+  if (!deployments || typeof deployments !== 'object' || Array.isArray(deployments)) return []
+  const agents = (deployments as { agents?: unknown }).agents
+  if (!Array.isArray(agents)) return []
+  return agents
+    .map((agent) =>
+      agent && typeof agent === 'object' && !Array.isArray(agent)
+        ? (agent as { id?: unknown }).id
+        : null,
+    )
+    .filter((agentId): agentId is string => typeof agentId === 'string' && agentId.trim() !== '')
 }
 
 async function withWorkerLockedDeployment(
@@ -989,7 +1484,7 @@ async function processDeployment(
     } else {
       await deploymentDao.appendLog(
         deployment.id,
-        `Using platform/default cluster (context=${process.env.KUBECONFIG_CONTEXT ?? 'rancher-desktop'}, kubeconfig=${process.env.KUBECONFIG ?? '~/.kube/config'})`,
+        `Using platform/default cluster (context=${describeAmbientKubeContext()}, kubeconfig=${process.env.KUBECONFIG ?? '~/.kube/config'})`,
         'info',
       )
     }
@@ -1400,6 +1895,12 @@ async function reconcileOrphans(deploymentDao: CloudDeploymentDao, clusterDao: C
   const presentNs = new Set(namespaces)
 
   for (const deployment of live) {
+    const updatedAt = deployment.updatedAt instanceof Date ? deployment.updatedAt.getTime() : 0
+    const orphanGraceMs = Number.isFinite(ORPHAN_RECONCILE_GRACE_MS)
+      ? Math.max(0, ORPHAN_RECONCILE_GRACE_MS)
+      : 10 * 60_000
+    if (updatedAt > 0 && Date.now() - updatedAt < orphanGraceMs) continue
+
     if (presentNs.has(deployment.namespace)) continue
     // Skip deployments tied to a BYOK cluster we can't reach.
     if (deployment.clusterId) {

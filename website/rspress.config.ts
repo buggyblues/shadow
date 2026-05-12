@@ -60,6 +60,11 @@ const ROUTE_SEO: Record<'en' | 'zh', Record<string, SeoMeta>> = {
       description:
         'Build deployable Buddy spaces with Shadow Cloud templates, official plugins, standalone CLI workflows, and Kubernetes-backed deployments.',
     },
+    '/platform/cloud-saas': {
+      title: 'Shadow Cloud SaaS Deployment Runtime - Pause, Resume, Backup, and Restore',
+      description:
+        'Manage running Cloud deployments: pause idle agent-sandboxes, resume on demand, create VolumeSnapshot and object backups, and restore state from backup.',
+    },
     '/platform/cloud-cli': {
       title: 'Shadow Cloud CLI - Validate and Deploy Templates',
       description:
@@ -91,6 +96,11 @@ const ROUTE_SEO: Record<'en' | 'zh', Record<string, SeoMeta>> = {
       title: '虾豆 Cloud 文档 - 模版、插件、CLI 与部署',
       description:
         '使用虾豆 Cloud 模版、官方插件、独立 CLI 和 Kubernetes 部署能力，构建可运行的 Buddy 空间。',
+    },
+    '/platform/cloud-saas': {
+      title: '虾豆 Cloud SaaS 部署运行时 - 暂停、恢复、备份和还原',
+      description:
+        '管理运行中的 Cloud 部署：暂停空闲 agent-sandbox、按需恢复、创建 VolumeSnapshot 和对象备份、从备份还原状态。',
     },
     '/platform/cloud-cli': {
       title: '虾豆 Cloud CLI - 校验和部署模版',
@@ -304,6 +314,7 @@ export default defineConfig({
               text: 'Shadow Cloud',
               items: [
                 { text: 'Cloud Overview', link: '/platform/cloud' },
+                { text: 'Cloud SaaS Runtime', link: '/platform/cloud-saas' },
                 { text: 'Cloud CLI', link: '/platform/cloud-cli' },
                 { text: 'Templates', link: '/platform/cloud-templates' },
                 { text: 'Plugins', link: '/platform/cloud-plugins' },
@@ -460,6 +471,7 @@ export default defineConfig({
               text: '虾豆 Cloud',
               items: [
                 { text: 'Cloud 概览', link: '/zh/platform/cloud' },
+                { text: 'Cloud SaaS 运行时', link: '/zh/platform/cloud-saas' },
                 { text: 'Cloud CLI', link: '/zh/platform/cloud-cli' },
                 { text: '模版', link: '/zh/platform/cloud-templates' },
                 { text: '插件', link: '/zh/platform/cloud-plugins' },

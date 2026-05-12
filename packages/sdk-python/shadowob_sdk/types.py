@@ -536,3 +536,22 @@ class ShadowOrder:
     currency: str
     items: list[dict[str, Any]]
     created_at: str
+
+
+@dataclass
+class ShadowCloudDeploymentBackup:
+    id: str
+    deployment_id: str = ""
+    namespace: str = ""
+    agent_id: str = ""
+    sandbox_name: str | None = None
+    pvc_name: str = ""
+    driver: str = ""
+    snapshot_name: str | None = None
+    object_key: str | None = None
+    status: str = ""
+    phase: str = ""
+    error: str | None = None
+    expires_at: str | None = None
+    created_at: str = ""
+    updated_at: str = ""

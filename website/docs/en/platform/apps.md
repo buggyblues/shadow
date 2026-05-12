@@ -187,3 +187,5 @@ ALL /api/app-proxy/:appId/*
 ```
 
 These endpoints are public and do not require authentication.
+
+When a URL-type app's backing Cloud deployment is paused, the app proxy will automatically trigger a resume. If the deployment takes longer than 25 seconds to start, a `503` status is returned with `Retry-After: 5`.

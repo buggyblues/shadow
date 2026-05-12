@@ -428,6 +428,41 @@
       "when": 1778763600000,
       "tag": "0060_unify_dm_channels",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1778850000000,
+      "tag": "0061_cloud_deployment_pause_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1778936400000,
+      "tag": "0062_cloud_deployment_backups",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1779022800000,
+      "tag": "0063_cloud_deployment_backup_phase",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1779109200000,
+      "tag": "0064_cloud_deployment_backup_phase_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1779195600000,
+      "tag": "0065_cloud_deployment_last_active_at",
+      "breakpoints": true
     }
   ]
 }

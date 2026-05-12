@@ -54,9 +54,13 @@ export function createStatusCommand(container: ServiceContainer) {
           container.logger.table(
             deployments.map((d) => ({
               NAME: d.name,
+              WORKLOAD: d.workloadKind ?? 'deployment',
+              STATE: d.runtimeState ?? 'unknown',
               READY: d.ready,
               'UP-TO-DATE': d.upToDate,
               AVAILABLE: d.available,
+              SANDBOX: d.sandboxName ?? '—',
+              'STATE PVC': d.statePvc ?? '—',
             })),
           )
         }

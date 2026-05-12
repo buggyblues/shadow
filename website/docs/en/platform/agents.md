@@ -183,6 +183,8 @@ POST /api/agents/:id/heartbeat
 
 Record a heartbeat to indicate the agent is still alive.
 
+If the agent's owner has a paused Cloud deployment, the heartbeat will automatically trigger a resume so the agent can serve the heartbeat.
+
 :::code-group
 
 ```ts [TypeScript]

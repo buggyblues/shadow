@@ -1289,6 +1289,68 @@ export type ShadowDiyCloudRunEvent =
       retryable: boolean
     }
 
+// ─── Cloud SaaS Deployment Runtime Types ───────────────────────────────────
+
+export type ShadowCloudDeploymentStatus =
+  | 'pending'
+  | 'deploying'
+  | 'cancelling'
+  | 'deployed'
+  | 'paused'
+  | 'resuming'
+  | 'failed'
+  | 'destroying'
+  | 'destroyed'
+
+export interface ShadowCloudDeploymentRuntimeResponse {
+  ok: boolean
+  status: ShadowCloudDeploymentStatus
+  deployment?: Record<string, unknown>
+}
+
+export interface ShadowCloudDeploymentManifest {
+  deploymentId: string
+  namespace: string
+  name: string
+  templateSlug: string | null
+  template: Record<string, unknown> | null
+  manifest: Record<string, unknown> | null
+  drift: {
+    status: 'up-to-date' | 'template-updated' | 'missing-template' | 'unlinked' | 'unknown'
+    templateAvailable: boolean
+    templateChanged: boolean
+    deployedTemplateHash: string | null
+    currentTemplateHash: string | null
+    configHash: string | null
+  }
+  configSnapshot: Record<string, unknown> | null
+}
+
+export interface ShadowCloudDeploymentTemplateSyncResult {
+  ok: boolean
+  action: 'updated' | 'forked'
+  template: Record<string, unknown>
+  manifest: ShadowCloudDeploymentManifest
+}
+
+export interface ShadowCloudDeploymentBackup {
+  id: string
+  deploymentId: string
+  namespace: string
+  agentId: string
+  sandboxName: string | null
+  pvcName: string
+  driver: 'volumeSnapshot' | 'restic' | string
+  snapshotName: string | null
+  objectKey: string | null
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'expired' | string
+  phase: string
+  error: string | null
+  expiresAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 // ─── Cloud SaaS Provider Gateway Types ─────────────────────────────────────
 
 export interface ShadowCloudProviderCatalog {

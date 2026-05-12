@@ -10,6 +10,18 @@ beforeAll(async () => {
   await loadAllPlugins(getPluginRegistry())
 }, 30_000)
 
+function buildDeploymentManifests(options: Parameters<typeof buildManifests>[0]) {
+  return buildManifests({
+    ...options,
+    config: {
+      ...options.config,
+      deployments: options.config.deployments
+        ? { ...options.config.deployments, backend: 'deployment' }
+        : options.config.deployments,
+    },
+  })
+}
+
 describe('buildAgentRuntimePackage', () => {
   it('splits config files, plain env, and secrets consistently', () => {
     const config: CloudConfig = {
@@ -269,7 +281,7 @@ describe('buildManifests', () => {
       },
     }
 
-    const manifests = buildManifests({ config, namespace: 'test-runtime-package' })
+    const manifests = buildDeploymentManifests({ config, namespace: 'test-runtime-package' })
     const configMap = manifests.find(
       (manifest) => manifest.kind === 'ConfigMap' && manifest.metadata?.name === 'agent-1-config',
     )!
@@ -326,7 +338,7 @@ describe('buildManifests', () => {
       },
     }
 
-    const manifests = buildManifests({
+    const manifests = buildDeploymentManifests({
       config,
       namespace: 'workspace-runtime-package',
       runtimeEnvVars: {
@@ -376,7 +388,7 @@ describe('buildManifests', () => {
       },
     }
 
-    const manifests = buildManifests({
+    const manifests = buildDeploymentManifests({
       config,
       namespace: 'runtime-context',
       runtimeContext: {
@@ -415,7 +427,7 @@ describe('buildManifests', () => {
       runtime: 'openclaw' as const,
       configuration: {},
     }
-    const latest = buildManifests({
+    const latest = buildDeploymentManifests({
       namespace: 'pull-policy-latest',
       config: {
         version: '1',
@@ -424,7 +436,7 @@ describe('buildManifests', () => {
         },
       },
     })
-    const pinned = buildManifests({
+    const pinned = buildDeploymentManifests({
       namespace: 'pull-policy-pinned',
       config: {
         version: '1',
@@ -438,7 +450,7 @@ describe('buildManifests', () => {
         },
       },
     })
-    const local = buildManifests({
+    const local = buildDeploymentManifests({
       namespace: 'pull-policy-local',
       config: {
         version: '1',
@@ -452,7 +464,7 @@ describe('buildManifests', () => {
         },
       },
     })
-    const explicit = buildManifests({
+    const explicit = buildDeploymentManifests({
       namespace: 'pull-policy-explicit',
       imagePullPolicy: 'IfNotPresent',
       config: {
@@ -498,8 +510,14 @@ describe('buildManifests', () => {
       },
     })
 
-    const first = buildManifests({ config: makeConfig('first-secret'), namespace: 'hash-a' })
-    const second = buildManifests({ config: makeConfig('second-secret'), namespace: 'hash-b' })
+    const first = buildDeploymentManifests({
+      config: makeConfig('first-secret'),
+      namespace: 'hash-a',
+    })
+    const second = buildDeploymentManifests({
+      config: makeConfig('second-secret'),
+      namespace: 'hash-b',
+    })
     const firstDeployment = first.find((manifest) => manifest.kind === 'Deployment')!
     const secondDeployment = second.find((manifest) => manifest.kind === 'Deployment')!
 
@@ -524,7 +542,7 @@ describe('buildManifests', () => {
       },
     }
 
-    const manifests = buildManifests({ config, namespace: 'test-runtime-package' })
+    const manifests = buildDeploymentManifests({ config, namespace: 'test-runtime-package' })
     const managedKinds = ['Namespace', 'ConfigMap', 'Secret', 'Deployment', 'Service']
 
     for (const kind of managedKinds) {
@@ -537,5 +555,82 @@ describe('buildManifests', () => {
     expect(service.spec.ports).toEqual([
       { name: 'health', port: 3100, targetPort: 3102, protocol: 'TCP' },
     ])
+  })
+
+  it('defaults new manifests to agent-sandbox resources with a persistent OpenClaw state PVC', () => {
+    const config: CloudConfig = {
+      version: '1',
+      deployments: {
+        agents: [
+          {
+            id: 'agent-1',
+            runtime: 'openclaw',
+            configuration: {},
+          },
+        ],
+      },
+    }
+
+    const manifests = buildManifests({ config, namespace: 'sandbox-runtime-package' })
+    expect(manifests.some((manifest) => manifest.kind === 'Deployment')).toBe(false)
+
+    const template = manifests.find(
+      (manifest) =>
+        manifest.kind === 'SandboxTemplate' && manifest.metadata?.name === 'agent-1-template',
+    )!
+    const claim = manifests.find(
+      (manifest) => manifest.kind === 'SandboxClaim' && manifest.metadata?.name === 'agent-1',
+    )!
+    const podSpec = template.spec.podTemplate.spec
+    const container = podSpec.containers[0]
+
+    expect(template.apiVersion).toBe('extensions.agents.x-k8s.io/v1alpha1')
+    expect(claim.apiVersion).toBe('extensions.agents.x-k8s.io/v1alpha1')
+    expect(template.spec.volumeClaimTemplates[0]).toMatchObject({
+      metadata: { name: 'openclaw-data' },
+      spec: {
+        accessModes: ['ReadWriteOnce'],
+        resources: { requests: { storage: '5Gi' } },
+      },
+    })
+    expect(podSpec.automountServiceAccountToken).toBe(false)
+    expect(podSpec.runtimeClassName).toBe('gvisor')
+    expect(podSpec.volumes).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'openclaw-data' })]),
+    )
+    expect(container.volumeMounts).toEqual(
+      expect.arrayContaining([{ name: 'openclaw-data', mountPath: '/home/openclaw/.openclaw' }]),
+    )
+    expect(container.env).toEqual(
+      expect.arrayContaining([
+        { name: 'OPENCLAW_STATE_DIR', value: '/home/openclaw/.openclaw' },
+        { name: 'OPENCLAW_DATA_DIR', value: '/home/openclaw/.openclaw' },
+      ]),
+    )
+    expect(claim.spec).toMatchObject({
+      sandboxTemplateRef: { name: 'agent-1-template' },
+      warmpool: 'none',
+      lifecycle: { shutdownPolicy: 'Retain' },
+    })
+  })
+
+  it('rejects multi-replica agents on the agent-sandbox backend', () => {
+    const config: CloudConfig = {
+      version: '1',
+      deployments: {
+        agents: [
+          {
+            id: 'agent-1',
+            runtime: 'openclaw',
+            replicas: 2,
+            configuration: {},
+          },
+        ],
+      },
+    }
+
+    expect(() => buildManifests({ config, namespace: 'sandbox-runtime-package' })).toThrow(
+      /supports only 0 or 1 replica/,
+    )
   })
 })

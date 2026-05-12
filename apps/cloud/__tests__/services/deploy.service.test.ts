@@ -67,6 +67,7 @@ describe('DeployService', () => {
       isKubeReachable: vi.fn().mockReturnValue(true),
       getOrCreateStack: vi.fn().mockResolvedValue(stack),
       deployStack: vi.fn().mockResolvedValue(undefined),
+      waitForAgentSandboxReady: vi.fn().mockResolvedValue({ runtimeState: 'running' }),
       getStackOutputs: vi.fn().mockResolvedValue({}),
     }
     const logger = {
@@ -132,6 +133,7 @@ describe('DeployService', () => {
       isKubeReachable: vi.fn().mockReturnValue(true),
       getOrCreateStack: vi.fn().mockResolvedValue(stack),
       deployStack: vi.fn().mockResolvedValue(undefined),
+      waitForAgentSandboxReady: vi.fn().mockResolvedValue({ runtimeState: 'running' }),
       getStackOutputs: vi.fn().mockResolvedValue({}),
     }
     const logger = {
@@ -214,6 +216,7 @@ describe('DeployService', () => {
       isKubeReachable: vi.fn().mockReturnValue(true),
       getOrCreateStack: vi.fn().mockResolvedValue(stack),
       deployStack: vi.fn().mockResolvedValue(undefined),
+      waitForAgentSandboxReady: vi.fn().mockResolvedValue({ runtimeState: 'running' }),
       getStackOutputs: vi.fn().mockResolvedValue({}),
     }
     const logger = {
@@ -243,6 +246,70 @@ describe('DeployService', () => {
         stackName: 'dev-marketingskills-buddy',
       }),
     )
+  })
+
+  it('waits for agent-sandbox workloads before reporting deployment complete', async () => {
+    const filePath = join(tempDir, 'shadowob-cloud.json')
+    writeFileSync(filePath, JSON.stringify({ ok: true }), 'utf8')
+
+    const config: CloudConfig = {
+      version: '1.0.0',
+      deployments: {
+        backend: 'agent-sandbox',
+        namespace: 'gstack-buddy',
+        agents: [
+          {
+            id: 'strategy-buddy',
+            runtime: 'openclaw',
+            configuration: { openclaw: {} },
+          },
+        ],
+      },
+    } as CloudConfig
+
+    const configService = {
+      parseFile: vi.fn().mockResolvedValue(config),
+      resolve: vi.fn().mockResolvedValue(config),
+    }
+    const stack = { cancel: vi.fn().mockResolvedValue(undefined) }
+    const k8s = {
+      isToolInstalled: vi.fn().mockReturnValue(true),
+      kindClusterExists: vi.fn().mockReturnValue(true),
+      createKindCluster: vi.fn(),
+      isKubeReachable: vi.fn().mockReturnValue(true),
+      getOrCreateStack: vi.fn().mockResolvedValue(stack),
+      deployStack: vi.fn().mockResolvedValue(undefined),
+      waitForAgentSandboxReady: vi.fn().mockResolvedValue({ runtimeState: 'running' }),
+      getStackOutputs: vi.fn().mockResolvedValue({}),
+    }
+    const logger = {
+      step: vi.fn(),
+      info: vi.fn(),
+      dim: vi.fn(),
+      warn: vi.fn(),
+      success: vi.fn(),
+    }
+    const service = new DeployService(
+      configService as never,
+      { build: vi.fn() } as never,
+      k8s as never,
+      logger as never,
+    )
+
+    await service.up({
+      filePath,
+      shadowUrl: 'http://server:3002',
+      shadowToken: 'pat_test',
+      skipProvision: true,
+    })
+
+    expect(k8s.waitForAgentSandboxReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        namespace: 'gstack-buddy',
+        agentName: 'strategy-buddy',
+      }),
+    )
+    expect(logger.success).toHaveBeenCalledWith('Deployment complete!')
   })
 
   it('destroys through the Pulumi stack with the selected kubeconfig', async () => {

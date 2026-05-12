@@ -135,6 +135,8 @@ export function baseEnvVars(agentName: string, runtime?: string) {
   if (runtime === 'openclaw') {
     return [
       ...common,
+      { name: 'OPENCLAW_STATE_DIR', value: OPENCLAW_DATA_PATH },
+      { name: 'OPENCLAW_DATA_DIR', value: OPENCLAW_DATA_PATH },
       { name: 'OPENCLAW_HEALTH_PORT', value: String(OPENCLAW_HEALTH_PORT) },
       { name: 'OPENCLAW_GATEWAY_PORT', value: String(OPENCLAW_GATEWAY_PORT) },
       { name: 'OPENCLAW_MODEL_PRICING_FETCH_TIMEOUT_MS', value: '2500' },

@@ -35,7 +35,24 @@ docker build \
   --quiet
 echo "✓ Image built: $IMAGE_NAME"
 
-# 2. Start container (provide minimal env so entrypoint doesn't crash)
+# 2. Bundled Shadow plugin must auto-deliver normal final replies.
+echo "▸ Checking bundled Shadow reply delivery mode..."
+REPLY_MODE_CHECK=$(docker run --rm --entrypoint sh "$IMAGE_NAME" -lc '
+  if grep -R "message_tool_only" -n /app/extensions/shadowob/dist >/tmp/shadow-reply-mode-bad 2>/dev/null; then
+    cat /tmp/shadow-reply-mode-bad
+    exit 1
+  fi
+  grep -R "sourceReplyDeliveryMode: \"automatic\"" -n /app/extensions/shadowob/dist >/dev/null 2>&1 ||
+    grep -R "sourceReplyDeliveryMode:\"automatic\"" -n /app/extensions/shadowob/dist >/dev/null 2>&1
+' 2>&1 || true)
+if [ -n "$REPLY_MODE_CHECK" ]; then
+  echo "✗ Bundled Shadow plugin still blocks automatic final-text replies"
+  echo "$REPLY_MODE_CHECK"
+  exit 1
+fi
+echo "✓ Bundled Shadow plugin uses automatic reply delivery"
+
+# 3. Start container (provide minimal env so entrypoint doesn't crash)
 echo "▸ Starting container..."
 docker run -d \
   --name "$CONTAINER_NAME" \
@@ -48,7 +65,7 @@ docker run -d \
 MAPPED_PORT=$(docker port "$CONTAINER_NAME" "$HEALTH_PORT/tcp" | head -1 | cut -d: -f2)
 echo "  Container started on port $MAPPED_PORT"
 
-# 3. Health check
+# 4. Health check
 echo "▸ Waiting for /health (timeout: ${TIMEOUT}s)..."
 elapsed=0
 while [ $elapsed -lt $TIMEOUT ]; do
@@ -67,7 +84,7 @@ if [ $elapsed -ge $TIMEOUT ]; then
   exit 1
 fi
 
-# 4. Non-root user check
+# 5. Non-root user check
 echo "▸ Checking user..."
 USER_ID=$(docker exec "$CONTAINER_NAME" id -u 2>/dev/null || echo "unknown")
 if [ "$USER_ID" = "0" ]; then
@@ -76,7 +93,7 @@ if [ "$USER_ID" = "0" ]; then
 fi
 echo "✓ Running as non-root (uid=$USER_ID)"
 
-# 5. Generated config must stay out of the mutable OpenClaw state directory.
+# 6. Generated config must stay out of the mutable OpenClaw state directory.
 echo "▸ Checking generated config path..."
 CONFIG_PATH=$(docker exec "$CONTAINER_NAME" sh -lc 'test ! -f /home/openclaw/.openclaw/openclaw.json && test -f /tmp/openclaw/config/openclaw.json && echo ok' 2>/dev/null || true)
 if [ "$CONFIG_PATH" != "ok" ]; then
@@ -86,7 +103,7 @@ if [ "$CONFIG_PATH" != "ok" ]; then
 fi
 echo "✓ Runtime config is isolated from ~/.openclaw"
 
-# 6. Runtime defaults should avoid noisy cloud warnings while preserving memory vector recall.
+# 7. Runtime defaults should avoid noisy cloud warnings while preserving memory vector recall.
 echo "▸ Checking cloud runtime defaults..."
 CONFIG_DEFAULTS=$(docker exec -i "$CONTAINER_NAME" node - <<'NODE' 2>/dev/null || true
 const { readFileSync } = require('node:fs')
@@ -132,7 +149,7 @@ if [ "$CONFIG_DEFAULTS" != "ok" ]; then
 fi
 echo "✓ Cloud runtime defaults are stable"
 
-# 7. API key leak check
+# 8. API key leak check
 echo "▸ Checking logs for API key leaks..."
 LOGS=$(docker logs "$CONTAINER_NAME" 2>&1)
 if echo "$LOGS" | grep -qiE 'sk-ant-|sk-proj-|gsk_|xai-|ghp_'; then
@@ -141,7 +158,7 @@ if echo "$LOGS" | grep -qiE 'sk-ant-|sk-proj-|gsk_|xai-|ghp_'; then
 fi
 echo "✓ No API key patterns in logs"
 
-# 8. OpenClaw must not rewrite generated runtime config after startup.
+# 9. OpenClaw must not rewrite generated runtime config after startup.
 echo "▸ Checking config overwrite logs..."
 if echo "$LOGS" | grep -q 'Config overwrite:'; then
   echo "✗ OpenClaw rewrote the generated runtime config"
@@ -150,7 +167,7 @@ if echo "$LOGS" | grep -q 'Config overwrite:'; then
 fi
 echo "✓ Runtime config was not rewritten"
 
-# 9. Cloud runner should not emit known misleading OpenClaw startup warnings.
+# 10. Cloud runner should not emit known misleading OpenClaw startup warnings.
 echo "▸ Checking cloud warning logs..."
 if echo "$LOGS" | grep -q 'Gateway is binding to a non-loopback address'; then
   echo "✗ OpenClaw gateway is still binding to a non-loopback address"
@@ -178,7 +195,7 @@ if echo "$LOGS" | grep -q '\[runtime-deps\] staging'; then
 fi
 echo "✓ No known noisy cloud warnings"
 
-# 10. OpenClaw expects writable runtime files for plugin evolution and local state.
+# 11. OpenClaw expects writable runtime files for plugin evolution and local state.
 echo "▸ Checking writable runtime filesystem..."
 if docker exec "$CONTAINER_NAME" sh -lc 'touch /app/extensions/.shadow-write-test /home/openclaw/.openclaw/.shadow-write-test && rm -f /app/extensions/.shadow-write-test /home/openclaw/.openclaw/.shadow-write-test' 2>/dev/null; then
   echo "✓ OpenClaw runtime paths are writable"
@@ -188,7 +205,7 @@ else
   exit 1
 fi
 
-# 11. OpenClaw agent skills need browser control, git, and Python available in the runner.
+# 12. OpenClaw agent skills need browser control, git, and Python available in the runner.
 echo "▸ Checking OpenClaw toolchain dependencies..."
 TOOLCHAIN_CHECK=$(docker exec "$CONTAINER_NAME" sh -lc '
   command -v git >/dev/null &&

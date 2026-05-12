@@ -2,6 +2,7 @@ import { zValidator } from '@hono/zod-validator'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
+import { triggerCloudDeploymentAutoResumeForBuddyUsers } from '../lib/cloud-deployment-autoresume'
 import { authMiddleware } from '../middleware/auth.middleware'
 import { createAgentSchema, updateAgentSchema } from '../validators/agent.schema'
 
@@ -252,6 +253,12 @@ export function createAgentHandler(container: AppContainer) {
     const id = c.req.param('id')
     try {
       const agent = await agentService.heartbeat(id, user.userId)
+      triggerCloudDeploymentAutoResumeForBuddyUsers({
+        container,
+        buddyUserIds: [user.userId],
+        reason: 'agent heartbeat',
+        logContext: { agentId: id },
+      })
       return c.json({ ok: true, status: agent?.status, lastHeartbeat: agent?.lastHeartbeat })
     } catch (err) {
       const status = (err as { status?: number }).status ?? 500
@@ -270,6 +277,12 @@ export function createAgentHandler(container: AppContainer) {
         user.userId,
         c.req.valid('json'),
       )
+      triggerCloudDeploymentAutoResumeForBuddyUsers({
+        container,
+        buddyUserIds: [user.userId],
+        reason: 'agent usage snapshot',
+        logContext: { agentId: id },
+      })
       return c.json({ ok: true, snapshot })
     } catch (err) {
       const status = (err as { status?: number }).status ?? 500

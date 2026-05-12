@@ -1,6 +1,7 @@
 import type { MessageMention } from '@shadowob/shared'
 import type { Socket, Server as SocketIOServer } from 'socket.io'
 import type { AppContainer } from '../container'
+import { triggerCloudDeploymentAutoResumeForMentions } from '../lib/cloud-deployment-autoresume'
 import { logger } from '../lib/logger'
 
 async function canUseChannelRoom(container: AppContainer, channelId: string, userId: string) {
@@ -90,6 +91,15 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
             content: preparedInput.content,
           })
           const message = await messageService.send(data.channelId, userId, preparedInput)
+          const messageMentions = Array.isArray(message.metadata?.mentions)
+            ? (message.metadata.mentions as MessageMention[])
+            : []
+          triggerCloudDeploymentAutoResumeForMentions({
+            container,
+            mentions: messageMentions,
+            reason: 'websocket message mention',
+            logContext: { channelId: data.channelId, userId },
+          })
 
           // Broadcast to channel room
           io.to(`channel:${data.channelId}`).emit('message:new', message)
@@ -153,16 +163,13 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
           // Create notifications for structured mentions
           try {
             const senderName = message.author?.displayName ?? message.author?.username ?? 'Someone'
-            const mentions = Array.isArray(message.metadata?.mentions)
-              ? (message.metadata.mentions as MessageMention[])
-              : []
             await mentionService.createMentionNotifications({
               messageId: message.id,
               channelId: data.channelId,
               authorId: userId,
               authorName: senderName,
               content: data.content,
-              mentions,
+              mentions: messageMentions,
             })
           } catch (err) {
             logger.warn(

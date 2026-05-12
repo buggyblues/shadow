@@ -16,6 +16,7 @@ export {
   cloudAgentUsageSnapshots,
   cloudClusters,
   cloudConfigs,
+  cloudDeploymentBackups,
   cloudDeploymentLogs,
   cloudDeploymentStatusEnum,
   cloudDeployments,

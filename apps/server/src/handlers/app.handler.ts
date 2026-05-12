@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import JSZip from 'jszip'
 import { lookup } from 'mime-types'
 import type { AppContainer } from '../container'
+import { waitCloudDeploymentAutoResumeForApp } from '../lib/cloud-deployment-autoresume'
 import { logger } from '../lib/logger'
 import { authMiddleware } from '../middleware/auth.middleware'
 import {
@@ -96,6 +97,18 @@ export function createAppHandler(container: AppContainer) {
     if (!isProxyEnabled(app.settings)) {
       return c.text('Proxy is disabled for this app', 403)
     }
+    const resumeResult = await waitCloudDeploymentAutoResumeForApp({
+      container,
+      app,
+      reason: 'app proxy request',
+      timeoutMs: 25_000,
+      logContext: { appId, path: c.req.path },
+    })
+    if (resumeResult.timedOut) {
+      return c.text('Application runtime is starting. Retry shortly.', 503, {
+        'Retry-After': '5',
+      })
+    }
 
     let upstreamBase: URL
     try {
@@ -142,12 +155,23 @@ export function createAppHandler(container: AppContainer) {
     const body =
       c.req.method === 'GET' || c.req.method === 'HEAD' ? undefined : await c.req.raw.arrayBuffer()
 
-    const upstreamRes = await fetch(upstreamUrl.toString(), {
-      method: c.req.method,
-      headers: reqHeaders,
-      body,
-      redirect: 'manual',
-    })
+    let upstreamRes: Response
+    try {
+      upstreamRes = await fetch(upstreamUrl.toString(), {
+        method: c.req.method,
+        headers: reqHeaders,
+        body,
+        redirect: 'manual',
+      })
+    } catch (err) {
+      logger.warn(
+        { err, appId, upstreamUrl: upstreamUrl.toString() },
+        '[app-proxy] upstream failed',
+      )
+      return c.text('Application runtime is starting or unavailable. Retry shortly.', 503, {
+        'Retry-After': '5',
+      })
+    }
 
     const headers = sanitizeProxyResponseHeaders(new Headers(upstreamRes.headers))
 
@@ -214,6 +238,18 @@ export function createAppHandler(container: AppContainer) {
     const filePath = c.req.param('*') || 'index.html'
 
     if (app.sourceType === 'url') {
+      const resumeResult = await waitCloudDeploymentAutoResumeForApp({
+        container,
+        app,
+        reason: 'app url open',
+        timeoutMs: 25_000,
+        logContext: { appId: app.id, serverId },
+      })
+      if (resumeResult.timedOut) {
+        return c.text('Application runtime is starting. Retry shortly.', 503, {
+          'Retry-After': '5',
+        })
+      }
       return c.redirect(app.sourceUrl)
     }
 

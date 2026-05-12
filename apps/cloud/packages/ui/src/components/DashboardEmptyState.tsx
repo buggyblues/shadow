@@ -11,7 +11,7 @@ interface DashboardEmptyStateProps {
   action?: ReactNode
   className?: string
   contentClassName?: string
-  cardVariant?: 'default' | 'glass' | 'surface' | 'gradient' | 'danger'
+  cardVariant?: 'default' | 'glass' | 'glassPanel' | 'surface' | 'gradient' | 'danger'
 }
 
 export function DashboardEmptyState({

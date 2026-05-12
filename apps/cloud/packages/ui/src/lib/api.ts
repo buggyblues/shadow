@@ -9,6 +9,101 @@ export interface Deployment {
   upToDate: string
   available: string
   age: string
+  status?: string
+  workloadKind?: 'deployment' | 'agent-sandbox'
+  runtimeState?: 'running' | 'paused' | 'resuming' | 'failed' | 'unknown'
+  sandboxName?: string
+  serviceFQDN?: string
+  statePvc?: string
+  pausedAt?: string
+  lastActiveAt?: string
+}
+
+export type DeploymentRedeployMode = 'snapshot' | 'template'
+
+export interface DeploymentRedeployOptions {
+  mode?: DeploymentRedeployMode
+  templateSlug?: string
+  configSnapshot?: Record<string, unknown>
+  envVars?: Record<string, string>
+  runtimeContext?: { locale?: string; timezone?: string }
+}
+
+export interface DeploymentManifestInfo {
+  deploymentId: string | number | null
+  namespace: string
+  name?: string
+  templateSlug: string | null
+  template: {
+    id: string
+    slug: string
+    name: string
+    description?: string | null
+    source: string
+    reviewStatus: string
+    updatedAt: string | null
+    ownedByUser?: boolean
+    editable?: boolean
+    contentHash?: string | null
+  } | null
+  manifest: {
+    schemaVersion: number
+    revision: number
+    manifestId: string
+    source: string
+    generatedAt: string | null
+    configHash: string | null
+    manifestHash: string | null
+    templateSlug: string | null
+    templateId: string | null
+    templateName: string | null
+    templateSource: string | null
+    templateReviewStatus: string | null
+    templateUpdatedAt: string | null
+    templateContentHash: string | null
+  } | null
+  drift: {
+    status: 'up-to-date' | 'template-updated' | 'missing-template' | 'unlinked' | 'unknown'
+    templateAvailable: boolean
+    templateChanged: boolean
+    deployedTemplateHash: string | null
+    currentTemplateHash: string | null
+    configHash: string | null
+  }
+  configSnapshot?: Record<string, unknown> | null
+}
+
+export interface DeploymentTemplateSyncResult {
+  ok: boolean
+  action: 'updated' | 'forked'
+  template: {
+    id?: string
+    slug: string
+    name: string
+    source?: string
+    reviewStatus?: string
+    updatedAt?: string | null
+  }
+  manifest?: DeploymentManifestInfo | Partial<DeploymentManifestInfo>
+}
+
+export interface DeploymentBackup {
+  id: string
+  restoreKey?: string
+  deploymentId: string | null
+  namespace: string
+  agentId: string
+  sandboxName: string | null
+  pvcName: string
+  driver: 'volumeSnapshot' | 'restic' | string
+  snapshotName: string | null
+  objectKey: string | null
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'expired' | string
+  phase?: string | null
+  error: string | null
+  expiresAt: string | null
+  createdAt: string | null
+  updatedAt: string | null
 }
 
 export interface Pod {
@@ -434,9 +529,54 @@ export const api = {
       ),
     logsUrl: (namespace: string, id: string) =>
       `${BASE}/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(id)}/logs`,
+    pause: (namespace: string, id: string) =>
+      post<{ ok: boolean; name: string; namespace: string; runtimeState: string }>(
+        `/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(id)}/pause`,
+        {},
+      ),
+    resume: (namespace: string, id: string) =>
+      post<{ ok: boolean; name: string; namespace: string; runtimeState: string }>(
+        `/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(id)}/resume`,
+        {},
+      ),
+    backups: (namespace: string, id: string) =>
+      get<{ namespace: string; agent: string; backups: DeploymentBackup[] }>(
+        `/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(id)}/backups`,
+      ),
+    createBackup: (
+      namespace: string,
+      id: string,
+      body?: { driver?: 'volumeSnapshot' | 'restic'; retentionDays?: number },
+    ) =>
+      post<{ ok: boolean; backup: DeploymentBackup }>(
+        `/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(id)}/backups`,
+        body ?? {},
+      ),
+    restore: (namespace: string, id: string, body?: { backupId?: string }) =>
+      post<{ ok: boolean; backup: DeploymentBackup; runtimeState: string }>(
+        `/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(id)}/restore`,
+        body ?? {},
+      ),
     costs: () => get<CostOverviewSummary>('/deployments/costs'),
     namespaceCosts: (namespace: string) =>
       get<NamespaceCostSummary>(`/deployments/${encodeURIComponent(namespace)}/costs`),
+    manifest: (namespace: string) =>
+      get<DeploymentManifestInfo>(`/deployments/${encodeURIComponent(namespace)}/manifest`),
+    syncTemplate: (
+      namespace: string,
+      body?: {
+        name?: string
+        description?: string
+        content?: Record<string, unknown>
+        tags?: string[]
+        category?: string
+        baseCost?: number
+      },
+    ) =>
+      post<DeploymentTemplateSyncResult>(
+        `/deployments/${encodeURIComponent(namespace)}/template`,
+        body ?? {},
+      ),
     env: {
       list: (namespace: string, mode: 'effective' | 'scoped' = 'effective') =>
         get<{
@@ -566,10 +706,13 @@ export const api = {
       ),
     streamUrl: (id: number | string) =>
       `${BASE}/deploy-tasks/${encodeURIComponent(String(id))}/stream`,
-    redeploy: (id: number | string) =>
-      postRaw(`/deploy-tasks/${encodeURIComponent(String(id))}/redeploy`, {}),
-    redeployToTaskId: async (id: number | string) => {
-      const response = await postRaw(`/deploy-tasks/${encodeURIComponent(String(id))}/redeploy`, {})
+    redeploy: (id: number | string, options?: DeploymentRedeployOptions) =>
+      postRaw(`/deploy-tasks/${encodeURIComponent(String(id))}/redeploy`, options ?? {}),
+    redeployToTaskId: async (id: number | string, options?: DeploymentRedeployOptions) => {
+      const response = await postRaw(
+        `/deploy-tasks/${encodeURIComponent(String(id))}/redeploy`,
+        options ?? {},
+      )
       return extractTaskIdFromSse(response)
     },
     cancel: (id: number | string) =>
@@ -742,6 +885,8 @@ export type CloudApiClient = typeof api & {
       | 'deploying'
       | 'cancelling'
       | 'deployed'
+      | 'paused'
+      | 'resuming'
       | 'failed'
       | 'destroying'
       | 'destroyed'
@@ -753,6 +898,8 @@ export type CloudApiClient = typeof api & {
       | 'deploying'
       | 'cancelling'
       | 'deployed'
+      | 'paused'
+      | 'resuming'
       | 'failed'
       | 'destroying'
       | 'destroyed'
@@ -766,6 +913,8 @@ export type CloudApiClient = typeof api & {
       | 'deploying'
       | 'cancelling'
       | 'deployed'
+      | 'paused'
+      | 'resuming'
       | 'failed'
       | 'destroying'
       | 'destroyed'
