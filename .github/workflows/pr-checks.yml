@@ -28,6 +28,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Path filter
         uses: dorny/paths-filter@v4
@@ -68,6 +70,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -83,6 +87,9 @@ jobs:
 
       - name: Lint (Biome)
         run: pnpm lint
+
+      - name: Drizzle migration guard
+        run: pnpm check:migrations
 
       - name: i18n check
         run: pnpm check:i18n
