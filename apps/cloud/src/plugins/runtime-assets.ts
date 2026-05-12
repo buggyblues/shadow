@@ -22,6 +22,7 @@ interface RuntimeAssetK8sOptions {
   pluginId: string
   isEnabled(agent: AgentDeployment, config: CloudConfig): boolean
   runtimeMountPath?: string
+  initRuntimeMountPath?: string
   skillsMountPath?: string
   subagentsMountPath?: string
   runtimeVolumeName?: string
@@ -140,12 +141,13 @@ export function buildRuntimeAssetK8sProvider(options: RuntimeAssetK8sOptions): P
       const subagentsVolumeName = options.subagentsVolumeName ?? `${options.pluginId}-subagents`
       const runtimeMountPath =
         options.runtimeMountPath ?? `/opt/shadow-plugin-deps/${options.pluginId}`
+      const initRuntimeMountPath = options.initRuntimeMountPath ?? '/runtime-deps'
       const skillsMountPath = options.skillsMountPath
       const subagentsMountPath = options.subagentsMountPath
       const hasSkillSources = Boolean(options.skillSources?.length && skillsMountPath)
       const hasSubagentSources = Boolean(options.subagentSources?.length && subagentsMountPath)
 
-      const volumeMounts = [{ name: runtimeVolumeName, mountPath: '/runtime-deps' }]
+      const volumeMounts = [{ name: runtimeVolumeName, mountPath: initRuntimeMountPath }]
       const volumes = [{ name: runtimeVolumeName, spec: { emptyDir: {} } }]
       const mainVolumeMounts = [
         { name: runtimeVolumeName, mountPath: runtimeMountPath, readOnly: true },
@@ -182,6 +184,7 @@ export function buildRuntimeAssetK8sProvider(options: RuntimeAssetK8sOptions): P
                 runtimeDependencies: options.runtimeDependencies,
                 skillSources: options.skillSources,
                 subagentSources: options.subagentSources,
+                runtimeRoot: initRuntimeMountPath,
                 sanityCommands: options.sanityCommands,
               }),
             ],

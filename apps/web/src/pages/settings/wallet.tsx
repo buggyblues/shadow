@@ -227,9 +227,7 @@ export function WalletSettings({
                 variant="secondary"
                 size="sm"
                 type="button"
-                onClick={() =>
-                  navigate({ to: '/settings', search: { tab: 'tasks' }, replace: true })
-                }
+                onClick={() => navigate({ to: '/settings/tasks', replace: true })}
                 icon={Target}
               >
                 {t('wallet.earnByTasks')}

@@ -301,7 +301,7 @@ export function PlayLaunchPage() {
   }
 
   const openTasks = () => {
-    window.location.href = '/app/settings?tab=tasks'
+    window.location.href = '/app/settings/tasks'
   }
 
   const openRecharge = () => {
@@ -313,7 +313,7 @@ export function PlayLaunchPage() {
     window.dispatchEvent(new CustomEvent('shadow:open-recharge'))
     window.setTimeout(() => {
       window.removeEventListener('shadow:open-recharge:ack', ack)
-      if (!acknowledged) window.location.href = '/app/settings?tab=wallet'
+      if (!acknowledged) window.location.href = '/app/settings/wallet'
     }, 250)
   }
 

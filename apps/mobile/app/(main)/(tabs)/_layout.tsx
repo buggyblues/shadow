@@ -3,12 +3,7 @@ import { Image } from 'expo-image'
 import { Tabs } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import {
-  TabBellSvg,
-  TabBuddySvg,
-  TabHomeSvg,
-  TabMeSvg,
-} from '../../../src/components/common/cat-svg'
+import { TabBellSvg, TabHomeSvg, TabMeSvg } from '../../../src/components/common/cat-svg'
 import { useUnreadCount } from '../../../src/hooks/use-unread-count'
 import { getImageUrl } from '../../../src/lib/api'
 import { useAuthStore } from '../../../src/stores/auth.store'
@@ -80,15 +75,6 @@ export default function TabsLayout() {
           title: '主页',
           tabBarIcon: ({ color, focused }) => (
             <TabHomeSvg size={26} color={color} focused={focused} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="buddies"
-        options={{
-          title: 'Buddy 市集',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBuddySvg size={26} color={color} focused={focused} />
           ),
         }}
       />

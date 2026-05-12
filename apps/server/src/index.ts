@@ -7,16 +7,13 @@ import { hash } from 'bcryptjs'
 import { eq } from 'drizzle-orm'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import { Server as SocketIOServer } from 'socket.io'
-import { WebSocket, WebSocketServer } from 'ws'
 import { createApp } from './app'
 import { type AppContainer, createAppContainer } from './container'
 import { db } from './db'
 import { users } from './db/schema'
-import { waitCloudDeploymentAutoResumeForApp } from './lib/cloud-deployment-autoresume'
 import { startCloudDeploymentProcessor } from './lib/cloud-deployment-processor'
 import { resolveCloudTemplatesDir } from './lib/cloud-templates'
 import { randomFixedDigits } from './lib/id'
-import { type JwtPayload, verifyToken } from './lib/jwt'
 import { logger } from './lib/logger'
 import { seedPlayCatalogResources } from './lib/play-catalog-seed'
 import { setupWebSocket } from './ws'
@@ -142,144 +139,6 @@ async function main() {
       logger.info(`🚀 Shadow Server running on http://localhost:${info.port}`)
     },
   )
-
-  // WebSocket proxy for URL apps:
-  // /api/app-proxy-ws/:appId/*
-  const appProxyWss = new WebSocketServer({ noServer: true })
-
-  /**
-   * Extract and verify JWT token from WebSocket upgrade request.
-   * Supports both query parameter (?token=...) and Authorization Bearer header.
-   */
-  function extractWsAuthToken(req: import('http').IncomingMessage): JwtPayload | null {
-    // Try query parameter first (browser WebSocket API can't set custom headers)
-    const reqUrl = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
-    const queryToken = reqUrl.searchParams.get('token')
-    if (queryToken) {
-      try {
-        return verifyToken(queryToken, 'access')
-      } catch {
-        return null
-      }
-    }
-
-    // Fallback: Authorization header (for non-browser clients)
-    const authHeader = req.headers['authorization']
-    if (authHeader?.startsWith('Bearer ')) {
-      try {
-        return verifyToken(authHeader.slice(7), 'access')
-      } catch {
-        return null
-      }
-    }
-
-    return null
-  }
-
-  server.on('upgrade', async (req, socket, head) => {
-    try {
-      const reqUrl = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
-      const match = reqUrl.pathname.match(/^\/api\/app-proxy(?:-ws)?\/([^/]+)(?:\/(.*))?$/)
-      if (!match) return
-
-      const appId = match[1]
-      const pathPart = match[2] ?? ''
-      if (!appId) {
-        socket.destroy()
-        return
-      }
-
-      // Authenticate the WebSocket connection
-      const authPayload = extractWsAuthToken(req)
-      if (!authPayload) {
-        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
-        socket.destroy()
-        return
-      }
-
-      const appService = container.resolve('appService')
-      const app = await appService.getApp(appId)
-
-      const proxyEnabled =
-        app.settings &&
-        typeof app.settings === 'object' &&
-        (app.settings as Record<string, unknown>).proxyEnabled === true
-
-      if (app.sourceType !== 'url' || !proxyEnabled) {
-        socket.destroy()
-        return
-      }
-      const resumeResult = await waitCloudDeploymentAutoResumeForApp({
-        container,
-        app,
-        reason: 'app proxy websocket',
-        includeChannelBotMembers: true,
-        timeoutMs: 30_000,
-        logContext: { appId, userId: authPayload.userId, path: reqUrl.pathname },
-      })
-      if (resumeResult.timedOut) {
-        socket.write('HTTP/1.1 503 Service Unavailable\r\nRetry-After: 5\r\n\r\n')
-        socket.destroy()
-        return
-      }
-
-      const base = new URL(app.sourceUrl)
-      const upstream = new URL(pathPart ? `./${pathPart}` : './', base)
-      upstream.search = reqUrl.search
-      upstream.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:'
-
-      appProxyWss.handleUpgrade(req, socket, head, (clientWs: WebSocket) => {
-        const protocolsHeader = req.headers['sec-websocket-protocol']
-        const protocols =
-          typeof protocolsHeader === 'string'
-            ? protocolsHeader
-                .split(',')
-                .map((s) => s.trim())
-                .filter(Boolean)
-            : []
-
-        const upstreamWs = new WebSocket(upstream.toString(), protocols)
-
-        clientWs.on('message', (data: WebSocket.RawData, isBinary: boolean) => {
-          if (upstreamWs.readyState === WebSocket.OPEN) {
-            upstreamWs.send(data, { binary: isBinary })
-          }
-        })
-
-        clientWs.on('close', () => {
-          if (
-            upstreamWs.readyState === WebSocket.OPEN ||
-            upstreamWs.readyState === WebSocket.CONNECTING
-          ) {
-            upstreamWs.close()
-          }
-        })
-
-        clientWs.on('error', () => {
-          try {
-            upstreamWs.close()
-          } catch {}
-        })
-
-        upstreamWs.on('message', (data: WebSocket.RawData, isBinary: boolean) => {
-          if (clientWs.readyState === clientWs.OPEN) {
-            clientWs.send(data, { binary: isBinary })
-          }
-        })
-
-        upstreamWs.on('close', () => {
-          if (clientWs.readyState === clientWs.OPEN) clientWs.close()
-        })
-
-        upstreamWs.on('error', () => {
-          if (clientWs.readyState === clientWs.OPEN)
-            clientWs.close(1011, 'upstream websocket error')
-        })
-      })
-    } catch {
-      socket.destroy()
-    }
-  })
 
   // Attach Socket.IO to the HTTP server
   const io = new SocketIOServer(server, {

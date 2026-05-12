@@ -690,7 +690,7 @@ export function ProviderProfilesPage() {
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    window.location.assign('/app/settings?tab=wallet')
+                    window.location.assign('/app/settings/wallet')
                   }}
                 >
                   <Wallet size={13} />

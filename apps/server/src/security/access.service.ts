@@ -1,4 +1,3 @@
-import type { AppDao } from '../dao/app.dao'
 import type { CloudDeploymentDao } from '../dao/cloud-deployment.dao'
 import type { MessageDao } from '../dao/message.dao'
 import type { OrderDao } from '../dao/order.dao'
@@ -17,7 +16,6 @@ export class AccessService {
     private deps: {
       userDao: UserDao
       serverDao: ServerDao
-      appDao: AppDao
       shopDao: ShopDao
       productDao: ProductDao
       orderDao: OrderDao
@@ -44,14 +42,6 @@ export class AccessService {
 
   async requireServerOwner(actor: ActorInput, serverId: string) {
     return this.requireServerRole(actor, serverId, 'owner')
-  }
-
-  async requireAppManage(actor: ActorInput, serverId: string, appId: string) {
-    await this.requireServerAdmin(actor, serverId)
-    const app = await this.deps.appDao.findById(appId)
-    if (!app) throw notFoundForScope('App not found')
-    if (app.serverId !== serverId) throw scopeMismatch('App not found')
-    return app
   }
 
   async requireShopManage(actor: ActorInput, shopId: string) {

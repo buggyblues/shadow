@@ -562,7 +562,7 @@ export function InvitePanel({
   }
 
   const handleGoToBuddySettings = () => {
-    navigate({ to: '/settings', search: { tab: 'buddy' } })
+    navigate({ to: '/settings/buddy' })
     onClose()
   }
 

@@ -98,7 +98,7 @@ shadowob oauth consents --json
 shadowob oauth revoke <app-id>
 ```
 
-See [Platform Apps](/platform/platform-apps) for a complete guide to building apps with the OAuth API.
+See [Platform Apps](/platform/platform-apps) for a complete guide to building OAuth apps.
 
 ## API Token Commands
 

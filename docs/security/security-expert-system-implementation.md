@@ -98,16 +98,7 @@ Gateway 的原则是“默认拒绝，显式允许”。
 
 ### 3.1 App
 
-调整点：
-
-- `app.handler.ts` 的 URL source 获取和 proxy 走 `SafeHttpClient`。
-- App 更新/删除通过 `AppUseCase`。
-- `app.dao.ts` 新增 `updateByServerIdAndId`、`deleteByServerIdAndId`。
-- `app.service.ts` 新增 `updateAppInServer`、`deleteAppInServer`。
-
-效果：
-
-- 降低 SSRF 风险。
+旧的 Server App / App Proxy 代码已移除，避免继续保留 URL 代理攻击面。
 - 避免一个 server admin 用全局 appId 修改另一个 server 的 app。
 
 ### 3.2 Cloud SaaS

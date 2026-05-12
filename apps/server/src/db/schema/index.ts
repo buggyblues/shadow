@@ -5,7 +5,6 @@ export {
 } from './agent-dashboard'
 export { agentPolicies } from './agent-policies'
 export { agentStatusEnum, agents } from './agents'
-export { appSourceEnum, appStatusEnum, apps } from './apps'
 export { attachments } from './attachments'
 export { channelJoinRequests } from './channel-join-requests'
 export { channelMembers } from './channel-members'
@@ -98,7 +97,7 @@ export {
   paymentOrders,
 } from './recharge'
 export {
-  clawListings,
+  agentListings,
   deviceTierEnum,
   listingStatusEnum,
   osTypeEnum,

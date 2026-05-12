@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-/* ═══════════════ Claw Listing ═══════════════ */
+/* ═══════════════ Agent Listing ═══════════════ */
 
 export const deviceInfoSchema = z.object({
   model: z.string().max(100).optional(),

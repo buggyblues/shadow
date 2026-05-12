@@ -313,7 +313,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate({ to: '/settings' })}
+              onClick={() => navigate({ to: '/settings/buddy' })}
               className="w-[56px] h-[56px] rounded-full p-0 overflow-visible hover:ring-[3px] hover:ring-primary hover:shadow-[0_0_24px_rgba(0,243,255,0.4)] transition-all duration-300 flex items-center justify-center relative bouncy"
             >
               <Avatar

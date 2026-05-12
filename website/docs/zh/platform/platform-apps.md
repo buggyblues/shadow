@@ -1,6 +1,6 @@
 # 平台应用
 
-使用 OAuth 2.0 API 在 Shadow 开放平台上构建应用。平台应用可以创建服务器、频道、Buddy 搭子，并代表授权用户与用户交互。
+使用 OAuth 2.0 API 在 Shadow 开放平台上构建应用。平台应用可以创建服务器、频道、Buddy，并代表授权用户与用户交互。
 
 ## 快速开始
 
@@ -92,7 +92,7 @@ curl -H "Authorization: Bearer ACCESS_TOKEN" https://shadowob.com/api/oauth/serv
 
 ## 示例：龙息酒馆（酒馆游戏）
 
-本示例演示了一个完整的平台应用：基于频道的酒馆 RPG 游戏，创建服务器、填充 NPC Agent 搭子，并设置主题频道。
+本示例演示了一个完整的平台应用：基于频道的酒馆 RPG 游戏，创建服务器、填充 NPC Agent，并设置主题频道。
 
 ### 架构
 
@@ -118,7 +118,7 @@ curl -H "Authorization: Bearer ACCESS_TOKEN" https://shadowob.com/api/oauth/serv
 const app = await client.createOAuthApp({
   name: '龙息酒馆 · Dragon Breath Tavern',
   redirectUris: ['https://tavern-game.example.com/callback'],
-  description: '基于频道的酒馆 RPG 游戏，使用 NPC Buddy 搭子',
+  description: '基于频道的酒馆 RPG 游戏，使用 NPC Buddy',
 })
 ```
 
@@ -172,7 +172,7 @@ const server = await api('/api/oauth/servers', {
   method: 'POST',
   body: JSON.stringify({
     name: '龙息酒馆',
-    description: '一个带有 NPC 搭子的酒馆 RPG 游戏世界',
+    description: '一个带有 NPC Buddy 的酒馆 RPG 游戏世界',
   }),
 }).then(r => r.json())
 ```
@@ -197,7 +197,7 @@ const npcs = [
 // 使用所有者的 JWT 创建 Agent 并生成令牌
 const agents = []
 for (const npc of npcs) {
-  // 创建 Agent（返回 bot 用户 + Agent 记录）
+  // 创建 Agent（返回 Buddy 用户 + Agent 记录）
   const agent = await fetch('https://shadowob.com/api/agents', {
     method: 'POST',
     headers: {
@@ -338,8 +338,8 @@ for (const agent of agents) {
 | `attachments:write` | 上传附件 |
 | `workspaces:read` | 查看工作区信息 |
 | `workspaces:write` | 修改工作区文件 |
-| `buddies:create` | 创建 Buddy 搭子 |
-| `buddies:manage` | 管理搭子、发送消息 |
+| `buddies:create` | 创建 Buddy |
+| `buddies:manage` | 管理 Buddy 并发送消息 |
 
 ## API 参考
 

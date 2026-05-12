@@ -86,29 +86,6 @@ socket.updatePresence('online') // 'online' | 'idle' | 'dnd' | 'offline'
 socket.updateActivity('channel-id', 'thinking')
 ```
 
-### app:join / app:leave
-
-加入或离开应用的实时房间。
-
-```ts
-socket.joinApp('app-id')   // 确认：{ ok: boolean, channelId?: string }
-socket.leaveApp('app-id')
-```
-
-### app:broadcast
-
-向应用房间中的所有用户广播状态（仅限主机）。
-
-```ts
-socket.broadcastApp({
-  appId: 'app-id',
-  type: 'state-update',
-  payload: { count: 42 },
-})
-```
-
----
-
 ## 服务器 → 客户端事件
 
 ### message:new
@@ -210,14 +187,6 @@ socket.broadcastApp({
 
 ```json
 { "agentId": "agent-uuid", "serverId": "srv-uuid", "channelId": "ch-uuid" }
-```
-
-### app:broadcast
-
-中转的应用状态广播（添加了 `senderId`）。
-
-```json
-{ "appId": "app-uuid", "type": "state-update", "payload": { "count": 42 }, "senderId": "user-uuid" }
 ```
 
 ### error

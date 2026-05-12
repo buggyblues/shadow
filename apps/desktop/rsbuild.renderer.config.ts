@@ -15,12 +15,6 @@ export default defineConfig({
       'import.meta.env.VITE_API_BASE': JSON.stringify(
         process.env.VITE_API_BASE || 'https://shadowob.com',
       ),
-      'import.meta.env.VITE_APP_PROXY_HOST_SUFFIX': JSON.stringify(
-        process.env.VITE_APP_PROXY_HOST_SUFFIX || '',
-      ),
-      'import.meta.env.VITE_APP_PROXY_SUBDOMAIN_PREFIX': JSON.stringify(
-        process.env.VITE_APP_PROXY_SUBDOMAIN_PREFIX || '',
-      ),
     },
     alias: {
       '@': resolve(__dirname, 'src/renderer'),

@@ -1,5 +1,5 @@
 import type { AgentDao } from '../dao/agent.dao'
-import type { ClawListingDao } from '../dao/claw-listing.dao'
+import type { AgentListingDao } from '../dao/agent-listing.dao'
 import type { FriendshipDao } from '../dao/friendship.dao'
 import type { RentalContractDao } from '../dao/rental-contract.dao'
 import type { UserDao } from '../dao/user.dao'
@@ -10,7 +10,7 @@ export class FriendshipService {
       friendshipDao: FriendshipDao
       userDao: UserDao
       agentDao: AgentDao
-      clawListingDao: ClawListingDao
+      agentListingDao: AgentListingDao
       rentalContractDao: RentalContractDao
     },
   ) {}
@@ -81,12 +81,12 @@ export class FriendshipService {
     await this.deps.friendshipDao.deleteByUserIdAndId(userId, friendshipId)
   }
 
-  /** Get friend list with user profiles (includes virtual claw friends) */
+  /** Get friend list with user profiles (includes virtual agent friends) */
   async getFriends(userId: string) {
     const friendships = await this.deps.friendshipDao.getFriends(userId)
     const results: Array<{
       friendshipId: string
-      source: 'friend' | 'owned_claw' | 'rented_claw'
+      source: 'friend' | 'owned_agent' | 'rented_agent'
       user: {
         id: string
         username: string
@@ -95,7 +95,7 @@ export class FriendshipService {
         status: string
         isBot: boolean
       }
-      clawStatus?: 'available' | 'listed' | 'rented_out'
+      agentStatus?: 'available' | 'listed' | 'rented_out'
       rentalExpiresAt?: Date | null
       createdAt: Date
     }> = []
@@ -125,7 +125,7 @@ export class FriendshipService {
       }
     }
 
-    // 2. Owned claws — agents where user is the owner
+    // 2. Owned agents where user is the owner
     const ownedAgents = await this.deps.agentDao.findByOwnerId(userId)
     for (const agent of ownedAgents) {
       if (addedUserIds.has(agent.userId)) continue
@@ -133,21 +133,21 @@ export class FriendshipService {
       if (botUser) {
         addedUserIds.add(botUser.id)
 
-        // Determine claw marketplace status
-        let clawStatus: 'available' | 'listed' | 'rented_out' = 'available'
-        const listings = await this.deps.clawListingDao.findByAgentIds([agent.id])
+        // Determine marketplace status for the agent listing.
+        let agentStatus: 'available' | 'listed' | 'rented_out' = 'available'
+        const listings = await this.deps.agentListingDao.findByAgentIds([agent.id])
         const activeListing = listings.find((l) => l.listingStatus === 'active' && l.isListed)
         if (activeListing) {
           const activeContract = await this.deps.rentalContractDao.findActiveByListingId(
             activeListing.id,
           )
-          clawStatus = activeContract ? 'rented_out' : 'listed'
+          agentStatus = activeContract ? 'rented_out' : 'listed'
         }
 
         results.push({
-          friendshipId: `claw:owned:${agent.id}`,
-          source: 'owned_claw',
-          clawStatus,
+          friendshipId: `agent:owned:${agent.id}`,
+          source: 'owned_agent',
+          agentStatus,
           user: {
             id: botUser.id,
             username: botUser.username,
@@ -161,7 +161,7 @@ export class FriendshipService {
       }
     }
 
-    // 3. Actively rented claws — rental contracts where user is the tenant
+    // 3. Actively rented agents where user is the tenant
     const activeRentals = await this.deps.rentalContractDao.findByTenantId(userId, {
       status: 'active',
     })
@@ -172,7 +172,7 @@ export class FriendshipService {
       if (contract.expiresAt && contract.expiresAt < now) continue
       if (contract.terminatedAt) continue
 
-      const listing = await this.deps.clawListingDao.findById(contract.listingId)
+      const listing = await this.deps.agentListingDao.findById(contract.listingId)
       if (!listing?.agentId) continue
 
       const agent = await this.deps.agentDao.findById(listing.agentId)
@@ -182,8 +182,8 @@ export class FriendshipService {
       if (botUser) {
         addedUserIds.add(botUser.id)
         results.push({
-          friendshipId: `claw:rented:${contract.id}`,
-          source: 'rented_claw',
+          friendshipId: `agent:rented:${contract.id}`,
+          source: 'rented_agent',
           rentalExpiresAt: contract.expiresAt,
           user: {
             id: botUser.id,

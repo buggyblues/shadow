@@ -147,6 +147,18 @@ function cloudHourlyBillingSource() {
   return CLOUD_HOURLY_BILLING_SOURCE_PREFIX
 }
 
+export function createCloudHourlyBillingReferenceId(deploymentId: string, billedUntil: Date) {
+  const bytes = createHash('sha256')
+    .update(`cloud-hourly:${deploymentId}:${billedUntil.toISOString()}`)
+    .digest()
+
+  bytes[6] = (bytes[6]! & 0x0f) | 0x50
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80
+
+  const hex = bytes.subarray(0, 16).toString('hex')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`
+}
+
 export function calculateCloudHourlyBillingCharge(input: {
   lastBilledAt: Date
   now: Date
@@ -431,7 +443,7 @@ async function settleCloudDeploymentHourlyUsage(
     charge.amountMicros,
     0,
     cloudHourlyBillingSource(),
-    deployment.id,
+    createCloudHourlyBillingReferenceId(deployment.id, charge.billedUntil),
     'cloud_hourly',
     `Cloud deployment hourly usage: ${deployment.name}`,
   )

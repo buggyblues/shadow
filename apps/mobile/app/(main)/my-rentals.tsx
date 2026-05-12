@@ -243,20 +243,20 @@ export default function MyRentalsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => router.push('/(main)/settings/buddy' as never)}
           style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.7 : 1 }]}
         >
           <ChevronLeft size={20} color={colors.text} />
         </Pressable>
         <Text style={[styles.title, { color: colors.text }]}>
-          {t('marketplace.myRentals', '我的租赁')}
+          {t('marketplace.rentalsAndListings', '租赁与挂单')}
         </Text>
         <Pressable
           style={({ pressed }) => [
             styles.createBtn,
             { backgroundColor: colors.primary, opacity: pressed ? 0.7 : 1 },
           ]}
-          onPress={() => router.push('/(main)/create-listing' as never)}
+          onPress={() => router.push('/(main)/create-listing/new' as never)}
         >
           <Plus size={16} color="#fff" />
           <Text style={styles.createBtnText}>{t('marketplace.createListing', '创建挂单')}</Text>

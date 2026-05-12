@@ -1,5 +1,4 @@
 import {
-  AppWindow,
   Archive,
   ClipboardPaste,
   Copy,
@@ -51,7 +50,6 @@ interface WorkspaceContextMenuProps {
   onRefresh: () => void
   onDownloadZip?: (folderId: string) => void
   onDownloadWorkspaceZip?: () => void
-  onPublishAsApp?: (node: WorkspaceNode) => void
 }
 
 const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.userAgent)
@@ -74,7 +72,6 @@ export function WorkspaceContextMenu({
   onRefresh,
   onDownloadZip,
   onDownloadWorkspaceZip,
-  onPublishAsApp,
 }: WorkspaceContextMenuProps) {
   const node = menu.node
   const menuRef = useRef<HTMLDivElement>(null)
@@ -96,7 +93,6 @@ export function WorkspaceContextMenu({
     onRefresh,
     onDownloadZip,
     onDownloadWorkspaceZip,
-    onPublishAsApp,
   })
 
   return (
@@ -176,7 +172,6 @@ function buildMenuGroups(ctx: {
   onRefresh: () => void
   onDownloadZip?: (folderId: string) => void
   onDownloadWorkspaceZip?: () => void
-  onPublishAsApp?: (node: WorkspaceNode) => void
 }): ContextMenuGroup[] {
   const { node } = ctx
 
@@ -265,25 +260,9 @@ function buildMenuGroups(ctx: {
     ]
   }
 
-  // File
-  const isPublishable =
-    ctx.onPublishAsApp &&
-    (node.name.endsWith('.zip') || node.name.endsWith('.html') || node.mime?.includes('zip'))
-
   return [
     {
-      items: [
-        { icon: Eye, label: '打开', onClick: () => ctx.onOpen(node.id) },
-        ...(isPublishable
-          ? [
-              {
-                icon: AppWindow,
-                label: '发布为应用',
-                onClick: () => ctx.onPublishAsApp!(node),
-              },
-            ]
-          : []),
-      ],
+      items: [{ icon: Eye, label: '打开', onClick: () => ctx.onOpen(node.id) }],
     },
     {
       title: '编辑',

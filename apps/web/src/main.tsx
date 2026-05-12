@@ -15,8 +15,6 @@ import { authenticatedRouterPathFromRedirect, currentAppRedirect } from './lib/a
 import { ensureAuthenticatedSession } from './lib/auth-session'
 import { reloadOnceForChunkError } from './lib/chunk-reload'
 import { queryClient } from './lib/query-client'
-import { AppPageRoute } from './pages/apps'
-import { BuddyManagementPage } from './pages/buddy-management'
 import { ChannelView } from './pages/channel-view'
 import { PersonalShopPage, ProductDetailPage } from './pages/commerce'
 import { ContractDetailPage } from './pages/contract-detail'
@@ -28,7 +26,6 @@ import { DirectChatPage } from './pages/dm-chat'
 import { InvitePage } from './pages/invite'
 import { LoginPage } from './pages/login'
 import { MarketplaceDetailPage } from './pages/marketplace-detail'
-import { MyRentalsPage } from './pages/my-rentals'
 import { OAuthAuthorizePage } from './pages/oauth-authorize'
 import { OAuthCallbackPage } from './pages/oauth-callback'
 import { PlayLaunchPage } from './pages/play-launch'
@@ -173,12 +170,6 @@ const serverWorkspaceRoute = createRoute({
   component: WorkspacePageRoute,
 })
 
-const serverAppsRoute = createRoute({
-  getParentRoute: () => serverLayoutRoute,
-  path: '/apps',
-  component: AppPageRoute,
-})
-
 const serverHomeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/s/$serverId',
@@ -189,55 +180,162 @@ const serverHomeRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/settings',
+  beforeLoad: ({ search }: { search: Record<string, unknown> }) => {
+    const legacyTab = search.tab as string | undefined
+    if (
+      legacyTab &&
+      ['developer', 'profile', 'account', 'appearance', 'notification'].includes(legacyTab)
+    ) {
+      throw redirect({ to: '/settings/buddy', search: { tab: legacyTab } })
+    }
+    throw redirect({ to: '/settings/buddy' })
+  },
   component: SettingsPage,
   validateSearch: (search: Record<string, unknown>) => ({
-    tab: (search.tab as string) || undefined,
     dm: (search.dm as string) || undefined,
-    section: (search.section as string) || undefined,
+    view: (search.view as string) || undefined,
+    agent: (search.agent as string) || undefined,
+    agentId: (search.agentId as string) || undefined,
+    tab: (search.tab as string) || undefined,
   }),
 })
 
-const settingsSubRoutes = [
-  { path: '/settings/quickstart', tab: 'quickstart' },
-  { path: '/settings/profile', tab: 'profile' },
-  { path: '/settings/account', tab: 'account' },
-  { path: '/settings/invite', tab: 'tasks', section: 'invite' },
-  { path: '/settings/tasks', tab: 'tasks' },
-  { path: '/settings/buddy', tab: 'buddy' },
-  { path: '/settings/appearance', tab: 'appearance' },
-  { path: '/settings/notification', tab: 'notification' },
-  { path: '/settings/friends', tab: 'friends' },
-  { path: '/settings/chat', tab: 'chat' },
-].map(({ path, tab, section }) =>
+const settingsSubRoutes: Array<{ path: string }> = [
+  { path: '/settings/quickstart' },
+  { path: '/settings/profile' },
+  { path: '/settings/account' },
+  { path: '/settings/invite' },
+  { path: '/settings/tasks' },
+  { path: '/settings/wallet' },
+  { path: '/settings/entitlements' },
+  { path: '/settings/wallet/entitlements' },
+  { path: '/settings/wallet/assets' },
+  { path: '/settings/wallet/settlements' },
+  { path: '/settings/wallet/actions' },
+  { path: '/settings/shop' },
+  { path: '/settings/shop/orders' },
+  { path: '/settings/appearance' },
+  { path: '/settings/notification' },
+  { path: '/settings/friends' },
+].map(({ path }) =>
   createRoute({
     getParentRoute: () => appRoute,
     path: path as '/settings/quickstart',
     component: SettingsPage,
     validateSearch: (search: Record<string, unknown>) => ({
-      tab: tab,
       dm: (search.dm as string) || undefined,
-      section,
+      view: (search.view as string) || undefined,
+      agent: (search.agent as string) || undefined,
+      agentId: (search.agentId as string) || undefined,
+      tab: (search.tab as string) || undefined,
     }),
-    beforeLoad: () => {
-      // Redirect to main settings route with tab parameter for backward compatibility
-      throw redirect({
-        to: '/settings',
-        search: { tab, ...(section ? { section } : {}) },
-      })
-    },
   }),
 )
+
+const settingsDmRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/settings/dm',
+  component: SettingsPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    dm: (search.dm as string) || undefined,
+    view: (search.view as string) || undefined,
+    agent: (search.agent as string) || undefined,
+    agentId: (search.agentId as string) || undefined,
+  }),
+})
+
+// Buddy settings aliases as first-class routes (to keep state in pathname)
+const settingsBuddyRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/settings/buddy',
+  component: SettingsPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    dm: (search.dm as string) || undefined,
+    view: (search.view as string) || undefined,
+    agent: (search.agent as string) || undefined,
+    agentId: (search.agentId as string) || undefined,
+  }),
+})
+
+const settingsBuddyMarketRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/settings/buddy/market',
+  component: SettingsPage,
+  beforeLoad: ({ search }) => {
+    const staleSectionState = search.view || search.agent || search.agentId
+    if (staleSectionState) {
+      throw redirect({
+        to: '/settings/buddy/market',
+        search: {
+          ...(search.q ? { q: search.q as string } : {}),
+          ...(search.device ? { device: search.device as string } : {}),
+          ...(search.os ? { os: search.os as string } : {}),
+          ...(search.sort ? { sort: search.sort as string } : {}),
+        },
+      })
+    }
+  },
+  validateSearch: (search: Record<string, unknown>) => ({
+    dm: (search.dm as string) || undefined,
+    view: (search.view as string) || undefined,
+    agent: (search.agent as string) || undefined,
+    agentId: (search.agentId as string) || undefined,
+  }),
+})
+
+const settingsBuddyCreateRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/settings/buddy/create',
+  component: SettingsPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    dm: (search.dm as string) || undefined,
+    agent: (search.agent as string) || undefined,
+    agentId: (search.agentId as string) || undefined,
+  }),
+})
+
+const settingsBuddyDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/settings/buddy/detail',
+  component: SettingsPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    dm: (search.dm as string) || undefined,
+    agent: (search.agent as string) || undefined,
+    agentId: (search.agentId as string) || undefined,
+  }),
+})
 
 const buddyMgmtRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/buddies',
-  component: BuddyManagementPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/settings/buddy' })
+  },
+  component: () => null,
 })
 
 const discoverRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/discover',
   component: DiscoverPage,
+})
+
+const marketplaceRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/marketplace',
+  beforeLoad: ({ search }) => {
+    const cleanedSearch = {
+      ...(search.q ? { q: search.q as string } : {}),
+      ...(search.device ? { device: search.device as string } : {}),
+      ...(search.os ? { os: search.os as string } : {}),
+      ...(search.sort ? { sort: search.sort as string } : {}),
+    }
+    throw redirect({
+      to: '/settings/buddy/market',
+      search: cleanedSearch,
+    })
+  },
+  component: () => null,
 })
 
 const marketplaceDetailRoute = createRoute({
@@ -249,7 +347,13 @@ const marketplaceDetailRoute = createRoute({
 const myRentalsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/marketplace/my-rentals',
-  component: MyRentalsPage,
+  beforeLoad: () => {
+    throw redirect({
+      to: '/settings/buddy/market',
+      search: {},
+    })
+  },
+  component: () => null,
 })
 
 const contractDetailRoute = createRoute({
@@ -300,30 +404,6 @@ const productDetailRoute = createRoute({
   component: ProductDetailPage,
 })
 
-const entitlementsRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/settings/entitlements',
-  component: SettingsPage,
-  beforeLoad: () => {
-    throw redirect({
-      to: '/settings',
-      search: { tab: 'wallet', section: 'entitlements' },
-    })
-  },
-})
-
-const shopOrdersRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/shop/orders',
-  component: SettingsPage,
-  beforeLoad: () => {
-    throw redirect({
-      to: '/settings',
-      search: { tab: 'shop', section: 'orders' },
-    })
-  },
-})
-
 const cloudRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/cloud',
@@ -372,13 +452,18 @@ const routeTree = rootRoute.addChildren([
       serverShopAdminRoute,
       serverShopRoute,
       serverWorkspaceRoute,
-      serverAppsRoute,
     ]),
     settingsRoute,
     ...settingsSubRoutes,
     playLaunchRoute,
+    settingsBuddyRoute,
+    settingsBuddyMarketRoute,
+    settingsBuddyCreateRoute,
+    settingsBuddyDetailRoute,
+    settingsDmRoute,
     buddyMgmtRoute,
     discoverRoute,
+    marketplaceRoute,
     myRentalsRoute,
     contractDetailRoute,
     createListingRoute,
@@ -389,8 +474,6 @@ const routeTree = rootRoute.addChildren([
     personalShopRoute,
     userShopRoute,
     productDetailRoute,
-    entitlementsRoute,
-    shopOrdersRoute,
     cloudRoute,
     diyCloudRoute,
     cloudSplatRoute,

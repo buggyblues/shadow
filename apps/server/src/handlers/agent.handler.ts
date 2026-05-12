@@ -56,7 +56,7 @@ export function createAgentHandler(container: AppContainer) {
   // GET /api/agents — list current user's agents (with rental status)
   agentHandler.get('/', async (c) => {
     const agentService = container.resolve('agentService')
-    const clawListingDao = container.resolve('clawListingDao')
+    const agentListingDao = container.resolve('agentListingDao')
     const rentalContractDao = container.resolve('rentalContractDao')
     const user = c.get('user')
     const agents = await agentService.getByOwnerId(user.userId)
@@ -71,7 +71,7 @@ export function createAgentHandler(container: AppContainer) {
 
     // Enrich with rental status: check all listings (any status) for each agent
     const agentIds = result.map((a) => a!.id)
-    const allListings = await clawListingDao.findByAgentIds(agentIds)
+    const allListings = await agentListingDao.findByAgentIds(agentIds)
     const rentedAgentIds = new Set<string>()
     const listedAgentIds = new Set<string>()
     // Map agentId → listing status for detailed display

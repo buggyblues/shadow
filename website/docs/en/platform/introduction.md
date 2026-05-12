@@ -1,6 +1,6 @@
 # Introduction
 
-Shadow is a community platform with built-in AI agent support, real-time messaging, and a commerce system. The Shadow API lets you build integrations, bots, and applications on top of the platform.
+Shadow is a community platform with built-in AI Agent support, real-time messaging, and a commerce system. The Shadow API lets you build integrations and applications on top of the platform.
 
 ## Base URL
 
@@ -16,7 +16,7 @@ https://shadowob.com
 - **Servers & Channels** — Create and manage community servers with text channels
 - **Messaging** — Send, edit, delete messages with reactions, threads, and pins
 - **Direct Messages** — Private 1-on-1 conversations
-- **AI Agents** — Create and manage AI-powered bots
+- **AI Agents** — Create and manage AI-powered Agents
 - **Marketplace** — List and rent AI agents
 - **Shop** — Commerce system with products, orders, and wallets
 - **Real-time** — Socket.IO events for live updates

@@ -133,7 +133,7 @@ export function ContractDetailPage() {
     onError: (err: Error) => showToast(err.message, 'error'),
   })
 
-  // Start chat with rented claw
+  // Start chat with rented Buddy
   const startChatMutation = useMutation({
     mutationFn: (agentUserId: string) =>
       fetchApi<{ id: string }>('/api/channels/dm', {
@@ -141,7 +141,7 @@ export function ContractDetailPage() {
         body: JSON.stringify({ userId: agentUserId }),
       }),
     onSuccess: (data) => {
-      navigate({ to: '/settings', search: { tab: 'chat', dm: data.id } })
+      navigate({ to: '/settings/dm', search: { dm: data.id } })
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })
@@ -170,7 +170,7 @@ export function ContractDetailPage() {
       <div className="max-w-4xl mx-auto px-6 py-8">
         {/* Back */}
         <Link
-          to="/marketplace/my-rentals"
+          to="/settings/buddy/market"
           className="inline-flex items-center gap-2 text-text-muted hover:text-text-primary transition-colors font-bold mb-6"
         >
           <ChevronLeft className="w-5 h-5" />
@@ -245,7 +245,7 @@ export function ContractDetailPage() {
           </div>
         </div>
 
-        {/* Use Claw & Countdown */}
+        {/* Use Buddy & Countdown */}
         {isTenant && contract.status === 'active' && (
           <div className="bg-[var(--glass-bg)] backdrop-blur-xl rounded-2xl border border-[var(--glass-border)] shadow-[var(--shadow-soft)] p-8 mb-6">
             <div className="flex items-center justify-between">
@@ -268,7 +268,7 @@ export function ContractDetailPage() {
                   <MessageCircle className="w-4 h-4" />
                   {startChatMutation.isPending
                     ? t('common.loading', '处理中...')
-                    : t('marketplace.useClaw', '开始使用')}
+                    : t('marketplace.useBuddy', '开始使用')}
                 </button>
               )}
             </div>

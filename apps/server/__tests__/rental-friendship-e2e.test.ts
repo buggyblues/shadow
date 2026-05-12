@@ -2,11 +2,11 @@
  * Rental ↔ Friendship Integration E2E Tests
  *
  * Tests the integration between rental contracts and the friend list:
- *   1. Rented clawBuddies appear in the tenant's friend list
- *   2. Rented claws are tagged with source='rented_claw' and rentalExpiresAt
- *   3. After contract termination, rented claw disappears from friend list
+ *   1. Rented Buddies appear in the tenant's friend list
+ *   2. Rented Buddies are tagged with source='rented_agent' and rentalExpiresAt
+ *   3. After contract termination, rented Buddy disappears from friend list
  *   4. Contract APIs return agentUserId when listing has an agentId
- *   5. Direct channel can be created with the rented claw's bot user (the "use" flow)
+ *   5. Direct channel can be created with the rented Buddy's bot user (the "use" flow)
  *
  * Requires: docker compose postgres running on localhost:5432
  */
@@ -148,7 +148,7 @@ beforeAll(async () => {
 afterAll(async () => {
   try {
     const { eq, inArray } = await import('drizzle-orm')
-    const { clawListings, rentalContracts, rentalUsageRecords, rentalViolations, wallets, users } =
+    const { agentListings, rentalContracts, rentalUsageRecords, rentalViolations, wallets, users } =
       schema
     const { agents } = schema
 
@@ -161,7 +161,7 @@ afterAll(async () => {
 
     // Delete all listings by owner
     if (ownerUserId) {
-      await db.delete(clawListings).where(eq(clawListings.ownerId, ownerUserId))
+      await db.delete(agentListings).where(eq(agentListings.ownerId, ownerUserId))
     }
 
     // Clean direct channel data
@@ -218,7 +218,7 @@ describe('Rental ↔ Friendship Integration E2E', () => {
       body: {
         agentId,
         title: 'Test Bot with Agent',
-        description: 'A claw listing with a linked agent',
+        description: 'An agent listing with a linked agent',
         skills: ['Testing'],
         deviceTier: 'mid_range',
         osType: 'linux',
@@ -237,13 +237,13 @@ describe('Rental ↔ Friendship Integration E2E', () => {
 
   /* ─────── 2. Tenant's friend list before renting ─────── */
 
-  it('should NOT show the claw in tenant friend list before renting', async () => {
+  it('should NOT show the Buddy in tenant friend list before renting', async () => {
     const res = await req('GET', '/api/friends', { token: tenantToken })
     expect(res.status).toBe(200)
 
     const friends = await json<{ source: string; user: { id: string } }[]>(res)
-    const rentedClaw = friends.find((f) => f.source === 'rented_claw' && f.user.id === botUserId)
-    expect(rentedClaw).toBeUndefined()
+    const rentedBuddy = friends.find((f) => f.source === 'rented_agent' && f.user.id === botUserId)
+    expect(rentedBuddy).toBeUndefined()
   })
 
   /* ─────── 3. Sign rental contract ─────── */
@@ -265,9 +265,9 @@ describe('Rental ↔ Friendship Integration E2E', () => {
     contractId = data.id
   })
 
-  /* ─────── 4. Rented claw appears in tenant's friend list ─────── */
+  /* ─────── 4. Rented Buddy appears in tenant's friend list ─────── */
 
-  it('should show the rented claw in tenant friend list after renting', async () => {
+  it('should show the rented Buddy in tenant friend list after renting', async () => {
     const res = await req('GET', '/api/friends', { token: tenantToken })
     expect(res.status).toBe(200)
 
@@ -281,25 +281,25 @@ describe('Rental ↔ Friendship Integration E2E', () => {
         }[]
       >(res)
 
-    const rentedClaw = friends.find((f) => f.source === 'rented_claw' && f.user.id === botUserId)
-    expect(rentedClaw).toBeDefined()
-    expect(rentedClaw!.user.isBot).toBe(true)
-    expect(rentedClaw!.friendshipId).toMatch(/^claw:rented:/)
+    const rentedBuddy = friends.find((f) => f.source === 'rented_agent' && f.user.id === botUserId)
+    expect(rentedBuddy).toBeDefined()
+    expect(rentedBuddy!.user.isBot).toBe(true)
+    expect(rentedBuddy!.friendshipId).toMatch(/^agent:rented:/)
     // rentalExpiresAt should be set since we used durationHours=24
-    expect(rentedClaw!.rentalExpiresAt).toBeDefined()
-    expect(rentedClaw!.rentalExpiresAt).not.toBeNull()
+    expect(rentedBuddy!.rentalExpiresAt).toBeDefined()
+    expect(rentedBuddy!.rentalExpiresAt).not.toBeNull()
   })
 
-  it('should NOT show the rented claw in owner friend list as rented_claw', async () => {
+  it('should NOT show the rented Buddy in owner friend list as rented_agent', async () => {
     const res = await req('GET', '/api/friends', { token: ownerToken })
     expect(res.status).toBe(200)
 
     const friends = await json<{ source: string; user: { id: string } }[]>(res)
-    // The owner should see it as owned_claw, not rented_claw
-    const asRented = friends.find((f) => f.source === 'rented_claw' && f.user.id === botUserId)
+    // The owner should see it as owned_agent, not rented_agent
+    const asRented = friends.find((f) => f.source === 'rented_agent' && f.user.id === botUserId)
     expect(asRented).toBeUndefined()
 
-    const asOwned = friends.find((f) => f.source === 'owned_claw' && f.user.id === botUserId)
+    const asOwned = friends.find((f) => f.source === 'owned_agent' && f.user.id === botUserId)
     expect(asOwned).toBeDefined()
   })
 
@@ -329,9 +329,9 @@ describe('Rental ↔ Friendship Integration E2E', () => {
     expect(data.agentUserId).toBe(botUserId)
   })
 
-  /* ─────── 6. "Use claw" flow: create direct channel with bot ─────── */
+  /* ─────── 6. "Use Buddy" flow: create direct channel with bot ─────── */
 
-  it('should create a direct channel with the rented claw bot user', async () => {
+  it('should create a direct channel with the rented Buddy bot user', async () => {
     const res = await req('POST', '/api/channels/dm', {
       token: tenantToken,
       body: { userId: botUserId },
@@ -369,16 +369,17 @@ describe('Rental ↔ Friendship Integration E2E', () => {
     expect(data1.id).toBe(data2.id)
   })
 
-  /* ─────── 7. Owner sees claw as rented_out in their friend list ─────── */
+  /* ─────── 7. Owner sees Buddy as rented_out in their friend list ─────── */
 
-  it('should show owned claw with rented_out status in owner friend list', async () => {
+  it('should show owned Buddy with rented_out status in owner friend list', async () => {
     const res = await req('GET', '/api/friends', { token: ownerToken })
     expect(res.status).toBe(200)
 
-    const friends = await json<{ source: string; user: { id: string }; clawStatus?: string }[]>(res)
-    const ownedClaw = friends.find((f) => f.source === 'owned_claw' && f.user.id === botUserId)
-    expect(ownedClaw).toBeDefined()
-    expect(ownedClaw!.clawStatus).toBe('rented_out')
+    const friends =
+      await json<{ source: string; user: { id: string }; agentStatus?: string }[]>(res)
+    const ownedBuddy = friends.find((f) => f.source === 'owned_agent' && f.user.id === botUserId)
+    expect(ownedBuddy).toBeDefined()
+    expect(ownedBuddy!.agentStatus).toBe('rented_out')
   })
 
   /* ─────── 8. Terminate contract ─────── */
@@ -394,26 +395,27 @@ describe('Rental ↔ Friendship Integration E2E', () => {
     expect(['completed', 'cancelled']).toContain(data.status)
   })
 
-  /* ─────── 9. Claw disappears from tenant friend list after termination ─────── */
+  /* ─────── 9. Buddy disappears from tenant friend list after termination ─────── */
 
-  it('should NOT show the rented claw in tenant friend list after termination', async () => {
+  it('should NOT show the rented Buddy in tenant friend list after termination', async () => {
     const res = await req('GET', '/api/friends', { token: tenantToken })
     expect(res.status).toBe(200)
 
     const friends = await json<{ source: string; user: { id: string } }[]>(res)
-    const rentedClaw = friends.find((f) => f.source === 'rented_claw' && f.user.id === botUserId)
-    expect(rentedClaw).toBeUndefined()
+    const rentedBuddy = friends.find((f) => f.source === 'rented_agent' && f.user.id === botUserId)
+    expect(rentedBuddy).toBeUndefined()
   })
 
-  it('should show owned claw as available after termination in owner friend list', async () => {
+  it('should show owned Buddy as available after termination in owner friend list', async () => {
     const res = await req('GET', '/api/friends', { token: ownerToken })
     expect(res.status).toBe(200)
 
-    const friends = await json<{ source: string; user: { id: string }; clawStatus?: string }[]>(res)
-    const ownedClaw = friends.find((f) => f.source === 'owned_claw' && f.user.id === botUserId)
-    expect(ownedClaw).toBeDefined()
+    const friends =
+      await json<{ source: string; user: { id: string }; agentStatus?: string }[]>(res)
+    const ownedBuddy = friends.find((f) => f.source === 'owned_agent' && f.user.id === botUserId)
+    expect(ownedBuddy).toBeDefined()
     // After termination, no active contracts → status should not be rented_out
     // It will be 'listed' if still listed, or 'available' if no active listing
-    expect(ownedClaw!.clawStatus).not.toBe('rented_out')
+    expect(ownedBuddy!.agentStatus).not.toBe('rented_out')
   })
 })

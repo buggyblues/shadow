@@ -42,7 +42,7 @@ The app platform API lets developers build around existing Shadow communities. S
 
 Use Cloud when you need any of these:
 
-- A real Buddy runtime, not only a placeholder bot.
+- A real Buddy runtime, not only a placeholder Buddy profile.
 - A server and default channels created from a template.
 - Skills, scripts, CLI tools, or MCP assets mounted into an agent.
 - Kubernetes-backed deployment with logs, status, pause/resume, state backup metadata, and teardown.

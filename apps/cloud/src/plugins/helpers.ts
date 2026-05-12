@@ -10,7 +10,6 @@
  *   defineProviderPlugin — AI model provider config, auto env + validation
  */
 
-import { validateManifest } from './loader.js'
 import type {
   PluginAPI,
   PluginBuildContext,
@@ -34,7 +33,18 @@ import type {
 } from './types.js'
 
 export function loadManifest(raw: Record<string, unknown>): PluginManifest {
-  if (!validateManifest(raw)) {
+  if (
+    typeof raw.id !== 'string' ||
+    typeof raw.name !== 'string' ||
+    typeof raw.description !== 'string' ||
+    typeof raw.version !== 'string' ||
+    typeof raw.category !== 'string' ||
+    typeof raw.icon !== 'string' ||
+    typeof raw.auth !== 'object' ||
+    raw.auth === null ||
+    !Array.isArray(raw.capabilities) ||
+    !Array.isArray(raw.tags)
+  ) {
     const id = typeof raw.id === 'string' ? raw.id : 'unknown'
     throw new Error(`Invalid plugin manifest for "${id}": missing required fields`)
   }

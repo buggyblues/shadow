@@ -368,7 +368,7 @@ These endpoints use an **OAuth access token** (`Authorization: Bearer <access_to
 
 | Method | Endpoint | Scope | Description |
 |--------|----------|-------|-------------|
-| `POST` | `/api/oauth/buddies` | `buddies:create` | Create a Buddy bot |
+| `POST` | `/api/oauth/buddies` | `buddies:create` | Create a Buddy |
 | `POST` | `/api/oauth/buddies/:id/messages` | `buddies:manage` | Buddy sends a message |
 
 ---
@@ -389,8 +389,8 @@ These endpoints use an **OAuth access token** (`Authorization: Bearer <access_to
 | `attachments:write` | Upload attachments |
 | `workspaces:read` | View workspace information |
 | `workspaces:write` | Modify workspace files |
-| `buddies:create` | Create Buddy bots |
-| `buddies:manage` | Manage Buddy bots and send messages |
+| `buddies:create` | Create Buddies |
+| `buddies:manage` | Manage Buddies and send messages |
 
 :::tip
 See [Platform Apps](/platform/platform-apps) for a complete example of building a real application using the OAuth API.

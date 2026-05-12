@@ -93,26 +93,6 @@ const showcase = {
       kernelType: 'openclaw',
     },
   ],
-  apps: [
-    {
-      name: 'Launchpad',
-      slug: 'launchpad',
-      description: 'A quick-launch board for community rituals, links, and handoff flows.',
-      sourceType: 'url',
-      sourceUrl: `${origin}/features`,
-      status: 'active',
-      isHomepage: true,
-    },
-    {
-      name: 'Ops Console',
-      slug: 'ops-console',
-      description: 'A lightweight operational dashboard wired into the server app center.',
-      sourceType: 'url',
-      sourceUrl: `${origin}/pricing`,
-      status: 'active',
-      isHomepage: false,
-    },
-  ],
 }
 
 async function waitForAppReady() {
@@ -305,26 +285,6 @@ async function ensureShopShowcase(token, serverId) {
   }
 }
 
-async function ensureAppShowcase(token, serverId) {
-  const appsResult = await requestJson(`/api/servers/${serverId}/apps`, { token })
-  const apps = Array.isArray(appsResult) ? appsResult : (appsResult.items ?? [])
-
-  const ensuredApps = []
-  for (const app of showcase.apps) {
-    let existing = apps.find((item) => item.slug === app.slug || item.name === app.name)
-    if (!existing) {
-      existing = await requestJson(`/api/servers/${serverId}/apps`, {
-        method: 'POST',
-        token,
-        body: app,
-      })
-    }
-    ensuredApps.push(existing)
-  }
-
-  return { apps: ensuredApps }
-}
-
 async function ensureAgentShowcase(token, serverId) {
   const agents = await requestJson('/api/agents', { token })
 
@@ -366,7 +326,6 @@ async function main() {
   const ownerSession = await ensureOwnerAccount()
   const { server, channels } = await ensureServer(ownerSession.accessToken)
   const shop = await ensureShopShowcase(ownerSession.accessToken, server.slug ?? server.id)
-  const apps = await ensureAppShowcase(ownerSession.accessToken, server.slug ?? server.id)
   const agentsShowcase = await ensureAgentShowcase(
     ownerSession.accessToken,
     server.slug ?? server.id,
@@ -401,9 +360,6 @@ async function main() {
       categoryId: shop.category.id,
       categoryName: shop.category.name,
       productNames: shop.products.map((item) => item.name),
-    },
-    apps: {
-      names: apps.apps.map((item) => item.name),
     },
     agents: {
       names: agentsShowcase.agents.map((item) => item.botUser?.displayName ?? item.name),

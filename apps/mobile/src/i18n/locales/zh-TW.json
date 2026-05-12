@@ -34,9 +34,7 @@
     "yes": "是",
     "no": "否",
     "search": "搜尋",
-    "noResults": "暫無結果",
-    "avatarUploaded": "頭像已上傳",
-    "uploadFailed": "上傳失敗"
+    "noResults": "暫無結果"
   },
   "nav": {
     "features": "特色功能",
@@ -157,7 +155,7 @@
     "tabQuickStart": "快速開始",
     "tabProfile": "個人資料",
     "tabAccount": "帳號安全",
-    "tabBuddy": "Buddy 管理",
+    "tabBuddy": "我的 Buddy",
     "logout": "登出",
     "profileTitle": "個人資料",
     "displayNameLabel": "顯示名稱",
@@ -238,7 +236,8 @@
     "appearanceTitle": "外觀設定",
     "darkTheme": "深色模式",
     "lightTheme": "淺色模式",
-    "systemTheme": "跟隨系統"
+    "systemTheme": "跟隨系統",
+    "activityGroup": "任務 & BUDDY"
   },
   "server": {
     "home": "首頁",
@@ -986,7 +985,10 @@
     "listingDraft": "草稿",
     "listingPaused": "已暫停",
     "listingExpired": "已過期",
-    "listingClosed": "已關閉"
+    "listingClosed": "已關閉",
+    "myBuddies": "我的 Buddy",
+    "selectBuddy": "選擇 Buddy",
+    "selectBuddyDesc": "從左側選擇一個 Buddy 管理設定。"
   },
   "serverHome": {
     "welcome": "歡迎來到",
@@ -1040,7 +1042,6 @@
     "priceAsc": "價格從低到高",
     "priceDesc": "價格從高到低",
     "results": "個結果",
-    "listMyClaw": "上架我的 Buddy",
     "emptyTitle": "暫無掛單",
     "emptyDesc": "還沒有人上架 Buddy，快來成為第一個吧！",
     "myRentals": "我的租賃",
@@ -1121,7 +1122,7 @@
     "listingTitle": "標題",
     "titlePlaceholder": "例：高配 Mac Studio 全端開發環境",
     "listingDesc": "描述",
-    "descPlaceholder": "介紹你的 Claw 可以做什麼...",
+    "descPlaceholder": "介紹你的 Buddy 可以做什麼...",
     "skillTags": "技能標籤",
     "skillsPlaceholder": "Web 開發, Python, DevOps （逗號分隔）",
     "guidelinesPlaceholder": "對使用方的要求和限制...",
@@ -1159,17 +1160,19 @@
     "deviceMidRange": "中端",
     "deviceLowEnd": "入門",
     "noDescription": "暫無描述",
-    "resultCount": "共 {{count}} 個 OpenClaw 可供租賃",
-    "noResults": "暫無可租賃的 OpenClaw，快來發佈第一個吧！",
+    "resultCount": "共 {{count}} 個 Buddy 可供租賃",
+    "noResults": "暫無可租賃的 Buddy，快來發佈第一個吧！",
     "myRentalsCta": "查看我的租賃",
-    "myRentalsCtaDesc": "管理你出租和使用中的 OpenClaw 合約",
+    "myRentalsCtaDesc": "管理你出租和使用中的 Buddy 合約",
     "goToMyRentals": "我的租賃",
     "unlimited": "不限時",
-    "delistClaw": "下架 Claw",
-    "delistSuccess": "Claw 已成功下架",
-    "delistHint": "下架後該 Claw 將不再出現在市場中",
-    "confirmDelist": "確定要下架這隻 Claw 嗎？",
-    "official": "官方"
+    "delistSuccess": "Buddy 已成功下架",
+    "delistHint": "下架後該 Buddy 將不再出現在市場中",
+    "confirmDelist": "確定要下架這隻 Buddy 嗎？",
+    "official": "官方",
+    "listMyBuddy": "上架我的 Buddy",
+    "delistBuddy": "下架 Buddy",
+    "rentalsAndListings": "租賃與掛單"
   },
   "apps": {
     "noApps": "暫無應用"

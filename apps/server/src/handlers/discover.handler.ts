@@ -172,7 +172,7 @@ export function createDiscoverHandler(container: AppContainer) {
 
     // 3. 获取活跃租赁
     if (!type || type === 'all' || type === 'rentals') {
-      const clawListingDao = container.resolve('clawListingDao')
+      const agentListingDao = container.resolve('agentListingDao')
       const userDao = container.resolve('userDao')
       const agentDao = container.resolve('agentDao')
 
@@ -184,7 +184,7 @@ export function createDiscoverHandler(container: AppContainer) {
         .limit(limit)
 
       for (const contract of activeContracts) {
-        const listing = await clawListingDao.findById(contract.listingId)
+        const listing = await agentListingDao.findById(contract.listingId)
         if (!listing) continue
 
         const tenant = await userDao.findById(contract.tenantId)

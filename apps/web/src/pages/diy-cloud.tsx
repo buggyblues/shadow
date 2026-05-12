@@ -815,7 +815,7 @@ export function DiyCloudPage() {
           kind: 'membership',
           title: t('diyCloud.gates.membershipTitle'),
           body: t('diyCloud.gates.membershipBody'),
-          primaryHref: '/app/settings?tab=tasks&section=invite',
+          primaryHref: '/app/settings/invite',
           primaryLabel: t('diyCloud.gates.goInvite'),
         })
         return
@@ -833,7 +833,7 @@ export function DiyCloudPage() {
           }),
           primaryHref: '/app/settings/tasks',
           primaryLabel: t('diyCloud.gates.goTasks'),
-          secondaryHref: '/app/settings?tab=wallet',
+          secondaryHref: '/app/settings/wallet',
           secondaryLabel: t('diyCloud.gates.goWallet'),
         })
         return

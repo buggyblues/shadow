@@ -171,13 +171,6 @@
       "status": "not-started"
     },
     {
-      "id": 23,
-      "title": "app-page.tsx: tokens, i18n, Button components",
-      "files": ["apps/web/src/components/app/app-page.tsx"],
-      "details": "10+ bg-white/*→tokens. Buttons rounded-xl→rounded-full. Context menu rounded-[24px]→rounded-[40px]. Raw RGBA shadows. Add useTranslation for Chinese strings. Native confirm()→ConfirmDialog",
-      "status": "not-started"
-    },
-    {
       "id": 24,
       "title": "buddy-management.tsx: context menu radius, Switch component",
       "files": ["apps/web/src/pages/buddy-management.tsx"],

@@ -34,9 +34,7 @@
     "yes": "はい",
     "no": "いいえ",
     "search": "検索",
-    "noResults": "結果なし",
-    "avatarUploaded": "アバターがアップロードされました",
-    "uploadFailed": "アップロードに失敗しました"
+    "noResults": "結果なし"
   },
   "nav": {
     "features": "機能紹介",
@@ -157,7 +155,7 @@
     "tabQuickStart": "クイックスタート",
     "tabProfile": "プロフィール",
     "tabAccount": "アカウント",
-    "tabBuddy": "Buddy 管理",
+    "tabBuddy": "My Buddy",
     "logout": "ログアウト",
     "profileTitle": "プロフィール",
     "displayNameLabel": "表示名",
@@ -238,7 +236,8 @@
     "appearanceTitle": "外観設定",
     "darkTheme": "ダークモード",
     "lightTheme": "ライトモード",
-    "systemTheme": "システム設定"
+    "systemTheme": "システム設定",
+    "activityGroup": "タスク & BUDDY"
   },
   "server": {
     "home": "ホーム",
@@ -989,7 +988,10 @@
     "listingDraft": "下書き",
     "listingPaused": "一時停止",
     "listingExpired": "期限切れ",
-    "listingClosed": "終了"
+    "listingClosed": "終了",
+    "myBuddies": "My Buddy",
+    "selectBuddy": "Buddy を選択",
+    "selectBuddyDesc": "左側から Buddy を選択して設定を管理します。"
   },
   "serverHome": {
     "welcome": "ようこそ",
@@ -1043,7 +1045,6 @@
     "priceAsc": "価格: 安い順",
     "priceDesc": "価格: 高い順",
     "results": "件",
-    "listMyClaw": "自分の Buddy を出品",
     "emptyTitle": "出品なし",
     "emptyDesc": "まだ出品がありません — 最初の出品者になろう！",
     "myRentals": "マイレンタル",
@@ -1124,7 +1125,7 @@
     "listingTitle": "タイトル",
     "titlePlaceholder": "例：ハイエンド Mac Studio フルスタック開発環境",
     "listingDesc": "説明",
-    "descPlaceholder": "あなたのClawで何ができるか説明...",
+    "descPlaceholder": "あなたのBuddyで何ができるか説明...",
     "skillTags": "スキルタグ",
     "skillsPlaceholder": "Web開発, Python, DevOps（カンマ区切り）",
     "guidelinesPlaceholder": "テナントへの要件と制限...",
@@ -1162,17 +1163,19 @@
     "deviceMidRange": "ミドルレンジ",
     "deviceLowEnd": "エントリー",
     "noDescription": "説明なし",
-    "resultCount": "{{count}} 件のOpenClawがレンタル可能",
-    "noResults": "レンタル可能なOpenClawはまだありません。最初に出品しましょう！",
+    "resultCount": "{{count}} 件のBuddyがレンタル可能",
+    "noResults": "レンタル可能なBuddyはまだありません。最初に出品しましょう！",
     "myRentalsCta": "マイレンタル",
-    "myRentalsCtaDesc": "レンタルと出品中のOpenClaw契約を管理",
+    "myRentalsCtaDesc": "レンタルと出品中のBuddy契約を管理",
     "goToMyRentals": "マイレンタル",
     "unlimited": "無制限",
-    "delistClaw": "Claw を取り下げ",
-    "delistSuccess": "Claw が取り下げられました",
-    "delistHint": "取り下げるとこの Claw はマーケットに表示されなくなります",
-    "confirmDelist": "この Claw を取り下げますか？",
-    "official": "公式"
+    "delistSuccess": "Buddy が取り下げられました",
+    "delistHint": "取り下げるとこの Buddy はマーケットに表示されなくなります",
+    "confirmDelist": "この Buddy を取り下げますか？",
+    "official": "公式",
+    "listMyBuddy": "自分の Buddy を出品",
+    "delistBuddy": "Buddy を取り下げ",
+    "rentalsAndListings": "レンタルと出品"
   },
   "apps": {
     "noApps": "アプリなし"

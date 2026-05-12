@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useTranslation } from 'react-i18next'
 import { showToast } from '../../lib/toast'
-import { useWorkspaceStore, type WorkspaceNode } from '../../stores/workspace.store'
+import { type WorkspaceNode, useWorkspaceStore } from '../../stores/workspace.store'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { WorkspaceContextMenu } from './WorkspaceContextMenu'
 import { WorkspaceDialogs } from './WorkspaceDialogs'
@@ -20,18 +20,12 @@ import { buildVisibleRows, findNodeById, resolveParentForTarget } from './worksp
 interface WorkspacePageProps {
   serverId: string
   onClose?: () => void
-  onPublishAsApp?: (node: WorkspaceNode) => void
   embedded?: boolean
 }
 
 /* --- WorkspacePage --- */
 
-export function WorkspacePage({
-  serverId,
-  onClose,
-  onPublishAsApp,
-  embedded = false,
-}: WorkspacePageProps) {
+export function WorkspacePage({ serverId, onClose, embedded = false }: WorkspacePageProps) {
   const { t } = useTranslation()
   const {
     workspace,
@@ -516,7 +510,6 @@ export function WorkspacePage({
           onRefresh={refetchTree}
           onDownloadZip={handleDownloadZip}
           onDownloadWorkspaceZip={handleDownloadWorkspaceZip}
-          onPublishAsApp={onPublishAsApp}
         />
       )}
 

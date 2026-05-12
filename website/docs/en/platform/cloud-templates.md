@@ -61,10 +61,10 @@ Official templates live in `apps/cloud/templates`.
             ]
           }
         ],
-        "buddies": [{ "id": "gstack-bot", "name": "Strategy Buddy" }],
+        "buddies": [{ "id": "strategy-buddy", "name": "Strategy Buddy" }],
         "bindings": [
           {
-            "targetId": "gstack-bot",
+            "targetId": "strategy-buddy",
             "targetType": "buddy",
             "servers": ["gstack-hq"],
             "channels": ["office-hours"],
@@ -109,4 +109,4 @@ Never place raw API keys in a template. Use env variables, platform secret group
 5. Confirm secrets are references, not inline values.
 6. Deploy once in a clean cluster and send a test message to the Buddy.
 
-Strong templates are more than chatbots. Add scripts, skills, CLI commands, MCP tools, scheduled tasks, or approval flows when they make the play useful.
+Strong templates are more than chat windows. Add scripts, skills, CLI commands, MCP tools, scheduled tasks, or approval flows when they make the play useful.

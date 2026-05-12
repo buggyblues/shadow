@@ -38,7 +38,6 @@ import {
   SettingsGroup,
   SettingsPanel,
 } from '../../pages/settings/_shared'
-import { useAppStore } from '../../stores/app.store'
 import { useAuthStore } from '../../stores/auth.store'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { ShopPage } from '../shop/shop-page'
@@ -529,18 +528,7 @@ export function ServerSettingsModal({
             {/* Workspace page */}
             {activeTab === 'workspace' && (
               <div className="flex h-full min-h-0 flex-col">
-                <WorkspacePage
-                  serverId={serverSlug}
-                  embedded
-                  onPublishAsApp={(node) => {
-                    const { setPublishFile, setOverlay, setEditingApp } = useAppStore.getState()
-                    setEditingApp(null)
-                    setPublishFile(node.id, node.name)
-                    setOverlay('create')
-                    onClose()
-                    navigate({ to: '/servers/$serverSlug/apps', params: { serverSlug } })
-                  }}
-                />
+                <WorkspacePage serverId={serverSlug} embedded />
               </div>
             )}
           </div>

@@ -5,7 +5,6 @@ import { useLayoutEffect } from 'react'
 import { WorkspacePage } from '../components/workspace/workspace-page'
 import { fetchApi } from '../lib/api'
 import { leaveChannel } from '../lib/socket'
-import { useAppStore } from '../stores/app.store'
 import { useChatStore } from '../stores/chat.store'
 
 export function WorkspacePageRoute() {
@@ -40,13 +39,6 @@ export function WorkspacePageRoute() {
     <WorkspacePage
       serverId={serverSlug}
       onClose={() => navigate({ to: '/servers/$serverSlug', params: { serverSlug } })}
-      onPublishAsApp={(node) => {
-        const { setPublishFile, setOverlay, setEditingApp } = useAppStore.getState()
-        setEditingApp(null)
-        setPublishFile(node.id, node.name)
-        setOverlay('create')
-        navigate({ to: '/servers/$serverSlug/apps', params: { serverSlug } })
-      }}
     />
   )
 }

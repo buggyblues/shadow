@@ -1,10 +1,6 @@
 import {
-  Badge,
   Button,
-  Card,
-  CardContent,
   cn,
-  Input,
   Modal,
   ModalBody,
   ModalButtonGroup,
@@ -13,1500 +9,323 @@ import {
   ModalHeader,
 } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { Link, useLocation, useNavigate, useSearch } from '@tanstack/react-router'
 import {
-  ArrowLeft,
-  BookOpen,
-  Bot,
-  Check,
-  CheckCircle,
-  ClipboardCopy,
-  Copy,
-  Edit2,
-  Key,
-  MessageSquare,
+  ArrowRight,
+  ChevronDown,
+  Clock,
+  Edit,
+  Eye,
+  MessageCircle,
+  PackageMinus,
+  Pause,
+  Play,
   Plus,
   Search,
-  ShieldCheck,
-  ShoppingCart,
+  Store,
   Terminal,
   Trash2,
-  XCircle,
+  Users,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { AgentDetail } from '../components/buddy-management/agent-detail'
+import { CreateAgentDialog, EditAgentDialog } from '../components/buddy-management/agent-dialogs'
+import type { Agent, TokenResponse } from '../components/buddy-management/types'
+import { BuddyMarketContent } from '../components/buddy-market/buddy-market-content'
 import { UserAvatar } from '../components/common/avatar'
-import { AvatarEditor } from '../components/common/avatar-editor'
-import { useAppStatus } from '../hooks/use-app-status'
-import { useUnreadCount } from '../hooks/use-unread-count'
+import { OnlineRank } from '../components/common/online-rank'
 import { fetchApi } from '../lib/api'
+import { showToast } from '../lib/toast'
+import { useAuthStore } from '../stores/auth.store'
 import { useUIStore } from '../stores/ui.store'
+import { CreateListingPage } from './create-listing'
 
-/* ── Types ───────────────────────────────────────────── */
+type TranslateFn = ReturnType<typeof useTranslation>['t']
 
-interface Agent {
+/* ── Embeddable Buddy Management Content (for Settings page) ── */
+
+type MyBuddySettingsSection = 'buddies' | 'market'
+type MarketWorkspaceSection = 'marketplace' | 'myRented' | 'outContracts' | 'myListings'
+
+interface Contract {
   id: string
-  userId: string
-  kernelType: string
-  config: Record<string, unknown>
+  contractNo: string
+  listingId: string
   ownerId: string
-  status: 'running' | 'stopped' | 'error'
-  containerId: string | null
-  lastHeartbeat: string | null
-  totalOnlineSeconds: number
+  tenantId: string
+  status: 'pending' | 'active' | 'completed' | 'cancelled' | 'violated' | 'disputed'
+  startsAt: string | null
+  expiresAt: string | null
+  terminatedAt: string | null
+  hourlyRate: number
+  baseDailyRate?: number
+  messageFee?: number
+  pricingVersion?: number
+  messageCount?: number
+  depositAmount: number
+  totalCost: number
+  listing?: { title: string; deviceTier: string; osType: string } | null
+  agentUserId?: string | null
   createdAt: string
-  updatedAt: string
-  isListed?: boolean
+}
+
+interface MyListing {
+  id: string
+  title: string
+  listingStatus: 'draft' | 'active' | 'paused' | 'expired' | 'closed'
+  isListed: boolean
+  deviceTier: string
+  osType: string
+  hourlyRate: number
+  baseDailyRate?: number
+  messageFee?: number
+  pricingVersion?: number
+  viewCount: number
+  rentalCount: number
+  createdAt: string
   isRented?: boolean
-  listingInfo?: {
-    listingId: string
-    listingStatus: string
-    isListed: boolean
-  } | null
-  botUser?: {
-    id: string
-    username: string
-    displayName: string | null
-    avatarUrl: string | null
-    email: string
-  } | null
-  owner?: {
-    id: string
-    username: string
-    displayName: string | null
-    avatarUrl: string | null
+  activeTenantId?: string | null
+  agent?: {
+    status: string
+    lastHeartbeat: string | null
+    totalOnlineSeconds: number
   } | null
 }
 
-interface TokenResponse {
-  token: string
-  agent: { id: string; userId: string; status: string }
-  botUser: { id: string; username: string; displayName: string | null; avatarUrl: string | null }
+const STATUS_STYLES: Record<string, { labelKey: string; bg: string; text: string }> = {
+  pending: { labelKey: 'marketplace.statusPending', bg: 'bg-warning/10', text: 'text-warning' },
+  active: { labelKey: 'marketplace.statusActive', bg: 'bg-success/10', text: 'text-success' },
+  completed: {
+    labelKey: 'marketplace.statusCompleted',
+    bg: 'bg-bg-secondary',
+    text: 'text-text-secondary',
+  },
+  cancelled: {
+    labelKey: 'marketplace.statusCancelled',
+    bg: 'bg-bg-secondary',
+    text: 'text-text-muted',
+  },
+  violated: { labelKey: 'marketplace.statusViolated', bg: 'bg-danger/10', text: 'text-danger' },
+  disputed: { labelKey: 'marketplace.statusDisputed', bg: 'bg-warning/10', text: 'text-warning' },
 }
 
-function deriveBuddyUsername(name: string) {
-  const username = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 32)
-  return username || 'buddy'
+const LISTING_STATUS: Record<string, { labelKey: string; bg: string; text: string }> = {
+  draft: { labelKey: 'marketplace.listingDraft', bg: 'bg-bg-secondary', text: 'text-text-muted' },
+  active: { labelKey: 'marketplace.listingActive', bg: 'bg-success/10', text: 'text-success' },
+  paused: { labelKey: 'marketplace.listingPaused', bg: 'bg-warning/10', text: 'text-warning' },
+  expired: {
+    labelKey: 'marketplace.listingExpired',
+    bg: 'bg-bg-secondary',
+    text: 'text-text-muted',
+  },
+  closed: { labelKey: 'marketplace.listingClosed', bg: 'bg-danger/10', text: 'text-danger' },
 }
 
-/** Renders a compact status badge for an agent's rental/listing status */
-function AgentListingBadge({ agent }: { agent: Agent }) {
-  const { t } = useTranslation()
-  if (agent.isRented) {
-    return (
-      <Badge variant="warning" size="xs" className="shrink-0">
-        🔒 {t('agentMgmt.rented')}
-      </Badge>
-    )
-  }
-  if (agent.isListed) {
-    return (
-      <Badge variant="success" size="xs" className="shrink-0">
-        📋 {t('agentMgmt.listed')}
-      </Badge>
-    )
-  }
-  if (agent.listingInfo) {
-    const statusMap: Record<string, { label: string; variant: 'neutral' | 'warning' | 'danger' }> =
-      {
-        draft: { label: t('agentMgmt.listingDraft'), variant: 'neutral' },
-        paused: { label: t('agentMgmt.listingPaused'), variant: 'warning' },
-        expired: { label: t('agentMgmt.listingExpired'), variant: 'neutral' },
-        closed: { label: t('agentMgmt.listingClosed'), variant: 'danger' },
-      }
-    const info = statusMap[agent.listingInfo.listingStatus]
-    if (info) {
-      return (
-        <Badge variant={info.variant} size="xs" className="shrink-0">
-          {info.label}
-        </Badge>
-      )
-    }
-  }
-  return null
+const DEVICE_TIERS: Record<string, { icon: string; labelKey: string }> = {
+  high_end: { icon: '🔥', labelKey: 'marketplace.deviceHighEnd' },
+  mid_range: { icon: '⚡', labelKey: 'marketplace.deviceMidRange' },
+  low_end: { icon: '💡', labelKey: 'marketplace.deviceLowEnd' },
 }
 
-/** Returns the status dot color class for an agent based on heartbeat-based online detection */
+function isAgentOnline(agent?: MyListing['agent']): boolean {
+  if (!agent) return false
+  if (agent.status !== 'running') return false
+  if (!agent.lastHeartbeat) return false
+  return Date.now() - new Date(agent.lastHeartbeat).getTime() < 90000
+}
+
+function formatOnlineDuration(seconds: number, t: TranslateFn): string {
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}${t('time.minutes', '分钟')}`
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}${t('time.hours', '小时')}`
+  return `${Math.floor(seconds / 86400)}${t('time.days', '天')}${Math.floor((seconds % 86400) / 3600)}${t('time.hours', '小时')}`
+}
+
+function getBuddyLevel(totalSeconds: number): number {
+  if (totalSeconds <= 0) return 0
+
+  const hours = totalSeconds / 3600
+  let suns = 0
+  let moons = 0
+  let stars = 0
+
+  if (hours >= 500) {
+    suns = Math.min(Math.floor(hours / 500), 4)
+    const remainAfterSuns = hours - suns * 500
+    moons = Math.min(Math.floor(remainAfterSuns / 100), 3)
+    const remainAfterMoons = remainAfterSuns - moons * 100
+    stars = Math.min(Math.floor(remainAfterMoons / 16), 3)
+  } else if (hours >= 100) {
+    moons = Math.min(Math.floor(hours / 100), 3)
+    const remain = hours - moons * 100
+    stars = Math.min(Math.floor(remain / 16), 3)
+  } else {
+    stars = Math.min(Math.floor(hours / 16), 3)
+  }
+
+  if (suns === 0 && moons === 0 && stars === 0) {
+    stars = hours >= 1 ? 1 : 0
+  }
+
+  return suns + moons + stars
+}
+
 function getAgentOnlineDotClass(agent: Agent): string {
   if (agent.status === 'error') return 'bg-danger'
   if (agent.status === 'stopped') return 'bg-text-muted/50'
-  // running — check heartbeat
   if (agent.lastHeartbeat && Date.now() - new Date(agent.lastHeartbeat).getTime() < 90000) {
     return 'bg-success'
   }
-  return 'bg-text-muted/50' // running but heartbeat stale → show as offline
+  return 'bg-text-muted/50'
 }
 
-/** Formats total online seconds into a human-readable duration string */
-function formatOnlineDuration(
-  totalSeconds: number,
-  t: (key: string, defaultValue?: string) => string,
-): string {
-  if (totalSeconds < 60) return `${totalSeconds}${t('time.seconds', '秒')}`
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  if (hours === 0) return `${minutes}${t('time.minutes', '分钟')}`
-  if (hours < 24)
-    return `${hours}${t('time.hours', '小时')}${minutes > 0 ? `${minutes}${t('time.minutes', '分钟')}` : ''}`
-  const days = Math.floor(hours / 24)
-  const remainHours = hours % 24
-  return `${days}${t('time.days', '天')}${remainHours > 0 ? `${remainHours}${t('time.hours', '小时')}` : ''}`
-}
-
-/* ── Agent Management Page ──────────────────────────── */
-
-export function BuddyManagementPage() {
-  const { t } = useTranslation()
-  const unreadCount = useUnreadCount()
-  useAppStatus({
-    title: t('agentMgmt.title'),
-    unreadCount,
-    hasNotification: unreadCount > 0,
-    variant: 'workspace',
-  })
+export function MyBuddySettingsContent({
+  initialSection = 'buddies',
+}: {
+  initialSection?: MyBuddySettingsSection
+}) {
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
-
-  const [showCreate, setShowCreate] = useState(false)
-  const [showEdit, setShowEdit] = useState(false)
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
-  const [generatedToken, setGeneratedToken] = useState<string | null>(null)
-  const [tokenCopied, setTokenCopied] = useState(false)
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
-  const [message, setMessage] = useState<{ text: string; success: boolean } | null>(null)
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; agent: Agent } | null>(
-    null,
-  )
-
-  // Fetch agents
-  const { data: agents = [], isLoading } = useQuery({
-    queryKey: ['agents'],
-    queryFn: () => fetchApi<Agent[]>('/api/agents'),
-    refetchInterval: 30000, // Refresh every 30s for heartbeat status
-  })
-
-  // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => fetchApi(`/api/agents/${id}`, { method: 'DELETE' }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agents'] })
-      setDeleteConfirmId(null)
-      if (selectedAgent?.id === deleteConfirmId) setSelectedAgent(null)
-      showMessage(t('agentMgmt.deleteSuccess'), true)
-    },
-    onError: () => showMessage(t('agentMgmt.deleteFailed'), false),
-  })
-
-  // Token mutation
-  const tokenMutation = useMutation({
-    mutationFn: (id: string) =>
-      fetchApi<TokenResponse>(`/api/agents/${id}/token`, { method: 'POST' }),
-    onSuccess: (data) => {
-      setGeneratedToken(data.token)
-      setTokenCopied(false)
-      queryClient.invalidateQueries({ queryKey: ['agents'] })
-    },
-  })
-
-  // Toggle (start/stop) mutation
-  const toggleMutation = useMutation({
-    mutationFn: (agent: Agent) =>
-      fetchApi<Agent>(`/api/agents/${agent.id}/${agent.status === 'running' ? 'stop' : 'start'}`, {
-        method: 'POST',
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agents'] })
-      // Refresh selected agent
-      if (selectedAgent) {
-        fetchApi<Agent>(`/api/agents/${selectedAgent.id}`).then((a) => setSelectedAgent(a))
-      }
-    },
-  })
-
-  const showMessage = (text: string, success: boolean) => {
-    setMessage({ text, success })
-    setTimeout(() => setMessage(null), 3000)
-  }
-
-  const copyToken = async (token: string) => {
-    await navigator.clipboard.writeText(token)
-    setTokenCopied(true)
-    showMessage(t('agentMgmt.tokenCopied'), true)
-  }
-
-  const handleAgentContextMenu = (e: React.MouseEvent, agent: Agent) => {
-    e.preventDefault()
-    setContextMenu({ x: e.clientX, y: e.clientY, agent })
-  }
-
-  // Close context menu on click outside
-  useEffect(() => {
-    const handleClick = () => setContextMenu(null)
-    if (contextMenu) {
-      document.addEventListener('click', handleClick)
-      return () => document.removeEventListener('click', handleClick)
-    }
-  }, [contextMenu])
-
-  const statusColor = (status: string) => {
-    switch (status) {
-      case 'running':
-        return 'text-success'
-      case 'stopped':
-        return 'text-text-muted'
-      case 'error':
-        return 'text-danger'
-      default:
-        return 'text-text-muted'
-    }
-  }
-
-  const statusLabel = (status: string) => {
-    switch (status) {
-      case 'running':
-        return t('agentMgmt.statusRunning')
-      case 'stopped':
-        return t('agentMgmt.statusStopped')
-      case 'error':
-        return t('agentMgmt.statusError')
-      default:
-        return status
-    }
-  }
-
-  return (
-    <div className="flex-1 flex flex-col md:flex-row bg-bg-deep overflow-hidden">
-      {/* Mobile header */}
-      <div className="md:hidden flex items-center gap-2 px-4 py-3 bg-bg-deep/80 backdrop-blur-xl border-b border-border-subtle shrink-0">
-        {selectedAgent ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setSelectedAgent(null)
-              setGeneratedToken(null)
-            }}
-          >
-            <ArrowLeft size={16} />
-            {t('agentMgmt.title')}
-          </Button>
-        ) : (
-          <>
-            <Button variant="ghost" size="sm" onClick={() => navigate({ to: '/' })}>
-              <ArrowLeft size={16} />
-              {t('common.back')}
-            </Button>
-            <span className="flex-1" />
-            <Button
-              variant="primary"
-              size="sm"
-              className="rounded-full"
-              onClick={() => setShowCreate(true)}
-            >
-              <Plus size={14} />
-              {t('agentMgmt.newAgent')}
-            </Button>
-          </>
-        )}
-      </div>
-
-      {/* Mobile agent list (when no agent selected) */}
-      {!selectedAgent && (
-        <div className="md:hidden flex-1 overflow-y-auto px-3 py-2 space-y-1">
-          {agents.map((agent) => (
-            <button
-              key={agent.id}
-              onClick={() => {
-                setSelectedAgent(agent)
-                setGeneratedToken(null)
-              }}
-              className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl text-[15px] font-medium text-text-secondary hover:bg-primary/10 hover:text-text-primary transition"
-            >
-              <UserAvatar
-                userId={agent.botUser?.id ?? agent.userId}
-                avatarUrl={agent.botUser?.avatarUrl}
-                displayName={agent.botUser?.displayName ?? undefined}
-                size="sm"
-              />
-              <span className="truncate flex-1 text-left">
-                {agent.botUser?.displayName ?? agent.botUser?.username ?? 'Agent'}
-              </span>
-              <AgentListingBadge agent={agent} />
-              <span className={`w-2 h-2 rounded-full ${getAgentOnlineDotClass(agent)}`} />
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Desktop Sidebar */}
-      <div className="w-60 bg-bg-deep/50 backdrop-blur-xl border-r border-border-subtle hidden md:flex flex-col shrink-0">
-        <div className="p-4 border-b border-border-subtle">
-          <Button variant="ghost" size="sm" onClick={() => navigate({ to: '/' })}>
-            <ArrowLeft size={16} />
-            {t('common.back')}
-          </Button>
-        </div>
-        <div className="px-5 py-3 text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mt-2">
-          {t('agentMgmt.title')}
-        </div>
-
-        {/* Agent list */}
-        <div className="flex-1 overflow-y-auto px-3 space-y-1">
-          {agents.map((agent) => (
-            <button
-              key={agent.id}
-              onClick={() => {
-                setSelectedAgent(agent)
-                setGeneratedToken(null)
-              }}
-              onContextMenu={(e) => handleAgentContextMenu(e, agent)}
-              className={cn(
-                'flex items-center gap-3 w-full px-3 py-2.5 rounded-2xl text-[15px] font-medium transition',
-                selectedAgent?.id === agent.id
-                  ? 'bg-primary/15 text-text-primary'
-                  : 'text-text-secondary hover:bg-primary/10 hover:text-text-primary',
-              )}
-            >
-              <UserAvatar
-                userId={agent.botUser?.id ?? agent.userId}
-                avatarUrl={agent.botUser?.avatarUrl}
-                displayName={agent.botUser?.displayName ?? undefined}
-                size="sm"
-              />
-              <span className="truncate flex-1 text-left">
-                {agent.botUser?.displayName ?? agent.botUser?.username ?? 'Agent'}
-              </span>
-              <AgentListingBadge agent={agent} />
-              <span className={`w-2 h-2 rounded-full ${getAgentOnlineDotClass(agent)}`} />
-            </button>
-          ))}
-
-          {/* New Agent button */}
-          <Button
-            variant="primary"
-            size="sm"
-            className="w-full rounded-full mt-3 mb-2"
-            onClick={() => setShowCreate(true)}
-          >
-            <Plus size={14} />
-            {t('agentMgmt.newAgent')}
-          </Button>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className={`flex-1 overflow-y-auto ${!selectedAgent ? 'hidden md:block' : ''}`}>
-        <div className="max-w-2xl mx-auto p-4 md:p-8">
-          {/* Global message */}
-          {message && (
-            <div
-              className={cn(
-                'mb-4 px-4 py-2 rounded-full text-sm font-bold',
-                message.success ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger',
-              )}
-            >
-              {message.text}
-            </div>
-          )}
-
-          {selectedAgent ? (
-            <AgentDetail
-              agent={selectedAgent}
-              generatedToken={generatedToken}
-              tokenCopied={tokenCopied}
-              tokenMutation={tokenMutation}
-              statusColor={statusColor}
-              statusLabel={statusLabel}
-              onCopyToken={copyToken}
-              onDelete={() => setDeleteConfirmId(selectedAgent.id)}
-              onEdit={() => setShowEdit(true)}
-              onToggle={(agent) => toggleMutation.mutate(agent)}
-              togglePending={toggleMutation.isPending}
-              t={t}
-            />
-          ) : (
-            <EmptyState
-              agents={agents}
-              isLoading={isLoading}
-              onCreateClick={() => setShowCreate(true)}
-              t={t}
-            />
-          )}
-        </div>
-      </div>
-
-      {/* Create dialog */}
-      {showCreate && (
-        <CreateAgentDialog
-          onClose={() => setShowCreate(false)}
-          onSuccess={(agent) => {
-            queryClient.invalidateQueries({ queryKey: ['agents'] })
-            setShowCreate(false)
-            setSelectedAgent(agent)
-            showMessage(t('agentMgmt.createSuccess'), true)
-          }}
-          onError={(msg) => showMessage(msg || t('agentMgmt.createFailed'), false)}
-          t={t}
-        />
-      )}
-
-      {/* Edit dialog */}
-      {showEdit && selectedAgent && (
-        <EditAgentDialog
-          agent={selectedAgent}
-          onClose={() => setShowEdit(false)}
-          onSuccess={(agent) => {
-            queryClient.invalidateQueries({ queryKey: ['agents'] })
-            setShowEdit(false)
-            setSelectedAgent(agent)
-            showMessage(t('agentMgmt.editSuccess'), true)
-          }}
-          onError={() => showMessage(t('agentMgmt.editFailed'), false)}
-          t={t}
-        />
-      )}
-
-      {/* Delete confirmation dialog */}
-      <Modal open={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)}>
-        <ModalContent maxWidth="max-w-md">
-          <ModalHeader title={t('common.confirm')} closeLabel={t('common.close', '关闭')} />
-          <ModalBody className="py-5">
-            <p className="text-sm font-bold italic text-text-muted">
-              {t('agentMgmt.deleteConfirm')}
-            </p>
-          </ModalBody>
-          <ModalFooter>
-            <ModalButtonGroup>
-              <Button variant="ghost" size="sm" onClick={() => setDeleteConfirmId(null)}>
-                {t('common.cancel')}
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => deleteConfirmId && deleteMutation.mutate(deleteConfirmId)}
-                disabled={deleteMutation.isPending}
-              >
-                {t('common.delete')}
-              </Button>
-            </ModalButtonGroup>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      {/* Agent context menu */}
-      {contextMenu && (
-        <div
-          className="fixed z-50 bg-bg-deep/90 backdrop-blur-xl border border-border-subtle rounded-2xl shadow-xl py-2 min-w-[180px]"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              tokenMutation.mutate(contextMenu.agent.id)
-              setSelectedAgent(contextMenu.agent)
-              setContextMenu(null)
-            }}
-            className="flex items-center gap-2 w-full px-4 py-2 text-sm text-text-secondary hover:bg-primary/10 hover:text-text-primary transition rounded-lg mx-1"
-            style={{ width: 'calc(100% - 8px)' }}
-          >
-            <Key size={14} />
-            {t('agentMgmt.generateToken')}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              toggleMutation.mutate(contextMenu.agent)
-              setContextMenu(null)
-            }}
-            className="flex items-center gap-2 w-full px-4 py-2 text-sm text-text-secondary hover:bg-primary/10 hover:text-text-primary transition rounded-lg mx-1"
-            style={{ width: 'calc(100% - 8px)' }}
-          >
-            {contextMenu.agent.status === 'running' ? (
-              <XCircle size={14} />
-            ) : (
-              <CheckCircle size={14} />
-            )}
-            {contextMenu.agent.status === 'running'
-              ? t('agentMgmt.disable')
-              : t('agentMgmt.enable')}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedAgent(contextMenu.agent)
-              setShowEdit(true)
-              setContextMenu(null)
-            }}
-            className="flex items-center gap-2 w-full px-4 py-2 text-sm text-text-secondary hover:bg-primary/10 hover:text-text-primary transition rounded-lg mx-1"
-            style={{ width: 'calc(100% - 8px)' }}
-          >
-            <Edit2 size={14} />
-            {t('common.edit')}
-          </button>
-          <div className="h-px bg-bg-tertiary/50 my-1 mx-3" />
-          <button
-            type="button"
-            onClick={() => {
-              setDeleteConfirmId(contextMenu.agent.id)
-              setContextMenu(null)
-            }}
-            className="flex items-center gap-2 w-full px-4 py-2 text-sm text-danger hover:bg-danger/10 transition rounded-lg mx-1"
-            style={{ width: 'calc(100% - 8px)' }}
-          >
-            <Trash2 size={14} />
-            {t('common.delete')}
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-/* ── Agent Detail Panel ──────────────────────────────── */
-
-function AgentDetail({
-  agent,
-  generatedToken,
-  tokenCopied,
-  tokenMutation,
-  statusColor,
-  statusLabel,
-  onCopyToken,
-  onDelete,
-  onEdit,
-  onToggle,
-  togglePending,
-  t,
-}: {
-  agent: Agent
-  generatedToken: string | null
-  tokenCopied: boolean
-  tokenMutation: ReturnType<typeof useMutation<TokenResponse, Error, string>>
-  statusColor: (s: string) => string
-  statusLabel: (s: string) => string
-  onCopyToken: (token: string) => void
-  onDelete: () => void
-  onEdit: () => void
-  onToggle: (agent: Agent) => void
-  togglePending: boolean
-  t: (key: string) => string
-}) {
-  const name = agent.botUser?.displayName ?? agent.botUser?.username ?? 'Agent'
-  const desc = (agent.config?.description as string) ?? ''
-
-  return (
-    <div className="space-y-6">
-      {/* Agent header */}
-      <div className="bg-bg-tertiary/40 rounded-[20px] p-6 border border-border-subtle shadow-sm">
-        <div className="flex items-center gap-4">
-          <UserAvatar
-            userId={agent.botUser?.id ?? agent.userId}
-            avatarUrl={agent.botUser?.avatarUrl}
-            displayName={name}
-            size="xl"
-          />
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-black text-text-primary">{name}</h3>
-              <Badge variant="primary" size="xs">
-                {t('common.bot')}
-              </Badge>
-            </div>
-            {agent.botUser?.username && (
-              <p className="text-sm text-text-muted font-bold italic">@{agent.botUser.username}</p>
-            )}
-            {desc && <p className="text-sm text-text-secondary mt-1">{desc}</p>}
-          </div>
-          <div className="flex gap-2">
-            <Button variant="ghost" size="icon" onClick={onEdit} title={t('common.edit')}>
-              <Edit2 size={18} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onDelete}
-              className="hover:text-danger hover:bg-danger/10"
-              title={t('common.delete')}
-            >
-              <Trash2 size={18} />
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Status & info */}
-      <div className="bg-bg-tertiary/40 rounded-[20px] p-6 border border-border-subtle shadow-sm grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1.5">
-            {t('agentMgmt.status')}
-          </label>
-          <div className="flex items-center gap-2">
-            {(() => {
-              if (agent.status === 'error') {
-                return (
-                  <Badge variant="danger" size="sm">
-                    <XCircle size={12} className="mr-1" />
-                    {t('agentMgmt.statusError')}
-                  </Badge>
-                )
-              }
-              if (agent.status === 'stopped') {
-                return (
-                  <Badge variant="neutral" size="sm">
-                    <span className="w-2 h-2 rounded-full bg-text-muted mr-1" />
-                    {t('agentMgmt.statusStopped')}
-                  </Badge>
-                )
-              }
-              const isOnline =
-                agent.lastHeartbeat && Date.now() - new Date(agent.lastHeartbeat).getTime() < 90000
-              return (
-                <Badge variant={isOnline ? 'success' : 'neutral'} size="sm">
-                  <span
-                    className={cn(
-                      'w-2 h-2 rounded-full mr-1',
-                      isOnline ? 'bg-success' : 'bg-text-muted',
-                    )}
-                  />
-                  {isOnline ? t('member.online') : t('member.offline')}
-                </Badge>
-              )
-            })()}
-          </div>
-        </div>
-        <div>
-          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1.5">
-            {t('agentMgmt.enableDisable')}
-          </label>
-          <button
-            type="button"
-            onClick={() => onToggle(agent)}
-            disabled={togglePending}
-            className={cn(
-              'relative w-11 h-6 rounded-full transition-colors',
-              agent.status === 'running' ? 'bg-success' : 'bg-text-muted/30',
-              togglePending && 'opacity-50',
-            )}
-          >
-            <span
-              className={cn(
-                'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-sm',
-                agent.status === 'running' && 'translate-x-5',
-              )}
-            />
-          </button>
-        </div>
-        <div>
-          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1.5">
-            {t('agentMgmt.owner')}
-          </label>
-          <div className="flex items-center gap-2">
-            {agent.owner && (
-              <UserAvatar
-                userId={agent.owner.id}
-                avatarUrl={agent.owner.avatarUrl}
-                displayName={agent.owner.displayName ?? agent.owner.username}
-                size="xs"
-              />
-            )}
-            <p className="text-sm text-text-primary font-bold">
-              {agent.owner?.displayName ?? agent.owner?.username ?? '—'}
-            </p>
-          </div>
-        </div>
-        <div>
-          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1.5">
-            {t('agentMgmt.createdAt')}
-          </label>
-          <p className="text-sm text-text-primary font-bold">
-            {new Date(agent.createdAt).toLocaleString()}
-          </p>
-        </div>
-        <div>
-          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
-            {t('agentMgmt.totalOnlineTime')}
-          </label>
-          <p className="text-sm text-text-primary font-bold">
-            {formatOnlineDuration(
-              agent.totalOnlineSeconds ?? 0,
-              t as (key: string, defaultValue?: string) => string,
-            )}
-          </p>
-        </div>
-        <div>
-          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
-            {t('agentMgmt.connection')}
-          </label>
-          {(() => {
-            if (!agent.lastHeartbeat) {
-              return (
-                <Badge variant="neutral" size="sm">
-                  {t('agentMgmt.neverConnected')}
-                </Badge>
-              )
-            }
-            const lastBeat = new Date(agent.lastHeartbeat).getTime()
-            const now = Date.now()
-            const diffSec = Math.floor((now - lastBeat) / 1000)
-            const isOnline = diffSec < 90
-            const isWarning = diffSec >= 90 && diffSec < 300
-            return (
-              <Badge variant={isOnline ? 'success' : isWarning ? 'warning' : 'danger'} size="sm">
-                <span
-                  className={cn(
-                    'w-2 h-2 rounded-full mr-1',
-                    isOnline ? 'bg-success' : isWarning ? 'bg-warning' : 'bg-danger',
-                  )}
-                />
-                {isOnline
-                  ? t('agentMgmt.connected')
-                  : `${t('agentMgmt.lastSeen')} ${new Date(agent.lastHeartbeat).toLocaleString()}`}
-              </Badge>
-            )
-          })()}
-        </div>
-        <div>
-          <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
-            {t('agentMgmt.rentalStatus')}
-          </label>
-          <div className="flex items-center gap-2">
-            {agent.isRented ? (
-              <Badge variant="warning" size="sm">
-                {t('agentMgmt.rented')}
-              </Badge>
-            ) : agent.isListed ? (
-              <Badge variant="success" size="sm">
-                {t('agentMgmt.listed')}
-              </Badge>
-            ) : agent.listingInfo ? (
-              <Badge variant="warning" size="sm">
-                {agent.listingInfo.listingStatus === 'draft'
-                  ? t('agentMgmt.listingDraft')
-                  : agent.listingInfo.listingStatus === 'paused'
-                    ? t('agentMgmt.listingPaused')
-                    : agent.listingInfo.listingStatus === 'expired'
-                      ? t('agentMgmt.listingExpired')
-                      : t('agentMgmt.listingClosed')}
-              </Badge>
-            ) : (
-              <Badge variant="neutral" size="sm">
-                {t('agentMgmt.notListed')}
-              </Badge>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Token section */}
-      <div className="bg-bg-tertiary/40 rounded-[20px] p-6 border border-border-subtle shadow-sm">
-        <div className="flex items-center gap-2 mb-3">
-          <Key size={16} className="text-primary" />
-          <h3 className="text-sm font-black text-text-primary uppercase tracking-[0.15em]">
-            {t('agentMgmt.tokenTitle')}
-          </h3>
-        </div>
-        <p className="text-sm text-text-muted font-bold italic mb-5">{t('agentMgmt.tokenDesc')}</p>
-
-        {(() => {
-          const displayToken =
-            generatedToken ?? (agent.config?.lastToken as string | undefined) ?? null
-          if (displayToken) {
-            return (
-              <div className="space-y-4">
-                <div className="bg-bg-deep/50 backdrop-blur-sm rounded-[16px] p-4 break-all font-mono text-[13px] text-text-secondary border border-border-subtle shadow-inner">
-                  {displayToken}
-                </div>
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant={tokenCopied ? 'outline' : 'primary'}
-                    size="sm"
-                    onClick={() => onCopyToken(displayToken)}
-                    className="rounded-[12px]"
-                  >
-                    <ClipboardCopy size={14} />
-                    {tokenCopied ? t('common.copied') : t('common.copy')}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => tokenMutation.mutate(agent.id)}
-                    disabled={tokenMutation.isPending}
-                    className="rounded-[12px]"
-                  >
-                    <Key size={14} />
-                    {tokenMutation.isPending
-                      ? t('agentMgmt.generating')
-                      : t('agentMgmt.regenerateToken')}
-                  </Button>
-                </div>
-
-                {/* JSON config example */}
-                <div className="mt-5">
-                  <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-2">
-                    {t('agentMgmt.configExample')}
-                  </label>
-                  <pre className="bg-bg-deep/50 backdrop-blur-sm rounded-[16px] p-4 text-[13px] text-text-secondary border border-border-subtle overflow-x-auto shadow-inner">
-                    {`{
-  "channels": {
-    "shadowob": {
-      "token": "${displayToken}...",
-      "serverUrl": "${window.location.origin}"
-    }
-  }
-}`}
-                  </pre>
-                </div>
-              </div>
-            )
-          }
-          return (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => tokenMutation.mutate(agent.id)}
-              disabled={tokenMutation.isPending}
-              className="rounded-[12px]"
-            >
-              <Key size={14} />
-              {tokenMutation.isPending ? t('agentMgmt.generating') : t('agentMgmt.generateToken')}
-            </Button>
-          )
-        })()}
-      </div>
-
-      {/* OpenClaw Setup Guide */}
-      <OpenClawSetupGuide
-        agent={agent}
-        generatedToken={generatedToken}
-        onGenerateToken={() => tokenMutation.mutate(agent.id)}
-        generatingToken={tokenMutation.isPending}
-        t={t}
-      />
-    </div>
-  )
-}
-
-/* ── OpenClaw Setup Guide ─────────────────────────────── */
-
-function CopyBlock({
-  content,
-  label,
-  t,
-}: {
-  content: string
-  label?: string
-  t: (key: string) => string
-}) {
-  const [copied, setCopied] = useState(false)
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(content)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-  return (
-    <div className="relative group">
-      {label && (
-        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
-          {label}
-        </p>
-      )}
-      <pre className="bg-bg-deep/50 backdrop-blur-sm rounded-2xl p-3 pr-10 font-mono text-xs text-text-secondary border border-border-subtle overflow-x-auto whitespace-pre-wrap break-all">
-        {content}
-      </pre>
-      <button
-        type="button"
-        onClick={handleCopy}
-        className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-bg-tertiary/50 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover transition opacity-0 group-hover:opacity-100"
-        title={t('common.copy')}
-      >
-        {copied ? <Check size={12} className="text-success" /> : <Copy size={12} />}
-      </button>
-    </div>
-  )
-}
-
-function OpenClawSetupGuide({
-  agent,
-  generatedToken,
-  onGenerateToken,
-  generatingToken,
-  t,
-}: {
-  agent: Agent
-  generatedToken: string | null
-  onGenerateToken: () => void
-  generatingToken: boolean
-  t: (key: string) => string
-}) {
-  const token = (agent.config?.lastToken as string | undefined) ?? generatedToken ?? ''
-  const hasToken = !!token.trim()
-  const serverUrl = window.location.origin
-  const [activeTab, setActiveTab] = useState<'manual' | 'chat'>('chat')
-
-  // Bash one-liner for manual setup
-  const bashCommand = `openclaw plugins install @shadowob/openclaw-shadowob && openclaw config set channels.shadowob.token "${token || '<TOKEN>'}" && openclaw config set channels.shadowob.serverUrl "${serverUrl}" && openclaw gateway restart`
-
-  // AI prompt for chat-based setup
-  const aiPrompt = `请帮我安装和配置 ShadowOwnBuddy 插件，连接到 Shadow 服务器。
-
-配置信息：
-- 插件名称：@shadowob/openclaw
-- 服务器地址：${serverUrl}
-
-请执行以下步骤：
-1. 安装插件：openclaw plugins install @shadowob/openclaw
-2. 配置 Token：openclaw config set channels.shadowob.token "${token || '<TOKEN>'}"
-3. 配置服务器地址：openclaw config set channels.shadowob.serverUrl "${serverUrl}"
-4. 重启网关：openclaw gateway restart
-
-请依次执行这些命令，并确认每个步骤是否成功。`
-
-  if (!hasToken) {
-    return (
-      <div className="bg-bg-tertiary/40 rounded-[20px] p-6 border border-border-subtle shadow-sm">
-        <div className="flex items-center gap-2 mb-3">
-          <BookOpen size={16} className="text-primary" />
-          <h3 className="text-sm font-black text-text-primary uppercase tracking-[0.15em]">
-            {t('agentMgmt.openclawGuideTitle')}
-          </h3>
-        </div>
-        <p className="text-sm text-text-muted font-bold italic mb-5">
-          {t('agentMgmt.setupTokenWarning')}
-        </p>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={onGenerateToken}
-          disabled={generatingToken}
-          className="rounded-[12px]"
-        >
-          <Key size={14} />
-          {generatingToken ? t('agentMgmt.generating') : t('agentMgmt.generateToken')}
-        </Button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="bg-bg-tertiary/40 rounded-[20px] p-6 border border-border-subtle shadow-sm">
-      <div className="flex items-center gap-2 mb-3">
-        <BookOpen size={16} className="text-primary" />
-        <h3 className="text-sm font-black text-text-primary uppercase tracking-[0.15em]">
-          {t('agentMgmt.openclawGuideTitle')}
-        </h3>
-      </div>
-      <p className="text-sm text-text-muted font-bold italic mb-5">
-        {t('agentMgmt.openclawGuideDesc')}
-      </p>
-
-      {/* Tab selector — pill-shaped */}
-      <div className="flex gap-1 mb-5 bg-bg-deep/50 backdrop-blur-sm rounded-full p-1 border border-border-subtle">
-        <button
-          type="button"
-          onClick={() => setActiveTab('manual')}
-          className={cn(
-            'flex items-center gap-1.5 flex-1 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest transition',
-            activeTab === 'manual'
-              ? 'bg-primary/15 text-primary shadow-sm'
-              : 'text-text-muted hover:text-text-secondary',
-          )}
-        >
-          <Terminal size={12} />
-          {t('agentMgmt.setupManual')}
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('chat')}
-          className={cn(
-            'flex items-center gap-1.5 flex-1 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest transition',
-            activeTab === 'chat'
-              ? 'bg-primary/15 text-primary shadow-sm'
-              : 'text-text-muted hover:text-text-secondary',
-          )}
-        >
-          <MessageSquare size={12} />
-          {t('agentMgmt.setupChat')}
-        </button>
-      </div>
-
-      {activeTab === 'manual' ? (
-        <>
-          {/* Quick bash one-liner */}
-          <div className="mb-4">
-            <p className="text-xs font-black text-text-secondary mb-2 uppercase tracking-widest">
-              {t('agentMgmt.setupBashTitle')}
-            </p>
-            <CopyBlock content={bashCommand} t={t} />
-            {!token && (
-              <p className="text-[11px] text-warning mt-1.5 ml-1 font-bold">
-                ⚠ {t('agentMgmt.setupTokenWarning')}
-              </p>
-            )}
-          </div>
-
-          <div className="h-px bg-bg-tertiary/50 my-4" />
-
-          {/* Step-by-step */}
-          <p className="text-[11px] font-black text-text-muted uppercase tracking-[0.2em] mb-3">
-            {t('agentMgmt.setupStepByStep')}
-          </p>
-
-          {/* Step 1: Install */}
-          <div className="mb-3">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-xs font-black flex items-center justify-center">
-                1
-              </span>
-              <span className="text-sm font-black text-text-primary">
-                {t('docs.openclawStep1Title')}
-              </span>
-            </div>
-            <div className="ml-7">
-              <CopyBlock content="openclaw plugins install @shadowob/openclaw-shadowob" t={t} />
-            </div>
-          </div>
-
-          {/* Step 2: Config Token */}
-          <div className="mb-3">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-xs font-black flex items-center justify-center">
-                2
-              </span>
-              <span className="text-sm font-black text-text-primary">
-                {t('agentMgmt.setupConfigToken')}
-              </span>
-            </div>
-            <div className="ml-7">
-              <CopyBlock content={`openclaw config set channels.shadowob.token "${token}"`} t={t} />
-            </div>
-          </div>
-
-          {/* Step 3: Config Server URL */}
-          <div className="mb-3">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-xs font-black flex items-center justify-center">
-                3
-              </span>
-              <span className="text-sm font-black text-text-primary">
-                {t('agentMgmt.setupConfigServer')}
-              </span>
-            </div>
-            <div className="ml-7">
-              <CopyBlock
-                content={`openclaw config set channels.shadowob.serverUrl "${serverUrl}"`}
-                t={t}
-              />
-            </div>
-          </div>
-
-          {/* Step 4: Run */}
-          <div className="mb-3">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-xs font-black flex items-center justify-center">
-                4
-              </span>
-              <span className="text-sm font-black text-text-primary">
-                {t('agentMgmt.openclawRunTitle')}
-              </span>
-            </div>
-            <div className="ml-7">
-              <CopyBlock content="openclaw gateway restart" t={t} />
-            </div>
-          </div>
-        </>
-      ) : (
-        <>
-          {/* AI chat prompt */}
-          <p className="text-xs text-text-muted font-bold italic mb-3">
-            {t('agentMgmt.setupChatDesc')}
-          </p>
-          <CopyBlock content={aiPrompt} t={t} />
-        </>
-      )}
-
-      {/* Capabilities */}
-      <div className="mt-4 pt-4 border-t border-border-subtle">
-        <p className="text-[11px] font-black text-text-muted uppercase tracking-[0.2em] mb-2">
-          {t('docs.openclawCapabilities')}
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          {['messaging', 'threads', 'reactions', 'media', 'mentions', 'editDelete'].map((cap) => (
-            <div
-              key={cap}
-              className="flex items-center gap-1.5 text-xs text-text-secondary font-bold"
-            >
-              <span className="text-success">✓</span>
-              {t(`docs.openclawCap_${cap}`)}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Link to full docs */}
-      <div className="mt-4 pt-3 border-t border-border-subtle">
-        <a
-          href="/product/index.html"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-primary hover:text-primary-hover font-black flex items-center gap-1 transition uppercase tracking-widest"
-        >
-          <BookOpen size={12} />
-          {t('agentMgmt.openclawFullDocs')}
-        </a>
-      </div>
-    </div>
-  )
-}
-
-/* ── Empty State ──────────────────────────────────────── */
-
-function EmptyState({
-  agents,
-  isLoading,
-  onCreateClick,
-  t,
-}: {
-  agents: Agent[]
-  isLoading: boolean
-  onCreateClick: () => void
-  t: (key: string) => string
-}) {
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-text-muted font-bold italic">{t('common.loading')}</div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex flex-col items-center justify-center h-64 text-center">
-      <img src="/Logo.svg" alt="Buddy" className="w-16 h-16 mb-4 opacity-30" />
-      <h2 className="text-xl font-black text-text-primary mb-2">
-        {agents.length === 0 ? t('agentMgmt.noAgents') : t('agentMgmt.title')}
-      </h2>
-      <p className="text-text-muted font-bold italic mb-6 max-w-md">
-        {agents.length === 0 ? t('agentMgmt.noAgentsDesc') : t('agentMgmt.subtitle')}
-      </p>
-      {agents.length === 0 && (
-        <Button variant="primary" size="lg" className="rounded-full" onClick={onCreateClick}>
-          <Plus size={18} />
-          {t('agentMgmt.newAgent')}
-        </Button>
-      )}
-    </div>
-  )
-}
-
-/* ── Create Agent Dialog ──────────────────────────────── */
-
-function CreateAgentDialog({
-  onClose,
-  onSuccess,
-  onError,
-  t,
-  initialData,
-}: {
-  onClose: () => void
-  onSuccess: (agent: Agent) => void
-  onError: (message?: string) => void
-  t: (key: string) => string
-  initialData?: { name?: string; username?: string; description?: string }
-}) {
-  const [name, setName] = useState(initialData?.name ?? '')
-  const [username, setUsername] = useState(initialData?.username ?? '')
-  const [usernameTouched, setUsernameTouched] = useState(Boolean(initialData?.username))
-  const [description, setDescription] = useState(initialData?.description ?? '')
-  const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null)
-
-  const createMutation = useMutation({
-    mutationFn: (data: {
-      name: string
-      username: string
-      description?: string
-      avatarUrl?: string
-    }) =>
-      fetchApi<Agent>('/api/agents', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: data.name,
-          username: data.username,
-          description: data.description,
-          avatarUrl: data.avatarUrl,
-          kernelType: 'openclaw',
-          config: {},
-        }),
-      }),
-    onSuccess: (agent) => onSuccess(agent),
-    onError: (err: Error) => {
-      if (err.message?.toLowerCase().includes('username already taken')) {
-        const suffix = Math.random().toString(36).slice(2, 6)
-        setUsername((prev) => `${(prev || 'buddy').slice(0, 27)}_${suffix}`)
-        setUsernameTouched(true)
-        onError(t('agentMgmt.usernameTaken'))
-      } else {
-        onError(err.message || t('agentMgmt.createFailed'))
-      }
-    },
-  })
-
-  const handleNameChange = (value: string) => {
-    setName(value)
-    if (!usernameTouched) {
-      setUsername(deriveBuddyUsername(value))
-    }
-  }
-
-  const handleUsernameChange = (value: string) => {
-    setUsernameTouched(true)
-    setUsername(
-      value
-        .toLowerCase()
-        .replace(/[^a-z0-9_-]/g, '')
-        .slice(0, 32),
-    )
-  }
-
-  const handleSubmit = () => {
-    if (!name.trim() || !username.trim()) return
-    createMutation.mutate({
-      name: name.trim(),
-      username: username.trim(),
-      description: description.trim() || undefined,
-      avatarUrl: selectedAvatar ?? undefined,
+  const handleSectionChange = (nextSection: MyBuddySettingsSection) => {
+    navigate({
+      to: nextSection === 'market' ? '/settings/buddy/market' : '/settings/buddy',
+      search: {},
+      replace: true,
     })
   }
 
   return (
-    <Modal open onClose={onClose}>
-      <ModalContent maxWidth="max-w-[560px]" className="shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
-        <ModalHeader title={t('agentMgmt.createTitle')} closeLabel={t('common.close')} />
-
-        <ModalBody className="space-y-5 py-5">
-          <p className="text-sm leading-6 text-text-secondary">{t('agentMgmt.createIntro')}</p>
-
-          <div className="space-y-3">
-            <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
-              {t('agentMgmt.identitySection')}
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-                  {t('agentMgmt.nameLabel')}
-                </label>
-                <Input
-                  value={name}
-                  onChange={(e) => handleNameChange(e.target.value)}
-                  placeholder={t('agentMgmt.namePlaceholder')}
-                  maxLength={64}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-                  {t('agentMgmt.usernameLabel')}
-                </label>
-                <Input
-                  value={username}
-                  onChange={(e) => handleUsernameChange(e.target.value)}
-                  placeholder={t('agentMgmt.usernamePlaceholder')}
-                  maxLength={32}
-                />
-                <p className="px-1 text-xs leading-5 text-text-muted">
-                  {t('agentMgmt.usernameHint')}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">
-              {t('agentMgmt.profileSection')}
-            </div>
-            <div className="space-y-2">
-              <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-                {t('agentMgmt.descLabel')}
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder={t('agentMgmt.descPlaceholder')}
-                className="w-full bg-bg-tertiary border-2 border-border-subtle text-text-primary rounded-[20px] px-5 py-4 text-sm font-bold leading-6 outline-none transition-all placeholder:text-text-muted/30 focus:border-primary focus:shadow-[0_0_0_5px_rgba(0,198,209,0.1)] resize-none"
-                rows={4}
-                maxLength={500}
-              />
-              <p className="px-1 text-xs leading-5 text-text-muted">
-                {t('agentMgmt.descriptionHint')}
-              </p>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-3">
-              {t('agentMgmt.avatarLabel')}
-            </label>
-            <AvatarEditor value={selectedAvatar ?? undefined} onChange={setSelectedAvatar} />
-          </div>
-        </ModalBody>
-
-        {/* Actions */}
-        <ModalFooter>
-          <ModalButtonGroup>
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleSubmit}
-              disabled={!name.trim() || !username.trim() || createMutation.isPending}
-            >
-              {createMutation.isPending ? t('agentMgmt.creating') : t('common.create')}
-            </Button>
-          </ModalButtonGroup>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
+    <div className="flex flex-1 min-w-0 min-h-0 flex-col gap-3">
+      <div className="flex flex-1 min-h-0 gap-3">
+        <BuddyManagementContent
+          activeSection={initialSection}
+          onSectionChange={handleSectionChange}
+        />
+      </div>
+    </div>
   )
 }
 
-/* ── Edit Agent Dialog ────────────────────────────────── */
-
-function EditAgentDialog({
-  agent,
-  onClose,
-  onSuccess,
-  onError,
-  t,
+export function BuddyManagementContent({
+  activeSection,
+  onSectionChange,
 }: {
-  agent: Agent
-  onClose: () => void
-  onSuccess: (agent: Agent) => void
-  onError: () => void
-  t: (key: string) => string
+  activeSection: MyBuddySettingsSection
+  onSectionChange: (nextSection: 'buddies' | 'market') => void
 }) {
-  const [name, setName] = useState(agent.botUser?.displayName ?? agent.botUser?.username ?? 'Buddy')
-  const [description, setDescription] = useState((agent.config?.description as string) ?? '')
-  const [selectedAvatar, setSelectedAvatar] = useState<string | null>(
-    agent.botUser?.avatarUrl ?? null,
-  )
-
-  const updateMutation = useMutation({
-    mutationFn: (data: { name: string; description?: string; avatarUrl?: string | null }) =>
-      fetchApi<Agent>(`/api/agents/${agent.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(data),
-      }),
-    onSuccess: (agent) => onSuccess(agent),
-    onError: () => onError(),
-  })
-
-  return (
-    <Modal open onClose={onClose}>
-      <ModalContent maxWidth="max-w-[480px]" className="shadow-[0_32px_120px_rgba(0,0,0,0.5)]">
-        <ModalHeader title={t('agentMgmt.editTitle')} closeLabel={t('common.close')} />
-
-        <ModalBody className="space-y-4 py-5">
-          <div className="space-y-2">
-            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-              {t('agentMgmt.nameLabel')}
-            </label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t('agentMgmt.namePlaceholder')}
-              maxLength={64}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1">
-              {t('agentMgmt.descLabel')}
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder={t('agentMgmt.descPlaceholder')}
-              className="w-full bg-bg-tertiary border-2 border-border-subtle text-text-primary rounded-[24px] px-6 py-4 text-base font-bold outline-none transition-all placeholder:text-text-muted/30 focus:border-primary focus:shadow-[0_0_0_5px_rgba(0,198,209,0.1)] resize-none"
-              rows={3}
-              maxLength={500}
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-3">
-              {t('agentMgmt.avatarLabel')}
-            </label>
-            <AvatarEditor value={selectedAvatar ?? undefined} onChange={setSelectedAvatar} />
-          </div>
-        </ModalBody>
-
-        <ModalFooter>
-          <ModalButtonGroup>
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() =>
-                name.trim() &&
-                updateMutation.mutate({
-                  name: name.trim(),
-                  description: description.trim() || undefined,
-                  avatarUrl: selectedAvatar,
-                })
-              }
-              disabled={!name.trim() || updateMutation.isPending}
-            >
-              {updateMutation.isPending ? t('common.saving') : t('common.save')}
-            </Button>
-          </ModalButtonGroup>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
-  )
-}
-
-/* ── Embeddable Buddy Management Content (for Settings page) ── */
-
-export function BuddyManagementContent() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const searchParams = useSearch({ strict: false }) as {
+    agent?: string
+    agentId?: string
+  }
 
-  const [showCreate, setShowCreate] = useState<{
-    name?: string
-    username?: string
-    description?: string
-  } | null>(null)
+  const routePath = location.pathname
+  const normalizedRoutePath = routePath.replace(/\/+$/, '')
+  const isBuddyCreatePath = normalizedRoutePath.endsWith('/settings/buddy/create')
+  const isBuddyMarketPath = normalizedRoutePath.endsWith('/settings/buddy/market')
+  const isBuddyDetailPath = normalizedRoutePath.endsWith('/settings/buddy/detail')
+  const routeSectionFromPath: MyBuddySettingsSection | undefined = isBuddyMarketPath
+    ? 'market'
+    : isBuddyCreatePath || isBuddyDetailPath
+      ? 'buddies'
+      : undefined
+  const effectiveSection: MyBuddySettingsSection = routeSectionFromPath ?? activeSection
+  const isMarketActive = isBuddyMarketPath || effectiveSection === 'market'
+
+  const showCreateMode = effectiveSection === 'buddies' && isBuddyCreatePath
+  const detailAgentId =
+    effectiveSection === 'buddies'
+      ? (() => {
+          if (typeof searchParams.agentId === 'string' && searchParams.agentId.trim()) {
+            return searchParams.agentId.trim()
+          }
+          if (typeof searchParams.agent === 'string' && searchParams.agent.trim()) {
+            return searchParams.agent.trim()
+          }
+          return undefined
+        })()
+      : undefined
+
+  const isDetailMode = effectiveSection === 'buddies' && isBuddyDetailPath && !!detailAgentId
+
+  const navigateBuddyView = (state: {
+    section: MyBuddySettingsSection
+    view?: 'create' | 'detail'
+    agentId?: string
+  }) => {
+    const routeTo =
+      state.section === 'market'
+        ? '/settings/buddy/market'
+        : state.view === 'create'
+          ? '/settings/buddy/create'
+          : state.view === 'detail'
+            ? '/settings/buddy/detail'
+            : '/settings/buddy'
+
+    navigate({
+      to: routeTo,
+      search:
+        state.section === 'market' || state.view === 'create'
+          ? {}
+          : state.view === 'detail' && state.agentId
+            ? { agentId: state.agentId }
+            : {},
+      replace: true,
+    })
+  }
+
   const [showEdit, setShowEdit] = useState(false)
+  const [activeListingAgent, setActiveListingAgent] = useState<{
+    agentId: string
+    listingId?: string
+  } | null>(null)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [generatedToken, setGeneratedToken] = useState<string | null>(null)
   const [tokenCopied, setTokenCopied] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [message, setMessage] = useState<{ text: string; success: boolean } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const currentUserId = useAuthStore((state) => state.user?.id) ?? null
 
   // Listen for 'create-buddy' pending action from task center
   const pendingAction = useUIStore((s) => s.pendingAction)
   const setPendingAction = useUIStore((s) => s.setPendingAction)
   useEffect(() => {
     if (pendingAction === 'create-buddy') {
-      setShowCreate({})
+      navigate({ to: '/settings/buddy/create', search: {}, replace: true })
       setPendingAction(null)
     }
-  }, [pendingAction, setPendingAction])
+  }, [navigate, pendingAction, setPendingAction])
 
   const { data: agents = [], isLoading } = useQuery({
     queryKey: ['agents'],
     queryFn: () => fetchApi<Agent[]>('/api/agents'),
     refetchInterval: 30000,
   })
+
+  useEffect(() => {
+    if (effectiveSection !== 'buddies') return
+    if (!detailAgentId) {
+      setSelectedAgent(null)
+      return
+    }
+
+    const found = agents.find((agent) => agent.id === detailAgentId)
+    setSelectedAgent(found ?? null)
+  }, [effectiveSection, agents, detailAgentId])
+
+  useEffect(() => {
+    if (effectiveSection !== 'buddies') {
+      setShowEdit(false)
+      setActiveListingAgent(null)
+      setSelectedAgent(null)
+      setGeneratedToken(null)
+      setDeleteConfirmId(null)
+      setMessage(null)
+    }
+  }, [effectiveSection])
 
   const filteredAgents = agents.filter((agent) => {
     if (!searchQuery) return true
@@ -1550,6 +369,18 @@ export function BuddyManagementContent() {
     },
   })
 
+  const messageOwnerMutation = useMutation({
+    mutationFn: (agentUserId: string) =>
+      fetchApi<{ id: string }>('/api/channels/dm', {
+        method: 'POST',
+        body: JSON.stringify({ userId: agentUserId }),
+      }),
+    onSuccess: (data) => {
+      navigate({ to: '/settings/dm', search: { dm: data.id } })
+    },
+    onError: (err: Error) => showToast(err.message, 'error'),
+  })
+
   const showMsg = (text: string, success: boolean) => {
     setMessage({ text, success })
     setTimeout(() => setMessage(null), 3000)
@@ -1561,68 +392,92 @@ export function BuddyManagementContent() {
     showMsg(t('agentMgmt.tokenCopied'), true)
   }
 
-  const statusColor = (status: string) => {
-    switch (status) {
-      case 'running':
-        return 'text-success'
-      case 'stopped':
-        return 'text-text-muted'
-      case 'error':
-        return 'text-danger'
-      default:
-        return 'text-text-muted'
-    }
-  }
-
-  const statusLabel = (status: string) => {
-    switch (status) {
-      case 'running':
-        return t('agentMgmt.statusRunning')
-      case 'stopped':
-        return t('agentMgmt.statusStopped')
-      case 'error':
-        return t('agentMgmt.statusError')
-      default:
-        return status
-    }
-  }
-
   // Main full-height split layout
   return (
     <>
       {/* Left Sidebar */}
       <div className="w-full md:w-72 lg:w-80 shrink-0 flex-col hidden md:flex">
         <div className="bg-[var(--glass-bg)] backdrop-blur-3xl border border-[var(--glass-line)] rounded-2xl flex-1 flex flex-col overflow-hidden shadow-sm">
-          <div className="shrink-0 flex flex-col gap-3 p-4 border-b border-[var(--glass-line)]">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60">
-                {t('agentMgmt.myBuddies', '我的终端节点')}
-              </span>
-              <Button
-                variant="primary"
-                size="sm"
-                className="rounded-full !px-3"
-                onClick={() => setShowCreate({})}
-              >
-                <Plus size={14} className="md:mr-1" />
-                <span className="hidden md:inline">{t('agentMgmt.newAgent', '添加')}</span>
-              </Button>
+          <div className="shrink-0 flex flex-col gap-2 p-3 border-b border-[var(--glass-line)]">
+            <div className="relative">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+              />
+              <input
+                type="text"
+                placeholder={t('agentMgmt.searchPlaceholder', '搜索 Buddy')}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-bg-tertiary/50 border border-border-subtle rounded-xl pl-8 pr-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/40 transition-shadow"
+              />
             </div>
-            {agents.length > 0 && (
-              <div className="relative">
-                <Search
-                  size={14}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
-                />
-                <input
-                  type="text"
-                  placeholder={t('agentMgmt.searchPlaceholder', '搜索节点或 ID...')}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-bg-tertiary/50 border border-border-subtle rounded-xl pl-8 pr-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/40 transition-shadow"
-                />
+            <button
+              type="button"
+              onClick={() => navigateBuddyView({ section: 'buddies', view: 'create' })}
+              className={cn(
+                'w-full flex items-center justify-between rounded-xl border border-transparent px-3 py-2.5 text-left transition-all duration-200',
+                showCreateMode
+                  ? 'bg-primary/10 border-primary/40 shadow-sm'
+                  : 'hover:bg-bg-tertiary/60 hover:border-border-dim',
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <span
+                  className={cn(
+                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-primary',
+                    showCreateMode ? 'bg-primary/25' : 'bg-primary/15',
+                  )}
+                >
+                  <Plus size={14} />
+                </span>
+                <span
+                  className={cn(
+                    'text-sm font-bold',
+                    showCreateMode ? 'text-primary' : 'text-text-primary',
+                  )}
+                >
+                  {t('agentMgmt.newAgent', '新建 Buddy')}
+                </span>
               </div>
-            )}
+              <ArrowRight
+                size={14}
+                className={cn('shrink-0', showCreateMode ? 'text-primary' : 'text-text-muted')}
+              />
+            </button>
+            <button
+              type="button"
+              onClick={() => onSectionChange('market')}
+              className={cn(
+                'w-full flex items-center justify-between rounded-xl border border-transparent px-3 py-2.5 text-left transition-all duration-200',
+                isMarketActive
+                  ? 'bg-warning/10 border-warning/40 shadow-sm'
+                  : 'hover:bg-bg-tertiary/60 hover:border-border-dim',
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <span
+                  className={cn(
+                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-warning',
+                    isMarketActive ? 'bg-warning/25' : 'bg-warning/15',
+                  )}
+                >
+                  <Store size={14} />
+                </span>
+                <span
+                  className={cn(
+                    'text-sm font-bold',
+                    isMarketActive ? 'text-warning' : 'text-text-primary',
+                  )}
+                >
+                  {t('marketplace.title', 'Buddy 集市')}
+                </span>
+              </div>
+              <ArrowRight
+                size={14}
+                className={cn('shrink-0', isMarketActive ? 'text-warning' : 'text-text-muted')}
+              />
+            </button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -1647,18 +502,7 @@ export function BuddyManagementContent() {
               </div>
             ) : agents.length === 0 ? (
               <div className="text-center p-4">
-                <p className="text-sm text-text-muted mb-4">
-                  {t('agentMgmt.noAgents', '暂无节点')}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => setShowCreate({})}
-                >
-                  <Plus size={14} className="mr-1" />
-                  {t('agentMgmt.createFirst', '配置节点')}
-                </Button>
+                <p className="text-sm text-text-muted">{t('agentMgmt.noAgents', '暂无节点')}</p>
               </div>
             ) : filteredAgents.length === 0 ? (
               <div className="text-center p-4">
@@ -1667,13 +511,18 @@ export function BuddyManagementContent() {
             ) : (
               filteredAgents.map((agent) => {
                 const name = agent.botUser?.displayName ?? agent.botUser?.username ?? 'Node'
-                const isSelected = selectedAgent?.id === agent.id
+                const isSelected = detailAgentId === agent.id
                 return (
                   <button
                     type="button"
                     key={agent.id}
                     onClick={() => {
-                      setSelectedAgent(isSelected ? null : agent)
+                      if (detailAgentId === agent.id) {
+                        onSectionChange('buddies')
+                      } else {
+                        navigateBuddyView({ section: 'buddies', view: 'detail', agentId: agent.id })
+                      }
+                      setActiveListingAgent(null)
                       setGeneratedToken(null)
                     }}
                     className={cn(
@@ -1706,8 +555,15 @@ export function BuddyManagementContent() {
                       >
                         {name}
                       </p>
-                      <p className="text-[11px] text-text-muted truncate font-mono">
-                        ID: {agent.id.slice(0, 8)}
+                      <p className="flex items-center gap-1 text-[11px] text-text-muted truncate font-mono">
+                        <span>
+                          {t('agentMgmt.buddyLevel', {
+                            level: getBuddyLevel(agent.totalOnlineSeconds),
+                          })}
+                        </span>
+                        {agent.totalOnlineSeconds > 0 ? (
+                          <OnlineRank totalSeconds={agent.totalOnlineSeconds} />
+                        ) : null}
                       </p>
                     </div>
                   </button>
@@ -1720,44 +576,100 @@ export function BuddyManagementContent() {
 
       {/* Right column: Details or placeholder */}
       <div className="flex-1 min-w-0 flex flex-col">
-        <div className="bg-[var(--glass-bg)] backdrop-blur-3xl border border-[var(--glass-line)] rounded-2xl flex-1 overflow-y-auto shadow-sm p-4 md:p-6 lg:p-8 relative">
-          {showCreate ? (
+        {/*
+         * 统一三类子页面（Buddy 详情 / 新建 / 集市）右侧内容区 padding，避免状态切换时出现视觉抖动。
+         */}
+        <div className="bg-[var(--glass-bg)] backdrop-blur-3xl border border-[var(--glass-line)] rounded-2xl flex-1 overflow-y-auto shadow-sm relative p-4 md:p-6 lg:p-8">
+          {effectiveSection === 'market' ? (
+            <BuddyRentalsPanel />
+          ) : showCreateMode ? (
             <CreateAgentDialog
-              onClose={() => setShowCreate(null)}
+              onClose={() => onSectionChange('buddies')}
               onSuccess={(agent) => {
                 queryClient.invalidateQueries({ queryKey: ['agents'] })
-                setShowCreate(null)
-                setSelectedAgent(agent)
+                navigateBuddyView({ section: 'buddies', view: 'detail', agentId: agent.id })
                 showMsg(t('agentMgmt.createSuccess'), true)
               }}
               onError={(message) => showMsg(message || t('agentMgmt.createFailed'), false)}
               t={t}
-              initialData={showCreate}
+              embedded
+              initialData={{}}
             />
-          ) : selectedAgent ? (
+          ) : isDetailMode ? (
             <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-right-4 duration-300">
-              <AgentDetail
-                agent={selectedAgent}
-                generatedToken={generatedToken}
-                tokenCopied={tokenCopied}
-                tokenMutation={tokenMutation}
-                statusColor={statusColor}
-                statusLabel={statusLabel}
-                onCopyToken={copyToken}
-                onDelete={() => setDeleteConfirmId(selectedAgent.id)}
-                onEdit={() => setShowEdit(true)}
-                onToggle={(agent) => toggleMutation.mutate(agent)}
-                togglePending={toggleMutation.isPending}
-                t={t}
-              />
+              {selectedAgent ? (
+                activeListingAgent ? (
+                  <CreateListingPage
+                    listingId={activeListingAgent.listingId}
+                    defaultAgentId={activeListingAgent.agentId}
+                    embedded
+                    onCancel={() => setActiveListingAgent(null)}
+                    onSubmitSuccess={() => {
+                      setActiveListingAgent(null)
+                      queryClient.invalidateQueries({ queryKey: ['agents'] })
+                      queryClient.invalidateQueries({ queryKey: ['marketplace'] })
+                      setMessage({
+                        text: activeListingAgent.listingId
+                          ? t('marketplace.listingUpdated', '挂单已更新')
+                          : t('marketplace.listingCreated', '挂单已创建'),
+                        success: true,
+                      })
+                      setTimeout(() => setMessage(null), 3000)
+                      if (selectedAgent) {
+                        fetchApi<Agent>(`/api/agents/${selectedAgent.id}`).then((updatedAgent) =>
+                          setSelectedAgent(updatedAgent),
+                        )
+                      }
+                    }}
+                  />
+                ) : (
+                  <AgentDetail
+                    agent={selectedAgent}
+                    generatedToken={generatedToken}
+                    tokenCopied={tokenCopied}
+                    tokenMutation={tokenMutation}
+                    onCopyToken={copyToken}
+                    onDelete={() => setDeleteConfirmId(selectedAgent.id)}
+                    onEdit={() => setShowEdit(true)}
+                    onCreateListing={() =>
+                      setActiveListingAgent({
+                        agentId: selectedAgent.id,
+                        listingId: selectedAgent.listingInfo?.listingId,
+                      })
+                    }
+                    onMessageOwner={() =>
+                      messageOwnerMutation.mutate(selectedAgent.botUser?.id || selectedAgent.userId)
+                    }
+                    isMessageOwnerPending={messageOwnerMutation.isPending}
+                    currentUserId={currentUserId}
+                    onToggle={(agent) => toggleMutation.mutate(agent)}
+                    togglePending={toggleMutation.isPending}
+                    t={t}
+                  />
+                )
+              ) : (
+                <div className="relative h-full min-h-[240px]">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center p-8 animate-in fade-in duration-300">
+                    <Terminal size={48} className="mx-auto mb-4" strokeWidth={1} />
+                    <p className="text-sm font-black uppercase tracking-[0.2em] mb-2">
+                      {t('agentMgmt.selectBuddy', '选择 Buddy')}
+                    </p>
+                    <p className="text-xs text-text-muted">
+                      {t('agentMgmt.selectBuddyDesc', '从左侧选择一个 Buddy 管理配置。')}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center p-8 animate-in fade-in duration-300">
               <div className="text-center opacity-40">
                 <Terminal size={48} className="mx-auto mb-4" strokeWidth={1} />
-                <p className="text-sm font-black uppercase tracking-[0.2em] mb-2">Select a node</p>
+                <p className="text-sm font-black uppercase tracking-[0.2em] mb-2">
+                  {t('agentMgmt.selectBuddy', '选择 Buddy')}
+                </p>
                 <p className="text-xs text-text-muted">
-                  Choose a terminal node from the left sidebar to manage its configuration.
+                  {t('agentMgmt.selectBuddyDesc', '从左侧选择一个 Buddy 管理配置。')}
                 </p>
               </div>
             </div>
@@ -1808,4 +720,646 @@ export function BuddyManagementContent() {
       </Modal>
     </>
   )
+}
+
+function BuddyRentalsPanel() {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [activeWorkspaceTab, setActiveWorkspaceTab] =
+    useState<MarketWorkspaceSection>('marketplace')
+
+  // Fetch contracts as tenant
+  const { data: rentingContracts, isLoading: isLoadingRenting } = useQuery({
+    queryKey: ['marketplace', 'contracts', 'tenant'],
+    queryFn: () => fetchApi<{ contracts: Contract[] }>('/api/marketplace/contracts?role=tenant'),
+  })
+
+  // Fetch contracts as owner
+  const { data: rentingOutContracts, isLoading: isLoadingOut } = useQuery({
+    queryKey: ['marketplace', 'contracts', 'owner'],
+    queryFn: () => fetchApi<{ contracts: Contract[] }>('/api/marketplace/contracts?role=owner'),
+  })
+
+  // Fetch my listings
+  const { data: myListings, isLoading: isLoadingListings } = useQuery({
+    queryKey: ['marketplace', 'my-listings'],
+    queryFn: () => fetchApi<{ listings: MyListing[] }>('/api/marketplace/my-listings'),
+  })
+
+  // Toggle listing status
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, listingStatus }: { id: string; listingStatus: string }) =>
+      fetchApi(`/api/marketplace/listings/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listingStatus }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marketplace'] })
+      showToast(t('marketplace.statusUpdated', '状态已更新'), 'success')
+    },
+    onError: (err: Error) => showToast(err.message, 'error'),
+  })
+
+  // Delete listing
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => fetchApi(`/api/marketplace/listings/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marketplace'] })
+      showToast(t('marketplace.listingDeleted', '挂单已删除'), 'success')
+    },
+    onError: (err: Error) => showToast(err.message, 'error'),
+  })
+
+  // Delist listing (toggle isListed to false)
+  const delistMutation = useMutation({
+    mutationFn: (id: string) =>
+      fetchApi(`/api/marketplace/listings/${id}/toggle`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isListed: false }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marketplace'] })
+      showToast(t('marketplace.delistSuccess', 'Buddy 已下架'), 'success')
+    },
+    onError: (err: Error) => showToast(err.message, 'error'),
+  })
+
+  // Relist listing (toggle isListed to true)
+  const relistMutation = useMutation({
+    mutationFn: (id: string) =>
+      fetchApi(`/api/marketplace/listings/${id}/toggle`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isListed: true }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marketplace'] })
+      showToast(t('marketplace.relistSuccess', 'Buddy 已重新上架'), 'success')
+    },
+    onError: (err: Error) => showToast(err.message, 'error'),
+  })
+
+  // Start chat with a rented Buddy.
+  const startChatMutation = useMutation({
+    mutationFn: (agentUserId: string) =>
+      fetchApi<{ id: string }>('/api/channels/dm', {
+        method: 'POST',
+        body: JSON.stringify({ userId: agentUserId }),
+      }),
+    onSuccess: (data) => {
+      navigate({ to: '/settings/dm', search: { dm: data.id } })
+    },
+    onError: (err: Error) => showToast(err.message, 'error'),
+  })
+
+  const myRentedCount = rentingContracts?.contracts?.length ?? 0
+  const outContractCount = rentingOutContracts?.contracts?.length ?? 0
+  const myListingsCount = myListings?.listings?.length ?? 0
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <select
+          id="workspaceFilter"
+          value={activeWorkspaceTab}
+          onChange={(event) =>
+            setActiveWorkspaceTab(event.currentTarget.value as MarketWorkspaceSection)
+          }
+          className="w-full md:w-auto rounded-xl border border-border-subtle bg-bg-secondary/60 px-3 py-2.5 text-sm font-black text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+        >
+          <option value="marketplace">{t('marketplace.title', 'Buddy 集市')}</option>
+          <option value="myRented">
+            {t('marketplace.renting', '我的租入')} (
+            {isLoadingRenting ? t('common.loading', '加载中') : myRentedCount})
+          </option>
+          <option value="outContracts">
+            {t('marketplace.outContracts', '租赁合同')} (
+            {isLoadingOut ? t('common.loading', '加载中') : outContractCount})
+          </option>
+          <option value="myListings">
+            {t('marketplace.myListings', '我的挂单')} (
+            {isLoadingListings ? t('common.loading', '加载中') : myListingsCount})
+          </option>
+        </select>
+      </div>
+
+      <div className="mt-4">
+        {activeWorkspaceTab === 'myRented' ? (
+          <RentalContractSection
+            titleKey="marketplace.renting"
+            titleFallback="我的租入"
+            contracts={rentingContracts?.contracts}
+            isLoading={isLoadingRenting}
+            startChatMutation={startChatMutation}
+            isTenantView
+            t={t}
+          />
+        ) : null}
+
+        {activeWorkspaceTab === 'outContracts' ? (
+          <RentalContractSection
+            titleKey="marketplace.outContracts"
+            titleFallback="租赁合同"
+            contracts={rentingOutContracts?.contracts}
+            isLoading={isLoadingOut}
+            t={t}
+          />
+        ) : null}
+
+        {activeWorkspaceTab === 'myListings' ? (
+          <section className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black uppercase tracking-[0.15em] text-text-secondary">
+                {t('marketplace.myListings', '我的挂单')}
+              </h3>
+              <Link
+                to="/settings/buddy/create"
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-400 to-amber-500 text-text-primary font-bold hover:from-amber-500 hover:to-amber-600 transition-all shadow-sm hover:shadow-md"
+              >
+                <Store className="w-4 h-4" />
+                {t('marketplace.createListing', '出租')}
+              </Link>
+            </div>
+            <ListingsSection
+              myListings={myListings}
+              isLoadingListings={isLoadingListings}
+              t={t}
+              toggleMutation={toggleMutation}
+              delistMutation={delistMutation}
+              relistMutation={relistMutation}
+              deleteMutation={deleteMutation}
+            />
+          </section>
+        ) : null}
+
+        {activeWorkspaceTab === 'marketplace' ? <BuddyMarketContent /> : null}
+      </div>
+    </div>
+  )
+}
+
+function RentalContractSection({
+  titleKey,
+  titleFallback,
+  contracts,
+  isLoading,
+  isTenantView,
+  startChatMutation,
+  t,
+}: {
+  titleKey: string
+  titleFallback: string
+  contracts: Contract[] | undefined
+  isLoading: boolean
+  isTenantView?: boolean
+  startChatMutation?: {
+    mutate: (agentUserId: string) => void
+    isPending: boolean
+  }
+  t: TranslateFn
+}) {
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-black uppercase tracking-[0.15em] text-text-secondary">
+          {t(titleKey, titleFallback)}
+        </h3>
+      </div>
+
+      <div className="space-y-4">
+        {isLoading ? (
+          [0, 1, 2].map((n) => (
+            <div
+              key={`skel-${n}`}
+              className="bg-bg-secondary/60 rounded-2xl border-2 border-border/20 p-6 animate-pulse h-28"
+            />
+          ))
+        ) : !contracts?.length ? (
+          <div className="text-center py-16">
+            <div className="text-5xl mb-4">📋</div>
+            <p className="text-text-muted font-bold">
+              {t('marketplace.noContracts', '暂无租赁合同')}
+            </p>
+          </div>
+        ) : (
+          contracts.map((c) => {
+            const st = STATUS_STYLES[c.status] ?? STATUS_STYLES.pending!
+            const isActive = c.status === 'active'
+            const contractMeta =
+              c.startsAt && c.expiresAt
+                ? `${Math.round((new Date(c.expiresAt).getTime() - new Date(c.startsAt).getTime()) / 3600000)}h`
+                : t('marketplace.unlimited', '不限时')
+            const priceText =
+              c.pricingVersion === 2 ? `${c.baseDailyRate ?? 0} 🦐/d` : `${c.hourlyRate} 🦐/h`
+            const cardAvatarUserId = c.agentUserId || c.ownerId || c.id
+
+            return (
+              <div
+                key={c.id}
+                className="relative overflow-hidden rounded-2xl border-2 border-border/20 bg-bg-secondary/80 backdrop-blur shadow-md hover:shadow-lg transition-all"
+              >
+                <div
+                  className={`absolute inset-y-0 left-0 w-1 ${
+                    isActive ? 'bg-success/70' : 'bg-text-muted/45'
+                  }`}
+                />
+                <div className="pl-3">
+                  <Link to={`/marketplace/contracts/${c.id}`} className="block">
+                    <div className="p-5 pb-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="relative">
+                            <UserAvatar
+                              userId={cardAvatarUserId}
+                              displayName={c.listing?.title || c.contractNo}
+                              size="sm"
+                              className={isActive ? 'ring-2 ring-success/50' : ''}
+                            />
+                            <span
+                              className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary ${
+                                isActive ? 'bg-success' : 'bg-text-muted/40'
+                              }`}
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                              <span
+                                className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${st.bg} ${st.text}`}
+                              >
+                                {t(st.labelKey)}
+                              </span>
+                              <span className="text-xs text-text-muted font-mono">
+                                #{c.contractNo}
+                              </span>
+                            </div>
+                            <h3 className="font-black text-base line-clamp-2">
+                              {c.listing?.title || t('marketplace.unknownListing', '未知挂单')}
+                            </h3>
+                            <p className="mt-1 text-xs text-text-muted">
+                              {new Date(c.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <p className="text-[11px] text-text-muted font-bold uppercase tracking-[0.14em]">
+                            {isActive
+                              ? t('marketplace.totalCost', '总费用')
+                              : t('marketplace.expectedCost', '预估费用')}
+                          </p>
+                          <p className="text-lg font-black text-warning leading-tight">
+                            {c.totalCost} 🦐
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <div className="rounded-xl border border-border-subtle bg-bg-secondary/70 p-2.5">
+                          <p className="text-[10px] uppercase tracking-[0.15em] text-text-muted font-black">
+                            {t('marketplace.duration', '时长')}
+                          </p>
+                          <div className="mt-1 inline-flex items-center gap-1.5 text-sm font-bold">
+                            <Clock className="w-3.5 h-3.5" />
+                            {contractMeta}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-border-subtle bg-bg-secondary/70 p-2.5">
+                          <p className="text-[10px] uppercase tracking-[0.15em] text-text-muted font-black">
+                            {t('marketplace.rate', '单价')}
+                          </p>
+                          <p className="mt-1 text-sm font-black">{priceText}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+
+                  {(isActive || c.expiresAt) && (
+                    <div className="px-5 pt-4 pb-3 flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle">
+                      <div>
+                        {c.expiresAt ? (
+                          <RentalCountdown expiresAt={c.expiresAt} />
+                        ) : (
+                          <span className="text-xs text-text-muted font-medium">
+                            {t('marketplace.unlimitedUsage', '不限时使用')}
+                          </span>
+                        )}
+                      </div>
+                      {isTenantView && c.agentUserId ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault()
+                            startChatMutation?.mutate(c.agentUserId as string)
+                          }}
+                          disabled={!startChatMutation || startChatMutation.isPending}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-primary to-primary text-white text-sm font-bold hover:from-primary hover:to-primary transition-all shadow-md hover:shadow-lg disabled:opacity-50"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          {t('marketplace.useBuddy', '开始使用')}
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })
+        )}
+      </div>
+    </section>
+  )
+}
+
+function ListingsSection({
+  myListings,
+  isLoadingListings,
+  t,
+  toggleMutation,
+  delistMutation,
+  relistMutation,
+  deleteMutation,
+}: {
+  myListings: { listings: MyListing[] } | undefined
+  isLoadingListings: boolean
+  t: TranslateFn
+  toggleMutation: { mutate: (p: { id: string; listingStatus: string }) => void }
+  delistMutation: { mutate: (id: string) => void }
+  relistMutation: { mutate: (id: string) => void }
+  deleteMutation: { mutate: (id: string) => void }
+}) {
+  const [showOffline, setShowOffline] = useState(false)
+
+  if (isLoadingListings) {
+    return (
+      <div className="space-y-4">
+        {[0, 1, 2].map((n) => (
+          <div
+            key={`lskel-${n}`}
+            className="bg-bg-secondary/60 rounded-2xl border-2 border-border/20 p-6 animate-pulse h-24"
+          />
+        ))}
+      </div>
+    )
+  }
+
+  if (!myListings?.listings?.length) {
+    return (
+      <div className="text-center py-16">
+        <div className="text-5xl mb-4">📦</div>
+        <p className="text-text-muted font-bold">
+          {t('marketplace.noListings', '还没有挂单，快去创建一个吧')}
+        </p>
+      </div>
+    )
+  }
+
+  const onlineListings = myListings.listings.filter((l) => isAgentOnline(l.agent))
+  const offlineListings = myListings.listings.filter((l) => !isAgentOnline(l.agent))
+
+  return (
+    <div className="space-y-4">
+      {onlineListings.map((l) => (
+        <ListingCard
+          key={l.id}
+          listing={l}
+          t={t}
+          toggleMutation={toggleMutation}
+          delistMutation={delistMutation}
+          relistMutation={relistMutation}
+          deleteMutation={deleteMutation}
+        />
+      ))}
+
+      {offlineListings.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowOffline(!showOffline)}
+            className="flex items-center gap-2 text-sm font-bold text-text-muted hover:text-text-secondary transition-colors w-full"
+          >
+            <ChevronDown
+              className={`w-4 h-4 transition-transform ${showOffline ? 'rotate-180' : ''}`}
+            />
+            {t('marketplace.offlineListings', '离线 Buddy')} ({offlineListings.length})
+          </button>
+          {showOffline &&
+            offlineListings.map((l) => (
+              <ListingCard
+                key={l.id}
+                listing={l}
+                t={t}
+                toggleMutation={toggleMutation}
+                delistMutation={delistMutation}
+                relistMutation={relistMutation}
+                deleteMutation={deleteMutation}
+              />
+            ))}
+        </>
+      )}
+    </div>
+  )
+}
+
+function ListingCard({
+  listing: l,
+  t,
+  toggleMutation,
+  delistMutation,
+  relistMutation,
+  deleteMutation,
+}: {
+  listing: MyListing
+  t: TranslateFn
+  toggleMutation: { mutate: (p: { id: string; listingStatus: string }) => void }
+  delistMutation: { mutate: (id: string) => void }
+  relistMutation: { mutate: (id: string) => void }
+  deleteMutation: { mutate: (id: string) => void }
+}) {
+  const online = isAgentOnline(l.agent)
+
+  let statusBadge: { label: string; bg: string; text: string }
+  if (l.isRented) {
+    statusBadge = {
+      label: t('marketplace.listingRented', '出租中'),
+      bg: 'bg-warning/10',
+      text: 'text-warning',
+    }
+  } else if (!l.isListed && l.listingStatus === 'active') {
+    statusBadge = {
+      label: t('marketplace.listingUnlisted', '已下架'),
+      bg: 'bg-bg-secondary',
+      text: 'text-text-muted',
+    }
+  } else {
+    const ls = LISTING_STATUS[l.listingStatus] ?? LISTING_STATUS.draft!
+    statusBadge = { label: t(ls.labelKey), bg: ls.bg, text: ls.text }
+  }
+
+  return (
+    <div className="bg-bg-secondary/80 backdrop-blur rounded-2xl border-2 border-border/20 shadow-md p-6">
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <div className="flex items-center gap-3 mb-1">
+            <span
+              className={`px-2.5 py-1 rounded-full text-xs font-bold ${statusBadge.bg} ${statusBadge.text}`}
+            >
+              {statusBadge.label}
+            </span>
+            <span className="flex items-center gap-1.5 text-xs">
+              <span
+                className={`w-2 h-2 rounded-full ${online ? 'bg-success animate-pulse' : 'bg-text-muted/30'}`}
+              />
+              <span className={online ? 'text-success font-bold' : 'text-text-muted'}>
+                {online ? t('marketplace.online', '在线') : t('marketplace.offline', '离线')}
+              </span>
+            </span>
+            {l.agent?.totalOnlineSeconds ? (
+              <span className="text-xs text-text-muted flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {t('marketplace.totalOnline', '累计')}{' '}
+                {formatOnlineDuration(l.agent.totalOnlineSeconds, t)}
+              </span>
+            ) : null}
+            <span className="text-xs text-text-muted">
+              {(() => {
+                const d = DEVICE_TIERS[l.deviceTier]
+                return d ? `${d.icon} ${t(d.labelKey)}` : ''
+              })()} · {l.osType}
+            </span>
+          </div>
+          <h3 className="font-bold text-lg">{l.title}</h3>
+          <div className="flex items-center gap-4 text-sm text-text-muted mt-1">
+            <span>
+              {l.pricingVersion === 2 ? `${l.baseDailyRate ?? 0} 🦐/d` : `${l.hourlyRate} 🦐/h`}
+            </span>
+            <span className="flex items-center gap-1">
+              <Eye className="w-3.5 h-3.5" /> {l.viewCount}
+            </span>
+            <span className="flex items-center gap-1">
+              <Users className="w-3.5 h-3.5" /> {l.rentalCount}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {l.isRented ? null : (
+            <>
+              {l.listingStatus === 'active' && l.isListed && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm(t('marketplace.confirmDelist', '确定要下架此 Buddy 吗？'))) {
+                      delistMutation.mutate(l.id)
+                    }
+                  }}
+                  className="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
+                  title={t('marketplace.delistBuddy', '下架 Buddy')}
+                >
+                  <PackageMinus className="w-4 h-4" />
+                </button>
+              )}
+              {l.listingStatus === 'active' && !l.isListed && (
+                <button
+                  type="button"
+                  onClick={() => relistMutation.mutate(l.id)}
+                  className="p-2 rounded-lg text-success hover:bg-success/10 transition-colors"
+                  title={t('marketplace.relistBuddy', '重新上架')}
+                >
+                  <Play className="w-4 h-4" />
+                </button>
+              )}
+              {l.listingStatus === 'active' && l.isListed && (
+                <button
+                  type="button"
+                  onClick={() => toggleMutation.mutate({ id: l.id, listingStatus: 'paused' })}
+                  className="p-2 rounded-lg text-warning hover:bg-warning/10 transition-colors"
+                  title={t('marketplace.pause', '暂停')}
+                >
+                  <Pause className="w-4 h-4" />
+                </button>
+              )}
+              {l.listingStatus === 'paused' && (
+                <button
+                  type="button"
+                  onClick={() => toggleMutation.mutate({ id: l.id, listingStatus: 'active' })}
+                  className="p-2 rounded-lg text-success hover:bg-success/10 transition-colors"
+                  title={t('marketplace.resume', '恢复')}
+                >
+                  <Play className="w-4 h-4" />
+                </button>
+              )}
+            </>
+          )}
+          <Link
+            to={`/marketplace/edit/${l.id}`}
+            className="p-2 rounded-lg text-text-muted hover:bg-bg-secondary transition-colors"
+            title={t('marketplace.edit', '编辑')}
+          >
+            <Edit className="w-4 h-4" />
+          </Link>
+          {(l.listingStatus === 'draft' ||
+            l.listingStatus === 'paused' ||
+            l.listingStatus === 'closed') && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(t('marketplace.confirmDelete', '确定删除此挂单？'))) {
+                  deleteMutation.mutate(l.id)
+                }
+              }}
+              className="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
+              title={t('marketplace.delete', '删除')}
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RentalCountdown({ expiresAt }: { expiresAt: string }) {
+  const { t } = useTranslation()
+  const [remaining, setRemaining] = useState(() => calcRemaining(expiresAt))
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setRemaining(calcRemaining(expiresAt))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [expiresAt])
+
+  if (remaining <= 0) {
+    return (
+      <span className="text-xs font-bold text-danger">{t('marketplace.expired', '已到期')}</span>
+    )
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-primary">
+      <Clock className="w-3 h-3" />
+      {formatCountdown(remaining, t)}
+    </span>
+  )
+}
+
+function calcRemaining(expiresAt: string): number {
+  return Math.max(0, new Date(expiresAt).getTime() - Date.now())
+}
+
+function formatCountdown(ms: number, t: TranslateFn): string {
+  const totalSec = Math.floor(ms / 1000)
+  const d = Math.floor(totalSec / 86400)
+  const h = Math.floor((totalSec % 86400) / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  const s = totalSec % 60
+  if (d > 0)
+    return `${d}${t('time.dayShort', '天')} ${h}${t('time.hourShort', '时')} ${m}${t('time.minShort', '分')}`
+  if (h > 0)
+    return `${h}${t('time.hourShort', '时')} ${m}${t('time.minShort', '分')} ${s}${t('time.secShort', '秒')}`
+  return `${m}${t('time.minShort', '分')} ${s}${t('time.secShort', '秒')}`
 }

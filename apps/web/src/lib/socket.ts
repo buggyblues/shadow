@@ -3,14 +3,10 @@ import { io, type Socket } from 'socket.io-client'
 
 let socket: Socket | null = null
 const joinedChannels = new Set<string>()
-const joinedApps = new Set<string>()
 
 function rejoinRooms(s: Socket): void {
   for (const channelId of joinedChannels) {
     s.emit('channel:join', { channelId })
-  }
-  for (const appId of joinedApps) {
-    s.emit('app:join', { appId })
   }
 }
 
@@ -52,7 +48,6 @@ export function disconnectSocket(): void {
     socket = null
   }
   joinedChannels.clear()
-  joinedApps.clear()
 }
 
 function handleBeforeUnload() {
@@ -121,29 +116,4 @@ export function sendTyping(channelId: string, typing = true): void {
 
 export function updatePresence(status: 'online' | 'idle' | 'dnd' | 'offline'): void {
   getSocket().emit('presence:update', { status })
-}
-
-export function joinApp(
-  appId: string,
-  ack?: (res: { ok: boolean; channelId?: string }) => void,
-): void {
-  joinedApps.add(appId)
-  const s = getSocket()
-  if (s.connected) {
-    s.emit('app:join', { appId }, ack)
-  } else if (ack) {
-    s.once('connect', () => s.emit('app:join', { appId }, ack))
-  }
-}
-
-export function leaveApp(appId: string): void {
-  joinedApps.delete(appId)
-  const s = getSocket()
-  if (s.connected) {
-    s.emit('app:leave', { appId })
-  }
-}
-
-export function broadcastAppState(appId: string, type: string, payload: unknown): void {
-  getSocket().emit('app:broadcast', { appId, type, payload })
 }

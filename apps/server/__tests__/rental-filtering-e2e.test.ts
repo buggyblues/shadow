@@ -143,7 +143,7 @@ afterAll(async () => {
   try {
     const { eq, inArray } = await import('drizzle-orm')
     const {
-      clawListings,
+      agentListings,
       rentalContracts,
       rentalUsageRecords,
       rentalViolations,
@@ -156,9 +156,9 @@ afterAll(async () => {
     if (ownerUserId) {
       // Find all contracts related to owner's listings
       const listings = await db
-        .select({ id: clawListings.id })
-        .from(clawListings)
-        .where(eq(clawListings.ownerId, ownerUserId))
+        .select({ id: agentListings.id })
+        .from(agentListings)
+        .where(eq(agentListings.ownerId, ownerUserId))
       const listingIds = listings.map((l) => l.id)
 
       if (listingIds.length > 0) {
@@ -177,7 +177,7 @@ afterAll(async () => {
         }
       }
 
-      await db.delete(clawListings).where(eq(clawListings.ownerId, ownerUserId))
+      await db.delete(agentListings).where(eq(agentListings.ownerId, ownerUserId))
     }
 
     // Delete agent
@@ -246,7 +246,7 @@ describe('Rental Filtering & Agent Chat Status E2E', () => {
   it('should create an active listing linked to agent', async () => {
     // Create directly in DB since the API might not expose agentId field
     const result = await db
-      .insert(schema.clawListings)
+      .insert(schema.agentListings)
       .values({
         ownerId: ownerUserId,
         agentId,

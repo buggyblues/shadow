@@ -2,7 +2,7 @@ import type { Mocked } from 'vitest'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentDao } from '../dao/agent.dao'
 import type { AgentDashboardDao } from '../dao/agent-dashboard.dao'
-import type { ClawListingDao } from '../dao/claw-listing.dao'
+import type { AgentListingDao } from '../dao/agent-listing.dao'
 import type { RentalContractDao } from '../dao/rental-contract.dao'
 import type { UserDao } from '../dao/user.dao'
 import { AgentDashboardService } from './agent-dashboard.service'
@@ -45,7 +45,7 @@ describe('AgentDashboardService', () => {
     findByListingIds: vi.fn(),
   })
 
-  const mockClawListingDao = mockDao<ClawListingDao>({
+  const mockAgentListingDao = mockDao<AgentListingDao>({
     findByAgentId: vi.fn(),
   })
 
@@ -57,7 +57,7 @@ describe('AgentDashboardService', () => {
     agentDashboardDao: mockAgentDashboardDao,
     agentDao: mockAgentDao,
     rentalContractDao: mockRentalContractDao,
-    clawListingDao: mockClawListingDao,
+    agentListingDao: mockAgentListingDao,
     userDao: mockUserDao,
     logger: mockLogger,
   })
@@ -103,7 +103,7 @@ describe('AgentDashboardService', () => {
       ] as any)
 
       // Mock rental stats
-      vi.mocked(mockClawListingDao.findByAgentId).mockResolvedValue([])
+      vi.mocked(mockAgentListingDao.findByAgentId).mockResolvedValue([])
 
       const result = await service.getDashboard(agentId, userId)
 

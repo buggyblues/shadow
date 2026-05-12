@@ -1,14 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { useRouter } from 'expo-router'
 import {
   ArrowDownAZ,
   ArrowUpAZ,
   ChevronDown,
-  Clock,
-  Eye,
   Search,
   SlidersHorizontal,
-  Users,
   X,
 } from 'lucide-react-native'
 import { useCallback, useMemo, useState } from 'react'
@@ -22,69 +18,15 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { Avatar } from '../../../src/components/common/avatar'
-import { EmptyState } from '../../../src/components/common/empty-state'
-import { LoadingScreen } from '../../../src/components/common/loading-screen'
-import { OnlineRank } from '../../../src/components/common/online-rank'
-import { PriceCompact } from '../../../src/components/common/price-display'
-import { fetchApi } from '../../../src/lib/api'
-import { fontSize, radius, spacing, useColors } from '../../../src/theme'
+import { EmptyState } from '../common/empty-state'
+import { LoadingScreen } from '../common/loading-screen'
+import { fetchApi } from '../../lib/api'
+import { BuddyMarketCard } from './buddy-market-card'
+import { DEVICE_TIER_INFO, OS_LABELS, SORT_OPTIONS, type Listing, type SortValue } from './types'
+import { fontSize, radius, spacing, useColors } from '../../theme'
 
-interface ListingOwner {
-  id: string
-  username: string
-  displayName: string | null
-  avatarUrl: string | null
-}
-
-interface Listing {
-  id: string
-  ownerId: string
-  agentId: string | null
-  title: string
-  description: string | null
-  skills: string[]
-  deviceTier: 'high_end' | 'mid_range' | 'low_end'
-  osType: 'macos' | 'windows' | 'linux'
-  deviceInfo: Record<string, string>
-  softwareTools: string[]
-  hourlyRate: number
-  dailyRate: number
-  monthlyRate: number
-  premiumMarkup: number
-  depositAmount: number
-  viewCount: number
-  rentalCount: number
-  tags: string[]
-  createdAt: string
-  totalOnlineSeconds: number
-  owner: ListingOwner | null
-}
-
-const DEVICE_TIER_INFO: Record<string, { label: string; color: string }> = {
-  high_end: { label: '高端', color: '#F59E0B' },
-  mid_range: { label: '中端', color: '#06B6D4' },
-  low_end: { label: '入门', color: '#9CA3AF' },
-}
-
-const OS_LABELS: Record<string, string> = {
-  macos: 'macOS',
-  windows: 'Windows',
-  linux: 'Linux',
-}
-
-const SORT_OPTIONS = [
-  { value: 'popular', label: '热门' },
-  { value: 'newest', label: '最新' },
-  { value: 'price-asc', label: '价格从低到高' },
-  { value: 'price-desc', label: '价格从高到低' },
-] as const
-
-type SortValue = (typeof SORT_OPTIONS)[number]['value']
-
-export default function BuddiesScreen() {
+export function BuddyMarketScreen() {
   const colors = useColors()
-  const router = useRouter()
   const [search, setSearch] = useState('')
   const [deviceTier, setDeviceTier] = useState<string | null>(null)
   const [osType, setOsType] = useState<string | null>(null)
@@ -121,103 +63,9 @@ export default function BuddiesScreen() {
     [sortBy],
   )
 
-  const formatOnlineTime = useCallback((seconds: number) => {
-    if (seconds < 3600) return `${Math.round(seconds / 60)}分钟`
-    const hours = Math.floor(seconds / 3600)
-    if (hours < 24) return `${hours}小时`
-    const days = Math.floor(hours / 24)
-    return `${days}天${hours % 24}小时`
-  }, [])
-
   const renderItem = useCallback(
-    ({ item }: { item: Listing }) => {
-      const tierInfo = DEVICE_TIER_INFO[item.deviceTier] ?? DEVICE_TIER_INFO.mid_range!
-      const ownerName = item.owner?.displayName || item.owner?.username || '?'
-
-      return (
-        <Pressable
-          style={({ pressed }) => [
-            styles.card,
-            {
-              backgroundColor: pressed ? colors.surfaceHover : colors.surface,
-              borderColor: colors.border,
-            },
-          ]}
-          onPress={() => router.push(`/(main)/buddy-detail/${item.id}` as never)}
-        >
-          {/* Top row: Avatar + title + tier badge */}
-          <View style={styles.cardTopRow}>
-            <Avatar
-              uri={item.owner?.avatarUrl}
-              name={ownerName}
-              size={40}
-              userId={item.owner?.id || item.ownerId}
-            />
-            <View style={styles.cardTitleCol}>
-              <View style={styles.titleRow}>
-                <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
-                  {item.title}
-                </Text>
-                <View style={[styles.tierBadge, { backgroundColor: `${tierInfo.color}20` }]}>
-                  <Text style={[styles.tierBadgeText, { color: tierInfo.color }]}>
-                    {tierInfo.label}
-                  </Text>
-                </View>
-              </View>
-              <Text style={[styles.ownerName, { color: colors.textMuted }]} numberOfLines={1}>
-                {ownerName} · {OS_LABELS[item.osType] ?? item.osType}
-              </Text>
-            </View>
-          </View>
-
-          {/* Description */}
-          {item.description && (
-            <Text style={[styles.cardDesc, { color: colors.textSecondary }]} numberOfLines={2}>
-              {item.description}
-            </Text>
-          )}
-
-          {/* Skills */}
-          {item.skills.length > 0 && (
-            <View style={styles.skills}>
-              {item.skills.slice(0, 4).map((skill) => (
-                <View
-                  key={skill}
-                  style={[styles.skillTag, { backgroundColor: `${colors.primary}12` }]}
-                >
-                  <Text style={[styles.skillText, { color: colors.primary }]}>{skill}</Text>
-                </View>
-              ))}
-              {item.skills.length > 4 && (
-                <Text style={[styles.skillMore, { color: colors.textMuted }]}>
-                  +{item.skills.length - 4}
-                </Text>
-              )}
-            </View>
-          )}
-
-          {/* Footer: Price + Stats */}
-          <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
-            <View style={styles.priceRow}>
-              <PriceCompact amount={item.hourlyRate} size={15} />
-              <Text style={[styles.priceUnit, { color: colors.textMuted }]}>/小时</Text>
-            </View>
-            <View style={styles.statsRow}>
-              <OnlineRank totalSeconds={item.totalOnlineSeconds} />
-              <Clock size={11} color={colors.textMuted} />
-              <Text style={[styles.statText, { color: colors.textMuted }]}>
-                {formatOnlineTime(item.totalOnlineSeconds)}
-              </Text>
-              <Eye size={11} color={colors.textMuted} />
-              <Text style={[styles.statText, { color: colors.textMuted }]}>{item.viewCount}</Text>
-              <Users size={11} color={colors.textMuted} />
-              <Text style={[styles.statText, { color: colors.textMuted }]}>{item.rentalCount}</Text>
-            </View>
-          </View>
-        </Pressable>
-      )
-    },
-    [colors, router, formatOnlineTime],
+    ({ item }: { item: Listing }) => <BuddyMarketCard listing={item} />,
+    [],
   )
 
   if (isLoading && !refreshing) return <LoadingScreen />
@@ -494,98 +342,5 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.md,
     paddingBottom: 100,
-  },
-
-  // Card
-  card: {
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    padding: spacing.lg,
-  },
-  cardTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  cardTitleCol: {
-    flex: 1,
-    gap: 2,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  cardTitle: {
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    flex: 1,
-  },
-  tierBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.full,
-  },
-  tierBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  ownerName: {
-    fontSize: fontSize.xs,
-  },
-  cardDesc: {
-    fontSize: fontSize.sm,
-    lineHeight: 18,
-    marginBottom: spacing.sm,
-  },
-  skills: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 4,
-    marginBottom: spacing.sm,
-  },
-  skillTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.full,
-  },
-  skillText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  skillMore: {
-    fontSize: 10,
-    fontWeight: '700',
-    alignSelf: 'center',
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  priceValue: {
-    fontSize: fontSize.lg,
-    fontWeight: '800',
-  },
-  priceUnit: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  statText: {
-    fontSize: 10,
-    fontWeight: '600',
-    marginRight: 4,
   },
 })

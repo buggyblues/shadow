@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import type { AgentDao } from '../dao/agent.dao'
-import type { ClawListingDao } from '../dao/claw-listing.dao'
+import type { AgentListingDao } from '../dao/agent-listing.dao'
 import type { InviteCodeDao } from '../dao/invite-code.dao'
 import type { RentalContractDao } from '../dao/rental-contract.dao'
 import type { TaskCenterDao } from '../dao/task-center.dao'
@@ -88,7 +88,7 @@ export class TaskCenterService {
       ledgerService: LedgerService
       inviteCodeDao: InviteCodeDao
       agentDao: AgentDao
-      clawListingDao: ClawListingDao
+      agentListingDao: AgentListingDao
       rentalContractDao: RentalContractDao
     },
   ) {}
@@ -206,7 +206,7 @@ export class TaskCenterService {
         return rows.length > 0
       }
       case 'list_buddy': {
-        const rows = await this.deps.clawListingDao.findByOwnerId(userId, { limit: 1, offset: 0 })
+        const rows = await this.deps.agentListingDao.findByOwnerId(userId, { limit: 1, offset: 0 })
         return rows.length > 0
       }
       case 'rent_buddy': {

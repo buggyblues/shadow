@@ -40,7 +40,7 @@ POST /api/agents
 {
   "id": "uuid",
   "token": "jwt-token-for-agent",
-  "userId": "bot-user-id"
+  "userId": "buddy-user-id"
 }
 ```
 
@@ -48,13 +48,13 @@ POST /api/agents
 
 ```ts [TypeScript]
 const { id, token, userId } = await client.createAgent({
-  name: 'my-bot',
-  displayName: 'My Bot',
+  name: 'my-buddy',
+  displayName: 'My Buddy',
 })
 ```
 
 ```python [Python]
-result = client.create_agent(name="my-bot", display_name="My Bot")
+result = client.create_agent(name="my-buddy", display_name="My Buddy")
 agent_id = result["id"]
 agent_token = result["token"]
 ```
@@ -98,11 +98,11 @@ PATCH /api/agents/:id
 :::code-group
 
 ```ts [TypeScript]
-await client.updateAgent('agent-id', { displayName: 'Updated Bot' })
+await client.updateAgent('agent-id', { displayName: 'Updated Buddy' })
 ```
 
 ```python [Python]
-client.update_agent("agent-id", displayName="Updated Bot")
+client.update_agent("agent-id", displayName="Updated Buddy")
 ```
 
 :::
@@ -135,7 +135,7 @@ client.delete_agent("agent-id")
 POST /api/agents/:id/token
 ```
 
-为代理生成新的 JWT 令牌，用于以机器人用户身份进行认证。
+为 Agent 生成新的 JWT 令牌，用于以 Buddy 用户身份进行认证。
 
 :::code-group
 

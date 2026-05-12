@@ -48,7 +48,7 @@ export function DirectChatRoute() {
   const { dmChannelId } = useParams({ strict: false }) as { dmChannelId: string }
   const navigate = useNavigate()
 
-  return <DirectChatView channelId={dmChannelId} onBack={() => navigate({ to: '/settings' })} />
+  return <DirectChatView channelId={dmChannelId} onBack={() => navigate({ to: '/settings/dm' })} />
 }
 
 export const DirectChatPage = DirectChatRoute

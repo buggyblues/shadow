@@ -756,7 +756,7 @@ describe('Agent Handler (HTTP)', () => {
             resolveMediaUrl: vi.fn((url: string | null | undefined) => url ?? null),
           }
         }
-        if (name === 'clawListingDao') return { findByAgentIds: vi.fn().mockResolvedValue([]) }
+        if (name === 'agentListingDao') return { findByAgentIds: vi.fn().mockResolvedValue([]) }
         if (name === 'rentalContractDao')
           return { findActiveByListingId: vi.fn().mockResolvedValue(null) }
         if (name === 'agentPolicyService') {

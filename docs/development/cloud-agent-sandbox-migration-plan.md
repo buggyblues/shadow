@@ -500,7 +500,7 @@ pnpm check:security-pr
 本轮 Review 追加验证（2026-05-11）：
 
 ```bash
-pnpm biome check apps/server/src/dao/cloud-deployment-backup.dao.ts apps/server/src/lib/cloud-deployment-processor.ts apps/server/src/handlers/cloud-saas.handler.ts apps/server/__tests__/cloud-deployment-processor.test.ts apps/cloud/packages/ui/src/pages/DeploymentNamespacePage.tsx apps/cloud/packages/ui/src/i18n/en.json apps/cloud/packages/ui/src/i18n/zh-CN.json apps/server/src/handlers/app.handler.ts apps/server/src/lib/cloud-deployment-autoresume.ts apps/web/src/components/app/app-page.tsx
+pnpm biome check apps/server/src/dao/cloud-deployment-backup.dao.ts apps/server/src/lib/cloud-deployment-processor.ts apps/server/src/handlers/cloud-saas.handler.ts apps/server/__tests__/cloud-deployment-processor.test.ts apps/cloud/packages/ui/src/pages/DeploymentNamespacePage.tsx apps/cloud/packages/ui/src/i18n/en.json apps/cloud/packages/ui/src/i18n/zh-CN.json apps/server/src/lib/cloud-deployment-autoresume.ts
 JWT_SECRET=test-secret-with-enough-entropy pnpm --filter @shadowob/server typecheck
 pnpm --filter @shadowob/cloud typecheck
 pnpm --filter @shadowob/web typecheck
@@ -562,10 +562,9 @@ kubectl config current-context && kubectl get sandboxclaim,sandbox,pod,pvc,svc -
 - `cloud_deployments.last_active_at` 已落库并接入活跃链路：agent heartbeat、usage snapshot、HTTP message、WebSocket message 中的 Buddy mention 会刷新对应 Cloud deployment 的活跃时间。
 - Worker 已实现自动 idle pause 基础链路：当 agent-sandbox deployment 的所有 agent 都显式配置 `sandbox.lifecycle.autoPause=true`，且超过 `idleSeconds` 未活跃时，worker 会 patch 对应 Sandbox `replicas=0`、等待 paused、再将 deployment 状态落为 `paused`。
 - `backupBeforePause=true` 已接入自动 pause：worker 在持有 namespace operation lock 后先同步创建备份，备份成功才继续 pause；备份失败会阻断 pause 并写入 `[auto-pause] Failed` 日志，避免无备份停机。
-- 自动 resume 已接入统一触发服务：HTTP/WS 消息里的 Buddy mention、agent heartbeat、usage snapshot、app gateway join/broadcast 和已显式配置 Cloud auto-resume target 的 app proxy 请求都会走同一条 `record activity -> find paused deployment -> patch Sandbox replicas=1 -> wait Ready` 路径；消息已先持久化，runner resume 后依赖现有 catch-up 逻辑消费。
+- 自动 resume 已接入统一触发服务：HTTP/WS 消息里的 Buddy mention、agent heartbeat、usage snapshot 都会走同一条 `record activity -> find paused deployment -> patch Sandbox replicas=1 -> wait Ready` 路径；消息已先持久化，runner resume 后依赖现有 catch-up 逻辑消费。
 - Dashboard 已补 Deployments 列表的 paused 聚合指标、namespace 内 sandbox/paused/resuming chips、Sandbox/PVC 元数据、paused pods/logs 的 Resume 主操作，以及 backup/restore 运行中提示条；Backups tab 在 active operation 期间提高轮询频率，结束后恢复常规刷新。
 - Cloud Dashboard 的共享 tab 组件已增加显式 `onSelect` 点击兜底，并接入 Deployments、Deployment detail、Namespace、Monitoring 和 Template detail 页面，避免 Radix tab keyboard path 正常但鼠标点击路径不切换时影响 Dashboard 可用性。
-- Web App Center 已补 URL app 的 Cloud auto-resume 配置项：管理员可开启“应用访问时唤醒 Cloud Buddy”，可显式填写 Buddy user IDs，也可从 app hidden channel 推断 Buddy；App iframe 在 Cloud runtime 恢复期间展示启动中的覆盖层，proxy 和非 proxy URL open 都会先等待 resume 或返回明确 starting 状态。
 - CSI VolumeSnapshot 正向路径已在 `kind-agent-sandbox` 验证：安装 external-snapshotter `v8.2.0` CRD/controller 和 `csi-driver-host-path v1.17.0` 后，创建 `source-pvc -> VolumeSnapshot -> restored-pvc`，显式使用 `volumeSnapshotClassName=csi-hostpath-snapclass`，`VolumeSnapshot.readyToUse=true`，恢复 Pod 读回 marker `shadow-csi-snapshot-ok-1778501025`。
 - 实测 snapshot-controller 对隐式 default class 选择不稳定，曾返回 `cannot find default snapshot class`；因此实现已改为解析 PVC StorageClass provisioner，再选择匹配的 `VolumeSnapshotClass` 并显式写入。
 - SaaS CSI-backed backup/restore 已真实验证：创建临时 template `csi-snapshot-smoke-03649947`，将 sandbox state PVC 绑定到 `csi-hostpath-sc`，通过正常 SaaS deploy API 部署 namespace `csi-snapshot-03649947`；默认 backup 选择 `driver=volumeSnapshot`，生成 `VolumeSnapshot.spec.volumeSnapshotClassName=csi-hostpath-snapclass` 且 `readyToUse=true`；将 PVC marker 改写后调用 restore API，流程自动 pause、PVC-from-snapshot restore、resume，最终 Pod 回到 `2/2 Running` 且 marker 恢复为备份前值。临时 deployment 已通过正常 destroy flow 清理。
@@ -577,7 +576,7 @@ kubectl config current-context && kubectl get sandboxclaim,sandbox,pod,pvc,svc -
 - 对象归档 fallback 已有加密和 retention 清理，但仍是 Shadow 私有对象存储 + helper Pod tar.gz；标准 restic/kopia repository secret、原生 repository prune、跨集群 restore API 仍是后续强化项。
 - restore 目前复用 deployment `resuming/failed/deployed` 状态与 backup `phase` 展示进度，后续如果需要审计级 restore 历史，应新增独立 `cloud_deployment_restore_operations` 表。
 - UI 当前通过 polling 展示 backup/restore 状态和 phase，active operation 期间已降到 3 秒轮询；后续可补充 operation progress SSE，把 archive、pause、PVC restore、resume、Ready wait 作为实时事件推送。
-- 自动 idle pause/resume 的控制面基础链路已实现，`backupBeforePause=true` 已补自动备份前置，HTTP/WS mention、agent runtime 上报、app gateway 和 app proxy 已统一到同一 auto-resume helper；mobile 端状态展示一致性仍待补齐。
+- 自动 idle pause/resume 的控制面基础链路已实现，`backupBeforePause=true` 已补自动备份前置，HTTP/WS mention、agent runtime 上报已统一到同一 auto-resume helper；mobile 端状态展示一致性仍待补齐。
 - WarmPool bootstrap 尚未启用：当前仍对 `warmPool.enabled=true` 报错。需要 runner 支持短期 bootstrap token/config fetcher 后，再生成通用 `SandboxWarmPool`。
 - Product E2E、kind integration、backup restore integration 还未接入 CI；当前 kind smoke 是本地手动验证。
 
@@ -825,8 +824,7 @@ docker compose -f docker-compose.ci-tests.yml run --rm ci-tests
 
 - 写入 `lastActiveAt`。
 - idle scanner 根据 `agents[].sandbox.lifecycle.idleSeconds` 执行 pause。
-- Shadow server 收到 HTTP/WS mention、agent heartbeat、usage snapshot、app gateway join/broadcast 或 app proxy 请求时调用统一 auto-resume helper，Ready 后由 runner catch-up 逻辑继续投递或重放消息。
-- 公开 app proxy 入口只对显式配置的 `cloudAutoResume.enabled`、`cloudAutoResumeUserIds`、`cloudAutoResumeBuddyUserIds` 或嵌套 `cloudDeployment/cloud` target 生效；开启后可从 hidden channel bot members 推断目标。已认证的 app gateway 和 app-proxy websocket 也会走同一推断路径，避免公开访问无门槛唤醒运行时。
+- Shadow server 收到 HTTP/WS mention、agent heartbeat、usage snapshot 时调用统一 auto-resume helper，Ready 后由 runner catch-up 逻辑继续投递或重放消息。
 
 ### UI 产品功能规划
 

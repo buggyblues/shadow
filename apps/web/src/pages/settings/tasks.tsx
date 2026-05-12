@@ -28,11 +28,11 @@ const taskGuides: Record<string, string> = {
   first_message:
     '1. 进入任意服务器的频道\n2. 在底部消息输入框中输入内容\n3. 按回车键或点击发送按钮即可\n4. 支持 Markdown 格式、表情、图片等',
   create_buddy:
-    '1. 进入「Buddy 管理」页面\n2. 点击「创建 Buddy」按钮\n3. 填写 Buddy 名称、描述等信息\n4. 创建后可通过 OpenClaw 连接 Buddy',
+    '1. 进入「我的 Buddy」页面\n2. 点击「创建 Buddy」按钮\n3. 填写 Buddy 名称、描述等信息\n4. 创建后可通过 OpenClaw 连接 Buddy',
   list_buddy:
-    '1. 进入「Buddy 管理」页面\n2. 选择要挂单的 Buddy\n3. 点击「上架到集市」\n4. 填写设备信息、技能标签和费率',
+    '1. 进入「我的 Buddy」页面\n2. 选择要挂单的 Buddy\n3. 打开「租赁与挂单」\n4. 填写设备信息、技能标签和费率',
   rent_buddy:
-    '1. 进入「Buddy 集市」页面（/buddies）\n2. 浏览可租赁的 Buddy 列表\n3. 点击感兴趣的 Buddy 查看详情\n4. 确认费用后签署租赁合同',
+    '1. 进入「我的 Buddy」页面\n2. 打开「租赁与挂单」\n3. 查看租入和出租合同\n4. 根据需要创建或管理挂单',
   list_product:
     '1. 进入已加入的服务器\n2. 点击侧边栏的「商店管理」\n3. 点击「上架商品」按钮\n4. 填写商品信息、规格和价格',
   invite_signup:
@@ -171,13 +171,13 @@ export function TaskSettings({
       }
       case 'create_buddy':
         setPendingAction('create-buddy')
-        navigate({ to: '/settings/buddy' })
+        navigate({ to: '/settings/buddy/create', search: {} })
         break
       case 'list_buddy':
-        navigate({ to: '/settings/buddy' })
+        navigate({ to: '/settings/buddy/market', search: {} })
         break
       case 'rent_buddy':
-        window.location.href = '/buddies'
+        navigate({ to: '/settings/buddy/market', search: {} })
         break
       case 'list_product': {
         const shopSlug = servers[0]?.server?.slug
@@ -187,7 +187,7 @@ export function TaskSettings({
         break
       }
       case 'invite_signup':
-        navigate({ to: '/settings', search: { tab: 'tasks', section: 'invite' } })
+        navigate({ to: '/settings/invite' })
         break
     }
   }
