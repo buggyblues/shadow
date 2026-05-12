@@ -55,8 +55,33 @@ export class ProductCategoryDao {
     return r[0] ?? null
   }
 
+  async updateByShopIdAndId(
+    shopId: string,
+    id: string,
+    data: Partial<{
+      name: string
+      slug: string
+      parentId: string | null
+      position: number
+      iconUrl: string | null
+    }>,
+  ) {
+    const r = await this.db
+      .update(productCategories)
+      .set(data)
+      .where(and(eq(productCategories.shopId, shopId), eq(productCategories.id, id)))
+      .returning()
+    return r[0] ?? null
+  }
+
   async delete(id: string) {
     await this.db.delete(productCategories).where(eq(productCategories.id, id))
+  }
+
+  async deleteByShopIdAndId(shopId: string, id: string) {
+    await this.db
+      .delete(productCategories)
+      .where(and(eq(productCategories.shopId, shopId), eq(productCategories.id, id)))
   }
 
   async countByShopId(shopId: string) {

@@ -431,6 +431,14 @@ export class ServerService {
       throw Object.assign(new Error('Member not found'), { status: 404 })
     }
 
+    // Generic member update must not be used for owner transfer/demotion.
+    // Owner changes need a dedicated flow that updates server.ownerId and membership atomically.
+    if ((target.role === 'owner' || targetUserId === server.ownerId) && input.role !== 'owner') {
+      throw Object.assign(new Error('Cannot demote the server owner through member update'), {
+        status: 403,
+      })
+    }
+
     return this.deps.serverDao.updateMember(serverId, targetUserId, input)
   }
 

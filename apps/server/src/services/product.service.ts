@@ -134,8 +134,31 @@ export class ProductService {
       }>
     },
   ) {
+    const product = await this.deps.productDao.findById(id)
+    if (!product) throw apiError('PRODUCT_NOT_FOUND', 404)
+    return this.updateProductInShop(product.shopId, id, data)
+  }
+
+  async updateProductInShop(
+    shopId: string,
+    id: string,
+    data: Parameters<ProductDao['update']>[1] & {
+      media?: Array<{ type?: string; url: string; thumbnailUrl?: string; position?: number }>
+      skus?: Array<{
+        id?: string
+        specValues?: string[]
+        price: number
+        stock?: number
+        imageUrl?: string
+        skuCode?: string
+        isActive?: boolean
+      }>
+    },
+  ) {
+    const product = await this.deps.productDao.findById(id)
+    if (!product || product.shopId !== shopId) throw apiError('PRODUCT_NOT_FOUND', 404)
     const { media, skus, ...productData } = data
-    await this.deps.productDao.update(id, productData)
+    await this.deps.productDao.updateByShopIdAndId(shopId, id, productData)
 
     if (media !== undefined) {
       await this.deps.productMediaDao.deleteByProductId(id)
@@ -186,7 +209,15 @@ export class ProductService {
   }
 
   async deleteProduct(id: string) {
-    return this.deps.productDao.delete(id)
+    const product = await this.deps.productDao.findById(id)
+    if (!product) throw apiError('PRODUCT_NOT_FOUND', 404)
+    return this.deleteProductInShop(product.shopId, id)
+  }
+
+  async deleteProductInShop(shopId: string, id: string) {
+    const product = await this.deps.productDao.findById(id)
+    if (!product || product.shopId !== shopId) throw apiError('PRODUCT_NOT_FOUND', 404)
+    return this.deps.productDao.deleteByShopIdAndId(shopId, id)
   }
 
   /** Called by OrderService after purchase */

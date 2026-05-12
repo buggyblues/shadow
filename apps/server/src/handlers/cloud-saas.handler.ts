@@ -10,14 +10,12 @@ import {
   collectRuntimeEnvRequirements,
   createVolumeSnapshotBackupAsync,
   deleteKubernetesResourceAsync,
-  deleteNamespace,
   execInPodAsync,
   execInPodWithInputAsync,
   extractCloudSaasRuntime,
   extractRequiredEnvVars,
   getPvcVolumeSnapshotCapability,
   isVolumeSnapshotApiAvailable,
-  listManagedNamespaces,
   listPodsAsync,
   listProviderCatalogs,
   loadCloudConfigSchema,
@@ -3015,13 +3013,20 @@ export function createCloudSaasHandler(container: AppContainer) {
       return c.json(sanitizedRows)
     }
 
-    const known = new Set(visibleRows.map((row) => row.namespace))
-    // Reconcile only against the platform default cluster — BYOK clusters
-    // would require iterating users' clusters and decrypting each kubeconfig,
-    // which is too heavy for a list endpoint. Orphans on BYOK are detected
-    // by the worker's reconcile loop instead.
-    const ns = listManagedNamespaces() ?? []
-    const orphans = ns.filter((n) => !known.has(n))
+    // Orphan namespace discovery is a platform operation. A user-scoped diff
+    // leaks other tenants' namespace names, so expose this only to platform admins
+    // and compute orphan-ness against all deployment rows.
+    await container.resolve('accessService').requirePlatformAdmin(c.get('actor'))
+    const kubernetesOpsGateway = container.resolve('kubernetesOpsGateway')
+    const cloudDeploymentDao = container.resolve('cloudDeploymentDao')
+    const ns = kubernetesOpsGateway.listManagedNamespaces() ?? []
+    const ownership = await Promise.all(
+      ns.map(async (namespace) => ({
+        namespace,
+        deployment: await cloudDeploymentDao.findByNamespaceGlobal(namespace),
+      })),
+    )
+    const orphans = ownership.filter((item) => !item.deployment).map((item) => item.namespace)
     return c.json({ items: sanitizedRows, _orphans: orphans })
   })
 
@@ -4824,20 +4829,12 @@ export function createCloudSaasHandler(container: AppContainer) {
   h.post('/deployments/orphans/:namespace/claim', async (c) => {
     const user = c.get('user') as { userId: string }
     const namespace = c.req.param('namespace')
-    const dao = container.resolve('cloudDeploymentDao')
-    const created = await dao.create({
-      userId: user.userId,
+    const kubernetesOpsGateway = container.resolve('kubernetesOpsGateway')
+    const created = await kubernetesOpsGateway.claimManagedOrphanNamespace({
+      actor: c.get('actor'),
+      ownerUserId: user.userId,
       namespace,
-      name: `orphan-${namespace}`,
-      agentCount: 0,
-      configSnapshot: null,
     })
-    if (!created) {
-      return c.json({ ok: false, error: 'Failed to create deployment row' }, 500)
-    }
-    // Bypass the normal "pending → deploying → deployed" pipeline.
-    await dao.updateStatus(created.id, 'deployed')
-    await dao.appendLog(created.id, '[reconcile] Adopted orphan namespace', 'info')
     return c.json({
       ok: true,
       deployment: sanitizeCloudSaasDeployment(created),
@@ -4851,21 +4848,16 @@ export function createCloudSaasHandler(container: AppContainer) {
    */
   h.post('/deployments/orphans/:namespace/cleanup', async (c) => {
     const namespace = c.req.param('namespace')
-    const managed = listManagedNamespaces() ?? []
-    if (!managed.includes(namespace)) {
-      return c.json(
-        {
-          ok: false,
-          error: 'Refusing to delete: namespace is not labeled as Shadow Cloud managed',
-        },
-        422,
-      )
-    }
+    const kubernetesOpsGateway = container.resolve('kubernetesOpsGateway')
     try {
-      deleteNamespace(namespace)
+      await kubernetesOpsGateway.cleanupManagedOrphanNamespace({
+        actor: c.get('actor'),
+        namespace,
+      })
       return c.json({ ok: true })
     } catch (err) {
-      return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 500)
+      const status = ((err as { status?: number }).status ?? 500) as 500 | 400 | 403 | 404
+      return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, status)
     }
   })
 

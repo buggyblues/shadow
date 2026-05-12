@@ -6,6 +6,7 @@ import type { AppContainer } from '../container'
 import { waitCloudDeploymentAutoResumeForApp } from '../lib/cloud-deployment-autoresume'
 import { logger } from '../lib/logger'
 import { authMiddleware } from '../middleware/auth.middleware'
+import { createActorContext } from '../security/actor-context'
 import {
   createAppSchema,
   listAppsQuerySchema,
@@ -42,13 +43,17 @@ export function createAppHandler(container: AppContainer) {
       return mediaService.getFileBuffer(sourceUrl)
     }
 
-    // External URL source
+    // External URL source must go through SafeHttpClient so URL apps cannot SSRF the server.
     try {
-      const res = await fetch(sourceUrl)
-      if (!res.ok) return null
-      const arr = await res.arrayBuffer()
-      return Buffer.from(arr)
-    } catch {
+      const safeHttpClient = container.resolve('safeHttpClient')
+      const { buffer } = await safeHttpClient.fetchBuffer(
+        sourceUrl,
+        {},
+        { action: 'app.source.fetch', maxBytes: 25 * 1024 * 1024 },
+      )
+      return buffer
+    } catch (err) {
+      logger.warn({ err, sourceUrl }, '[app-serve] rejected or failed external source URL')
       return null
     }
   }
@@ -112,7 +117,8 @@ export function createAppHandler(container: AppContainer) {
 
     let upstreamBase: URL
     try {
-      upstreamBase = new URL(app.sourceUrl)
+      const safeHttpClient = container.resolve('safeHttpClient')
+      upstreamBase = await safeHttpClient.assertSafeUrl(app.sourceUrl)
     } catch {
       return c.text('Invalid source URL', 400)
     }
@@ -157,12 +163,17 @@ export function createAppHandler(container: AppContainer) {
 
     let upstreamRes: Response
     try {
-      upstreamRes = await fetch(upstreamUrl.toString(), {
-        method: c.req.method,
-        headers: reqHeaders,
-        body,
-        redirect: 'manual',
-      })
+      const safeHttpClient = container.resolve('safeHttpClient')
+      upstreamRes = await safeHttpClient.fetch(
+        upstreamUrl.toString(),
+        {
+          method: c.req.method,
+          headers: reqHeaders,
+          body,
+          redirect: 'manual',
+        },
+        { action: 'app.proxy.forward', maxRedirects: 0 },
+      )
     } catch (err) {
       logger.warn(
         { err, appId, upstreamUrl: upstreamUrl.toString() },
@@ -250,7 +261,9 @@ export function createAppHandler(container: AppContainer) {
           'Retry-After': '5',
         })
       }
-      return c.redirect(app.sourceUrl)
+      const safeHttpClient = container.resolve('safeHttpClient')
+      const target = await safeHttpClient.assertSafeUrl(app.sourceUrl)
+      return c.redirect(target.toString())
     }
 
     // Determine if the source is a zip or a single HTML file
@@ -398,35 +411,38 @@ export function createAppHandler(container: AppContainer) {
     const user = c.get('user')
     await requireAdmin(serverId, user.userId)
 
-    const appService = container.resolve('appService')
-    const app = await appService.createApp(serverId, user.userId, c.req.valid('json'))
+    const appUseCase = container.resolve('appUseCase')
+    const app = await appUseCase.createApp({
+      ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+      serverId,
+      payload: c.req.valid('json'),
+    })
     return c.json(app, 201)
   })
 
   // PATCH /servers/:serverId/apps/:appId — update app
   h.patch('/servers/:serverId/apps/:appId', zValidator('json', updateAppSchema), async (c) => {
     const serverId = await resolveServerId(c.req.param('serverId'))
-    const user = c.get('user')
-    await requireAdmin(serverId, user.userId)
-
-    const appService = container.resolve('appService')
-    const result = await appService.updateApp(
-      c.req.param('appId'),
-      user.userId,
-      c.req.valid('json'),
-    )
+    const appUseCase = container.resolve('appUseCase')
+    const result = await appUseCase.updateApp({
+      ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+      serverId,
+      appId: c.req.param('appId'),
+      payload: c.req.valid('json'),
+    })
     return c.json(result)
   })
 
   // DELETE /servers/:serverId/apps/:appId — delete app
   h.delete('/servers/:serverId/apps/:appId', async (c) => {
     const serverId = await resolveServerId(c.req.param('serverId'))
-    const user = c.get('user')
-    await requireAdmin(serverId, user.userId)
-
-    const appService = container.resolve('appService')
-    await appService.deleteApp(c.req.param('appId'), user.userId)
-    return c.json({ ok: true })
+    const appUseCase = container.resolve('appUseCase')
+    const result = await appUseCase.deleteApp({
+      ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+      serverId,
+      appId: c.req.param('appId'),
+    })
+    return c.json(result)
   })
 
   /* ══════════════════════════════════════════
@@ -439,11 +455,12 @@ export function createAppHandler(container: AppContainer) {
     zValidator('json', publishFromWorkspaceSchema),
     async (c) => {
       const serverId = await resolveServerId(c.req.param('serverId'))
-      const user = c.get('user')
-      await requireAdmin(serverId, user.userId)
-
-      const appService = container.resolve('appService')
-      const app = await appService.publishFromWorkspace(serverId, user.userId, c.req.valid('json'))
+      const appUseCase = container.resolve('appUseCase')
+      const app = await appUseCase.publishFromWorkspace({
+        ctx: createActorContext(c.get('actor'), { route: c.req.path }),
+        serverId,
+        payload: c.req.valid('json'),
+      })
       return c.json(app, 201)
     },
   )

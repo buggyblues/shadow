@@ -7,13 +7,12 @@ function parseDisposition(value: string | undefined): 'inline' | 'attachment' {
 }
 
 async function serveSignedMedia(container: AppContainer, c: Context) {
-  const mediaService = container.resolve('mediaService')
+  const mediaAccessGateway = container.resolve('mediaAccessGateway')
   const token = c.req.param('token')
   if (!token) return c.json({ ok: false, error: 'File not found' }, 404)
 
   try {
-    const payload = mediaService.verifySignedToken(token)
-    const response = await mediaService.getSignedObjectResponse(payload, c.req.header('Range'))
+    const response = await mediaAccessGateway.getSignedObjectResponse(token, c.req.header('Range'))
     return c.body(response.body, response.status, response.headers)
   } catch (err) {
     const status =
@@ -135,8 +134,8 @@ export function createAttachmentMediaHandler(container: AppContainer) {
   handler.use('/attachments/:id/media-url', authMiddleware)
 
   handler.get('/attachments/:id/media-url', async (c) => {
-    const mediaService = container.resolve('mediaService')
-    const result = await mediaService.resolveAttachmentMediaUrl({
+    const mediaAccessGateway = container.resolve('mediaAccessGateway')
+    const result = await mediaAccessGateway.createAttachmentReadUrl({
       actor: c.get('actor'),
       attachmentId: c.req.param('id'),
       disposition: parseDisposition(c.req.query('disposition')),

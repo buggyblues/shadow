@@ -337,8 +337,22 @@ export class OrderService {
   ) {
     const currentOrder = await this.deps.orderDao.findById(orderId)
     if (!currentOrder) throw Object.assign(new Error('Order not found'), { status: 404 })
+    return this.updateOrderStatusInShop(currentOrder.shopId, orderId, status, extra)
+  }
 
-    if (currentOrder.status !== status) {
+  async updateOrderStatusInShop(
+    shopId: string,
+    orderId: string,
+    status: 'processing' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'refunded',
+    extra?: { trackingNo?: string; sellerNote?: string },
+  ) {
+    const currentOrder = await this.deps.orderDao.findById(orderId)
+    if (!currentOrder || currentOrder.shopId !== shopId) {
+      throw Object.assign(new Error('Order not found'), { status: 404 })
+    }
+
+    const isStateChange = currentOrder.status !== status
+    if (isStateChange) {
       const allowed = ORDER_STATE_TRANSITIONS[currentOrder.status] || []
       if (!allowed.includes(status)) {
         throw Object.assign(
@@ -349,9 +363,9 @@ export class OrderService {
     }
 
     const timestamps: Record<string, Date> = {}
-    if (status === 'shipped') timestamps.shippedAt = new Date()
-    if (status === 'completed') timestamps.completedAt = new Date()
-    if (status === 'cancelled') timestamps.cancelledAt = new Date()
+    if (status === 'shipped' && isStateChange) timestamps.shippedAt = new Date()
+    if (status === 'completed' && isStateChange) timestamps.completedAt = new Date()
+    if (status === 'cancelled' && isStateChange) timestamps.cancelledAt = new Date()
 
     const result = await this.deps.orderDao.update(orderId, {
       status,
@@ -359,8 +373,7 @@ export class OrderService {
       ...timestamps,
     } as Parameters<OrderDao['update']>[1])
 
-    // Settle: credit the shop owner (server owner) on order completion
-    if (status === 'completed') {
+    if (status === 'completed' && isStateChange) {
       await this.settleOrder(currentOrder)
     }
 

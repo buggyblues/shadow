@@ -43,12 +43,18 @@ import { WalletDao } from './dao/wallet.dao'
 import { WorkspaceDao } from './dao/workspace.dao'
 import { WorkspaceNodeDao } from './dao/workspace-node.dao'
 import type { Database } from './db'
+import { CommandGateway } from './gateways/command.gateway'
+import { KubernetesOpsGateway } from './gateways/kubernetes-ops.gateway'
+import { MediaAccessGateway } from './gateways/media-access.gateway'
+import { SafeHttpClient } from './gateways/safe-http-client'
 // Lib
 import { logger } from './lib/logger'
+import { AccessService } from './security/access.service'
 import { AgentService } from './services/agent.service'
 import { AgentDashboardService } from './services/agent-dashboard.service'
 import { AgentPolicyService } from './services/agent-policy.service'
 import { AppService } from './services/app.service'
+import { AuditLogService } from './services/audit-log.service'
 // Service classes
 import { AuthService } from './services/auth.service'
 import { CartService } from './services/cart.service'
@@ -105,12 +111,22 @@ import { TipService } from './services/tip.service'
 import { VoiceEnhanceService } from './services/voice-enhance.service'
 import { WalletService } from './services/wallet.service'
 import { WorkspaceService } from './services/workspace.service'
+import { AppUseCase } from './usecases/app.usecase'
 
 export interface Cradle {
   // Infrastructure
   db: Database
   logger: typeof logger
   io: SocketIOServer
+
+  // Security architecture
+  accessService: AccessService
+  auditLogService: AuditLogService
+  safeHttpClient: SafeHttpClient
+  kubernetesOpsGateway: KubernetesOpsGateway
+  mediaAccessGateway: MediaAccessGateway
+  commandGateway: CommandGateway
+  appUseCase: AppUseCase
 
   // DAOs
   userDao: UserDao
@@ -250,6 +266,15 @@ export function createAppContainer(db: Database): AppContainer {
     // Infrastructure
     db: asValue(db),
     logger: asValue(logger),
+
+    // Security architecture
+    accessService: asClass(AccessService).singleton(),
+    auditLogService: asClass(AuditLogService).singleton(),
+    safeHttpClient: asClass(SafeHttpClient).singleton(),
+    kubernetesOpsGateway: asClass(KubernetesOpsGateway).singleton(),
+    mediaAccessGateway: asClass(MediaAccessGateway).singleton(),
+    commandGateway: asClass(CommandGateway).singleton(),
+    appUseCase: asClass(AppUseCase).singleton(),
 
     // DAOs
     userDao: asClass(UserDao).singleton(),

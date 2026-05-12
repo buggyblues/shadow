@@ -281,5 +281,8 @@ export const rentalViolations = pgTable(
   (t) => ({
     rentalViolationsContractIdIdx: index('rental_violations_contract_id_idx').on(t.contractId),
     rentalViolationsViolatorIdIdx: index('rental_violations_violator_id_idx').on(t.violatorId),
+    rentalViolationsContractTypeViolatorUnique: unique(
+      'rental_violations_contract_type_violator_unique',
+    ).on(t.contractId, t.violationType, t.violatorId),
   }),
 )

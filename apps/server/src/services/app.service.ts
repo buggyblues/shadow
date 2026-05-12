@@ -93,19 +93,27 @@ export class AppService {
   async updateApp(appId: string, _publisherId: string, input: UpdateAppInput) {
     const app = await this.deps.appDao.findById(appId)
     if (!app) throw Object.assign(new Error('App not found'), { status: 404 })
+    return this.updateAppInServer(app.serverId, appId, input)
+  }
 
-    // If setting as homepage, clear any other homepage first
-    if (input.isHomepage && !app.isHomepage) {
-      await this.deps.appDao.clearHomepage(app.serverId)
+  async updateAppInServer(serverId: string, appId: string, input: UpdateAppInput) {
+    const app = await this.deps.appDao.findById(appId)
+    if (!app || app.serverId !== serverId) {
+      throw Object.assign(new Error('App not found'), { status: 404 })
     }
 
-    // Rename the hidden channel if slug/name changed
+    if (input.isHomepage && !app.isHomepage) {
+      await this.deps.appDao.clearHomepage(serverId)
+    }
+
     if ((input.slug !== undefined || input.name !== undefined) && app.channelId) {
       const newChannelName = `app:${input.slug ?? input.name ?? app.name}`
       await this.deps.channelDao.update(app.channelId, { name: newChannelName })
     }
 
-    return this.deps.appDao.update(appId, input)
+    const updated = await this.deps.appDao.updateByServerIdAndId(serverId, appId, input)
+    if (!updated) throw Object.assign(new Error('App not found'), { status: 404 })
+    return updated
   }
 
   // ─── Delete ───
@@ -113,13 +121,20 @@ export class AppService {
   async deleteApp(appId: string, _publisherId: string) {
     const app = await this.deps.appDao.findById(appId)
     if (!app) throw Object.assign(new Error('App not found'), { status: 404 })
+    await this.deleteAppInServer(app.serverId, appId)
+  }
 
-    // Delete the hidden channel
+  async deleteAppInServer(serverId: string, appId: string) {
+    const app = await this.deps.appDao.findById(appId)
+    if (!app || app.serverId !== serverId) {
+      throw Object.assign(new Error('App not found'), { status: 404 })
+    }
+
     if (app.channelId) {
       await this.deps.channelDao.delete(app.channelId)
     }
 
-    await this.deps.appDao.delete(appId)
+    await this.deps.appDao.deleteByServerIdAndId(serverId, appId)
   }
 
   // ─── Publish from Workspace ───
@@ -149,7 +164,7 @@ export class AppService {
     if (input.slug) {
       const existing = await this.deps.appDao.findBySlug(serverId, input.slug)
       if (existing) {
-        return this.updateApp(existing.id, publisherId, {
+        return this.updateAppInServer(serverId, existing.id, {
           name: input.name,
           description: input.description,
           iconUrl: input.iconUrl,

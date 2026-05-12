@@ -863,10 +863,15 @@ export function createShopHandler(container: AppContainer) {
       const serverId = await resolveServerId(c.req.param('serverId'))
       const user = c.get('user')
       await requireShopAdmin(serverId, user.userId)
+      const shop = await resolveShop(serverId)
       const shopService = container.resolve('shopService')
-      return c.json(
-        await shopService.updateCategory(c.req.param('categoryId'), c.req.valid('json')),
+      const category = await shopService.updateCategoryInShop(
+        shop.id,
+        c.req.param('categoryId'),
+        c.req.valid('json'),
       )
+      if (!category) return errorResponse(c, 'CATEGORY_NOT_FOUND', 404)
+      return c.json(category)
     },
   )
 
@@ -874,8 +879,9 @@ export function createShopHandler(container: AppContainer) {
     const serverId = await resolveServerId(c.req.param('serverId'))
     const user = c.get('user')
     await requireShopAdmin(serverId, user.userId)
+    const shop = await resolveShop(serverId)
     const shopService = container.resolve('shopService')
-    await shopService.deleteCategory(c.req.param('categoryId'))
+    await shopService.deleteCategoryInShop(shop.id, c.req.param('categoryId'))
     return c.json({ ok: true })
   })
 
@@ -946,9 +952,14 @@ export function createShopHandler(container: AppContainer) {
       const serverId = await resolveServerId(c.req.param('serverId'))
       const user = c.get('user')
       await requireShopAdmin(serverId, user.userId)
+      const shop = await resolveShop(serverId)
       const productService = container.resolve('productService')
       return c.json(
-        await productService.updateProduct(c.req.param('productId'), c.req.valid('json')),
+        await productService.updateProductInShop(
+          shop.id,
+          c.req.param('productId'),
+          c.req.valid('json'),
+        ),
       )
     },
   )
@@ -957,8 +968,9 @@ export function createShopHandler(container: AppContainer) {
     const serverId = await resolveServerId(c.req.param('serverId'))
     const user = c.get('user')
     await requireShopAdmin(serverId, user.userId)
+    const shop = await resolveShop(serverId)
     const productService = container.resolve('productService')
-    await productService.deleteProduct(c.req.param('productId'))
+    await productService.deleteProductInShop(shop.id, c.req.param('productId'))
     return c.json({ ok: true })
   })
 
@@ -1089,10 +1101,11 @@ export function createShopHandler(container: AppContainer) {
       const serverId = await resolveServerId(c.req.param('serverId'))
       const user = c.get('user')
       await requireShopAdmin(serverId, user.userId)
+      const shop = await resolveShop(serverId)
       const orderService = container.resolve('orderService')
       const input = c.req.valid('json')
       return c.json(
-        await orderService.updateOrderStatus(c.req.param('orderId'), input.status, {
+        await orderService.updateOrderStatusInShop(shop.id, c.req.param('orderId'), input.status, {
           trackingNo: input.trackingNo,
           sellerNote: input.sellerNote,
         }),

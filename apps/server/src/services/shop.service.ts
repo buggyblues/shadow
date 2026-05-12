@@ -74,10 +74,30 @@ export class ShopService {
   }
 
   async updateCategory(id: string, data: Parameters<ProductCategoryDao['update']>[1]) {
-    return this.deps.productCategoryDao.update(id, data)
+    const category = await this.deps.productCategoryDao.findById(id)
+    if (!category) return null
+    return this.updateCategoryInShop(category.shopId, id, data)
+  }
+
+  async updateCategoryInShop(
+    shopId: string,
+    id: string,
+    data: Parameters<ProductCategoryDao['update']>[1],
+  ) {
+    const category = await this.deps.productCategoryDao.findById(id)
+    if (!category || category.shopId !== shopId) return null
+    return this.deps.productCategoryDao.updateByShopIdAndId(shopId, id, data)
   }
 
   async deleteCategory(id: string) {
-    return this.deps.productCategoryDao.delete(id)
+    const category = await this.deps.productCategoryDao.findById(id)
+    if (!category) return
+    return this.deleteCategoryInShop(category.shopId, id)
+  }
+
+  async deleteCategoryInShop(shopId: string, id: string) {
+    const category = await this.deps.productCategoryDao.findById(id)
+    if (!category || category.shopId !== shopId) return
+    return this.deps.productCategoryDao.deleteByShopIdAndId(shopId, id)
   }
 }

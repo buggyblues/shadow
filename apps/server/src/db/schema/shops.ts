@@ -402,6 +402,12 @@ export const walletTransactions = pgTable(
   (t) => ({
     walletTransactionsWalletIdIdx: index('wallet_transactions_wallet_id_idx').on(t.walletId),
     walletTransactionsCreatedAtIdx: index('wallet_transactions_created_at_idx').on(t.createdAt),
+    walletTransactionsReferenceUnique: unique('wallet_transactions_reference_unique').on(
+      t.walletId,
+      t.type,
+      t.referenceType,
+      t.referenceId,
+    ),
   }),
 )
 
